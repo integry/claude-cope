@@ -6,7 +6,7 @@ const app = new Hono();
 app.use("*", cors());
 
 app.post("/api/chat", (c) => {
-  return c.json({ message: "Chat endpoint" });
+  return c.json({ message: "[⚙️] Backend is successfully coping with your request." });
 });
 
 export default app;
