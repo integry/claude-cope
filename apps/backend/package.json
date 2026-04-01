@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "echo 'No dev server configured yet'",
+    "dev": "wrangler dev",
     "build": "echo 'No build configured yet'",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "echo 'No typecheck configured yet'"
@@ -13,6 +13,8 @@
     "hono": "^4.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.0.0"
+    "@cloudflare/workers-types": "^4.20241205.0",
+    "typescript": "^5.0.0",
+    "wrangler": "^3.99.0"
   }
 }
