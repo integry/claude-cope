@@ -1,0 +1,12 @@
+{
+  "name": "@claude-cope/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'No dev server configured yet'",
+    "build": "echo 'No build configured yet'",
+    "lint": "eslint .",
+    "typecheck": "echo 'No typecheck configured yet'"
+  }
+}
