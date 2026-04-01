@@ -10,6 +10,7 @@
     "typecheck": "echo 'No typecheck configured yet'"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.12",
     "hono": "^4.0.0"
   },
   "devDependencies": {
