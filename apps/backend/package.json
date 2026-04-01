@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "build": "echo 'No build configured yet'",
+    "build": "tsc",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "echo 'No typecheck configured yet'"
   },
@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241205.0",
+    "@types/node": "^25.5.0",
     "typescript": "^5.0.0",
     "wrangler": "^3.99.0"
   }
