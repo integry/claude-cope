@@ -1,0 +1,18 @@
+{
+  "name": "@claude-cope/backend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'No dev server configured yet'",
+    "build": "echo 'No build configured yet'",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "echo 'No typecheck configured yet'"
+  },
+  "dependencies": {
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
