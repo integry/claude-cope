@@ -10,6 +10,7 @@ import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, parseSabotageParams } from "./slashCommandExecutor";
 import Ticker from "./Ticker";
+import { useMultiplayer } from "../hooks/useMultiplayer";
 
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
@@ -18,6 +19,7 @@ export type Message = {
 
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, drainQuota, resetQuota, unlockAchievement } = useGameState();
+  const { onlineCount } = useMultiplayer();
   const rank = state.economy.currentRank;
   const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
@@ -201,7 +203,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount },
     );
   };
 
