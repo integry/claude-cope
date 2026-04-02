@@ -15,7 +15,7 @@ export type Message = {
 
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, unlockAchievement } = useGameState();
-  const rank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
+  const rank = state.economy.currentRank;
 
   const [history, setHistory] = useState<Message[]>([]);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
@@ -83,12 +83,21 @@ function Terminal() {
         }
       }
 
-      setState((prev) => ({
-        ...prev,
-        technicalDebt: prev.technicalDebt + target,
-        totalTechnicalDebt: prev.totalTechnicalDebt + target,
-        rankIndex: Math.max(prev.rankIndex, rankIndex),
-      }));
+      setState((prev) => {
+        const newRankIndex = Math.max(
+          CORPORATE_RANKS.findIndex((r) => r.title === prev.economy.currentRank),
+          rankIndex,
+        );
+        return {
+          ...prev,
+          economy: {
+            ...prev.economy,
+            currentTD: prev.economy.currentTD + target,
+            totalTDEarned: prev.economy.totalTDEarned + target,
+            currentRank: CORPORATE_RANKS[newRankIndex]?.title ?? prev.economy.currentRank,
+          },
+        };
+      });
 
       setHistory((prev) => [
         ...prev,
@@ -117,13 +126,13 @@ function Terminal() {
 
   const getFilteredSlashCommands = () =>
     SLASH_COMMANDS.filter((cmd) => {
-      if (cmd === "/store" && state.totalTechnicalDebt < 1000) return false;
+      if (cmd === "/store" && state.economy.totalTDEarned < 1000) return false;
       return cmd.startsWith(slashQuery.toLowerCase());
     });
 
   const submitBrag = (username: string) => {
-    const currentRank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
-    const currentDebt = state.totalTechnicalDebt;
+    const currentRank = state.economy.currentRank;
+    const currentDebt = state.economy.totalTDEarned;
 
     setHistory((prev) => [
       ...prev,
@@ -210,7 +219,7 @@ function Terminal() {
       if (command === "/clear") {
         setHistory([]);
       } else if (command === "/store") {
-        if (state.totalTechnicalDebt < 1000) {
+        if (state.economy.totalTDEarned < 1000) {
           reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
         } else {
           setHistory(clearLoading);
@@ -416,7 +425,7 @@ function Terminal() {
     >
       <div className="sticky top-0 z-10 bg-[#0d1117] border-b border-green-800 pb-2 mb-2 flex justify-between text-green-400">
         <span>Rank: {rank}</span>
-        <span>Technical Debt: {state.totalTechnicalDebt.toLocaleString()} TD</span>
+        <span>Technical Debt: {state.economy.totalTDEarned.toLocaleString()} TD</span>
       </div>
       <div className="flex-1 overflow-y-auto">
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
@@ -426,7 +435,7 @@ function Terminal() {
         <div ref={bottomRef} />
       </div>
       <div className="relative">
-        {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.totalTechnicalDebt} />}
+        {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} />}
         {state.buddy.type && (
           <div className="text-yellow-400 text-xs mb-1">
             {BUDDY_ICONS[state.buddy.type] ?? "🐾"} {state.buddy.type} is watching...
