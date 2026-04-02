@@ -5,6 +5,10 @@ import type * as Party from "partykit/server";
 export default class ClaudeCopeServer implements Party.Server {
   constructor(readonly room: Party.Room) {}
 
+  // Maintain the authoritative health bar state for the co-op event
+  private outageHp = 0;
+  private isOutageActive = false;
+
   // When a user connects, we broadcast the new total user count to everyone.
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
     this.broadcastPresence();
@@ -28,6 +32,16 @@ export default class ClaudeCopeServer implements Party.Server {
           target.send(JSON.stringify({ type: "incoming_ping", attacker: "A Coworker" }));
         } else {
           sender.send(JSON.stringify({ type: "ping_failed", reason: "No one else is online." }));
+        }
+      } else if (data.type === "damage_outage" && this.isOutageActive) {
+        // Process damage from clients and broadcast the new health total to everyone
+        this.outageHp = Math.max(0, this.outageHp - 10);
+        this.room.broadcast(JSON.stringify({ type: "outage_update", hp: this.outageHp }));
+
+        // End the event if the community successfully depletes the health bar
+        if (this.outageHp <= 0) {
+          this.isOutageActive = false;
+          this.room.broadcast(JSON.stringify({ type: "outage_cleared" }));
         }
       }
     } catch (e) {
