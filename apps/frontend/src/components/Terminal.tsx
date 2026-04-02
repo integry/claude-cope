@@ -12,7 +12,7 @@ export type Message = {
 };
 
 function Terminal() {
-  const { state } = useGameState();
+  const { state, addActiveTD } = useGameState();
   const rank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
 
   const [history, setHistory] = useState<Message[]>([]);
@@ -46,6 +46,8 @@ function Terminal() {
     setSlashQuery("");
     setSlashIndex(0);
 
+    addActiveTD(Math.floor(Math.random() * 40) + 10);
+
     if (command === "/clear") {
       setHistory([]);
     } else {
@@ -72,6 +74,7 @@ function Terminal() {
       }
 
       if (inputValue.trim() !== "" && !isProcessing) {
+        addActiveTD(Math.floor(Math.random() * 40) + 10);
         const command = inputValue;
         setCommandHistory((prev) => [...prev, command]);
         setHistoryIndex(-1);
