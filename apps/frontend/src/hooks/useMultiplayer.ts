@@ -16,7 +16,7 @@ export function useMultiplayer() {
         if (data.type === 'presence') {
           setOnlineCount(data.count);
         }
-      } catch (e) {
+      } catch {
         console.error('Failed to parse multiplayer message');
       }
     });
