@@ -23,20 +23,19 @@ function Terminal() {
 
   const [history, setHistory] = useState<Message[]>([]);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState<number>(-1);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [slashQuery, setSlashQuery] = useState<string>("");
-  const [slashIndex, setSlashIndex] = useState<number>(0);
-  const [inputValue, setInputValue] = useState<string>("");
-  const [showStore, setShowStore] = useState<boolean>(false);
-  const [bragPending, setBragPending] = useState<boolean>(false);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [slashQuery, setSlashQuery] = useState("");
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [inputValue, setInputValue] = useState("");
+  const [showStore, setShowStore] = useState(false);
+  const [bragPending, setBragPending] = useState(false);
   const [isBooting, setIsBooting] = useState<boolean>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("sabotage") !== "true";
   });
 
   const [regressionGlitch, setRegressionGlitch] = useState<string | null>(null);
-
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -275,9 +274,8 @@ function Terminal() {
         return;
       } else if (command === "/compact") {
         setHistory((prev) => {
-          const filtered = clearLoading(prev);
-          const compacted = filtered.slice(0, Math.max(0, filtered.length - 5));
-          return [...compacted, { role: "system", content: "[✓] Context compacted. Deleted 50 lines of unoptimized boilerplate." }];
+          const filtered = clearLoading(prev).slice(0, Math.max(0, clearLoading(prev).length - 5));
+          return [...filtered, { role: "system", content: "[✓] Context compacted. Deleted 50 lines of unoptimized boilerplate." }];
         });
       } else if (command === "/brag") {
         setBragPending(true);
@@ -382,11 +380,7 @@ function Terminal() {
       const newIndex = historyIndex - 1;
       if (newIndex < -1) return;
       setHistoryIndex(newIndex);
-      if (newIndex === -1) {
-        setInputValue("");
-      } else {
-        setInputValue(commandHistory[commandHistory.length - 1 - newIndex]!);
-      }
+      setInputValue(newIndex === -1 ? "" : commandHistory[commandHistory.length - 1 - newIndex]!);
     }
   };
 
