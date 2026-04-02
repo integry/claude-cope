@@ -1,0 +1,4 @@
+{
+  "name": "claude-cope-party",
+  "main": "src/server.ts"
+}

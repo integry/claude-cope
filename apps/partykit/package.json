@@ -1,0 +1,13 @@
+{
+  "name": "@claude-cope/partykit",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/server.ts",
+  "scripts": {
+    "dev": "partykit dev",
+    "deploy": "partykit deploy"
+  },
+  "dependencies": {
+    "partykit": "^0.0.104"
+  }
+}
