@@ -1,2 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
 .claude
-node_modules
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Wrangler
+.wrangler/
+.mf/
+
+# Turbo
+.turbo/
