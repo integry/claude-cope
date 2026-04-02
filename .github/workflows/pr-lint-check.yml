@@ -23,8 +23,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: |
             package-lock.json
-            apps/web/package-lock.json
-            apps/api/package-lock.json
+            apps/frontend/package-lock.json
+            apps/backend/package-lock.json
 
       - name: Install Dependencies
         id: install
@@ -35,10 +35,10 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
-            web:
-              - 'apps/web/**'
-            api:
-              - 'apps/api/**'
+            frontend:
+              - 'apps/frontend/**'
+            backend:
+              - 'apps/backend/**'
 
       - name: Run Checks
         id: build
@@ -49,85 +49,85 @@ jobs:
           EXIT_CODE=0
           echo "Starting validation process..." > build_log.txt
 
-          # --- WEB (React Frontend) ---
-          if [ "${{ steps.filter.outputs.web }}" == 'true' ]; then
-            echo -e "\n--- Web App: Lint & Build ---" >> build_log.txt
-            WEB_FAILED=0
+          # --- FRONTEND (React + Vite) ---
+          if [ "${{ steps.filter.outputs.frontend }}" == 'true' ]; then
+            echo -e "\n--- Frontend: Lint, Typecheck & Build ---" >> build_log.txt
+            FE_FAILED=0
 
             # Lint
-            LINT_OUTPUT=$(npm run lint -w apps/web -- --max-warnings 0 2>&1) || {
-              echo "❌ Web Lint FAILED" >> build_log.txt
+            LINT_OUTPUT=$(npm run lint -w @claude-cope/frontend 2>&1) || {
+              echo "❌ Frontend Lint FAILED" >> build_log.txt
               echo "$LINT_OUTPUT" >> build_log.txt
-              WEB_FAILED=1
+              FE_FAILED=1
               EXIT_CODE=1
             }
-            if [ $WEB_FAILED -eq 0 ]; then
-              echo "✅ Web Lint passed" >> build_log.txt
+            if [ $FE_FAILED -eq 0 ]; then
+              echo "✅ Frontend Lint passed" >> build_log.txt
             fi
 
             # Typecheck
-            if [ $WEB_FAILED -eq 0 ]; then
-              TYPECHECK_OUTPUT=$(npm run typecheck -w apps/web 2>&1) || {
-                echo "❌ Web Typecheck FAILED" >> build_log.txt
+            if [ $FE_FAILED -eq 0 ]; then
+              TYPECHECK_OUTPUT=$(npm run typecheck -w @claude-cope/frontend 2>&1) || {
+                echo "❌ Frontend Typecheck FAILED" >> build_log.txt
                 echo "$TYPECHECK_OUTPUT" >> build_log.txt
-                WEB_FAILED=1
+                FE_FAILED=1
                 EXIT_CODE=1
               }
-              if [ $WEB_FAILED -eq 0 ]; then
-                echo "✅ Web Typecheck passed" >> build_log.txt
+              if [ $FE_FAILED -eq 0 ]; then
+                echo "✅ Frontend Typecheck passed" >> build_log.txt
               fi
             fi
 
             # Build
-            BUILD_OUTPUT=$(npm run build -w apps/web 2>&1) || {
-              echo "❌ Web Build FAILED" >> build_log.txt
+            BUILD_OUTPUT=$(npm run build -w @claude-cope/frontend 2>&1) || {
+              echo "❌ Frontend Build FAILED" >> build_log.txt
               echo "$BUILD_OUTPUT" | tail -100 >> build_log.txt
-              WEB_FAILED=1
+              FE_FAILED=1
               EXIT_CODE=1
             }
-            if [ $WEB_FAILED -eq 0 ]; then
-              echo "✅ Web Build passed" >> build_log.txt
+            if [ $FE_FAILED -eq 0 ]; then
+              echo "✅ Frontend Build passed" >> build_log.txt
             fi
           fi
 
-          # --- API (Hono Backend) ---
-          if [ "${{ steps.filter.outputs.api }}" == 'true' ]; then
-            echo -e "\n--- API: Lint & Build ---" >> build_log.txt
-            API_FAILED=0
+          # --- BACKEND (Hono) ---
+          if [ "${{ steps.filter.outputs.backend }}" == 'true' ]; then
+            echo -e "\n--- Backend: Lint, Typecheck & Build ---" >> build_log.txt
+            BE_FAILED=0
 
             # Lint
-            LINT_OUTPUT=$(npm run lint -w apps/api -- --max-warnings 0 2>&1) || {
-              echo "❌ API Lint FAILED" >> build_log.txt
+            LINT_OUTPUT=$(npm run lint -w @claude-cope/backend 2>&1) || {
+              echo "❌ Backend Lint FAILED" >> build_log.txt
               echo "$LINT_OUTPUT" >> build_log.txt
-              API_FAILED=1
+              BE_FAILED=1
               EXIT_CODE=1
             }
-            if [ $API_FAILED -eq 0 ]; then
-              echo "✅ API Lint passed" >> build_log.txt
+            if [ $BE_FAILED -eq 0 ]; then
+              echo "✅ Backend Lint passed" >> build_log.txt
             fi
 
             # Typecheck
-            if [ $API_FAILED -eq 0 ]; then
-              TYPECHECK_OUTPUT=$(npm run typecheck -w apps/api 2>&1) || {
-                echo "❌ API Typecheck FAILED" >> build_log.txt
+            if [ $BE_FAILED -eq 0 ]; then
+              TYPECHECK_OUTPUT=$(npm run typecheck -w @claude-cope/backend 2>&1) || {
+                echo "❌ Backend Typecheck FAILED" >> build_log.txt
                 echo "$TYPECHECK_OUTPUT" >> build_log.txt
-                API_FAILED=1
+                BE_FAILED=1
                 EXIT_CODE=1
               }
-              if [ $API_FAILED -eq 0 ]; then
-                echo "✅ API Typecheck passed" >> build_log.txt
+              if [ $BE_FAILED -eq 0 ]; then
+                echo "✅ Backend Typecheck passed" >> build_log.txt
               fi
             fi
 
             # Build
-            BUILD_OUTPUT=$(npm run build -w apps/api 2>&1) || {
-              echo "❌ API Build FAILED" >> build_log.txt
+            BUILD_OUTPUT=$(npm run build -w @claude-cope/backend 2>&1) || {
+              echo "❌ Backend Build FAILED" >> build_log.txt
               echo "$BUILD_OUTPUT" | tail -100 >> build_log.txt
-              API_FAILED=1
+              BE_FAILED=1
               EXIT_CODE=1
             }
-            if [ $API_FAILED -eq 0 ]; then
-              echo "✅ API Build passed" >> build_log.txt
+            if [ $BE_FAILED -eq 0 ]; then
+              echo "✅ Backend Build passed" >> build_log.txt
             fi
           fi
 
