@@ -20,6 +20,7 @@ interface SlashCommandContext {
   setSlashIndex: (v: number) => void;
   addActiveTD: (n: number) => void;
   applyQuotaDrain: () => boolean;
+  onlineCount: number;
 }
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.content !== "[⚙️] Claude is coping...");
@@ -96,6 +97,8 @@ export function executeSlashCommand(
       ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
       const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
       reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType}${shinyLabel} ${buddyIcon}!` });
+    } else if (command === "/who") {
+      reply({ role: "system", content: `[📡] There are currently ${ctx.onlineCount} developers suffering in this instance.` });
     } else {
       reply({ role: "system", content: `[✓] Executed ${command}` });
     }
