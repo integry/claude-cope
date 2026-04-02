@@ -18,9 +18,9 @@ export type Message = {
 };
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, drainQuota, resetQuota, unlockAchievement } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty } = useGameState();
   const [history, setHistory] = useState<Message[]>([]);
-  const { onlineCount, sendPing, pendingPing, rejectPing } = useMultiplayer(setHistory);
+  const { onlineCount, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty });
   const rank = state.economy.currentRank;
   const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
@@ -40,6 +40,7 @@ function Terminal() {
 
   const [clearCount, setClearCount] = useState(0);
   const [regressionGlitch, setRegressionGlitch] = useState<string | null>(null);
+  const [activeRegression, setActiveRegression] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -86,11 +87,11 @@ function Terminal() {
   // Update Regression chaos event — fires every 10-15 minutes
   useEffect(() => {
     const REGRESSION_TYPES = [
-      { name: "RTL Text Inversion", css: "direction: rtl; unicode-bidi: bidi-override;" },
-      { name: "Comic Sans Migration", css: "font-family: 'Comic Sans MS', 'Comic Sans', cursive;" },
-      { name: "Upside-Down Rendering", css: "transform: scaleY(-1);" },
-      { name: "Opacity Fade Leak", css: "opacity: 0.3;" },
-      { name: "Letter Spacing Explosion", css: "letter-spacing: 0.5em;" },
+      { id: "backwards_typing", name: "Backwards Typing", css: "" },
+      { id: "broken_scrollback", name: "Broken Scrollback", css: "" },
+      { id: "upside_down", name: "Upside-Down Rendering", css: "transform: scaleY(-1);" },
+      { id: "opacity_fade", name: "Opacity Fade Leak", css: "opacity: 0.3;" },
+      { id: "letter_spacing", name: "Letter Spacing Explosion", css: "letter-spacing: 0.5em;" },
     ];
 
     const scheduleRegression = () => {
@@ -101,11 +102,13 @@ function Terminal() {
           ...prev,
           { role: "warning", content: `[⬆️ UPDATE] Claude Cope v0.1.4-rc.${Math.floor(Math.random() * 99) + 1} deploying... Applying patch: ${regression.name}` },
         ]);
-        setRegressionGlitch(regression.css);
+        setRegressionGlitch(regression.css || null);
+        setActiveRegression(regression.id);
 
         // Revert after exactly 10 seconds
         setTimeout(() => {
           setRegressionGlitch(null);
+          setActiveRegression(null);
           setHistory((prev) => [
             ...prev,
             { role: "error", content: `[⏪ ROLLBACK] Update failed. Reverting ${regression.name}... Previous stable version restored.` },
@@ -187,7 +190,11 @@ function Terminal() {
   };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    let value = e.target.value;
+    if (activeRegression === "backwards_typing" && value.length > inputValue.length) {
+      const newChar = value.slice(inputValue.length);
+      value = newChar + inputValue;
+    }
     setInputValue(value);
     const newQuery = value.startsWith("/") ? value : "";
     setSlashQuery(newQuery);
@@ -207,6 +214,22 @@ function Terminal() {
     );
   };
 
+  const DAMAGE_COMMANDS = ["kubectl restart pods", "ssh prod-01", "git revert HEAD"];
+
+  const tryOutageDamage = (): boolean => {
+    if (outageHp !== null && DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) {
+      sendDamage();
+      setHistory((prev) => [
+        ...prev,
+        { role: "user", content: inputValue },
+        { role: "system", content: `[💥 HIT] Damage dealt to PROD OUTAGE!` },
+      ]);
+      setInputValue("");
+      return true;
+    }
+    return false;
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     const filtered = getFilteredSlashCommands();
     const slashMenuOpen = slashQuery !== "" && filtered.length > 0;
@@ -222,6 +245,9 @@ function Terminal() {
       }
 
       if (inputValue.trim() !== "" && !isProcessing) {
+        // Handle outage damage commands — bypass normal LLM processing
+        if (tryOutageDamage()) return;
+
         if (bragPending) {
           const username = inputValue.trim();
           setInputValue("");
@@ -237,9 +263,9 @@ function Terminal() {
         }
 
         // Increment buddy interjection counter
-        const buddyInterjection = computeBuddyInterjection(state.buddy);
+        const buddyResult = computeBuddyInterjection(state.buddy);
         if (state.buddy.type) {
-          const newCount = buddyInterjection ? 0 : state.buddy.promptsSinceLastInterjection + 1;
+          const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
           setState((prev) => ({
             ...prev,
             buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount },
@@ -265,7 +291,7 @@ function Terminal() {
           userMessage,
         ].map((m) => ({ role: m.role, content: m.content }));
 
-        submitChatMessage(chatMessages, buddyInterjection, unlockAchievement, setHistory, setIsProcessing);
+        submitChatMessage(chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing);
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
@@ -294,13 +320,27 @@ function Terminal() {
 
   return (
     <div
-      className="h-screen w-screen bg-[#0d1117] font-mono text-sm text-gray-300 p-4 flex flex-col transition-all duration-300"
+      className={`h-screen w-screen font-mono text-sm text-gray-300 p-4 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"}`}
       style={regressionGlitch ? Object.fromEntries(regressionGlitch.split(";").filter(Boolean).map((s) => { const [k, ...v] = s.split(":"); return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()]; })) : undefined}
       onClick={() => inputRef.current?.focus()}
     >
       {/* Mount the Ticker at the very top of the interface so it acts as a global broadcast banner */}
       <Ticker />
-      <div className="sticky top-0 z-10 bg-[#0d1117] border-b border-green-800 pb-2 mb-2">
+      {outageHp !== null && (
+        <div className="mb-2 border border-red-500 rounded p-2 bg-red-950">
+          <div className="flex items-center justify-between text-red-400 text-xs mb-1">
+            <span className="font-bold">[PROD OUTAGE] AWS us-east-1</span>
+            <span>{outageHp}% HP</span>
+          </div>
+          <div className="h-3 bg-red-900 rounded overflow-hidden">
+            <div
+              className="h-full bg-red-500 transition-all duration-300 rounded"
+              style={{ width: `${outageHp}%` }}
+            />
+          </div>
+        </div>
+      )}
+      <div className={`sticky top-0 z-10 border-b pb-2 mb-2 ${outageHp !== null ? "bg-red-900 border-red-500" : "bg-[#0d1117] border-green-800"}`}>
         <div className="flex justify-between text-green-400 mb-1">
           <span>Rank: {rank}</span>
           <span>Technical Debt: {state.economy.totalTDEarned.toLocaleString()} TD</span>
@@ -326,10 +366,10 @@ function Terminal() {
           </span>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
-          <OutputBlock key={index} message={message} />
+          <OutputBlock key={index} message={message} promptString={activeRegression ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "} />
         ))}
         <div ref={bottomRef} />
       </div>
@@ -346,6 +386,7 @@ function Terminal() {
           disabled={isProcessing || isBooting || quotaLocked}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          promptString={activeRegression ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "}
         />
       </div>
       {showStore && (

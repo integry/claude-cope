@@ -57,6 +57,24 @@ export function executeSlashCommand(
         ...clearLoading(prev),
         { role: "warning", content: "[WARNING] Executing sudo rm -rf /..." },
       ]);
+
+      const fakePaths = [
+        "/usr/bin", "/var/log", "/etc/passwd", "/home/node/.bashrc",
+        "/usr/lib/node_modules", "/var/cache/apt", "/opt/corporate-synergy",
+        "/tmp/.secretly-mining-crypto", "/usr/share/man", "/boot/vmlinuz",
+        "/dev/null", "/proc/self", "/sys/class/backlight",
+        "/root/.ssh/authorized_keys", "/var/run/docker.sock",
+      ];
+      const interval = 2000 / fakePaths.length;
+      fakePaths.forEach((p, i) => {
+        setTimeout(() => {
+          ctx.setHistory((prev) => [
+            ...prev,
+            { role: "system", content: `Deleting ${p}...` },
+          ]);
+        }, interval * (i + 1));
+      });
+
       setTimeout(() => {
         const messages: Message[] = [];
         if (newClearCount >= 3) {
@@ -117,7 +135,7 @@ export function executeSlashCommand(
     }
 
     ctx.setIsProcessing(false);
-  }, 1500);
+  }, Math.floor(Math.random() * 1500) + 1500);
 }
 
 export function parseSabotageParams(
