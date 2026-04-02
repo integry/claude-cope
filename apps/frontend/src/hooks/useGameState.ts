@@ -161,6 +161,14 @@ function loadState(): GameState {
   return createDefaultState();
 }
 
+/** Geometric series sum: total cost to buy `amount` generators starting at `owned`. */
+export function calcBulkCost(baseCost: number, owned: number, amount: number): number {
+  // Sum = baseCost * r^owned * (r^amount - 1) / (r - 1)
+  const rOwned = Math.pow(GROWTH_RATE, owned);
+  const rAmount = Math.pow(GROWTH_RATE, amount);
+  return Math.floor(baseCost * rOwned * (rAmount - 1) / (GROWTH_RATE - 1));
+}
+
 function calculateTDpS(inventory: Record<string, number>): number {
   let tdps = 0;
   for (const generator of GENERATORS) {
@@ -227,21 +235,19 @@ export function useGameState() {
     return () => clearInterval(interval);
   }, []);
 
-  const buyGenerator = useCallback((generatorId: string): boolean => {
+  const buyGenerator = useCallback((generatorId: string, amount: number = 1): boolean => {
     const generator = GENERATORS.find((g) => g.id === generatorId);
-    if (!generator) return false;
+    if (!generator || amount < 1) return false;
 
     const current = stateRef.current;
     const owned = current.inventory[generatorId] ?? 0;
-    const cost = Math.floor(generator.baseCost * Math.pow(GROWTH_RATE, owned));
+    const cost = calcBulkCost(generator.baseCost, owned, amount);
 
     if (current.economy.currentTD < cost) return false;
 
     setState((prev) => {
       const ownedNow = prev.inventory[generatorId] ?? 0;
-      const dynamicCost = Math.floor(
-        generator.baseCost * Math.pow(GROWTH_RATE, ownedNow),
-      );
+      const dynamicCost = calcBulkCost(generator.baseCost, ownedNow, amount);
       if (prev.economy.currentTD < dynamicCost) return prev;
 
       return {
@@ -252,7 +258,7 @@ export function useGameState() {
         },
         inventory: {
           ...prev.inventory,
-          [generatorId]: ownedNow + 1,
+          [generatorId]: ownedNow + amount,
         },
       };
     });
