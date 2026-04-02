@@ -13,7 +13,7 @@ export type Message = {
 };
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, unlockAchievement } = useGameState();
   const rank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
 
   const [history, setHistory] = useState<Message[]>([]);
@@ -245,12 +245,29 @@ function Terminal() {
             }
 
             const data = await res.json();
-            const reply =
+            const rawReply =
               data?.choices?.[0]?.message?.content ?? "[❌ Error] No response from API.";
+
+            // Parse and extract achievement tags from the LLM response
+            const achievementRegex = /\[ACHIEVEMENT_UNLOCKED:\s*(.+?)\]/g;
+            const achievementMessages: Message[] = [];
+            let match;
+            while ((match = achievementRegex.exec(rawReply)) !== null) {
+              const achievementId = match[1]!.trim();
+              unlockAchievement(achievementId);
+              achievementMessages.push({
+                role: "warning",
+                content: `[🏆 Achievement Unlocked: ${achievementId}]`,
+              });
+            }
+
+            // Strip achievement tags from the visible reply
+            const reply = rawReply.replace(achievementRegex, "").trim();
 
             setHistory((prev) => [
               ...prev.filter((msg) => msg.role !== "loading"),
               { role: "system", content: reply },
+              ...achievementMessages,
             ]);
           })
           .catch(() => {
