@@ -14,34 +14,46 @@ export const GROWTH_RATE = 1.15;
 
 export const GENERATORS: Generator[] = [
   {
+    id: "stackoverflow-copy-paster",
+    name: "StackOverflow Copy-Paster",
+    baseCost: 15,
+    baseOutput: 0.1,
+  },
+  {
     id: "intern",
-    name: "Unpaid Intern",
-    baseCost: 10,
+    name: "Unpaid Bootcamp Intern",
+    baseCost: 100,
     baseOutput: 1,
   },
   {
     id: "hotfix",
-    name: "Hotfix Pipeline",
-    baseCost: 50,
-    baseOutput: 5,
+    name: '"Temporary" Hotfix',
+    baseCost: 1100,
+    baseOutput: 8,
   },
   {
     id: "npm",
-    name: "NPM Dependency",
-    baseCost: 250,
-    baseOutput: 20,
+    name: "NPM Dependency Importer",
+    baseCost: 12000,
+    baseOutput: 47,
   },
   {
     id: "microservice",
-    name: "Microservice",
-    baseCost: 1000,
-    baseOutput: 75,
+    name: "Microservices Architect",
+    baseCost: 130000,
+    baseOutput: 260,
+  },
+  {
+    id: "llm-code-wrapper",
+    name: "LLM Code Wrapper",
+    baseCost: 1400000,
+    baseOutput: 1400,
   },
   {
     id: "agile",
-    name: "Agile Consultant",
-    baseCost: 5000,
-    baseOutput: 300,
+    name: "Agile Scrum Master",
+    baseCost: 20000000,
+    baseOutput: 7800,
   },
   {
     id: "rogue-api-key",
@@ -50,10 +62,22 @@ export const GENERATORS: Generator[] = [
     baseOutput: 15000,
   },
   {
+    id: "blockchain",
+    name: "Blockchain Integration",
+    baseCost: 330000000,
+    baseOutput: 44000,
+  },
+  {
     id: "kubernetes-overlord",
     name: "Kubernetes Overlord",
     baseCost: 5100000000,
     baseOutput: 260000,
+  },
+  {
+    id: "vibe-coder",
+    name: "Vibe Coder Protocol",
+    baseCost: 75000000000,
+    baseOutput: 1600000,
   },
 ];
 
