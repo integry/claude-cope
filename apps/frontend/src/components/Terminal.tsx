@@ -20,7 +20,7 @@ export type Message = {
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, drainQuota, resetQuota, unlockAchievement } = useGameState();
   const [history, setHistory] = useState<Message[]>([]);
-  const { onlineCount, sendPing, pendingPing, rejectPing, outageHp } = useMultiplayer(setHistory);
+  const { onlineCount, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer(setHistory);
   const rank = state.economy.currentRank;
   const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
@@ -222,6 +222,19 @@ function Terminal() {
       }
 
       if (inputValue.trim() !== "" && !isProcessing) {
+        // Handle outage damage commands — bypass normal LLM processing
+        const DAMAGE_COMMANDS = ["kubectl restart pods", "ssh prod-01", "git revert HEAD"];
+        if (outageHp !== null && DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) {
+          sendDamage();
+          setHistory((prev) => [
+            ...prev,
+            { role: "user", content: inputValue },
+            { role: "system", content: `[💥 HIT] Damage dealt to PROD OUTAGE!` },
+          ]);
+          setInputValue("");
+          return;
+        }
+
         if (bragPending) {
           const username = inputValue.trim();
           setInputValue("");
