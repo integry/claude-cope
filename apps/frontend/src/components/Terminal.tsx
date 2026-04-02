@@ -214,6 +214,19 @@ function Terminal() {
           setHistory((prev) => prev.filter((m) => m.content !== "[⚙️] Claude is coping..."));
           setShowStore(true);
         }
+      } else if (command === "/synergize") {
+        setHistory((prev) => [
+          ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
+          { role: "system", content: "[🗓️] Joining 1-on-1 meeting. Please wait..." },
+        ]);
+        setTimeout(() => {
+          setHistory((prev) => [
+            ...prev,
+            { role: "system", content: "[✓] Survived 10 seconds of corporate synergy. No action items assigned." },
+          ]);
+          setIsProcessing(false);
+        }, 10000);
+        return;
       } else if (command === "/brag") {
         setBragPending(true);
         setHistory((prev) => [
