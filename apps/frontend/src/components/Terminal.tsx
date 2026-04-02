@@ -241,8 +241,10 @@ function Terminal() {
       } else if (command === "/buddy") {
         const roll = Math.random() * 100;
         const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
-        setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny: false, promptsSinceLastInterjection: 0 } }));
-        reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType} ${buddyIcon}!` });
+        const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
+        setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
+        const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
+        reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType}${shinyLabel} ${buddyIcon}!` });
       } else {
         reply({ role: "system", content: `[✓] Executed ${command}` });
       }
@@ -381,8 +383,8 @@ function Terminal() {
       <div className="relative">
         {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} />}
         {state.buddy.type && (
-          <div className="text-yellow-400 text-xs mb-1">
-            {BUDDY_ICONS[state.buddy.type] ?? "🐾"} {state.buddy.type} is watching...
+          <div className={`text-xs mb-1 ${state.buddy.isShiny ? "text-amber-300" : "text-yellow-400"}`}>
+            {BUDDY_ICONS[state.buddy.type] ?? "🐾"} {state.buddy.isShiny ? `✨ Shiny ${state.buddy.type} ✨` : state.buddy.type} is watching...
           </div>
         )}
         <CommandLine
