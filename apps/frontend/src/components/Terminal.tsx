@@ -242,6 +242,16 @@ function Terminal() {
           ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
           { role: "system", content: "[🏆] Enter your name for the Hall of Blame:" },
         ]);
+      } else if (command === "/support") {
+        setHistory((prev) => [
+          ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
+          { role: "system", content: "[✓] Support ticket created. Redirecting payload directly to /dev/null..." },
+        ]);
+      } else if (command === "/preworkout") {
+        setHistory((prev) => [
+          ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
+          { role: "system", content: "[✓] Injected 400mg of pure caffeine into the Node.js event loop. LFG." },
+        ]);
       } else {
         setHistory((prev) => [
           ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
