@@ -9,6 +9,8 @@ import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, parseSabotageParams } from "./slashCommandExecutor";
+import Ticker from "./Ticker";
+import { useMultiplayer } from "../hooks/useMultiplayer";
 
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
@@ -17,11 +19,12 @@ export type Message = {
 
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, drainQuota, resetQuota, unlockAchievement } = useGameState();
+  const [history, setHistory] = useState<Message[]>([]);
+  const { onlineCount, sendPing, pendingPing, rejectPing } = useMultiplayer(setHistory);
   const rank = state.economy.currentRank;
   const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
 
-  const [history, setHistory] = useState<Message[]>([]);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -200,7 +203,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, sendPing, pendingPing, rejectPing },
     );
   };
 
@@ -295,6 +298,8 @@ function Terminal() {
       style={regressionGlitch ? Object.fromEntries(regressionGlitch.split(";").filter(Boolean).map((s) => { const [k, ...v] = s.split(":"); return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()]; })) : undefined}
       onClick={() => inputRef.current?.focus()}
     >
+      {/* Mount the Ticker at the very top of the interface so it acts as a global broadcast banner */}
+      <Ticker />
       <div className="sticky top-0 z-10 bg-[#0d1117] border-b border-green-800 pb-2 mb-2">
         <div className="flex justify-between text-green-400 mb-1">
           <span>Rank: {rank}</span>
