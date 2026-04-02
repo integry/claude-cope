@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, ChangeEvent, KeyboardEvent } from "react";
 import OutputBlock from "./OutputBlock";
 import CommandLine from "./CommandLine";
-import SlashMenu, { SLASH_COMMANDS } from "./SlashMenu";
+import SlashMenu from "./SlashMenu";
+import { SLASH_COMMANDS } from "./slashCommands";
 
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
