@@ -189,26 +189,36 @@ function Terminal() {
     setSlashQuery("");
     setSlashIndex(0);
 
-    addActiveTD(Math.floor(Math.random() * 40) + 10);
+    setIsProcessing(true);
+    setHistory((prev) => [
+      ...prev,
+      { role: "user", content: command },
+      { role: "loading", content: "[⚙️] Claude is coping..." },
+    ]);
 
-    if (command === "/clear") {
-      setHistory([]);
-    } else if (command === "/store") {
-      setShowStore(true);
-    } else if (command === "/brag") {
-      setBragPending(true);
-      setHistory((prev) => [
-        ...prev,
-        { role: "user", content: "/brag" },
-        { role: "system", content: "[🏆] Enter your name for the Hall of Blame:" },
-      ]);
-    } else {
-      setHistory((prev) => [
-        ...prev,
-        { role: "user", content: command },
-        { role: "system", content: `[✓] Executed ${command}` },
-      ]);
-    }
+    setTimeout(() => {
+      addActiveTD(Math.floor(Math.random() * 40) + 10);
+
+      if (command === "/clear") {
+        setHistory([]);
+      } else if (command === "/store") {
+        setHistory((prev) => prev.filter((m) => m.content !== "[⚙️] Claude is coping..."));
+        setShowStore(true);
+      } else if (command === "/brag") {
+        setBragPending(true);
+        setHistory((prev) => [
+          ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
+          { role: "system", content: "[🏆] Enter your name for the Hall of Blame:" },
+        ]);
+      } else {
+        setHistory((prev) => [
+          ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
+          { role: "system", content: `[✓] Executed ${command}` },
+        ]);
+      }
+
+      setIsProcessing(false);
+    }, 1500);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
