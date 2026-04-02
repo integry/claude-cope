@@ -207,6 +207,22 @@ function Terminal() {
     );
   };
 
+  const DAMAGE_COMMANDS = ["kubectl restart pods", "ssh prod-01", "git revert HEAD"];
+
+  const tryOutageDamage = (): boolean => {
+    if (outageHp !== null && DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) {
+      sendDamage();
+      setHistory((prev) => [
+        ...prev,
+        { role: "user", content: inputValue },
+        { role: "system", content: `[💥 HIT] Damage dealt to PROD OUTAGE!` },
+      ]);
+      setInputValue("");
+      return true;
+    }
+    return false;
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     const filtered = getFilteredSlashCommands();
     const slashMenuOpen = slashQuery !== "" && filtered.length > 0;
@@ -223,17 +239,7 @@ function Terminal() {
 
       if (inputValue.trim() !== "" && !isProcessing) {
         // Handle outage damage commands — bypass normal LLM processing
-        const DAMAGE_COMMANDS = ["kubectl restart pods", "ssh prod-01", "git revert HEAD"];
-        if (outageHp !== null && DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) {
-          sendDamage();
-          setHistory((prev) => [
-            ...prev,
-            { role: "user", content: inputValue },
-            { role: "system", content: `[💥 HIT] Damage dealt to PROD OUTAGE!` },
-          ]);
-          setInputValue("");
-          return;
-        }
+        if (tryOutageDamage()) return;
 
         if (bragPending) {
           const username = inputValue.trim();
