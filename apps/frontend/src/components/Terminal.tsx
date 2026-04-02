@@ -12,6 +12,36 @@ export type Message = {
   content: string;
 };
 
+const BUDDY_ICONS: Record<string, string> = {
+  "Agile Snail": "🐌",
+  "Sarcastic Clippy": "📎",
+  "10x Dragon": "🐉",
+};
+
+const BUDDY_INTERJECTIONS: Record<string, string[]> = {
+  "Agile Snail": [
+    "Would you like to schedule a retrospective?",
+    "Have you updated the Jira board?",
+    "Let's circle back on that in the next standup.",
+    "Can we timebox this discussion?",
+    "I think we need a story point estimation session.",
+  ],
+  "Sarcastic Clippy": [
+    "It looks like you're writing spaghetti code. Would you like help?",
+    "Have you considered rewriting this in Rust?",
+    "I see you're importing a 2MB library for a single function. Classic.",
+    "That's certainly... one way to do it.",
+    "Ah yes, the 'it works on my machine' approach. Bold.",
+  ],
+  "10x Dragon": [
+    "is judging your variable names.",
+    "went to sleep because your codebase is boring.",
+    "refactored your code while you weren't looking. It's worse now.",
+    "deployed to production without telling you.",
+    "deleted your node_modules for fun. Good luck.",
+  ],
+};
+
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, unlockAchievement } = useGameState();
   const rank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
@@ -274,6 +304,32 @@ function Terminal() {
         }
 
         addActiveTD(Math.floor(Math.random() * 40) + 10);
+
+        // Increment buddy interjection counter
+        let buddyInterjection: Message | null = null;
+        if (state.buddy.type) {
+          const newCount = state.buddy.promptsSinceLastInterjection + 1;
+          if (newCount >= 5) {
+            const buddyType = state.buddy.type;
+            const icon = BUDDY_ICONS[buddyType] ?? "🐾";
+            const lines = BUDDY_INTERJECTIONS[buddyType] ?? ["stares at you blankly."];
+            const text = lines[Math.floor(Math.random() * lines.length)]!;
+            buddyInterjection = {
+              role: "warning",
+              content: `[${icon} ${buddyType}] ${text}`,
+            };
+            setState((prev) => ({
+              ...prev,
+              buddy: { ...prev.buddy, promptsSinceLastInterjection: 0 },
+            }));
+          } else {
+            setState((prev) => ({
+              ...prev,
+              buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount },
+            }));
+          }
+        }
+
         const command = inputValue;
         setCommandHistory((prev) => [...prev, command]);
         setHistoryIndex(-1);
@@ -343,6 +399,7 @@ function Terminal() {
               ...prev.filter((msg) => msg.role !== "loading"),
               { role: "system", content: reply },
               ...achievementMessages,
+              ...(buddyInterjection ? [buddyInterjection] : []),
             ]);
           })
           .catch(() => {
@@ -402,6 +459,11 @@ function Terminal() {
       </div>
       <div className="relative">
         {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.totalTechnicalDebt} />}
+        {state.buddy.type && (
+          <div className="text-yellow-400 text-xs mb-1">
+            {BUDDY_ICONS[state.buddy.type] ?? "🐾"} {state.buddy.type} is watching...
+          </div>
+        )}
         <CommandLine
           ref={inputRef}
           value={inputValue}
