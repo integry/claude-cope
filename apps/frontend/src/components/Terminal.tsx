@@ -191,13 +191,17 @@ function Terminal() {
     setInputValue("");
     setSlashQuery("");
     setSlashIndex(0);
-
     setIsProcessing(true);
     setHistory((prev) => [
       ...prev,
       { role: "user", content: command },
       { role: "loading", content: "[⚙️] Claude is coping..." },
     ]);
+
+    const clearLoading = (prev: Message[]) => prev.filter((m) => m.content !== "[⚙️] Claude is coping...");
+    const reply = (msg: Message): void => {
+      setHistory((prev) => [...clearLoading(prev), msg]);
+    };
 
     setTimeout(() => {
       addActiveTD(Math.floor(Math.random() * 40) + 10);
@@ -206,57 +210,41 @@ function Terminal() {
         setHistory([]);
       } else if (command === "/store") {
         if (state.totalTechnicalDebt < 1000) {
-          setHistory((prev) => [
-            ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
-            { role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." },
-          ]);
+          reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
         } else {
-          setHistory((prev) => prev.filter((m) => m.content !== "[⚙️] Claude is coping..."));
+          setHistory(clearLoading);
           setShowStore(true);
         }
       } else if (command === "/synergize") {
-        setHistory((prev) => [
-          ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
-          { role: "system", content: "[🗓️] Joining 1-on-1 meeting. Please wait..." },
-        ]);
+        reply({ role: "system", content: "[🗓️] Joining 1-on-1 meeting. Please wait..." });
         setTimeout(() => {
-          setHistory((prev) => [
-            ...prev,
-            { role: "system", content: "[✓] Survived 10 seconds of corporate synergy. No action items assigned." },
-          ]);
+          setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived 10 seconds of corporate synergy. No action items assigned." }]);
           setIsProcessing(false);
         }, 10000);
         return;
       } else if (command === "/compact") {
         setHistory((prev) => {
-          const filtered = prev.filter((m) => m.content !== "[⚙️] Claude is coping...");
+          const filtered = clearLoading(prev);
           const compacted = filtered.slice(0, Math.max(0, filtered.length - 5));
-          return [
-            ...compacted,
-            { role: "system", content: "[✓] Context compacted. Deleted 50 lines of unoptimized boilerplate." },
-          ];
+          return [...compacted, { role: "system", content: "[✓] Context compacted. Deleted 50 lines of unoptimized boilerplate." }];
         });
       } else if (command === "/brag") {
         setBragPending(true);
-        setHistory((prev) => [
-          ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
-          { role: "system", content: "[🏆] Enter your name for the Hall of Blame:" },
-        ]);
+        reply({ role: "system", content: "[🏆] Enter your name for the Hall of Blame:" });
       } else if (command === "/support") {
-        setHistory((prev) => [
-          ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
-          { role: "system", content: "[✓] Support ticket created. Redirecting payload directly to /dev/null..." },
-        ]);
+        reply({ role: "system", content: "[✓] Support ticket created. Redirecting payload directly to /dev/null..." });
       } else if (command === "/preworkout") {
-        setHistory((prev) => [
-          ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
-          { role: "system", content: "[✓] Injected 400mg of pure caffeine into the Node.js event loop. LFG." },
-        ]);
+        reply({ role: "system", content: "[✓] Injected 400mg of pure caffeine into the Node.js event loop. LFG." });
+      } else if (command === "/buddy") {
+        const roll = Math.random() * 100;
+        const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
+        setState((prev) => ({
+          ...prev,
+          buddy: { type: buddyType, isShiny: false, promptsSinceLastInterjection: 0 },
+        }));
+        reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType} ${buddyIcon}!` });
       } else {
-        setHistory((prev) => [
-          ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
-          { role: "system", content: `[✓] Executed ${command}` },
-        ]);
+        reply({ role: "system", content: `[✓] Executed ${command}` });
       }
 
       setIsProcessing(false);
