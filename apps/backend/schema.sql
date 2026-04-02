@@ -1,7 +1,7 @@
 -- Hall of Blame leaderboard schema for Cloudflare D1 (serverless SQLite)
 
 CREATE TABLE IF NOT EXISTS hall_of_blame (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     username TEXT NOT NULL,
     corporate_rank TEXT NOT NULL,
     technical_debt INTEGER NOT NULL DEFAULT 0,
