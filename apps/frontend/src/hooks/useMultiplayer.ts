@@ -2,8 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import PartySocket from 'partysocket';
 import { Message } from '../components/Terminal';
 
+interface UseMultiplayerOptions {
+  setHistory: React.Dispatch<React.SetStateAction<Message[]>>;
+  applyOutageReward: () => void;
+  applyOutagePenalty: () => void;
+}
+
 // We pass setHistory to allow the hook to write messages directly to the terminal when an attack occurs.
-export function useMultiplayer(setHistory: React.Dispatch<React.SetStateAction<Message[]>>) {
+export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty }: UseMultiplayerOptions) {
   const [onlineCount, setOnlineCount] = useState(1);
   const [pendingPing, setPendingPing] = useState(false);
   // Track the current outage health to render the global health bar
@@ -47,7 +53,13 @@ export function useMultiplayer(setHistory: React.Dispatch<React.SetStateAction<M
         } else if (data.type === 'outage_cleared') {
           // Remove the health bar and reward players
           setOutageHp(null);
+          applyOutageReward();
           setHistory(prev => [...prev, { role: 'system', content: '[SUCCESS] AWS us-east-1 is back online. All players receive a TD boost.' }]);
+        } else if (data.type === 'outage_failed') {
+          // Remove the health bar and penalize players
+          setOutageHp(null);
+          applyOutagePenalty();
+          setHistory(prev => [...prev, { role: 'error', content: '[FAILURE] AWS us-east-1 outage was not resolved in time. Your most expensive generator has been decommissioned.' }]);
         }
       } catch {
         console.error('Failed to parse multiplayer message');
@@ -55,7 +67,7 @@ export function useMultiplayer(setHistory: React.Dispatch<React.SetStateAction<M
     });
 
     return () => socket.close();
-  }, [setHistory]);
+  }, [setHistory, applyOutageReward, applyOutagePenalty]);
 
   // Expose methods to trigger attacks and defend against them
   const sendPing = () => socketRef.current?.send(JSON.stringify({ type: 'ping' }));

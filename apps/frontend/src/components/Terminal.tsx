@@ -18,9 +18,9 @@ export type Message = {
 };
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, drainQuota, resetQuota, unlockAchievement } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty } = useGameState();
   const [history, setHistory] = useState<Message[]>([]);
-  const { onlineCount, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer(setHistory);
+  const { onlineCount, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty });
   const rank = state.economy.currentRank;
   const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
