@@ -115,7 +115,10 @@ function Terminal() {
   };
 
   const getFilteredSlashCommands = () =>
-    SLASH_COMMANDS.filter((cmd) => cmd.startsWith(slashQuery.toLowerCase()));
+    SLASH_COMMANDS.filter((cmd) => {
+      if (cmd === "/store" && state.totalTechnicalDebt < 1000) return false;
+      return cmd.startsWith(slashQuery.toLowerCase());
+    });
 
   const submitBrag = (username: string) => {
     const currentRank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
@@ -202,8 +205,15 @@ function Terminal() {
       if (command === "/clear") {
         setHistory([]);
       } else if (command === "/store") {
-        setHistory((prev) => prev.filter((m) => m.content !== "[⚙️] Claude is coping..."));
-        setShowStore(true);
+        if (state.totalTechnicalDebt < 1000) {
+          setHistory((prev) => [
+            ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
+            { role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." },
+          ]);
+        } else {
+          setHistory((prev) => prev.filter((m) => m.content !== "[⚙️] Claude is coping..."));
+          setShowStore(true);
+        }
       } else if (command === "/brag") {
         setBragPending(true);
         setHistory((prev) => [
@@ -371,7 +381,7 @@ function Terminal() {
         <div ref={bottomRef} />
       </div>
       <div className="relative">
-        {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} />}
+        {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.totalTechnicalDebt} />}
         <CommandLine
           ref={inputRef}
           value={inputValue}

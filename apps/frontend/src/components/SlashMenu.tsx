@@ -3,12 +3,14 @@ import { SLASH_COMMANDS } from "./slashCommands";
 type SlashMenuProps = {
   query: string;
   activeIndex: number;
+  totalTechnicalDebt: number;
 };
 
-function SlashMenu({ query, activeIndex }: SlashMenuProps) {
-  const filtered = SLASH_COMMANDS.filter((cmd) =>
-    cmd.startsWith(query.toLowerCase())
-  );
+function SlashMenu({ query, activeIndex, totalTechnicalDebt }: SlashMenuProps) {
+  const filtered = SLASH_COMMANDS.filter((cmd) => {
+    if (cmd === "/store" && totalTechnicalDebt < 1000) return false;
+    return cmd.startsWith(query.toLowerCase());
+  });
 
   if (filtered.length === 0) return null;
 
