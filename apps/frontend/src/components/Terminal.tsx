@@ -6,6 +6,7 @@ import { SLASH_COMMANDS } from "./slashCommands";
 import StoreOverlay from "./StoreOverlay";
 import { useGameState } from "../hooks/useGameState";
 import { CORPORATE_RANKS } from "../game/constants";
+import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
 
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
@@ -25,9 +26,44 @@ function Terminal() {
   const [inputValue, setInputValue] = useState<string>("");
   const [showStore, setShowStore] = useState<boolean>(false);
   const [bragPending, setBragPending] = useState<boolean>(false);
+  const [isBooting, setIsBooting] = useState<boolean>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("sabotage") !== "true";
+  });
 
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Boot sequence for organic visitors
+  useEffect(() => {
+    if (!isBooting) return;
+
+    const bootLines = [
+      "[OK] Initializing Claude Cope v0.1.3...",
+      "[OK] Bypassing stackoverflow...",
+      "[OK] Injecting technical debt...",
+      "[OK] Disabling all unit tests...",
+      "[OK] Replacing documentation with TODO comments...",
+      "[OK] Boot complete. Welcome to Claude Cope.",
+    ];
+
+    const interval = 3000 / bootLines.length;
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+
+    bootLines.forEach((line, i) => {
+      const id = setTimeout(() => {
+        setHistory((prev) => [...prev, { role: "system" as const, content: line }]);
+      }, interval * (i + 1));
+      timeouts.push(id);
+    });
+
+    const finishId = setTimeout(() => {
+      setIsBooting(false);
+    }, 3000);
+    timeouts.push(finishId);
+
+    return () => timeouts.forEach(clearTimeout);
+  }, [isBooting]);
 
   // Handle sabotage URL parameters on mount
   useEffect(() => {
@@ -80,7 +116,10 @@ function Terminal() {
   };
 
   const getFilteredSlashCommands = () =>
-    SLASH_COMMANDS.filter((cmd) => cmd.startsWith(slashQuery.toLowerCase()));
+    SLASH_COMMANDS.filter((cmd) => {
+      if (cmd === "/store" && state.totalTechnicalDebt < 1000) return false;
+      return cmd.startsWith(slashQuery.toLowerCase());
+    });
 
   const submitBrag = (username: string) => {
     const currentRank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
@@ -153,27 +192,61 @@ function Terminal() {
     setInputValue("");
     setSlashQuery("");
     setSlashIndex(0);
+    setIsProcessing(true);
+    setHistory((prev) => [
+      ...prev,
+      { role: "user", content: command },
+      { role: "loading", content: "[⚙️] Claude is coping..." },
+    ]);
 
-    addActiveTD(Math.floor(Math.random() * 40) + 10);
+    const clearLoading = (prev: Message[]) => prev.filter((m) => m.content !== "[⚙️] Claude is coping...");
+    const reply = (msg: Message): void => {
+      setHistory((prev) => [...clearLoading(prev), msg]);
+    };
 
-    if (command === "/clear") {
-      setHistory([]);
-    } else if (command === "/store") {
-      setShowStore(true);
-    } else if (command === "/brag") {
-      setBragPending(true);
-      setHistory((prev) => [
-        ...prev,
-        { role: "user", content: "/brag" },
-        { role: "system", content: "[🏆] Enter your name for the Hall of Blame:" },
-      ]);
-    } else {
-      setHistory((prev) => [
-        ...prev,
-        { role: "user", content: command },
-        { role: "system", content: `[✓] Executed ${command}` },
-      ]);
-    }
+    setTimeout(() => {
+      addActiveTD(Math.floor(Math.random() * 40) + 10);
+
+      if (command === "/clear") {
+        setHistory([]);
+      } else if (command === "/store") {
+        if (state.totalTechnicalDebt < 1000) {
+          reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
+        } else {
+          setHistory(clearLoading);
+          setShowStore(true);
+        }
+      } else if (command === "/synergize") {
+        reply({ role: "system", content: "[🗓️] Joining 1-on-1 meeting. Please wait..." });
+        setTimeout(() => {
+          setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived 10 seconds of corporate synergy. No action items assigned." }]);
+          setIsProcessing(false);
+        }, 10000);
+        return;
+      } else if (command === "/compact") {
+        setHistory((prev) => {
+          const filtered = clearLoading(prev);
+          const compacted = filtered.slice(0, Math.max(0, filtered.length - 5));
+          return [...compacted, { role: "system", content: "[✓] Context compacted. Deleted 50 lines of unoptimized boilerplate." }];
+        });
+      } else if (command === "/brag") {
+        setBragPending(true);
+        reply({ role: "system", content: "[🏆] Enter your name for the Hall of Blame:" });
+      } else if (command === "/support") {
+        reply({ role: "system", content: "[✓] Support ticket created. Redirecting payload directly to /dev/null..." });
+      } else if (command === "/preworkout") {
+        reply({ role: "system", content: "[✓] Injected 400mg of pure caffeine into the Node.js event loop. LFG." });
+      } else if (command === "/buddy") {
+        const roll = Math.random() * 100;
+        const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
+        setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny: false, promptsSinceLastInterjection: 0 } }));
+        reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType} ${buddyIcon}!` });
+      } else {
+        reply({ role: "system", content: `[✓] Executed ${command}` });
+      }
+
+      setIsProcessing(false);
+    }, 1500);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -199,6 +272,32 @@ function Terminal() {
         }
 
         addActiveTD(Math.floor(Math.random() * 40) + 10);
+
+        // Increment buddy interjection counter
+        let buddyInterjection: Message | null = null;
+        if (state.buddy.type) {
+          const newCount = state.buddy.promptsSinceLastInterjection + 1;
+          if (newCount >= 5) {
+            const buddyType = state.buddy.type;
+            const icon = BUDDY_ICONS[buddyType] ?? "🐾";
+            const lines = BUDDY_INTERJECTIONS[buddyType] ?? ["stares at you blankly."];
+            const text = lines[Math.floor(Math.random() * lines.length)]!;
+            buddyInterjection = {
+              role: "warning",
+              content: `[${icon} ${buddyType}] ${text}`,
+            };
+            setState((prev) => ({
+              ...prev,
+              buddy: { ...prev.buddy, promptsSinceLastInterjection: 0 },
+            }));
+          } else {
+            setState((prev) => ({
+              ...prev,
+              buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount },
+            }));
+          }
+        }
+
         const command = inputValue;
         setCommandHistory((prev) => [...prev, command]);
         setHistoryIndex(-1);
@@ -268,6 +367,7 @@ function Terminal() {
               ...prev.filter((msg) => msg.role !== "loading"),
               { role: "system", content: reply },
               ...achievementMessages,
+              ...(buddyInterjection ? [buddyInterjection] : []),
             ]);
           })
           .catch(() => {
@@ -319,18 +419,23 @@ function Terminal() {
         <span>Technical Debt: {state.totalTechnicalDebt.toLocaleString()} TD</span>
       </div>
       <div className="flex-1 overflow-y-auto">
-        <p>Welcome to Claude Cope. Type a command to begin.</p>
+        {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
           <OutputBlock key={index} message={message} />
         ))}
         <div ref={bottomRef} />
       </div>
       <div className="relative">
-        {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} />}
+        {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.totalTechnicalDebt} />}
+        {state.buddy.type && (
+          <div className="text-yellow-400 text-xs mb-1">
+            {BUDDY_ICONS[state.buddy.type] ?? "🐾"} {state.buddy.type} is watching...
+          </div>
+        )}
         <CommandLine
           ref={inputRef}
           value={inputValue}
-          disabled={isProcessing}
+          disabled={isProcessing || isBooting}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
         />

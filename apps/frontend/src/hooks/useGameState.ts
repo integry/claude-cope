@@ -3,12 +3,19 @@ import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE } from "../game/constants";
 
 const STORAGE_KEY = "claudeCopeState";
 
+export interface BuddyState {
+  type: string | null;
+  isShiny: boolean;
+  promptsSinceLastInterjection: number;
+}
+
 export interface GameState {
   technicalDebt: number;
   totalTechnicalDebt: number;
   rankIndex: number;
   inventory: Record<string, number>;
   achievements: string[];
+  buddy: BuddyState;
 }
 
 function createDefaultState(): GameState {
@@ -22,6 +29,11 @@ function createDefaultState(): GameState {
     rankIndex: 0,
     inventory,
     achievements: [],
+    buddy: {
+      type: null,
+      isShiny: false,
+      promptsSinceLastInterjection: 0,
+    },
   };
 }
 
@@ -32,6 +44,13 @@ function loadState(): GameState {
       const parsed = JSON.parse(stored) as GameState;
       if (!Array.isArray(parsed.achievements)) {
         parsed.achievements = [];
+      }
+      if (!parsed.buddy) {
+        parsed.buddy = {
+          type: null,
+          isShiny: false,
+          promptsSinceLastInterjection: 0,
+        };
       }
       return parsed;
     }
@@ -68,14 +87,15 @@ export function useGameState() {
     }
   }, [state]);
 
-  // Background game loop — runs every second
+  // Background game loop — runs every 100ms for smooth visual updates
   useEffect(() => {
     const interval = setInterval(() => {
       setState((prev) => {
         const tdps = calculateTDpS(prev.inventory);
         if (tdps === 0) return prev;
 
-        const newTotalTD = prev.totalTechnicalDebt + tdps;
+        const tickTD = tdps / 10;
+        const newTotalTD = prev.totalTechnicalDebt + tickTD;
 
         // Check for rank advancement
         let newRankIndex = prev.rankIndex;
@@ -88,12 +108,12 @@ export function useGameState() {
 
         return {
           ...prev,
-          technicalDebt: prev.technicalDebt + tdps,
+          technicalDebt: prev.technicalDebt + tickTD,
           totalTechnicalDebt: newTotalTD,
           rankIndex: newRankIndex,
         };
       });
-    }, 1000);
+    }, 100);
 
     return () => clearInterval(interval);
   }, []);
