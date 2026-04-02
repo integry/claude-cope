@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { GENERATORS, CORPORATE_RANKS } from "../game/constants";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE } from "../game/constants";
 
 const STORAGE_KEY = "claudeCopeState";
 
@@ -92,5 +92,56 @@ export function useGameState() {
     return () => clearInterval(interval);
   }, []);
 
-  return [state, setState] as const;
+  const buyGenerator = useCallback((generatorId: string): boolean => {
+    const generator = GENERATORS.find((g) => g.id === generatorId);
+    if (!generator) return false;
+
+    const current = stateRef.current;
+    const owned = current.inventory[generatorId] ?? 0;
+    const cost = Math.floor(generator.baseCost * Math.pow(GROWTH_RATE, owned));
+
+    if (current.technicalDebt < cost) return false;
+
+    setState((prev) => {
+      const ownedNow = prev.inventory[generatorId] ?? 0;
+      const dynamicCost = Math.floor(
+        generator.baseCost * Math.pow(GROWTH_RATE, ownedNow),
+      );
+      if (prev.technicalDebt < dynamicCost) return prev;
+
+      return {
+        ...prev,
+        technicalDebt: prev.technicalDebt - dynamicCost,
+        inventory: {
+          ...prev.inventory,
+          [generatorId]: ownedNow + 1,
+        },
+      };
+    });
+
+    return true;
+  }, []);
+
+  const addActiveTD = useCallback((amount: number) => {
+    setState((prev) => {
+      const newTotalTD = prev.totalTechnicalDebt + amount;
+
+      let newRankIndex = prev.rankIndex;
+      while (
+        newRankIndex < CORPORATE_RANKS.length - 1 &&
+        newTotalTD >= CORPORATE_RANKS[newRankIndex + 1]!.threshold
+      ) {
+        newRankIndex++;
+      }
+
+      return {
+        ...prev,
+        technicalDebt: prev.technicalDebt + amount,
+        totalTechnicalDebt: newTotalTD,
+        rankIndex: newRankIndex,
+      };
+    });
+  }, []);
+
+  return { state, setState, buyGenerator, addActiveTD };
 }
