@@ -3,12 +3,19 @@ import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE } from "../game/constants";
 
 const STORAGE_KEY = "claudeCopeState";
 
+export interface BuddyState {
+  type: string | null;
+  isShiny: boolean;
+  promptsSinceLastInterjection: number;
+}
+
 export interface GameState {
   technicalDebt: number;
   totalTechnicalDebt: number;
   rankIndex: number;
   inventory: Record<string, number>;
   achievements: string[];
+  buddy: BuddyState;
 }
 
 function createDefaultState(): GameState {
@@ -22,6 +29,11 @@ function createDefaultState(): GameState {
     rankIndex: 0,
     inventory,
     achievements: [],
+    buddy: {
+      type: null,
+      isShiny: false,
+      promptsSinceLastInterjection: 0,
+    },
   };
 }
 
@@ -32,6 +44,13 @@ function loadState(): GameState {
       const parsed = JSON.parse(stored) as GameState;
       if (!Array.isArray(parsed.achievements)) {
         parsed.achievements = [];
+      }
+      if (!parsed.buddy) {
+        parsed.buddy = {
+          type: null,
+          isShiny: false,
+          promptsSinceLastInterjection: 0,
+        };
       }
       return parsed;
     }
