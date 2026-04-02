@@ -227,6 +227,15 @@ function Terminal() {
           setIsProcessing(false);
         }, 10000);
         return;
+      } else if (command === "/compact") {
+        setHistory((prev) => {
+          const filtered = prev.filter((m) => m.content !== "[⚙️] Claude is coping...");
+          const compacted = filtered.slice(0, Math.max(0, filtered.length - 5));
+          return [
+            ...compacted,
+            { role: "system", content: "[✓] Context compacted. Deleted 50 lines of unoptimized boilerplate." },
+          ];
+        });
       } else if (command === "/brag") {
         setBragPending(true);
         setHistory((prev) => [
