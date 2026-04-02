@@ -263,9 +263,9 @@ function Terminal() {
         }
 
         // Increment buddy interjection counter
-        const buddyInterjection = computeBuddyInterjection(state.buddy);
+        const buddyResult = computeBuddyInterjection(state.buddy);
         if (state.buddy.type) {
-          const newCount = buddyInterjection ? 0 : state.buddy.promptsSinceLastInterjection + 1;
+          const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
           setState((prev) => ({
             ...prev,
             buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount },
@@ -291,7 +291,7 @@ function Terminal() {
           userMessage,
         ].map((m) => ({ role: m.role, content: m.content }));
 
-        submitChatMessage(chatMessages, buddyInterjection, unlockAchievement, setHistory, setIsProcessing);
+        submitChatMessage(chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing);
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
