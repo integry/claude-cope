@@ -4,3 +4,8 @@ compatibility_date = "2024-12-01"
 
 [dev]
 port = 8787
+
+[[d1_databases]]
+binding = "DB"
+database_name = "claude-cope-db"
+database_id = "placeholder-database-id"
