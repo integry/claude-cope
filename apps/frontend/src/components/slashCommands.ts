@@ -1,1 +1,1 @@
-export const SLASH_COMMANDS = ["/clear", "/support", "/preworkout", "/buddy"];
+export const SLASH_COMMANDS = ["/clear", "/support", "/preworkout", "/buddy", "/store"];
