@@ -6,6 +6,8 @@ import { Message } from '../components/Terminal';
 export function useMultiplayer(setHistory: React.Dispatch<React.SetStateAction<Message[]>>) {
   const [onlineCount, setOnlineCount] = useState(1);
   const [pendingPing, setPendingPing] = useState(false);
+  // Track the current outage health to render the global health bar
+  const [outageHp, setOutageHp] = useState<number | null>(null);
   const socketRef = useRef<PartySocket | null>(null);
 
   useEffect(() => {
@@ -35,6 +37,13 @@ export function useMultiplayer(setHistory: React.Dispatch<React.SetStateAction<M
               return false;
             });
           }, 5000);
+        } else if (data.type === 'outage_update') {
+          // Sync the local health bar with the server
+          setOutageHp(data.hp);
+        } else if (data.type === 'outage_cleared') {
+          // Remove the health bar and reward players
+          setOutageHp(null);
+          setHistory(prev => [...prev, { role: 'system', content: '[SUCCESS] AWS us-east-1 is back online. All players receive a TD boost.' }]);
         }
       } catch {
         console.error('Failed to parse multiplayer message');
@@ -47,6 +56,8 @@ export function useMultiplayer(setHistory: React.Dispatch<React.SetStateAction<M
   // Expose methods to trigger attacks and defend against them
   const sendPing = () => socketRef.current?.send(JSON.stringify({ type: 'ping' }));
   const rejectPing = () => setPendingPing(false);
+  // Expose a method to allow players to attack the outage
+  const sendDamage = () => socketRef.current?.send(JSON.stringify({ type: 'damage_outage' }));
 
-  return { onlineCount, sendPing, pendingPing, rejectPing };
+  return { onlineCount, sendPing, pendingPing, rejectPing, outageHp, sendDamage };
 }
