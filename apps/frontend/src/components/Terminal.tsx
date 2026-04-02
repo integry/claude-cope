@@ -239,10 +239,7 @@ function Terminal() {
       } else if (command === "/buddy") {
         const roll = Math.random() * 100;
         const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
-        setState((prev) => ({
-          ...prev,
-          buddy: { type: buddyType, isShiny: false, promptsSinceLastInterjection: 0 },
-        }));
+        setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny: false, promptsSinceLastInterjection: 0 } }));
         reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType} ${buddyIcon}!` });
       } else {
         reply({ role: "system", content: `[✓] Executed ${command}` });
