@@ -9,6 +9,7 @@ import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, parseSabotageParams } from "./slashCommandExecutor";
+import Ticker from "./Ticker";
 
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
@@ -295,6 +296,8 @@ function Terminal() {
       style={regressionGlitch ? Object.fromEntries(regressionGlitch.split(";").filter(Boolean).map((s) => { const [k, ...v] = s.split(":"); return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()]; })) : undefined}
       onClick={() => inputRef.current?.focus()}
     >
+      {/* Mount the Ticker at the very top of the interface so it acts as a global broadcast banner */}
+      <Ticker />
       <div className="sticky top-0 z-10 bg-[#0d1117] border-b border-green-800 pb-2 mb-2">
         <div className="flex justify-between text-green-400 mb-1">
           <span>Rank: {rank}</span>
