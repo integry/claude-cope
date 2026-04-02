@@ -1,7 +1,14 @@
 import { Hono } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { SYSTEM_PROMPT } from "../prompts/systemPrompt";
 
-const chat = new Hono();
+type Env = {
+  Bindings: {
+    OPENROUTER_API_KEY?: string;
+  };
+};
+
+const chat = new Hono<Env>();
 
 chat.post("/", async (c) => {
   const apiKey = c.env?.OPENROUTER_API_KEY ?? process.env.OPENROUTER_API_KEY;
@@ -40,7 +47,7 @@ chat.post("/", async (c) => {
   const data = await response.json();
 
   if (!response.ok) {
-    return c.json({ error: "OpenRouter request failed", details: data }, response.status);
+    return c.json({ error: "OpenRouter request failed", details: data }, response.status as ContentfulStatusCode);
   }
 
   return c.json(data);
