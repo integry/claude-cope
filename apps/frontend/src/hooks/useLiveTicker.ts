@@ -13,7 +13,7 @@ export function useLiveTicker() {
     if (initialEvents.length > 0 && liveEvents.length === 0) {
       setLiveEvents(initialEvents);
     }
-  }, [initialEvents]);
+  }, [initialEvents, liveEvents.length]);
 
   // Subscribe to the 'global_incidents' channel to listen for live events.
   useEffect(() => {
