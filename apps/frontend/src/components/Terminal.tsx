@@ -3,6 +3,7 @@ import OutputBlock from "./OutputBlock";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import { SLASH_COMMANDS } from "./slashCommands";
+import StoreOverlay from "./StoreOverlay";
 import { useGameState } from "../hooks/useGameState";
 import { CORPORATE_RANKS } from "../game/constants";
 
@@ -12,7 +13,7 @@ export type Message = {
 };
 
 function Terminal() {
-  const { state, addActiveTD } = useGameState();
+  const { state, addActiveTD, buyGenerator } = useGameState();
   const rank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
 
   const [history, setHistory] = useState<Message[]>([]);
@@ -22,6 +23,7 @@ function Terminal() {
   const [slashQuery, setSlashQuery] = useState<string>("");
   const [slashIndex, setSlashIndex] = useState<number>(0);
   const [inputValue, setInputValue] = useState<string>("");
+  const [showStore, setShowStore] = useState<boolean>(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -50,6 +52,8 @@ function Terminal() {
 
     if (command === "/clear") {
       setHistory([]);
+    } else if (command === "/store") {
+      setShowStore(true);
     } else {
       setHistory((prev) => [
         ...prev,
@@ -194,6 +198,13 @@ function Terminal() {
           onKeyDown={handleKeyDown}
         />
       </div>
+      {showStore && (
+        <StoreOverlay
+          state={state}
+          buyGenerator={buyGenerator}
+          onClose={() => setShowStore(false)}
+        />
+      )}
     </div>
   );
 }
