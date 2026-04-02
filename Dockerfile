@@ -9,8 +9,6 @@ COPY package.json package-lock.json ./
 # Copy workspace package.json files for dependency resolution
 COPY apps/frontend/package.json apps/frontend/package.json
 COPY apps/backend/package.json apps/backend/package.json
-COPY apps/web/package.json apps/web/package.json
-COPY apps/api/package.json apps/api/package.json
 
 # Install all dependencies (including devDependencies for building)
 RUN npm ci
@@ -35,8 +33,6 @@ COPY package.json package-lock.json ./
 
 # Copy only the backend package.json for production dependency installation
 COPY apps/backend/package.json apps/backend/package.json
-COPY apps/web/package.json apps/web/package.json
-COPY apps/api/package.json apps/api/package.json
 COPY apps/frontend/package.json apps/frontend/package.json
 
 # Install production dependencies only
