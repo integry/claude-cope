@@ -25,9 +25,9 @@ chat.post("/", async (c) => {
     return c.json({ error: "messages array is required" }, 400);
   }
 
-  // Increase context window to 10 messages to ensure the LLM has enough historical data
-  // to detect long-running user frustration patterns for semantic achievements.
-  const recentMessages = body.messages.slice(-10);
+  // Strict context window: only send the last 4 messages per product spec
+  // to manage context strictly and avoid over-reliance on deep history.
+  const recentMessages = body.messages.slice(-4);
 
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
