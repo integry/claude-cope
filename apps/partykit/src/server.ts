@@ -18,7 +18,18 @@ export default class ClaudeCopeServer implements Party.Server {
   onMessage(message: string, sender: Party.Connection) {
     try {
       const data = JSON.parse(message);
-      // Future handlers for ping and outage will go here
+      if (data.type === "ping") {
+        // We randomly select another active connection to serve as the target.
+        // This simulates targeted sabotage without requiring a complex authentication system.
+        const conns = Array.from(this.room.getConnections());
+        const targets = conns.filter(c => c.id !== sender.id);
+        if (targets.length > 0) {
+          const target = targets[Math.floor(Math.random() * targets.length)];
+          target.send(JSON.stringify({ type: "incoming_ping", attacker: "A Coworker" }));
+        } else {
+          sender.send(JSON.stringify({ type: "ping_failed", reason: "No one else is online." }));
+        }
+      }
     } catch (e) {
       console.error("Invalid message format");
     }

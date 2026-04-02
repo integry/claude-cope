@@ -21,6 +21,9 @@ interface SlashCommandContext {
   addActiveTD: (n: number) => void;
   applyQuotaDrain: () => boolean;
   onlineCount: number;
+  sendPing: () => void;
+  pendingPing: boolean;
+  rejectPing: () => void;
 }
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.content !== "[⚙️] Claude is coping...");
@@ -99,6 +102,16 @@ export function executeSlashCommand(
       reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType}${shinyLabel} ${buddyIcon}!` });
     } else if (command === "/who") {
       reply({ role: "system", content: `[📡] There are currently ${ctx.onlineCount} developers suffering in this instance.` });
+    } else if (command === "/ping") {
+      ctx.sendPing();
+      reply({ role: "system", content: "[📡] Pinging a random coworker with unsolicited Jira tickets..." });
+    } else if (command === "/reject") {
+      if (ctx.pendingPing) {
+        ctx.rejectPing();
+        reply({ role: "system", content: "[🛡️] Jira tickets rejected! You dodged the corporate sabotage." });
+      } else {
+        reply({ role: "error", content: "[❌] No incoming ping to reject." });
+      }
     } else {
       reply({ role: "system", content: `[✓] Executed ${command}` });
     }
