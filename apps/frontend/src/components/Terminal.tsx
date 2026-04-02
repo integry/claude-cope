@@ -6,8 +6,9 @@ import { SLASH_COMMANDS } from "./slashCommands";
 import StoreOverlay from "./StoreOverlay";
 import { useGameState } from "../hooks/useGameState";
 import { CORPORATE_RANKS } from "../game/constants";
-import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
+import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
+import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
@@ -280,28 +281,13 @@ function Terminal() {
         }
 
         // Increment buddy interjection counter
-        let buddyInterjection: Message | null = null;
+        const buddyInterjection = computeBuddyInterjection(state.buddy);
         if (state.buddy.type) {
-          const newCount = state.buddy.promptsSinceLastInterjection + 1;
-          if (newCount >= 5) {
-            const buddyType = state.buddy.type;
-            const icon = BUDDY_ICONS[buddyType] ?? "🐾";
-            const lines = BUDDY_INTERJECTIONS[buddyType] ?? ["stares at you blankly."];
-            const text = lines[Math.floor(Math.random() * lines.length)]!;
-            buddyInterjection = {
-              role: "warning",
-              content: `[${icon} ${buddyType}] ${text}`,
-            };
-            setState((prev) => ({
-              ...prev,
-              buddy: { ...prev.buddy, promptsSinceLastInterjection: 0 },
-            }));
-          } else {
-            setState((prev) => ({
-              ...prev,
-              buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount },
-            }));
-          }
+          const newCount = buddyInterjection ? 0 : state.buddy.promptsSinceLastInterjection + 1;
+          setState((prev) => ({
+            ...prev,
+            buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount },
+          }));
         }
 
         const command = inputValue;
@@ -323,68 +309,7 @@ function Terminal() {
           userMessage,
         ].map((m) => ({ role: m.role, content: m.content }));
 
-        fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: chatMessages }),
-        })
-          .then(async (res) => {
-            if (res.status === 429) {
-              setHistory((prev) => [
-                ...prev.filter((msg) => msg.role !== "loading"),
-                { role: "warning", content: "[⚠️] Rate limited. Please wait before sending another message." },
-              ]);
-              return;
-            }
-
-            if (!res.ok) {
-              const errorData = await res.json().catch(() => null);
-              setHistory((prev) => [
-                ...prev.filter((msg) => msg.role !== "loading"),
-                {
-                  role: "error",
-                  content: `[❌ Error] ${errorData?.error ?? "Request failed"}`,
-                },
-              ]);
-              return;
-            }
-
-            const data = await res.json();
-            const rawReply =
-              data?.choices?.[0]?.message?.content ?? "[❌ Error] No response from API.";
-
-            // Parse and extract achievement tags from the LLM response
-            const achievementRegex = /\[ACHIEVEMENT_UNLOCKED:\s*(.+?)\]/g;
-            const achievementMessages: Message[] = [];
-            let match;
-            while ((match = achievementRegex.exec(rawReply)) !== null) {
-              const achievementId = match[1]!.trim();
-              unlockAchievement(achievementId);
-              achievementMessages.push({
-                role: "warning",
-                content: `[🏆 Achievement Unlocked: ${achievementId}]`,
-              });
-            }
-
-            // Strip achievement tags from the visible reply
-            const reply = rawReply.replace(achievementRegex, "").trim();
-
-            setHistory((prev) => [
-              ...prev.filter((msg) => msg.role !== "loading"),
-              { role: "system", content: reply },
-              ...achievementMessages,
-              ...(buddyInterjection ? [buddyInterjection] : []),
-            ]);
-          })
-          .catch(() => {
-            setHistory((prev) => [
-              ...prev.filter((msg) => msg.role !== "loading"),
-              { role: "error", content: "[❌ Error] Network error. Is the backend running?" },
-            ]);
-          })
-          .finally(() => {
-            setIsProcessing(false);
-          });
+        submitChatMessage(chatMessages, buddyInterjection, unlockAchievement, setHistory, setIsProcessing);
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
