@@ -7,6 +7,7 @@ import StoreOverlay from "./StoreOverlay";
 import { useGameState } from "../hooks/useGameState";
 import { CORPORATE_RANKS } from "../game/constants";
 import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
+import { submitBrag } from "./submitBrag";
 
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
@@ -15,7 +16,7 @@ export type Message = {
 
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, unlockAchievement } = useGameState();
-  const rank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
+  const rank = state.economy.currentRank;
 
   const [history, setHistory] = useState<Message[]>([]);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
@@ -83,12 +84,21 @@ function Terminal() {
         }
       }
 
-      setState((prev) => ({
-        ...prev,
-        technicalDebt: prev.technicalDebt + target,
-        totalTechnicalDebt: prev.totalTechnicalDebt + target,
-        rankIndex: Math.max(prev.rankIndex, rankIndex),
-      }));
+      setState((prev) => {
+        const newRankIndex = Math.max(
+          CORPORATE_RANKS.findIndex((r) => r.title === prev.economy.currentRank),
+          rankIndex,
+        );
+        return {
+          ...prev,
+          economy: {
+            ...prev.economy,
+            currentTD: prev.economy.currentTD + target,
+            totalTDEarned: prev.economy.totalTDEarned + target,
+            currentRank: CORPORATE_RANKS[newRankIndex]?.title ?? prev.economy.currentRank,
+          },
+        };
+      });
 
       setHistory((prev) => [
         ...prev,
@@ -117,76 +127,9 @@ function Terminal() {
 
   const getFilteredSlashCommands = () =>
     SLASH_COMMANDS.filter((cmd) => {
-      if (cmd === "/store" && state.totalTechnicalDebt < 1000) return false;
+      if (cmd === "/store" && state.economy.totalTDEarned < 1000) return false;
       return cmd.startsWith(slashQuery.toLowerCase());
     });
-
-  const submitBrag = (username: string) => {
-    const currentRank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
-    const currentDebt = state.totalTechnicalDebt;
-
-    setHistory((prev) => [
-      ...prev,
-      { role: "user", content: username },
-      { role: "loading", content: "[⚙️] Submitting to the Hall of Blame..." },
-    ]);
-
-    fetch("/api/leaderboard", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, rank: currentRank, debt: currentDebt }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => null);
-          setHistory((prev) => [
-            ...prev.filter((msg) => msg.role !== "loading"),
-            { role: "error", content: `[❌ Error] ${errorData?.error ?? "Failed to submit brag"}` },
-          ]);
-          return;
-        }
-
-        const sabotageUrl = `${window.location.origin}?sabotage=true&target=${currentDebt}&rank=${encodeURIComponent(currentRank)}`;
-
-        const payload = [
-          "┌──────────────────────────────────────────────┐",
-          "│        PERFORMANCE REVIEW — Claude Cope       │",
-          "├──────────────────────────────────────────────┤",
-          `│  Employee:  ${username.padEnd(33)}│`,
-          `│  Rank:      ${currentRank.padEnd(33)}│`,
-          `│  Total TD:  ${currentDebt.toLocaleString().padEnd(33)}│`,
-          "├──────────────────────────────────────────────┤",
-          "│  Comments:                                    │",
-          "│  \"Has demonstrated an exceptional ability     │",
-          "│   to accumulate technical debt at scale.\"     │",
-          "├──────────────────────────────────────────────┤",
-          "│  🔗 Share the love (sabotage a coworker):     │",
-          `│  ${sabotageUrl.length <= 44 ? sabotageUrl.padEnd(44) : sabotageUrl}│`,
-          "└──────────────────────────────────────────────┘",
-        ].join("\n");
-
-        navigator.clipboard.writeText(payload).catch(() => {
-          // clipboard may not be available in all environments
-        });
-
-        setHistory((prev) => [
-          ...prev.filter((msg) => msg.role !== "loading"),
-          {
-            role: "system",
-            content: `\`\`\`\n${payload}\n\`\`\`\n\n[📋 Copied to clipboard! Paste it anywhere to brag.]`,
-          },
-        ]);
-      })
-      .catch(() => {
-        setHistory((prev) => [
-          ...prev.filter((msg) => msg.role !== "loading"),
-          { role: "error", content: "[❌ Error] Network error. Is the backend running?" },
-        ]);
-      })
-      .finally(() => {
-        setBragPending(false);
-      });
-  };
 
   const executeSlashCommand = (command: string) => {
     setInputValue("");
@@ -210,7 +153,7 @@ function Terminal() {
       if (command === "/clear") {
         setHistory([]);
       } else if (command === "/store") {
-        if (state.totalTechnicalDebt < 1000) {
+        if (state.economy.totalTDEarned < 1000) {
           reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
         } else {
           setHistory(clearLoading);
@@ -267,7 +210,7 @@ function Terminal() {
         if (bragPending) {
           const username = inputValue.trim();
           setInputValue("");
-          submitBrag(username);
+          submitBrag(username, state.economy.currentRank, state.economy.totalTDEarned, setHistory, setBragPending);
           return;
         }
 
@@ -416,7 +359,7 @@ function Terminal() {
     >
       <div className="sticky top-0 z-10 bg-[#0d1117] border-b border-green-800 pb-2 mb-2 flex justify-between text-green-400">
         <span>Rank: {rank}</span>
-        <span>Technical Debt: {state.totalTechnicalDebt.toLocaleString()} TD</span>
+        <span>Technical Debt: {state.economy.totalTDEarned.toLocaleString()} TD</span>
       </div>
       <div className="flex-1 overflow-y-auto">
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
@@ -426,7 +369,7 @@ function Terminal() {
         <div ref={bottomRef} />
       </div>
       <div className="relative">
-        {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.totalTechnicalDebt} />}
+        {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} />}
         {state.buddy.type && (
           <div className="text-yellow-400 text-xs mb-1">
             {BUDDY_ICONS[state.buddy.type] ?? "🐾"} {state.buddy.type} is watching...
