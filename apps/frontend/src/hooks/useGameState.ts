@@ -16,6 +16,7 @@ export interface EconomyState {
   currentRank: string;
   quotaPercent: number;
   quotaLockouts: number;
+  tdMultiplier: number;
 }
 
 export interface GameState {
@@ -71,6 +72,7 @@ function createDefaultState(): GameState {
       currentRank: CORPORATE_RANKS[0]!.title,
       quotaPercent: 100,
       quotaLockouts: 0,
+      tdMultiplier: 1,
     },
     inventory,
     achievements: [],
@@ -102,6 +104,7 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
       currentRank: rankTitleFromIndex(legacy.rankIndex),
       quotaPercent: 100,
       quotaLockouts: 0,
+      tdMultiplier: 1,
     },
     inventory: legacy.inventory,
     achievements: Array.isArray(legacy.achievements) ? legacy.achievements : [],
@@ -140,6 +143,10 @@ function loadState(): GameState {
       // Ensure quotaPercent is initialized for existing saves
       if (!state.economy.quotaPercent) {
         state.economy.quotaPercent = 100;
+      }
+      // Ensure tdMultiplier is initialized for existing saves
+      if (!state.economy.tdMultiplier) {
+        state.economy.tdMultiplier = 1;
       }
 
       // Update lastLogin on load
@@ -185,9 +192,10 @@ export function useGameState() {
   useEffect(() => {
     const interval = setInterval(() => {
       setState((prev) => {
-        const tdps = calculateTDpS(prev.inventory);
-        if (tdps === 0) return prev;
+        const baseTdps = calculateTDpS(prev.inventory);
+        if (baseTdps === 0) return prev;
 
+        const tdps = baseTdps * prev.economy.tdMultiplier;
         const tickTD = tdps / 10;
         const newTotalTDEarned = prev.economy.totalTDEarned + tickTD;
 
@@ -305,5 +313,39 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, addActiveTD, drainQuota, resetQuota, unlockAchievement };
+  const applyOutageReward = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      economy: {
+        ...prev.economy,
+        tdMultiplier: prev.economy.tdMultiplier + 0.05,
+      },
+    }));
+  }, []);
+
+  const applyOutagePenalty = useCallback(() => {
+    setState((prev) => {
+      // Find the most expensive generator that the player owns at least 1 of
+      let mostExpensiveId: string | null = null;
+      let highestCost = -1;
+      for (const generator of GENERATORS) {
+        const count = prev.inventory[generator.id] ?? 0;
+        if (count > 0 && generator.baseCost > highestCost) {
+          highestCost = generator.baseCost;
+          mostExpensiveId = generator.id;
+        }
+      }
+      if (!mostExpensiveId) return prev;
+
+      return {
+        ...prev,
+        inventory: {
+          ...prev.inventory,
+          [mostExpensiveId]: (prev.inventory[mostExpensiveId] ?? 0) - 1,
+        },
+      };
+    });
+  }, []);
+
+  return { state, setState, buyGenerator, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty };
 }
