@@ -15,6 +15,11 @@ interface SlashCommandContext {
   unlockAchievement: (id: string) => void;
   clearCount: number;
   setClearCount: (v: number) => void;
+  setInputValue: (v: string) => void;
+  setSlashQuery: (v: string) => void;
+  setSlashIndex: (v: number) => void;
+  addActiveTD: (n: number) => void;
+  applyQuotaDrain: () => boolean;
 }
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.content !== "[⚙️] Claude is coping...");
@@ -22,15 +27,10 @@ const clearLoading = (prev: Message[]) => prev.filter((m) => m.content !== "[⚙
 export function executeSlashCommand(
   command: string,
   ctx: SlashCommandContext,
-  setInputValue: (v: string) => void,
-  setSlashQuery: (v: string) => void,
-  setSlashIndex: (v: number) => void,
-  addActiveTD: (n: number) => void,
-  applyQuotaDrain: () => boolean,
 ) {
-  setInputValue("");
-  setSlashQuery("");
-  setSlashIndex(0);
+  ctx.setInputValue("");
+  ctx.setSlashQuery("");
+  ctx.setSlashIndex(0);
   ctx.setIsProcessing(true);
   ctx.setHistory((prev) => [
     ...prev,
@@ -43,8 +43,8 @@ export function executeSlashCommand(
   };
 
   setTimeout(() => {
-    addActiveTD(Math.floor(Math.random() * 40) + 10);
-    if (applyQuotaDrain()) return;
+    ctx.addActiveTD(Math.floor(Math.random() * 40) + 10);
+    if (ctx.applyQuotaDrain()) return;
 
     if (command === "/clear") {
       const newClearCount = ctx.clearCount + 1;
