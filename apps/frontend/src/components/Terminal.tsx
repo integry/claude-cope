@@ -9,8 +9,8 @@ export type Message = {
 
 function Terminal() {
   const [_history, _setHistory] = useState<Message[]>([]);
-  const [_commandHistory, _setCommandHistory] = useState<string[]>([]);
-  const [_historyIndex, _setHistoryIndex] = useState<number>(-1);
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [_isProcessing, _setIsProcessing] = useState<boolean>(false);
   const [_slashQuery, _setSlashQuery] = useState<string>("");
   const [inputValue, setInputValue] = useState<string>("");
@@ -26,8 +26,32 @@ function Terminal() {
     setInputValue(e.target.value);
   };
 
-  const handleKeyDown = (_e: KeyboardEvent<HTMLInputElement>) => {
-    // Key handling will be implemented in a future phase
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      if (inputValue.trim() !== "") {
+        setCommandHistory((prev) => [...prev, inputValue]);
+        setHistoryIndex(-1);
+        setInputValue("");
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (commandHistory.length === 0) return;
+      const newIndex = historyIndex + 1;
+      if (newIndex < commandHistory.length) {
+        setHistoryIndex(newIndex);
+        setInputValue(commandHistory[commandHistory.length - 1 - newIndex]!);
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const newIndex = historyIndex - 1;
+      if (newIndex < -1) return;
+      setHistoryIndex(newIndex);
+      if (newIndex === -1) {
+        setInputValue("");
+      } else {
+        setInputValue(commandHistory[commandHistory.length - 1 - newIndex]!);
+      }
+    }
   };
 
   return (
