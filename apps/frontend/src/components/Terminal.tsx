@@ -1,7 +1,8 @@
 import { useState } from "react";
+import OutputBlock from "./OutputBlock";
 
 export type Message = {
-  role: "user" | "assistant" | "system";
+  role: "user" | "system" | "loading" | "warning" | "error";
   content: string;
 };
 
@@ -15,6 +16,9 @@ function Terminal() {
   return (
     <div className="h-screen w-screen bg-[#0d1117] font-mono text-sm text-gray-300 p-4">
       <p>Welcome to Claude Cope. Type a command to begin.</p>
+      {_history.map((message, index) => (
+        <OutputBlock key={index} message={message} />
+      ))}
     </div>
   );
 }
