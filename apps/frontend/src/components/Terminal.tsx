@@ -369,7 +369,7 @@ function Terminal() {
       <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
-          <OutputBlock key={index} message={message} />
+          <OutputBlock key={index} message={message} promptString={activeRegression ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "} />
         ))}
         <div ref={bottomRef} />
       </div>
@@ -386,6 +386,7 @@ function Terminal() {
           disabled={isProcessing || isBooting || quotaLocked}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          promptString={activeRegression ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "}
         />
       </div>
       {showStore && (
