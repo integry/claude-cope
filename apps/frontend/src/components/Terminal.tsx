@@ -13,7 +13,7 @@ export type Message = {
 };
 
 function Terminal() {
-  const { state, addActiveTD, buyGenerator } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator } = useGameState();
   const rank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
 
   const [history, setHistory] = useState<Message[]>([]);
@@ -27,6 +27,44 @@ function Terminal() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Handle sabotage URL parameters on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("sabotage") !== "true") return;
+
+    const target = parseInt(params.get("target") ?? "0", 10);
+    const rankTitle = params.get("rank") ?? "";
+
+    if (target > 0) {
+      // Find the rank index matching the provided rank title
+      let rankIndex = 0;
+      for (let i = 0; i < CORPORATE_RANKS.length; i++) {
+        if (CORPORATE_RANKS[i]!.title === rankTitle) {
+          rankIndex = i;
+          break;
+        }
+      }
+
+      setState((prev) => ({
+        ...prev,
+        technicalDebt: prev.technicalDebt + target,
+        totalTechnicalDebt: prev.totalTechnicalDebt + target,
+        rankIndex: Math.max(prev.rankIndex, rankIndex),
+      }));
+
+      setHistory((prev) => [
+        ...prev,
+        {
+          role: "warning" as const,
+          content: `[🚨 SABOTAGE] A colleague sent you ${target.toLocaleString()} TD of inherited technical debt! Your rank has been set to ${rankTitle || "Unknown"}.`,
+        },
+      ]);
+    }
+
+    // Silently strip URL parameters so a refresh doesn't replay
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [setState]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
