@@ -20,7 +20,7 @@ export type Message = {
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, drainQuota, resetQuota, unlockAchievement } = useGameState();
   const [history, setHistory] = useState<Message[]>([]);
-  const { onlineCount, sendPing, pendingPing, rejectPing } = useMultiplayer(setHistory);
+  const { onlineCount, sendPing, pendingPing, rejectPing, outageHp } = useMultiplayer(setHistory);
   const rank = state.economy.currentRank;
   const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
@@ -294,13 +294,27 @@ function Terminal() {
 
   return (
     <div
-      className="h-screen w-screen bg-[#0d1117] font-mono text-sm text-gray-300 p-4 flex flex-col transition-all duration-300"
+      className={`h-screen w-screen font-mono text-sm text-gray-300 p-4 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"}`}
       style={regressionGlitch ? Object.fromEntries(regressionGlitch.split(";").filter(Boolean).map((s) => { const [k, ...v] = s.split(":"); return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()]; })) : undefined}
       onClick={() => inputRef.current?.focus()}
     >
       {/* Mount the Ticker at the very top of the interface so it acts as a global broadcast banner */}
       <Ticker />
-      <div className="sticky top-0 z-10 bg-[#0d1117] border-b border-green-800 pb-2 mb-2">
+      {outageHp !== null && (
+        <div className="mb-2 border border-red-500 rounded p-2 bg-red-950">
+          <div className="flex items-center justify-between text-red-400 text-xs mb-1">
+            <span className="font-bold">[PROD OUTAGE] AWS us-east-1</span>
+            <span>{outageHp}% HP</span>
+          </div>
+          <div className="h-3 bg-red-900 rounded overflow-hidden">
+            <div
+              className="h-full bg-red-500 transition-all duration-300 rounded"
+              style={{ width: `${outageHp}%` }}
+            />
+          </div>
+        </div>
+      )}
+      <div className={`sticky top-0 z-10 border-b pb-2 mb-2 ${outageHp !== null ? "bg-red-900 border-red-500" : "bg-[#0d1117] border-green-800"}`}>
         <div className="flex justify-between text-green-400 mb-1">
           <span>Rank: {rank}</span>
           <span>Technical Debt: {state.economy.totalTDEarned.toLocaleString()} TD</span>
