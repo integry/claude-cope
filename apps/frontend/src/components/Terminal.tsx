@@ -5,10 +5,10 @@ import SlashMenu from "./SlashMenu";
 import { SLASH_COMMANDS } from "./slashCommands";
 import StoreOverlay from "./StoreOverlay";
 import { useGameState } from "../hooks/useGameState";
-import { CORPORATE_RANKS } from "../game/constants";
 import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
+import { executeSlashCommand, parseSabotageParams } from "./slashCommandExecutor";
 
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
@@ -73,49 +73,7 @@ function Terminal() {
 
   // Handle sabotage URL parameters on mount
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("sabotage") !== "true") return;
-
-    const target = parseInt(params.get("target") ?? "0", 10);
-    const rankTitle = params.get("rank") ?? "";
-
-    if (target > 0) {
-      // Find the rank index matching the provided rank title
-      let rankIndex = 0;
-      for (let i = 0; i < CORPORATE_RANKS.length; i++) {
-        if (CORPORATE_RANKS[i]!.title === rankTitle) {
-          rankIndex = i;
-          break;
-        }
-      }
-
-      setState((prev) => {
-        const newRankIndex = Math.max(
-          CORPORATE_RANKS.findIndex((r) => r.title === prev.economy.currentRank),
-          rankIndex,
-        );
-        return {
-          ...prev,
-          economy: {
-            ...prev.economy,
-            currentTD: prev.economy.currentTD + target,
-            totalTDEarned: prev.economy.totalTDEarned + target,
-            currentRank: CORPORATE_RANKS[newRankIndex]?.title ?? prev.economy.currentRank,
-          },
-        };
-      });
-
-      setHistory((prev) => [
-        ...prev,
-        {
-          role: "warning" as const,
-          content: `[🚨 SABOTAGE] A colleague sent you ${target.toLocaleString()} TD of inherited technical debt! Your rank has been set to ${rankTitle || "Unknown"}.`,
-        },
-      ]);
-    }
-
-    // Silently strip URL parameters so a refresh doesn't replay
-    window.history.replaceState({}, "", window.location.pathname);
+    parseSabotageParams(setState, setHistory);
   }, [setState]);
 
   useEffect(() => {
@@ -239,82 +197,12 @@ function Terminal() {
       return cmd.startsWith(slashQuery.toLowerCase());
     });
 
-  const executeSlashCommand = (command: string) => {
-    setInputValue("");
-    setSlashQuery("");
-    setSlashIndex(0);
-    setIsProcessing(true);
-    setHistory((prev) => [
-      ...prev,
-      { role: "user", content: command },
-      { role: "loading", content: "[⚙️] Claude is coping..." },
-    ]);
-
-    const clearLoading = (prev: Message[]) => prev.filter((m) => m.content !== "[⚙️] Claude is coping...");
-    const reply = (msg: Message): void => {
-      setHistory((prev) => [...clearLoading(prev), msg]);
-    };
-
-    setTimeout(() => {
-      addActiveTD(Math.floor(Math.random() * 40) + 10);
-      if (applyQuotaDrain()) return;
-
-      if (command === "/clear") {
-        const newClearCount = clearCount + 1;
-        setClearCount(newClearCount);
-        setHistory((prev) => [
-          ...clearLoading(prev),
-          { role: "warning", content: "[WARNING] Executing sudo rm -rf /..." },
-        ]);
-        setTimeout(() => {
-          const messages: Message[] = [];
-          if (newClearCount >= 3) {
-            unlockAchievement("the_nuclear_option");
-            messages.push({ role: "warning", content: "[🏆 Achievement Unlocked: the_nuclear_option]" });
-          }
-          setHistory(messages);
-          setIsProcessing(false);
-        }, 2000);
-        return;
-      } else if (command === "/store") {
-        if (state.economy.totalTDEarned < 1000) {
-          reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
-        } else {
-          setHistory(clearLoading);
-          setShowStore(true);
-        }
-      } else if (command === "/synergize") {
-        reply({ role: "system", content: "[🗓️] Joining 1-on-1 meeting. Please wait..." });
-        setTimeout(() => {
-          setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived 10 seconds of corporate synergy. No action items assigned." }]);
-          setIsProcessing(false);
-        }, 10000);
-        return;
-      } else if (command === "/compact") {
-        setHistory((prev) => {
-          const filtered = clearLoading(prev).slice(0, Math.max(0, clearLoading(prev).length - 5));
-          return [...filtered, { role: "system", content: "[✓] Context compacted. Deleted 50 lines of unoptimized boilerplate." }];
-        });
-      } else if (command === "/brag") {
-        setBragPending(true);
-        reply({ role: "system", content: "[🏆] Enter your name for the Hall of Blame:" });
-      } else if (command === "/support") {
-        reply({ role: "system", content: "[✓] Support ticket created. Redirecting payload directly to /dev/null..." });
-      } else if (command === "/preworkout") {
-        reply({ role: "system", content: "[✓] Injected 400mg of pure caffeine into the Node.js event loop. LFG." });
-      } else if (command === "/buddy") {
-        const roll = Math.random() * 100;
-        const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
-        const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
-        setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
-        const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
-        reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType}${shinyLabel} ${buddyIcon}!` });
-      } else {
-        reply({ role: "system", content: `[✓] Executed ${command}` });
-      }
-
-      setIsProcessing(false);
-    }, 1500);
+  const runSlashCommand = (command: string) => {
+    executeSlashCommand(
+      command,
+      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, unlockAchievement, clearCount, setClearCount },
+      setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain,
+    );
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -326,7 +214,7 @@ function Terminal() {
         e.preventDefault();
         const selected = filtered[slashIndex];
         if (selected) {
-          executeSlashCommand(selected);
+          runSlashCommand(selected);
         }
         return;
       }
