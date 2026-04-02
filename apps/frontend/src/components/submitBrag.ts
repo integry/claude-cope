@@ -34,20 +34,13 @@ export function submitBrag(
       const sabotageUrl = `${window.location.origin}?sabotage=true&target=${totalTDEarned}&rank=${encodeURIComponent(currentRank)}`;
 
       const payload = [
-        "┌──────────────────────────────────────────────┐",
-        "│        PERFORMANCE REVIEW — Claude Cope       │",
-        "├──────────────────────────────────────────────┤",
-        `│  Employee:  ${username.padEnd(33)}│`,
-        `│  Rank:      ${currentRank.padEnd(33)}│`,
-        `│  Total TD:  ${totalTDEarned.toLocaleString().padEnd(33)}│`,
-        "├──────────────────────────────────────────────┤",
-        "│  Comments:                                    │",
-        "│  \"Has demonstrated an exceptional ability     │",
-        "│   to accumulate technical debt at scale.\"     │",
-        "├──────────────────────────────────────────────┤",
-        "│  🔗 Share the love (sabotage a coworker):     │",
-        `│  ${sabotageUrl.length <= 44 ? sabotageUrl.padEnd(44) : sabotageUrl}│`,
-        "└──────────────────────────────────────────────┘",
+        "====================================",
+        "EMPLOYEE PERFORMANCE REVIEW",
+        `Rank: ${currentRank}`,
+        `Total Technical Debt: $${totalTDEarned.toLocaleString()}`,
+        "====================================",
+        "Challenge your coworkers to do worse:",
+        sabotageUrl,
       ].join("\n");
 
       navigator.clipboard.writeText(payload).catch(() => {
