@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, ChangeEvent, KeyboardEvent } from "react";
 import OutputBlock from "./OutputBlock";
 import CommandLine from "./CommandLine";
+import SlashMenu from "./SlashMenu";
 
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
@@ -12,7 +13,7 @@ function Terminal() {
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [_slashQuery, _setSlashQuery] = useState<string>("");
+  const [slashQuery, setSlashQuery] = useState<string>("");
   const [inputValue, setInputValue] = useState<string>("");
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -23,7 +24,9 @@ function Terminal() {
   }, [history]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value);
+    const value = e.target.value;
+    setInputValue(value);
+    setSlashQuery(value.startsWith("/") ? value : "");
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -85,13 +88,16 @@ function Terminal() {
         ))}
         <div ref={bottomRef} />
       </div>
-      <CommandLine
-        ref={inputRef}
-        value={inputValue}
-        disabled={isProcessing}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-      />
+      <div className="relative">
+        {slashQuery && <SlashMenu query={slashQuery} />}
+        <CommandLine
+          ref={inputRef}
+          value={inputValue}
+          disabled={isProcessing}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+        />
+      </div>
     </div>
   );
 }
