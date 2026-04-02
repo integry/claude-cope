@@ -71,23 +71,64 @@ function Terminal() {
         setHistoryIndex(-1);
         setInputValue("");
 
+        const userMessage: Message = { role: "user", content: command };
+
         setHistory((prev) => [
           ...prev,
-          { role: "user", content: command },
+          userMessage,
           { role: "loading", content: "[⚙️] Coping with your request..." },
         ]);
         setIsProcessing(true);
 
-        setTimeout(() => {
-          setHistory((prev) => [
-            ...prev.filter((msg) => msg.role !== "loading"),
-            {
-              role: "system",
-              content: "[❌ Error] Your request lacks a senior mindset.",
-            },
-          ]);
-          setIsProcessing(false);
-        }, 1500);
+        const chatMessages = [
+          ...history.filter((m) => m.role === "user" || m.role === "system"),
+          userMessage,
+        ].map((m) => ({ role: m.role, content: m.content }));
+
+        fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: chatMessages }),
+        })
+          .then(async (res) => {
+            if (res.status === 429) {
+              setHistory((prev) => [
+                ...prev.filter((msg) => msg.role !== "loading"),
+                { role: "warning", content: "[⚠️] Rate limited. Please wait before sending another message." },
+              ]);
+              return;
+            }
+
+            if (!res.ok) {
+              const errorData = await res.json().catch(() => null);
+              setHistory((prev) => [
+                ...prev.filter((msg) => msg.role !== "loading"),
+                {
+                  role: "error",
+                  content: `[❌ Error] ${errorData?.error ?? "Request failed"}`,
+                },
+              ]);
+              return;
+            }
+
+            const data = await res.json();
+            const reply =
+              data?.choices?.[0]?.message?.content ?? "[❌ Error] No response from API.";
+
+            setHistory((prev) => [
+              ...prev.filter((msg) => msg.role !== "loading"),
+              { role: "system", content: reply },
+            ]);
+          })
+          .catch(() => {
+            setHistory((prev) => [
+              ...prev.filter((msg) => msg.role !== "loading"),
+              { role: "error", content: "[❌ Error] Network error. Is the backend running?" },
+            ]);
+          })
+          .finally(() => {
+            setIsProcessing(false);
+          });
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
