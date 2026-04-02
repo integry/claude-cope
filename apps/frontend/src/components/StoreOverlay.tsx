@@ -41,6 +41,9 @@ function StoreOverlay({ state, buyGenerator, onClose }: StoreOverlayProps) {
                 <span>{gen.name}</span>
                 <span className="text-xs text-gray-400">x{owned}</span>
               </div>
+              <p className="text-xs text-gray-400 italic mt-1">
+                {gen.description}
+              </p>
               <div className="text-xs mt-1">
                 <span className={canAfford ? "text-green-400" : "text-gray-500"}>
                   Cost: {cost} TD
