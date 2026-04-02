@@ -40,6 +40,7 @@ function Terminal() {
 
   const [clearCount, setClearCount] = useState(0);
   const [regressionGlitch, setRegressionGlitch] = useState<string | null>(null);
+  const [activeRegression, setActiveRegression] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -86,11 +87,11 @@ function Terminal() {
   // Update Regression chaos event — fires every 10-15 minutes
   useEffect(() => {
     const REGRESSION_TYPES = [
-      { name: "RTL Text Inversion", css: "direction: rtl; unicode-bidi: bidi-override;" },
-      { name: "Comic Sans Migration", css: "font-family: 'Comic Sans MS', 'Comic Sans', cursive;" },
-      { name: "Upside-Down Rendering", css: "transform: scaleY(-1);" },
-      { name: "Opacity Fade Leak", css: "opacity: 0.3;" },
-      { name: "Letter Spacing Explosion", css: "letter-spacing: 0.5em;" },
+      { id: "backwards_typing", name: "Backwards Typing", css: "" },
+      { id: "broken_scrollback", name: "Broken Scrollback", css: "" },
+      { id: "upside_down", name: "Upside-Down Rendering", css: "transform: scaleY(-1);" },
+      { id: "opacity_fade", name: "Opacity Fade Leak", css: "opacity: 0.3;" },
+      { id: "letter_spacing", name: "Letter Spacing Explosion", css: "letter-spacing: 0.5em;" },
     ];
 
     const scheduleRegression = () => {
@@ -101,11 +102,13 @@ function Terminal() {
           ...prev,
           { role: "warning", content: `[⬆️ UPDATE] Claude Cope v0.1.4-rc.${Math.floor(Math.random() * 99) + 1} deploying... Applying patch: ${regression.name}` },
         ]);
-        setRegressionGlitch(regression.css);
+        setRegressionGlitch(regression.css || null);
+        setActiveRegression(regression.id);
 
         // Revert after exactly 10 seconds
         setTimeout(() => {
           setRegressionGlitch(null);
+          setActiveRegression(null);
           setHistory((prev) => [
             ...prev,
             { role: "error", content: `[⏪ ROLLBACK] Update failed. Reverting ${regression.name}... Previous stable version restored.` },
@@ -187,7 +190,11 @@ function Terminal() {
   };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    let value = e.target.value;
+    if (activeRegression === "backwards_typing" && value.length > inputValue.length) {
+      const newChar = value.slice(inputValue.length);
+      value = newChar + inputValue;
+    }
     setInputValue(value);
     const newQuery = value.startsWith("/") ? value : "";
     setSlashQuery(newQuery);
@@ -359,7 +366,7 @@ function Terminal() {
           </span>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
           <OutputBlock key={index} message={message} />
