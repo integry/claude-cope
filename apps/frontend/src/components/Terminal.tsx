@@ -252,6 +252,32 @@ function Terminal() {
           ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
           { role: "system", content: "[✓] Injected 400mg of pure caffeine into the Node.js event loop. LFG." },
         ]);
+      } else if (command === "/buddy") {
+        const roll = Math.random() * 100;
+        let buddyType: string;
+        let buddyIcon: string;
+        if (roll < 70) {
+          buddyType = "Agile Snail";
+          buddyIcon = "🐌";
+        } else if (roll < 95) {
+          buddyType = "Sarcastic Clippy";
+          buddyIcon = "📎";
+        } else {
+          buddyType = "10x Dragon";
+          buddyIcon = "🐉";
+        }
+        setState((prev) => ({
+          ...prev,
+          buddy: {
+            type: buddyType,
+            isShiny: false,
+            promptsSinceLastInterjection: 0,
+          },
+        }));
+        setHistory((prev) => [
+          ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
+          { role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType} ${buddyIcon}!` },
+        ]);
       } else {
         setHistory((prev) => [
           ...prev.filter((m) => m.content !== "[⚙️] Claude is coping..."),
