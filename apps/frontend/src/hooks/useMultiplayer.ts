@@ -37,6 +37,10 @@ export function useMultiplayer(setHistory: React.Dispatch<React.SetStateAction<M
               return false;
             });
           }, 5000);
+        } else if (data.type === 'outage_start') {
+          // Show critical alert and initialize the health bar
+          setOutageHp(data.hp);
+          setHistory(prev => [...prev, { role: 'error', content: '[CRITICAL ALERT: AWS us-east-1 IS DOWN]' }]);
         } else if (data.type === 'outage_update') {
           // Sync the local health bar with the server
           setOutageHp(data.hp);
