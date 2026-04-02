@@ -24,6 +24,7 @@ function Terminal() {
   const [slashIndex, setSlashIndex] = useState<number>(0);
   const [inputValue, setInputValue] = useState<string>("");
   const [showStore, setShowStore] = useState<boolean>(false);
+  const [bragPending, setBragPending] = useState<boolean>(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -81,6 +82,73 @@ function Terminal() {
   const getFilteredSlashCommands = () =>
     SLASH_COMMANDS.filter((cmd) => cmd.startsWith(slashQuery.toLowerCase()));
 
+  const submitBrag = (username: string) => {
+    const currentRank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
+    const currentDebt = state.totalTechnicalDebt;
+
+    setHistory((prev) => [
+      ...prev,
+      { role: "user", content: username },
+      { role: "loading", content: "[⚙️] Submitting to the Hall of Blame..." },
+    ]);
+
+    fetch("/api/leaderboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, rank: currentRank, debt: currentDebt }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => null);
+          setHistory((prev) => [
+            ...prev.filter((msg) => msg.role !== "loading"),
+            { role: "error", content: `[❌ Error] ${errorData?.error ?? "Failed to submit brag"}` },
+          ]);
+          return;
+        }
+
+        const sabotageUrl = `${window.location.origin}?sabotage=true&target=${currentDebt}&rank=${encodeURIComponent(currentRank)}`;
+
+        const payload = [
+          "┌──────────────────────────────────────────────┐",
+          "│        PERFORMANCE REVIEW — Claude Cope       │",
+          "├──────────────────────────────────────────────┤",
+          `│  Employee:  ${username.padEnd(33)}│`,
+          `│  Rank:      ${currentRank.padEnd(33)}│`,
+          `│  Total TD:  ${currentDebt.toLocaleString().padEnd(33)}│`,
+          "├──────────────────────────────────────────────┤",
+          "│  Comments:                                    │",
+          "│  \"Has demonstrated an exceptional ability     │",
+          "│   to accumulate technical debt at scale.\"     │",
+          "├──────────────────────────────────────────────┤",
+          "│  🔗 Share the love (sabotage a coworker):     │",
+          `│  ${sabotageUrl.length <= 44 ? sabotageUrl.padEnd(44) : sabotageUrl}│`,
+          "└──────────────────────────────────────────────┘",
+        ].join("\n");
+
+        navigator.clipboard.writeText(payload).catch(() => {
+          // clipboard may not be available in all environments
+        });
+
+        setHistory((prev) => [
+          ...prev.filter((msg) => msg.role !== "loading"),
+          {
+            role: "system",
+            content: `\`\`\`\n${payload}\n\`\`\`\n\n[📋 Copied to clipboard! Paste it anywhere to brag.]`,
+          },
+        ]);
+      })
+      .catch(() => {
+        setHistory((prev) => [
+          ...prev.filter((msg) => msg.role !== "loading"),
+          { role: "error", content: "[❌ Error] Network error. Is the backend running?" },
+        ]);
+      })
+      .finally(() => {
+        setBragPending(false);
+      });
+  };
+
   const executeSlashCommand = (command: string) => {
     setInputValue("");
     setSlashQuery("");
@@ -92,6 +160,13 @@ function Terminal() {
       setHistory([]);
     } else if (command === "/store") {
       setShowStore(true);
+    } else if (command === "/brag") {
+      setBragPending(true);
+      setHistory((prev) => [
+        ...prev,
+        { role: "user", content: "/brag" },
+        { role: "system", content: "[🏆] Enter your name for the Hall of Blame:" },
+      ]);
     } else {
       setHistory((prev) => [
         ...prev,
@@ -116,6 +191,13 @@ function Terminal() {
       }
 
       if (inputValue.trim() !== "" && !isProcessing) {
+        if (bragPending) {
+          const username = inputValue.trim();
+          setInputValue("");
+          submitBrag(username);
+          return;
+        }
+
         addActiveTD(Math.floor(Math.random() * 40) + 10);
         const command = inputValue;
         setCommandHistory((prev) => [...prev, command]);
