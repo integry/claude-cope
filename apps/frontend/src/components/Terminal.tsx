@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, ChangeEvent, KeyboardEvent } from "react";
 import OutputBlock from "./OutputBlock";
 import CommandLine from "./CommandLine";
-import SlashMenu from "./SlashMenu";
+import SlashMenu, { SLASH_COMMANDS } from "./SlashMenu";
 
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
@@ -14,6 +14,7 @@ function Terminal() {
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [slashQuery, setSlashQuery] = useState<string>("");
+  const [slashIndex, setSlashIndex] = useState<number>(0);
   const [inputValue, setInputValue] = useState<string>("");
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -26,11 +27,44 @@ function Terminal() {
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
-    setSlashQuery(value.startsWith("/") ? value : "");
+    const newQuery = value.startsWith("/") ? value : "";
+    setSlashQuery(newQuery);
+    setSlashIndex(0);
+  };
+
+  const getFilteredSlashCommands = () =>
+    SLASH_COMMANDS.filter((cmd) => cmd.startsWith(slashQuery.toLowerCase()));
+
+  const executeSlashCommand = (command: string) => {
+    setInputValue("");
+    setSlashQuery("");
+    setSlashIndex(0);
+
+    if (command === "/clear") {
+      setHistory([]);
+    } else {
+      setHistory((prev) => [
+        ...prev,
+        { role: "user", content: command },
+        { role: "system", content: `[✓] Executed ${command}` },
+      ]);
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    const filtered = getFilteredSlashCommands();
+    const slashMenuOpen = slashQuery !== "" && filtered.length > 0;
+
     if (e.key === "Enter") {
+      if (slashMenuOpen) {
+        e.preventDefault();
+        const selected = filtered[slashIndex];
+        if (selected) {
+          executeSlashCommand(selected);
+        }
+        return;
+      }
+
       if (inputValue.trim() !== "" && !isProcessing) {
         const command = inputValue;
         setCommandHistory((prev) => [...prev, command]);
@@ -57,6 +91,10 @@ function Terminal() {
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      if (slashMenuOpen) {
+        setSlashIndex((prev) => (prev > 0 ? prev - 1 : filtered.length - 1));
+        return;
+      }
       if (commandHistory.length === 0) return;
       const newIndex = historyIndex + 1;
       if (newIndex < commandHistory.length) {
@@ -65,6 +103,10 @@ function Terminal() {
       }
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
+      if (slashMenuOpen) {
+        setSlashIndex((prev) => (prev < filtered.length - 1 ? prev + 1 : 0));
+        return;
+      }
       const newIndex = historyIndex - 1;
       if (newIndex < -1) return;
       setHistoryIndex(newIndex);
@@ -89,7 +131,7 @@ function Terminal() {
         <div ref={bottomRef} />
       </div>
       <div className="relative">
-        {slashQuery && <SlashMenu query={slashQuery} />}
+        {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} />}
         <CommandLine
           ref={inputRef}
           value={inputValue}
