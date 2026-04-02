@@ -25,6 +25,7 @@ jobs:
             package-lock.json
             apps/frontend/package-lock.json
             apps/backend/package-lock.json
+            apps/partykit/package-lock.json
 
       - name: Install Dependencies
         id: install
@@ -39,6 +40,8 @@ jobs:
               - 'apps/frontend/**'
             backend:
               - 'apps/backend/**'
+            partykit:
+              - 'apps/partykit/**'
 
       - name: Run Checks
         id: build
@@ -128,6 +131,36 @@ jobs:
             }
             if [ $BE_FAILED -eq 0 ]; then
               echo "✅ Backend Build passed" >> build_log.txt
+            fi
+          fi
+
+          # --- PARTYKIT (Real-Time Server) ---
+          if [ "${{ steps.filter.outputs.partykit }}" == 'true' ]; then
+            echo -e "\n--- PartyKit: Lint & Typecheck ---" >> build_log.txt
+            PK_FAILED=0
+
+            # Lint
+            LINT_OUTPUT=$(npm run lint -w @claude-cope/partykit 2>&1) || {
+              echo "❌ PartyKit Lint FAILED" >> build_log.txt
+              echo "$LINT_OUTPUT" >> build_log.txt
+              PK_FAILED=1
+              EXIT_CODE=1
+            }
+            if [ $PK_FAILED -eq 0 ]; then
+              echo "✅ PartyKit Lint passed" >> build_log.txt
+            fi
+
+            # Typecheck
+            if [ $PK_FAILED -eq 0 ]; then
+              TYPECHECK_OUTPUT=$(npm run typecheck -w @claude-cope/partykit 2>&1) || {
+                echo "❌ PartyKit Typecheck FAILED" >> build_log.txt
+                echo "$TYPECHECK_OUTPUT" >> build_log.txt
+                PK_FAILED=1
+                EXIT_CODE=1
+              }
+              if [ $PK_FAILED -eq 0 ]; then
+                echo "✅ PartyKit Typecheck passed" >> build_log.txt
+              fi
             fi
           fi
 
