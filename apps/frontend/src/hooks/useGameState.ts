@@ -69,7 +69,7 @@ function createDefaultState(): GameState {
       currentTD: 0,
       totalTDEarned: 0,
       currentRank: CORPORATE_RANKS[0]!.title,
-      quotaPercent: 0,
+      quotaPercent: 100,
       quotaLockouts: 0,
     },
     inventory,
@@ -100,7 +100,7 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
       currentTD: legacy.technicalDebt,
       totalTDEarned: legacy.totalTechnicalDebt,
       currentRank: rankTitleFromIndex(legacy.rankIndex),
-      quotaPercent: 0,
+      quotaPercent: 100,
       quotaLockouts: 0,
     },
     inventory: legacy.inventory,
@@ -135,6 +135,11 @@ function loadState(): GameState {
       }
       if (!state.economy) {
         return createDefaultState();
+      }
+
+      // Ensure quotaPercent is initialized for existing saves
+      if (!state.economy.quotaPercent) {
+        state.economy.quotaPercent = 100;
       }
 
       // Update lastLogin on load
@@ -254,6 +259,32 @@ export function useGameState() {
     });
   }, []);
 
+  const drainQuota = useCallback((): number => {
+    const drain = Math.floor(Math.random() * 43) + 3; // 3% to 45%
+    const current = stateRef.current.economy.quotaPercent;
+    const raw = current - drain;
+    const newPercent = raw < 0 ? 0 : raw;
+    setState((prev) => ({
+      ...prev,
+      economy: {
+        ...prev.economy,
+        quotaPercent: newPercent,
+      },
+    }));
+    return newPercent;
+  }, []);
+
+  const resetQuota = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      economy: {
+        ...prev.economy,
+        quotaPercent: 100,
+        quotaLockouts: prev.economy.quotaLockouts + 1,
+      },
+    }));
+  }, []);
+
   const unlockAchievement = useCallback((achievement: string) => {
     setState((prev) => {
       if (prev.achievements.includes(achievement)) return prev;
@@ -264,5 +295,5 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, addActiveTD, unlockAchievement };
+  return { state, setState, buyGenerator, addActiveTD, drainQuota, resetQuota, unlockAchievement };
 }
