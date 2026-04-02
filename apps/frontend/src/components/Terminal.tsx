@@ -35,6 +35,7 @@ function Terminal() {
     return params.get("sabotage") !== "true";
   });
 
+  const [clearCount, setClearCount] = useState(0);
   const [regressionGlitch, setRegressionGlitch] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -169,13 +170,23 @@ function Terminal() {
     ]);
     setTimeout(() => {
       resetQuota();
+      const newLockouts = state.economy.quotaLockouts + 1;
+      if (newLockouts >= 3) {
+        unlockAchievement("homer_at_the_buffet");
+      }
       setQuotaLocked(false);
       setIsProcessing(false);
       setInstantBanReady(true);
-      setHistory((prev) => [
-        ...prev,
-        { role: "system", content: "[✓] Billing upgrade complete. Quota restored to 100%. You may continue." },
-      ]);
+      setHistory((prev) => {
+        const messages: Message[] = [
+          ...prev,
+          { role: "system", content: "[✓] Billing upgrade complete. Quota restored to 100%. You may continue." },
+        ];
+        if (newLockouts >= 3) {
+          messages.push({ role: "warning", content: "[🏆 Achievement Unlocked: homer_at_the_buffet]" });
+        }
+        return messages;
+      });
       // Instant ban trap window: 2 seconds after unlock
       setTimeout(() => setInstantBanReady(false), 2000);
     }, 5000);
@@ -249,12 +260,19 @@ function Terminal() {
       if (applyQuotaDrain()) return;
 
       if (command === "/clear") {
+        const newClearCount = clearCount + 1;
+        setClearCount(newClearCount);
         setHistory((prev) => [
           ...clearLoading(prev),
           { role: "warning", content: "[WARNING] Executing sudo rm -rf /..." },
         ]);
         setTimeout(() => {
-          setHistory([]);
+          const messages: Message[] = [];
+          if (newClearCount >= 3) {
+            unlockAchievement("the_nuclear_option");
+            messages.push({ role: "warning", content: "[🏆 Achievement Unlocked: the_nuclear_option]" });
+          }
+          setHistory(messages);
           setIsProcessing(false);
         }, 2000);
         return;
