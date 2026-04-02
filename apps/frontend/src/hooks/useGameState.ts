@@ -8,6 +8,7 @@ export interface GameState {
   totalTechnicalDebt: number;
   rankIndex: number;
   inventory: Record<string, number>;
+  achievements: string[];
 }
 
 function createDefaultState(): GameState {
@@ -20,6 +21,7 @@ function createDefaultState(): GameState {
     totalTechnicalDebt: 0,
     rankIndex: 0,
     inventory,
+    achievements: [],
   };
 }
 
@@ -27,7 +29,11 @@ function loadState(): GameState {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      return JSON.parse(stored) as GameState;
+      const parsed = JSON.parse(stored) as GameState;
+      if (!Array.isArray(parsed.achievements)) {
+        parsed.achievements = [];
+      }
+      return parsed;
     }
   } catch {
     // Corrupted or inaccessible localStorage — fall through to default
@@ -143,5 +149,15 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, addActiveTD };
+  const unlockAchievement = useCallback((achievement: string) => {
+    setState((prev) => {
+      if (prev.achievements.includes(achievement)) return prev;
+      return {
+        ...prev,
+        achievements: [...prev.achievements, achievement],
+      };
+    });
+  }, []);
+
+  return { state, setState, buyGenerator, addActiveTD, unlockAchievement };
 }
