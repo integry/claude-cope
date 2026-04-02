@@ -68,14 +68,15 @@ export function useGameState() {
     }
   }, [state]);
 
-  // Background game loop — runs every second
+  // Background game loop — runs every 100ms for smooth visual updates
   useEffect(() => {
     const interval = setInterval(() => {
       setState((prev) => {
         const tdps = calculateTDpS(prev.inventory);
         if (tdps === 0) return prev;
 
-        const newTotalTD = prev.totalTechnicalDebt + tdps;
+        const tickTD = tdps / 10;
+        const newTotalTD = prev.totalTechnicalDebt + tickTD;
 
         // Check for rank advancement
         let newRankIndex = prev.rankIndex;
@@ -88,12 +89,12 @@ export function useGameState() {
 
         return {
           ...prev,
-          technicalDebt: prev.technicalDebt + tdps,
+          technicalDebt: prev.technicalDebt + tickTD,
           totalTechnicalDebt: newTotalTD,
           rankIndex: newRankIndex,
         };
       });
-    }, 1000);
+    }, 100);
 
     return () => clearInterval(interval);
   }, []);
