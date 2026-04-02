@@ -8,10 +8,10 @@ export type Message = {
 };
 
 function Terminal() {
-  const [_history, _setHistory] = useState<Message[]>([]);
+  const [history, setHistory] = useState<Message[]>([]);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
-  const [_isProcessing, _setIsProcessing] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [_slashQuery, _setSlashQuery] = useState<string>("");
   const [inputValue, setInputValue] = useState<string>("");
 
@@ -20,7 +20,7 @@ function Terminal() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
-  }, [_history]);
+  }, [history]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
@@ -28,10 +28,29 @@ function Terminal() {
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
-      if (inputValue.trim() !== "") {
-        setCommandHistory((prev) => [...prev, inputValue]);
+      if (inputValue.trim() !== "" && !isProcessing) {
+        const command = inputValue;
+        setCommandHistory((prev) => [...prev, command]);
         setHistoryIndex(-1);
         setInputValue("");
+
+        setHistory((prev) => [
+          ...prev,
+          { role: "user", content: command },
+          { role: "loading", content: "[⚙️] Coping with your request..." },
+        ]);
+        setIsProcessing(true);
+
+        setTimeout(() => {
+          setHistory((prev) => [
+            ...prev.filter((msg) => msg.role !== "loading"),
+            {
+              role: "system",
+              content: "[❌ Error] Your request lacks a senior mindset.",
+            },
+          ]);
+          setIsProcessing(false);
+        }, 1500);
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
@@ -61,7 +80,7 @@ function Terminal() {
     >
       <div className="flex-1 overflow-y-auto">
         <p>Welcome to Claude Cope. Type a command to begin.</p>
-        {_history.map((message, index) => (
+        {history.map((message, index) => (
           <OutputBlock key={index} message={message} />
         ))}
         <div ref={bottomRef} />
@@ -69,6 +88,7 @@ function Terminal() {
       <CommandLine
         ref={inputRef}
         value={inputValue}
+        disabled={isProcessing}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
       />
