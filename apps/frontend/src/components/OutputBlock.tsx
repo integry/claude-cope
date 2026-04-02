@@ -11,13 +11,13 @@ const roleColors: Record<Message["role"], string> = {
   error: "text-red-500",
 };
 
-function OutputBlock({ message }: { message: Message }) {
+function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Message; promptString?: string }) {
   const colorClass = roleColors[message.role];
 
   return (
     <div className={colorClass}>
       {message.role === "user" && (
-        <span className="text-gray-500">cope@local:~$ </span>
+        <span className="text-gray-500">{promptString}</span>
       )}
       {message.role === "system" ? (
         <ReactMarkdown

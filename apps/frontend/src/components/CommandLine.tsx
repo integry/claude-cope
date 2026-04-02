@@ -5,13 +5,14 @@ type CommandLineProps = {
   disabled?: boolean;
   onChange: (e: ChangeEvent<HTMLInputElement>) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
+  promptString?: string;
 };
 
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
-  function CommandLine({ value, disabled, onChange, onKeyDown }, ref) {
+  function CommandLine({ value, disabled, onChange, onKeyDown, promptString = "cope@local:~$ " }, ref) {
     return (
       <div className="flex items-center">
-        <span className="text-gray-500 whitespace-pre">cope@local:~$ </span>
+        <span className="text-gray-500 whitespace-pre">{promptString}</span>
         <input
           ref={ref}
           type="text"

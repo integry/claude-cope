@@ -3,18 +3,27 @@ import type { Message } from "./Terminal";
 import type { BuddyState } from "../hooks/useGameState";
 import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
 
-export function computeBuddyInterjection(buddy: BuddyState): Message | null {
+export type BuddyInterjectionResult = {
+  message: Message;
+  shouldDeleteHistory: boolean;
+};
+
+export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionResult | null {
   if (!buddy.type) return null;
   if (buddy.promptsSinceLastInterjection + 1 < 5) return null;
   const icon = BUDDY_ICONS[buddy.type] ?? "🐾";
   const lines = BUDDY_INTERJECTIONS[buddy.type] ?? ["stares at you blankly."];
   const text = lines[Math.floor(Math.random() * lines.length)]!;
-  return { role: "warning", content: `[${icon} ${buddy.type}] ${text}` };
+  const shouldDeleteHistory = buddy.type === "10x Dragon" && Math.random() < 0.5;
+  return {
+    message: { role: "warning", content: `[${icon} ${buddy.type}] ${text}` },
+    shouldDeleteHistory,
+  };
 }
 
 export function submitChatMessage(
   chatMessages: { role: string; content: string }[],
-  buddyInterjection: Message | null,
+  buddyResult: BuddyInterjectionResult | null,
   unlockAchievement: (id: string) => void,
   setHistory: Dispatch<SetStateAction<Message[]>>,
   setIsProcessing: Dispatch<SetStateAction<boolean>>,
@@ -63,12 +72,32 @@ export function submitChatMessage(
 
       const reply = rawReply.replace(achievementRegex, "").trim();
 
-      setHistory((prev) => [
-        ...prev.filter((msg) => msg.role !== "loading"),
-        { role: "system", content: reply },
-        ...achievementMessages,
-        ...(buddyInterjection ? [buddyInterjection] : []),
-      ]);
+      setHistory((prev) => {
+        let updated = [
+          ...prev.filter((msg) => msg.role !== "loading"),
+          { role: "system" as const, content: reply },
+          ...achievementMessages,
+          ...(buddyResult ? [buddyResult.message] : []),
+        ];
+
+        if (buddyResult?.shouldDeleteHistory) {
+          // Find deletable messages (user or system, not warnings/errors)
+          const deletableIndices = updated.reduce<number[]>((acc, msg, i) => {
+            if (msg.role === "user" || msg.role === "system") acc.push(i);
+            return acc;
+          }, []);
+          if (deletableIndices.length > 1) {
+            const targetIdx = deletableIndices[Math.floor(Math.random() * (deletableIndices.length - 1))]!;
+            updated = [
+              ...updated.slice(0, targetIdx),
+              ...updated.slice(targetIdx + 1),
+              { role: "warning" as const, content: "[🐉 10x Dragon] *swoosh* — a line of your history has been incinerated." },
+            ];
+          }
+        }
+
+        return updated;
+      });
     })
     .catch(() => {
       setHistory((prev) => [
