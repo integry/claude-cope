@@ -43,15 +43,26 @@ export const GENERATORS: Generator[] = [
     baseCost: 5000,
     baseOutput: 300,
   },
+  {
+    id: "rogue-api-key",
+    name: "Rogue API Key",
+    baseCost: 450000,
+    baseOutput: 15000,
+  },
+  {
+    id: "kubernetes-overlord",
+    name: "Kubernetes Overlord",
+    baseCost: 5100000000,
+    baseOutput: 260000,
+  },
 ];
 
 export const CORPORATE_RANKS: CorporateRank[] = [
-  { title: "Junior Developer", threshold: 0 },
-  { title: "Mid-Level Developer", threshold: 50 },
-  { title: "Senior Developer", threshold: 200 },
-  { title: "Tech Lead", threshold: 500 },
-  { title: "Staff Engineer", threshold: 1300 },
-  { title: "Principal Engineer", threshold: 3400 },
-  { title: "VP of Engineering", threshold: 8900 },
-  { title: "CTO", threshold: 23300 },
+  { title: "Junior Code Monkey", threshold: 0 },
+  { title: "Mid-Level Googler", threshold: 89000 },
+  { title: "Merge Conflict Fighter", threshold: 377000 },
+  { title: "CSS JadooGaar (Magician)", threshold: 987000 },
+  { title: "Principal Production Saboteur", threshold: 11000000 },
+  { title: "Digital Overlord Engineer", threshold: 121000000 },
+  { title: "Ultimate API Baba", threshold: 1300000000 },
 ];

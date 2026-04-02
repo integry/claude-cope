@@ -26,7 +26,7 @@ function StoreOverlay({ state, buyGenerator, onClose }: StoreOverlayProps) {
         {GENERATORS.map((gen) => {
           const owned = state.inventory[gen.id] ?? 0;
           const cost = Math.floor(gen.baseCost * Math.pow(GROWTH_RATE, owned));
-          const canAfford = state.technicalDebt >= cost;
+          const canAfford = state.economy.currentTD >= cost;
 
           return (
             <div

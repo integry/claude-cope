@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE } from "../game/constants";
 
 const STORAGE_KEY = "claudeCopeState";
+const STATE_VERSION = "1.0";
 
 export interface BuddyState {
   type: string | null;
@@ -9,13 +10,51 @@ export interface BuddyState {
   promptsSinceLastInterjection: number;
 }
 
+export interface EconomyState {
+  currentTD: number;
+  totalTDEarned: number;
+  currentRank: string;
+  quotaPercent: number;
+  quotaLockouts: number;
+}
+
 export interface GameState {
+  version: string;
+  lastLogin: number;
+  economy: EconomyState;
+  inventory: Record<string, number>;
+  achievements: string[];
+  buddy: BuddyState;
+}
+
+/** Legacy flat state shape used before the economy refactor. */
+interface LegacyGameState {
   technicalDebt: number;
   totalTechnicalDebt: number;
   rankIndex: number;
   inventory: Record<string, number>;
   achievements: string[];
-  buddy: BuddyState;
+  buddy?: BuddyState;
+}
+
+function rankTitleFromIndex(index: number): string {
+  return CORPORATE_RANKS[index]?.title ?? CORPORATE_RANKS[0]!.title;
+}
+
+function rankIndexFromTitle(title: string): number {
+  const idx = CORPORATE_RANKS.findIndex((r) => r.title === title);
+  return idx >= 0 ? idx : 0;
+}
+
+function resolveRank(totalTDEarned: number, currentRankTitle: string): string {
+  let rankIndex = rankIndexFromTitle(currentRankTitle);
+  while (
+    rankIndex < CORPORATE_RANKS.length - 1 &&
+    totalTDEarned >= CORPORATE_RANKS[rankIndex + 1]!.threshold
+  ) {
+    rankIndex++;
+  }
+  return rankTitleFromIndex(rankIndex);
 }
 
 function createDefaultState(): GameState {
@@ -24,9 +63,15 @@ function createDefaultState(): GameState {
     inventory[generator.id] = 0;
   }
   return {
-    technicalDebt: 0,
-    totalTechnicalDebt: 0,
-    rankIndex: 0,
+    version: STATE_VERSION,
+    lastLogin: Date.now(),
+    economy: {
+      currentTD: 0,
+      totalTDEarned: 0,
+      currentRank: CORPORATE_RANKS[0]!.title,
+      quotaPercent: 100,
+      quotaLockouts: 0,
+    },
     inventory,
     achievements: [],
     buddy: {
@@ -37,22 +82,71 @@ function createDefaultState(): GameState {
   };
 }
 
+function isLegacyState(obj: Record<string, unknown>): boolean {
+  return "technicalDebt" in obj && !("economy" in obj);
+}
+
+function migrateLegacyState(legacy: LegacyGameState): GameState {
+  const buddy: BuddyState = legacy.buddy ?? {
+    type: null,
+    isShiny: false,
+    promptsSinceLastInterjection: 0,
+  };
+
+  return {
+    version: STATE_VERSION,
+    lastLogin: Date.now(),
+    economy: {
+      currentTD: legacy.technicalDebt,
+      totalTDEarned: legacy.totalTechnicalDebt,
+      currentRank: rankTitleFromIndex(legacy.rankIndex),
+      quotaPercent: 100,
+      quotaLockouts: 0,
+    },
+    inventory: legacy.inventory,
+    achievements: Array.isArray(legacy.achievements) ? legacy.achievements : [],
+    buddy,
+  };
+}
+
 function loadState(): GameState {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      const parsed = JSON.parse(stored) as GameState;
-      if (!Array.isArray(parsed.achievements)) {
-        parsed.achievements = [];
+      const parsed = JSON.parse(stored) as Record<string, unknown>;
+
+      // Migrate legacy flat state to new nested structure
+      if (isLegacyState(parsed)) {
+        return migrateLegacyState(parsed as unknown as LegacyGameState);
       }
-      if (!parsed.buddy) {
-        parsed.buddy = {
+
+      const state = parsed as unknown as GameState;
+
+      // Ensure required fields exist (defensive)
+      if (!Array.isArray(state.achievements)) {
+        state.achievements = [];
+      }
+      if (!state.buddy) {
+        state.buddy = {
           type: null,
           isShiny: false,
           promptsSinceLastInterjection: 0,
         };
       }
-      return parsed;
+      if (!state.economy) {
+        return createDefaultState();
+      }
+
+      // Ensure quotaPercent is initialized for existing saves
+      if (!state.economy.quotaPercent) {
+        state.economy.quotaPercent = 100;
+      }
+
+      // Update lastLogin on load
+      state.lastLogin = Date.now();
+      state.version = STATE_VERSION;
+
+      return state;
     }
   } catch {
     // Corrupted or inaccessible localStorage — fall through to default
@@ -95,22 +189,29 @@ export function useGameState() {
         if (tdps === 0) return prev;
 
         const tickTD = tdps / 10;
-        const newTotalTD = prev.totalTechnicalDebt + tickTD;
+        const newTotalTDEarned = prev.economy.totalTDEarned + tickTD;
 
         // Check for rank advancement
-        let newRankIndex = prev.rankIndex;
-        while (
-          newRankIndex < CORPORATE_RANKS.length - 1 &&
-          newTotalTD >= CORPORATE_RANKS[newRankIndex + 1]!.threshold
-        ) {
-          newRankIndex++;
+        const newRank = resolveRank(newTotalTDEarned, prev.economy.currentRank);
+
+        // Rogue API Key passively drains quota over time
+        const rogueCount = prev.inventory["rogue-api-key"] ?? 0;
+        let newQuotaPercent = prev.economy.quotaPercent;
+        if (rogueCount > 0) {
+          // Drain 0.5% per Rogue API Key per second (0.05% per tick at 100ms)
+          const quotaDrain = rogueCount * 0.05;
+          newQuotaPercent = Math.max(0, prev.economy.quotaPercent - quotaDrain);
         }
 
         return {
           ...prev,
-          technicalDebt: prev.technicalDebt + tickTD,
-          totalTechnicalDebt: newTotalTD,
-          rankIndex: newRankIndex,
+          economy: {
+            ...prev.economy,
+            currentTD: prev.economy.currentTD + tickTD,
+            totalTDEarned: newTotalTDEarned,
+            currentRank: newRank,
+            quotaPercent: newQuotaPercent,
+          },
         };
       });
     }, 100);
@@ -126,18 +227,21 @@ export function useGameState() {
     const owned = current.inventory[generatorId] ?? 0;
     const cost = Math.floor(generator.baseCost * Math.pow(GROWTH_RATE, owned));
 
-    if (current.technicalDebt < cost) return false;
+    if (current.economy.currentTD < cost) return false;
 
     setState((prev) => {
       const ownedNow = prev.inventory[generatorId] ?? 0;
       const dynamicCost = Math.floor(
         generator.baseCost * Math.pow(GROWTH_RATE, ownedNow),
       );
-      if (prev.technicalDebt < dynamicCost) return prev;
+      if (prev.economy.currentTD < dynamicCost) return prev;
 
       return {
         ...prev,
-        technicalDebt: prev.technicalDebt - dynamicCost,
+        economy: {
+          ...prev.economy,
+          currentTD: prev.economy.currentTD - dynamicCost,
+        },
         inventory: {
           ...prev.inventory,
           [generatorId]: ownedNow + 1,
@@ -150,23 +254,45 @@ export function useGameState() {
 
   const addActiveTD = useCallback((amount: number) => {
     setState((prev) => {
-      const newTotalTD = prev.totalTechnicalDebt + amount;
-
-      let newRankIndex = prev.rankIndex;
-      while (
-        newRankIndex < CORPORATE_RANKS.length - 1 &&
-        newTotalTD >= CORPORATE_RANKS[newRankIndex + 1]!.threshold
-      ) {
-        newRankIndex++;
-      }
+      const newTotalTDEarned = prev.economy.totalTDEarned + amount;
+      const newRank = resolveRank(newTotalTDEarned, prev.economy.currentRank);
 
       return {
         ...prev,
-        technicalDebt: prev.technicalDebt + amount,
-        totalTechnicalDebt: newTotalTD,
-        rankIndex: newRankIndex,
+        economy: {
+          ...prev.economy,
+          currentTD: prev.economy.currentTD + amount,
+          totalTDEarned: newTotalTDEarned,
+          currentRank: newRank,
+        },
       };
     });
+  }, []);
+
+  const drainQuota = useCallback((): number => {
+    const drain = Math.floor(Math.random() * 43) + 3; // 3% to 45%
+    const current = stateRef.current.economy.quotaPercent;
+    const raw = current - drain;
+    const newPercent = raw < 0 ? 0 : raw;
+    setState((prev) => ({
+      ...prev,
+      economy: {
+        ...prev.economy,
+        quotaPercent: newPercent,
+      },
+    }));
+    return newPercent;
+  }, []);
+
+  const resetQuota = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      economy: {
+        ...prev.economy,
+        quotaPercent: 100,
+        quotaLockouts: prev.economy.quotaLockouts + 1,
+      },
+    }));
   }, []);
 
   const unlockAchievement = useCallback((achievement: string) => {
@@ -179,5 +305,5 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, addActiveTD, unlockAchievement };
+  return { state, setState, buyGenerator, addActiveTD, drainQuota, resetQuota, unlockAchievement };
 }
