@@ -35,6 +35,8 @@ function Terminal() {
     return params.get("sabotage") !== "true";
   });
 
+  const [regressionGlitch, setRegressionGlitch] = useState<string | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -119,6 +121,44 @@ function Terminal() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [history]);
+
+  // Update Regression chaos event — fires every 10-15 minutes
+  useEffect(() => {
+    const REGRESSION_TYPES = [
+      { name: "RTL Text Inversion", css: "direction: rtl; unicode-bidi: bidi-override;" },
+      { name: "Comic Sans Migration", css: "font-family: 'Comic Sans MS', 'Comic Sans', cursive;" },
+      { name: "Upside-Down Rendering", css: "transform: scaleY(-1);" },
+      { name: "Opacity Fade Leak", css: "opacity: 0.3;" },
+      { name: "Letter Spacing Explosion", css: "letter-spacing: 0.5em;" },
+    ];
+
+    const scheduleRegression = () => {
+      const delayMs = (Math.random() * 5 + 10) * 60 * 1000; // 10-15 minutes
+      return setTimeout(() => {
+        const regression = REGRESSION_TYPES[Math.floor(Math.random() * REGRESSION_TYPES.length)]!;
+        setHistory((prev) => [
+          ...prev,
+          { role: "warning", content: `[⬆️ UPDATE] Claude Cope v0.1.4-rc.${Math.floor(Math.random() * 99) + 1} deploying... Applying patch: ${regression.name}` },
+        ]);
+        setRegressionGlitch(regression.css);
+
+        // Revert after exactly 10 seconds
+        setTimeout(() => {
+          setRegressionGlitch(null);
+          setHistory((prev) => [
+            ...prev,
+            { role: "error", content: `[⏪ ROLLBACK] Update failed. Reverting ${regression.name}... Previous stable version restored.` },
+          ]);
+        }, 10000);
+
+        // Schedule the next regression
+        timerId = scheduleRegression();
+      }, delayMs);
+    };
+
+    let timerId = scheduleRegression();
+    return () => clearTimeout(timerId);
+  }, []);
 
   const triggerQuotaLockout = () => {
     setQuotaLocked(true);
@@ -344,7 +384,8 @@ function Terminal() {
 
   return (
     <div
-      className="h-screen w-screen bg-[#0d1117] font-mono text-sm text-gray-300 p-4 flex flex-col"
+      className="h-screen w-screen bg-[#0d1117] font-mono text-sm text-gray-300 p-4 flex flex-col transition-all duration-300"
+      style={regressionGlitch ? Object.fromEntries(regressionGlitch.split(";").filter(Boolean).map((s) => { const [k, ...v] = s.split(":"); return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()]; })) : undefined}
       onClick={() => inputRef.current?.focus()}
     >
       <div className="sticky top-0 z-10 bg-[#0d1117] border-b border-green-800 pb-2 mb-2">
