@@ -250,7 +250,15 @@ function Terminal() {
       if (applyQuotaDrain()) return;
 
       if (command === "/clear") {
-        setHistory([]);
+        setHistory((prev) => [
+          ...clearLoading(prev),
+          { role: "warning", content: "[WARNING] Executing sudo rm -rf /..." },
+        ]);
+        setTimeout(() => {
+          setHistory([]);
+          setIsProcessing(false);
+        }, 2000);
+        return;
       } else if (command === "/store") {
         if (state.economy.totalTDEarned < 1000) {
           reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
