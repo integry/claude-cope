@@ -1,7 +1,11 @@
 import { useState, useRef, useEffect, ChangeEvent, KeyboardEvent } from "react";
 import OutputBlock from "./OutputBlock";
 import CommandLine from "./CommandLine";
-import SlashMenu, { SLASH_COMMANDS } from "./SlashMenu";
+import SlashMenu from "./SlashMenu";
+import { SLASH_COMMANDS } from "./slashCommands";
+import StoreOverlay from "./StoreOverlay";
+import { useGameState } from "../hooks/useGameState";
+import { CORPORATE_RANKS } from "../game/constants";
 
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
@@ -9,6 +13,9 @@ export type Message = {
 };
 
 function Terminal() {
+  const { state, addActiveTD, buyGenerator } = useGameState();
+  const rank = CORPORATE_RANKS[state.rankIndex]?.title ?? "Junior Developer";
+
   const [history, setHistory] = useState<Message[]>([]);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
@@ -16,6 +23,7 @@ function Terminal() {
   const [slashQuery, setSlashQuery] = useState<string>("");
   const [slashIndex, setSlashIndex] = useState<number>(0);
   const [inputValue, setInputValue] = useState<string>("");
+  const [showStore, setShowStore] = useState<boolean>(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -40,8 +48,12 @@ function Terminal() {
     setSlashQuery("");
     setSlashIndex(0);
 
+    addActiveTD(Math.floor(Math.random() * 40) + 10);
+
     if (command === "/clear") {
       setHistory([]);
+    } else if (command === "/store") {
+      setShowStore(true);
     } else {
       setHistory((prev) => [
         ...prev,
@@ -66,6 +78,7 @@ function Terminal() {
       }
 
       if (inputValue.trim() !== "" && !isProcessing) {
+        addActiveTD(Math.floor(Math.random() * 40) + 10);
         const command = inputValue;
         setCommandHistory((prev) => [...prev, command]);
         setHistoryIndex(-1);
@@ -164,6 +177,10 @@ function Terminal() {
       className="h-screen w-screen bg-[#0d1117] font-mono text-sm text-gray-300 p-4 flex flex-col"
       onClick={() => inputRef.current?.focus()}
     >
+      <div className="sticky top-0 z-10 bg-[#0d1117] border-b border-green-800 pb-2 mb-2 flex justify-between text-green-400">
+        <span>Rank: {rank}</span>
+        <span>Technical Debt: {state.totalTechnicalDebt.toLocaleString()} TD</span>
+      </div>
       <div className="flex-1 overflow-y-auto">
         <p>Welcome to Claude Cope. Type a command to begin.</p>
         {history.map((message, index) => (
@@ -181,6 +198,13 @@ function Terminal() {
           onKeyDown={handleKeyDown}
         />
       </div>
+      {showStore && (
+        <StoreOverlay
+          state={state}
+          buyGenerator={buyGenerator}
+          onClose={() => setShowStore(false)}
+        />
+      )}
     </div>
   );
 }

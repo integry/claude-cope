@@ -1,4 +1,4 @@
-export const SLASH_COMMANDS = ["/clear", "/support", "/preworkout", "/buddy"];
+import { SLASH_COMMANDS } from "./slashCommands";
 
 type SlashMenuProps = {
   query: string;
