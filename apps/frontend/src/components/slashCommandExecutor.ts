@@ -117,7 +117,7 @@ export function executeSlashCommand(
     }
 
     ctx.setIsProcessing(false);
-  }, 1500);
+  }, Math.floor(Math.random() * 1500) + 1500);
 }
 
 export function parseSabotageParams(
