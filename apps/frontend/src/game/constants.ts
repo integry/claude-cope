@@ -43,6 +43,18 @@ export const GENERATORS: Generator[] = [
     baseCost: 5000,
     baseOutput: 300,
   },
+  {
+    id: "rogue-api-key",
+    name: "Rogue API Key",
+    baseCost: 450000,
+    baseOutput: 15000,
+  },
+  {
+    id: "kubernetes-overlord",
+    name: "Kubernetes Overlord",
+    baseCost: 5100000000,
+    baseOutput: 260000,
+  },
 ];
 
 export const CORPORATE_RANKS: CorporateRank[] = [

@@ -194,6 +194,15 @@ export function useGameState() {
         // Check for rank advancement
         const newRank = resolveRank(newTotalTDEarned, prev.economy.currentRank);
 
+        // Rogue API Key passively drains quota over time
+        const rogueCount = prev.inventory["rogue-api-key"] ?? 0;
+        let newQuotaPercent = prev.economy.quotaPercent;
+        if (rogueCount > 0) {
+          // Drain 0.5% per Rogue API Key per second (0.05% per tick at 100ms)
+          const quotaDrain = rogueCount * 0.05;
+          newQuotaPercent = Math.max(0, prev.economy.quotaPercent - quotaDrain);
+        }
+
         return {
           ...prev,
           economy: {
@@ -201,6 +210,7 @@ export function useGameState() {
             currentTD: prev.economy.currentTD + tickTD,
             totalTDEarned: newTotalTDEarned,
             currentRank: newRank,
+            quotaPercent: newQuotaPercent,
           },
         };
       });
