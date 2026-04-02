@@ -25,9 +25,44 @@ function Terminal() {
   const [inputValue, setInputValue] = useState<string>("");
   const [showStore, setShowStore] = useState<boolean>(false);
   const [bragPending, setBragPending] = useState<boolean>(false);
+  const [isBooting, setIsBooting] = useState<boolean>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("sabotage") !== "true";
+  });
 
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Boot sequence for organic visitors
+  useEffect(() => {
+    if (!isBooting) return;
+
+    const bootLines = [
+      "[OK] Initializing Claude Cope v0.1.3...",
+      "[OK] Bypassing stackoverflow...",
+      "[OK] Injecting technical debt...",
+      "[OK] Disabling all unit tests...",
+      "[OK] Replacing documentation with TODO comments...",
+      "[OK] Boot complete. Welcome to Claude Cope.",
+    ];
+
+    const interval = 3000 / bootLines.length;
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+
+    bootLines.forEach((line, i) => {
+      const id = setTimeout(() => {
+        setHistory((prev) => [...prev, { role: "system" as const, content: line }]);
+      }, interval * (i + 1));
+      timeouts.push(id);
+    });
+
+    const finishId = setTimeout(() => {
+      setIsBooting(false);
+    }, 3000);
+    timeouts.push(finishId);
+
+    return () => timeouts.forEach(clearTimeout);
+  }, [isBooting]);
 
   // Handle sabotage URL parameters on mount
   useEffect(() => {
@@ -319,7 +354,7 @@ function Terminal() {
         <span>Technical Debt: {state.totalTechnicalDebt.toLocaleString()} TD</span>
       </div>
       <div className="flex-1 overflow-y-auto">
-        <p>Welcome to Claude Cope. Type a command to begin.</p>
+        {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
           <OutputBlock key={index} message={message} />
         ))}
@@ -330,7 +365,7 @@ function Terminal() {
         <CommandLine
           ref={inputRef}
           value={inputValue}
-          disabled={isProcessing}
+          disabled={isProcessing || isBooting}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
         />
