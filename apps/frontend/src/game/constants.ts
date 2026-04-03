@@ -93,6 +93,103 @@ export const GENERATORS: Generator[] = [
   },
 ];
 
+export interface Upgrade {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  /** The generator whose output gets boosted. */
+  targetGeneratorId: string;
+  /** The generator you must own to unlock this upgrade. */
+  requiredGeneratorId: string;
+  /** Multiplier applied to the target generator's output. */
+  multiplier: number;
+}
+
+export const UPGRADES: Upgrade[] = [
+  {
+    id: "intern-boost-copypaster",
+    name: "Intern Mentorship Program",
+    description: "Interns teach Copy-Pasters advanced Ctrl+V techniques.",
+    cost: 500,
+    targetGeneratorId: "stackoverflow-copy-paster",
+    requiredGeneratorId: "intern",
+    multiplier: 2,
+  },
+  {
+    id: "hotfix-boost-intern",
+    name: "Hotfix Cargo Cult",
+    description: "Interns worship the ancient hotfixes and code twice as fast.",
+    cost: 5000,
+    targetGeneratorId: "intern",
+    requiredGeneratorId: "hotfix",
+    multiplier: 2,
+  },
+  {
+    id: "npm-boost-hotfix",
+    name: "left-pad Insurance Policy",
+    description: "NPM dependencies make hotfixes self-replicating.",
+    cost: 50000,
+    targetGeneratorId: "hotfix",
+    requiredGeneratorId: "npm",
+    multiplier: 2,
+  },
+  {
+    id: "microservice-boost-npm",
+    name: "Dependency Injection Overdose",
+    description: "Microservices import so many packages they collapse into a singularity of node_modules.",
+    cost: 500000,
+    targetGeneratorId: "npm",
+    requiredGeneratorId: "microservice",
+    multiplier: 2,
+  },
+  {
+    id: "llm-boost-microservice",
+    name: "AI-Powered Architecture Reviews",
+    description: "The LLM suggests splitting every function into its own microservice.",
+    cost: 5000000,
+    targetGeneratorId: "microservice",
+    requiredGeneratorId: "llm-code-wrapper",
+    multiplier: 2,
+  },
+  {
+    id: "agile-boost-llm",
+    name: "Sprint-Driven Prompt Engineering",
+    description: "Two-week sprints dedicated entirely to refining AI prompts.",
+    cost: 75000000,
+    targetGeneratorId: "llm-code-wrapper",
+    requiredGeneratorId: "agile",
+    multiplier: 2,
+  },
+  {
+    id: "blockchain-boost-agile",
+    name: "Decentralized Standup Meetings",
+    description: "Standup notes are now immutable on-chain. No one reads them either way.",
+    cost: 1000000000,
+    targetGeneratorId: "agile",
+    requiredGeneratorId: "blockchain",
+    multiplier: 2,
+  },
+  {
+    id: "kubernetes-boost-blockchain",
+    name: "Container-Orchestrated Consensus",
+    description: "Each blockchain node runs in its own Kubernetes pod across 12 regions.",
+    cost: 15000000000,
+    targetGeneratorId: "blockchain",
+    requiredGeneratorId: "kubernetes-overlord",
+    multiplier: 2,
+  },
+  {
+    id: "vibe-boost-kubernetes",
+    name: "Vibes-Based Auto-Scaling",
+    description: "Kubernetes scales pods based on the vibe coder's energy levels.",
+    cost: 200000000000,
+    targetGeneratorId: "kubernetes-overlord",
+    requiredGeneratorId: "vibe-coder",
+    multiplier: 2,
+  },
+];
+
 export const CORPORATE_RANKS: CorporateRank[] = [
   { title: "Junior Code Monkey", threshold: 0 },
   { title: "Mid-Level Googler", threshold: 89000 },

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GENERATORS } from "../game/constants";
+import { GENERATORS, UPGRADES } from "../game/constants";
 import { calcBulkCost } from "../hooks/useGameState";
 import type { GameState } from "../hooks/useGameState";
 
@@ -8,10 +8,11 @@ type BuyMultiplier = 1 | 10 | 100;
 type StoreOverlayProps = {
   state: GameState;
   buyGenerator: (generatorId: string, amount?: number) => boolean;
+  buyUpgrade: (upgradeId: string) => boolean;
   onClose: () => void;
 };
 
-function StoreOverlay({ state, buyGenerator, onClose }: StoreOverlayProps) {
+function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlayProps) {
   const [buyMultiplier, setBuyMultiplier] = useState<BuyMultiplier>(1);
 
   return (
@@ -86,6 +87,65 @@ function StoreOverlay({ state, buyGenerator, onClose }: StoreOverlayProps) {
               >
                 {canAfford ? `Buy ${buyMultiplier}x` : "Can't afford"}
               </button>
+            </div>
+          );
+        })}
+
+        {/* Synergy Upgrades */}
+        <div className="border-t border-gray-700 pt-3 mt-3">
+          <span className="text-yellow-400 font-bold text-xs">
+            &gt; synergy upgrades
+          </span>
+        </div>
+        {UPGRADES.map((upgrade) => {
+          const owned = state.upgrades.includes(upgrade.id);
+          const hasRequired = (state.inventory[upgrade.requiredGeneratorId] ?? 0) > 0;
+          const canAfford = !owned && hasRequired && state.economy.currentTD >= upgrade.cost;
+          const targetGen = GENERATORS.find((g) => g.id === upgrade.targetGeneratorId);
+
+          return (
+            <div
+              key={upgrade.id}
+              className={`rounded border p-3 ${
+                owned
+                  ? "border-yellow-700 bg-yellow-950/20 text-yellow-300"
+                  : canAfford
+                    ? "border-yellow-700 bg-yellow-950/30 text-gray-200"
+                    : "border-gray-700 bg-gray-900/50 text-gray-500"
+              }`}
+            >
+              <div className="flex justify-between items-center text-sm font-semibold">
+                <span>{upgrade.name}</span>
+                {owned && <span className="text-xs text-yellow-400">OWNED</span>}
+              </div>
+              <p className="text-xs text-gray-400 italic mt-1">
+                {upgrade.description}
+              </p>
+              <div className="text-xs mt-1">
+                <span className={canAfford ? "text-yellow-400" : "text-gray-500"}>
+                  Cost: {upgrade.cost.toLocaleString()} TD
+                </span>
+                <span className="text-gray-500 ml-2">
+                  ({targetGen?.name} x{upgrade.multiplier})
+                </span>
+              </div>
+              {!owned && (
+                <button
+                  disabled={!canAfford}
+                  onClick={() => buyUpgrade(upgrade.id)}
+                  className={`mt-2 w-full text-xs py-1 rounded ${
+                    canAfford
+                      ? "bg-yellow-700 hover:bg-yellow-600 text-white cursor-pointer"
+                      : "bg-gray-800 text-gray-600 cursor-not-allowed"
+                  }`}
+                >
+                  {!hasRequired
+                    ? "Requires " + (GENERATORS.find((g) => g.id === upgrade.requiredGeneratorId)?.name ?? "???")
+                    : canAfford
+                      ? "Buy Upgrade"
+                      : "Can't afford"}
+                </button>
+              )}
             </div>
           );
         })}
