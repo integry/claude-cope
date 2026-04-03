@@ -1,4 +1,5 @@
 import { Message } from "./Terminal";
+import { API_BASE } from "../config";
 
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
 type SetBragPending = React.Dispatch<React.SetStateAction<boolean>>;
@@ -73,7 +74,7 @@ export function submitBrag(opts: SubmitBragOptions) {
     { role: "loading", content: "[⚙️] Submitting to the Hall of Blame..." },
   ]);
 
-  fetch("/api/leaderboard", {
+  fetch(`${API_BASE}/api/leaderboard`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, rank: currentRank, debt: totalTDEarned }),

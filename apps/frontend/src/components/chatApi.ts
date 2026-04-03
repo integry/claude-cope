@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { Message } from "./Terminal";
 import type { BuddyState } from "../hooks/useGameState";
 import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
+import { API_BASE } from "../config";
 
 export type BuddyInterjectionResult = {
   message: Message;
@@ -31,7 +32,7 @@ export function submitChatMessage(opts: {
   apiKey?: string;
 }) {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey } = opts;
-  fetch("/api/chat", {
+  fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages: chatMessages, rank: currentRank, ...(apiKey ? { apiKey } : {}) }),
@@ -71,7 +72,7 @@ export function submitChatMessage(opts: {
           role: "warning",
           content: `[🏆 Achievement Unlocked: ${achievementId}]`,
         });
-        fetch("/api/recent-events", {
+        fetch(`${API_BASE}/api/recent-events`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: `🏆 A player unlocked the achievement: ${achievementId}` }),

@@ -7,15 +7,17 @@ import events from "./routes/events";
 
 const app = new Hono();
 
-// Apply strict origin checking to prevent cross-site request forgery and unauthorized API usage.
-// We use a dynamic origin function because we need to support both dev and prod environments safely.
-app.use("*", cors({
-  origin: (origin) => {
-    const allowedOrigins = ['https://claudecope.com', 'http://localhost:5173'];
-    if (!origin || allowedOrigins.includes(origin)) return origin;
-    return 'https://claudecope.com';
-  }
-}));
+app.use("*", (c, next) => {
+  const env = c.env as Record<string, string | undefined>;
+  const csv = env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGINS || "https://claudecope.com,http://localhost:5173";
+  const allowed = csv.split(",").map((s: string) => s.trim());
+  return cors({
+    origin: (origin) => {
+      if (!origin || allowed.includes(origin)) return origin;
+      return allowed[0]!;
+    },
+  })(c, next);
+});
 
 app.use("/api/chat", rateLimiter);
 
