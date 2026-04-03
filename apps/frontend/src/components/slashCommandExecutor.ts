@@ -225,6 +225,8 @@ export function executeSlashCommand(
     } else if (handleCoreCommand(command, ctx, reply)) {
       // /synergize handles its own setIsProcessing
       if (command === "/synergize") return;
+    } else if (command === "/key") {
+      reply({ role: "system", content: "[🔑] Usage: /key <your-api-key> — Provide your own OpenRouter or Anthropic API key to bypass default limits. Type /key clear to remove your key." });
     } else if (command === "/feedback" || command === "/bug") {
       reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as WONTFIX. Have a synergistic day." });
     } else if (handleNewCommand(command, ctx, reply)) {

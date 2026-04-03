@@ -11,16 +11,17 @@ type Env = {
 const chat = new Hono<Env>();
 
 chat.post("/", async (c) => {
-  const apiKey = c.env?.OPENROUTER_API_KEY ?? process.env.OPENROUTER_API_KEY;
+  const body = await c.req.json<{
+    messages: { role: string; content: string }[];
+    rank?: string;
+    apiKey?: string;
+  }>();
+
+  const apiKey = body.apiKey || c.env?.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
   }
-
-  const body = await c.req.json<{
-    messages: { role: string; content: string }[];
-    rank?: string;
-  }>();
 
   if (!body.messages || !Array.isArray(body.messages)) {
     return c.json({ error: "messages array is required" }, 400);

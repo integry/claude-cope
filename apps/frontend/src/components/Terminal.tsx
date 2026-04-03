@@ -9,6 +9,7 @@ import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, parseSabotageParams, rollBuddy } from "./slashCommandExecutor";
+import { handleKeyCommand } from "./keyCommandHandler";
 import Ticker from "./Ticker";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 
@@ -259,6 +260,11 @@ function Terminal() {
       return;
     }
 
+    if (handleKeyCommand(inputValue, setState, setHistory)) {
+      setInputValue("");
+      return;
+    }
+
     addActiveTD(Math.floor(Math.random() * 40) + 10);
 
     if (applyQuotaDrain()) {
@@ -295,7 +301,7 @@ function Terminal() {
       userMessage,
     ].map((m) => ({ role: m.role, content: m.content }));
 
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank });
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey });
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
