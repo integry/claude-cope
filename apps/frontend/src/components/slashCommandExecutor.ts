@@ -149,7 +149,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
       return true;
     }
     const roll = Math.random() * 100;
-    const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "@/\""] : roll < 95 ? ["Sarcastic Clippy", "/|\\"] : ["10x Dragon", ">~<"];
+    const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
     const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
     ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
     const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
@@ -267,7 +267,7 @@ export function rollBuddy(
   setHistory: SetHistory,
 ) {
   const roll = Math.random() * 100;
-  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "@/\""] : roll < 95 ? ["Sarcastic Clippy", "/|\\"] : ["10x Dragon", ">~<"];
+  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
   const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
