@@ -84,15 +84,19 @@ function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Rep
   return true;
 }
 
+function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
+  if (ctx.state.economy.totalTDEarned < 1000) {
+    reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
+  } else {
+    ctx.setHistory(clearLoading);
+    ctx.setShowStore(true);
+  }
+  return true;
+}
+
 function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   if (command === "/store") {
-    if (ctx.state.economy.totalTDEarned < 1000) {
-      reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
-    } else {
-      ctx.setHistory(clearLoading);
-      ctx.setShowStore(true);
-    }
-    return true;
+    return handleStoreCommand(ctx, reply);
   } else if (command === "/leaderboard") {
     ctx.setHistory(clearLoading);
     ctx.setShowLeaderboard(true);
