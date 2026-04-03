@@ -71,6 +71,11 @@ export function submitChatMessage(opts: {
           role: "warning",
           content: `[🏆 Achievement Unlocked: ${achievementId}]`,
         });
+        fetch("/api/recent-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: `🏆 A player unlocked the achievement: ${achievementId}` }),
+        }).catch(() => {});
       }
 
       const reply = rawReply.replace(achievementRegex, "").trim();
