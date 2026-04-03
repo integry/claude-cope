@@ -197,8 +197,14 @@ export function calculateTDpS(inventory: Record<string, number>, ownedUpgrades: 
   for (const upgradeId of ownedUpgrades) {
     const upgrade = UPGRADES.find((u) => u.id === upgradeId);
     if (upgrade) {
+      // Dynamic synergy: multiplier scales with the count of the required generator
+      const effectiveMultiplier =
+        upgrade.synergyPercent != null
+          ? 1 + ((inventory[upgrade.requiredGeneratorId] ?? 0) * upgrade.synergyPercent) / 100
+          : upgrade.multiplier;
+
       multipliers[upgrade.targetGeneratorId] =
-        (multipliers[upgrade.targetGeneratorId] ?? 1) * upgrade.multiplier;
+        (multipliers[upgrade.targetGeneratorId] ?? 1) * effectiveMultiplier;
     }
   }
 

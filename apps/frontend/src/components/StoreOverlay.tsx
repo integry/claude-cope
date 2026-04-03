@@ -126,7 +126,10 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
                   Cost: {upgrade.cost.toLocaleString()} TD
                 </span>
                 <span className="text-gray-500 ml-2">
-                  ({targetGen?.name} x{upgrade.multiplier})
+                  ({targetGen?.name}{" "}
+                  {upgrade.synergyPercent != null
+                    ? `x${(1 + ((state.inventory[upgrade.requiredGeneratorId] ?? 0) * upgrade.synergyPercent) / 100).toFixed(2)} — +${upgrade.synergyPercent}%/ea`
+                    : `x${upgrade.multiplier}`})
                 </span>
               </div>
               {!owned && (

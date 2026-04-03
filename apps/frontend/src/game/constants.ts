@@ -102,8 +102,14 @@ export interface Upgrade {
   targetGeneratorId: string;
   /** The generator you must own to unlock this upgrade. */
   requiredGeneratorId: string;
-  /** Multiplier applied to the target generator's output. */
+  /** Multiplier applied to the target generator's output (used when synergy is not set). */
   multiplier: number;
+  /**
+   * When set, the multiplier scales dynamically based on the count of
+   * `requiredGeneratorId` owned: effective multiplier = 1 + (count * synergyPercent / 100).
+   * For example, synergyPercent=1 means +1% per required generator owned.
+   */
+  synergyPercent?: number;
 }
 
 export const UPGRADES: Upgrade[] = [
@@ -155,11 +161,12 @@ export const UPGRADES: Upgrade[] = [
   {
     id: "agile-boost-llm",
     name: "Sprint-Driven Prompt Engineering",
-    description: "Two-week sprints dedicated entirely to refining AI prompts.",
+    description: "Each Agile Scrum Master refines AI prompts, boosting LLM output by +1% per Scrum Master owned.",
     cost: 75000000,
     targetGeneratorId: "llm-code-wrapper",
     requiredGeneratorId: "agile",
     multiplier: 2,
+    synergyPercent: 1,
   },
   {
     id: "blockchain-boost-agile",
