@@ -18,6 +18,7 @@ export { calcBulkCost } from "./gameStateUtils";
 export function useGameState() {
   const [state, setState] = useState<GameState>(loadState);
   const stateRef = useRef(state);
+  const [offlineTDEarned, setOfflineTDEarned] = useState(0);
 
   // Keep the ref in sync with the latest state
   useEffect(() => {
@@ -36,6 +37,8 @@ export function useGameState() {
       const offlineTD = tdps * (elapsed / 1000);
 
       if (offlineTD <= 0) return { ...prev, lastLogin: now };
+
+      setOfflineTDEarned(offlineTD);
 
       const newTotalTDEarned = prev.economy.totalTDEarned + offlineTD;
       const newRank = resolveRank(newTotalTDEarned, prev.economy.currentRank);
@@ -306,5 +309,5 @@ export function useGameState() {
     }));
   }, []);
 
-  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory };
+  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
 }
