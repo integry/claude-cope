@@ -1,5 +1,4 @@
 function HeaderBar({ rank, totalTDEarned, quotaPercent, outageHp }: { rank: string; totalTDEarned: number; quotaPercent: number; outageHp: number | null }) {
-  if (totalTDEarned < 100) return null;
   return (
     <div className={`sticky top-0 z-10 border-b pb-2 mb-2 ${outageHp !== null ? "bg-red-900 border-red-500" : "bg-[#0d1117] border-green-800"}`}>
       <div className="flex justify-between text-green-400 mb-1">
