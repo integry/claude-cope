@@ -9,18 +9,37 @@ interface UseMultiplayerOptions {
   applyPvpDebuff: () => void;
 }
 
+// Generate a persistent random username for this browser session
+function getLocalUsername(): string {
+  const key = 'claude-cope-username';
+  let name = localStorage.getItem(key);
+  if (!name) {
+    const adjectives = ['Agile', 'Scrum', 'Legacy', 'Senior', 'Junior', 'Stealth', 'Rogue', 'Toxic', 'Based', 'Cracked'];
+    const nouns = ['Dev', 'Intern', 'Architect', 'SRE', 'Manager', 'Contractor', 'Gopher', 'Rustacean', 'Pythonista', 'Hacker'];
+    const adj = adjectives[Math.floor(Math.random() * adjectives.length)]!;
+    const noun = nouns[Math.floor(Math.random() * nouns.length)]!;
+    const num = Math.floor(Math.random() * 999);
+    name = `${adj}${noun}${num}`;
+    localStorage.setItem(key, name);
+  }
+  return name;
+}
+
 // We pass setHistory to allow the hook to write messages directly to the terminal when an attack occurs.
 export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff }: UseMultiplayerOptions) {
   const [onlineCount, setOnlineCount] = useState(1);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [pendingPing, setPendingPing] = useState(false);
   // Track the current outage health to render the global health bar
   const [outageHp, setOutageHp] = useState<number | null>(null);
   const socketRef = useRef<PartySocket | null>(null);
+  const localUsername = useRef(getLocalUsername()).current;
 
   useEffect(() => {
     const socket = new PartySocket({
       host: import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999',
       room: 'global-terminal',
+      query: { username: localUsername },
     });
     socketRef.current = socket;
 
@@ -29,6 +48,11 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
         const data = JSON.parse(event.data);
         if (data.type === 'presence') {
           setOnlineCount(data.count);
+          setOnlineUsers(data.users ?? []);
+        } else if (data.type === 'ping_sent') {
+          setHistory(prev => [...prev, { role: 'system', content: `[📡] Ping delivered to ${data.target}. Jira tickets dispatched.` }]);
+        } else if (data.type === 'ping_failed') {
+          setHistory(prev => [...prev, { role: 'error', content: `[❌] Ping failed: ${data.reason}` }]);
         } else if (data.type === 'incoming_ping') {
           // Trigger the defense window state when attacked
           setPendingPing(true);
@@ -69,13 +93,13 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
     });
 
     return () => socket.close();
-  }, [setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff]);
+  }, [localUsername, setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff]);
 
   // Expose methods to trigger attacks and defend against them
-  const sendPing = () => socketRef.current?.send(JSON.stringify({ type: 'ping' }));
+  const sendPing = (target?: string) => socketRef.current?.send(JSON.stringify({ type: 'ping', ...(target ? { target } : {}) }));
   const rejectPing = () => setPendingPing(false);
   // Expose a method to allow players to attack the outage
   const sendDamage = () => socketRef.current?.send(JSON.stringify({ type: 'damage_outage' }));
 
-  return { onlineCount, sendPing, pendingPing, rejectPing, outageHp, sendDamage };
+  return { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage, localUsername };
 }

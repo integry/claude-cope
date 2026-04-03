@@ -41,7 +41,7 @@ function HeaderBar({ rank, totalTDEarned, quotaPercent, outageHp }: { rank: stri
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff } = useGameState();
   const [history, setHistory] = useState<Message[]>([]);
-  const { onlineCount, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
+  const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
   const rank = state.economy.currentRank;
   const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
@@ -233,7 +233,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
     );
   };
 
@@ -256,6 +256,12 @@ function Terminal() {
   const handleEnterSubmit = () => {
     // Handle outage damage commands — bypass normal LLM processing
     if (tryOutageDamage()) return;
+
+    // Handle /ping with arguments (e.g. "/ping SomeUser")
+    if (inputValue.trim().startsWith("/ping ")) {
+      runSlashCommand(inputValue.trim());
+      return;
+    }
 
     if (bragPending) {
       const username = inputValue.trim();
