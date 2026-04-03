@@ -17,6 +17,7 @@ chat.post("/", async (c) => {
     apiKey?: string;
   }>();
 
+  const isBYOK = Boolean(body.apiKey);
   const apiKey = body.apiKey || c.env?.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
@@ -45,7 +46,7 @@ chat.post("/", async (c) => {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "nvidia/nemotron-3-8b-chat-steer",
+      model: isBYOK ? "anthropic/claude-3-opus" : "nvidia/nemotron-3-8b-chat-steer",
       messages,
     }),
   });
