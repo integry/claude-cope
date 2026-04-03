@@ -3,15 +3,18 @@ import { Message } from "./Terminal";
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
 type SetBragPending = React.Dispatch<React.SetStateAction<boolean>>;
 
-export function submitBrag(
-  username: string,
-  currentRank: string,
-  totalTDEarned: number,
-  generatorsOwned: number,
-  mostAbusedCommand: string,
-  setHistory: SetHistory,
-  setBragPending: SetBragPending,
-) {
+interface SubmitBragOptions {
+  username: string;
+  currentRank: string;
+  totalTDEarned: number;
+  generatorsOwned: number;
+  mostAbusedCommand: string;
+  setHistory: SetHistory;
+  setBragPending: SetBragPending;
+}
+
+export function submitBrag(opts: SubmitBragOptions) {
+  const { username, currentRank, totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending } = opts;
   setHistory((prev) => [
     ...prev,
     { role: "user", content: username },

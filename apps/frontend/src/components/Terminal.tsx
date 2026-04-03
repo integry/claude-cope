@@ -240,7 +240,7 @@ function Terminal() {
       setInputValue("");
       const generatorsOwned = Object.values(state.inventory).reduce((sum, count) => sum + count, 0);
       const mostAbusedCommand = "/clear"; // The command everyone spams
-      submitBrag(username, state.economy.currentRank, state.economy.totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending);
+      submitBrag({ username, currentRank: state.economy.currentRank, totalTDEarned: state.economy.totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending });
       return;
     }
 
