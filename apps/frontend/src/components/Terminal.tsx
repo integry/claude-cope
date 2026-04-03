@@ -26,25 +26,13 @@ function HeaderBar({ rank, totalTDEarned, quotaPercent, outageHp }: { rank: stri
         <span>Rank: {rank}</span>
         <span>Technical Debt: {totalTDEarned.toLocaleString()} TD</span>
       </div>
-      <div className="flex items-center gap-2 text-xs">
-        <span className="text-gray-500">API Quota:</span>
-        <div className="flex-1 h-2 bg-gray-800 rounded overflow-hidden">
-          <div
-            className="h-full transition-all duration-300 rounded"
-            style={{
-              width: `${quotaPercent}%`,
-              backgroundColor:
-                quotaPercent > 50
-                  ? "#22c55e"
-                  : quotaPercent > 20
-                    ? "#eab308"
-                    : "#ef4444",
-            }}
-          />
-        </div>
-        <span className={quotaPercent > 50 ? "text-green-400" : quotaPercent > 20 ? "text-yellow-400" : "text-red-400"}>
-          {quotaPercent}%
-        </span>
+      <div className={`text-xs font-mono ${quotaPercent > 50 ? "text-green-400" : quotaPercent > 20 ? "text-yellow-400" : "text-red-400"}`}>
+        {(() => {
+          const totalBlocks = 20;
+          const filledBlocks = Math.round((quotaPercent / 100) * totalBlocks);
+          const emptyBlocks = totalBlocks - filledBlocks;
+          return `[API Quota: ${"█".repeat(filledBlocks)}${"░".repeat(emptyBlocks)} ${quotaPercent}%]`;
+        })()}
       </div>
     </div>
   );
