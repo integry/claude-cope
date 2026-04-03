@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE } from "../game/constants";
+import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE, UPGRADES } from "../game/constants";
 
 const STORAGE_KEY = "claudeCopeState";
 const STATE_VERSION = "1.0";
@@ -24,6 +24,7 @@ export interface GameState {
   lastLogin: number;
   economy: EconomyState;
   inventory: Record<string, number>;
+  upgrades: string[];
   achievements: string[];
   buddy: BuddyState;
   apiKey?: string;
@@ -76,6 +77,7 @@ function createDefaultState(): GameState {
       tdMultiplier: 1,
     },
     inventory,
+    upgrades: [],
     achievements: [],
     buddy: {
       type: null,
@@ -108,6 +110,7 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
       tdMultiplier: 1,
     },
     inventory: legacy.inventory,
+    upgrades: [],
     achievements: Array.isArray(legacy.achievements) ? legacy.achievements : [],
     buddy,
   };
@@ -127,6 +130,9 @@ function loadState(): GameState {
       const state = parsed as unknown as GameState;
 
       // Ensure required fields exist (defensive)
+      if (!Array.isArray(state.upgrades)) {
+        state.upgrades = [];
+      }
       if (!Array.isArray(state.achievements)) {
         state.achievements = [];
       }
@@ -169,11 +175,22 @@ export function calcBulkCost(baseCost: number, owned: number, amount: number): n
   return Math.floor(baseCost * rOwned * (rAmount - 1) / (GROWTH_RATE - 1));
 }
 
-function calculateTDpS(inventory: Record<string, number>): number {
+function calculateTDpS(inventory: Record<string, number>, ownedUpgrades: string[] = []): number {
+  // Build a multiplier map from owned upgrades
+  const multipliers: Record<string, number> = {};
+  for (const upgradeId of ownedUpgrades) {
+    const upgrade = UPGRADES.find((u) => u.id === upgradeId);
+    if (upgrade) {
+      multipliers[upgrade.targetGeneratorId] =
+        (multipliers[upgrade.targetGeneratorId] ?? 1) * upgrade.multiplier;
+    }
+  }
+
   let tdps = 0;
   for (const generator of GENERATORS) {
     const count = inventory[generator.id] ?? 0;
-    tdps += count * generator.baseOutput;
+    const synergy = multipliers[generator.id] ?? 1;
+    tdps += count * generator.baseOutput * synergy;
   }
   return tdps;
 }
@@ -194,7 +211,7 @@ export function useGameState() {
       const elapsed = now - prev.lastLogin;
       if (elapsed <= 0) return { ...prev, lastLogin: now };
 
-      const baseTdps = calculateTDpS(prev.inventory);
+      const baseTdps = calculateTDpS(prev.inventory, prev.upgrades);
       const tdps = baseTdps * prev.economy.tdMultiplier;
       const offlineTD = tdps * (elapsed / 1000);
 
@@ -229,7 +246,7 @@ export function useGameState() {
   useEffect(() => {
     const interval = setInterval(() => {
       setState((prev) => {
-        const baseTdps = calculateTDpS(prev.inventory);
+        const baseTdps = calculateTDpS(prev.inventory, prev.upgrades);
         if (baseTdps === 0) return prev;
 
         const tdps = baseTdps * prev.economy.tdMultiplier;
@@ -405,6 +422,36 @@ export function useGameState() {
     };
   }, []);
 
+  const buyUpgrade = useCallback((upgradeId: string): boolean => {
+    const upgrade = UPGRADES.find((u) => u.id === upgradeId);
+    if (!upgrade) return false;
+
+    const current = stateRef.current;
+    // Already owned
+    if (current.upgrades.includes(upgradeId)) return false;
+    // Must own at least one of the required generator
+    if ((current.inventory[upgrade.requiredGeneratorId] ?? 0) < 1) return false;
+    // Must be able to afford it
+    if (current.economy.currentTD < upgrade.cost) return false;
+
+    setState((prev) => {
+      if (prev.upgrades.includes(upgradeId)) return prev;
+      if ((prev.inventory[upgrade.requiredGeneratorId] ?? 0) < 1) return prev;
+      if (prev.economy.currentTD < upgrade.cost) return prev;
+
+      return {
+        ...prev,
+        economy: {
+          ...prev.economy,
+          currentTD: prev.economy.currentTD - upgrade.cost,
+        },
+        upgrades: [...prev.upgrades, upgradeId],
+      };
+    });
+
+    return true;
+  }, []);
+
   const applyOutagePenalty = useCallback(() => {
     setState((prev) => {
       // Find the most expensive generator that the player owns at least 1 of
@@ -429,5 +476,5 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff };
+  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff };
 }
