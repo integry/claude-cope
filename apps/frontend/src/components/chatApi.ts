@@ -21,14 +21,15 @@ export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionRe
   };
 }
 
-export function submitChatMessage(
-  chatMessages: { role: string; content: string }[],
-  buddyResult: BuddyInterjectionResult | null,
-  unlockAchievement: (id: string) => void,
-  setHistory: Dispatch<SetStateAction<Message[]>>,
-  setIsProcessing: Dispatch<SetStateAction<boolean>>,
-  currentRank: string,
-) {
+export function submitChatMessage(opts: {
+  chatMessages: { role: string; content: string }[];
+  buddyResult: BuddyInterjectionResult | null;
+  unlockAchievement: (id: string) => void;
+  setHistory: Dispatch<SetStateAction<Message[]>>;
+  setIsProcessing: Dispatch<SetStateAction<boolean>>;
+  currentRank: string;
+}) {
+  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank } = opts;
   fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
