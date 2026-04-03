@@ -4,6 +4,7 @@ import type { BuddyState } from "../hooks/useGameState";
 import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
+import { buildAchievementBox } from "./achievementBox";
 
 export type BuddyInterjectionResult = {
   message: Message;
@@ -71,7 +72,7 @@ export function submitChatMessage(opts: {
         unlockAchievement(achievementId);
         achievementMessages.push({
           role: "warning",
-          content: `[🏆 Achievement Unlocked: ${achievementId}]`,
+          content: buildAchievementBox(achievementId),
         });
         const achievementMessage = `🏆 A player unlocked the achievement: ${achievementId}`;
         fetch(`${API_BASE}/api/recent-events`, {
