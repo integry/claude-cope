@@ -94,6 +94,7 @@ function Terminal() {
       { id: "upside_down", name: "Upside-Down Rendering", css: "transform: scaleY(-1);" },
       { id: "opacity_fade", name: "Opacity Fade Leak", css: "opacity: 0.3;" },
       { id: "letter_spacing", name: "Letter Spacing Explosion", css: "letter-spacing: 0.5em;" },
+      { id: "comic_sans", name: "Font Corruption", css: 'font-family: "Comic Sans MS", "Comic Sans", cursive;' },
     ];
 
     const scheduleRegression = () => {
