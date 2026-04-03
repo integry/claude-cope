@@ -30,9 +30,9 @@ chat.post("/", async (c) => {
 
   const rank = body.rank ?? "Junior Code Monkey";
 
-  // Context window: send up to 10 messages per product spec (5-10 range)
-  // to provide sufficient conversation context without over-reliance on deep history.
-  const recentMessages = body.messages.slice(-10);
+  // Context window: send only last 4 messages per functional spec
+  // to minimize token usage and enforce erratic, forgetful AI behavior.
+  const recentMessages = body.messages.slice(-4);
 
   const messages = [
     { role: "system", content: getSystemPrompt(rank) },
