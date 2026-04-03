@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type SynergizeOverlayProps = {
   onClose: () => void;
@@ -30,11 +30,21 @@ const AGENDA_ITEMS = [
 function SynergizeOverlay({ onClose }: SynergizeOverlayProps) {
   const [agendaIndex, setAgendaIndex] = useState(0);
   const [clickedBuzzwords, setClickedBuzzwords] = useState<Set<number>>(new Set());
+  const [timeLeft, setTimeLeft] = useState(10);
+
+  useEffect(() => {
+    if (timeLeft <= 0) return;
+    const id = setInterval(() => {
+      setTimeLeft((t) => t - 1);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [timeLeft]);
 
   const currentAgenda = AGENDA_ITEMS[agendaIndex];
   if (!currentAgenda) return null;
 
   const allClicked = clickedBuzzwords.size === currentAgenda.buzzwords.length;
+  const canProceed = allClicked && timeLeft <= 0;
 
   const handleBuzzwordClick = (idx: number) => {
     setClickedBuzzwords((prev) => new Set(prev).add(idx));
@@ -55,10 +65,16 @@ function SynergizeOverlay({ onClose }: SynergizeOverlayProps) {
         {/* Header */}
         <div className="border-b border-gray-700 pb-3 mb-4">
           <div className="text-yellow-400 font-bold text-sm">
-            [1-ON-1 MEETING] Mandatory Synergy Session
+            📅 Calendar Invite: Mandatory Synergy Session
+          </div>
+          <div className="text-gray-500 text-xs mt-1">
+            Organizer: Corporate Overlord • When: Now (non-negotiable)
           </div>
           <div className="text-gray-500 text-xs mt-1">
             Step {agendaIndex + 1} of {AGENDA_ITEMS.length} — This meeting cannot be skipped.
+            {timeLeft > 0 && (
+              <span className="text-red-400 ml-2">⏱ {timeLeft}s remaining</span>
+            )}
           </div>
         </div>
 
@@ -106,18 +122,20 @@ function SynergizeOverlay({ onClose }: SynergizeOverlayProps) {
         {/* Next / End Meeting button */}
         <button
           onClick={handleNext}
-          disabled={!allClicked}
+          disabled={!canProceed}
           className={`w-full py-2 rounded text-sm font-bold transition-colors ${
-            allClicked
+            canProceed
               ? "bg-green-700 hover:bg-green-600 text-white cursor-pointer"
               : "bg-gray-800 text-gray-600 cursor-not-allowed"
           }`}
         >
-          {!allClicked
-            ? "Click all buzzwords to continue..."
-            : agendaIndex < AGENDA_ITEMS.length - 1
-              ? "Proceed to Next Agenda Item"
-              : "End Meeting (finally)"}
+          {timeLeft > 0
+            ? `Please wait... ${timeLeft}s`
+            : !allClicked
+              ? "Click all buzzwords to continue..."
+              : agendaIndex < AGENDA_ITEMS.length - 1
+                ? "Proceed to Next Agenda Item"
+                : "End Meeting (finally)"}
         </button>
       </div>
     </div>

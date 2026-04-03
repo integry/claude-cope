@@ -4,9 +4,10 @@ type SlashMenuProps = {
   query: string;
   activeIndex: number;
   totalTechnicalDebt: number;
+  onSelect: (cmd: string) => void;
 };
 
-function SlashMenu({ query, activeIndex, totalTechnicalDebt }: SlashMenuProps) {
+function SlashMenu({ query, activeIndex, totalTechnicalDebt, onSelect }: SlashMenuProps) {
   const filtered = SLASH_COMMANDS.filter((cmd) => {
     if (cmd === "/store" && totalTechnicalDebt < 1000) return false;
     return cmd.startsWith(query.toLowerCase());
@@ -19,11 +20,12 @@ function SlashMenu({ query, activeIndex, totalTechnicalDebt }: SlashMenuProps) {
       {filtered.map((cmd, i) => (
         <li
           key={cmd}
-          className={`px-3 py-1 cursor-default ${
+          className={`px-3 py-1 cursor-pointer ${
             i === activeIndex
               ? "bg-gray-700 text-white"
               : "text-gray-300 hover:bg-gray-800"
           }`}
+          onClick={() => onSelect(cmd)}
         >
           {cmd}
         </li>

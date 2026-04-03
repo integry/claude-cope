@@ -30,7 +30,7 @@ describe("computeBuddyInterjection", () => {
     const result = computeBuddyInterjection(buddy);
     expect(result).not.toBeNull();
     expect(result!.message.role).toBe("warning");
-    expect(result!.message.content).toContain("🐌");
+    expect(result!.message.content).toContain("@..@");
     expect(result!.message.content).toContain("Agile Snail");
   });
 
@@ -42,7 +42,7 @@ describe("computeBuddyInterjection", () => {
     };
     const result = computeBuddyInterjection(buddy);
     expect(result).not.toBeNull();
-    expect(result!.message.content).toContain("📎");
+    expect(result!.message.content).toContain("| o |");
     expect(result!.message.content).toContain("Sarcastic Clippy");
     expect(result!.shouldDeleteHistory).toBe(false);
   });
@@ -66,7 +66,7 @@ describe("computeBuddyInterjection", () => {
 
     // All should have dragon icon
     for (const r of allNonNull) {
-      expect(r.message.content).toContain("🐉");
+      expect(r.message.content).toContain("o.o");
     }
   });
 

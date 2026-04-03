@@ -13,13 +13,15 @@ export type BuddyInterjectionResult = {
 
 export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionResult | null {
   if (!buddy.type) return null;
-  if (buddy.promptsSinceLastInterjection + 1 < 5) return null;
+  const promptCount = buddy.promptsSinceLastInterjection + 1;
+  if (promptCount < 3) return null;
+  if (promptCount < 7 && Math.random() >= 0.33) return null;
   const icon = BUDDY_ICONS[buddy.type] ?? "🐾";
   const lines = BUDDY_INTERJECTIONS[buddy.type] ?? ["stares at you blankly."];
   const text = lines[Math.floor(Math.random() * lines.length)]!;
   const shouldDeleteHistory = buddy.type === "10x Dragon" && Math.random() < 0.5;
   return {
-    message: { role: "warning", content: `[${icon} ${buddy.type}] ${text}` },
+    message: { role: "warning", content: `${icon}\n[${buddy.type}] ${text}` },
     shouldDeleteHistory,
   };
 }
@@ -34,6 +36,8 @@ export function submitChatMessage(opts: {
   apiKey?: string;
 }) {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey } = opts;
+  const fakeDelay = 1500 + Math.random() * 1500;
+  setTimeout(() => {
   fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -125,4 +129,5 @@ export function submitChatMessage(opts: {
     .finally(() => {
       setIsProcessing(false);
     });
+  }, fakeDelay);
 }

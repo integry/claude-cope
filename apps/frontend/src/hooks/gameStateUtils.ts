@@ -23,6 +23,11 @@ export interface EconomyState {
   tdMultiplier: number;
 }
 
+export interface ModesState {
+  fast: boolean;
+  voice: boolean;
+}
+
 export interface GameState {
   version: string;
   lastLogin: number;
@@ -33,6 +38,7 @@ export interface GameState {
   buddy: BuddyState;
   chatHistory: Message[];
   commandUsage: Record<string, number>;
+  modes: ModesState;
   apiKey?: string;
 }
 
@@ -92,6 +98,7 @@ function createDefaultState(): GameState {
     },
     chatHistory: [],
     commandUsage: {},
+    modes: { fast: false, voice: false },
   };
 }
 
@@ -123,6 +130,7 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
     buddy,
     chatHistory: [],
     commandUsage: {},
+    modes: { fast: false, voice: false },
   };
 }
 
@@ -158,6 +166,9 @@ export function loadState(): GameState {
       }
       if (!state.commandUsage || typeof state.commandUsage !== "object") {
         state.commandUsage = {};
+      }
+      if (!state.modes || typeof state.modes !== "object") {
+        state.modes = { fast: false, voice: false };
       }
       if (!state.economy) {
         return createDefaultState();
