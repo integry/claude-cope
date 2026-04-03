@@ -101,6 +101,8 @@ function Terminal() {
       { id: "opacity_fade", name: "Opacity Fade Leak", css: "opacity: 0.3;" },
       { id: "letter_spacing", name: "Letter Spacing Explosion", css: "letter-spacing: 0.5em;" },
       { id: "comic_sans", name: "Font Corruption", css: 'font-family: "Comic Sans MS", "Comic Sans", cursive;' },
+      { id: "all_caps", name: "ALL CAPS", css: "text-transform: uppercase;" },
+      { id: "windows_prompt", name: "OS Downgrade", css: "" },
     ];
 
     const scheduleRegression = () => {
@@ -402,7 +404,7 @@ function Terminal() {
       <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
-          <OutputBlock key={index} message={message} promptString={activeRegression ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "} />
+          <OutputBlock key={index} message={message} promptString={activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "} />
         ))}
         <div ref={bottomRef} />
       </div>
@@ -419,7 +421,7 @@ function Terminal() {
           disabled={isProcessing || isBooting || quotaLocked}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          promptString={activeRegression ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "}
+          promptString={activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "}
         />
       </div>
       {showStore && (
