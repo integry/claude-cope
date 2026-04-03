@@ -213,7 +213,6 @@ export function useGameState() {
         },
       };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Persist state to localStorage
