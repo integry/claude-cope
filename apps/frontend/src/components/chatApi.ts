@@ -13,7 +13,9 @@ export type BuddyInterjectionResult = {
 
 export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionResult | null {
   if (!buddy.type) return null;
-  if (buddy.promptsSinceLastInterjection + 1 < 5) return null;
+  const promptCount = buddy.promptsSinceLastInterjection + 1;
+  if (promptCount < 3) return null;
+  if (promptCount < 7 && Math.random() >= 0.33) return null;
   const icon = BUDDY_ICONS[buddy.type] ?? "🐾";
   const lines = BUDDY_INTERJECTIONS[buddy.type] ?? ["stares at you blankly."];
   const text = lines[Math.floor(Math.random() * lines.length)]!;
