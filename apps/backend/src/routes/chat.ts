@@ -45,7 +45,7 @@ chat.post("/", async (c) => {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "nvidia/nemotron-4-340b-instruct",
+      model: "nvidia/nemotron-3-8b-chat-steer",
       messages,
     }),
   });
