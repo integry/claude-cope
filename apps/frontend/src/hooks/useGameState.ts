@@ -1,9 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, SetStateAction } from "react";
 import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE, UPGRADES } from "../game/constants";
 import { supabase } from "../supabaseClient";
 
 const STORAGE_KEY = "claudeCopeState";
 const STATE_VERSION = "1.0";
+
+export type Message = {
+  role: "user" | "system" | "loading" | "warning" | "error";
+  content: string;
+};
 
 export interface BuddyState {
   type: string | null;
@@ -28,6 +33,7 @@ export interface GameState {
   upgrades: string[];
   achievements: string[];
   buddy: BuddyState;
+  chatHistory: Message[];
   apiKey?: string;
 }
 
@@ -85,6 +91,7 @@ function createDefaultState(): GameState {
       isShiny: false,
       promptsSinceLastInterjection: 0,
     },
+    chatHistory: [],
   };
 }
 
@@ -143,6 +150,9 @@ function loadState(): GameState {
           isShiny: false,
           promptsSinceLastInterjection: 0,
         };
+      }
+      if (!Array.isArray(state.chatHistory)) {
+        state.chatHistory = [];
       }
       if (!state.economy) {
         return createDefaultState();
@@ -234,10 +244,14 @@ export function useGameState() {
     });
   }, []);
 
-  // Persist state to localStorage
+  // Persist state to localStorage (filter transient "loading" messages from chat history)
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const toSave = {
+        ...state,
+        chatHistory: state.chatHistory.filter((m) => m.role !== "loading"),
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     } catch {
       // localStorage full or unavailable — silently ignore
     }
@@ -483,5 +497,12 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff };
+  const setChatHistory = useCallback((action: SetStateAction<Message[]>) => {
+    setState((prev) => ({
+      ...prev,
+      chatHistory: typeof action === "function" ? action(prev.chatHistory) : action,
+    }));
+  }, []);
+
+  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory };
 }

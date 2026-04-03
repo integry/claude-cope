@@ -4,7 +4,7 @@ import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import { SLASH_COMMANDS } from "./slashCommands";
 import StoreOverlay from "./StoreOverlay";
-import { useGameState } from "../hooks/useGameState";
+import { useGameState, Message } from "../hooks/useGameState";
 import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
@@ -13,10 +13,7 @@ import { handleKeyCommand } from "./keyCommandHandler";
 import Ticker from "./Ticker";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 
-export type Message = {
-  role: "user" | "system" | "loading" | "warning" | "error";
-  content: string;
-};
+export type { Message };
 
 function HeaderBar({ rank, totalTDEarned, quotaPercent, outageHp }: { rank: string; totalTDEarned: number; quotaPercent: number; outageHp: number | null }) {
   if (totalTDEarned < 100) return null;
@@ -39,8 +36,9 @@ function HeaderBar({ rank, totalTDEarned, quotaPercent, outageHp }: { rank: stri
 }
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff } = useGameState();
-  const [history, setHistory] = useState<Message[]>([]);
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory } = useGameState();
+  const history = state.chatHistory;
+  const setHistory = setChatHistory;
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
   const rank = state.economy.currentRank;
   const [quotaLocked, setQuotaLocked] = useState(false);
@@ -56,6 +54,7 @@ function Terminal() {
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [isBooting, setIsBooting] = useState<boolean>(() => {
+    if (history.length > 0) return false; // Skip boot if chat history was restored
     const params = new URLSearchParams(window.location.search);
     return params.get("sabotage") !== "true";
   });
