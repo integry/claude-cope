@@ -26,7 +26,6 @@ function Terminal() {
   const rank = state.economy.currentRank;
   const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
-
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -85,13 +84,9 @@ function Terminal() {
 
   // Welcome-back message for offline TD earnings
   useEffect(() => {
-    if (offlineTDEarned > 0) {
-      setHistory((prev) => [
-        ...prev,
-        { role: "system", content: `[☕ WELCOME BACK] While you were away, your codebase accumulated ${Math.floor(offlineTDEarned).toLocaleString()} Technical Debt. The suffering never stops.` },
-      ]);
-      clearOfflineTDEarned();
-    }
+    if (offlineTDEarned <= 0) return;
+    setHistory((prev) => [...prev, { role: "system", content: `[☕ WELCOME BACK] While you were away, your codebase accumulated ${Math.floor(offlineTDEarned).toLocaleString()} Technical Debt. The suffering never stops.` }]);
+    clearOfflineTDEarned();
   }, [offlineTDEarned, clearOfflineTDEarned, setHistory]);
 
   // Handle sabotage URL parameters on mount
@@ -177,21 +172,14 @@ function Terminal() {
   };
 
   const triggerInstantBan = () => {
-    setInstantBanReady(false);
-    setQuotaLocked(true);
-    setIsProcessing(true);
-    setHistory((prev) => [
-      ...prev,
+    setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
+    setHistory((prev) => [...prev,
       { role: "error", content: "[🚨 INSTANT BAN] Suspicious activity detected! You typed too fast after a billing upgrade." },
       { role: "warning", content: "[🔒] Account temporarily suspended. Reviewing compliance..." },
     ]);
     setTimeout(() => {
-      setQuotaLocked(false);
-      setIsProcessing(false);
-      setHistory((prev) => [
-        ...prev,
-        { role: "system", content: "[✓] Compliance review passed. Account reinstated. Proceed with caution." },
-      ]);
+      setQuotaLocked(false); setIsProcessing(false);
+      setHistory((prev) => [...prev, { role: "system", content: "[✓] Compliance review passed. Account reinstated. Proceed with caution." }]);
     }, 5000);
   };
 
@@ -237,17 +225,11 @@ function Terminal() {
   const DAMAGE_COMMANDS = ["kubectl restart pods", "ssh prod-01", "git revert HEAD"];
 
   const tryOutageDamage = (): boolean => {
-    if (outageHp !== null && DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) {
-      sendDamage();
-      setHistory((prev) => [
-        ...prev,
-        { role: "user", content: inputValue },
-        { role: "system", content: `[💥 HIT] Damage dealt to PROD OUTAGE!` },
-      ]);
-      setInputValue("");
-      return true;
-    }
-    return false;
+    if (outageHp === null || !DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) return false;
+    sendDamage();
+    setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: `[💥 HIT] Damage dealt to PROD OUTAGE!` }]);
+    setInputValue("");
+    return true;
   };
 
   const handleEnterSubmit = () => {
