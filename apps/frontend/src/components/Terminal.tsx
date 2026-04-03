@@ -5,6 +5,7 @@ import SlashMenu from "./SlashMenu";
 import { SLASH_COMMANDS } from "./slashCommands";
 import StoreOverlay from "./StoreOverlay";
 import LeaderboardOverlay from "./LeaderboardOverlay";
+import AchievementOverlay from "./AchievementOverlay";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
 import { BUDDY_ICONS } from "./buddyConstants";
@@ -34,6 +35,7 @@ function Terminal() {
   const [inputValue, setInputValue] = useState("");
   const [showStore, setShowStore] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [isBooting, setIsBooting] = useState<boolean>(() => {
@@ -215,7 +217,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setShowAchievements, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
     );
   };
 
@@ -428,6 +430,12 @@ function Terminal() {
       {showLeaderboard && (
         <LeaderboardOverlay
           onClose={() => setShowLeaderboard(false)}
+        />
+      )}
+      {showAchievements && (
+        <AchievementOverlay
+          unlockedIds={state.achievements}
+          onClose={() => setShowAchievements(false)}
         />
       )}
     </div>
