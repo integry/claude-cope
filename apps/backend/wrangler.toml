@@ -9,3 +9,9 @@ port = 8787
 binding = "DB"
 database_name = "claude-cope-db"
 database_id = "placeholder-database-id"
+
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "0"
+simple = { limit = 100, period = 60 }
