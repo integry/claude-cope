@@ -54,7 +54,7 @@ export const GENERATORS: Generator[] = [
     name: "Rogue API Key",
     description: "A leaked API key that an undergrad is using to generate crypto whitepapers on your dime.",
     baseCost: 450000,
-    baseOutput: 15000,
+    baseOutput: 780,
   },
   {
     id: "llm-code-wrapper",
