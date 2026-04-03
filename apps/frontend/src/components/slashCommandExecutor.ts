@@ -16,6 +16,7 @@ interface SlashCommandContext {
   setShowStore: (v: boolean) => void;
   setShowLeaderboard: (v: boolean) => void;
   setShowAchievements: (v: boolean) => void;
+  setShowSynergize: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -122,20 +123,8 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     ctx.setShowAchievements(true);
     return true;
   } else if (command === "/synergize") {
-    reply({ role: "system", content: "[🗓️] Simulating a 15-minute meeting. Please wait..." });
-    setTimeout(() => {
-      ctx.setHistory((prev) => [...prev, { role: "system", content: "[📋] Agenda Item 1: Review last sprint's velocity metrics and blame someone." }]);
-    }, 3000);
-    setTimeout(() => {
-      ctx.setHistory((prev) => [...prev, { role: "system", content: "[📋] Agenda Item 2: Discuss migrating to a new framework nobody asked for." }]);
-    }, 6000);
-    setTimeout(() => {
-      ctx.setHistory((prev) => [...prev, { role: "system", content: "[📋] Agenda Item 3: Action items from the meeting about reducing meetings." }]);
-    }, 9000);
-    setTimeout(() => {
-      ctx.setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]);
-      ctx.setIsProcessing(false);
-    }, 10000);
+    reply({ role: "system", content: "[🗓️] Mandatory 1-on-1 meeting initiated. You cannot escape." });
+    ctx.setShowSynergize(true);
     return true;
   } else if (command === "/compact") {
     ctx.setHistory((prev) => {
