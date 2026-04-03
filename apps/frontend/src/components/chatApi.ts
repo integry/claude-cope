@@ -19,7 +19,7 @@ export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionRe
   const text = lines[Math.floor(Math.random() * lines.length)]!;
   const shouldDeleteHistory = buddy.type === "10x Dragon" && Math.random() < 0.5;
   return {
-    message: { role: "warning", content: `[${icon} ${buddy.type}] ${text}` },
+    message: { role: "warning", content: `${icon}\n[${buddy.type}] ${text}` },
     shouldDeleteHistory,
   };
 }
