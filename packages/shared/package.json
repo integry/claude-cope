@@ -1,0 +1,8 @@
+{
+  "name": "@claude-cope/shared",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    "./multiplayer-types": "./src/multiplayer-types.ts"
+  }
+}

@@ -1,4 +1,5 @@
 import type * as Party from "partykit/server";
+import type { ClientMessage, ServerMessage } from "@claude-cope/shared/multiplayer-types";
 
 // The core PartyKit server class. We manage real-time, low-latency events here
 // because Cloudflare Workers WebSockets are faster than standard database polling.
@@ -39,9 +40,17 @@ export default class ClaudeCopeServer implements Party.Server {
     this.broadcastPresence();
   }
 
+  private send(conn: Party.Connection, msg: ServerMessage) {
+    conn.send(JSON.stringify(msg));
+  }
+
+  private broadcast(msg: ServerMessage) {
+    this.room.broadcast(JSON.stringify(msg));
+  }
+
   onMessage(message: string, sender: Party.Connection) {
     try {
-      const data = JSON.parse(message);
+      const data: ClientMessage = JSON.parse(message);
       if (data.type === "ping") {
         const attackerName = this.usernames.get(sender.id) || "A Coworker";
         const conns = Array.from(this.room.getConnections());
@@ -51,21 +60,21 @@ export default class ClaudeCopeServer implements Party.Server {
           // Targeted ping: find a specific user by username
           const targetConn = targets.find(c => this.usernames.get(c.id) === data.target);
           if (targetConn) {
-            targetConn.send(JSON.stringify({ type: "incoming_ping", attacker: attackerName }));
-            sender.send(JSON.stringify({ type: "ping_sent", target: data.target }));
+            this.send(targetConn, { type: "incoming_ping", attacker: attackerName });
+            this.send(sender, { type: "ping_sent", target: data.target });
             this.startPingTimer(targetConn.id, attackerName);
           } else {
-            sender.send(JSON.stringify({ type: "ping_failed", reason: `User "${data.target}" is not online.` }));
+            this.send(sender, { type: "ping_failed", reason: `User "${data.target}" is not online.` });
           }
         } else if (targets.length > 0) {
           // Random ping: select a random target
           const target = targets[Math.floor(Math.random() * targets.length)];
           const targetName = this.usernames.get(target.id) || "someone";
-          target.send(JSON.stringify({ type: "incoming_ping", attacker: attackerName }));
-          sender.send(JSON.stringify({ type: "ping_sent", target: targetName }));
+          this.send(target, { type: "incoming_ping", attacker: attackerName });
+          this.send(sender, { type: "ping_sent", target: targetName });
           this.startPingTimer(target.id, attackerName);
         } else {
-          sender.send(JSON.stringify({ type: "ping_failed", reason: "No one else is online." }));
+          this.send(sender, { type: "ping_failed", reason: "No one else is online." });
         }
       } else if (data.type === "reject_ping") {
         // Victim is rejecting/blocking the incoming attack
@@ -74,12 +83,12 @@ export default class ClaudeCopeServer implements Party.Server {
           clearTimeout(pending);
           this.pendingPings.delete(sender.id);
           const victimName = this.usernames.get(sender.id) || "someone";
-          this.room.broadcast(JSON.stringify({ type: "ping_rejected", victim: victimName }));
+          this.broadcast({ type: "ping_rejected", victim: victimName });
         }
       } else if (data.type === "damage_outage" && this.isOutageActive) {
         // Process damage from clients and broadcast the new health total to everyone
         this.outageHp = Math.max(0, this.outageHp - 10);
-        this.room.broadcast(JSON.stringify({ type: "outage_update", hp: this.outageHp }));
+        this.broadcast({ type: "outage_update", hp: this.outageHp });
 
         // End the event if the community successfully depletes the health bar
         if (this.outageHp <= 0) {
@@ -88,7 +97,7 @@ export default class ClaudeCopeServer implements Party.Server {
             clearTimeout(this.outageTimer);
             this.outageTimer = null;
           }
-          this.room.broadcast(JSON.stringify({ type: "outage_cleared" }));
+          this.broadcast({ type: "outage_cleared" });
         }
       }
     } catch {
@@ -106,9 +115,7 @@ export default class ClaudeCopeServer implements Party.Server {
     const timer = setTimeout(() => {
       this.pendingPings.delete(victimConnId);
       const victimName = this.usernames.get(victimConnId) || "someone";
-      this.room.broadcast(
-        JSON.stringify({ type: "ping_applied", attacker: attackerName, victim: victimName })
-      );
+      this.broadcast({ type: "ping_applied", attacker: attackerName, victim: victimName });
     }, 5000);
 
     this.pendingPings.set(victimConnId, timer);
@@ -133,16 +140,14 @@ export default class ClaudeCopeServer implements Party.Server {
     this.isOutageActive = true;
     this.outageHp = 100;
 
-    this.room.broadcast(
-      JSON.stringify({ type: "outage_start", hp: this.outageHp })
-    );
+    this.broadcast({ type: "outage_start", hp: this.outageHp });
 
     // If players don't deplete the HP within 2 minutes, the outage fails
     this.outageTimer = setTimeout(() => {
       if (this.isOutageActive) {
         this.isOutageActive = false;
         this.outageHp = 0;
-        this.room.broadcast(JSON.stringify({ type: "outage_failed" }));
+        this.broadcast({ type: "outage_failed" });
       }
     }, 2 * 60 * 1000);
   }
@@ -151,12 +156,10 @@ export default class ClaudeCopeServer implements Party.Server {
   private broadcastPresence() {
     const connections = Array.from(this.room.getConnections());
     const users = connections.map(c => this.usernames.get(c.id) || `anon-${c.id.slice(0, 6)}`);
-    this.room.broadcast(
-      JSON.stringify({
-        type: "presence",
-        count: connections.length,
-        users,
-      })
-    );
+    this.broadcast({
+      type: "presence",
+      count: connections.length,
+      users,
+    });
   }
 }
