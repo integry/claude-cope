@@ -315,7 +315,8 @@ function Terminal() {
         {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
         {state.buddy.type && (
           <div className={`text-xs mb-1 ${state.buddy.isShiny ? "text-amber-300" : "text-yellow-400"}`}>
-            {BUDDY_ICONS[state.buddy.type] ?? "🐾"} {state.buddy.isShiny ? `✨ Shiny ${state.buddy.type} ✨` : state.buddy.type} is watching...
+            <pre className="font-mono whitespace-pre inline-block">{BUDDY_ICONS[state.buddy.type] ?? "🐾"}</pre>
+            <div>{state.buddy.isShiny ? `✨ Shiny ${state.buddy.type} ✨` : state.buddy.type} is watching...</div>
           </div>
         )}
         <CommandLine
