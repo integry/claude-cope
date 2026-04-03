@@ -356,8 +356,8 @@ export function parseSabotageParams(
         ...prev,
         economy: {
           ...prev.economy,
-          currentTD: prev.economy.currentTD + target,
-          totalTDEarned: prev.economy.totalTDEarned + target,
+          currentTD: target,
+          totalTDEarned: target,
           currentRank: CORPORATE_RANKS[newRankIndex]?.title ?? prev.economy.currentRank,
         },
       };
