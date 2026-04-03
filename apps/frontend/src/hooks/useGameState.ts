@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, SetStateAction } from "react";
-import { GENERATORS, UPGRADES } from "../game/constants";
+import { GENERATORS, UPGRADES, CORPORATE_RANKS } from "../game/constants";
 import { supabase } from "../supabaseClient";
 import {
   type Message,
@@ -92,6 +92,44 @@ export function useGameState() {
           newQuotaPercent = Math.max(0, prev.economy.quotaPercent - quotaDrain);
         }
 
+        // Check passive economy achievements
+        const newAchievements = [...prev.achievements];
+
+        // dependency_hell: own 10+ NPM Dependency Importers
+        if (
+          !newAchievements.includes("dependency_hell") &&
+          (prev.inventory["npm"] ?? 0) >= 10
+        ) {
+          newAchievements.push("dependency_hell");
+        }
+
+        // ten_x_developer: exceed 10,000 TD/s
+        if (
+          !newAchievements.includes("ten_x_developer") &&
+          tdps >= 10_000
+        ) {
+          newAchievements.push("ten_x_developer");
+        }
+
+        // the_java_enterprise: own generators from 5+ different types
+        if (!newAchievements.includes("the_java_enterprise")) {
+          const ownedTypes = GENERATORS.filter(
+            (g) => (prev.inventory[g.id] ?? 0) > 0
+          ).length;
+          if (ownedTypes >= 5) {
+            newAchievements.push("the_java_enterprise");
+          }
+        }
+
+        // heat_death: reach the maximum corporate rank
+        const maxRankTitle = CORPORATE_RANKS[CORPORATE_RANKS.length - 1]!.title;
+        if (
+          !newAchievements.includes("heat_death") &&
+          newRank === maxRankTitle
+        ) {
+          newAchievements.push("heat_death");
+        }
+
         return {
           ...prev,
           economy: {
@@ -101,6 +139,7 @@ export function useGameState() {
             currentRank: newRank,
             quotaPercent: newQuotaPercent,
           },
+          achievements: newAchievements,
         };
       });
     }, 100);
