@@ -292,6 +292,14 @@ export function useGameState() {
       };
     });
 
+    if (cost > 1_000_000) {
+      fetch("/api/recent-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: `💰 A player bought ${amount}x ${generator.name} for ${cost.toLocaleString()} TD!` }),
+      }).catch(() => {});
+    }
+
     return true;
   }, []);
 
