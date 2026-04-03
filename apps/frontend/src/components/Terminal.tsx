@@ -8,7 +8,7 @@ import { useGameState } from "../hooks/useGameState";
 import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
-import { executeSlashCommand, parseSabotageParams } from "./slashCommandExecutor";
+import { executeSlashCommand, parseSabotageParams, rollBuddy } from "./slashCommandExecutor";
 import Ticker from "./Ticker";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 
@@ -33,6 +33,7 @@ function Terminal() {
   const [inputValue, setInputValue] = useState("");
   const [showStore, setShowStore] = useState(false);
   const [bragPending, setBragPending] = useState(false);
+  const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [isBooting, setIsBooting] = useState<boolean>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("sabotage") !== "true";
@@ -211,7 +212,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
     );
   };
 
@@ -241,6 +242,19 @@ function Terminal() {
       const generatorsOwned = Object.values(state.inventory).reduce((sum, count) => sum + count, 0);
       const mostAbusedCommand = "/clear"; // The command everyone spams
       submitBrag({ username, currentRank: state.economy.currentRank, totalTDEarned: state.economy.totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending });
+      return;
+    }
+
+    if (buddyPendingConfirm) {
+      const answer = inputValue.trim().toLowerCase();
+      setInputValue("");
+      setBuddyPendingConfirm(false);
+      if (answer === "y" || answer === "yes") {
+        setHistory((prev) => [...prev, { role: "user", content: inputValue }]);
+        rollBuddy(setState, setHistory);
+      } else {
+        setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]);
+      }
       return;
     }
 

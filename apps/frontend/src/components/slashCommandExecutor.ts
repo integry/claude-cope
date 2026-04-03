@@ -12,6 +12,7 @@ interface SlashCommandContext {
   setIsProcessing: (v: boolean) => void;
   setShowStore: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
+  setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
   clearCount: number;
   setClearCount: (v: number) => void;
@@ -101,6 +102,11 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     reply({ role: "system", content: "[✓] Injected 400mg of pure caffeine into the Node.js event loop. LFG." });
     return true;
   } else if (command === "/buddy") {
+    if (ctx.state.buddy.type) {
+      ctx.setBuddyPendingConfirm(true);
+      reply({ role: "system", content: `[⚠️] You already have a buddy (${ctx.state.buddy.type}). Re-rolling will replace it. Are you sure? (y/n)` });
+      return true;
+    }
     const roll = Math.random() * 100;
     const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
     const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
@@ -178,6 +184,18 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     return true;
   }
   return false;
+}
+
+export function rollBuddy(
+  setState: SetState,
+  setHistory: SetHistory,
+) {
+  const roll = Math.random() * 100;
+  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
+  const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
+  setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
+  const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
+  setHistory((prev) => [...prev, { role: "system" as const, content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType}${shinyLabel} ${buddyIcon}!` }]);
 }
 
 export function executeSlashCommand(
