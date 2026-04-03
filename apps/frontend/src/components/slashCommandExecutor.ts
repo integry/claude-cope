@@ -11,6 +11,7 @@ interface SlashCommandContext {
   setHistory: SetHistory;
   setIsProcessing: (v: boolean) => void;
   setShowStore: (v: boolean) => void;
+  setShowLeaderboard: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -78,6 +79,10 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
       ctx.setHistory(clearLoading);
       ctx.setShowStore(true);
     }
+    return true;
+  } else if (command === "/leaderboard") {
+    ctx.setHistory(clearLoading);
+    ctx.setShowLeaderboard(true);
     return true;
   } else if (command === "/synergize") {
     reply({ role: "system", content: "[🗓️] Simulating a 15-minute meeting. Please wait..." });
