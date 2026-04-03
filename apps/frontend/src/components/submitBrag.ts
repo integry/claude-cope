@@ -7,6 +7,8 @@ export function submitBrag(
   username: string,
   currentRank: string,
   totalTDEarned: number,
+  generatorsOwned: number,
+  mostAbusedCommand: string,
   setHistory: SetHistory,
   setBragPending: SetBragPending,
 ) {
@@ -36,8 +38,11 @@ export function submitBrag(
       const payload = [
         "====================================",
         "EMPLOYEE PERFORMANCE REVIEW",
+        "====================================",
         `Rank: ${currentRank}`,
         `Total Technical Debt: $${totalTDEarned.toLocaleString()}`,
+        `Generators Owned: ${generatorsOwned}`,
+        `Most Abused Command: ${mostAbusedCommand}`,
         "====================================",
         "Challenge your coworkers to do worse:",
         sabotageUrl,

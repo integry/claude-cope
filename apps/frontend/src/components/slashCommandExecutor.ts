@@ -207,6 +207,8 @@ export function executeSlashCommand(
     } else if (handleCoreCommand(command, ctx, reply)) {
       // /synergize handles its own setIsProcessing
       if (command === "/synergize") return;
+    } else if (command === "/feedback" || command === "/bug") {
+      reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as WONTFIX. Have a synergistic day." });
     } else if (handleNewCommand(command, ctx, reply)) {
       // /brrrrrr handles its own setIsProcessing
       if (command === "/brrrrrr") return;
