@@ -231,6 +231,56 @@ function Terminal() {
     return false;
   };
 
+  const handleEnterSubmit = () => {
+    // Handle outage damage commands — bypass normal LLM processing
+    if (tryOutageDamage()) return;
+
+    if (bragPending) {
+      const username = inputValue.trim();
+      setInputValue("");
+      submitBrag(username, state.economy.currentRank, state.economy.totalTDEarned, setHistory, setBragPending);
+      return;
+    }
+
+    addActiveTD(Math.floor(Math.random() * 40) + 10);
+
+    if (applyQuotaDrain()) {
+      setInputValue("");
+      return;
+    }
+
+    // Increment buddy interjection counter
+    const buddyResult = computeBuddyInterjection(state.buddy);
+    if (state.buddy.type) {
+      const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
+      setState((prev) => ({
+        ...prev,
+        buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount },
+      }));
+    }
+
+    const command = inputValue;
+    setCommandHistory((prev) => [...prev, command]);
+    setHistoryIndex(-1);
+    setInputValue("");
+
+    const userMessage: Message = { role: "user", content: command };
+
+    setHistory((prev) => [
+      ...prev,
+      userMessage,
+      { role: "loading", content: "[⚙️] Coping with your request..." },
+    ]);
+    setIsProcessing(true);
+
+    const chatMessages = [
+      ...history.filter((m) => m.role === "user" || m.role === "system"),
+      userMessage,
+    ].map((m) => ({ role: m.role, content: m.content }));
+
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank });
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "c" && e.ctrlKey && brrrrrrIntervalRef.current) {
       e.preventDefault();
@@ -255,53 +305,7 @@ function Terminal() {
       }
 
       if (inputValue.trim() !== "" && !isProcessing) {
-        // Handle outage damage commands — bypass normal LLM processing
-        if (tryOutageDamage()) return;
-
-        if (bragPending) {
-          const username = inputValue.trim();
-          setInputValue("");
-          submitBrag(username, state.economy.currentRank, state.economy.totalTDEarned, setHistory, setBragPending);
-          return;
-        }
-
-        addActiveTD(Math.floor(Math.random() * 40) + 10);
-
-        if (applyQuotaDrain()) {
-          setInputValue("");
-          return;
-        }
-
-        // Increment buddy interjection counter
-        const buddyResult = computeBuddyInterjection(state.buddy);
-        if (state.buddy.type) {
-          const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
-          setState((prev) => ({
-            ...prev,
-            buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount },
-          }));
-        }
-
-        const command = inputValue;
-        setCommandHistory((prev) => [...prev, command]);
-        setHistoryIndex(-1);
-        setInputValue("");
-
-        const userMessage: Message = { role: "user", content: command };
-
-        setHistory((prev) => [
-          ...prev,
-          userMessage,
-          { role: "loading", content: "[⚙️] Coping with your request..." },
-        ]);
-        setIsProcessing(true);
-
-        const chatMessages = [
-          ...history.filter((m) => m.role === "user" || m.role === "system"),
-          userMessage,
-        ].map((m) => ({ role: m.role, content: m.content }));
-
-        submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank });
+        handleEnterSubmit();
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
