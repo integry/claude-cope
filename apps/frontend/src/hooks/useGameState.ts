@@ -26,6 +26,7 @@ export interface GameState {
   inventory: Record<string, number>;
   achievements: string[];
   buddy: BuddyState;
+  apiKey?: string;
 }
 
 /** Legacy flat state shape used before the economy refactor. */

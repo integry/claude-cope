@@ -259,6 +259,29 @@ function Terminal() {
       return;
     }
 
+    // Handle /key command with argument
+    if (inputValue.trim().toLowerCase().startsWith("/key ")) {
+      const keyArg = inputValue.trim().slice(5).trim();
+      setInputValue("");
+      if (keyArg.toLowerCase() === "clear") {
+        setState((prev) => ({ ...prev, apiKey: undefined }));
+        setHistory((prev) => [
+          ...prev,
+          { role: "user", content: "/key clear" },
+          { role: "system", content: "[🔑] API key removed. Using default server key." },
+        ]);
+      } else if (keyArg.length > 0) {
+        setState((prev) => ({ ...prev, apiKey: keyArg }));
+        const masked = keyArg.slice(0, 6) + "..." + keyArg.slice(-4);
+        setHistory((prev) => [
+          ...prev,
+          { role: "user", content: `/key ${masked}` },
+          { role: "system", content: `[🔑] API key set (${masked}). Your key will be used for all future requests.` },
+        ]);
+      }
+      return;
+    }
+
     addActiveTD(Math.floor(Math.random() * 40) + 10);
 
     if (applyQuotaDrain()) {
@@ -295,7 +318,7 @@ function Terminal() {
       userMessage,
     ].map((m) => ({ role: m.role, content: m.content }));
 
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank });
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey });
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {

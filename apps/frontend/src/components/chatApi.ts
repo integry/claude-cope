@@ -28,12 +28,13 @@ export function submitChatMessage(opts: {
   setHistory: Dispatch<SetStateAction<Message[]>>;
   setIsProcessing: Dispatch<SetStateAction<boolean>>;
   currentRank: string;
+  apiKey?: string;
 }) {
-  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank } = opts;
+  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey } = opts;
   fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: chatMessages, rank: currentRank }),
+    body: JSON.stringify({ messages: chatMessages, rank: currentRank, ...(apiKey ? { apiKey } : {}) }),
   })
     .then(async (res) => {
       if (res.status === 429) {
