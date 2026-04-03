@@ -400,6 +400,15 @@ function Terminal() {
               style={{ width: `${outageHp}%` }}
             />
           </div>
+          <div className="mt-2 text-red-300 text-xs">
+            <span className="font-bold">Type to deal damage:</span>{" "}
+            {DAMAGE_COMMANDS.map((cmd, i) => (
+              <span key={cmd}>
+                <code className="bg-red-900 px-1 rounded text-red-200">{cmd}</code>
+                {i < DAMAGE_COMMANDS.length - 1 && ", "}
+              </span>
+            ))}
+          </div>
         </div>
       )}
       <HeaderBar rank={rank} totalTDEarned={state.economy.totalTDEarned} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} />
