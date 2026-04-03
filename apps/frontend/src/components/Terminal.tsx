@@ -19,7 +19,7 @@ export type Message = {
 };
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff } = useGameState();
   const [history, setHistory] = useState<Message[]>([]);
   const { onlineCount, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
   const rank = state.economy.currentRank;
@@ -430,6 +430,7 @@ function Terminal() {
         <StoreOverlay
           state={state}
           buyGenerator={buyGenerator}
+          buyUpgrade={buyUpgrade}
           onClose={() => setShowStore(false)}
         />
       )}
