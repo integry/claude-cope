@@ -146,8 +146,8 @@ function Terminal() {
     setIsProcessing(true);
     setHistory((prev) => [
       ...prev,
-      { role: "error", content: "[🚫 QUOTA EXCEEDED] API quota depleted. Contacting billing..." },
-      { role: "warning", content: "[💳] Upgrading to Claude Cope Enterprise™ ($4,999/mo)... Please wait." },
+      { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." },
+      { role: "warning", content: "[⚙️] Upgrading to $200/mo Pro Tier..." },
     ]);
     setTimeout(() => {
       resetQuota();
@@ -161,10 +161,10 @@ function Terminal() {
       setHistory((prev) => {
         const messages: Message[] = [
           ...prev,
-          { role: "system", content: "[✓] Billing upgrade complete. Quota restored to 100%. You may continue." },
+          { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" },
         ];
         if (newLockouts >= 3) {
-          messages.push({ role: "warning", content: "[🏆 Achievement Unlocked: homer_at_the_buffet]" });
+          messages.push({ role: "warning", content: "Achievement Unlocked: Do these sound like the actions of a man who had ALL he could eat?" });
         }
         return messages;
       });
@@ -174,12 +174,11 @@ function Terminal() {
   const triggerInstantBan = () => {
     setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
     setHistory((prev) => [...prev,
-      { role: "error", content: "[🚨 INSTANT BAN] Suspicious activity detected! You typed too fast after a billing upgrade." },
-      { role: "warning", content: "[🔒] Account temporarily suspended. Reviewing compliance..." },
+      { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." },
     ]);
     setTimeout(() => {
       setQuotaLocked(false); setIsProcessing(false);
-      setHistory((prev) => [...prev, { role: "system", content: "[✓] Compliance review passed. Account reinstated. Proceed with caution." }]);
+      setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]);
     }, 5000);
   };
 
