@@ -30,28 +30,29 @@ const AGENDA_ITEMS = [
 function SynergizeOverlay({ onClose }: SynergizeOverlayProps) {
   const [agendaIndex, setAgendaIndex] = useState(0);
   const [clickedBuzzwords, setClickedBuzzwords] = useState<Set<number>>(new Set());
-  const [timeLeft, setTimeLeft] = useState(10);
+  const [globalTimeLeft, setGlobalTimeLeft] = useState(10);
 
   useEffect(() => {
-    if (timeLeft <= 0) return;
+    if (globalTimeLeft <= 0) return;
     const id = setInterval(() => {
-      setTimeLeft((t) => t - 1);
+      setGlobalTimeLeft((t) => t - 1);
     }, 1000);
     return () => clearInterval(id);
-  }, [timeLeft]);
+  }, [globalTimeLeft]);
 
   const currentAgenda = AGENDA_ITEMS[agendaIndex];
   if (!currentAgenda) return null;
 
   const allClicked = clickedBuzzwords.size === currentAgenda.buzzwords.length;
-  const canProceed = allClicked && timeLeft <= 0;
+  const isLastStep = agendaIndex >= AGENDA_ITEMS.length - 1;
+  const canProceed = allClicked && (isLastStep ? globalTimeLeft <= 0 : true);
 
   const handleBuzzwordClick = (idx: number) => {
     setClickedBuzzwords((prev) => new Set(prev).add(idx));
   };
 
   const handleNext = () => {
-    if (agendaIndex < AGENDA_ITEMS.length - 1) {
+    if (!isLastStep) {
       setAgendaIndex((prev) => prev + 1);
       setClickedBuzzwords(new Set());
     } else {
@@ -72,8 +73,8 @@ function SynergizeOverlay({ onClose }: SynergizeOverlayProps) {
           </div>
           <div className="text-gray-500 text-xs mt-1">
             Step {agendaIndex + 1} of {AGENDA_ITEMS.length} — This meeting cannot be skipped.
-            {timeLeft > 0 && (
-              <span className="text-red-400 ml-2">⏱ {timeLeft}s remaining</span>
+            {globalTimeLeft > 0 && (
+              <span className="text-red-400 ml-2">⏱ {globalTimeLeft}s remaining</span>
             )}
           </div>
         </div>
@@ -129,13 +130,13 @@ function SynergizeOverlay({ onClose }: SynergizeOverlayProps) {
               : "bg-gray-800 text-gray-600 cursor-not-allowed"
           }`}
         >
-          {timeLeft > 0
-            ? `Please wait... ${timeLeft}s`
-            : !allClicked
-              ? "Click all buzzwords to continue..."
-              : agendaIndex < AGENDA_ITEMS.length - 1
-                ? "Proceed to Next Agenda Item"
-                : "End Meeting (finally)"}
+          {!allClicked
+            ? "Click all buzzwords to continue..."
+            : isLastStep && globalTimeLeft > 0
+              ? `Please wait... ${globalTimeLeft}s`
+              : isLastStep
+                ? "End Meeting (finally)"
+                : "Proceed to Next Agenda Item"}
         </button>
       </div>
     </div>
