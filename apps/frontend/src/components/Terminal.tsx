@@ -75,6 +75,7 @@ function Terminal() {
       "[OK] Initializing Claude Cope v0.1.3...",
       "[OK] Bypassing stackoverflow...",
       "[OK] Injecting technical debt...",
+      "[WARN] Loading condescension matrix...",
       "[OK] Disabling all unit tests...",
       "[OK] Replacing documentation with TODO comments...",
       "[OK] Boot complete. Welcome to Claude Cope.",
@@ -135,7 +136,7 @@ function Terminal() {
           setActiveRegression(null);
           setHistory((prev) => [
             ...prev,
-            { role: "error", content: `[⏪ ROLLBACK] Update failed. Reverting ${regression.name}... Previous stable version restored.` },
+            { role: "error", content: `[FATAL ERROR] Rolling back... Reverting ${regression.name}. We apologize for the improved experience.` },
           ]);
         }, 10000);
 
