@@ -21,17 +21,20 @@ export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionRe
   };
 }
 
-export function submitChatMessage(
-  chatMessages: { role: string; content: string }[],
-  buddyResult: BuddyInterjectionResult | null,
-  unlockAchievement: (id: string) => void,
-  setHistory: Dispatch<SetStateAction<Message[]>>,
-  setIsProcessing: Dispatch<SetStateAction<boolean>>,
-) {
+export function submitChatMessage(opts: {
+  chatMessages: { role: string; content: string }[];
+  buddyResult: BuddyInterjectionResult | null;
+  unlockAchievement: (id: string) => void;
+  setHistory: Dispatch<SetStateAction<Message[]>>;
+  setIsProcessing: Dispatch<SetStateAction<boolean>>;
+  currentRank: string;
+  apiKey?: string;
+}) {
+  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey } = opts;
   fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: chatMessages }),
+    body: JSON.stringify({ messages: chatMessages, rank: currentRank, ...(apiKey ? { apiKey } : {}) }),
   })
     .then(async (res) => {
       if (res.status === 429) {
@@ -68,6 +71,11 @@ export function submitChatMessage(
           role: "warning",
           content: `[🏆 Achievement Unlocked: ${achievementId}]`,
         });
+        fetch("/api/recent-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: `🏆 A player unlocked the achievement: ${achievementId}` }),
+        }).catch(() => {});
       }
 
       const reply = rawReply.replace(achievementRegex, "").trim();

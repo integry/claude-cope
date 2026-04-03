@@ -8,7 +8,8 @@ import { useGameState } from "../hooks/useGameState";
 import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
-import { executeSlashCommand, parseSabotageParams } from "./slashCommandExecutor";
+import { executeSlashCommand, parseSabotageParams, rollBuddy } from "./slashCommandExecutor";
+import { handleKeyCommand } from "./keyCommandHandler";
 import Ticker from "./Ticker";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 
@@ -18,9 +19,9 @@ export type Message = {
 };
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff } = useGameState();
   const [history, setHistory] = useState<Message[]>([]);
-  const { onlineCount, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty });
+  const { onlineCount, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
   const rank = state.economy.currentRank;
   const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
@@ -33,6 +34,7 @@ function Terminal() {
   const [inputValue, setInputValue] = useState("");
   const [showStore, setShowStore] = useState(false);
   const [bragPending, setBragPending] = useState(false);
+  const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [isBooting, setIsBooting] = useState<boolean>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("sabotage") !== "true";
@@ -43,6 +45,7 @@ function Terminal() {
   const [activeRegression, setActiveRegression] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Boot sequence for organic visitors
   useEffect(() => {
@@ -92,6 +95,7 @@ function Terminal() {
       { id: "upside_down", name: "Upside-Down Rendering", css: "transform: scaleY(-1);" },
       { id: "opacity_fade", name: "Opacity Fade Leak", css: "opacity: 0.3;" },
       { id: "letter_spacing", name: "Letter Spacing Explosion", css: "letter-spacing: 0.5em;" },
+      { id: "comic_sans", name: "Font Corruption", css: 'font-family: "Comic Sans MS", "Comic Sans", cursive;' },
     ];
 
     const scheduleRegression = () => {
@@ -210,7 +214,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, sendPing, pendingPing, rejectPing },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
     );
   };
 
@@ -230,7 +234,86 @@ function Terminal() {
     return false;
   };
 
+  const handleEnterSubmit = () => {
+    // Handle outage damage commands — bypass normal LLM processing
+    if (tryOutageDamage()) return;
+
+    if (bragPending) {
+      const username = inputValue.trim();
+      setInputValue("");
+      const generatorsOwned = Object.values(state.inventory).reduce((sum, count) => sum + count, 0);
+      const mostAbusedCommand = "/clear"; // The command everyone spams
+      submitBrag({ username, currentRank: state.economy.currentRank, totalTDEarned: state.economy.totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending });
+      return;
+    }
+
+    if (buddyPendingConfirm) {
+      const answer = inputValue.trim().toLowerCase();
+      setInputValue("");
+      setBuddyPendingConfirm(false);
+      if (answer === "y" || answer === "yes") {
+        setHistory((prev) => [...prev, { role: "user", content: inputValue }]);
+        rollBuddy(setState, setHistory);
+      } else {
+        setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]);
+      }
+      return;
+    }
+
+    if (handleKeyCommand(inputValue, setState, setHistory)) {
+      setInputValue("");
+      return;
+    }
+
+    addActiveTD(Math.floor(Math.random() * 40) + 10);
+
+    if (applyQuotaDrain()) {
+      setInputValue("");
+      return;
+    }
+
+    // Increment buddy interjection counter
+    const buddyResult = computeBuddyInterjection(state.buddy);
+    if (state.buddy.type) {
+      const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
+      setState((prev) => ({
+        ...prev,
+        buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount },
+      }));
+    }
+
+    const command = inputValue;
+    setCommandHistory((prev) => [...prev, command]);
+    setHistoryIndex(-1);
+    setInputValue("");
+
+    const userMessage: Message = { role: "user", content: command };
+
+    setHistory((prev) => [
+      ...prev,
+      userMessage,
+      { role: "loading", content: "[⚙️] Coping with your request..." },
+    ]);
+    setIsProcessing(true);
+
+    const chatMessages = [
+      ...history.filter((m) => m.role === "user" || m.role === "system"),
+      userMessage,
+    ].map((m) => ({ role: m.role, content: m.content }));
+
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey });
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "c" && e.ctrlKey && brrrrrrIntervalRef.current) {
+      e.preventDefault();
+      clearInterval(brrrrrrIntervalRef.current);
+      brrrrrrIntervalRef.current = null;
+      setHistory((prev) => [...prev, { role: "warning", content: "^C\n[✓] Process interrupted. Your CPU lives to fight another day." }]);
+      setIsProcessing(false);
+      return;
+    }
+
     const filtered = getFilteredSlashCommands();
     const slashMenuOpen = slashQuery !== "" && filtered.length > 0;
 
@@ -245,53 +328,7 @@ function Terminal() {
       }
 
       if (inputValue.trim() !== "" && !isProcessing) {
-        // Handle outage damage commands — bypass normal LLM processing
-        if (tryOutageDamage()) return;
-
-        if (bragPending) {
-          const username = inputValue.trim();
-          setInputValue("");
-          submitBrag(username, state.economy.currentRank, state.economy.totalTDEarned, setHistory, setBragPending);
-          return;
-        }
-
-        addActiveTD(Math.floor(Math.random() * 40) + 10);
-
-        if (applyQuotaDrain()) {
-          setInputValue("");
-          return;
-        }
-
-        // Increment buddy interjection counter
-        const buddyResult = computeBuddyInterjection(state.buddy);
-        if (state.buddy.type) {
-          const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
-          setState((prev) => ({
-            ...prev,
-            buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount },
-          }));
-        }
-
-        const command = inputValue;
-        setCommandHistory((prev) => [...prev, command]);
-        setHistoryIndex(-1);
-        setInputValue("");
-
-        const userMessage: Message = { role: "user", content: command };
-
-        setHistory((prev) => [
-          ...prev,
-          userMessage,
-          { role: "loading", content: "[⚙️] Coping with your request..." },
-        ]);
-        setIsProcessing(true);
-
-        const chatMessages = [
-          ...history.filter((m) => m.role === "user" || m.role === "system"),
-          userMessage,
-        ].map((m) => ({ role: m.role, content: m.content }));
-
-        submitChatMessage(chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing);
+        handleEnterSubmit();
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();

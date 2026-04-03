@@ -1,7 +1,10 @@
+import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Message } from "./Terminal";
+
+const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
 const roleColors: Record<Message["role"], string> = {
   user: "text-gray-300",
@@ -11,14 +14,25 @@ const roleColors: Record<Message["role"], string> = {
   error: "text-red-500",
 };
 
+function Spinner() {
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setFrame((f: number) => (f + 1) % SPINNER_FRAMES.length), 150);
+    return () => clearInterval(id);
+  }, []);
+  return <span>{SPINNER_FRAMES[frame]} </span>;
+}
+
 function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Message; promptString?: string }) {
   const colorClass = roleColors[message.role];
+  const isAchievement = message.role === "warning" && message.content.includes("Achievement Unlocked");
 
   return (
-    <div className={colorClass}>
+    <div className={`${colorClass} ${isAchievement ? "achievement-flash" : ""}`}>
       {message.role === "user" && (
         <span className="text-gray-500">{promptString}</span>
       )}
+      {message.role === "loading" && <Spinner />}
       {message.role === "system" ? (
         <ReactMarkdown
           components={{

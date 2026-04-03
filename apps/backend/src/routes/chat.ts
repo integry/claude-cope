@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { SYSTEM_PROMPT } from "../prompts/systemPrompt";
+import { getSystemPrompt } from "../prompts/systemPrompt";
 
 type Env = {
   Bindings: {
@@ -11,26 +11,30 @@ type Env = {
 const chat = new Hono<Env>();
 
 chat.post("/", async (c) => {
-  const apiKey = c.env?.OPENROUTER_API_KEY ?? process.env.OPENROUTER_API_KEY;
+  const body = await c.req.json<{
+    messages: { role: string; content: string }[];
+    rank?: string;
+    apiKey?: string;
+  }>();
+
+  const apiKey = body.apiKey || c.env?.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
   }
 
-  const body = await c.req.json<{
-    messages: { role: string; content: string }[];
-  }>();
-
   if (!body.messages || !Array.isArray(body.messages)) {
     return c.json({ error: "messages array is required" }, 400);
   }
 
-  // Strict context window: only send the last 4 messages per product spec
-  // to manage context strictly and avoid over-reliance on deep history.
-  const recentMessages = body.messages.slice(-4);
+  const rank = body.rank ?? "Junior Code Monkey";
+
+  // Context window: send up to 10 messages per product spec (5-10 range)
+  // to provide sufficient conversation context without over-reliance on deep history.
+  const recentMessages = body.messages.slice(-10);
 
   const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: getSystemPrompt(rank) },
     ...recentMessages,
   ];
 

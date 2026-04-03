@@ -26,6 +26,7 @@ export interface GameState {
   inventory: Record<string, number>;
   achievements: string[];
   buddy: BuddyState;
+  apiKey?: string;
 }
 
 /** Legacy flat state shape used before the economy refactor. */
@@ -149,8 +150,7 @@ function loadState(): GameState {
         state.economy.tdMultiplier = 1;
       }
 
-      // Update lastLogin on load
-      state.lastLogin = Date.now();
+      // Preserve lastLogin from storage so we can compute offline TD on mount
       state.version = STATE_VERSION;
 
       return state;
@@ -159,6 +159,14 @@ function loadState(): GameState {
     // Corrupted or inaccessible localStorage — fall through to default
   }
   return createDefaultState();
+}
+
+/** Geometric series sum: total cost to buy `amount` generators starting at `owned`. */
+export function calcBulkCost(baseCost: number, owned: number, amount: number): number {
+  // Sum = baseCost * r^owned * (r^amount - 1) / (r - 1)
+  const rOwned = Math.pow(GROWTH_RATE, owned);
+  const rAmount = Math.pow(GROWTH_RATE, amount);
+  return Math.floor(baseCost * rOwned * (rAmount - 1) / (GROWTH_RATE - 1));
 }
 
 function calculateTDpS(inventory: Record<string, number>): number {
@@ -178,6 +186,35 @@ export function useGameState() {
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  // Award offline TD on mount based on time since last login
+  useEffect(() => {
+    setState((prev) => {
+      const now = Date.now();
+      const elapsed = now - prev.lastLogin;
+      if (elapsed <= 0) return { ...prev, lastLogin: now };
+
+      const baseTdps = calculateTDpS(prev.inventory);
+      const tdps = baseTdps * prev.economy.tdMultiplier;
+      const offlineTD = tdps * (elapsed / 1000);
+
+      if (offlineTD <= 0) return { ...prev, lastLogin: now };
+
+      const newTotalTDEarned = prev.economy.totalTDEarned + offlineTD;
+      const newRank = resolveRank(newTotalTDEarned, prev.economy.currentRank);
+
+      return {
+        ...prev,
+        lastLogin: now,
+        economy: {
+          ...prev.economy,
+          currentTD: prev.economy.currentTD + offlineTD,
+          totalTDEarned: newTotalTDEarned,
+          currentRank: newRank,
+        },
+      };
+    });
+  }, []);
 
   // Persist state to localStorage
   useEffect(() => {
@@ -227,21 +264,19 @@ export function useGameState() {
     return () => clearInterval(interval);
   }, []);
 
-  const buyGenerator = useCallback((generatorId: string): boolean => {
+  const buyGenerator = useCallback((generatorId: string, amount: number = 1): boolean => {
     const generator = GENERATORS.find((g) => g.id === generatorId);
-    if (!generator) return false;
+    if (!generator || amount < 1) return false;
 
     const current = stateRef.current;
     const owned = current.inventory[generatorId] ?? 0;
-    const cost = Math.floor(generator.baseCost * Math.pow(GROWTH_RATE, owned));
+    const cost = calcBulkCost(generator.baseCost, owned, amount);
 
     if (current.economy.currentTD < cost) return false;
 
     setState((prev) => {
       const ownedNow = prev.inventory[generatorId] ?? 0;
-      const dynamicCost = Math.floor(
-        generator.baseCost * Math.pow(GROWTH_RATE, ownedNow),
-      );
+      const dynamicCost = calcBulkCost(generator.baseCost, ownedNow, amount);
       if (prev.economy.currentTD < dynamicCost) return prev;
 
       return {
@@ -252,10 +287,18 @@ export function useGameState() {
         },
         inventory: {
           ...prev.inventory,
-          [generatorId]: ownedNow + 1,
+          [generatorId]: ownedNow + amount,
         },
       };
     });
+
+    if (cost > 1_000_000) {
+      fetch("/api/recent-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: `💰 A player bought ${amount}x ${generator.name} for ${cost.toLocaleString()} TD!` }),
+      }).catch(() => {});
+    }
 
     return true;
   }, []);
@@ -323,6 +366,45 @@ export function useGameState() {
     }));
   }, []);
 
+  const debuffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const applyPvpDebuff = useCallback(() => {
+    // Clear any existing debuff timer
+    if (debuffTimerRef.current) {
+      clearTimeout(debuffTimerRef.current);
+    }
+
+    // Halve TD generation
+    setState((prev) => ({
+      ...prev,
+      economy: {
+        ...prev.economy,
+        tdMultiplier: prev.economy.tdMultiplier * 0.5,
+      },
+    }));
+
+    // Auto-restore after exactly 60 seconds
+    debuffTimerRef.current = setTimeout(() => {
+      setState((prev) => ({
+        ...prev,
+        economy: {
+          ...prev.economy,
+          tdMultiplier: prev.economy.tdMultiplier * 2,
+        },
+      }));
+      debuffTimerRef.current = null;
+    }, 60000);
+  }, []);
+
+  // Clean up debuff timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debuffTimerRef.current) {
+        clearTimeout(debuffTimerRef.current);
+      }
+    };
+  }, []);
+
   const applyOutagePenalty = useCallback(() => {
     setState((prev) => {
       // Find the most expensive generator that the player owns at least 1 of
@@ -347,5 +429,5 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty };
+  return { state, setState, buyGenerator, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff };
 }
