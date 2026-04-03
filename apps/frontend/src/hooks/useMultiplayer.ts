@@ -57,18 +57,14 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
           // Trigger the defense window state when attacked
           setPendingPing(true);
           setHistory(prev => [...prev, { role: 'warning', content: `[INCOMING PACKET] ${data.attacker} assigned you 3 Jira tickets. Type /reject in 5 seconds to block!` }]);
-
-          // Automatically apply the debuff if the user fails to type /reject within 5 seconds
-          setTimeout(() => {
-            setPendingPing(current => {
-              if (current) {
-                setHistory(p => [...p, { role: 'error', content: '[DEBUFF] Jira tickets accepted. Tech Debt generation halved for 60s.' }]);
-                applyPvpDebuff();
-                return false;
-              }
-              return false;
-            });
-          }, 5000);
+        } else if (data.type === 'ping_applied') {
+          // Server confirmed the ping was not rejected in time — apply the debuff
+          setPendingPing(false);
+          setHistory(prev => [...prev, { role: 'error', content: '[DEBUFF] Jira tickets accepted. Tech Debt generation halved for 60s.' }]);
+          applyPvpDebuff();
+        } else if (data.type === 'ping_rejected') {
+          // Server confirmed the ping was successfully rejected
+          setPendingPing(false);
         } else if (data.type === 'outage_start') {
           // Show critical alert and initialize the health bar
           setOutageHp(data.hp);
@@ -97,7 +93,10 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
 
   // Expose methods to trigger attacks and defend against them
   const sendPing = (target?: string) => socketRef.current?.send(JSON.stringify({ type: 'ping', ...(target ? { target } : {}) }));
-  const rejectPing = () => setPendingPing(false);
+  const rejectPing = () => {
+    setPendingPing(false);
+    socketRef.current?.send(JSON.stringify({ type: 'reject_ping' }));
+  };
   // Expose a method to allow players to attack the outage
   const sendDamage = () => socketRef.current?.send(JSON.stringify({ type: 'damage_outage' }));
 
