@@ -1,4 +1,6 @@
 import { CORPORATE_RANKS, GENERATORS } from "../game/constants";
+import { API_BASE } from "../config";
+import { supabase } from "../supabaseClient";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 
@@ -68,6 +70,19 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
     }
     ctx.setHistory(messages);
     ctx.setIsProcessing(false);
+
+    // Broadcast terminal crash to global incident ticker
+    const crashMessage = "💥 A player crashed their terminal with /clear!";
+    fetch(`${API_BASE}/api/recent-events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: crashMessage }),
+    }).catch(() => {});
+    supabase?.channel('global_incidents').send({
+      type: 'broadcast',
+      event: 'new_incident',
+      payload: { message: crashMessage },
+    }).catch(() => {});
   }, 2000);
   return true;
 }
