@@ -3,6 +3,7 @@ import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
+import { buildAchievementBox } from "./achievementBox";
 
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
@@ -66,7 +67,7 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
     const messages: Message[] = [];
     if (newClearCount >= 3) {
       ctx.unlockAchievement("the_nuclear_option");
-      messages.push({ role: "warning", content: "[🏆 Achievement Unlocked: the_nuclear_option]" });
+      messages.push({ role: "warning", content: buildAchievementBox("the_nuclear_option") });
     }
     ctx.setHistory(messages);
     ctx.setIsProcessing(false);

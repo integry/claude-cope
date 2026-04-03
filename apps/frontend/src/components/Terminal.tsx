@@ -12,6 +12,7 @@ import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, parseSabotageParams, rollBuddy } from "./slashCommandExecutor";
+import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
 import Ticker from "./Ticker";
 import { useMultiplayer } from "../hooks/useMultiplayer";
@@ -164,7 +165,7 @@ function Terminal() {
           { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" },
         ];
         if (newLockouts >= 3) {
-          messages.push({ role: "warning", content: "Achievement Unlocked: Do these sound like the actions of a man who had ALL he could eat?" });
+          messages.push({ role: "warning", content: buildAchievementBox("homer_at_the_buffet") });
         }
         return messages;
       });
