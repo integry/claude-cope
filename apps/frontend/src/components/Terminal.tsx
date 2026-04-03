@@ -4,6 +4,8 @@ import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import { SLASH_COMMANDS } from "./slashCommands";
 import StoreOverlay from "./StoreOverlay";
+import LeaderboardOverlay from "./LeaderboardOverlay";
+import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
 import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
@@ -14,26 +16,6 @@ import Ticker from "./Ticker";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 
 export type { Message };
-
-function HeaderBar({ rank, totalTDEarned, quotaPercent, outageHp }: { rank: string; totalTDEarned: number; quotaPercent: number; outageHp: number | null }) {
-  if (totalTDEarned < 100) return null;
-  return (
-    <div className={`sticky top-0 z-10 border-b pb-2 mb-2 ${outageHp !== null ? "bg-red-900 border-red-500" : "bg-[#0d1117] border-green-800"}`}>
-      <div className="flex justify-between text-green-400 mb-1">
-        <span>Rank: {rank}</span>
-        <span>Technical Debt: {totalTDEarned.toLocaleString()} TD</span>
-      </div>
-      <div className={`text-xs font-mono ${quotaPercent > 50 ? "text-green-400" : quotaPercent > 20 ? "text-yellow-400" : "text-red-400"}`}>
-        {(() => {
-          const totalBlocks = 20;
-          const filledBlocks = Math.round((quotaPercent / 100) * totalBlocks);
-          const emptyBlocks = totalBlocks - filledBlocks;
-          return `[API Quota: ${"█".repeat(filledBlocks)}${"░".repeat(emptyBlocks)} ${quotaPercent}%]`;
-        })()}
-      </div>
-    </div>
-  );
-}
 
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory } = useGameState();
@@ -51,6 +33,7 @@ function Terminal() {
   const [slashIndex, setSlashIndex] = useState(0);
   const [inputValue, setInputValue] = useState("");
   const [showStore, setShowStore] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [isBooting, setIsBooting] = useState<boolean>(() => {
@@ -232,7 +215,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
     );
   };
 
@@ -440,6 +423,11 @@ function Terminal() {
           buyGenerator={buyGenerator}
           buyUpgrade={buyUpgrade}
           onClose={() => setShowStore(false)}
+        />
+      )}
+      {showLeaderboard && (
+        <LeaderboardOverlay
+          onClose={() => setShowLeaderboard(false)}
         />
       )}
     </div>

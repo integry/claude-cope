@@ -11,6 +11,7 @@ interface SlashCommandContext {
   setHistory: SetHistory;
   setIsProcessing: (v: boolean) => void;
   setShowStore: (v: boolean) => void;
+  setShowLeaderboard: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -70,6 +71,18 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
   return true;
 }
 
+function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+  const target = command.slice(5).trim();
+  if (target) {
+    ctx.sendPing(target);
+    reply({ role: "system", content: `[📡] Targeting ${target} with unsolicited Jira tickets...` });
+  } else {
+    ctx.sendPing();
+    reply({ role: "system", content: "[📡] Pinging a random coworker with unsolicited Jira tickets..." });
+  }
+  return true;
+}
+
 function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   if (command === "/store") {
     if (ctx.state.economy.totalTDEarned < 1000) {
@@ -78,6 +91,10 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
       ctx.setHistory(clearLoading);
       ctx.setShowStore(true);
     }
+    return true;
+  } else if (command === "/leaderboard") {
+    ctx.setHistory(clearLoading);
+    ctx.setShowLeaderboard(true);
     return true;
   } else if (command === "/synergize") {
     reply({ role: "system", content: "[🗓️] Simulating a 15-minute meeting. Please wait..." });
@@ -129,15 +146,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     }
     return true;
   } else if (command.startsWith("/ping")) {
-    const target = command.slice(5).trim();
-    if (target) {
-      ctx.sendPing(target);
-      reply({ role: "system", content: `[📡] Targeting ${target} with unsolicited Jira tickets...` });
-    } else {
-      ctx.sendPing();
-      reply({ role: "system", content: "[📡] Pinging a random coworker with unsolicited Jira tickets..." });
-    }
-    return true;
+    return handlePingCommand(command, ctx, reply);
   } else if (command === "/reject") {
     if (ctx.pendingPing) {
       ctx.rejectPing();
