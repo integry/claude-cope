@@ -25,9 +25,10 @@ function Spinner() {
 
 function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Message; promptString?: string }) {
   const colorClass = roleColors[message.role];
+  const isAchievement = message.role === "warning" && message.content.includes("Achievement Unlocked");
 
   return (
-    <div className={colorClass}>
+    <div className={`${colorClass} ${isAchievement ? "achievement-flash" : ""}`}>
       {message.role === "user" && (
         <span className="text-gray-500">{promptString}</span>
       )}

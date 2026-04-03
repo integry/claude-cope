@@ -18,3 +18,29 @@
   white-space: nowrap;
   animation: marquee 20s linear infinite;
 }
+
+@keyframes achievement-flash {
+  0%, 100% {
+    background-color: transparent;
+    color: inherit;
+  }
+  10%, 30%, 50% {
+    background-color: #facc15;
+    color: #000;
+  }
+  20%, 40% {
+    background-color: #22c55e;
+    color: #000;
+  }
+  60% {
+    background-color: transparent;
+    color: inherit;
+  }
+}
+
+.achievement-flash {
+  animation: achievement-flash 1.5s ease-out;
+  padding: 2px 4px;
+  border-radius: 2px;
+  font-weight: bold;
+}
