@@ -19,7 +19,7 @@ import { useMultiplayer } from "../hooks/useMultiplayer";
 export type { Message };
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
@@ -82,6 +82,17 @@ function Terminal() {
 
     return () => timeouts.forEach(clearTimeout);
   }, [isBooting, setHistory]);
+
+  // Welcome-back message for offline TD earnings
+  useEffect(() => {
+    if (offlineTDEarned > 0) {
+      setHistory((prev) => [
+        ...prev,
+        { role: "system", content: `[☕ WELCOME BACK] While you were away, your codebase accumulated ${Math.floor(offlineTDEarned).toLocaleString()} Technical Debt. The suffering never stops.` },
+      ]);
+      clearOfflineTDEarned();
+    }
+  }, [offlineTDEarned, clearOfflineTDEarned, setHistory]);
 
   // Handle sabotage URL parameters on mount
   useEffect(() => {
