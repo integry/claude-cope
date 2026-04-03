@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { SYSTEM_PROMPT } from "../prompts/systemPrompt";
+import { getSystemPrompt } from "../prompts/systemPrompt";
 
 type Env = {
   Bindings: {
@@ -19,18 +19,21 @@ chat.post("/", async (c) => {
 
   const body = await c.req.json<{
     messages: { role: string; content: string }[];
+    rank?: string;
   }>();
 
   if (!body.messages || !Array.isArray(body.messages)) {
     return c.json({ error: "messages array is required" }, 400);
   }
 
+  const rank = body.rank ?? "Junior Code Monkey";
+
   // Strict context window: only send the last 4 messages per product spec
   // to manage context strictly and avoid over-reliance on deep history.
   const recentMessages = body.messages.slice(-4);
 
   const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: getSystemPrompt(rank) },
     ...recentMessages,
   ];
 

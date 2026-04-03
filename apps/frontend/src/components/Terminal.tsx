@@ -291,7 +291,7 @@ function Terminal() {
           userMessage,
         ].map((m) => ({ role: m.role, content: m.content }));
 
-        submitChatMessage(chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing);
+        submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank });
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
