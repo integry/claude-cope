@@ -50,6 +50,13 @@ export const GENERATORS: Generator[] = [
     baseOutput: 260,
   },
   {
+    id: "rogue-api-key",
+    name: "Rogue API Key",
+    description: "A leaked API key that an undergrad is using to generate crypto whitepapers on your dime.",
+    baseCost: 450000,
+    baseOutput: 15000,
+  },
+  {
     id: "llm-code-wrapper",
     name: "LLM Code Wrapper",
     description: "Prompt-engineers solutions that compile perfectly but fail silently in production environments.",
@@ -62,13 +69,6 @@ export const GENERATORS: Generator[] = [
     description: "Generates zero actual code, but creates endless Jira tickets and blocks development with stand-ups.",
     baseCost: 20000000,
     baseOutput: 7800,
-  },
-  {
-    id: "rogue-api-key",
-    name: "Rogue API Key",
-    description: "A leaked API key that an undergrad is using to generate crypto whitepapers on your dime.",
-    baseCost: 450000,
-    baseOutput: 15000,
   },
   {
     id: "blockchain",
