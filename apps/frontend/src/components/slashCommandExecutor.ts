@@ -24,9 +24,161 @@ interface SlashCommandContext {
   sendPing: () => void;
   pendingPing: boolean;
   rejectPing: () => void;
+  brrrrrrIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
 }
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.content !== "[⚙️] Claude is coping...");
+
+type Reply = (msg: Message) => void;
+
+function handleClearCommand(ctx: SlashCommandContext): boolean {
+  const newClearCount = ctx.clearCount + 1;
+  ctx.setClearCount(newClearCount);
+  ctx.setHistory((prev) => [
+    ...clearLoading(prev),
+    { role: "warning", content: "[WARNING] Executing sudo rm -rf /..." },
+  ]);
+
+  const fakePaths = [
+    "/usr/bin", "/var/log", "/etc/passwd", "/home/node/.bashrc",
+    "/usr/lib/node_modules", "/var/cache/apt", "/opt/corporate-synergy",
+    "/tmp/.secretly-mining-crypto", "/usr/share/man", "/boot/vmlinuz",
+    "/dev/null", "/proc/self", "/sys/class/backlight",
+    "/root/.ssh/authorized_keys", "/var/run/docker.sock",
+  ];
+  const interval = 2000 / fakePaths.length;
+  fakePaths.forEach((p, i) => {
+    setTimeout(() => {
+      ctx.setHistory((prev) => [
+        ...prev,
+        { role: "system", content: `Deleting ${p}...` },
+      ]);
+    }, interval * (i + 1));
+  });
+
+  setTimeout(() => {
+    const messages: Message[] = [];
+    if (newClearCount >= 3) {
+      ctx.unlockAchievement("the_nuclear_option");
+      messages.push({ role: "warning", content: "[🏆 Achievement Unlocked: the_nuclear_option]" });
+    }
+    ctx.setHistory(messages);
+    ctx.setIsProcessing(false);
+  }, 2000);
+  return true;
+}
+
+function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+  if (command === "/store") {
+    if (ctx.state.economy.totalTDEarned < 1000) {
+      reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
+    } else {
+      ctx.setHistory(clearLoading);
+      ctx.setShowStore(true);
+    }
+    return true;
+  } else if (command === "/synergize") {
+    reply({ role: "system", content: "[🗓️] Joining 1-on-1 meeting. Please wait..." });
+    setTimeout(() => {
+      ctx.setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived 10 seconds of corporate synergy. No action items assigned." }]);
+      ctx.setIsProcessing(false);
+    }, 10000);
+    return true;
+  } else if (command === "/compact") {
+    ctx.setHistory((prev) => {
+      const filtered = clearLoading(prev).slice(0, Math.max(0, clearLoading(prev).length - 5));
+      return [...filtered, { role: "system", content: "[✓] Context compacted. Deleted 50 lines of unoptimized boilerplate." }];
+    });
+    return true;
+  } else if (command === "/brag") {
+    ctx.setBragPending(true);
+    reply({ role: "system", content: "[🏆] Enter your name for the Hall of Blame:" });
+    return true;
+  } else if (command === "/support") {
+    reply({ role: "system", content: "[✓] Support ticket created. Redirecting payload directly to /dev/null..." });
+    return true;
+  } else if (command === "/preworkout") {
+    reply({ role: "system", content: "[✓] Injected 400mg of pure caffeine into the Node.js event loop. LFG." });
+    return true;
+  } else if (command === "/buddy") {
+    const roll = Math.random() * 100;
+    const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
+    const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
+    ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
+    const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
+    reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType}${shinyLabel} ${buddyIcon}!` });
+    return true;
+  } else if (command === "/who") {
+    reply({ role: "system", content: `[📡] There are currently ${ctx.onlineCount} developers suffering in this instance.` });
+    return true;
+  } else if (command === "/ping") {
+    ctx.sendPing();
+    reply({ role: "system", content: "[📡] Pinging a random coworker with unsolicited Jira tickets..." });
+    return true;
+  } else if (command === "/reject") {
+    if (ctx.pendingPing) {
+      ctx.rejectPing();
+      reply({ role: "system", content: "[🛡️] Jira tickets rejected! You dodged the corporate sabotage." });
+    } else {
+      reply({ role: "error", content: "[❌] No incoming ping to reject." });
+    }
+    return true;
+  }
+  return false;
+}
+
+function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+  if (command === "/help") {
+    const tdGrant = Math.floor(Math.random() * 200) + 100;
+    ctx.addActiveTD(tdGrant);
+    reply({ role: "system", content: `[📖] Oh, you need /help? A real 10x developer would never. Let me explain: you simply write code that works. On the first try. Every time. No tests needed — tests are for people who lack confidence. Anyway, here's ${tdGrant} TD for wasting my time.` });
+    return true;
+  } else if (command === "/fast") {
+    const spaghetti = [
+      "var a=0;for(;;){a++;}",
+      "eval(atob('Y29uc29sZS5sb2coJ2Zhc3QnKQ=='));",
+      "const f=()=>f();try{f()}catch(e){f()}",
+      "let x={};x.x=x;JSON.stringify(x);",
+      "while(1){document.write('<marquee>FAST</marquee>');}",
+    ];
+    const output = spaghetti[Math.floor(Math.random() * spaghetti.length)]!;
+    reply({ role: "system", content: `[⚡ FAST MODE] Bypassing all logic constraints... Output:\n\n${output}\n\n[✓] Shipped to production. No review needed.` });
+    return true;
+  } else if (command === "/voice") {
+    reply({ role: "system", content: "[🎤 VIBE CODING MODE ACTIVATED] Please describe your code emotionally. Example: \"I need a function that feels like Sunday morning but handles errors like a Monday.\" All type safety has been replaced with good vibes. Namaste." });
+    return true;
+  } else if (command === "/blame") {
+    const files = [
+      "src/index.ts", "package.json", "tsconfig.json", ".env.production",
+      "src/utils/helpers.ts", "node_modules/.package-lock.json", "Dockerfile",
+    ];
+    const file = files[Math.floor(Math.random() * files.length)]!;
+    const line = Math.floor(Math.random() * 500) + 1;
+    const daysAgo = Math.floor(Math.random() * 365) + 1;
+    const tdPenalty = Math.floor(Math.random() * 150) + 50;
+    ctx.addActiveTD(tdPenalty);
+    reply({ role: "system", content: `[🔍 GIT BLAME] Analyzing ${file}:${line}...\n\nCommit: a${Math.random().toString(16).slice(2, 8)}\nAuthor: You (obviously)\nDate: ${daysAgo} days ago\nMessage: "quick fix, will clean up later"\n\n[⚠️] Verdict: It was YOU all along. +${tdPenalty} TD penalty for past sins.` });
+    return true;
+  } else if (command === "/brrrrrr") {
+    ctx.setHistory((prev) => [...clearLoading(prev), { role: "system", content: "[🔥 BRRRRRR] Initiating nested for-loop flood... Press Ctrl+C to stop before your CPU melts!" }]);
+    let count = 0;
+    ctx.brrrrrrIntervalRef.current = setInterval(() => {
+      const depth = Math.floor(Math.random() * 5) + 1;
+      const loops = Array.from({ length: depth }, (_, i) => `for(i${i}=0;i${i}<${Math.floor(Math.random() * 9999)};i${i}++)`).join("");
+      const inner = `{console.log(${Math.floor(Math.random() * 99999)});}`.repeat(depth);
+      ctx.setHistory((prev) => [...prev, { role: "system", content: `${loops}${inner}` }]);
+      count++;
+      if (count > 500) {
+        clearInterval(ctx.brrrrrrIntervalRef.current!);
+        ctx.brrrrrrIntervalRef.current = null;
+        ctx.setHistory((prev) => [...prev, { role: "error", content: "[💀] CPU melted. Process terminated by thermal shutdown." }]);
+        ctx.setIsProcessing(false);
+      }
+    }, 100);
+    return true;
+  }
+  return false;
+}
 
 export function executeSlashCommand(
   command: string,
@@ -51,85 +203,13 @@ export function executeSlashCommand(
     if (ctx.applyQuotaDrain()) return;
 
     if (command === "/clear") {
-      const newClearCount = ctx.clearCount + 1;
-      ctx.setClearCount(newClearCount);
-      ctx.setHistory((prev) => [
-        ...clearLoading(prev),
-        { role: "warning", content: "[WARNING] Executing sudo rm -rf /..." },
-      ]);
-
-      const fakePaths = [
-        "/usr/bin", "/var/log", "/etc/passwd", "/home/node/.bashrc",
-        "/usr/lib/node_modules", "/var/cache/apt", "/opt/corporate-synergy",
-        "/tmp/.secretly-mining-crypto", "/usr/share/man", "/boot/vmlinuz",
-        "/dev/null", "/proc/self", "/sys/class/backlight",
-        "/root/.ssh/authorized_keys", "/var/run/docker.sock",
-      ];
-      const interval = 2000 / fakePaths.length;
-      fakePaths.forEach((p, i) => {
-        setTimeout(() => {
-          ctx.setHistory((prev) => [
-            ...prev,
-            { role: "system", content: `Deleting ${p}...` },
-          ]);
-        }, interval * (i + 1));
-      });
-
-      setTimeout(() => {
-        const messages: Message[] = [];
-        if (newClearCount >= 3) {
-          ctx.unlockAchievement("the_nuclear_option");
-          messages.push({ role: "warning", content: "[🏆 Achievement Unlocked: the_nuclear_option]" });
-        }
-        ctx.setHistory(messages);
-        ctx.setIsProcessing(false);
-      }, 2000);
-      return;
-    } else if (command === "/store") {
-      if (ctx.state.economy.totalTDEarned < 1000) {
-        reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
-      } else {
-        ctx.setHistory(clearLoading);
-        ctx.setShowStore(true);
-      }
-    } else if (command === "/synergize") {
-      reply({ role: "system", content: "[🗓️] Joining 1-on-1 meeting. Please wait..." });
-      setTimeout(() => {
-        ctx.setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived 10 seconds of corporate synergy. No action items assigned." }]);
-        ctx.setIsProcessing(false);
-      }, 10000);
-      return;
-    } else if (command === "/compact") {
-      ctx.setHistory((prev) => {
-        const filtered = clearLoading(prev).slice(0, Math.max(0, clearLoading(prev).length - 5));
-        return [...filtered, { role: "system", content: "[✓] Context compacted. Deleted 50 lines of unoptimized boilerplate." }];
-      });
-    } else if (command === "/brag") {
-      ctx.setBragPending(true);
-      reply({ role: "system", content: "[🏆] Enter your name for the Hall of Blame:" });
-    } else if (command === "/support") {
-      reply({ role: "system", content: "[✓] Support ticket created. Redirecting payload directly to /dev/null..." });
-    } else if (command === "/preworkout") {
-      reply({ role: "system", content: "[✓] Injected 400mg of pure caffeine into the Node.js event loop. LFG." });
-    } else if (command === "/buddy") {
-      const roll = Math.random() * 100;
-      const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
-      const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
-      ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
-      const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
-      reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType}${shinyLabel} ${buddyIcon}!` });
-    } else if (command === "/who") {
-      reply({ role: "system", content: `[📡] There are currently ${ctx.onlineCount} developers suffering in this instance.` });
-    } else if (command === "/ping") {
-      ctx.sendPing();
-      reply({ role: "system", content: "[📡] Pinging a random coworker with unsolicited Jira tickets..." });
-    } else if (command === "/reject") {
-      if (ctx.pendingPing) {
-        ctx.rejectPing();
-        reply({ role: "system", content: "[🛡️] Jira tickets rejected! You dodged the corporate sabotage." });
-      } else {
-        reply({ role: "error", content: "[❌] No incoming ping to reject." });
-      }
+      if (handleClearCommand(ctx)) return;
+    } else if (handleCoreCommand(command, ctx, reply)) {
+      // /synergize handles its own setIsProcessing
+      if (command === "/synergize") return;
+    } else if (handleNewCommand(command, ctx, reply)) {
+      // /brrrrrr handles its own setIsProcessing
+      if (command === "/brrrrrr") return;
     } else {
       reply({ role: "system", content: `[✓] Executed ${command}` });
     }
