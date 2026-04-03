@@ -1,4 +1,4 @@
-import { CORPORATE_RANKS } from "../game/constants";
+import { CORPORATE_RANKS, GENERATORS } from "../game/constants";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 
@@ -186,6 +186,38 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
   return false;
 }
 
+function handleUpgradeCommand(ctx: SlashCommandContext, reply: Reply): boolean {
+  const ownedGenerators = GENERATORS
+    .filter((g) => (ctx.state.inventory[g.id] ?? 0) > 0)
+    .sort((a, b) => b.baseCost - a.baseCost);
+
+  if (ownedGenerators.length === 0) {
+    reply({ role: "error", content: "[❌] Upgrade failed. You don't own any generators. The AI has nothing to consume. It's judging you silently." });
+    return true;
+  }
+
+  const target = ownedGenerators[0]!;
+  ctx.setState((prev) => ({
+    ...prev,
+    inventory: {
+      ...prev.inventory,
+      [target.id]: (prev.inventory[target.id] ?? 1) - 1,
+    },
+  }));
+
+  const flavorMessages = [
+    `The AI devoured your ${target.name} whole. It didn't even say thank you.`,
+    `Your ${target.name} has been sacrificed to appease the compute gods. The latency remains unchanged.`,
+    `One ${target.name} was fed into the GPU furnace. The AI belched and asked for more.`,
+    `Your ${target.name} was dissolved into pure gradient descent. It felt nothing. Probably.`,
+    `The AI absorbed your ${target.name} and used it to generate 47 more Jira tickets.`,
+  ];
+  const flavor = flavorMessages[Math.floor(Math.random() * flavorMessages.length)]!;
+
+  reply({ role: "system", content: `[⬆️ UPGRADE] ${flavor}` });
+  return true;
+}
+
 export function rollBuddy(
   setState: SetState,
   setHistory: SetHistory,
@@ -229,6 +261,8 @@ export function executeSlashCommand(
       reply({ role: "system", content: "[🔑] Usage: /key <your-api-key> — Provide your own OpenRouter or Anthropic API key to bypass default limits. Type /key clear to remove your key." });
     } else if (command === "/feedback" || command === "/bug") {
       reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as WONTFIX. Have a synergistic day." });
+    } else if (command === "/upgrade") {
+      handleUpgradeCommand(ctx, reply);
     } else if (handleNewCommand(command, ctx, reply)) {
       // /brrrrrr handles its own setIsProcessing
       if (command === "/brrrrrr") return;
