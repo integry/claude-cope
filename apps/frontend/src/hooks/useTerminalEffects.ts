@@ -16,7 +16,7 @@ const REGRESSION_TYPES = [
 
 interface UseTerminalEffectsArgs {
   history: Message[];
-  setHistory: (updater: (prev: Message[]) => Message[]) => void;
+  setHistory: Dispatch<SetStateAction<Message[]>>;
   setState: Dispatch<SetStateAction<GameState>>;
   offlineTDEarned: number;
   clearOfflineTDEarned: () => void;
