@@ -43,6 +43,7 @@ function Terminal() {
   const [activeRegression, setActiveRegression] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Boot sequence for organic visitors
   useEffect(() => {
@@ -210,7 +211,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, sendPing, pendingPing, rejectPing },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
     );
   };
 
@@ -231,6 +232,15 @@ function Terminal() {
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "c" && e.ctrlKey && brrrrrrIntervalRef.current) {
+      e.preventDefault();
+      clearInterval(brrrrrrIntervalRef.current);
+      brrrrrrIntervalRef.current = null;
+      setHistory((prev) => [...prev, { role: "warning", content: "^C\n[✓] Process interrupted. Your CPU lives to fight another day." }]);
+      setIsProcessing(false);
+      return;
+    }
+
     const filtered = getFilteredSlashCommands();
     const slashMenuOpen = slashQuery !== "" && filtered.length > 0;
 

@@ -24,6 +24,7 @@ interface SlashCommandContext {
   sendPing: () => void;
   pendingPing: boolean;
   rejectPing: () => void;
+  brrrrrrIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
 }
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.content !== "[⚙️] Claude is coping...");
@@ -130,6 +131,50 @@ export function executeSlashCommand(
       } else {
         reply({ role: "error", content: "[❌] No incoming ping to reject." });
       }
+    } else if (command === "/help") {
+      const tdGrant = Math.floor(Math.random() * 200) + 100;
+      ctx.addActiveTD(tdGrant);
+      reply({ role: "system", content: `[📖] Oh, you need /help? A real 10x developer would never. Let me explain: you simply write code that works. On the first try. Every time. No tests needed — tests are for people who lack confidence. Anyway, here's ${tdGrant} TD for wasting my time.` });
+    } else if (command === "/fast") {
+      const spaghetti = [
+        "var a=0;for(;;){a++;}",
+        "eval(atob('Y29uc29sZS5sb2coJ2Zhc3QnKQ=='));",
+        "const f=()=>f();try{f()}catch(e){f()}",
+        "let x={};x.x=x;JSON.stringify(x);",
+        "while(1){document.write('<marquee>FAST</marquee>');}",
+      ];
+      const output = spaghetti[Math.floor(Math.random() * spaghetti.length)]!;
+      reply({ role: "system", content: `[⚡ FAST MODE] Bypassing all logic constraints... Output:\n\n${output}\n\n[✓] Shipped to production. No review needed.` });
+    } else if (command === "/voice") {
+      reply({ role: "system", content: "[🎤 VIBE CODING MODE ACTIVATED] Please describe your code emotionally. Example: \"I need a function that feels like Sunday morning but handles errors like a Monday.\" All type safety has been replaced with good vibes. Namaste." });
+    } else if (command === "/blame") {
+      const files = [
+        "src/index.ts", "package.json", "tsconfig.json", ".env.production",
+        "src/utils/helpers.ts", "node_modules/.package-lock.json", "Dockerfile",
+      ];
+      const file = files[Math.floor(Math.random() * files.length)]!;
+      const line = Math.floor(Math.random() * 500) + 1;
+      const daysAgo = Math.floor(Math.random() * 365) + 1;
+      const tdPenalty = Math.floor(Math.random() * 150) + 50;
+      ctx.addActiveTD(tdPenalty);
+      reply({ role: "system", content: `[🔍 GIT BLAME] Analyzing ${file}:${line}...\n\nCommit: a${Math.random().toString(16).slice(2, 8)}\nAuthor: You (obviously)\nDate: ${daysAgo} days ago\nMessage: "quick fix, will clean up later"\n\n[⚠️] Verdict: It was YOU all along. +${tdPenalty} TD penalty for past sins.` });
+    } else if (command === "/brrrrrr") {
+      ctx.setHistory((prev) => [...clearLoading(prev), { role: "system", content: "[🔥 BRRRRRR] Initiating nested for-loop flood... Press Ctrl+C to stop before your CPU melts!" }]);
+      let count = 0;
+      ctx.brrrrrrIntervalRef.current = setInterval(() => {
+        const depth = Math.floor(Math.random() * 5) + 1;
+        const loops = Array.from({ length: depth }, (_, i) => `for(i${i}=0;i${i}<${Math.floor(Math.random() * 9999)};i${i}++)`).join("");
+        const inner = `{console.log(${Math.floor(Math.random() * 99999)});}`.repeat(depth);
+        ctx.setHistory((prev) => [...prev, { role: "system", content: `${loops}${inner}` }]);
+        count++;
+        if (count > 500) {
+          clearInterval(ctx.brrrrrrIntervalRef.current!);
+          ctx.brrrrrrIntervalRef.current = null;
+          ctx.setHistory((prev) => [...prev, { role: "error", content: "[💀] CPU melted. Process terminated by thermal shutdown." }]);
+          ctx.setIsProcessing(false);
+        }
+      }, 100);
+      return;
     } else {
       reply({ role: "system", content: `[✓] Executed ${command}` });
     }
