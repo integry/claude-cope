@@ -32,6 +32,14 @@ events.post("/", async (c) => {
   if (!message) return c.json({ error: "Message required" }, 400);
 
   await db.prepare("INSERT INTO recent_events (message) VALUES (?)").bind(message).run();
+
+  // Prune old rows to keep only the 50 most recent entries
+  await db
+    .prepare(
+      "DELETE FROM recent_events WHERE id NOT IN (SELECT id FROM recent_events ORDER BY created_at DESC LIMIT 50)"
+    )
+    .run();
+
   return c.json({ success: true }, 201);
 });
 
