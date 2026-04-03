@@ -78,17 +78,17 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     }
     return true;
   } else if (command === "/synergize") {
-    reply({ role: "system", content: "[🗓️] Joining 1-on-1 meeting. Please wait..." });
+    reply({ role: "system", content: "[🗓️] Simulating a 15-minute meeting. Please wait..." });
     setTimeout(() => {
-      ctx.setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived 10 seconds of corporate synergy. No action items assigned." }]);
+      ctx.setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]);
       ctx.setIsProcessing(false);
     }, 10000);
     return true;
   } else if (command === "/compact") {
-    ctx.setHistory((prev) => {
-      const filtered = clearLoading(prev).slice(0, Math.max(0, clearLoading(prev).length - 5));
-      return [...filtered, { role: "system", content: "[✓] Context compacted. Deleted 50 lines of unoptimized boilerplate." }];
-    });
+    ctx.setHistory((prev) => [
+      ...clearLoading(prev),
+      { role: "system", content: "[✓] Context compacted. Deleted 50 lines of unoptimized boilerplate." },
+    ]);
     return true;
   } else if (command === "/brag") {
     ctx.setBragPending(true);
