@@ -283,6 +283,16 @@ export function executeSlashCommand(
     ctx.setHistory((prev) => [...clearLoading(prev), msg]);
   };
 
+  // Track command usage for performance review brag card
+  const baseCommand = command.startsWith("/ping ") ? "/ping" : command;
+  ctx.setState((prev) => ({
+    ...prev,
+    commandUsage: {
+      ...prev.commandUsage,
+      [baseCommand]: (prev.commandUsage[baseCommand] ?? 0) + 1,
+    },
+  }));
+
   setTimeout(() => {
     ctx.addActiveTD(Math.floor(Math.random() * 40) + 10);
     if (ctx.applyQuotaDrain()) return;

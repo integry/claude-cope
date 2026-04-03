@@ -251,7 +251,10 @@ function Terminal() {
       const username = inputValue.trim();
       setInputValue("");
       const generatorsOwned = Object.values(state.inventory).reduce((sum, count) => sum + count, 0);
-      const mostAbusedCommand = "/clear"; // The command everyone spams
+      const mostAbusedCommand = Object.entries(state.commandUsage).reduce(
+        (best, [cmd, count]) => (count > best[1] ? [cmd, count] : best),
+        ["/clear", 0] as [string, number],
+      )[0];
       submitBrag({ username, currentRank: state.economy.currentRank, totalTDEarned: state.economy.totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending });
       return;
     }

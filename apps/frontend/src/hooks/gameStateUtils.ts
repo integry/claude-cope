@@ -32,6 +32,7 @@ export interface GameState {
   achievements: string[];
   buddy: BuddyState;
   chatHistory: Message[];
+  commandUsage: Record<string, number>;
   apiKey?: string;
 }
 
@@ -90,6 +91,7 @@ function createDefaultState(): GameState {
       promptsSinceLastInterjection: 0,
     },
     chatHistory: [],
+    commandUsage: {},
   };
 }
 
@@ -120,6 +122,7 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
     achievements: Array.isArray(legacy.achievements) ? legacy.achievements : [],
     buddy,
     chatHistory: [],
+    commandUsage: {},
   };
 }
 
@@ -152,6 +155,9 @@ export function loadState(): GameState {
       }
       if (!Array.isArray(state.chatHistory)) {
         state.chatHistory = [];
+      }
+      if (!state.commandUsage || typeof state.commandUsage !== "object") {
+        state.commandUsage = {};
       }
       if (!state.economy) {
         return createDefaultState();
