@@ -6,10 +6,11 @@ interface UseMultiplayerOptions {
   setHistory: React.Dispatch<React.SetStateAction<Message[]>>;
   applyOutageReward: () => void;
   applyOutagePenalty: () => void;
+  applyPvpDebuff: () => void;
 }
 
 // We pass setHistory to allow the hook to write messages directly to the terminal when an attack occurs.
-export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty }: UseMultiplayerOptions) {
+export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff }: UseMultiplayerOptions) {
   const [onlineCount, setOnlineCount] = useState(1);
   const [pendingPing, setPendingPing] = useState(false);
   // Track the current outage health to render the global health bar
@@ -38,6 +39,7 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
             setPendingPing(current => {
               if (current) {
                 setHistory(p => [...p, { role: 'error', content: '[DEBUFF] Jira tickets accepted. Tech Debt generation halved for 60s.' }]);
+                applyPvpDebuff();
                 return false;
               }
               return false;
@@ -67,7 +69,7 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
     });
 
     return () => socket.close();
-  }, [setHistory, applyOutageReward, applyOutagePenalty]);
+  }, [setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff]);
 
   // Expose methods to trigger attacks and defend against them
   const sendPing = () => socketRef.current?.send(JSON.stringify({ type: 'ping' }));

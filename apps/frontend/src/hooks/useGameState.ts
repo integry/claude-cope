@@ -149,8 +149,7 @@ function loadState(): GameState {
         state.economy.tdMultiplier = 1;
       }
 
-      // Update lastLogin on load
-      state.lastLogin = Date.now();
+      // Preserve lastLogin from storage so we can compute offline TD on mount
       state.version = STATE_VERSION;
 
       return state;
@@ -186,6 +185,35 @@ export function useGameState() {
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  // Award offline TD on mount based on time since last login
+  useEffect(() => {
+    setState((prev) => {
+      const now = Date.now();
+      const elapsed = now - prev.lastLogin;
+      if (elapsed <= 0) return { ...prev, lastLogin: now };
+
+      const baseTdps = calculateTDpS(prev.inventory);
+      const tdps = baseTdps * prev.economy.tdMultiplier;
+      const offlineTD = tdps * (elapsed / 1000);
+
+      if (offlineTD <= 0) return { ...prev, lastLogin: now };
+
+      const newTotalTDEarned = prev.economy.totalTDEarned + offlineTD;
+      const newRank = resolveRank(newTotalTDEarned, prev.economy.currentRank);
+
+      return {
+        ...prev,
+        lastLogin: now,
+        economy: {
+          ...prev.economy,
+          currentTD: prev.economy.currentTD + offlineTD,
+          totalTDEarned: newTotalTDEarned,
+          currentRank: newRank,
+        },
+      };
+    });
+  }, []);
 
   // Persist state to localStorage
   useEffect(() => {
@@ -329,6 +357,45 @@ export function useGameState() {
     }));
   }, []);
 
+  const debuffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const applyPvpDebuff = useCallback(() => {
+    // Clear any existing debuff timer
+    if (debuffTimerRef.current) {
+      clearTimeout(debuffTimerRef.current);
+    }
+
+    // Halve TD generation
+    setState((prev) => ({
+      ...prev,
+      economy: {
+        ...prev.economy,
+        tdMultiplier: prev.economy.tdMultiplier * 0.5,
+      },
+    }));
+
+    // Auto-restore after exactly 60 seconds
+    debuffTimerRef.current = setTimeout(() => {
+      setState((prev) => ({
+        ...prev,
+        economy: {
+          ...prev.economy,
+          tdMultiplier: prev.economy.tdMultiplier * 2,
+        },
+      }));
+      debuffTimerRef.current = null;
+    }, 60000);
+  }, []);
+
+  // Clean up debuff timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debuffTimerRef.current) {
+        clearTimeout(debuffTimerRef.current);
+      }
+    };
+  }, []);
+
   const applyOutagePenalty = useCallback(() => {
     setState((prev) => {
       // Find the most expensive generator that the player owns at least 1 of
@@ -353,5 +420,5 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty };
+  return { state, setState, buyGenerator, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff };
 }
