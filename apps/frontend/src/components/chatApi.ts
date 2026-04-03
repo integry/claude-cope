@@ -34,6 +34,8 @@ export function submitChatMessage(opts: {
   apiKey?: string;
 }) {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey } = opts;
+  const fakeDelay = 1500 + Math.random() * 1500;
+  setTimeout(() => {
   fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -125,4 +127,5 @@ export function submitChatMessage(opts: {
     .finally(() => {
       setIsProcessing(false);
     });
+  }, fakeDelay);
 }
