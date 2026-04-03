@@ -14,13 +14,20 @@ export default class ClaudeCopeServer implements Party.Server {
   private outageTimer: ReturnType<typeof setTimeout> | null = null;
   private outageSchedule: ReturnType<typeof setTimeout> | null = null;
 
-  // When a user connects, we broadcast the new total user count to everyone.
+  // Track connected usernames by connection ID
+  private usernames = new Map<string, string>();
+
+  // When a user connects, extract their username and broadcast updated presence.
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
+    const url = new URL(ctx.request.url);
+    const username = url.searchParams.get("username") || `anon-${conn.id.slice(0, 6)}`;
+    this.usernames.set(conn.id, username);
     this.broadcastPresence();
   }
 
-  // When a user disconnects, we update the count so the /who command remains accurate.
+  // When a user disconnects, remove their username and update presence.
   onClose(conn: Party.Connection) {
+    this.usernames.delete(conn.id);
     this.broadcastPresence();
   }
 
@@ -28,13 +35,25 @@ export default class ClaudeCopeServer implements Party.Server {
     try {
       const data = JSON.parse(message);
       if (data.type === "ping") {
-        // We randomly select another active connection to serve as the target.
-        // This simulates targeted sabotage without requiring a complex authentication system.
+        const attackerName = this.usernames.get(sender.id) || "A Coworker";
         const conns = Array.from(this.room.getConnections());
         const targets = conns.filter(c => c.id !== sender.id);
-        if (targets.length > 0) {
+
+        if (data.target) {
+          // Targeted ping: find a specific user by username
+          const targetConn = targets.find(c => this.usernames.get(c.id) === data.target);
+          if (targetConn) {
+            targetConn.send(JSON.stringify({ type: "incoming_ping", attacker: attackerName }));
+            sender.send(JSON.stringify({ type: "ping_sent", target: data.target }));
+          } else {
+            sender.send(JSON.stringify({ type: "ping_failed", reason: `User "${data.target}" is not online.` }));
+          }
+        } else if (targets.length > 0) {
+          // Random ping: select a random target
           const target = targets[Math.floor(Math.random() * targets.length)];
-          target.send(JSON.stringify({ type: "incoming_ping", attacker: "A Coworker" }));
+          const targetName = this.usernames.get(target.id) || "someone";
+          target.send(JSON.stringify({ type: "incoming_ping", attacker: attackerName }));
+          sender.send(JSON.stringify({ type: "ping_sent", target: targetName }));
         } else {
           sender.send(JSON.stringify({ type: "ping_failed", reason: "No one else is online." }));
         }
@@ -91,13 +110,15 @@ export default class ClaudeCopeServer implements Party.Server {
     }, 2 * 60 * 1000);
   }
 
-  // Utility function to broadcast the current connection count to all clients in the room.
+  // Broadcast the current connection count and list of online usernames to all clients.
   private broadcastPresence() {
     const connections = Array.from(this.room.getConnections());
+    const users = connections.map(c => this.usernames.get(c.id) || `anon-${c.id.slice(0, 6)}`);
     this.room.broadcast(
       JSON.stringify({
         type: "presence",
         count: connections.length,
+        users,
       })
     );
   }

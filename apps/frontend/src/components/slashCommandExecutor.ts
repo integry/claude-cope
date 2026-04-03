@@ -22,7 +22,8 @@ interface SlashCommandContext {
   addActiveTD: (n: number) => void;
   applyQuotaDrain: () => boolean;
   onlineCount: number;
-  sendPing: () => void;
+  onlineUsers: string[];
+  sendPing: (target?: string) => void;
   pendingPing: boolean;
   rejectPing: () => void;
   brrrrrrIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
@@ -120,11 +121,22 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType}${shinyLabel} ${buddyIcon}!` });
     return true;
   } else if (command === "/who") {
-    reply({ role: "system", content: `[📡] There are currently ${ctx.onlineCount} developers suffering in this instance.` });
+    if (ctx.onlineUsers.length > 0) {
+      const userList = ctx.onlineUsers.join(", ");
+      reply({ role: "system", content: `[📡] ${ctx.onlineCount} developer(s) suffering in this instance: ${userList}` });
+    } else {
+      reply({ role: "system", content: `[📡] There are currently ${ctx.onlineCount} developers suffering in this instance.` });
+    }
     return true;
-  } else if (command === "/ping") {
-    ctx.sendPing();
-    reply({ role: "system", content: "[📡] Pinging a random coworker with unsolicited Jira tickets..." });
+  } else if (command.startsWith("/ping")) {
+    const target = command.slice(5).trim();
+    if (target) {
+      ctx.sendPing(target);
+      reply({ role: "system", content: `[📡] Targeting ${target} with unsolicited Jira tickets...` });
+    } else {
+      ctx.sendPing();
+      reply({ role: "system", content: "[📡] Pinging a random coworker with unsolicited Jira tickets..." });
+    }
     return true;
   } else if (command === "/reject") {
     if (ctx.pendingPing) {
