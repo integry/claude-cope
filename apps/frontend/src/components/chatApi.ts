@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { Message } from "./Terminal";
 import type { BuddyState } from "../hooks/useGameState";
+import type { ModesState } from "../hooks/gameStateUtils";
 import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
@@ -34,14 +35,15 @@ export function submitChatMessage(opts: {
   setIsProcessing: Dispatch<SetStateAction<boolean>>;
   currentRank: string;
   apiKey?: string;
+  modes?: ModesState;
 }) {
-  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey } = opts;
+  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, modes } = opts;
   const fakeDelay = 1500 + Math.random() * 1500;
   setTimeout(() => {
   fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: chatMessages, rank: currentRank, ...(apiKey ? { apiKey } : {}) }),
+    body: JSON.stringify({ messages: chatMessages, rank: currentRank, ...(apiKey ? { apiKey } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}) }),
   })
     .then(async (res) => {
       if (res.status === 429) {
