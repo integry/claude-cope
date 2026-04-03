@@ -11,6 +11,8 @@ interface SlashCommandContext {
   setHistory: SetHistory;
   setIsProcessing: (v: boolean) => void;
   setShowStore: (v: boolean) => void;
+  setShowLeaderboard: (v: boolean) => void;
+  setShowAchievements: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -70,17 +72,50 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
   return true;
 }
 
+function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+  const target = command.slice(5).trim();
+  if (target) {
+    ctx.sendPing(target);
+    reply({ role: "system", content: `[📡] Targeting ${target} with unsolicited Jira tickets...` });
+  } else {
+    ctx.sendPing();
+    reply({ role: "system", content: "[📡] Pinging a random coworker with unsolicited Jira tickets..." });
+  }
+  return true;
+}
+
+function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
+  if (ctx.state.economy.totalTDEarned < 1000) {
+    reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
+  } else {
+    ctx.setHistory(clearLoading);
+    ctx.setShowStore(true);
+  }
+  return true;
+}
+
 function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   if (command === "/store") {
-    if (ctx.state.economy.totalTDEarned < 1000) {
-      reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
-    } else {
-      ctx.setHistory(clearLoading);
-      ctx.setShowStore(true);
-    }
+    return handleStoreCommand(ctx, reply);
+  } else if (command === "/leaderboard") {
+    ctx.setHistory(clearLoading);
+    ctx.setShowLeaderboard(true);
+    return true;
+  } else if (command === "/achievements") {
+    ctx.setHistory(clearLoading);
+    ctx.setShowAchievements(true);
     return true;
   } else if (command === "/synergize") {
     reply({ role: "system", content: "[🗓️] Simulating a 15-minute meeting. Please wait..." });
+    setTimeout(() => {
+      ctx.setHistory((prev) => [...prev, { role: "system", content: "[📋] Agenda Item 1: Review last sprint's velocity metrics and blame someone." }]);
+    }, 3000);
+    setTimeout(() => {
+      ctx.setHistory((prev) => [...prev, { role: "system", content: "[📋] Agenda Item 2: Discuss migrating to a new framework nobody asked for." }]);
+    }, 6000);
+    setTimeout(() => {
+      ctx.setHistory((prev) => [...prev, { role: "system", content: "[📋] Agenda Item 3: Action items from the meeting about reducing meetings." }]);
+    }, 9000);
     setTimeout(() => {
       ctx.setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]);
       ctx.setIsProcessing(false);
@@ -114,7 +149,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
       return true;
     }
     const roll = Math.random() * 100;
-    const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
+    const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "@/\""] : roll < 95 ? ["Sarcastic Clippy", "/|\\"] : ["10x Dragon", ">~<"];
     const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
     ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
     const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
@@ -129,15 +164,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     }
     return true;
   } else if (command.startsWith("/ping")) {
-    const target = command.slice(5).trim();
-    if (target) {
-      ctx.sendPing(target);
-      reply({ role: "system", content: `[📡] Targeting ${target} with unsolicited Jira tickets...` });
-    } else {
-      ctx.sendPing();
-      reply({ role: "system", content: "[📡] Pinging a random coworker with unsolicited Jira tickets..." });
-    }
-    return true;
+    return handlePingCommand(command, ctx, reply);
   } else if (command === "/reject") {
     if (ctx.pendingPing) {
       ctx.rejectPing();
@@ -240,7 +267,7 @@ export function rollBuddy(
   setHistory: SetHistory,
 ) {
   const roll = Math.random() * 100;
-  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
+  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "@/\""] : roll < 95 ? ["Sarcastic Clippy", "/|\\"] : ["10x Dragon", ">~<"];
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
   const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
@@ -264,6 +291,16 @@ export function executeSlashCommand(
   const reply = (msg: Message): void => {
     ctx.setHistory((prev) => [...clearLoading(prev), msg]);
   };
+
+  // Track command usage for performance review brag card
+  const baseCommand = command.startsWith("/ping ") ? "/ping" : command;
+  ctx.setState((prev) => ({
+    ...prev,
+    commandUsage: {
+      ...prev.commandUsage,
+      [baseCommand]: (prev.commandUsage[baseCommand] ?? 0) + 1,
+    },
+  }));
 
   setTimeout(() => {
     ctx.addActiveTD(Math.floor(Math.random() * 40) + 10);

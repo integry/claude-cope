@@ -4,7 +4,10 @@ import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import { SLASH_COMMANDS } from "./slashCommands";
 import StoreOverlay from "./StoreOverlay";
-import { useGameState } from "../hooks/useGameState";
+import LeaderboardOverlay from "./LeaderboardOverlay";
+import AchievementOverlay from "./AchievementOverlay";
+import HeaderBar from "./HeaderBar";
+import { useGameState, Message } from "../hooks/useGameState";
 import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
@@ -13,39 +16,16 @@ import { handleKeyCommand } from "./keyCommandHandler";
 import Ticker from "./Ticker";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 
-export type Message = {
-  role: "user" | "system" | "loading" | "warning" | "error";
-  content: string;
-};
-
-function HeaderBar({ rank, totalTDEarned, quotaPercent, outageHp }: { rank: string; totalTDEarned: number; quotaPercent: number; outageHp: number | null }) {
-  if (totalTDEarned < 100) return null;
-  return (
-    <div className={`sticky top-0 z-10 border-b pb-2 mb-2 ${outageHp !== null ? "bg-red-900 border-red-500" : "bg-[#0d1117] border-green-800"}`}>
-      <div className="flex justify-between text-green-400 mb-1">
-        <span>Rank: {rank}</span>
-        <span>Technical Debt: {totalTDEarned.toLocaleString()} TD</span>
-      </div>
-      <div className={`text-xs font-mono ${quotaPercent > 50 ? "text-green-400" : quotaPercent > 20 ? "text-yellow-400" : "text-red-400"}`}>
-        {(() => {
-          const totalBlocks = 20;
-          const filledBlocks = Math.round((quotaPercent / 100) * totalBlocks);
-          const emptyBlocks = totalBlocks - filledBlocks;
-          return `[API Quota: ${"█".repeat(filledBlocks)}${"░".repeat(emptyBlocks)} ${quotaPercent}%]`;
-        })()}
-      </div>
-    </div>
-  );
-}
+export type { Message };
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff } = useGameState();
-  const [history, setHistory] = useState<Message[]>([]);
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned } = useGameState();
+  const history = state.chatHistory;
+  const setHistory = setChatHistory;
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
   const rank = state.economy.currentRank;
   const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
-
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -53,9 +33,12 @@ function Terminal() {
   const [slashIndex, setSlashIndex] = useState(0);
   const [inputValue, setInputValue] = useState("");
   const [showStore, setShowStore] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [isBooting, setIsBooting] = useState<boolean>(() => {
+    if (history.length > 0) return false; // Skip boot if chat history was restored
     const params = new URLSearchParams(window.location.search);
     return params.get("sabotage") !== "true";
   });
@@ -97,12 +80,19 @@ function Terminal() {
     timeouts.push(finishId);
 
     return () => timeouts.forEach(clearTimeout);
-  }, [isBooting]);
+  }, [isBooting, setHistory]);
+
+  // Welcome-back message for offline TD earnings
+  useEffect(() => {
+    if (offlineTDEarned <= 0) return;
+    setHistory((prev) => [...prev, { role: "system", content: `[☕ WELCOME BACK] While you were away, your codebase accumulated ${Math.floor(offlineTDEarned).toLocaleString()} Technical Debt. The suffering never stops.` }]);
+    clearOfflineTDEarned();
+  }, [offlineTDEarned, clearOfflineTDEarned, setHistory]);
 
   // Handle sabotage URL parameters on mount
   useEffect(() => {
     parseSabotageParams(setState, setHistory);
-  }, [setState]);
+  }, [setState, setHistory]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
@@ -117,6 +107,8 @@ function Terminal() {
       { id: "opacity_fade", name: "Opacity Fade Leak", css: "opacity: 0.3;" },
       { id: "letter_spacing", name: "Letter Spacing Explosion", css: "letter-spacing: 0.5em;" },
       { id: "comic_sans", name: "Font Corruption", css: 'font-family: "Comic Sans MS", "Comic Sans", cursive;' },
+      { id: "all_caps", name: "ALL CAPS", css: "text-transform: uppercase;" },
+      { id: "windows_prompt", name: "OS Downgrade", css: "" },
     ];
 
     const scheduleRegression = () => {
@@ -147,7 +139,7 @@ function Terminal() {
 
     let timerId = scheduleRegression();
     return () => clearTimeout(timerId);
-  }, []);
+  }, [setHistory]);
 
   const triggerQuotaLockout = () => {
     setQuotaLocked(true);
@@ -180,21 +172,14 @@ function Terminal() {
   };
 
   const triggerInstantBan = () => {
-    setInstantBanReady(false);
-    setQuotaLocked(true);
-    setIsProcessing(true);
-    setHistory((prev) => [
-      ...prev,
+    setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
+    setHistory((prev) => [...prev,
       { role: "error", content: "[🚨 INSTANT BAN] Suspicious activity detected! You typed too fast after a billing upgrade." },
       { role: "warning", content: "[🔒] Account temporarily suspended. Reviewing compliance..." },
     ]);
     setTimeout(() => {
-      setQuotaLocked(false);
-      setIsProcessing(false);
-      setHistory((prev) => [
-        ...prev,
-        { role: "system", content: "[✓] Compliance review passed. Account reinstated. Proceed with caution." },
-      ]);
+      setQuotaLocked(false); setIsProcessing(false);
+      setHistory((prev) => [...prev, { role: "system", content: "[✓] Compliance review passed. Account reinstated. Proceed with caution." }]);
     }, 5000);
   };
 
@@ -233,24 +218,18 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setShowAchievements, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
     );
   };
 
   const DAMAGE_COMMANDS = ["kubectl restart pods", "ssh prod-01", "git revert HEAD"];
 
   const tryOutageDamage = (): boolean => {
-    if (outageHp !== null && DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) {
-      sendDamage();
-      setHistory((prev) => [
-        ...prev,
-        { role: "user", content: inputValue },
-        { role: "system", content: `[💥 HIT] Damage dealt to PROD OUTAGE!` },
-      ]);
-      setInputValue("");
-      return true;
-    }
-    return false;
+    if (outageHp === null || !DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) return false;
+    sendDamage();
+    setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: `[💥 HIT] Damage dealt to PROD OUTAGE!` }]);
+    setInputValue("");
+    return true;
   };
 
   const handleEnterSubmit = () => {
@@ -267,7 +246,10 @@ function Terminal() {
       const username = inputValue.trim();
       setInputValue("");
       const generatorsOwned = Object.values(state.inventory).reduce((sum, count) => sum + count, 0);
-      const mostAbusedCommand = "/clear"; // The command everyone spams
+      const mostAbusedCommand = Object.entries(state.commandUsage).reduce(
+        (best, [cmd, count]) => (count > best[1] ? [cmd, count] : best),
+        ["/clear", 0] as [string, number],
+      )[0];
       submitBrag({ username, currentRank: state.economy.currentRank, totalTDEarned: state.economy.totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending });
       return;
     }
@@ -415,7 +397,7 @@ function Terminal() {
       <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
-          <OutputBlock key={index} message={message} promptString={activeRegression ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "} />
+          <OutputBlock key={index} message={message} promptString={activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "} />
         ))}
         <div ref={bottomRef} />
       </div>
@@ -432,7 +414,7 @@ function Terminal() {
           disabled={isProcessing || isBooting || quotaLocked}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          promptString={activeRegression ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "}
+          promptString={activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "}
         />
       </div>
       {showStore && (
@@ -441,6 +423,17 @@ function Terminal() {
           buyGenerator={buyGenerator}
           buyUpgrade={buyUpgrade}
           onClose={() => setShowStore(false)}
+        />
+      )}
+      {showLeaderboard && (
+        <LeaderboardOverlay
+          onClose={() => setShowLeaderboard(false)}
+        />
+      )}
+      {showAchievements && (
+        <AchievementOverlay
+          unlockedIds={state.achievements}
+          onClose={() => setShowAchievements(false)}
         />
       )}
     </div>

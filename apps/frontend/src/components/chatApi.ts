@@ -3,6 +3,7 @@ import type { Message } from "./Terminal";
 import type { BuddyState } from "../hooks/useGameState";
 import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
 import { API_BASE } from "../config";
+import { supabase } from "../supabaseClient";
 
 export type BuddyInterjectionResult = {
   message: Message;
@@ -72,10 +73,16 @@ export function submitChatMessage(opts: {
           role: "warning",
           content: `[🏆 Achievement Unlocked: ${achievementId}]`,
         });
+        const achievementMessage = `🏆 A player unlocked the achievement: ${achievementId}`;
         fetch(`${API_BASE}/api/recent-events`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: `🏆 A player unlocked the achievement: ${achievementId}` }),
+          body: JSON.stringify({ message: achievementMessage }),
+        }).catch(() => {});
+        supabase?.channel('global_incidents').send({
+          type: 'broadcast',
+          event: 'new_incident',
+          payload: { message: achievementMessage },
         }).catch(() => {});
       }
 
