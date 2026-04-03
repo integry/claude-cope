@@ -108,6 +108,15 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
   } else if (command === "/synergize") {
     reply({ role: "system", content: "[🗓️] Simulating a 15-minute meeting. Please wait..." });
     setTimeout(() => {
+      ctx.setHistory((prev) => [...prev, { role: "system", content: "[📋] Agenda Item 1: Review last sprint's velocity metrics and blame someone." }]);
+    }, 3000);
+    setTimeout(() => {
+      ctx.setHistory((prev) => [...prev, { role: "system", content: "[📋] Agenda Item 2: Discuss migrating to a new framework nobody asked for." }]);
+    }, 6000);
+    setTimeout(() => {
+      ctx.setHistory((prev) => [...prev, { role: "system", content: "[📋] Agenda Item 3: Action items from the meeting about reducing meetings." }]);
+    }, 9000);
+    setTimeout(() => {
       ctx.setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]);
       ctx.setIsProcessing(false);
     }, 10000);
@@ -140,7 +149,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
       return true;
     }
     const roll = Math.random() * 100;
-    const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
+    const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "@/\""] : roll < 95 ? ["Sarcastic Clippy", "/|\\"] : ["10x Dragon", ">~<"];
     const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
     ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
     const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
@@ -258,7 +267,7 @@ export function rollBuddy(
   setHistory: SetHistory,
 ) {
   const roll = Math.random() * 100;
-  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
+  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "@/\""] : roll < 95 ? ["Sarcastic Clippy", "/|\\"] : ["10x Dragon", ">~<"];
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
   const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";

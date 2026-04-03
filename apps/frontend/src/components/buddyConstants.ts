@@ -1,7 +1,7 @@
 export const BUDDY_ICONS: Record<string, string> = {
-  "Agile Snail": "🐌",
-  "Sarcastic Clippy": "📎",
-  "10x Dragon": "🐉",
+  "Agile Snail": "@/\"",
+  "Sarcastic Clippy": "/|\\",
+  "10x Dragon": ">~<",
 };
 
 export const BUDDY_INTERJECTIONS: Record<string, string[]> = {
