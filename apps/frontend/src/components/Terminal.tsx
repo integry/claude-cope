@@ -6,6 +6,7 @@ import { SLASH_COMMANDS } from "./slashCommands";
 import StoreOverlay from "./StoreOverlay";
 import LeaderboardOverlay from "./LeaderboardOverlay";
 import AchievementOverlay from "./AchievementOverlay";
+import SynergizeOverlay from "./SynergizeOverlay";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
 import { BUDDY_ICONS } from "./buddyConstants";
@@ -36,6 +37,7 @@ function Terminal() {
   const [showStore, setShowStore] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
+  const [showSynergize, setShowSynergize] = useState(false);
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [isBooting, setIsBooting] = useState<boolean>(() => {
@@ -218,7 +220,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setShowAchievements, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
     );
   };
 
@@ -434,6 +436,15 @@ function Terminal() {
         <AchievementOverlay
           unlockedIds={state.achievements}
           onClose={() => setShowAchievements(false)}
+        />
+      )}
+      {showSynergize && (
+        <SynergizeOverlay
+          onClose={() => {
+            setShowSynergize(false);
+            setIsProcessing(false);
+            setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]);
+          }}
         />
       )}
     </div>
