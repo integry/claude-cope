@@ -189,18 +189,22 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     reply({ role: "system", content: `[📖] Oh, you need /help? A real 10x developer would never. Let me explain: you simply write code that works. On the first try. Every time. No tests needed — tests are for people who lack confidence. Anyway, here's ${tdGrant} TD for wasting my time.` });
     return true;
   } else if (command === "/fast") {
-    const spaghetti = [
-      "var a=0;for(;;){a++;}",
-      "eval(atob('Y29uc29sZS5sb2coJ2Zhc3QnKQ=='));",
-      "const f=()=>f();try{f()}catch(e){f()}",
-      "let x={};x.x=x;JSON.stringify(x);",
-      "while(1){document.write('<marquee>FAST</marquee>');}",
-    ];
-    const output = spaghetti[Math.floor(Math.random() * spaghetti.length)]!;
-    reply({ role: "system", content: `[⚡ FAST MODE] Bypassing all logic constraints... Output:\n\n${output}\n\n[✓] Shipped to production. No review needed.` });
+    const newFast = !ctx.state.modes.fast;
+    ctx.setState((prev) => ({ ...prev, modes: { ...prev.modes, fast: newFast } }));
+    if (newFast) {
+      reply({ role: "system", content: "[⚡ FAST MODE ACTIVATED] All code reviews disabled. Type safety optional. Shipping directly to production at mass velocity. Godspeed." });
+    } else {
+      reply({ role: "system", content: "[⚡ FAST MODE DEACTIVATED] Reinstating code reviews, type checks, and existential dread. Welcome back to reality." });
+    }
     return true;
   } else if (command === "/voice") {
-    reply({ role: "system", content: "[🎤 VIBE CODING MODE ACTIVATED] Please describe your code emotionally. Example: \"I need a function that feels like Sunday morning but handles errors like a Monday.\" All type safety has been replaced with good vibes. Namaste." });
+    const newVoice = !ctx.state.modes.voice;
+    ctx.setState((prev) => ({ ...prev, modes: { ...prev.modes, voice: newVoice } }));
+    if (newVoice) {
+      reply({ role: "system", content: "[🎤 VIBE CODING MODE ACTIVATED] Please describe your code emotionally. All type safety has been replaced with good vibes. Namaste." });
+    } else {
+      reply({ role: "system", content: "[🎤 VIBE CODING MODE DEACTIVATED] Type safety restored. Emotions suppressed. Back to cold, logical determinism." });
+    }
     return true;
   } else if (command === "/blame") {
     const files = [
