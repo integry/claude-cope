@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE, UPGRADES } from "../game/constants";
+import { supabase } from "../supabaseClient";
 
 const STORAGE_KEY = "claudeCopeState";
 const STATE_VERSION = "1.0";
@@ -310,10 +311,16 @@ export function useGameState() {
     });
 
     if (cost > 1_000_000) {
+      const purchaseMessage = `💰 A player bought ${amount}x ${generator.name} for ${cost.toLocaleString()} TD!`;
       fetch("/api/recent-events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: `💰 A player bought ${amount}x ${generator.name} for ${cost.toLocaleString()} TD!` }),
+        body: JSON.stringify({ message: purchaseMessage }),
+      }).catch(() => {});
+      supabase?.channel('global_incidents').send({
+        type: 'broadcast',
+        event: 'new_incident',
+        payload: { message: purchaseMessage },
       }).catch(() => {});
     }
 
