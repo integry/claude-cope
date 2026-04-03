@@ -96,12 +96,12 @@ function Terminal() {
     timeouts.push(finishId);
 
     return () => timeouts.forEach(clearTimeout);
-  }, [isBooting]);
+  }, [isBooting, setHistory]);
 
   // Handle sabotage URL parameters on mount
   useEffect(() => {
     parseSabotageParams(setState, setHistory);
-  }, [setState]);
+  }, [setState, setHistory]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
@@ -146,7 +146,7 @@ function Terminal() {
 
     let timerId = scheduleRegression();
     return () => clearTimeout(timerId);
-  }, []);
+  }, [setHistory]);
 
   const triggerQuotaLockout = () => {
     setQuotaLocked(true);
