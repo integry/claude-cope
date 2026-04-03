@@ -17,6 +17,9 @@ export default class ClaudeCopeServer implements Party.Server {
   // Track connected usernames by connection ID
   private usernames = new Map<string, string>();
 
+  // Track pending PvP ping attacks awaiting rejection (keyed by victim connection ID)
+  private pendingPings = new Map<string, ReturnType<typeof setTimeout>>();
+
   // When a user connects, extract their username and broadcast updated presence.
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
     const url = new URL(ctx.request.url);
@@ -25,8 +28,13 @@ export default class ClaudeCopeServer implements Party.Server {
     this.broadcastPresence();
   }
 
-  // When a user disconnects, remove their username and update presence.
+  // When a user disconnects, remove their username, clean up pending pings, and update presence.
   onClose(conn: Party.Connection) {
+    const pending = this.pendingPings.get(conn.id);
+    if (pending) {
+      clearTimeout(pending);
+      this.pendingPings.delete(conn.id);
+    }
     this.usernames.delete(conn.id);
     this.broadcastPresence();
   }
@@ -45,6 +53,7 @@ export default class ClaudeCopeServer implements Party.Server {
           if (targetConn) {
             targetConn.send(JSON.stringify({ type: "incoming_ping", attacker: attackerName }));
             sender.send(JSON.stringify({ type: "ping_sent", target: data.target }));
+            this.startPingTimer(targetConn.id, attackerName);
           } else {
             sender.send(JSON.stringify({ type: "ping_failed", reason: `User "${data.target}" is not online.` }));
           }
@@ -54,8 +63,18 @@ export default class ClaudeCopeServer implements Party.Server {
           const targetName = this.usernames.get(target.id) || "someone";
           target.send(JSON.stringify({ type: "incoming_ping", attacker: attackerName }));
           sender.send(JSON.stringify({ type: "ping_sent", target: targetName }));
+          this.startPingTimer(target.id, attackerName);
         } else {
           sender.send(JSON.stringify({ type: "ping_failed", reason: "No one else is online." }));
+        }
+      } else if (data.type === "reject_ping") {
+        // Victim is rejecting/blocking the incoming attack
+        const pending = this.pendingPings.get(sender.id);
+        if (pending) {
+          clearTimeout(pending);
+          this.pendingPings.delete(sender.id);
+          const victimName = this.usernames.get(sender.id) || "someone";
+          this.room.broadcast(JSON.stringify({ type: "ping_rejected", victim: victimName }));
         }
       } else if (data.type === "damage_outage" && this.isOutageActive) {
         // Process damage from clients and broadcast the new health total to everyone
@@ -75,6 +94,24 @@ export default class ClaudeCopeServer implements Party.Server {
     } catch {
       console.error("Invalid message format");
     }
+  }
+
+  // Start a 5-second server-authoritative timer for a pending ping attack.
+  // If the victim doesn't reject in time, the debuff is applied automatically.
+  private startPingTimer(victimConnId: string, attackerName: string) {
+    // Clear any existing pending ping for this victim
+    const existing = this.pendingPings.get(victimConnId);
+    if (existing) clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+      this.pendingPings.delete(victimConnId);
+      const victimName = this.usernames.get(victimConnId) || "someone";
+      this.room.broadcast(
+        JSON.stringify({ type: "ping_applied", attacker: attackerName, victim: victimName })
+      );
+    }, 5000);
+
+    this.pendingPings.set(victimConnId, timer);
   }
 
   // Schedule the next automated outage after a random delay between 2 and 3 hours
