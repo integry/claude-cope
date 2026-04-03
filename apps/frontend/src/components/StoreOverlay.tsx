@@ -47,7 +47,7 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3">
-        {GENERATORS.map((gen) => {
+        {GENERATORS.filter((gen) => state.economy.totalTDEarned >= gen.baseCost * 0.1).map((gen) => {
           const owned = state.inventory[gen.id] ?? 0;
           const cost = calcBulkCost(gen.baseCost, owned, buyMultiplier);
           const canAfford = state.economy.currentTD >= cost;
@@ -97,7 +97,14 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
             &gt; synergy upgrades
           </span>
         </div>
-        {UPGRADES.map((upgrade) => {
+        {UPGRADES.filter((upgrade) => {
+          const target = GENERATORS.find((g) => g.id === upgrade.targetGeneratorId);
+          const required = GENERATORS.find((g) => g.id === upgrade.requiredGeneratorId);
+          return (
+            (!target || state.economy.totalTDEarned >= target.baseCost * 0.1) &&
+            (!required || state.economy.totalTDEarned >= required.baseCost * 0.1)
+          );
+        }).map((upgrade) => {
           const owned = state.upgrades.includes(upgrade.id);
           const hasRequired = (state.inventory[upgrade.requiredGeneratorId] ?? 0) > 0;
           const canAfford = !owned && hasRequired && state.economy.currentTD >= upgrade.cost;
@@ -126,7 +133,10 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
                   Cost: {upgrade.cost.toLocaleString()} TD
                 </span>
                 <span className="text-gray-500 ml-2">
-                  ({targetGen?.name} x{upgrade.multiplier})
+                  ({targetGen?.name}{" "}
+                  {upgrade.synergyPercent != null
+                    ? `x${(1 + ((state.inventory[upgrade.requiredGeneratorId] ?? 0) * upgrade.synergyPercent) / 100).toFixed(2)} — +${upgrade.synergyPercent}%/ea`
+                    : `x${upgrade.multiplier}`})
                 </span>
               </div>
               {!owned && (

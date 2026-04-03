@@ -1,6 +1,9 @@
 import { CORPORATE_RANKS, GENERATORS } from "../game/constants";
+import { API_BASE } from "../config";
+import { supabase } from "../supabaseClient";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
+import { buildAchievementBox } from "./achievementBox";
 
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
@@ -13,6 +16,7 @@ interface SlashCommandContext {
   setShowStore: (v: boolean) => void;
   setShowLeaderboard: (v: boolean) => void;
   setShowAchievements: (v: boolean) => void;
+  setShowSynergize: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -64,10 +68,23 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
     const messages: Message[] = [];
     if (newClearCount >= 3) {
       ctx.unlockAchievement("the_nuclear_option");
-      messages.push({ role: "warning", content: "[🏆 Achievement Unlocked: the_nuclear_option]" });
+      messages.push({ role: "warning", content: buildAchievementBox("the_nuclear_option") });
     }
     ctx.setHistory(messages);
     ctx.setIsProcessing(false);
+
+    // Broadcast terminal crash to global incident ticker
+    const crashMessage = "💥 A player crashed their terminal with /clear!";
+    fetch(`${API_BASE}/api/recent-events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: crashMessage }),
+    }).catch(() => {});
+    supabase?.channel('global_incidents').send({
+      type: 'broadcast',
+      event: 'new_incident',
+      payload: { message: crashMessage },
+    }).catch(() => {});
   }, 2000);
   return true;
 }
@@ -106,20 +123,8 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     ctx.setShowAchievements(true);
     return true;
   } else if (command === "/synergize") {
-    reply({ role: "system", content: "[🗓️] Simulating a 15-minute meeting. Please wait..." });
-    setTimeout(() => {
-      ctx.setHistory((prev) => [...prev, { role: "system", content: "[📋] Agenda Item 1: Review last sprint's velocity metrics and blame someone." }]);
-    }, 3000);
-    setTimeout(() => {
-      ctx.setHistory((prev) => [...prev, { role: "system", content: "[📋] Agenda Item 2: Discuss migrating to a new framework nobody asked for." }]);
-    }, 6000);
-    setTimeout(() => {
-      ctx.setHistory((prev) => [...prev, { role: "system", content: "[📋] Agenda Item 3: Action items from the meeting about reducing meetings." }]);
-    }, 9000);
-    setTimeout(() => {
-      ctx.setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]);
-      ctx.setIsProcessing(false);
-    }, 10000);
+    reply({ role: "system", content: "[🗓️] Mandatory 1-on-1 meeting initiated. You cannot escape." });
+    ctx.setShowSynergize(true);
     return true;
   } else if (command === "/compact") {
     ctx.setHistory((prev) => {
@@ -149,7 +154,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
       return true;
     }
     const roll = Math.random() * 100;
-    const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "@/\""] : roll < 95 ? ["Sarcastic Clippy", "/|\\"] : ["10x Dragon", ">~<"];
+    const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
     const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
     ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
     const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
@@ -267,7 +272,7 @@ export function rollBuddy(
   setHistory: SetHistory,
 ) {
   const roll = Math.random() * 100;
-  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "@/\""] : roll < 95 ? ["Sarcastic Clippy", "/|\\"] : ["10x Dragon", ">~<"];
+  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
   const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
@@ -356,8 +361,8 @@ export function parseSabotageParams(
         ...prev,
         economy: {
           ...prev.economy,
-          currentTD: prev.economy.currentTD + target,
-          totalTDEarned: prev.economy.totalTDEarned + target,
+          currentTD: target,
+          totalTDEarned: target,
           currentRank: CORPORATE_RANKS[newRankIndex]?.title ?? prev.economy.currentRank,
         },
       };

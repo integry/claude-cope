@@ -6,12 +6,14 @@ import { SLASH_COMMANDS } from "./slashCommands";
 import StoreOverlay from "./StoreOverlay";
 import LeaderboardOverlay from "./LeaderboardOverlay";
 import AchievementOverlay from "./AchievementOverlay";
+import SynergizeOverlay from "./SynergizeOverlay";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
 import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, parseSabotageParams, rollBuddy } from "./slashCommandExecutor";
+import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
 import Ticker from "./Ticker";
 import { useMultiplayer } from "../hooks/useMultiplayer";
@@ -35,6 +37,7 @@ function Terminal() {
   const [showStore, setShowStore] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
+  const [showSynergize, setShowSynergize] = useState(false);
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [isBooting, setIsBooting] = useState<boolean>(() => {
@@ -146,8 +149,8 @@ function Terminal() {
     setIsProcessing(true);
     setHistory((prev) => [
       ...prev,
-      { role: "error", content: "[🚫 QUOTA EXCEEDED] API quota depleted. Contacting billing..." },
-      { role: "warning", content: "[💳] Upgrading to Claude Cope Enterprise™ ($4,999/mo)... Please wait." },
+      { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." },
+      { role: "warning", content: "[⚙️] Upgrading to $200/mo Pro Tier..." },
     ]);
     setTimeout(() => {
       resetQuota();
@@ -161,10 +164,10 @@ function Terminal() {
       setHistory((prev) => {
         const messages: Message[] = [
           ...prev,
-          { role: "system", content: "[✓] Billing upgrade complete. Quota restored to 100%. You may continue." },
+          { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" },
         ];
         if (newLockouts >= 3) {
-          messages.push({ role: "warning", content: "[🏆 Achievement Unlocked: homer_at_the_buffet]" });
+          messages.push({ role: "warning", content: buildAchievementBox("homer_at_the_buffet") });
         }
         return messages;
       });
@@ -174,12 +177,11 @@ function Terminal() {
   const triggerInstantBan = () => {
     setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
     setHistory((prev) => [...prev,
-      { role: "error", content: "[🚨 INSTANT BAN] Suspicious activity detected! You typed too fast after a billing upgrade." },
-      { role: "warning", content: "[🔒] Account temporarily suspended. Reviewing compliance..." },
+      { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." },
     ]);
     setTimeout(() => {
       setQuotaLocked(false); setIsProcessing(false);
-      setHistory((prev) => [...prev, { role: "system", content: "[✓] Compliance review passed. Account reinstated. Proceed with caution." }]);
+      setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]);
     }, 5000);
   };
 
@@ -218,7 +220,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setShowAchievements, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef },
     );
   };
 
@@ -364,7 +366,7 @@ function Terminal() {
 
   return (
     <div
-      className={`h-screen w-screen font-mono text-sm text-gray-300 p-4 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"}`}
+      className={`h-screen w-screen font-mono text-sm text-gray-300 p-4 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
       style={regressionGlitch ? Object.fromEntries(regressionGlitch.split(";").filter(Boolean).map((s) => { const [k, ...v] = s.split(":"); return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()]; })) : undefined}
       onClick={() => inputRef.current?.focus()}
     >
@@ -434,6 +436,15 @@ function Terminal() {
         <AchievementOverlay
           unlockedIds={state.achievements}
           onClose={() => setShowAchievements(false)}
+        />
+      )}
+      {showSynergize && (
+        <SynergizeOverlay
+          onClose={() => {
+            setShowSynergize(false);
+            setIsProcessing(false);
+            setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]);
+          }}
         />
       )}
     </div>

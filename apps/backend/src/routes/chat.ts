@@ -17,6 +17,7 @@ chat.post("/", async (c) => {
     apiKey?: string;
   }>();
 
+  const isBYOK = Boolean(body.apiKey);
   const apiKey = body.apiKey || c.env?.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
@@ -29,9 +30,9 @@ chat.post("/", async (c) => {
 
   const rank = body.rank ?? "Junior Code Monkey";
 
-  // Context window: send up to 10 messages per product spec (5-10 range)
-  // to provide sufficient conversation context without over-reliance on deep history.
-  const recentMessages = body.messages.slice(-10);
+  // Context window: send only last 4 messages per functional spec
+  // to minimize token usage and enforce erratic, forgetful AI behavior.
+  const recentMessages = body.messages.slice(-4);
 
   const messages = [
     { role: "system", content: getSystemPrompt(rank) },
@@ -45,7 +46,7 @@ chat.post("/", async (c) => {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "nvidia/nemotron-3-8b-chat-steer",
+      model: isBYOK ? "anthropic/claude-3-opus" : "nvidia/nemotron-3-8b-chat-steer",
       messages,
     }),
   });
