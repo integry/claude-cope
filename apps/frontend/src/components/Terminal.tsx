@@ -175,8 +175,6 @@ function Terminal() {
         }
         return messages;
       });
-      // Instant ban trap window: 2 seconds after unlock
-      setTimeout(() => setInstantBanReady(false), 2000);
     }, 5000);
   };
 
