@@ -86,10 +86,15 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     }, 10000);
     return true;
   } else if (command === "/compact") {
-    ctx.setHistory((prev) => [
-      ...clearLoading(prev),
-      { role: "system", content: "[✓] Context compacted. Deleted 50 lines of unoptimized boilerplate." },
-    ]);
+    ctx.setHistory((prev) => {
+      const cleaned = clearLoading(prev);
+      const removeCount = Math.min(50, cleaned.length);
+      const remaining = cleaned.slice(0, cleaned.length - removeCount);
+      return [
+        ...remaining,
+        { role: "system", content: `[✓] Context compacted. Deleted ${removeCount} lines of unoptimized boilerplate.` },
+      ];
+    });
     return true;
   } else if (command === "/brag") {
     ctx.setBragPending(true);
