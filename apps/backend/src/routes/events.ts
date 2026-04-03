@@ -3,6 +3,8 @@ import { Hono } from "hono";
 type Env = {
   Bindings: {
     DB: D1Database;
+    SUPABASE_URL?: string;
+    SUPABASE_SERVICE_ROLE_KEY?: string;
   };
 };
 
@@ -39,6 +41,29 @@ events.post("/", async (c) => {
       "DELETE FROM recent_events WHERE id NOT IN (SELECT id FROM recent_events ORDER BY created_at DESC LIMIT 50)"
     )
     .run();
+
+  // Broadcast the event to all connected Supabase WebSocket clients in real time.
+  const supabaseUrl = c.env?.SUPABASE_URL;
+  const supabaseKey = c.env?.SUPABASE_SERVICE_ROLE_KEY;
+  if (supabaseUrl && supabaseKey) {
+    fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            topic: "realtime:global_incidents",
+            event: "new_incident",
+            payload: { message },
+          },
+        ],
+      }),
+    }).catch(() => {});
+  }
 
   return c.json({ success: true }, 201);
 });
