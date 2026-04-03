@@ -136,6 +136,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
         { role: "system", content: `[✓] Context compacted. Deleted ${removeCount} lines of unoptimized boilerplate.` },
       ];
     });
+    ctx.unlockAchievement("history_eraser");
     return true;
   } else if (command === "/brag") {
     ctx.setBragPending(true);
@@ -217,6 +218,10 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     const tdPenalty = Math.floor(Math.random() * 150) + 50;
     ctx.addActiveTD(tdPenalty);
     reply({ role: "system", content: `[🔍 GIT BLAME] Analyzing ${file}:${line}...\n\nCommit: a${Math.random().toString(16).slice(2, 8)}\nAuthor: You (obviously)\nDate: ${daysAgo} days ago\nMessage: "quick fix, will clean up later"\n\n[⚠️] Verdict: It was YOU all along. +${tdPenalty} TD penalty for past sins.` });
+    const blameCount = (ctx.state.commandUsage["/blame"] ?? 0) + 1;
+    if (blameCount >= 5) {
+      ctx.unlockAchievement("the_blame_game");
+    }
     return true;
   } else if (command === "/brrrrrr") {
     ctx.setHistory((prev) => [...clearLoading(prev), { role: "system", content: "[🔥 BRRRRRR] Initiating nested for-loop flood... Press Ctrl+C to stop before your CPU melts!" }]);
@@ -314,6 +319,11 @@ export function executeSlashCommand(
   setTimeout(() => {
     ctx.addActiveTD(Math.floor(Math.random() * 40) + 10);
     if (ctx.applyQuotaDrain()) return;
+
+    const exitCommands = ["exit", "quit", "/exit", "/quit"];
+    if (exitCommands.includes(command.toLowerCase())) {
+      ctx.unlockAchievement("the_final_escape");
+    }
 
     if (command === "/clear") {
       if (handleClearCommand(ctx)) return;
