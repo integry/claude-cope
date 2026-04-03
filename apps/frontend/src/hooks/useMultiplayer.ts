@@ -93,7 +93,7 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
     });
 
     return () => socket.close();
-  }, [setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff]);
+  }, [localUsername, setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff]);
 
   // Expose methods to trigger attacks and defend against them
   const sendPing = (target?: string) => socketRef.current?.send(JSON.stringify({ type: 'ping', ...(target ? { target } : {}) }));

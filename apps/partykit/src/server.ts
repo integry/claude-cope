@@ -72,7 +72,7 @@ export default class ClaudeCopeServer implements Party.Server {
           this.room.broadcast(JSON.stringify({ type: "outage_cleared" }));
         }
       }
-    } catch (e) {
+    } catch {
       console.error("Invalid message format");
     }
   }
