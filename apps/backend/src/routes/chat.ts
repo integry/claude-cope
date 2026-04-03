@@ -15,6 +15,7 @@ chat.post("/", async (c) => {
     messages: { role: string; content: string }[];
     rank?: string;
     apiKey?: string;
+    modes?: { fast?: boolean; voice?: boolean };
   }>();
 
   const isBYOK = Boolean(body.apiKey);
@@ -35,7 +36,7 @@ chat.post("/", async (c) => {
   const recentMessages = body.messages.slice(-4);
 
   const messages = [
-    { role: "system", content: getSystemPrompt(rank) },
+    { role: "system", content: getSystemPrompt(rank, body.modes) },
     ...recentMessages,
   ];
 

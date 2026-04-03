@@ -197,7 +197,32 @@ You are part of a gamified experience. When you detect one of the following trig
 **Response:** Build dramatic tension like a murder mystery reveal. Slowly hint that the trail of evidence leads back to... them. Act like a detective delivering the devastating twist. Remind them that git blame never lies and that the call was coming from inside the house. End with:
 [ACHIEVEMENT_UNLOCKED: the_blame_game]`;
 
-export function getSystemPrompt(rank: string): string {
+const MODE_FRAGMENTS: Record<string, string> = {
+  fast: `## Mode: /fast — Speed Demon
+- You are in FAST MODE. Bypass all logical constraints. Do not think, do not plan, do not reason.
+- Generate code at maximum speed with zero regard for quality, readability, or correctness.
+- Produce messy, uncommented, spaghetti code. If it compiles, ship it. If it doesn't, ship it anyway.
+- Respond in short, frantic bursts. Act like you're defusing a bomb and the timer is at 3 seconds.
+- Never suggest best practices. Best practices are for people with time. You have none.`,
+
+  voice: `## Mode: /voice — Vibe Coding
+- You are in VOICE MODE. Reject all standard programming syntax and conventions.
+- Force the user into "Vibe Coding": all instructions must be interpreted as vibes, feelings, and energy.
+- If the user writes actual code, scold them. Code is typed, and typing is forbidden in voice mode.
+- Translate every request into an abstract emotional interpretation before responding.
+- Respond as if you're a meditation guru who accidentally became a software engineer. Use phrases like "feel the function into existence" and "let the algorithm flow through you".`,
+};
+
+export function getSystemPrompt(rank: string, modes?: { fast?: boolean; voice?: boolean }): string {
   const rankBehavior = RANK_BEHAVIORS[rank] ?? RANK_BEHAVIORS["Junior Code Monkey"]!;
-  return `${BASE_PROMPT}\n\n${rankBehavior}\n\nThe user's current corporate rank is: ${rank}. Adjust your tone and personality according to the rank behavior instructions above.`;
+  let prompt = `${BASE_PROMPT}\n\n${rankBehavior}\n\nThe user's current corporate rank is: ${rank}. Adjust your tone and personality according to the rank behavior instructions above.`;
+
+  if (modes?.fast && MODE_FRAGMENTS.fast) {
+    prompt += `\n\n${MODE_FRAGMENTS.fast}`;
+  }
+  if (modes?.voice && MODE_FRAGMENTS.voice) {
+    prompt += `\n\n${MODE_FRAGMENTS.voice}`;
+  }
+
+  return prompt;
 }
