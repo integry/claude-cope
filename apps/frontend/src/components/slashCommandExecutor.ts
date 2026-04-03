@@ -325,6 +325,8 @@ export function executeSlashCommand(
     } else if (handleNewCommand(command, ctx, reply)) {
       // /brrrrrr handles its own setIsProcessing
       if (command === "/brrrrrr") return;
+    } else if (command.startsWith("/")) {
+      reply({ role: "error", content: `[❌ Error] Command not found: ${command}` });
     } else {
       reply({ role: "system", content: `[✓] Executed ${command}` });
     }
