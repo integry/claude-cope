@@ -9,6 +9,7 @@ import { BUDDY_ICONS } from "./buddyConstants";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, parseSabotageParams, rollBuddy } from "./slashCommandExecutor";
+import { handleKeyCommand } from "./keyCommandHandler";
 import Ticker from "./Ticker";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 
@@ -259,26 +260,8 @@ function Terminal() {
       return;
     }
 
-    // Handle /key command with argument
-    if (inputValue.trim().toLowerCase().startsWith("/key ")) {
-      const keyArg = inputValue.trim().slice(5).trim();
+    if (handleKeyCommand(inputValue, setState, setHistory)) {
       setInputValue("");
-      if (keyArg.toLowerCase() === "clear") {
-        setState((prev) => ({ ...prev, apiKey: undefined }));
-        setHistory((prev) => [
-          ...prev,
-          { role: "user", content: "/key clear" },
-          { role: "system", content: "[🔑] API key removed. Using default server key." },
-        ]);
-      } else if (keyArg.length > 0) {
-        setState((prev) => ({ ...prev, apiKey: keyArg }));
-        const masked = keyArg.slice(0, 6) + "..." + keyArg.slice(-4);
-        setHistory((prev) => [
-          ...prev,
-          { role: "user", content: `/key ${masked}` },
-          { role: "system", content: `[🔑] API key set (${masked}). Your key will be used for all future requests.` },
-        ]);
-      }
       return;
     }
 
