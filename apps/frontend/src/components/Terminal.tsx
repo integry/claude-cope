@@ -218,7 +218,7 @@ function Terminal() {
       userMessage,
     ].map((m) => ({ role: m.role, content: m.content }));
 
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey });
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, modes: state.modes });
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
