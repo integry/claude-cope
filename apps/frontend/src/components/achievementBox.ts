@@ -1,10 +1,20 @@
+import { ALL_ACHIEVEMENTS } from "../game/achievements";
+
 /**
  * Builds an ANSI-styled bordered box for achievement unlock notifications.
  */
 export function buildAchievementBox(achievementId: string): string {
+  const achievement = ALL_ACHIEVEMENTS.find((a) => a.id === achievementId);
   const label = "🏆 ACHIEVEMENT UNLOCKED!";
-  const detail = achievementId;
-  const innerWidth = Math.max(label.length, detail.length) + 4;
+  const name = achievement
+    ? `★ ${achievement.name} ★`
+    : achievementId;
+  const description = achievement?.description ?? "";
+  const lines = [label, name];
+  if (description) {
+    lines.push(description);
+  }
+  const innerWidth = Math.max(...lines.map((l) => l.length)) + 4;
   const pad = (text: string) => {
     const padding = innerWidth - text.length;
     const left = Math.floor(padding / 2);
@@ -12,10 +22,14 @@ export function buildAchievementBox(achievementId: string): string {
     return " ".repeat(left) + text + " ".repeat(right);
   };
   const border = "═".repeat(innerWidth);
-  return [
+  const boxLines = [
     `╔${border}╗`,
     `║${pad(label)}║`,
-    `║${pad(detail)}║`,
-    `╚${border}╝`,
-  ].join("\n");
+    `║${pad(name)}║`,
+  ];
+  if (description) {
+    boxLines.push(`║${pad(description)}║`);
+  }
+  boxLines.push(`╚${border}╝`);
+  return boxLines.join("\n");
 }
