@@ -1,4 +1,4 @@
-import { useState, useEffect, Dispatch, SetStateAction } from "react";
+import { useState, useEffect, useRef, Dispatch, SetStateAction } from "react";
 import { Message } from "./useGameState";
 import { GameState } from "./useGameState";
 import { parseSabotageParams } from "../components/slashCommandExecutor";
@@ -30,6 +30,12 @@ export function useTerminalEffects({ history, setHistory, setState, offlineTDEar
   });
   const [regressionGlitch, setRegressionGlitch] = useState<string | null>(null);
   const [activeRegression, setActiveRegression] = useState<string | null>(null);
+
+  // Track latest history for the regression glitch inactivity check
+  const historyRef = useRef(history);
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
 
   // Boot sequence for organic visitors
   useEffect(() => {
@@ -73,6 +79,13 @@ export function useTerminalEffects({ history, setHistory, setState, offlineTDEar
     const scheduleRegression = () => {
       const delayMs = (Math.random() * 5 + 10) * 60 * 1000;
       return setTimeout(() => {
+        // Skip regression if user is inactive (last message is a rollback from a previous regression)
+        const lastMessage = historyRef.current[historyRef.current.length - 1];
+        if (lastMessage && lastMessage.content.includes("[FATAL ERROR] Rolling back...")) {
+          timerId = scheduleRegression();
+          return;
+        }
+
         const regression = REGRESSION_TYPES[Math.floor(Math.random() * REGRESSION_TYPES.length)]!;
         setHistory((prev) => [
           ...prev,
