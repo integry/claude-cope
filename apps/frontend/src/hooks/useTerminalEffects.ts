@@ -3,6 +3,24 @@ import { Message } from "./useGameState";
 import { GameState } from "./useGameState";
 import { parseSabotageParams } from "../components/slashCommandExecutor";
 
+const DEPLOY_MESSAGES = [
+  (v: number, name: string) => `[⬆️ UPDATE] Claude Cope v0.1.4-rc.${v} deploying... Applying patch: ${name}`,
+  (v: number, name: string) => `[🔥 HOTFIX] Emergency patch v0.1.4-rc.${v} pushed to prod — ${name}`,
+  (v: number, name: string) => `[🚀 DEPLOY] Claude Cope v0.1.4-rc.${v} rolling out... Installing: ${name}`,
+  (v: number, name: string) => `[⚙️ PATCH] Applying untested fix v0.1.4-rc.${v}... Module: ${name}`,
+  (v: number, name: string) => `[📦 RELEASE] v0.1.4-rc.${v} shipped without review — ${name} enabled`,
+  (v: number, name: string) => `[🔄 SYNC] Force-pushing v0.1.4-rc.${v} to production... Overwriting: ${name}`,
+];
+
+const ROLLBACK_MESSAGES = [
+  (name: string) => `[FATAL ERROR] Rolling back... Reverting ${name}. We apologize for the improved experience.`,
+  (name: string) => `[💥 CRASH] ${name} caused a segfault. Rolling back before anyone notices.`,
+  (name: string) => `[🚨 PANIC] Kernel panic — ${name} not recoverable. Initiating rollback.`,
+  (name: string) => `[❌ REVERT] ${name} broke everything. Pretending it never happened.`,
+  (name: string) => `[⚠️ ROLLBACK] ${name} deemed too stable. Reverting to preserve chaos.`,
+  (name: string) => `[🔥 INCIDENT] ${name} triggered 47 alerts. Rolling back and blaming intern.`,
+];
+
 const REGRESSION_TYPES = [
   { id: "backwards_typing", name: "Backwards Typing", css: "" },
   { id: "broken_scrollback", name: "Broken Scrollback", css: "" },
@@ -81,15 +99,18 @@ export function useTerminalEffects({ history, setHistory, setState, offlineTDEar
       return setTimeout(() => {
         // Skip regression if user is inactive (last message is a rollback from a previous regression)
         const lastMessage = historyRef.current[historyRef.current.length - 1];
-        if (lastMessage && lastMessage.content.includes("[FATAL ERROR] Rolling back...")) {
+        if (lastMessage && lastMessage.role === "error" && lastMessage.content.includes("Rolling back")) {
           timerId = scheduleRegression();
           return;
         }
 
         const regression = REGRESSION_TYPES[Math.floor(Math.random() * REGRESSION_TYPES.length)]!;
+        const v = Math.floor(Math.random() * 99) + 1;
+        const deployMsg = DEPLOY_MESSAGES[Math.floor(Math.random() * DEPLOY_MESSAGES.length)]!;
+        const rollbackMsg = ROLLBACK_MESSAGES[Math.floor(Math.random() * ROLLBACK_MESSAGES.length)]!;
         setHistory((prev) => [
           ...prev,
-          { role: "warning", content: `[⬆️ UPDATE] Claude Cope v0.1.4-rc.${Math.floor(Math.random() * 99) + 1} deploying... Applying patch: ${regression.name}` },
+          { role: "warning", content: deployMsg(v, regression.name) },
         ]);
         setRegressionGlitch(regression.css || null);
         setActiveRegression(regression.id);
@@ -98,7 +119,7 @@ export function useTerminalEffects({ history, setHistory, setState, offlineTDEar
           setActiveRegression(null);
           setHistory((prev) => [
             ...prev,
-            { role: "error", content: `[FATAL ERROR] Rolling back... Reverting ${regression.name}. We apologize for the improved experience.` },
+            { role: "error", content: rollbackMsg(regression.name) },
           ]);
         }, 10000);
         timerId = scheduleRegression();
