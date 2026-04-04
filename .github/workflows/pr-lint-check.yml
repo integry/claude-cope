@@ -101,6 +101,19 @@ jobs:
             if [ $FE_FAILED -eq 0 ]; then
               echo "✅ Frontend Build passed" >> build_log.txt
             fi
+
+            # Test
+            if [ $FE_FAILED -eq 0 ]; then
+              TEST_OUTPUT=$(npm run test -w @claude-cope/frontend 2>&1) || {
+                echo "❌ Frontend Tests FAILED" >> build_log.txt
+                echo "$TEST_OUTPUT" | tail -100 >> build_log.txt
+                FE_FAILED=1
+                EXIT_CODE=1
+              }
+              if [ $FE_FAILED -eq 0 ]; then
+                echo "✅ Frontend Tests passed" >> build_log.txt
+              fi
+            fi
           fi
 
           # --- BACKEND (Hono) ---
