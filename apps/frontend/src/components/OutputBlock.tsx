@@ -37,7 +37,7 @@ function classifyTag(tagContent: string): TagCategory {
 function preprocessTagPrefix(content: string): string {
   const match = content.match(/^\[([^\]]+)\]/);
   if (!match) return content;
-  const tagText = match[1];
+  const tagText = match[1]!;
   const category = classifyTag(tagText);
   const marker = `\`${TAG_MARKER_PREFIX}${category}__:${tagText}\``;
   return marker + content.slice(match[0].length);
