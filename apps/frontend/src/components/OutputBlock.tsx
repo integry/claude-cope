@@ -40,10 +40,50 @@ function TokenCounter() {
   );
 }
 
+const markdownComponents = {
+  p({ children }: { children?: React.ReactNode }) {
+    return <p className="mb-3 leading-relaxed">{children}</p>;
+  },
+  strong({ children }: { children?: React.ReactNode }) {
+    return <strong className="text-white font-bold">{children}</strong>;
+  },
+  ul({ children }: { children?: React.ReactNode }) {
+    return <ul className="list-disc pl-6 mb-3">{children}</ul>;
+  },
+  ol({ children }: { children?: React.ReactNode }) {
+    return <ol className="list-decimal pl-6 mb-3">{children}</ol>;
+  },
+  li({ children }: { children?: React.ReactNode }) {
+    return <li className="mb-1 leading-relaxed">{children}</li>;
+  },
+  code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
+    const match = /language-(\w+)/.exec(className || "");
+    const codeString = String(children).replace(/\n$/, "");
+    if (match) {
+      return (
+        <SyntaxHighlighter
+          style={vscDarkPlus}
+          language={match[1]}
+          PreTag="div"
+        >
+          {codeString}
+        </SyntaxHighlighter>
+      );
+    }
+    return (
+      <code className={`text-cyan-300 bg-cyan-950/30 px-1 rounded ${className || ""}`} {...props}>
+        {children}
+      </code>
+    );
+  },
+};
+
 function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Message; promptString?: string }) {
   const colorClass = roleColors[message.role];
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
   const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
+  const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
+  const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
 
   return (
     <div className={`mb-5 ${colorClass} ${isAchievement ? "achievement-flash whitespace-pre font-bold" : isBuddyInterjection ? "whitespace-pre font-mono" : ""}`}>
@@ -51,46 +91,8 @@ function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Me
         <span className="text-green-400 font-bold">{promptString}</span>
       )}
       {message.role === "loading" && <Spinner />}
-      {message.role === "system" ? (
-        <ReactMarkdown
-          components={{
-            p({ children }) {
-              return <p className="mb-3">{children}</p>;
-            },
-            strong({ children }) {
-              return <strong className="text-white font-bold">{children}</strong>;
-            },
-            ul({ children }) {
-              return <ul className="list-disc pl-6 mb-3">{children}</ul>;
-            },
-            ol({ children }) {
-              return <ol className="list-decimal pl-6 mb-3">{children}</ol>;
-            },
-            li({ children }) {
-              return <li className="mb-1">{children}</li>;
-            },
-            code({ className, children, ...props }) {
-              const match = /language-(\w+)/.exec(className || "");
-              const codeString = String(children).replace(/\n$/, "");
-              if (match) {
-                return (
-                  <SyntaxHighlighter
-                    style={vscDarkPlus}
-                    language={match[1]}
-                    PreTag="div"
-                  >
-                    {codeString}
-                  </SyntaxHighlighter>
-                );
-              }
-              return (
-                <code className={`text-cyan-300 bg-cyan-950/30 px-1 rounded ${className || ""}`} {...props}>
-                  {children}
-                </code>
-              );
-            },
-          }}
-        >
+      {useMarkdown ? (
+        <ReactMarkdown components={markdownComponents}>
           {message.content}
         </ReactMarkdown>
       ) : (
