@@ -47,10 +47,18 @@ function Terminal() {
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastEscapeRef = useRef<number>(0);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [history]);
+
+  // Requirement 1: Auto-restore focus when terminal finishes processing/booting/quota lockout
+  useEffect(() => {
+    if (!isProcessing && !isBooting && !quotaLocked) {
+      inputRef.current?.focus();
+    }
+  }, [isProcessing, isBooting, quotaLocked]);
 
   const triggerQuotaLockout = () => {
     setQuotaLocked(true);
@@ -114,6 +122,7 @@ function Terminal() {
       value = newChar + inputValue;
     }
     setInputValue(value);
+    setHistoryIndex(-1);
     const newQuery = value.startsWith("/") ? value : "";
     setSlashQuery(newQuery);
     setSlashIndex(0);
@@ -234,6 +243,35 @@ function Terminal() {
     const filtered = getFilteredSlashCommands();
     const slashMenuOpen = slashQuery !== "" && filtered.length > 0;
 
+    if (e.key === "Escape") {
+      const now = Date.now();
+      if (now - lastEscapeRef.current < 500) {
+        // Double-escape: clear input and close slash menu
+        if (inputValue.length > 0) {
+          setHistory((prev) => [...prev, { role: "system", content: "[ESC ESC] Input cleared. Even your half-typed thoughts disappoint me." }]);
+        }
+        setInputValue("");
+        setSlashQuery("");
+        setSlashIndex(0);
+        lastEscapeRef.current = 0;
+      } else {
+        lastEscapeRef.current = now;
+      }
+      return;
+    }
+
+    if (e.key === "Tab") {
+      if (slashMenuOpen) {
+        e.preventDefault();
+        const selected = filtered[slashIndex];
+        if (selected) {
+          setInputValue(selected);
+          setSlashQuery(selected);
+        }
+      }
+      return;
+    }
+
     if (e.key === "Enter") {
       if (slashMenuOpen) {
         e.preventDefault();
@@ -257,7 +295,12 @@ function Terminal() {
       const newIndex = historyIndex + 1;
       if (newIndex < commandHistory.length) {
         setHistoryIndex(newIndex);
-        setInputValue(commandHistory[commandHistory.length - 1 - newIndex]!);
+        const val = commandHistory[commandHistory.length - 1 - newIndex]!;
+        setInputValue(val);
+        setTimeout(() => {
+          const el = inputRef.current;
+          if (el) { el.selectionStart = el.selectionEnd = val.length; }
+        }, 0);
       }
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -268,7 +311,12 @@ function Terminal() {
       const newIndex = historyIndex - 1;
       if (newIndex < -1) return;
       setHistoryIndex(newIndex);
-      setInputValue(newIndex === -1 ? "" : commandHistory[commandHistory.length - 1 - newIndex]!);
+      const val = newIndex === -1 ? "" : commandHistory[commandHistory.length - 1 - newIndex]!;
+      setInputValue(val);
+      setTimeout(() => {
+        const el = inputRef.current;
+        if (el) { el.selectionStart = el.selectionEnd = val.length; }
+      }, 0);
     }
   };
 
