@@ -17,13 +17,12 @@ const roleColors: Record<Message["role"], string> = {
 type TagCategory = "ERROR" | "WARN" | "SUCCESS" | "INFO";
 
 const TAG_STYLES: Record<TagCategory, string> = {
-  ERROR: "bg-red-500/15 text-red-400",
-  WARN: "bg-yellow-500/15 text-yellow-400",
-  SUCCESS: "bg-green-500/15 text-green-400",
-  INFO: "bg-blue-500/15 text-blue-400",
+  ERROR: "text-red-400",
+  WARN: "text-yellow-400",
+  SUCCESS: "text-green-400",
+  INFO: "text-blue-400",
 };
 
-const TAG_MARKER_PREFIX = "__TAG_";
 const TAG_MARKER_REGEX = /^__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+)$/;
 
 function classifyTag(tagContent: string): TagCategory {
@@ -34,18 +33,55 @@ function classifyTag(tagContent: string): TagCategory {
   return "INFO";
 }
 
-function preprocessTagPrefix(content: string): string {
-  return content
-    .split("\n")
-    .map((line) => {
-      const match = line.match(/^\[([^\]]+)\]/);
-      if (!match) return line;
-      const tagText = match[1]!;
-      const category = classifyTag(tagText);
-      const marker = `\`${TAG_MARKER_PREFIX}${category}__:${tagText}\``;
-      return marker + line.slice(match[0].length);
-    })
-    .join("\n");
+/** Strip any leaked __TAG_ markers the LLM echoes back from seeing chat history */
+function cleanLeakedTagMarkers(content: string): string {
+  return content.replace(/`__TAG_(?:ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g, "[$1]");
+}
+
+/** Render a line of text, replacing any `__TAG_...__:text` or `[TAG]` markers with styled spans. */
+function renderLineWithTags(line: string): React.ReactNode {
+  // Match backtick-wrapped tag markers: `__TAG_ERROR__:some text`
+  const TAG_INLINE = /`__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g;
+  // Match raw [BRACKET] tags at line start
+  const BRACKET_TAG = /^\[([^\]]+)\]/;
+
+  // First try backtick-wrapped markers
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let inlineMatch;
+  while ((inlineMatch = TAG_INLINE.exec(line)) !== null) {
+    if (inlineMatch.index > lastIndex) {
+      parts.push(line.slice(lastIndex, inlineMatch.index));
+    }
+    const category = inlineMatch[1] as TagCategory;
+    const tagText = inlineMatch[2];
+    parts.push(
+      <span key={inlineMatch.index} className={`${TAG_STYLES[category]} font-mono text-xs font-bold mr-2`}>
+        {tagText}
+      </span>
+    );
+    lastIndex = TAG_INLINE.lastIndex;
+  }
+  if (parts.length > 0) {
+    if (lastIndex < line.length) parts.push(line.slice(lastIndex));
+    return <>{parts}</>;
+  }
+
+  // Fallback: bracket tags at start of line
+  const bracketMatch = BRACKET_TAG.exec(line);
+  if (bracketMatch) {
+    const category = classifyTag(bracketMatch[1]!);
+    return (
+      <>
+        <span className={`${TAG_STYLES[category]} font-mono text-xs font-bold mr-2`}>
+          {bracketMatch[1]}
+        </span>
+        {line.slice(bracketMatch[0].length)}
+      </>
+    );
+  }
+
+  return line;
 }
 
 function Spinner() {
@@ -76,7 +112,12 @@ function TokenCounter() {
 
 const markdownComponents = {
   p({ children }: { children?: React.ReactNode }) {
-    return <p className="mb-3 leading-relaxed">{children}</p>;
+    // Process [BRACKET TAG] markers in text children
+    const processed = React.Children.map(children, (child) => {
+      if (typeof child === "string") return renderLineWithTags(child);
+      return child;
+    });
+    return <p className="mb-3 leading-relaxed">{processed}</p>;
   },
   strong({ children }: { children?: React.ReactNode }) {
     return <strong className="text-white font-bold">{children}</strong>;
@@ -115,6 +156,22 @@ const markdownComponents = {
     const match = /language-(\w+)/.exec(className || "");
     const codeString = String(children).replace(/\n$/, "");
     if (match) {
+      // Terminal-ish languages render as plain preformatted text
+      // to avoid clashing with the terminal's own dark/monospace aesthetic
+      const terminalLangs = ["terminal", "bash", "sh", "shell", "console", "text", "log", "plaintext"];
+      if (terminalLangs.includes(match[1]!)) {
+        const lines = codeString.split("\n");
+        return (
+          <code className="block whitespace-pre text-gray-100">
+            {lines.map((line, i) => (
+              <React.Fragment key={i}>
+                {renderLineWithTags(line)}
+                {i < lines.length - 1 && "\n"}
+              </React.Fragment>
+            ))}
+          </code>
+        );
+      }
       return (
         <SyntaxHighlighter
           style={vscDarkPlus}
@@ -143,17 +200,17 @@ const markdownComponents = {
   },
 };
 
-function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Message; promptString?: string }) {
+function OutputBlock({ message, isNew = false, promptString = "cope@local:~$ " }: { message: Message; isNew?: boolean; promptString?: string }) {
   const colorClass = roleColors[message.role];
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
   const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
   const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
 
-  const processedContent = useMarkdown ? preprocessTagPrefix(message.content) : message.content;
+  const processedContent = useMarkdown ? cleanLeakedTagMarkers(message.content) : message.content;
 
   return (
-    <div className={`mb-5 ${colorClass} ${isAchievement ? "achievement-flash whitespace-pre font-bold" : isBuddyInterjection ? "whitespace-pre font-mono" : "leading-relaxed"}`}>
+    <div className={`mb-5 ${colorClass} ${isAchievement ? `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold` : isBuddyInterjection ? "whitespace-pre font-mono" : "leading-relaxed"}`}>
       {message.role === "user" && (
         <span className="text-green-400 font-bold">{promptString}</span>
       )}

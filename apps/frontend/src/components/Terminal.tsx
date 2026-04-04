@@ -48,6 +48,7 @@ function Terminal() {
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const initialHistoryLen = useRef(history.length);
   const lastEscapeRef = useRef<number>(0);
 
   useEffect(() => {
@@ -192,10 +193,16 @@ function Terminal() {
       return;
     }
 
+    const command = inputValue;
+    setCommandHistory((prev) => [...prev, command]);
+    setHistoryIndex(-1);
+    setInputValue("");
+
     addActiveTD(Math.floor(Math.random() * 40) + 10);
 
+    // Show the user's message in history before any lockout/ban kicks in
     if (applyQuotaDrain()) {
-      setInputValue("");
+      setHistory((prev) => [...prev, { role: "user", content: command }]);
       return;
     }
 
@@ -208,11 +215,6 @@ function Terminal() {
         buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount },
       }));
     }
-
-    const command = inputValue;
-    setCommandHistory((prev) => [...prev, command]);
-    setHistoryIndex(-1);
-    setInputValue("");
 
     const userMessage: Message = { role: "user", content: command };
 
@@ -368,7 +370,7 @@ function Terminal() {
       <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
-          <OutputBlock key={index} message={message} promptString={activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "} />
+          <OutputBlock key={index} message={message} isNew={index >= initialHistoryLen.current} promptString={activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "} />
         ))}
         <div ref={bottomRef} />
       </div>
