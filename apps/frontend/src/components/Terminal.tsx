@@ -274,7 +274,7 @@ function Terminal() {
 
   return (
     <div
-      className={`h-screen w-screen font-mono text-sm text-gray-300 p-4 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
+      className={`h-screen w-screen font-mono text-sm text-gray-100 leading-relaxed p-4 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
       style={regressionGlitch ? Object.fromEntries(regressionGlitch.split(";").filter(Boolean).map((s) => { const [k, ...v] = s.split(":"); return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()]; })) : undefined}
       onClick={() => inputRef.current?.focus()}
     >
