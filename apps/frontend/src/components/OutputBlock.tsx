@@ -28,19 +28,24 @@ const TAG_MARKER_REGEX = /^__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+)$/;
 
 function classifyTag(tagContent: string): TagCategory {
   const lower = tagContent.toLowerCase();
-  if (/error|❌|💀|🚨|fail|fatal/.test(lower)) return "ERROR";
-  if (/warn|⚠️|caution/.test(lower)) return "WARN";
-  if (/success|✓|✅|complete|done/.test(lower)) return "SUCCESS";
+  if (/error|❌|💀|🚨|fail|fatal|critical|sigsegv/.test(lower)) return "ERROR";
+  if (/warn|⚠️|caution|notice|deprecated/.test(lower)) return "WARN";
+  if (/success|✓|✅|complete|done|installed/.test(lower)) return "SUCCESS";
   return "INFO";
 }
 
 function preprocessTagPrefix(content: string): string {
-  const match = content.match(/^\[([^\]]+)\]/);
-  if (!match) return content;
-  const tagText = match[1]!;
-  const category = classifyTag(tagText);
-  const marker = `\`${TAG_MARKER_PREFIX}${category}__:${tagText}\``;
-  return marker + content.slice(match[0].length);
+  return content
+    .split("\n")
+    .map((line) => {
+      const match = line.match(/^\[([^\]]+)\]/);
+      if (!match) return line;
+      const tagText = match[1]!;
+      const category = classifyTag(tagText);
+      const marker = `\`${TAG_MARKER_PREFIX}${category}__:${tagText}\``;
+      return marker + line.slice(match[0].length);
+    })
+    .join("\n");
 }
 
 function Spinner() {
@@ -76,14 +81,35 @@ const markdownComponents = {
   strong({ children }: { children?: React.ReactNode }) {
     return <strong className="text-white font-bold">{children}</strong>;
   },
+  em({ children }: { children?: React.ReactNode }) {
+    return <em className="text-gray-300 italic">{children}</em>;
+  },
+  h1({ children }: { children?: React.ReactNode }) {
+    return <h1 className="text-lg font-bold text-white mb-3 mt-4 border-b border-gray-700 pb-1">{children}</h1>;
+  },
+  h2({ children }: { children?: React.ReactNode }) {
+    return <h2 className="text-base font-bold text-white mb-2 mt-3">{children}</h2>;
+  },
+  h3({ children }: { children?: React.ReactNode }) {
+    return <h3 className="text-sm font-bold text-gray-200 mb-2 mt-2">{children}</h3>;
+  },
+  blockquote({ children }: { children?: React.ReactNode }) {
+    return <blockquote className="border-l-2 border-gray-600 pl-3 ml-1 my-2 text-gray-400 italic">{children}</blockquote>;
+  },
+  hr() {
+    return <hr className="border-gray-700 my-4" />;
+  },
   ul({ children }: { children?: React.ReactNode }) {
-    return <ul className="list-disc pl-6 mb-3">{children}</ul>;
+    return <ul className="list-disc pl-6 mb-3 space-y-1">{children}</ul>;
   },
   ol({ children }: { children?: React.ReactNode }) {
-    return <ol className="list-decimal pl-6 mb-3">{children}</ol>;
+    return <ol className="list-decimal pl-6 mb-3 space-y-1">{children}</ol>;
   },
   li({ children }: { children?: React.ReactNode }) {
-    return <li className="mb-1 leading-relaxed">{children}</li>;
+    return <li className="leading-relaxed">{children}</li>;
+  },
+  pre({ children }: { children?: React.ReactNode }) {
+    return <pre className="my-3 rounded overflow-x-auto">{children}</pre>;
   },
   code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
     const match = /language-(\w+)/.exec(className || "");
@@ -124,16 +150,20 @@ function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Me
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
   const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
 
+  const processedContent = useMarkdown ? preprocessTagPrefix(message.content) : message.content;
+
   return (
-    <div className={`mb-5 ${colorClass} ${isAchievement ? "achievement-flash whitespace-pre font-bold" : isBuddyInterjection ? "whitespace-pre font-mono" : ""}`}>
+    <div className={`mb-5 ${colorClass} ${isAchievement ? "achievement-flash whitespace-pre font-bold" : isBuddyInterjection ? "whitespace-pre font-mono" : "leading-relaxed"}`}>
       {message.role === "user" && (
         <span className="text-green-400 font-bold">{promptString}</span>
       )}
       {message.role === "loading" && <Spinner />}
       {useMarkdown ? (
-        <ReactMarkdown components={markdownComponents}>
-          {preprocessTagPrefix(message.content)}
-        </ReactMarkdown>
+        <div className="space-y-1">
+          <ReactMarkdown components={markdownComponents}>
+            {processedContent}
+          </ReactMarkdown>
+        </div>
       ) : (
         message.content
       )}
