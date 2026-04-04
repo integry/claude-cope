@@ -97,9 +97,26 @@ export function useTerminalEffects({ history, setHistory, setState, offlineTDEar
     const scheduleRegression = () => {
       const delayMs = (Math.random() * 5 + 10) * 60 * 1000;
       return setTimeout(() => {
-        // Skip regression if user is inactive (last message is a rollback from a previous regression)
-        const lastMessage = historyRef.current[historyRef.current.length - 1];
-        if (lastMessage && lastMessage.role === "error" && lastMessage.content.includes("Rolling back")) {
+        // Skip regression if user hasn't interacted since the last rollback event.
+        // Iterate backward to find the most recent user message or rollback —
+        // if the last meaningful activity was a regression, suppress the next one.
+        let hasUserActivitySinceLastRollback = true;
+        for (let i = historyRef.current.length - 1; i >= 0; i--) {
+          const msg = historyRef.current[i]!;
+          if (msg.role === "user") break;
+          if (msg.role === "error" && (
+            msg.content.includes("Rolling back") ||
+            msg.content.includes("ROLLBACK") ||
+            msg.content.includes("REVERT") ||
+            msg.content.includes("CRASH") ||
+            msg.content.includes("PANIC") ||
+            msg.content.includes("INCIDENT")
+          )) {
+            hasUserActivitySinceLastRollback = false;
+            break;
+          }
+        }
+        if (!hasUserActivitySinceLastRollback) {
           timerId = scheduleRegression();
           return;
         }
