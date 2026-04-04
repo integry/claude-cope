@@ -1,8 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { computeBuddyInterjection, submitChatMessage } from "../chatApi";
 import type { BuddyState } from "../../hooks/useGameState";
 
 describe("computeBuddyInterjection", () => {
+  beforeEach(() => {
+    vi.spyOn(Math, "random").mockReturnValue(0.1);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("returns null when buddy type is null", () => {
     const buddy: BuddyState = {
       type: null,
@@ -13,10 +21,12 @@ describe("computeBuddyInterjection", () => {
   });
 
   it("returns null when prompts since last interjection < 4 (needs 5 to trigger)", () => {
+    // Mock Math.random to return >= 0.33 so the early-exit check triggers
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
     const buddy: BuddyState = {
       type: "Agile Snail",
       isShiny: false,
-      promptsSinceLastInterjection: 3, // 3 + 1 = 4, still < 5
+      promptsSinceLastInterjection: 3, // 3 + 1 = 4, still < 7 and random >= 0.33 → null
     };
     expect(computeBuddyInterjection(buddy)).toBeNull();
   });
@@ -53,21 +63,20 @@ describe("computeBuddyInterjection", () => {
       isShiny: false,
       promptsSinceLastInterjection: 10,
     };
-    // Run multiple times to check that shouldDeleteHistory can be true or false
-    const results = Array.from({ length: 50 }, () => computeBuddyInterjection(buddy));
-    const allNonNull = results.filter((r) => r !== null);
-    expect(allNonNull.length).toBe(50);
 
-    // With 50 trials at 50% probability, extremely unlikely to get all same value
-    const hasTrue = allNonNull.some((r) => r.shouldDeleteHistory);
-    const hasFalse = allNonNull.some((r) => !r.shouldDeleteHistory);
-    // At least one should be true and one false (statistically near-certain)
-    expect(hasTrue || hasFalse).toBe(true);
+    // Mock Math.random to return 0.3 (< 0.5) so shouldDeleteHistory is true
+    vi.spyOn(Math, "random").mockReturnValue(0.3);
+    const resultTrue = computeBuddyInterjection(buddy);
+    expect(resultTrue).not.toBeNull();
+    expect(resultTrue!.shouldDeleteHistory).toBe(true);
+    expect(resultTrue!.message.content).toContain("o.o");
 
-    // All should have dragon icon
-    for (const r of allNonNull) {
-      expect(r.message.content).toContain("o.o");
-    }
+    // Mock Math.random to return 0.7 (>= 0.5) so shouldDeleteHistory is false
+    vi.spyOn(Math, "random").mockReturnValue(0.7);
+    const resultFalse = computeBuddyInterjection(buddy);
+    expect(resultFalse).not.toBeNull();
+    expect(resultFalse!.shouldDeleteHistory).toBe(false);
+    expect(resultFalse!.message.content).toContain("o.o");
   });
 
   it("non-Dragon buddies never set shouldDeleteHistory", () => {
@@ -97,6 +106,11 @@ describe("computeBuddyInterjection", () => {
 describe("submitChatMessage - achievement parsing", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("extracts single achievement from response", async () => {
@@ -130,10 +144,10 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
     });
 
-    // Wait for the async fetch chain to resolve
-    await vi.waitFor(() => {
-      expect(unlockAchievement).toHaveBeenCalledWith("first_prompt");
-    });
+    // Advance past the setTimeout delay
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(unlockAchievement).toHaveBeenCalledWith("first_prompt");
 
     expect(setIsProcessing).toHaveBeenCalledWith(false);
   });
@@ -169,9 +183,9 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
     });
 
-    await vi.waitFor(() => {
-      expect(unlockAchievement).toHaveBeenCalledTimes(2);
-    });
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(unlockAchievement).toHaveBeenCalledTimes(2);
     expect(unlockAchievement).toHaveBeenCalledWith("speed_runner");
     expect(unlockAchievement).toHaveBeenCalledWith("big_spender");
   });
@@ -206,9 +220,7 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
     });
 
-    await vi.waitFor(() => {
-      expect(setHistory).toHaveBeenCalled();
-    });
+    await vi.advanceTimersByTimeAsync(3000);
 
     // Call the updater function passed to setHistory
     const updater = setHistory.mock.calls[0]![0] as (prev: unknown[]) => unknown[];
@@ -239,9 +251,7 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
     });
 
-    await vi.waitFor(() => {
-      expect(setHistory).toHaveBeenCalled();
-    });
+    await vi.advanceTimersByTimeAsync(3000);
 
     const updater = setHistory.mock.calls[0]![0] as (prev: unknown[]) => unknown[];
     const result = updater([]) as Array<{ role: string; content: string }>;
@@ -265,9 +275,7 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
     });
 
-    await vi.waitFor(() => {
-      expect(setHistory).toHaveBeenCalled();
-    });
+    await vi.advanceTimersByTimeAsync(3000);
 
     const updater = setHistory.mock.calls[0]![0] as (prev: unknown[]) => unknown[];
     const result = updater([]) as Array<{ role: string; content: string }>;
@@ -300,10 +308,9 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
     });
 
-    await vi.waitFor(() => {
-      expect(setIsProcessing).toHaveBeenCalledWith(false);
-    });
+    await vi.advanceTimersByTimeAsync(3000);
 
+    expect(setIsProcessing).toHaveBeenCalledWith(false);
     expect(unlockAchievement).not.toHaveBeenCalled();
   });
 
@@ -327,10 +334,9 @@ describe("submitChatMessage - achievement parsing", () => {
       apiKey: "sk-test-key",
     });
 
-    await vi.waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
+    await vi.advanceTimersByTimeAsync(3000);
 
+    expect(fetchSpy).toHaveBeenCalled();
     const callArgs = fetchSpy.mock.calls[0]!;
     const body = JSON.parse((callArgs[1] as RequestInit).body as string);
     expect(body.apiKey).toBe("sk-test-key");
