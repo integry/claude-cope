@@ -57,3 +57,35 @@
 .pvp-ping-flash {
   animation: pvp-flash 0.5s ease-in-out infinite;
 }
+
+@keyframes compact-squeeze {
+  0% {
+    transform: scaleY(1) scaleX(1);
+    opacity: 1;
+  }
+  30% {
+    transform: scaleY(0.4) scaleX(1.02);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(0.2) scaleX(1.04);
+    opacity: 0.3;
+  }
+  70% {
+    transform: scaleY(0.6) scaleX(0.99);
+    opacity: 0.7;
+  }
+  85% {
+    transform: scaleY(1.03) scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(1) scaleX(1);
+    opacity: 1;
+  }
+}
+
+.compact-squeeze {
+  animation: compact-squeeze 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: bottom center;
+}

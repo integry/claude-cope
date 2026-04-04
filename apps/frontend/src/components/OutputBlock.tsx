@@ -14,6 +14,76 @@ const roleColors: Record<Message["role"], string> = {
   error: "text-red-500",
 };
 
+type TagCategory = "ERROR" | "WARN" | "SUCCESS" | "INFO";
+
+const TAG_STYLES: Record<TagCategory, string> = {
+  ERROR: "text-red-400",
+  WARN: "text-yellow-400",
+  SUCCESS: "text-green-400",
+  INFO: "text-blue-400",
+};
+
+const TAG_MARKER_REGEX = /^__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+)$/;
+
+function classifyTag(tagContent: string): TagCategory {
+  const lower = tagContent.toLowerCase();
+  if (/error|❌|💀|🚨|fail|fatal|critical|sigsegv/.test(lower)) return "ERROR";
+  if (/warn|⚠️|caution|notice|deprecated/.test(lower)) return "WARN";
+  if (/success|✓|✅|complete|done|installed/.test(lower)) return "SUCCESS";
+  return "INFO";
+}
+
+/** Strip any leaked __TAG_ markers the LLM echoes back from seeing chat history */
+function cleanLeakedTagMarkers(content: string): string {
+  return content.replace(/`__TAG_(?:ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g, "[$1]");
+}
+
+/** Render a line of text, replacing any `__TAG_...__:text` or `[TAG]` markers with styled spans. */
+function renderLineWithTags(line: string): React.ReactNode {
+  // Match backtick-wrapped tag markers: `__TAG_ERROR__:some text`
+  const TAG_INLINE = /`__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g;
+  // Match raw [BRACKET] tags at line start
+  const BRACKET_TAG = /^\[([^\]]+)\]/;
+
+  // First try backtick-wrapped markers
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let inlineMatch;
+  while ((inlineMatch = TAG_INLINE.exec(line)) !== null) {
+    if (inlineMatch.index > lastIndex) {
+      parts.push(line.slice(lastIndex, inlineMatch.index));
+    }
+    const category = inlineMatch[1] as TagCategory;
+    const tagText = inlineMatch[2];
+    parts.push(
+      <span key={inlineMatch.index} className={`${TAG_STYLES[category]} font-mono text-xs font-bold mr-2`}>
+        {tagText}
+      </span>
+    );
+    lastIndex = TAG_INLINE.lastIndex;
+  }
+  if (parts.length > 0) {
+    if (lastIndex < line.length) parts.push(line.slice(lastIndex));
+    return <>{parts}</>;
+  }
+
+  // Fallback: bracket tags at start of line
+  const bracketMatch = BRACKET_TAG.exec(line);
+  if (bracketMatch) {
+    const category = classifyTag(bracketMatch[1]!);
+    return (
+      <>
+        <span className={`${TAG_STYLES[category]} font-mono text-xs font-bold mr-2`}>
+          {bracketMatch[1]}
+        </span>
+        {line.slice(bracketMatch[0].length)}
+      </>
+    );
+  }
+
+  return line;
+}
+
 function Spinner() {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
@@ -40,59 +110,117 @@ function TokenCounter() {
   );
 }
 
-function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Message; promptString?: string }) {
+const markdownComponents = {
+  p({ children }: { children?: React.ReactNode }) {
+    // Process [BRACKET TAG] markers in text children
+    const processed = React.Children.map(children, (child) => {
+      if (typeof child === "string") return renderLineWithTags(child);
+      return child;
+    });
+    return <p className="mb-3 leading-relaxed">{processed}</p>;
+  },
+  strong({ children }: { children?: React.ReactNode }) {
+    return <strong className="text-white font-bold">{children}</strong>;
+  },
+  em({ children }: { children?: React.ReactNode }) {
+    return <em className="text-gray-300 italic">{children}</em>;
+  },
+  h1({ children }: { children?: React.ReactNode }) {
+    return <h1 className="text-lg font-bold text-white mb-3 mt-4 border-b border-gray-700 pb-1">{children}</h1>;
+  },
+  h2({ children }: { children?: React.ReactNode }) {
+    return <h2 className="text-base font-bold text-white mb-2 mt-3">{children}</h2>;
+  },
+  h3({ children }: { children?: React.ReactNode }) {
+    return <h3 className="text-sm font-bold text-gray-200 mb-2 mt-2">{children}</h3>;
+  },
+  blockquote({ children }: { children?: React.ReactNode }) {
+    return <blockquote className="border-l-2 border-gray-600 pl-3 ml-1 my-2 text-gray-400 italic">{children}</blockquote>;
+  },
+  hr() {
+    return <hr className="border-gray-700 my-4" />;
+  },
+  ul({ children }: { children?: React.ReactNode }) {
+    return <ul className="list-disc pl-6 mb-3 space-y-1">{children}</ul>;
+  },
+  ol({ children }: { children?: React.ReactNode }) {
+    return <ol className="list-decimal pl-6 mb-3 space-y-1">{children}</ol>;
+  },
+  li({ children }: { children?: React.ReactNode }) {
+    return <li className="leading-relaxed">{children}</li>;
+  },
+  pre({ children }: { children?: React.ReactNode }) {
+    return <pre className="my-3 rounded overflow-x-auto">{children}</pre>;
+  },
+  code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
+    const match = /language-(\w+)/.exec(className || "");
+    const codeString = String(children).replace(/\n$/, "");
+    if (match) {
+      // Terminal-ish languages render as plain preformatted text
+      // to avoid clashing with the terminal's own dark/monospace aesthetic
+      const terminalLangs = ["terminal", "bash", "sh", "shell", "console", "text", "log", "plaintext"];
+      if (terminalLangs.includes(match[1]!)) {
+        const lines = codeString.split("\n");
+        return (
+          <code className="block whitespace-pre text-gray-100">
+            {lines.map((line, i) => (
+              <React.Fragment key={i}>
+                {renderLineWithTags(line)}
+                {i < lines.length - 1 && "\n"}
+              </React.Fragment>
+            ))}
+          </code>
+        );
+      }
+      return (
+        <SyntaxHighlighter
+          style={vscDarkPlus}
+          language={match[1]}
+          PreTag="div"
+        >
+          {codeString}
+        </SyntaxHighlighter>
+      );
+    }
+    const tagMatch = TAG_MARKER_REGEX.exec(codeString);
+    if (tagMatch) {
+      const category = tagMatch[1] as TagCategory;
+      const tagText = tagMatch[2];
+      return (
+        <span className={`${TAG_STYLES[category]} px-1.5 py-0 font-mono text-xs font-bold mr-2 inline-block`}>
+          {tagText}
+        </span>
+      );
+    }
+    return (
+      <code className={`text-cyan-300 bg-cyan-950/30 px-1 rounded ${className || ""}`} {...props}>
+        {children}
+      </code>
+    );
+  },
+};
+
+function OutputBlock({ message, isNew = false, promptString = "cope@local:~$ " }: { message: Message; isNew?: boolean; promptString?: string }) {
   const colorClass = roleColors[message.role];
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
   const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
+  const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
+  const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
+
+  const processedContent = useMarkdown ? cleanLeakedTagMarkers(message.content) : message.content;
 
   return (
-    <div className={`mb-5 ${colorClass} ${isAchievement ? "achievement-flash whitespace-pre font-bold" : isBuddyInterjection ? "whitespace-pre font-mono" : ""}`}>
+    <div className={`mb-5 ${colorClass} ${isAchievement ? `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold` : isBuddyInterjection ? "whitespace-pre font-mono" : "leading-relaxed"}`}>
       {message.role === "user" && (
         <span className="text-green-400 font-bold">{promptString}</span>
       )}
       {message.role === "loading" && <Spinner />}
-      {message.role === "system" ? (
-        <ReactMarkdown
-          components={{
-            p({ children }) {
-              return <p className="mb-3">{children}</p>;
-            },
-            strong({ children }) {
-              return <strong className="text-white font-bold">{children}</strong>;
-            },
-            ul({ children }) {
-              return <ul className="list-disc pl-6 mb-3">{children}</ul>;
-            },
-            ol({ children }) {
-              return <ol className="list-decimal pl-6 mb-3">{children}</ol>;
-            },
-            li({ children }) {
-              return <li className="mb-1">{children}</li>;
-            },
-            code({ className, children, ...props }) {
-              const match = /language-(\w+)/.exec(className || "");
-              const codeString = String(children).replace(/\n$/, "");
-              if (match) {
-                return (
-                  <SyntaxHighlighter
-                    style={vscDarkPlus}
-                    language={match[1]}
-                    PreTag="div"
-                  >
-                    {codeString}
-                  </SyntaxHighlighter>
-                );
-              }
-              return (
-                <code className={`text-cyan-300 bg-cyan-950/30 px-1 rounded ${className || ""}`} {...props}>
-                  {children}
-                </code>
-              );
-            },
-          }}
-        >
-          {message.content}
-        </ReactMarkdown>
+      {useMarkdown ? (
+        <div className="space-y-1">
+          <ReactMarkdown components={markdownComponents}>
+            {processedContent}
+          </ReactMarkdown>
+        </div>
       ) : (
         message.content
       )}

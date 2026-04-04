@@ -210,7 +210,7 @@ export function useGameState() {
   }, []);
 
   const drainQuota = useCallback((): number => {
-    const drain = Math.floor(Math.random() * 43) + 3; // 3% to 45%
+    const drain = Math.floor(Math.random() * 12) + 1; // 1% to 12%
     const current = stateRef.current.economy.quotaPercent;
     const raw = current - drain;
     const newPercent = raw < 0 ? 0 : raw;

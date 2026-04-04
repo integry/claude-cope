@@ -79,8 +79,6 @@ export function submitChatMessage(opts: {
   modes?: ModesState;
 }) {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, modes } = opts;
-  const fakeDelay = 1500 + Math.random() * 1500;
-  setTimeout(() => {
   fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -107,8 +105,15 @@ export function submitChatMessage(opts: {
         return;
       }
 
-      // Read streamed SSE response
-      let rawReply = await readStreamedResponse(res, setHistory);
+      // Handle both SSE stream (BYOK) and JSON (free tier) responses
+      let rawReply: string;
+      const contentType = res.headers.get("content-type") ?? "";
+      if (contentType.includes("text/event-stream")) {
+        rawReply = await readStreamedResponse(res, setHistory);
+      } else {
+        const data = await res.json();
+        rawReply = data?.choices?.[0]?.message?.content ?? "";
+      }
 
       if (!rawReply) {
         rawReply = "[❌ Error] No response from API.";
@@ -176,5 +181,4 @@ export function submitChatMessage(opts: {
     .finally(() => {
       setIsProcessing(false);
     });
-  }, fakeDelay);
 }

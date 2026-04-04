@@ -33,6 +33,7 @@ interface SlashCommandContext {
   pendingPing: boolean;
   rejectPing: () => void;
   brrrrrrIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
+  triggerCompactEffect: () => void;
 }
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.role !== "loading");
@@ -127,6 +128,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     ctx.setShowSynergize(true);
     return true;
   } else if (command === "/compact") {
+    ctx.triggerCompactEffect();
     ctx.setHistory((prev) => {
       const cleaned = clearLoading(prev);
       const removeCount = Math.min(50, cleaned.length);
@@ -316,6 +318,13 @@ export function executeSlashCommand(
     },
   }));
 
+  // /clear fires instantly — no fake processing delay
+  if (command === "/clear") {
+    ctx.addActiveTD(Math.floor(Math.random() * 40) + 10);
+    handleClearCommand(ctx);
+    return;
+  }
+
   setTimeout(() => {
     ctx.addActiveTD(Math.floor(Math.random() * 40) + 10);
     if (ctx.applyQuotaDrain()) return;
@@ -325,9 +334,7 @@ export function executeSlashCommand(
       ctx.unlockAchievement("the_final_escape");
     }
 
-    if (command === "/clear") {
-      if (handleClearCommand(ctx)) return;
-    } else if (handleCoreCommand(command, ctx, reply)) {
+    if (handleCoreCommand(command, ctx, reply)) {
       // /synergize handles its own setIsProcessing
       if (command === "/synergize") return;
     } else if (command === "/key") {

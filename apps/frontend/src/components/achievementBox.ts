@@ -1,14 +1,18 @@
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
 
 /**
- * Builds an ANSI-styled bordered box for achievement unlock notifications.
+ * Builds a bordered box for achievement unlock notifications.
+ * Uses only ASCII for reliable monospace alignment.
  */
 export function buildAchievementBox(achievementId: string): string {
   const achievement = ALL_ACHIEVEMENTS.find((a) => a.id === achievementId);
-  const label = "🏆 ACHIEVEMENT UNLOCKED!";
+  const label = "ACHIEVEMENT UNLOCKED!";
+  const fallbackName = achievementId
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
   const name = achievement
-    ? `★ ${achievement.name} ★`
-    : achievementId;
+    ? `* ${achievement.name} *`
+    : `* ${fallbackName} *`;
   const description = achievement?.description ?? "";
   const lines = [label, name];
   if (description) {
@@ -21,15 +25,15 @@ export function buildAchievementBox(achievementId: string): string {
     const right = padding - left;
     return " ".repeat(left) + text + " ".repeat(right);
   };
-  const border = "═".repeat(innerWidth);
+  const border = "=".repeat(innerWidth + 2);
   const boxLines = [
-    `╔${border}╗`,
-    `║${pad(label)}║`,
-    `║${pad(name)}║`,
+    `+${border}+`,
+    `| ${pad(label)} |`,
+    `| ${pad(name)} |`,
   ];
   if (description) {
-    boxLines.push(`║${pad(description)}║`);
+    boxLines.push(`| ${pad(description)} |`);
   }
-  boxLines.push(`╚${border}╝`);
+  boxLines.push(`+${border}+`);
   return boxLines.join("\n");
 }
