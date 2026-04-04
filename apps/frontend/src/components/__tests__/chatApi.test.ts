@@ -106,6 +106,11 @@ describe("computeBuddyInterjection", () => {
 describe("submitChatMessage - achievement parsing", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("extracts single achievement from response", async () => {
@@ -139,10 +144,10 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
     });
 
-    // Wait for the async fetch chain to resolve
-    await vi.waitFor(() => {
-      expect(unlockAchievement).toHaveBeenCalledWith("first_prompt");
-    });
+    // Advance past the setTimeout delay
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(unlockAchievement).toHaveBeenCalledWith("first_prompt");
 
     expect(setIsProcessing).toHaveBeenCalledWith(false);
   });
@@ -178,9 +183,9 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
     });
 
-    await vi.waitFor(() => {
-      expect(unlockAchievement).toHaveBeenCalledTimes(2);
-    });
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(unlockAchievement).toHaveBeenCalledTimes(2);
     expect(unlockAchievement).toHaveBeenCalledWith("speed_runner");
     expect(unlockAchievement).toHaveBeenCalledWith("big_spender");
   });
@@ -215,9 +220,7 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
     });
 
-    await vi.waitFor(() => {
-      expect(setHistory).toHaveBeenCalled();
-    });
+    await vi.advanceTimersByTimeAsync(3000);
 
     // Call the updater function passed to setHistory
     const updater = setHistory.mock.calls[0]![0] as (prev: unknown[]) => unknown[];
@@ -248,9 +251,7 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
     });
 
-    await vi.waitFor(() => {
-      expect(setHistory).toHaveBeenCalled();
-    });
+    await vi.advanceTimersByTimeAsync(3000);
 
     const updater = setHistory.mock.calls[0]![0] as (prev: unknown[]) => unknown[];
     const result = updater([]) as Array<{ role: string; content: string }>;
@@ -274,9 +275,7 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
     });
 
-    await vi.waitFor(() => {
-      expect(setHistory).toHaveBeenCalled();
-    });
+    await vi.advanceTimersByTimeAsync(3000);
 
     const updater = setHistory.mock.calls[0]![0] as (prev: unknown[]) => unknown[];
     const result = updater([]) as Array<{ role: string; content: string }>;
@@ -309,10 +308,9 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
     });
 
-    await vi.waitFor(() => {
-      expect(setIsProcessing).toHaveBeenCalledWith(false);
-    });
+    await vi.advanceTimersByTimeAsync(3000);
 
+    expect(setIsProcessing).toHaveBeenCalledWith(false);
     expect(unlockAchievement).not.toHaveBeenCalled();
   });
 
@@ -336,10 +334,9 @@ describe("submitChatMessage - achievement parsing", () => {
       apiKey: "sk-test-key",
     });
 
-    await vi.waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
+    await vi.advanceTimersByTimeAsync(3000);
 
+    expect(fetchSpy).toHaveBeenCalled();
     const callArgs = fetchSpy.mock.calls[0]!;
     const body = JSON.parse((callArgs[1] as RequestInit).body as string);
     expect(body.apiKey).toBe("sk-test-key");
