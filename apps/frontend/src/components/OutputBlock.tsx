@@ -7,8 +7,8 @@ import type { Message } from "./Terminal";
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
 const roleColors: Record<Message["role"], string> = {
-  user: "text-gray-300",
-  system: "text-green-400",
+  user: "text-gray-100",
+  system: "text-gray-100",
   loading: "text-yellow-400",
   warning: "text-yellow-400",
   error: "text-red-500",
