@@ -230,6 +230,56 @@ function Terminal() {
     submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, modes: state.modes });
   };
 
+  const setCursorToEnd = (val: string) => {
+    setTimeout(() => {
+      const el = inputRef.current;
+      if (el) { el.selectionStart = el.selectionEnd = val.length; }
+    }, 0);
+  };
+
+  const handleEscapeKey = () => {
+    const now = Date.now();
+    if (now - lastEscapeRef.current < 500) {
+      if (inputValue.length > 0) {
+        setHistory((prev) => [...prev, { role: "system", content: "[ESC ESC] Input cleared. Even your half-typed thoughts disappoint me." }]);
+      }
+      setInputValue("");
+      setSlashQuery("");
+      setSlashIndex(0);
+      lastEscapeRef.current = 0;
+    } else {
+      lastEscapeRef.current = now;
+    }
+  };
+
+  const handleArrowUp = (slashMenuOpen: boolean, filtered: string[]) => {
+    if (slashMenuOpen) {
+      setSlashIndex((prev) => (prev > 0 ? prev - 1 : filtered.length - 1));
+      return;
+    }
+    if (commandHistory.length === 0) return;
+    const newIndex = historyIndex + 1;
+    if (newIndex < commandHistory.length) {
+      setHistoryIndex(newIndex);
+      const val = commandHistory[commandHistory.length - 1 - newIndex]!;
+      setInputValue(val);
+      setCursorToEnd(val);
+    }
+  };
+
+  const handleArrowDown = (slashMenuOpen: boolean, filtered: string[]) => {
+    if (slashMenuOpen) {
+      setSlashIndex((prev) => (prev < filtered.length - 1 ? prev + 1 : 0));
+      return;
+    }
+    const newIndex = historyIndex - 1;
+    if (newIndex < -1) return;
+    setHistoryIndex(newIndex);
+    const val = newIndex === -1 ? "" : commandHistory[commandHistory.length - 1 - newIndex]!;
+    setInputValue(val);
+    setCursorToEnd(val);
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "c" && e.ctrlKey && brrrrrrIntervalRef.current) {
       e.preventDefault();
@@ -244,19 +294,7 @@ function Terminal() {
     const slashMenuOpen = slashQuery !== "" && filtered.length > 0;
 
     if (e.key === "Escape") {
-      const now = Date.now();
-      if (now - lastEscapeRef.current < 500) {
-        // Double-escape: clear input and close slash menu
-        if (inputValue.length > 0) {
-          setHistory((prev) => [...prev, { role: "system", content: "[ESC ESC] Input cleared. Even your half-typed thoughts disappoint me." }]);
-        }
-        setInputValue("");
-        setSlashQuery("");
-        setSlashIndex(0);
-        lastEscapeRef.current = 0;
-      } else {
-        lastEscapeRef.current = now;
-      }
+      handleEscapeKey();
       return;
     }
 
@@ -287,36 +325,10 @@ function Terminal() {
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      if (slashMenuOpen) {
-        setSlashIndex((prev) => (prev > 0 ? prev - 1 : filtered.length - 1));
-        return;
-      }
-      if (commandHistory.length === 0) return;
-      const newIndex = historyIndex + 1;
-      if (newIndex < commandHistory.length) {
-        setHistoryIndex(newIndex);
-        const val = commandHistory[commandHistory.length - 1 - newIndex]!;
-        setInputValue(val);
-        setTimeout(() => {
-          const el = inputRef.current;
-          if (el) { el.selectionStart = el.selectionEnd = val.length; }
-        }, 0);
-      }
+      handleArrowUp(slashMenuOpen, filtered);
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      if (slashMenuOpen) {
-        setSlashIndex((prev) => (prev < filtered.length - 1 ? prev + 1 : 0));
-        return;
-      }
-      const newIndex = historyIndex - 1;
-      if (newIndex < -1) return;
-      setHistoryIndex(newIndex);
-      const val = newIndex === -1 ? "" : commandHistory[commandHistory.length - 1 - newIndex]!;
-      setInputValue(val);
-      setTimeout(() => {
-        const el = inputRef.current;
-        if (el) { el.selectionStart = el.selectionEnd = val.length; }
-      }, 0);
+      handleArrowDown(slashMenuOpen, filtered);
     }
   };
 
