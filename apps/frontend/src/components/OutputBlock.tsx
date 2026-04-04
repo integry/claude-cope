@@ -52,7 +52,7 @@ function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Me
                 );
               }
               return (
-                <code className={className} {...props}>
+                <code className={`text-cyan-300 bg-cyan-950/30 px-1 rounded ${className || ""}`} {...props}>
                   {children}
                 </code>
               );
