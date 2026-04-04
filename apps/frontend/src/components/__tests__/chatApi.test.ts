@@ -2,6 +2,40 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { computeBuddyInterjection, submitChatMessage } from "../chatApi";
 import type { BuddyState } from "../../hooks/useGameState";
 
+/**
+ * Creates a mock ReadableStream that simulates an SSE streamed response
+ * from the OpenRouter API. Each content string becomes a separate SSE chunk.
+ */
+function createMockStream(contents: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const chunks = contents.map(
+    (content) =>
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`
+  );
+  chunks.push("data: [DONE]\n\n");
+
+  let index = 0;
+  return new ReadableStream({
+    pull(controller) {
+      if (index < chunks.length) {
+        controller.enqueue(encoder.encode(chunks[index]!));
+        index++;
+      } else {
+        controller.close();
+      }
+    },
+  });
+}
+
+function createMockStreamResponse(contents: string[]) {
+  return {
+    ok: true,
+    status: 200,
+    body: createMockStream(contents),
+    json: () => Promise.reject(new Error("Should not call json on stream")),
+  } as unknown as Response;
+}
+
 describe("computeBuddyInterjection", () => {
   beforeEach(() => {
     vi.spyOn(Math, "random").mockReturnValue(0.1);
@@ -118,22 +152,9 @@ describe("submitChatMessage - achievement parsing", () => {
     const setHistory = vi.fn();
     const setIsProcessing = vi.fn();
 
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      json: () =>
-        Promise.resolve({
-          choices: [
-            {
-              message: {
-                content:
-                  "Great job! [ACHIEVEMENT_UNLOCKED: first_prompt] You did it!",
-              },
-            },
-          ],
-        }),
-    };
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(mockResponse as Response);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockStreamResponse(["Great job! [ACHIEVEMENT_UNLOCKED: first_prompt] You did it!"])
+    );
 
     submitChatMessage({
       chatMessages: [{ role: "user", content: "hello" }],
@@ -157,22 +178,12 @@ describe("submitChatMessage - achievement parsing", () => {
     const setHistory = vi.fn();
     const setIsProcessing = vi.fn();
 
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      json: () =>
-        Promise.resolve({
-          choices: [
-            {
-              message: {
-                content:
-                  "[ACHIEVEMENT_UNLOCKED: speed_runner] Nice! [ACHIEVEMENT_UNLOCKED: big_spender]",
-              },
-            },
-          ],
-        }),
-    };
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(mockResponse as Response);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockStreamResponse([
+        "[ACHIEVEMENT_UNLOCKED: speed_runner] Nice! ",
+        "[ACHIEVEMENT_UNLOCKED: big_spender]",
+      ])
+    );
 
     submitChatMessage({
       chatMessages: [{ role: "user", content: "hello" }],
@@ -194,22 +205,9 @@ describe("submitChatMessage - achievement parsing", () => {
     const setHistory = vi.fn();
     const setIsProcessing = vi.fn();
 
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      json: () =>
-        Promise.resolve({
-          choices: [
-            {
-              message: {
-                content:
-                  "Hello there [ACHIEVEMENT_UNLOCKED: test_ach] friend!",
-              },
-            },
-          ],
-        }),
-    };
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(mockResponse as Response);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockStreamResponse(["Hello there [ACHIEVEMENT_UNLOCKED: test_ach] friend!"])
+    );
 
     submitChatMessage({
       chatMessages: [{ role: "user", content: "hi" }],
@@ -222,8 +220,9 @@ describe("submitChatMessage - achievement parsing", () => {
 
     await vi.advanceTimersByTimeAsync(3000);
 
-    // Call the updater function passed to setHistory
-    const updater = setHistory.mock.calls[0]![0] as (prev: unknown[]) => unknown[];
+    // Get the final setHistory call (the last one after streaming completes)
+    const lastCall = setHistory.mock.calls[setHistory.mock.calls.length - 1]!;
+    const updater = lastCall[0] as (prev: unknown[]) => unknown[];
     const result = updater([]) as Array<{ role: string; content: string }>;
     const systemMsg = result.find((m) => m.role === "system");
     expect(systemMsg).toBeDefined();
@@ -289,15 +288,9 @@ describe("submitChatMessage - achievement parsing", () => {
     const setHistory = vi.fn();
     const setIsProcessing = vi.fn();
 
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      json: () =>
-        Promise.resolve({
-          choices: [{ message: { content: "Just a normal reply." } }],
-        }),
-    };
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(mockResponse as Response);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockStreamResponse(["Just a normal reply."])
+    );
 
     submitChatMessage({
       chatMessages: [{ role: "user", content: "hi" }],
@@ -315,14 +308,9 @@ describe("submitChatMessage - achievement parsing", () => {
   });
 
   it("sends apiKey in request body when provided", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () =>
-        Promise.resolve({
-          choices: [{ message: { content: "reply" } }],
-        }),
-    } as Response);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockStreamResponse(["reply"])
+    );
 
     submitChatMessage({
       chatMessages: [{ role: "user", content: "hi" }],

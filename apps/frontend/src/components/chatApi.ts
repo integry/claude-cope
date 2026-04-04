@@ -28,6 +28,46 @@ export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionRe
   };
 }
 
+function processSSEChunk(chunk: string, state: { rawReply: string }, setHistory: Dispatch<SetStateAction<Message[]>>) {
+  const lines = chunk.split("\n");
+  for (const line of lines) {
+    if (!line.startsWith("data: ")) continue;
+    const data = line.slice(6).trim();
+    if (data === "[DONE]") continue;
+    try {
+      const parsed = JSON.parse(data);
+      const delta = parsed?.choices?.[0]?.delta?.content;
+      if (delta) {
+        state.rawReply += delta;
+        const currentReply = state.rawReply;
+        setHistory((prev) =>
+          prev.map((msg) =>
+            msg.role === "loading" ? { ...msg, content: currentReply } : msg
+          )
+        );
+      }
+    } catch {
+      // Skip malformed JSON chunks
+    }
+  }
+}
+
+async function readStreamedResponse(res: Response, setHistory: Dispatch<SetStateAction<Message[]>>): Promise<string> {
+  const state = { rawReply: "" };
+  const reader = res.body?.getReader();
+  if (!reader) return "";
+  const decoder = new TextDecoder();
+  let done = false;
+  while (!done) {
+    const { value, done: readerDone } = await reader.read();
+    done = readerDone;
+    if (value) {
+      processSSEChunk(decoder.decode(value, { stream: true }), state, setHistory);
+    }
+  }
+  return state.rawReply;
+}
+
 export function submitChatMessage(opts: {
   chatMessages: { role: string; content: string }[];
   buddyResult: BuddyInterjectionResult | null;
@@ -67,9 +107,12 @@ export function submitChatMessage(opts: {
         return;
       }
 
-      const data = await res.json();
-      const rawReply =
-        data?.choices?.[0]?.message?.content ?? "[❌ Error] No response from API.";
+      // Read streamed SSE response
+      let rawReply = await readStreamedResponse(res, setHistory);
+
+      if (!rawReply) {
+        rawReply = "[❌ Error] No response from API.";
+      }
 
       const achievementRegex = /\[ACHIEVEMENT_UNLOCKED:\s*(.+?)\]/g;
       const achievementMessages: Message[] = [];

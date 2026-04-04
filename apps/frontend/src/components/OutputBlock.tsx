@@ -24,18 +24,18 @@ function Spinner() {
 }
 
 function TokenCounter() {
-  const [sent, setSent] = useState(0);
+  const [sent, setSent] = useState(185000 + Math.floor(Math.random() * 40000));
   const [received, setReceived] = useState(0);
   useEffect(() => {
     const id = setInterval(() => {
-      setSent((s: number) => s + Math.floor(Math.random() * 12) + 3);
-      setReceived((r: number) => r + Math.floor(Math.random() * 8) + 1);
+      setSent((s: number) => s + Math.floor(Math.random() * 120) + 30);
+      setReceived((r: number) => r + Math.floor(Math.random() * 80) + 10);
     }, 80);
     return () => clearInterval(id);
   }, []);
   return (
     <span className="text-yellow-400/70 ml-2 text-sm">
-      Tokens - Sent: {sent} | Received: {received}
+      Tokens - Sent: {(sent / 1000).toFixed(1)}k | Received: {(received / 1000).toFixed(1)}k
     </span>
   );
 }

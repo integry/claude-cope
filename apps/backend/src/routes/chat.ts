@@ -31,9 +31,8 @@ chat.post("/", async (c) => {
 
   const rank = body.rank ?? "Junior Code Monkey";
 
-  // Context window: send only last 4 messages per functional spec
-  // to minimize token usage and enforce erratic, forgetful AI behavior.
-  const recentMessages = body.messages.slice(-4);
+  // Context window: send last 10 messages for better context retention.
+  const recentMessages = body.messages.slice(-10);
 
   const messages = [
     { role: "system", content: getSystemPrompt(rank, body.modes) },
@@ -49,16 +48,23 @@ chat.post("/", async (c) => {
     body: JSON.stringify({
       model: isBYOK ? "anthropic/claude-3-opus" : "nvidia/nemotron-3-8b-chat-steer",
       messages,
+      stream: true,
     }),
   });
 
-  const data = await response.json();
-
   if (!response.ok) {
+    const data = await response.json();
     return c.json({ error: "OpenRouter request failed", details: data }, response.status as ContentfulStatusCode);
   }
 
-  return c.json(data);
+  // Proxy the streaming response directly to the client
+  return new Response(response.body as ReadableStream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 });
 
 export default chat;
