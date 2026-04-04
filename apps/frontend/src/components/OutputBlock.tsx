@@ -37,6 +37,21 @@ function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Me
       {message.role === "system" ? (
         <ReactMarkdown
           components={{
+            p({ children }) {
+              return <p className="mb-3">{children}</p>;
+            },
+            strong({ children }) {
+              return <strong className="text-white font-bold">{children}</strong>;
+            },
+            ul({ children }) {
+              return <ul className="list-disc pl-6 mb-3">{children}</ul>;
+            },
+            ol({ children }) {
+              return <ol className="list-decimal pl-6 mb-3">{children}</ol>;
+            },
+            li({ children }) {
+              return <li className="mb-1">{children}</li>;
+            },
             code({ className, children, ...props }) {
               const match = /language-(\w+)/.exec(className || "");
               const codeString = String(children).replace(/\n$/, "");
