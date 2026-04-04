@@ -14,7 +14,7 @@ export function handleKeyCommand(
     setHistory((prev) => [
       ...prev,
       { role: "user", content: "/key clear" },
-      { role: "system", content: "[🔑] API key removed. Using default server key." },
+      { role: "system", content: "[🔑] **API key removed**. Using default server key." },
     ]);
   } else if (keyArg.length > 0) {
     setState((prev) => ({ ...prev, apiKey: keyArg }));
@@ -22,7 +22,7 @@ export function handleKeyCommand(
     setHistory((prev) => [
       ...prev,
       { role: "user", content: `/key ${masked}` },
-      { role: "system", content: `[🔑] API key set (${masked}). Your key will be used for all future requests.` },
+      { role: "system", content: `[🔑] **API key set** (\`${masked}\`). Your key will be used for all future requests.` },
     ]);
   }
   return true;

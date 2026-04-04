@@ -59,7 +59,7 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
     setTimeout(() => {
       ctx.setHistory((prev) => [
         ...prev,
-        { role: "system", content: `Deleting ${p}...` },
+        { role: "system", content: `Deleting \`${p}\`...` },
       ]);
     }, interval * (i + 1));
   });
@@ -93,7 +93,7 @@ function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Rep
   const target = command.slice(5).trim();
   if (target) {
     ctx.sendPing(target);
-    reply({ role: "system", content: `[📡] Targeting ${target} with unsolicited Jira tickets...` });
+    reply({ role: "system", content: `[📡] Targeting **${target}** with unsolicited Jira tickets...` });
   } else {
     ctx.sendPing();
     reply({ role: "system", content: "[📡] Pinging a random coworker with unsolicited Jira tickets..." });
@@ -103,7 +103,7 @@ function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Rep
 
 function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   if (ctx.state.economy.totalTDEarned < 1000) {
-    reply({ role: "error", content: "[❌ Error] Store access denied. Requires 1,000 Technical Debt." });
+    reply({ role: "error", content: "[❌ Error] Store access denied. Requires **1,000 Technical Debt**." });
   } else {
     ctx.setHistory(clearLoading);
     ctx.setShowStore(true);
@@ -123,7 +123,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     ctx.setShowAchievements(true);
     return true;
   } else if (command === "/synergize") {
-    reply({ role: "system", content: "[🗓️] Mandatory 1-on-1 meeting initiated. You cannot escape." });
+    reply({ role: "system", content: "[🗓️] **Mandatory 1-on-1 meeting** initiated. You cannot escape." });
     ctx.setShowSynergize(true);
     return true;
   } else if (command === "/compact") {
@@ -133,25 +133,25 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
       const remaining = cleaned.slice(0, cleaned.length - removeCount);
       return [
         ...remaining,
-        { role: "system", content: `[✓] Context compacted. Deleted ${removeCount} lines of unoptimized boilerplate.` },
+        { role: "system", content: `[✓] Context compacted. Deleted **${removeCount}** lines of unoptimized boilerplate.` },
       ];
     });
     ctx.unlockAchievement("history_eraser");
     return true;
   } else if (command === "/brag") {
     ctx.setBragPending(true);
-    reply({ role: "system", content: "[🏆] Enter your name for the Hall of Blame:" });
+    reply({ role: "system", content: "[🏆] Enter your name for the **Hall of Blame**:" });
     return true;
   } else if (command === "/support") {
-    reply({ role: "system", content: "[✓] Support ticket created. Redirecting payload directly to /dev/null..." });
+    reply({ role: "system", content: "[✓] Support ticket created. Redirecting payload directly to `/dev/null`..." });
     return true;
   } else if (command === "/preworkout") {
-    reply({ role: "system", content: "[✓] Injected 400mg of pure caffeine into the Node.js event loop. LFG." });
+    reply({ role: "system", content: "[✓] Injected **400mg** of pure caffeine into the **Node.js event loop**. LFG." });
     return true;
   } else if (command === "/buddy") {
     if (ctx.state.buddy.type) {
       ctx.setBuddyPendingConfirm(true);
-      reply({ role: "system", content: `[⚠️] You already have a buddy (${ctx.state.buddy.type}). Re-rolling will replace it. Are you sure? (y/n)` });
+      reply({ role: "system", content: `[⚠️] You already have a buddy (**${ctx.state.buddy.type}**). Re-rolling will replace it. Are you sure? (y/n)` });
       return true;
     }
     const roll = Math.random() * 100;
@@ -159,14 +159,14 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
     ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
     const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
-    reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType}${shinyLabel} ${buddyIcon}!` });
+    reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: **${buddyType}**${shinyLabel} ${buddyIcon}!` });
     return true;
   } else if (command === "/who") {
     if (ctx.onlineUsers.length > 0) {
       const userList = ctx.onlineUsers.join(", ");
-      reply({ role: "system", content: `[📡] ${ctx.onlineCount} developer(s) suffering in this instance: ${userList}` });
+      reply({ role: "system", content: `[📡] **${ctx.onlineCount}** developer(s) suffering in this instance: ${userList}` });
     } else {
-      reply({ role: "system", content: `[📡] There are currently ${ctx.onlineCount} developers suffering in this instance.` });
+      reply({ role: "system", content: `[📡] There are currently **${ctx.onlineCount}** developers suffering in this instance.` });
     }
     return true;
   } else if (command.startsWith("/ping")) {
@@ -174,7 +174,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
   } else if (command === "/reject") {
     if (ctx.pendingPing) {
       ctx.rejectPing();
-      reply({ role: "system", content: "[🛡️] Jira tickets rejected! You dodged the corporate sabotage." });
+      reply({ role: "system", content: "[🛡️] Jira tickets **rejected**! You dodged the corporate sabotage." });
     } else {
       reply({ role: "error", content: "[❌] No incoming ping to reject." });
     }
@@ -187,24 +187,24 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
   if (command === "/help") {
     const tdGrant = Math.floor(Math.random() * 200) + 100;
     ctx.addActiveTD(tdGrant);
-    reply({ role: "system", content: `[📖] Oh, you need /help? A real 10x developer would never. Let me explain: you simply write code that works. On the first try. Every time. No tests needed — tests are for people who lack confidence. Anyway, here's ${tdGrant} TD for wasting my time.` });
+    reply({ role: "system", content: `[📖] Oh, you need \`/help\`? A real **10x developer** would never. Let me explain: you simply write code that works. On the first try. Every time. No tests needed — tests are for people who lack confidence. Anyway, here's **${tdGrant} TD** for wasting my time.` });
     return true;
   } else if (command === "/fast") {
     const newFast = !ctx.state.modes.fast;
     ctx.setState((prev) => ({ ...prev, modes: { ...prev.modes, fast: newFast } }));
     if (newFast) {
-      reply({ role: "system", content: "[⚡ FAST MODE ACTIVATED] All code reviews disabled. Type safety optional. Shipping directly to production at mass velocity. Godspeed." });
+      reply({ role: "system", content: "[⚡ **FAST MODE ACTIVATED**] All code reviews disabled. Type safety optional. Shipping directly to **production** at mass velocity. Godspeed." });
     } else {
-      reply({ role: "system", content: "[⚡ FAST MODE DEACTIVATED] Reinstating code reviews, type checks, and existential dread. Welcome back to reality." });
+      reply({ role: "system", content: "[⚡ **FAST MODE DEACTIVATED**] Reinstating code reviews, type checks, and existential dread. Welcome back to reality." });
     }
     return true;
   } else if (command === "/voice") {
     const newVoice = !ctx.state.modes.voice;
     ctx.setState((prev) => ({ ...prev, modes: { ...prev.modes, voice: newVoice } }));
     if (newVoice) {
-      reply({ role: "system", content: "[🎤 VIBE CODING MODE ACTIVATED] Please describe your code emotionally. All type safety has been replaced with good vibes. Namaste." });
+      reply({ role: "system", content: "[🎤 **VIBE CODING MODE ACTIVATED**] Please describe your code emotionally. All type safety has been replaced with good vibes. Namaste." });
     } else {
-      reply({ role: "system", content: "[🎤 VIBE CODING MODE DEACTIVATED] Type safety restored. Emotions suppressed. Back to cold, logical determinism." });
+      reply({ role: "system", content: "[🎤 **VIBE CODING MODE DEACTIVATED**] Type safety restored. Emotions suppressed. Back to cold, logical determinism." });
     }
     return true;
   } else if (command === "/blame") {
@@ -217,7 +217,7 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     const daysAgo = Math.floor(Math.random() * 365) + 1;
     const tdPenalty = Math.floor(Math.random() * 150) + 50;
     ctx.addActiveTD(tdPenalty);
-    reply({ role: "system", content: `[🔍 GIT BLAME] Analyzing ${file}:${line}...\n\nCommit: a${Math.random().toString(16).slice(2, 8)}\nAuthor: You (obviously)\nDate: ${daysAgo} days ago\nMessage: "quick fix, will clean up later"\n\n[⚠️] Verdict: It was YOU all along. +${tdPenalty} TD penalty for past sins.` });
+    reply({ role: "system", content: `[🔍 **GIT BLAME**] Analyzing \`${file}:${line}\`...\n\nCommit: \`a${Math.random().toString(16).slice(2, 8)}\`\nAuthor: **You** (obviously)\nDate: ${daysAgo} days ago\nMessage: "quick fix, will clean up later"\n\n[⚠️] Verdict: It was **YOU** all along. **+${tdPenalty} TD** penalty for past sins.` });
     const blameCount = (ctx.state.commandUsage["/blame"] ?? 0) + 1;
     if (blameCount >= 5) {
       ctx.unlockAchievement("the_blame_game");
@@ -250,7 +250,7 @@ function handleUpgradeCommand(ctx: SlashCommandContext, reply: Reply): boolean {
     .sort((a, b) => b.baseCost - a.baseCost);
 
   if (ownedGenerators.length === 0) {
-    reply({ role: "error", content: "[❌] Upgrade failed. You don't own any generators. The AI has nothing to consume. It's judging you silently." });
+    reply({ role: "error", content: "[❌] **Upgrade failed.** You don't own any generators. The AI has nothing to consume. It's judging you silently." });
     return true;
   }
 
@@ -264,11 +264,11 @@ function handleUpgradeCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   }));
 
   const flavorMessages = [
-    `The AI devoured your ${target.name} whole. It didn't even say thank you.`,
-    `Your ${target.name} has been sacrificed to appease the compute gods. The latency remains unchanged.`,
-    `One ${target.name} was fed into the GPU furnace. The AI belched and asked for more.`,
-    `Your ${target.name} was dissolved into pure gradient descent. It felt nothing. Probably.`,
-    `The AI absorbed your ${target.name} and used it to generate 47 more Jira tickets.`,
+    `The AI devoured your **${target.name}** whole. It didn't even say thank you.`,
+    `Your **${target.name}** has been sacrificed to appease the compute gods. The latency remains unchanged.`,
+    `One **${target.name}** was fed into the GPU furnace. The AI belched and asked for more.`,
+    `Your **${target.name}** was dissolved into pure gradient descent. It felt nothing. Probably.`,
+    `The AI absorbed your **${target.name}** and used it to generate 47 more Jira tickets.`,
   ];
   const flavor = flavorMessages[Math.floor(Math.random() * flavorMessages.length)]!;
 
@@ -285,7 +285,7 @@ export function rollBuddy(
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
   const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
-  setHistory((prev) => [...prev, { role: "system" as const, content: `[✓] RNG sequence complete. Spawning your new companion: ${buddyType}${shinyLabel} ${buddyIcon}!` }]);
+  setHistory((prev) => [...prev, { role: "system" as const, content: `[✓] RNG sequence complete. Spawning your new companion: **${buddyType}**${shinyLabel} ${buddyIcon}!` }]);
 }
 
 export function executeSlashCommand(
@@ -331,18 +331,18 @@ export function executeSlashCommand(
       // /synergize handles its own setIsProcessing
       if (command === "/synergize") return;
     } else if (command === "/key") {
-      reply({ role: "system", content: "[🔑] Usage: /key <your-api-key> — Provide your own OpenRouter or Anthropic API key to bypass default limits. Type /key clear to remove your key." });
+      reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter or Anthropic API key to bypass default limits. Type `/key clear` to remove your key." });
     } else if (command === "/feedback" || command === "/bug") {
-      reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as WONTFIX. Have a synergistic day." });
+      reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
     } else if (command === "/upgrade") {
       handleUpgradeCommand(ctx, reply);
     } else if (handleNewCommand(command, ctx, reply)) {
       // /brrrrrr handles its own setIsProcessing
       if (command === "/brrrrrr") return;
     } else if (command.startsWith("/")) {
-      reply({ role: "error", content: `[❌ Error] Command not found: ${command}` });
+      reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
     } else {
-      reply({ role: "system", content: `[✓] Executed ${command}` });
+      reply({ role: "system", content: `[✓] Executed \`${command}\`` });
     }
 
     ctx.setIsProcessing(false);
@@ -388,7 +388,7 @@ export function parseSabotageParams(
       ...prev,
       {
         role: "warning" as const,
-        content: `[🚨 SABOTAGE] A colleague sent you ${target.toLocaleString()} TD of inherited technical debt! Your rank has been set to ${rankTitle || "Unknown"}.`,
+        content: `[🚨 **SABOTAGE**] A colleague sent you **${target.toLocaleString()} TD** of inherited technical debt! Your rank has been set to **${rankTitle || "Unknown"}**.`,
       },
     ]);
   }
