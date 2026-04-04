@@ -17,10 +17,10 @@ const roleColors: Record<Message["role"], string> = {
 type TagCategory = "ERROR" | "WARN" | "SUCCESS" | "INFO";
 
 const TAG_STYLES: Record<TagCategory, string> = {
-  ERROR: "bg-red-900/50 border border-red-500/60 text-red-300",
-  WARN: "bg-yellow-900/50 border border-yellow-500/60 text-yellow-300",
-  SUCCESS: "bg-green-900/50 border border-green-500/60 text-green-300",
-  INFO: "bg-blue-900/50 border border-blue-500/60 text-blue-300",
+  ERROR: "bg-red-500/15 text-red-400",
+  WARN: "bg-yellow-500/15 text-yellow-400",
+  SUCCESS: "bg-green-500/15 text-green-400",
+  INFO: "bg-blue-500/15 text-blue-400",
 };
 
 const TAG_MARKER_PREFIX = "__TAG_";
@@ -104,7 +104,7 @@ const markdownComponents = {
       const category = tagMatch[1] as TagCategory;
       const tagText = tagMatch[2];
       return (
-        <span className={`${TAG_STYLES[category]} px-2 py-0.5 rounded text-xs font-bold mr-2 inline-block`}>
+        <span className={`${TAG_STYLES[category]} px-1.5 py-0 font-mono text-xs font-bold mr-2 inline-block`}>
           {tagText}
         </span>
       );
