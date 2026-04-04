@@ -29,7 +29,7 @@ function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Me
   const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
 
   return (
-    <div className={`${colorClass} ${isAchievement ? "achievement-flash whitespace-pre font-bold" : isBuddyInterjection ? "whitespace-pre font-mono" : ""}`}>
+    <div className={`mb-5 ${colorClass} ${isAchievement ? "achievement-flash whitespace-pre font-bold" : isBuddyInterjection ? "whitespace-pre font-mono" : ""}`}>
       {message.role === "user" && (
         <span className="text-gray-500">{promptString}</span>
       )}
