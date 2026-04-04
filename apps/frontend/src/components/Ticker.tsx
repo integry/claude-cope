@@ -14,7 +14,7 @@ export default function Ticker() {
       <div className="animate-marquee whitespace-nowrap">
         {liveEvents.map((ev, i) => (
           <span key={i} className="mr-10">
-            [LIVE] {ev.message}
+            <strong className="text-yellow-400 bg-yellow-950/30 px-1 rounded">[LIVE]</strong> {ev.message}
           </span>
         ))}
       </div>
