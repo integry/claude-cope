@@ -39,6 +39,8 @@ chat.post("/", async (c) => {
     ...recentMessages,
   ];
 
+  const model = isBYOK ? "anthropic/claude-3-opus" : "nvidia/nemotron-nano-9b-v2:free";
+
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -46,9 +48,9 @@ chat.post("/", async (c) => {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: isBYOK ? "anthropic/claude-3-opus" : "nvidia/nemotron-3-super-120b-a12b:free",
+      model,
       messages,
-      stream: true,
+      ...(isBYOK ? { stream: true } : {}),
     }),
   });
 
@@ -57,14 +59,20 @@ chat.post("/", async (c) => {
     return c.json({ error: "OpenRouter request failed", details: data }, response.status as ContentfulStatusCode);
   }
 
-  // Proxy the streaming response directly to the client
-  return new Response(response.body as ReadableStream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+  // BYOK: stream the response for better UX with fast models
+  if (isBYOK) {
+    return new Response(response.body as ReadableStream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  }
+
+  // Free tier: return JSON directly (model sends everything at once anyway)
+  const data = await response.json();
+  return c.json(data);
 });
 
 export default chat;
