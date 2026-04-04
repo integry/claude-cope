@@ -14,6 +14,35 @@ const roleColors: Record<Message["role"], string> = {
   error: "text-red-500",
 };
 
+type TagCategory = "ERROR" | "WARN" | "SUCCESS" | "INFO";
+
+const TAG_STYLES: Record<TagCategory, string> = {
+  ERROR: "bg-red-900/50 border border-red-500/60 text-red-300",
+  WARN: "bg-yellow-900/50 border border-yellow-500/60 text-yellow-300",
+  SUCCESS: "bg-green-900/50 border border-green-500/60 text-green-300",
+  INFO: "bg-blue-900/50 border border-blue-500/60 text-blue-300",
+};
+
+const TAG_MARKER_PREFIX = "__TAG_";
+const TAG_MARKER_REGEX = /^__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+)$/;
+
+function classifyTag(tagContent: string): TagCategory {
+  const lower = tagContent.toLowerCase();
+  if (/error|❌|💀|🚨|fail|fatal/.test(lower)) return "ERROR";
+  if (/warn|⚠️|caution/.test(lower)) return "WARN";
+  if (/success|✓|✅|complete|done/.test(lower)) return "SUCCESS";
+  return "INFO";
+}
+
+function preprocessTagPrefix(content: string): string {
+  const match = content.match(/^\[([^\]]+)\]/);
+  if (!match) return content;
+  const tagText = match[1];
+  const category = classifyTag(tagText);
+  const marker = `\`${TAG_MARKER_PREFIX}${category}__:${tagText}\``;
+  return marker + content.slice(match[0].length);
+}
+
 function Spinner() {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
@@ -70,6 +99,16 @@ const markdownComponents = {
         </SyntaxHighlighter>
       );
     }
+    const tagMatch = TAG_MARKER_REGEX.exec(codeString);
+    if (tagMatch) {
+      const category = tagMatch[1] as TagCategory;
+      const tagText = tagMatch[2];
+      return (
+        <span className={`${TAG_STYLES[category]} px-2 py-0.5 rounded text-xs font-bold mr-2 inline-block`}>
+          {tagText}
+        </span>
+      );
+    }
     return (
       <code className={`text-cyan-300 bg-cyan-950/30 px-1 rounded ${className || ""}`} {...props}>
         {children}
@@ -93,7 +132,7 @@ function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Me
       {message.role === "loading" && <Spinner />}
       {useMarkdown ? (
         <ReactMarkdown components={markdownComponents}>
-          {message.content}
+          {preprocessTagPrefix(message.content)}
         </ReactMarkdown>
       ) : (
         message.content
