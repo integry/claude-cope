@@ -9,6 +9,7 @@ COPY package.json package-lock.json ./
 # Copy workspace package.json files for dependency resolution
 COPY apps/frontend/package.json apps/frontend/package.json
 COPY apps/backend/package.json apps/backend/package.json
+COPY packages/shared/package.json packages/shared/package.json
 
 # Install all dependencies (including devDependencies for building)
 RUN npm ci
@@ -16,6 +17,7 @@ RUN npm ci
 # Copy source files
 COPY apps/frontend/ apps/frontend/
 COPY apps/backend/ apps/backend/
+COPY packages/shared/ packages/shared/
 
 # Build the React frontend
 RUN npm run build --workspace=apps/frontend
@@ -34,6 +36,7 @@ COPY package.json package-lock.json ./
 # Copy only the backend package.json for production dependency installation
 COPY apps/backend/package.json apps/backend/package.json
 COPY apps/frontend/package.json apps/frontend/package.json
+COPY packages/shared/package.json packages/shared/package.json
 
 # Install production dependencies only
 RUN npm ci --omit=dev
