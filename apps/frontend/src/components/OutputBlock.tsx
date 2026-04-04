@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -83,4 +83,4 @@ function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Me
   );
 }
 
-export default OutputBlock;
+export default React.memo(OutputBlock);
