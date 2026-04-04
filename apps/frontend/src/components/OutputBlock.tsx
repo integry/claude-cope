@@ -23,6 +23,23 @@ function Spinner() {
   return <span>{SPINNER_FRAMES[frame]} </span>;
 }
 
+function TokenCounter() {
+  const [sent, setSent] = useState(0);
+  const [received, setReceived] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setSent((s: number) => s + Math.floor(Math.random() * 12) + 3);
+      setReceived((r: number) => r + Math.floor(Math.random() * 8) + 1);
+    }, 80);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span className="text-yellow-400/70 ml-2 text-sm">
+      Tokens - Sent: {sent} | Received: {received}
+    </span>
+  );
+}
+
 function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Message; promptString?: string }) {
   const colorClass = roleColors[message.role];
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
@@ -79,6 +96,7 @@ function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Me
       ) : (
         message.content
       )}
+      {message.role === "loading" && <TokenCounter />}
     </div>
   );
 }
