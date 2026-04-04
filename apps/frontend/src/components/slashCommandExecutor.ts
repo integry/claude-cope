@@ -35,7 +35,7 @@ interface SlashCommandContext {
   brrrrrrIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
 }
 
-const clearLoading = (prev: Message[]) => prev.filter((m) => m.content !== "[⚙️] Claude is coping...");
+const clearLoading = (prev: Message[]) => prev.filter((m) => m.role !== "loading");
 
 type Reply = (msg: Message) => void;
 
@@ -299,7 +299,7 @@ export function executeSlashCommand(
   ctx.setHistory((prev) => [
     ...prev,
     { role: "user", content: command },
-    { role: "loading", content: "[⚙️] Claude is coping..." },
+    { role: "loading", content: "[⚙️] Coping with your request..." },
   ]);
 
   const reply = (msg: Message): void => {
