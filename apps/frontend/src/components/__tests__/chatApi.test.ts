@@ -31,6 +31,7 @@ function createMockStreamResponse(contents: string[]) {
   return {
     ok: true,
     status: 200,
+    headers: new Headers({ "content-type": "text/event-stream" }),
     body: createMockStream(contents),
     json: () => Promise.reject(new Error("Should not call json on stream")),
   } as unknown as Response;
