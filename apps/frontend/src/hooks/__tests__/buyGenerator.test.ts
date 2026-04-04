@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { calcBulkCost } from "../gameStateUtils";
-import { GENERATORS, GROWTH_RATE } from "../../game/constants";
-import type { GameState, EconomyState } from "../gameStateUtils";
+import { GENERATORS } from "../../game/constants";
+import type { GameState } from "../gameStateUtils";
 
 /* ------------------------------------------------------------------ */
 /*  Helper: replicate the pure buyGenerator logic from useGameState    */
