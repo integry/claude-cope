@@ -7,7 +7,7 @@ import type { Message } from "./Terminal";
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
 const roleColors: Record<Message["role"], string> = {
-  user: "text-gray-100",
+  user: "text-white font-bold",
   system: "text-gray-100",
   loading: "text-yellow-400",
   warning: "text-yellow-400",
@@ -31,7 +31,7 @@ function OutputBlock({ message, promptString = "cope@local:~$ " }: { message: Me
   return (
     <div className={`mb-5 ${colorClass} ${isAchievement ? "achievement-flash whitespace-pre font-bold" : isBuddyInterjection ? "whitespace-pre font-mono" : ""}`}>
       {message.role === "user" && (
-        <span className="text-gray-500">{promptString}</span>
+        <span className="text-green-400 font-bold">{promptString}</span>
       )}
       {message.role === "loading" && <Spinner />}
       {message.role === "system" ? (
