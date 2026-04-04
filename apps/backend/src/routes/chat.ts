@@ -31,7 +31,7 @@ chat.post("/", async (c) => {
 
   const rank = body.rank ?? "Junior Code Monkey";
 
-  // Context window: send last 10 messages for better context retention.
+  // Context window: send last 10 messages for conversation continuity.
   const recentMessages = body.messages.slice(-10);
 
   const messages = [
