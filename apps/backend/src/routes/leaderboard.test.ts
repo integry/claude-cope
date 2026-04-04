@@ -121,7 +121,7 @@ describe("POST /api/leaderboard", () => {
     );
 
     expect(res.status).toBe(500);
-    const json = await res.json();
+    const json = (await res.json()) as { error: string };
     expect(json.error).toBe("Database is not configured");
   });
 
@@ -142,7 +142,7 @@ describe("POST /api/leaderboard", () => {
     );
 
     expect(res.status).toBe(500);
-    const json = await res.json();
+    const json = (await res.json()) as { error: string };
     expect(json.error).toBe("Failed to insert record");
   });
 });
