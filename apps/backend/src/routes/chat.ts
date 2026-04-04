@@ -19,7 +19,7 @@ chat.post("/", async (c) => {
   }>();
 
   const isBYOK = Boolean(body.apiKey);
-  const apiKey = body.apiKey || c.env?.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
+  const apiKey = body.apiKey || (c.env as Record<string, string | undefined>).OPENROUTER_API_KEY;
 
   if (!apiKey) {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
@@ -46,7 +46,7 @@ chat.post("/", async (c) => {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: isBYOK ? "anthropic/claude-3-opus" : "nvidia/nemotron-3-8b-chat-steer",
+      model: isBYOK ? "anthropic/claude-3-opus" : "nvidia/nemotron-3-super-120b-a12b:free",
       messages,
       stream: true,
     }),

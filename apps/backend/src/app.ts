@@ -9,7 +9,7 @@ const app = new Hono();
 
 app.use("*", (c, next) => {
   const env = c.env as Record<string, string | undefined>;
-  const csv = env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGINS || "https://claudecope.com,http://localhost:5173";
+  const csv = env.ALLOWED_ORIGINS || "https://claudecope.com,http://localhost:5173";
   const allowed = csv.split(",").map((s: string) => s.trim());
   return cors({
     origin: (origin) => {
