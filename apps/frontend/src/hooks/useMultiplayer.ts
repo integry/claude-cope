@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import PartySocket from 'partysocket';
 import { Message } from '../components/Terminal';
+import type { ClientMessage, ServerMessage } from '@claude-cope/shared/multiplayer-types';
 
 interface UseMultiplayerOptions {
   setHistory: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -45,7 +46,7 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
 
     socket.addEventListener('message', (event) => {
       try {
-        const data = JSON.parse(event.data);
+        const data: ServerMessage = JSON.parse(event.data);
         if (data.type === 'presence') {
           setOnlineCount(data.count);
           setOnlineUsers(data.users ?? []);
@@ -91,14 +92,16 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
     return () => socket.close();
   }, [localUsername, setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff]);
 
+  const sendMessage = (msg: ClientMessage) => socketRef.current?.send(JSON.stringify(msg));
+
   // Expose methods to trigger attacks and defend against them
-  const sendPing = (target?: string) => socketRef.current?.send(JSON.stringify({ type: 'ping', ...(target ? { target } : {}) }));
+  const sendPing = (target?: string) => sendMessage({ type: 'ping', ...(target ? { target } : {}) });
   const rejectPing = () => {
     setPendingPing(false);
-    socketRef.current?.send(JSON.stringify({ type: 'reject_ping' }));
+    sendMessage({ type: 'reject_ping' });
   };
   // Expose a method to allow players to attack the outage
-  const sendDamage = () => socketRef.current?.send(JSON.stringify({ type: 'damage_outage' }));
+  const sendDamage = () => sendMessage({ type: 'damage_outage' });
 
   return { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage, localUsername };
 }
