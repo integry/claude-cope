@@ -18,6 +18,7 @@ import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
 import Ticker from "./Ticker";
 import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
+import SprintProgressBar from "./SprintProgressBar";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 
@@ -395,23 +396,9 @@ function Terminal() {
           promptString={promptString}
         />
       </div>
-      {state.activeTicket && (() => {
-        const ticket = state.activeTicket;
-        const sprintPercent = Math.min(100, Math.round((ticket.sprintProgress / ticket.sprintGoal) * 100));
-        const totalBlocks = 30;
-        const filledBlocks = Math.round((sprintPercent / 100) * totalBlocks);
-        const emptyBlocks = totalBlocks - filledBlocks;
-        return (
-          <div className="text-xs font-mono text-cyan-400 mt-1 border-t border-cyan-900 pt-1">
-            <span className="text-cyan-600">[SPRINT]</span> {ticket.id}: <span className="text-cyan-300 truncate">{ticket.title}</span>
-            <div className="flex items-center gap-2">
-              <span className="text-cyan-500">[{"█".repeat(filledBlocks)}{"░".repeat(emptyBlocks)}]</span>
-              <span className="text-cyan-300">{ticket.sprintProgress}/{ticket.sprintGoal} TD</span>
-              <span className="text-cyan-600">{sprintPercent}%</span>
-            </div>
-          </div>
-        );
-      })()}
+      {state.activeTicket && (
+        <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />
+      )}
       {showStore && (
         <StoreOverlay
           state={state}
