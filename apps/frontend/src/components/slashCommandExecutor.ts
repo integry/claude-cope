@@ -1,9 +1,10 @@
-import { CORPORATE_RANKS, GENERATORS } from "../game/constants";
+import { GENERATORS } from "../game/constants";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { buildAchievementBox } from "./achievementBox";
+import { handleTicketCommand, handleBacklogCommand, handleTakeCommand } from "./ticketCommands";
 
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
@@ -246,105 +247,6 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
   return false;
 }
 
-async function handleTicketCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<boolean> {
-  const task = command.slice("/ticket".length).trim();
-  if (!task) {
-    reply({ role: "error", content: "[❌] Usage: `/ticket <description>` — Describe a task for the PM to over-engineer." });
-    return true;
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/api/tickets/refine`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ task }),
-    });
-
-    if (!res.ok) {
-      reply({ role: "error", content: `[❌] Ticket refinement failed (HTTP ${res.status}). The PM is on PTO.` });
-      return true;
-    }
-
-    const data = await res.json() as { id: string; title: string; description: string; estimatedTechDebt: number };
-    reply({
-      role: "system",
-      content: `[📋 **TICKET REFINED**] Your PM has over-scoped your request:\n\n**${data.title}**\n\n${data.description}\n\n**Story Points:** ${data.estimatedTechDebt} TD\n**Ticket ID:** \`${data.id}\``,
-    });
-  } catch {
-    reply({ role: "error", content: "[❌] Network error — could not reach the PM. They're probably in a meeting about meetings." });
-  }
-  return true;
-}
-
-async function handleBacklogCommand(ctx: SlashCommandContext, reply: Reply): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/tickets/community`);
-    if (!res.ok) {
-      reply({ role: "error", content: `[❌] Failed to fetch backlog (HTTP ${res.status}).` });
-      return true;
-    }
-
-    const tickets = await res.json() as { id: string; title: string; description: string; technical_debt: number }[];
-    if (!tickets.length) {
-      reply({ role: "system", content: "[📋 **BACKLOG**] The backlog is empty. Submit tickets with `/ticket <description>`." });
-      return true;
-    }
-
-    const list = tickets.map((t, i) => `${i + 1}. **${t.title}** — ${t.technical_debt} TD (\`${t.id.slice(0, 8)}\`)`).join("\n");
-    reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]\n\n${list}\n\nUse \`/take <ticket-id>\` to claim a ticket.` });
-  } catch {
-    reply({ role: "error", content: "[❌] Network error — the backlog server is unreachable." });
-  }
-  return true;
-}
-
-async function handleTakeCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<boolean> {
-  const ticketId = command.slice("/take".length).trim();
-  if (!ticketId) {
-    reply({ role: "error", content: "[❌] Usage: `/take <ticket-id>` — Check `/backlog` for available tickets." });
-    return true;
-  }
-
-  if (ctx.state.activeTicket) {
-    reply({ role: "error", content: `[❌] You already have an active ticket: **${ctx.state.activeTicket.title}**. Finish it first!` });
-    return true;
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/api/tickets/community`);
-    if (!res.ok) {
-      reply({ role: "error", content: `[❌] Failed to fetch backlog (HTTP ${res.status}).` });
-      return true;
-    }
-
-    const tickets = await res.json() as { id: string; title: string; technical_debt: number }[];
-    const ticket = tickets.find((t) => t.id.startsWith(ticketId));
-
-    if (!ticket) {
-      reply({ role: "error", content: `[❌] Ticket \`${ticketId}\` not found. Check \`/backlog\` for available tickets.` });
-      return true;
-    }
-
-    ctx.setState((prev) => ({
-      ...prev,
-      activeTicket: {
-        id: ticket.id.slice(0, 8),
-        title: ticket.title,
-        sprintProgress: 0,
-        sprintGoal: ticket.technical_debt,
-      },
-    }));
-
-    reply({
-      role: "system",
-      content: `[🎫 **TICKET CLAIMED**] You picked up **${ticket.title}**.\n\nSprint goal: **${ticket.technical_debt} TD**. Get grinding!`,
-    });
-  } catch {
-    reply({ role: "error", content: "[❌] Network error — could not fetch tickets." });
-  }
-  return true;
-}
-
 function handleUpgradeCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   const ownedGenerators = GENERATORS
     .filter((g) => (ctx.state.inventory[g.id] ?? 0) > 0)
@@ -443,13 +345,13 @@ export function executeSlashCommand(
     } else if (command === "/upgrade") {
       handleUpgradeCommand(ctx, reply);
     } else if (command.startsWith("/ticket")) {
-      handleTicketCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
+      handleTicketCommand(command, reply).then(() => ctx.setIsProcessing(false));
       return;
     } else if (command === "/backlog") {
-      handleBacklogCommand(ctx, reply).then(() => ctx.setIsProcessing(false));
+      handleBacklogCommand(reply).then(() => ctx.setIsProcessing(false));
       return;
     } else if (command.startsWith("/take")) {
-      handleTakeCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
+      handleTakeCommand(command, ctx.state, ctx.setState, reply).then(() => ctx.setIsProcessing(false));
       return;
     } else if (handleNewCommand(command, ctx, reply)) {
       // /brrrrrr handles its own setIsProcessing
@@ -464,49 +366,4 @@ export function executeSlashCommand(
   }, Math.floor(Math.random() * 1500) + 1500);
 }
 
-export function parseSabotageParams(
-  setState: SetState,
-  setHistory: SetHistory,
-) {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get("sabotage") !== "true") return;
-
-  const target = parseInt(params.get("target") ?? "0", 10);
-  const rankTitle = params.get("rank") ?? "";
-
-  if (target > 0) {
-    let rankIndex = 0;
-    for (let i = 0; i < CORPORATE_RANKS.length; i++) {
-      if (CORPORATE_RANKS[i]!.title === rankTitle) {
-        rankIndex = i;
-        break;
-      }
-    }
-
-    setState((prev) => {
-      const newRankIndex = Math.max(
-        CORPORATE_RANKS.findIndex((r) => r.title === prev.economy.currentRank),
-        rankIndex,
-      );
-      return {
-        ...prev,
-        economy: {
-          ...prev.economy,
-          currentTD: target,
-          totalTDEarned: target,
-          currentRank: CORPORATE_RANKS[newRankIndex]?.title ?? prev.economy.currentRank,
-        },
-      };
-    });
-
-    setHistory((prev) => [
-      ...prev,
-      {
-        role: "warning" as const,
-        content: `[🚨 **SABOTAGE**] A colleague sent you **${target.toLocaleString()} TD** of inherited technical debt! Your rank has been set to **${rankTitle || "Unknown"}**.`,
-      },
-    ]);
-  }
-
-  window.history.replaceState({}, "", window.location.pathname);
-}
+export { parseSabotageParams } from "./sabotageParams";
