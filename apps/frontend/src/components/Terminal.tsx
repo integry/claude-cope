@@ -118,13 +118,8 @@ function Terminal() {
 
   const triggerInstantBan = () => {
     setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
-    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"),
-      { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." },
-    ]);
-    setTimeout(() => {
-      setQuotaLocked(false); setIsProcessing(false);
-      setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]);
-    }, 5000);
+    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." }]);
+    setTimeout(() => { setQuotaLocked(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
   };
 
   /** Drains quota and triggers lockout if depleted. Returns true if command was consumed by lockout. */
@@ -416,22 +411,9 @@ function Terminal() {
           onClose={() => setShowStore(false)}
         />
       )}
-      {showLeaderboard && (
-        <LeaderboardOverlay
-          onClose={() => setShowLeaderboard(false)}
-        />
-      )}
-      {showAchievements && (
-        <AchievementOverlay
-          unlockedIds={state.achievements}
-          onClose={() => setShowAchievements(false)}
-        />
-      )}
-      {showHelp && (
-        <HelpOverlay
-          onClose={() => setShowHelp(false)}
-        />
-      )}
+      {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
+      {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
+      {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}
       {showSynergize && (
         <SynergizeOverlay
           onClose={() => {
