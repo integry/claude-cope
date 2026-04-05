@@ -22,6 +22,16 @@ import { useTerminalEffects } from "../hooks/useTerminalEffects";
 
 export type { Message };
 
+function parseGlitchStyle(regressionGlitch: string | undefined) {
+  if (!regressionGlitch) return undefined;
+  return Object.fromEntries(
+    regressionGlitch.split(";").filter(Boolean).map((s) => {
+      const [k, ...v] = s.split(":");
+      return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()];
+    })
+  );
+}
+
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned } = useGameState();
   const history = state.chatHistory;
@@ -339,7 +349,7 @@ function Terminal() {
   return (
     <div
       className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "min-h-screen"} w-full font-mono text-sm text-gray-100 leading-relaxed p-4 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
-      style={regressionGlitch ? Object.fromEntries(regressionGlitch.split(";").filter(Boolean).map((s) => { const [k, ...v] = s.split(":"); return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()]; })) : undefined}
+      style={parseGlitchStyle(regressionGlitch)}
       onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
       {/* Mount the Ticker at the very top of the interface so it acts as a global broadcast banner */}
