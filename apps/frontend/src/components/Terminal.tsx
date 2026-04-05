@@ -99,7 +99,8 @@ function Terminal() {
       const isNew = newLockouts >= 3 && unlockAchievement("homer_at_the_buffet");
       setQuotaLocked(false);
       setIsProcessing(false);
-      setInstantBanReady(true);
+      // Only arm the ban trap on the first lockout — it's a one-time gag
+      if (newLockouts === 1) setInstantBanReady(true);
       setHistory((prev) => {
         const messages: Message[] = [
           ...prev,
