@@ -19,6 +19,7 @@ interface SlashCommandContext {
   setShowAchievements: (v: boolean) => void;
   setShowSynergize: (v: boolean) => void;
   setShowHelp: (v: boolean) => void;
+  setShowAbout: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -194,6 +195,10 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     ctx.setHistory(clearLoading);
     ctx.setShowHelp(true);
     window.history.pushState(null, "", "/help");
+    return true;
+  } else if (command === "/about") {
+    ctx.setHistory(clearLoading);
+    ctx.setShowAbout(true);
     return true;
   } else if (command === "/fast") {
     const newFast = !ctx.state.modes.fast;
