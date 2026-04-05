@@ -4,7 +4,7 @@ import { supabase } from "../supabaseClient";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { buildAchievementBox } from "./achievementBox";
-import { handleTicketCommand, handleBacklogCommand, handleTakeCommand } from "./ticketCommands";
+import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand } from "./ticketCommands";
 
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
@@ -391,6 +391,8 @@ export function executeSlashCommand(
       return;
     } else if (command.startsWith("/take")) {
       handleTakeCommand(command, ctx.state, ctx.setState, reply);
+    } else if (command === "/abandon") {
+      handleAbandonCommand(ctx.state, ctx.setState, reply);
     } else if (command.startsWith("/alias")) {
       handleAliasCommand(command, ctx, reply);
     } else if (command.startsWith("/model")) {
