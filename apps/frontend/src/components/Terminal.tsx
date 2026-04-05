@@ -72,7 +72,7 @@ function Terminal() {
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialHistoryLen = useRef(history.length);
   const lastEscapeRef = useRef<number>(0);
-  const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ ";
+  const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
