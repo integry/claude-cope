@@ -50,6 +50,7 @@ function Terminal() {
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialHistoryLen = useRef(history.length);
   const lastEscapeRef = useRef<number>(0);
+  const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ ";
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
@@ -370,7 +371,7 @@ function Terminal() {
       <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : ""} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
-          <OutputBlock key={index} message={message} isNew={index >= initialHistoryLen.current} promptString={activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "} />
+          <OutputBlock key={index} message={message} isNew={index >= initialHistoryLen.current} promptString={promptString} />
         ))}
         <div ref={bottomRef} />
       </div>
@@ -388,7 +389,7 @@ function Terminal() {
           disabled={isProcessing || isBooting || quotaLocked}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          promptString={activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "}
+          promptString={promptString}
         />
       </div>
       {showStore && (
