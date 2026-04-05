@@ -255,21 +255,51 @@ const markdownComponents = {
   },
 };
 
-function OutputBlock({ message, isNew = false, promptString = "❯ " }: { message: Message; isNew?: boolean; promptString?: string }) {
+function getContainerClass(message: Message, isNew: boolean): string {
   const colorClass = roleColors[message.role];
+  const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
+  const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
+
+  let modifier = "leading-relaxed";
+  if (isAchievement) {
+    modifier = `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold`;
+  } else if (isBuddyInterjection) {
+    modifier = "whitespace-pre font-mono";
+  }
+  return `mb-5 ${colorClass} ${modifier}`;
+}
+
+function MessageContent({ message }: { message: Message }) {
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
   const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
   const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
-
-  const processedContent = useMarkdown ? cleanLeakedTagMarkers(message.content) : message.content;
-
-  // Show simulated tool calls only while LLM request is pending (before streaming starts)
   const isAwaitingResponse = message.role === "loading" && message.content === "[⚙️] Coping with your request...";
   const isStreaming = message.role === "loading" && !isAwaitingResponse;
 
+  if (message.role === "user") return null;
+
+  if (useMarkdown) {
+    const processedContent = cleanLeakedTagMarkers(message.content);
+    return (
+      <div className="space-y-1">
+        <ReactMarkdown components={markdownComponents}>
+          {processedContent}
+        </ReactMarkdown>
+      </div>
+    );
+  }
+
+  if (isStreaming) return <>{message.content}</>;
+  if (message.role !== "loading") return <>{message.content}</>;
+  return null;
+}
+
+function OutputBlock({ message, isNew = false, promptString = "❯ " }: { message: Message; isNew?: boolean; promptString?: string }) {
+  const isAwaitingResponse = message.role === "loading" && message.content === "[⚙️] Coping with your request...";
+
   return (
-    <div className={`mb-5 ${colorClass} ${isAchievement ? `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold` : isBuddyInterjection ? "whitespace-pre font-mono" : "leading-relaxed"}`}>
+    <div className={getContainerClass(message, isNew)}>
       {message.role === "user" && (
         <div className="inline-block bg-gray-100 text-gray-900 rounded px-3 py-1.5 font-bold">
           <span className="text-gray-500 mr-1">{promptString}</span>
@@ -277,15 +307,7 @@ function OutputBlock({ message, isNew = false, promptString = "❯ " }: { messag
         </div>
       )}
       {message.role === "loading" && <Spinner />}
-      {message.role !== "user" && (useMarkdown ? (
-        <div className="space-y-1">
-          <ReactMarkdown components={markdownComponents}>
-            {processedContent}
-          </ReactMarkdown>
-        </div>
-      ) : (
-        isStreaming ? message.content : message.role !== "loading" ? message.content : null
-      ))}
+      <MessageContent message={message} />
       {isAwaitingResponse && <SimulatedToolCall />}
       {message.role === "loading" && <TokenCounter />}
     </div>
