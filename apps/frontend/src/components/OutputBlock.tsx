@@ -200,7 +200,7 @@ const markdownComponents = {
   },
 };
 
-function OutputBlock({ message, isNew = false, promptString = "cope@local:~$ " }: { message: Message; isNew?: boolean; promptString?: string }) {
+function OutputBlock({ message, isNew = false, promptString = "❯ " }: { message: Message; isNew?: boolean; promptString?: string }) {
   const colorClass = roleColors[message.role];
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
   const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
@@ -212,10 +212,13 @@ function OutputBlock({ message, isNew = false, promptString = "cope@local:~$ " }
   return (
     <div className={`mb-5 ${colorClass} ${isAchievement ? `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold` : isBuddyInterjection ? "whitespace-pre font-mono" : "leading-relaxed"}`}>
       {message.role === "user" && (
-        <span className="text-green-400 font-bold">{promptString}</span>
+        <div className="inline-block bg-gray-100 text-gray-900 rounded px-3 py-1.5 font-bold">
+          <span className="text-gray-500 mr-1">{promptString}</span>
+          {message.content}
+        </div>
       )}
       {message.role === "loading" && <Spinner />}
-      {useMarkdown ? (
+      {message.role !== "user" && (useMarkdown ? (
         <div className="space-y-1">
           <ReactMarkdown components={markdownComponents}>
             {processedContent}
@@ -223,7 +226,7 @@ function OutputBlock({ message, isNew = false, promptString = "cope@local:~$ " }
         </div>
       ) : (
         message.content
-      )}
+      ))}
       {message.role === "loading" && <TokenCounter />}
     </div>
   );

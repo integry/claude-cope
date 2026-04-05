@@ -9,20 +9,22 @@ type CommandLineProps = {
 };
 
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
-  function CommandLine({ value, disabled, onChange, onKeyDown, promptString = "cope@local:~$ " }, ref) {
+  function CommandLine({ value, disabled, onChange, onKeyDown, promptString = "❯ " }, ref) {
     return (
-      <div className="flex items-center">
-        <span className="text-green-400 font-bold whitespace-pre">{promptString}</span>
-        <input
-          ref={ref}
-          type="text"
-          value={value}
-          disabled={disabled}
-          onChange={onChange}
-          onKeyDown={onKeyDown}
-          className="flex-1 outline-none bg-transparent text-white font-bold caret-white disabled:opacity-50"
-          autoFocus
-        />
+      <div className="border-t border-b border-gray-600/50 py-1.5">
+        <div className="flex items-center">
+          <span className="text-white font-bold whitespace-pre">{promptString}</span>
+          <input
+            ref={ref}
+            type="text"
+            value={value}
+            disabled={disabled}
+            onChange={onChange}
+            onKeyDown={onKeyDown}
+            className="flex-1 outline-none bg-transparent text-white font-bold caret-white disabled:opacity-50"
+            autoFocus
+          />
+        </div>
       </div>
     );
   }
