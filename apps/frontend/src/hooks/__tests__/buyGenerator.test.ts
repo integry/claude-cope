@@ -76,6 +76,7 @@ function makeDefaultState(overrides?: Partial<GameState>): GameState {
     commandUsage: {},
     modes: { fast: false, voice: false },
     activeTicket: null,
+    hasSeenTicketPrompt: false,
     ...overrides,
   };
 }

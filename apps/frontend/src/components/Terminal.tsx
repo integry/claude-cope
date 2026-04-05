@@ -18,6 +18,7 @@ import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
 import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
+import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import Ticker from "./Ticker";
 import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
 import SprintProgressBar from "./SprintProgressBar";
@@ -97,6 +98,13 @@ function Terminal() {
       inputRef.current?.focus();
     }
   }, [isProcessing, isBooting, quotaLocked]);
+
+  // Show a random community ticket prompt for first-time users after boot
+  useEffect(() => {
+    if (isBooting || state.hasSeenTicketPrompt) return;
+    setState((prev) => ({ ...prev, hasSeenTicketPrompt: true }));
+    fetchRandomTicketPrompt(setHistory);
+  }, [isBooting, state.hasSeenTicketPrompt, setState, setHistory]);
 
   const triggerQuotaLockout = () => {
     setQuotaLocked(true);
