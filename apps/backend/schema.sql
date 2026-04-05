@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS hall_of_blame (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     username TEXT NOT NULL,
     corporate_rank TEXT NOT NULL,
+    country TEXT NOT NULL DEFAULT 'Unknown',
     technical_debt INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
