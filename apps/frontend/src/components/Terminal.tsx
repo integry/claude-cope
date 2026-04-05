@@ -9,6 +9,7 @@ import AchievementOverlay from "./AchievementOverlay";
 import SynergizeOverlay from "./SynergizeOverlay";
 import HelpOverlay from "./HelpOverlay";
 import AboutOverlay from "./AboutOverlay";
+import UserProfileOverlay from "./UserProfileOverlay";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
 import { calculateTDpS } from "../hooks/gameStateUtils";
@@ -49,6 +50,7 @@ function Terminal() {
   const [showSynergize, setShowSynergize] = useState(false);
   const [showHelp, setShowHelp] = useState(() => window.location.pathname === "/help");
   const [showAbout, setShowAbout] = useState(() => window.location.pathname === "/about");
+  const [showProfile, setShowProfile] = useState(false);
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
@@ -158,7 +160,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowProfile, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } },
     );
   };
 
@@ -415,6 +417,7 @@ function Terminal() {
       {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
       {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
       {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
+      {showProfile && <UserProfileOverlay state={state} onClose={() => setShowProfile(false)} />}
       {showSynergize && (
         <SynergizeOverlay
           onClose={() => {

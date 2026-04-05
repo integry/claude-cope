@@ -20,6 +20,7 @@ interface SlashCommandContext {
   setShowSynergize: (v: boolean) => void;
   setShowHelp: (v: boolean) => void;
   setShowAbout: (v: boolean) => void;
+  setShowProfile: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -129,6 +130,10 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
   } else if (command === "/synergize") {
     reply({ role: "system", content: "[🗓️] **Mandatory 1-on-1 meeting** initiated. You cannot escape." });
     ctx.setShowSynergize(true);
+    return true;
+  } else if (command === "/profile") {
+    ctx.setHistory(clearLoading);
+    ctx.setShowProfile(true);
     return true;
   } else if (command === "/compact") {
     ctx.triggerCompactEffect();
