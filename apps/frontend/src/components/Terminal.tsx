@@ -22,6 +22,16 @@ import { useTerminalEffects } from "../hooks/useTerminalEffects";
 
 export type { Message };
 
+function parseGlitchStyle(regressionGlitch: string | null | undefined) {
+  if (!regressionGlitch) return undefined;
+  return Object.fromEntries(
+    regressionGlitch.split(";").filter(Boolean).map((s) => {
+      const [k, ...v] = s.split(":");
+      return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()];
+    })
+  );
+}
+
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
@@ -50,6 +60,7 @@ function Terminal() {
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialHistoryLen = useRef(history.length);
   const lastEscapeRef = useRef<number>(0);
+  const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ ";
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
@@ -356,8 +367,8 @@ function Terminal() {
 
   return (
     <div
-      className={`h-screen w-screen font-mono text-sm text-gray-100 leading-relaxed p-4 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
-      style={regressionGlitch ? Object.fromEntries(regressionGlitch.split(";").filter(Boolean).map((s) => { const [k, ...v] = s.split(":"); return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()]; })) : undefined}
+      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "min-h-screen"} w-full font-mono text-sm text-gray-100 leading-relaxed p-4 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
+      style={parseGlitchStyle(regressionGlitch)}
       onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
       {/* Mount the Ticker at the very top of the interface so it acts as a global broadcast banner */}
@@ -389,7 +400,7 @@ function Terminal() {
       <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
-          <OutputBlock key={index} message={message} isNew={index >= initialHistoryLen.current} promptString={activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "} />
+          <OutputBlock key={index} message={message} isNew={index >= initialHistoryLen.current} promptString={promptString} />
         ))}
         <div ref={bottomRef} />
       </div>
@@ -407,7 +418,7 @@ function Terminal() {
           disabled={isProcessing || isBooting || quotaLocked}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          promptString={activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "}
+          promptString={promptString}
         />
       </div>
       {showStore && (
