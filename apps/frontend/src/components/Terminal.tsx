@@ -337,7 +337,7 @@ function Terminal() {
 
   return (
     <div
-      className={`h-screen w-screen font-mono text-sm text-gray-100 leading-relaxed p-4 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
+      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "min-h-screen"} w-full font-mono text-sm text-gray-100 leading-relaxed p-4 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
       style={regressionGlitch ? Object.fromEntries(regressionGlitch.split(";").filter(Boolean).map((s) => { const [k, ...v] = s.split(":"); return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()]; })) : undefined}
       onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
@@ -367,7 +367,7 @@ function Terminal() {
         </div>
       )}
       <HeaderBar rank={rank} totalTDEarned={state.economy.totalTDEarned} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} tdps={calculateTDpS(state.inventory, state.upgrades)} />
-      <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
+      <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : ""} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
           <OutputBlock key={index} message={message} isNew={index >= initialHistoryLen.current} promptString={activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ "} />
