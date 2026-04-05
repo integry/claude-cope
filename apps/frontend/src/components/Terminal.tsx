@@ -23,7 +23,7 @@ import { useTerminalEffects } from "../hooks/useTerminalEffects";
 export type { Message };
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
@@ -199,6 +199,25 @@ function Terminal() {
     setInputValue("");
 
     addActiveTD(Math.floor(Math.random() * 40) + 10);
+
+    // Update ticket progress based on prompt length
+    if (state.activeTicket) {
+      const increment = command.length * 150;
+      updateTicketProgress(increment);
+      const newProgress = Math.min(
+        state.activeTicket.sprintProgress + increment,
+        state.activeTicket.sprintGoal,
+      );
+      if (newProgress >= state.activeTicket.sprintGoal) {
+        const payout = state.activeTicket.sprintGoal;
+        addActiveTD(payout);
+        setHistory((prev) => [
+          ...prev,
+          { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned ${payout} TD. The board is pleased... for now.` },
+        ]);
+        setState((prev) => ({ ...prev, activeTicket: null }));
+      }
+    }
 
     // Show the user's message in history before any lockout/ban kicks in
     if (applyQuotaDrain()) {
