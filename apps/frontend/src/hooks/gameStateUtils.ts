@@ -37,6 +37,8 @@ function generateUsername(): string {
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
   content: string;
+  tokensSent?: number;
+  tokensReceived?: number;
 };
 
 export interface BuddyState {
