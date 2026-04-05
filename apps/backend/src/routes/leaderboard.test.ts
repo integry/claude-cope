@@ -43,7 +43,32 @@ describe("POST /api/leaderboard", () => {
     // rank should be passed through unchanged
     expect(bound).toContain("alice");
     expect(bound).toContain("Senior Debt Architect");
+    expect(bound).toContain("Unknown");
     expect(bound).toContain(1_000_000);
+  });
+
+  it("saves country from cf-ipcountry header", async () => {
+    const { db, bound } = createMockDB();
+    const res = await app.request(
+      "/api/leaderboard",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "cf-ipcountry": "PK",
+        },
+        body: JSON.stringify({
+          username: "ali",
+          rank: "Tech Lead",
+          debt: 500_000,
+        }),
+      },
+      { ALLOWED_ORIGINS: "http://localhost:5173", DB: db }
+    );
+
+    expect(res.status).toBe(201);
+    expect(bound).toContain("PK");
+    expect(bound).not.toContain("Unknown");
   });
 
   it("overrides rank to 'DevTools Hacker' when debt exceeds 50 billion", async () => {
@@ -150,7 +175,7 @@ describe("POST /api/leaderboard", () => {
 describe("GET /api/leaderboard", () => {
   it("returns leaderboard entries from the database", async () => {
     const mockResults = [
-      { id: "1", username: "alice", corporate_rank: "CTO", technical_debt: 999, created_at: "2026-01-01" },
+      { id: "1", username: "alice", corporate_rank: "CTO", country: "US", technical_debt: 999, created_at: "2026-01-01" },
     ];
     const db = {
       prepare: vi.fn().mockReturnValue({

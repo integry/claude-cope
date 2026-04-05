@@ -17,7 +17,7 @@ leaderboard.get("/", async (c) => {
 
   const { results } = await db
     .prepare(
-      "SELECT id, username, corporate_rank, technical_debt, created_at FROM hall_of_blame ORDER BY technical_debt DESC LIMIT 50"
+      "SELECT id, username, corporate_rank, country, technical_debt, created_at FROM hall_of_blame ORDER BY technical_debt DESC LIMIT 50"
     )
     .all();
 
@@ -47,11 +47,13 @@ leaderboard.post("/", async (c) => {
   // Cheater Catch: if debt exceeds 50 billion, override rank
   const corporateRank = debt > 50_000_000_000 ? "🤡 DevTools Hacker" : rank;
 
+  const country = c.req.header("cf-ipcountry") || "Unknown";
+
   const { success } = await db
     .prepare(
-      "INSERT INTO hall_of_blame (id, username, corporate_rank, technical_debt) VALUES (lower(hex(randomblob(16))), ?, ?, ?)"
+      "INSERT INTO hall_of_blame (id, username, corporate_rank, country, technical_debt) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)"
     )
-    .bind(username, corporateRank, debt)
+    .bind(username, corporateRank, country, debt)
     .run();
 
   if (!success) {
