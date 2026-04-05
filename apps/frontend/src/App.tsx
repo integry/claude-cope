@@ -8,8 +8,11 @@ function App() {
 
   return (
     <>
-      {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
-      <Terminal />
+      {showSplash ? (
+        <SplashScreen onComplete={handleSplashComplete} />
+      ) : (
+        <Terminal />
+      )}
     </>
   );
 }
