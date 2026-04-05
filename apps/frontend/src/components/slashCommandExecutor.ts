@@ -193,6 +193,7 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     ctx.addActiveTD(tdGrant);
     ctx.setHistory(clearLoading);
     ctx.setShowHelp(true);
+    window.history.pushState(null, "", "/help");
     return true;
   } else if (command === "/fast") {
     const newFast = !ctx.state.modes.fast;
