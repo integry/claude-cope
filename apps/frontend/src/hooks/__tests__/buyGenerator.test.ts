@@ -74,6 +74,7 @@ function makeDefaultState(overrides?: Partial<GameState>): GameState {
     chatHistory: [],
     commandUsage: {},
     modes: { fast: false, voice: false },
+    activeTicket: null,
     ...overrides,
   };
 }

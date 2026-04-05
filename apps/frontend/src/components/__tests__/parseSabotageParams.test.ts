@@ -29,6 +29,7 @@ function makeGameState(overrides: Partial<GameState["economy"]> = {}): GameState
     chatHistory: [],
     commandUsage: {},
     modes: { fast: false, voice: false },
+    activeTicket: null,
   };
 }
 
