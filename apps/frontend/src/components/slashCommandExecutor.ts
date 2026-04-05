@@ -150,6 +150,16 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     ctx.setHistory(clearLoading);
     ctx.setShowProfile(true);
     return true;
+  } else if (command === "/user" || command.startsWith("/user ")) {
+    const alias = command.slice(5).trim();
+    ctx.setHistory(clearLoading);
+    ctx.setShowProfile(true);
+    if (alias) {
+      window.history.pushState(null, "", `/user/${encodeURIComponent(alias)}`);
+    } else {
+      window.history.pushState(null, "", `/user/${encodeURIComponent(ctx.state.username)}`);
+    }
+    return true;
   } else if (command === "/compact") {
     ctx.triggerCompactEffect();
     ctx.setHistory((prev) => {
@@ -358,7 +368,7 @@ export function executeSlashCommand(
   };
 
   // Track command usage for performance review brag card
-  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command;
+  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command;
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {
