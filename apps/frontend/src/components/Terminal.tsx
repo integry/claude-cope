@@ -64,7 +64,7 @@ function Terminal() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [showSynergize, setShowSynergize] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
+  const [showHelp, setShowHelp] = useState(() => window.location.pathname === "/help");
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
@@ -79,6 +79,14 @@ function Terminal() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [history]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      setShowHelp(window.location.pathname === "/help");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   // Requirement 1: Auto-restore focus when terminal finishes processing/booting/quota lockout
   useEffect(() => {
@@ -413,7 +421,7 @@ function Terminal() {
       )}
       {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
       {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
-      {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}
+      {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
       {showSynergize && (
         <SynergizeOverlay
           onClose={() => {
