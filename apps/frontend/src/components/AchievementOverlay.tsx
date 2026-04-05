@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
 
 type AchievementOverlayProps = {
@@ -6,8 +7,13 @@ type AchievementOverlayProps = {
 };
 
 function AchievementOverlay({ unlockedIds, onClose }: AchievementOverlayProps) {
+  const [showCollectedOnly, setShowCollectedOnly] = useState(false);
   const unlockedSet = new Set(unlockedIds);
   const unlockedCount = ALL_ACHIEVEMENTS.filter((a) => unlockedSet.has(a.id)).length;
+
+  const displayedAchievements = showCollectedOnly
+    ? ALL_ACHIEVEMENTS.filter((a) => unlockedSet.has(a.id))
+    : ALL_ACHIEVEMENTS;
 
   return (
     <div className="fixed right-0 top-0 h-full w-80 bg-[#0d1117] border-l border-gray-700 flex flex-col z-20">
@@ -31,8 +37,31 @@ function AchievementOverlay({ unlockedIds, onClose }: AchievementOverlayProps) {
  ╚══════════════════════════════╝`}</pre>
       </div>
 
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-700">
+        <button
+          onClick={() => setShowCollectedOnly(false)}
+          className={`text-xs px-2 py-0.5 rounded border ${
+            !showCollectedOnly
+              ? "border-green-500 text-green-400 bg-green-500/10"
+              : "border-gray-700 text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          All
+        </button>
+        <button
+          onClick={() => setShowCollectedOnly(true)}
+          className={`text-xs px-2 py-0.5 rounded border ${
+            showCollectedOnly
+              ? "border-green-500 text-green-400 bg-green-500/10"
+              : "border-gray-700 text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          Collected
+        </button>
+      </div>
+
       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
-        {ALL_ACHIEVEMENTS.map((achievement) => {
+        {displayedAchievements.map((achievement) => {
           const unlocked = unlockedSet.has(achievement.id);
           return (
             <div
