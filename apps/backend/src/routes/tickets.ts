@@ -18,7 +18,7 @@ tickets.post("/refine", async (c) => {
     return c.json({ error: "Database is not configured" }, 500);
   }
 
-  const apiKey = (c.env as Record<string, string | undefined>).OPENROUTER_API_KEY;
+  const apiKey = (c.env as unknown as Record<string, string | undefined>).OPENROUTER_API_KEY;
 
   if (!apiKey) {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
