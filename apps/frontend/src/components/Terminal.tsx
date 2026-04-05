@@ -12,12 +12,14 @@ import AboutOverlay from "./AboutOverlay";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
 import { calculateTDpS } from "../hooks/gameStateUtils";
-import { BUDDY_ICONS } from "./buddyConstants";
+import { BuddyDisplay } from "./BuddyDisplay";
+import { parseGlitchStyle } from "./parseGlitchStyle";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
 import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
+import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import Ticker from "./Ticker";
 import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
 import SprintProgressBar from "./SprintProgressBar";
@@ -25,26 +27,6 @@ import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 
 export type { Message };
-
-function BuddyDisplay({ type, isShiny }: { type: string | null; isShiny: boolean }) {
-  if (!type) return null;
-  return (
-    <div className={`text-xs mb-1 ${isShiny ? "text-amber-300" : "text-yellow-400"}`}>
-      <pre className="font-mono whitespace-pre inline-block">{BUDDY_ICONS[type] ?? "🐾"}</pre>
-      <div>{isShiny ? `✨ Shiny ${type} ✨` : type} is watching...</div>
-    </div>
-  );
-}
-
-function parseGlitchStyle(regressionGlitch: string | null | undefined) {
-  if (!regressionGlitch) return undefined;
-  return Object.fromEntries(
-    regressionGlitch.split(";").filter(Boolean).map((s) => {
-      const [k, ...v] = s.split(":");
-      return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()];
-    })
-  );
-}
 
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
@@ -97,6 +79,13 @@ function Terminal() {
       inputRef.current?.focus();
     }
   }, [isProcessing, isBooting, quotaLocked]);
+
+  // Show a random community ticket prompt for first-time users after boot
+  useEffect(() => {
+    if (isBooting || state.hasSeenTicketPrompt) return;
+    setState((prev) => ({ ...prev, hasSeenTicketPrompt: true }));
+    fetchRandomTicketPrompt(setHistory);
+  }, [isBooting, state.hasSeenTicketPrompt, setState, setHistory]);
 
   const triggerQuotaLockout = () => {
     setQuotaLocked(true);

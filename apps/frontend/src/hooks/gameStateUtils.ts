@@ -81,6 +81,7 @@ export interface GameState {
   commandUsage: Record<string, number>;
   modes: ModesState;
   activeTicket: ActiveTicket | null;
+  hasSeenTicketPrompt: boolean;
   apiKey?: string;
   selectedModel?: string;
 }
@@ -144,6 +145,7 @@ function createDefaultState(): GameState {
     commandUsage: {},
     modes: { fast: false, voice: false },
     activeTicket: null,
+    hasSeenTicketPrompt: false,
   };
 }
 
@@ -178,6 +180,7 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
     commandUsage: {},
     modes: { fast: false, voice: false },
     activeTicket: null,
+    hasSeenTicketPrompt: false,
   };
 }
 
@@ -219,6 +222,9 @@ export function loadState(): GameState {
       }
       if (state.activeTicket === undefined) {
         state.activeTicket = null;
+      }
+      if (state.hasSeenTicketPrompt === undefined) {
+        state.hasSeenTicketPrompt = false;
       }
       if (!state.username) {
         state.username = generateUsername();
