@@ -6,6 +6,61 @@ import type { Message } from "./Terminal";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
+const SIMULATED_TOOL_STEPS = [
+  { tool: "Read", target: "src/index.ts", action: "Reading file" },
+  { tool: "Grep", target: "handleRequest", action: "Searching codebase" },
+  { tool: "Read", target: "package.json", action: "Reading file" },
+  { tool: "Bash", target: "npm test", action: "Running command" },
+  { tool: "Glob", target: "src/**/*.ts", action: "Finding files" },
+  { tool: "Read", target: "tsconfig.json", action: "Reading file" },
+  { tool: "Grep", target: "export default", action: "Searching codebase" },
+  { tool: "Bash", target: "tsc --noEmit", action: "Running command" },
+  { tool: "Read", target: "src/utils/helpers.ts", action: "Reading file" },
+  { tool: "Grep", target: "TODO|FIXME", action: "Searching codebase" },
+  { tool: "Read", target: ".env.example", action: "Reading file" },
+  { tool: "Bash", target: "git log --oneline -5", action: "Running command" },
+];
+
+function SimulatedToolCall() {
+  const [stepIndex, setStepIndex] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    // Cycle through tool steps at varying intervals for realism
+    const interval = setInterval(() => {
+      setStepIndex((prev) => (prev + 1) % SIMULATED_TOOL_STEPS.length);
+      setElapsed(0);
+    }, 1200 + Math.random() * 800);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setElapsed((e) => e + 80);
+      setFrame((f) => (f + 1) % SPINNER_FRAMES.length);
+    }, 80);
+    return () => clearInterval(id);
+  }, []);
+
+  const step = SIMULATED_TOOL_STEPS[stepIndex]!;
+  const durationSec = (elapsed / 1000).toFixed(1);
+
+  return (
+    <div className="mt-1 space-y-0.5 text-sm font-mono">
+      <div className="text-gray-500 flex items-center gap-2">
+        <span className="text-yellow-400">{SPINNER_FRAMES[frame]}</span>
+        <span className="text-blue-400">{step.tool}</span>
+        <span className="text-gray-400">{step.target}</span>
+        <span className="text-gray-600">({durationSec}s)</span>
+      </div>
+      <div className="text-gray-600 text-xs pl-4">
+        {step.action}...
+      </div>
+    </div>
+  );
+}
+
 const roleColors: Record<Message["role"], string> = {
   user: "text-white font-bold",
   system: "text-gray-100",
@@ -200,17 +255,51 @@ const markdownComponents = {
   },
 };
 
-function OutputBlock({ message, isNew = false, promptString = "❯ " }: { message: Message; isNew?: boolean; promptString?: string }) {
+function getContainerClass(message: Message, isNew: boolean): string {
   const colorClass = roleColors[message.role];
+  const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
+  const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
+
+  let modifier = "leading-relaxed";
+  if (isAchievement) {
+    modifier = `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold`;
+  } else if (isBuddyInterjection) {
+    modifier = "whitespace-pre font-mono";
+  }
+  return `mb-5 ${colorClass} ${modifier}`;
+}
+
+function MessageContent({ message }: { message: Message }) {
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
   const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
   const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
+  const isAwaitingResponse = message.role === "loading" && message.content === "[⚙️] Coping with your request...";
+  const isStreaming = message.role === "loading" && !isAwaitingResponse;
 
-  const processedContent = useMarkdown ? cleanLeakedTagMarkers(message.content) : message.content;
+  if (message.role === "user") return null;
+
+  if (useMarkdown) {
+    const processedContent = cleanLeakedTagMarkers(message.content);
+    return (
+      <div className="space-y-1">
+        <ReactMarkdown components={markdownComponents}>
+          {processedContent}
+        </ReactMarkdown>
+      </div>
+    );
+  }
+
+  if (isStreaming) return <>{message.content}</>;
+  if (message.role !== "loading") return <>{message.content}</>;
+  return null;
+}
+
+function OutputBlock({ message, isNew = false, promptString = "❯ " }: { message: Message; isNew?: boolean; promptString?: string }) {
+  const isAwaitingResponse = message.role === "loading" && message.content === "[⚙️] Coping with your request...";
 
   return (
-    <div className={`mb-5 ${colorClass} ${isAchievement ? `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold` : isBuddyInterjection ? "whitespace-pre font-mono" : "leading-relaxed"}`}>
+    <div className={getContainerClass(message, isNew)}>
       {message.role === "user" && (
         <div className="inline-block bg-gray-100 text-gray-900 rounded px-3 py-1.5 font-bold">
           <span className="text-gray-500 mr-1">{promptString}</span>
@@ -218,15 +307,8 @@ function OutputBlock({ message, isNew = false, promptString = "❯ " }: { messag
         </div>
       )}
       {message.role === "loading" && <Spinner />}
-      {message.role !== "user" && (useMarkdown ? (
-        <div className="space-y-1">
-          <ReactMarkdown components={markdownComponents}>
-            {processedContent}
-          </ReactMarkdown>
-        </div>
-      ) : (
-        message.content
-      ))}
+      <MessageContent message={message} />
+      {isAwaitingResponse && <SimulatedToolCall />}
       {message.role === "loading" && <TokenCounter />}
     </div>
   );
