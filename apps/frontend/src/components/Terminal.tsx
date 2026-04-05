@@ -434,6 +434,9 @@ function Terminal() {
           }}
         />
       )}
+      <footer className="fixed bottom-0 left-0 w-full text-center text-xs text-gray-500 py-1 bg-[#0d1117]/80 backdrop-blur-sm border-t border-gray-800">
+        This is a parody project and is not affiliated with or endorsed by Anthropic.
+      </footer>
     </div>
   );
 }
