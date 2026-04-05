@@ -12,7 +12,7 @@ import AboutOverlay from "./AboutOverlay";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
 import { calculateTDpS } from "../hooks/gameStateUtils";
-import { BUDDY_ICONS } from "./buddyConstants";
+import { BuddyDisplay, parseGlitchStyle } from "./BuddyDisplay";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
@@ -26,26 +26,6 @@ import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 
 export type { Message };
-
-function BuddyDisplay({ type, isShiny }: { type: string | null; isShiny: boolean }) {
-  if (!type) return null;
-  return (
-    <div className={`text-xs mb-1 ${isShiny ? "text-amber-300" : "text-yellow-400"}`}>
-      <pre className="font-mono whitespace-pre inline-block">{BUDDY_ICONS[type] ?? "🐾"}</pre>
-      <div>{isShiny ? `✨ Shiny ${type} ✨` : type} is watching...</div>
-    </div>
-  );
-}
-
-function parseGlitchStyle(regressionGlitch: string | null | undefined) {
-  if (!regressionGlitch) return undefined;
-  return Object.fromEntries(
-    regressionGlitch.split(";").filter(Boolean).map((s) => {
-      const [k, ...v] = s.split(":");
-      return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()];
-    })
-  );
-}
 
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
