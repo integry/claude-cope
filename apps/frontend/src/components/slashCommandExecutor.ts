@@ -267,6 +267,25 @@ function handleAliasCommand(command: string, ctx: SlashCommandContext, reply: Re
   reply({ role: "system", content: `[✓] Alias updated from **${oldName}** to **${newName}**. The codebase will never know.` });
 }
 
+function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
+  const modelName = command.slice(6).trim();
+  if (!modelName) {
+    const current = ctx.state.selectedModel ?? "default";
+    reply({ role: "system", content: `[🤖] Current model: **${current}**. Usage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.` });
+    return;
+  }
+  if (modelName === "clear") {
+    ctx.setState((prev) => {
+      const { selectedModel: _, ...rest } = prev;
+      return { ...rest } as GameState;
+    });
+    reply({ role: "system", content: "[✓] Model reset to **default**. Back to baseline corporate AI." });
+    return;
+  }
+  ctx.setState((prev) => ({ ...prev, selectedModel: modelName }));
+  reply({ role: "system", content: `[✓] Model switched to **${modelName}**. May your tokens be plentiful and your latency low.` });
+}
+
 function handleUpgradeCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   const ownedGenerators = GENERATORS
     .filter((g) => (ctx.state.inventory[g.id] ?? 0) > 0)
@@ -330,7 +349,7 @@ export function executeSlashCommand(
   };
 
   // Track command usage for performance review brag card
-  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command;
+  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command;
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {
@@ -374,6 +393,8 @@ export function executeSlashCommand(
       handleTakeCommand(command, ctx.state, ctx.setState, reply);
     } else if (command.startsWith("/alias")) {
       handleAliasCommand(command, ctx, reply);
+    } else if (command.startsWith("/model")) {
+      handleModelCommand(command, ctx, reply);
     } else if (handleNewCommand(command, ctx, reply)) {
       // /brrrrrr handles its own setIsProcessing
       if (command === "/brrrrrr") return;

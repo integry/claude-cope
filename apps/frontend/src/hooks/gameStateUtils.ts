@@ -80,6 +80,7 @@ export interface GameState {
   modes: ModesState;
   activeTicket: ActiveTicket | null;
   apiKey?: string;
+  selectedModel?: string;
 }
 
 /** Legacy flat state shape used before the economy refactor. */
