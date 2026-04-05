@@ -78,16 +78,14 @@ function Terminal() {
     setQuotaLocked(true);
     setIsProcessing(true);
     setHistory((prev) => [
-      ...prev,
+      ...prev.filter((m) => m.role !== "loading"),
       { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." },
       { role: "warning", content: "[⚙️] Upgrading to $200/mo Pro Tier..." },
     ]);
     setTimeout(() => {
       resetQuota();
       const newLockouts = state.economy.quotaLockouts + 1;
-      if (newLockouts >= 3) {
-        unlockAchievement("homer_at_the_buffet");
-      }
+      const isNew = newLockouts >= 3 && unlockAchievement("homer_at_the_buffet");
       setQuotaLocked(false);
       setIsProcessing(false);
       setInstantBanReady(true);
@@ -96,7 +94,7 @@ function Terminal() {
           ...prev,
           { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" },
         ];
-        if (newLockouts >= 3) {
+        if (isNew) {
           messages.push({ role: "warning", content: buildAchievementBox("homer_at_the_buffet") });
         }
         return messages;
@@ -106,7 +104,7 @@ function Terminal() {
 
   const triggerInstantBan = () => {
     setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
-    setHistory((prev) => [...prev,
+    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"),
       { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." },
     ]);
     setTimeout(() => {

@@ -235,7 +235,9 @@ export function useGameState() {
     }));
   }, []);
 
-  const unlockAchievement = useCallback((achievement: string) => {
+  /** Returns true if the achievement was newly unlocked, false if already owned. */
+  const unlockAchievement = useCallback((achievement: string): boolean => {
+    if (stateRef.current.achievements.includes(achievement)) return false;
     setState((prev) => {
       if (prev.achievements.includes(achievement)) return prev;
       return {
@@ -243,6 +245,7 @@ export function useGameState() {
         achievements: [...prev.achievements, achievement],
       };
     });
+    return true;
   }, []);
 
   const applyOutageReward = useCallback(() => {
