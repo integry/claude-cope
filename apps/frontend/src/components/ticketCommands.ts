@@ -58,10 +58,10 @@ export async function handleBacklogCommand(reply: Reply): Promise<boolean> {
 
     const numW = 3;
     const idW = 10;
-    const titleW = 64;
+    const titleW = Math.max(5, ...tickets.map((t) => t.title.length));
     const tdW = 8;
     const sep = `+${"-".repeat(numW + 2)}+${"-".repeat(idW + 2)}+${"-".repeat(titleW + 2)}+${"-".repeat(tdW + 2)}+`;
-    const pad = (s: string, w: number) => s.length > w ? s.slice(0, w - 1) + "…" : s + " ".repeat(w - s.length);
+    const pad = (s: string, w: number) => s + " ".repeat(Math.max(0, w - s.length));
     const header = `| ${pad("#", numW)} | ${pad("ID", idW)} | ${pad("Title", titleW)} | ${pad("TD", tdW)} |`;
     const rows = tickets.map((t, i) =>
       `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(t.title, titleW)} | ${pad(String(t.technical_debt), tdW)} |`
@@ -117,7 +117,7 @@ export function handleTakeCommand(
 
   reply({
     role: "system",
-    content: `[🎫 **TICKET CLAIMED**] You picked up **${ticket.title}**.\n\nSprint goal: **${ticket.technical_debt} TD**. Get grinding!`,
+    content: `[🎫 **TICKET CLAIMED**] ${ticket.id}: **${ticket.title}**\n\n> ${ticket.description}\n\nSprint goal: **${ticket.technical_debt} TD**. Start prompting to make progress.`,
   });
   return true;
 }

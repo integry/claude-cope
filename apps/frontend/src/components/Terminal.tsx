@@ -165,8 +165,8 @@ function Terminal() {
     // Handle outage damage commands — bypass normal LLM processing
     if (tryOutageDamage()) return;
 
-    // Handle /ping with arguments (e.g. "/ping SomeUser")
-    if (inputValue.trim().startsWith("/ping ")) {
+    // Route all slash commands (including ones with args like /ping, /take, /ticket)
+    if (inputValue.trim().startsWith("/")) {
       runSlashCommand(inputValue.trim());
       return;
     }
@@ -208,25 +208,6 @@ function Terminal() {
 
     addActiveTD(Math.floor(Math.random() * 40) + 10);
 
-    // Update ticket progress based on prompt length
-    if (state.activeTicket) {
-      const increment = command.length * 150;
-      updateTicketProgress(increment);
-      const newProgress = Math.min(
-        state.activeTicket.sprintProgress + increment,
-        state.activeTicket.sprintGoal,
-      );
-      if (newProgress >= state.activeTicket.sprintGoal) {
-        const payout = state.activeTicket.sprintGoal;
-        addActiveTD(payout);
-        setHistory((prev) => [
-          ...prev,
-          { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned ${payout} TD. The board is pleased... for now.` },
-        ]);
-        setState((prev) => ({ ...prev, activeTicket: null }));
-      }
-    }
-
     // Show the user's message in history before any lockout/ban kicks in
     if (applyQuotaDrain()) {
       setHistory((prev) => [...prev, { role: "user", content: command }]);
@@ -257,7 +238,25 @@ function Terminal() {
       userMessage,
     ].map((m) => ({ role: m.role, content: m.content }));
 
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, modes: state.modes });
+    const onSprintProgress = (amount: number) => {
+      if (!state.activeTicket) return;
+      updateTicketProgress(amount);
+      const newProgress = Math.min(
+        state.activeTicket.sprintProgress + amount,
+        state.activeTicket.sprintGoal,
+      );
+      if (newProgress >= state.activeTicket.sprintGoal) {
+        const payout = state.activeTicket.sprintGoal;
+        addActiveTD(payout);
+        setHistory((prev) => [
+          ...prev,
+          { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned ${payout} TD. The board is pleased... for now.` },
+        ]);
+        setState((prev) => ({ ...prev, activeTicket: null }));
+      }
+    };
+
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress });
   };
 
   const setCursorToEnd = (val: string) => {
