@@ -3,6 +3,37 @@ import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE, UPGRADES } from "../game/cons
 const STORAGE_KEY = "claudeCopeState";
 const STATE_VERSION = "1.0";
 
+const USERNAME_ADJECTIVES = [
+  "Agile", "Async", "Binary", "Blazing", "Caffeinated", "Concurrent", "Cranky",
+  "Cursed", "Dangling", "Deployed", "Distributed", "Eager", "Encrypted", "Ephemeral",
+  "Flaky", "Floating", "Fuzzy", "Ghostly", "Glitchy", "Hardcoded", "Headless",
+  "Idle", "Infinite", "Jittery", "Lazy", "Legacy", "Lurking", "Memoized",
+  "Minified", "Mutable", "Nested", "Nocturnal", "Obfuscated", "Orphaned",
+  "Parallel", "Patched", "Phantom", "Pixelated", "Quantum", "Reactive",
+  "Recursive", "Refactored", "Rogue", "Rusty", "Shadowy", "Silent", "Spinning",
+  "Stale", "Static", "Stealth", "Stubborn", "Tangled", "Turbo", "Uncached",
+  "Undefined", "Unmerged", "Untested", "Verbose", "Virtual", "Volatile",
+];
+
+const USERNAME_NOUNS = [
+  "Allocator", "Artifact", "Backup", "Bitmap", "Bot", "Buffer", "Bug",
+  "Buildbot", "Cache", "Clipboard", "Compiler", "Container", "Cron",
+  "Daemon", "Debugger", "Deployer", "Endpoint", "Exception", "Firewall",
+  "Fork", "Gremlin", "Handler", "Hashmap", "Heap", "Instance", "Iterator",
+  "Kernel", "Linter", "Logger", "Loop", "Mainframe", "Malloc", "Mutex",
+  "Nibble", "Node", "Packet", "Parser", "Pipeline", "Pixel", "Pointer",
+  "Process", "Prompt", "Proxy", "Queue", "Rebase", "Router", "Runtime",
+  "Script", "Servlet", "Shader", "Shard", "Snippet", "Socket", "Sprocket",
+  "Stack", "Subnet", "Thread", "Token", "Transpiler", "Widget", "Zombie",
+];
+
+function generateUsername(): string {
+  const adj = USERNAME_ADJECTIVES[Math.floor(Math.random() * USERNAME_ADJECTIVES.length)]!;
+  const noun = USERNAME_NOUNS[Math.floor(Math.random() * USERNAME_NOUNS.length)]!;
+  const num = Math.floor(Math.random() * 10000);
+  return `${adj}${noun}${num}`;
+}
+
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
   content: string;
@@ -37,6 +68,7 @@ export interface ActiveTicket {
 
 export interface GameState {
   version: string;
+  username: string;
   lastLogin: number;
   economy: EconomyState;
   inventory: Record<string, number>;
@@ -87,6 +119,7 @@ function createDefaultState(): GameState {
   }
   return {
     version: STATE_VERSION,
+    username: generateUsername(),
     lastLogin: Date.now(),
     economy: {
       currentTD: 0,
@@ -124,6 +157,7 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
 
   return {
     version: STATE_VERSION,
+    username: generateUsername(),
     lastLogin: Date.now(),
     economy: {
       currentTD: legacy.technicalDebt,
@@ -182,6 +216,9 @@ export function loadState(): GameState {
       }
       if (state.activeTicket === undefined) {
         state.activeTicket = null;
+      }
+      if (!state.username) {
+        state.username = generateUsername();
       }
       if (!state.economy) {
         return createDefaultState();
