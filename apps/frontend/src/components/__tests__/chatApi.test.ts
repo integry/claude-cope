@@ -6,12 +6,15 @@ import type { BuddyState } from "../../hooks/useGameState";
  * Creates a mock ReadableStream that simulates an SSE streamed response
  * from the OpenRouter API. Each content string becomes a separate SSE chunk.
  */
-function createMockStream(contents: string[]): ReadableStream<Uint8Array> {
+function createMockStream(contents: string[], usage?: { prompt_tokens: number; completion_tokens: number }): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   const chunks = contents.map(
     (content) =>
       `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`
   );
+  if (usage) {
+    chunks.push(`data: ${JSON.stringify({ usage, choices: [] })}\n\n`);
+  }
   chunks.push("data: [DONE]\n\n");
 
   let index = 0;
@@ -27,12 +30,12 @@ function createMockStream(contents: string[]): ReadableStream<Uint8Array> {
   });
 }
 
-function createMockStreamResponse(contents: string[]) {
+function createMockStreamResponse(contents: string[], usage?: { prompt_tokens: number; completion_tokens: number }) {
   return {
     ok: true,
     status: 200,
     headers: new Headers({ "content-type": "text/event-stream" }),
-    body: createMockStream(contents),
+    body: createMockStream(contents, usage),
     json: () => Promise.reject(new Error("Should not call json on stream")),
   } as unknown as Response;
 }
@@ -306,6 +309,35 @@ describe("submitChatMessage - achievement parsing", () => {
 
     expect(setIsProcessing).toHaveBeenCalledWith(false);
     expect(unlockAchievement).not.toHaveBeenCalled();
+  });
+
+  it("passes real token counts from stream usage to final message", async () => {
+    const setHistory = vi.fn();
+    const setIsProcessing = vi.fn();
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockStreamResponse(["Hello!"], { prompt_tokens: 150, completion_tokens: 42 })
+    );
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    // Get the final setHistory call
+    const lastCall = setHistory.mock.calls[setHistory.mock.calls.length - 1]!;
+    const updater = lastCall[0] as (prev: unknown[]) => unknown[];
+    const result = updater([]) as Array<{ role: string; content: string; tokensSent?: number; tokensReceived?: number }>;
+    const systemMsg = result.find((m) => m.role === "system");
+    expect(systemMsg).toBeDefined();
+    expect(systemMsg!.tokensSent).toBe(150);
+    expect(systemMsg!.tokensReceived).toBe(42);
   });
 
   it("sends apiKey in request body when provided", async () => {

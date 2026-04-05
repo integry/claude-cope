@@ -69,7 +69,7 @@ Do NOT output a range like "1-3". Output ONE number.`;
     body: JSON.stringify({
       model,
       messages,
-      ...(isBYOK ? { stream: true } : {}),
+      ...(isBYOK ? { stream: true, stream_options: { include_usage: true } } : {}),
     }),
   });
 

@@ -231,6 +231,9 @@ function OutputBlock({ message, isNew = false, promptString = "cope@local:~$ " }
         message.content
       )}
       {message.role === "loading" && <TokenCounter tokensSent={message.tokensSent} tokensReceived={message.tokensReceived} />}
+      {message.role === "system" && (message.tokensSent != null || message.tokensReceived != null) && (
+        <TokenCounter tokensSent={message.tokensSent} tokensReceived={message.tokensReceived} />
+      )}
     </div>
   );
 }
