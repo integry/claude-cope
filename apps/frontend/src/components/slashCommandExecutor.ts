@@ -199,6 +199,7 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
   } else if (command === "/about") {
     ctx.setHistory(clearLoading);
     ctx.setShowAbout(true);
+    window.history.pushState(null, "", "/about");
     return true;
   } else if (command === "/fast") {
     const newFast = !ctx.state.modes.fast;
