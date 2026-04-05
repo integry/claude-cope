@@ -28,7 +28,7 @@ export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionRe
   };
 }
 
-function processSSEChunk(chunk: string, state: { rawReply: string }, setHistory: Dispatch<SetStateAction<Message[]>>) {
+function processSSEChunk(chunk: string, state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number } }, setHistory: Dispatch<SetStateAction<Message[]>>) {
   const lines = chunk.split("\n");
   for (const line of lines) {
     if (!line.startsWith("data: ")) continue;
@@ -36,6 +36,13 @@ function processSSEChunk(chunk: string, state: { rawReply: string }, setHistory:
     if (data === "[DONE]") continue;
     try {
       const parsed = JSON.parse(data);
+      // Capture usage data from the final stream chunk (sent when stream_options.include_usage is true)
+      if (parsed?.usage) {
+        state.usage = {
+          prompt_tokens: parsed.usage.prompt_tokens ?? 0,
+          completion_tokens: parsed.usage.completion_tokens ?? 0,
+        };
+      }
       const delta = parsed?.choices?.[0]?.delta?.content;
       if (delta) {
         state.rawReply += delta;
@@ -52,10 +59,15 @@ function processSSEChunk(chunk: string, state: { rawReply: string }, setHistory:
   }
 }
 
-async function readStreamedResponse(res: Response, setHistory: Dispatch<SetStateAction<Message[]>>): Promise<string> {
-  const state = { rawReply: "" };
+type StreamResult = {
+  rawReply: string;
+  usage?: { prompt_tokens: number; completion_tokens: number };
+};
+
+async function readStreamedResponse(res: Response, setHistory: Dispatch<SetStateAction<Message[]>>): Promise<StreamResult> {
+  const state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number } } = { rawReply: "" };
   const reader = res.body?.getReader();
-  if (!reader) return "";
+  if (!reader) return { rawReply: "" };
   const decoder = new TextDecoder();
   let done = false;
   while (!done) {
@@ -65,7 +77,46 @@ async function readStreamedResponse(res: Response, setHistory: Dispatch<SetState
       processSSEChunk(decoder.decode(value, { stream: true }), state, setHistory);
     }
   }
-  return state.rawReply;
+  return { rawReply: state.rawReply, usage: state.usage };
+}
+
+function processReplyTags(
+  rawReply: string,
+  unlockAchievement: (id: string) => void,
+  onSprintProgress?: (amount: number) => void,
+): { achievementMessages: Message[]; reply: string } {
+  const achievementRegex = /\[ACHIEVEMENT_UNLOCKED:\s*(.+?)\]/g;
+  const achievementMessages: Message[] = [];
+  let match;
+  while ((match = achievementRegex.exec(rawReply)) !== null) {
+    const achievementId = match[1]!.trim();
+    unlockAchievement(achievementId);
+    achievementMessages.push({
+      role: "warning",
+      content: buildAchievementBox(achievementId),
+    });
+    const achievementName = ALL_ACHIEVEMENTS.find((a) => a.id === achievementId)?.name ?? achievementId;
+    const achievementMessage = `🏆 A player unlocked the achievement: ${achievementName}`;
+    fetch(`${API_BASE}/api/recent-events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: achievementMessage }),
+    }).catch(() => {});
+    supabase?.channel('global_incidents').send({
+      type: 'broadcast',
+      event: 'new_incident',
+      payload: { message: achievementMessage },
+    }).catch(() => {});
+  }
+
+  const sprintRegex = /\[SPRINT_PROGRESS:\s*(\d+)(?:\s*-\s*\d+)?\]/g;
+  const sprintMatch = sprintRegex.exec(rawReply);
+  if (sprintMatch && onSprintProgress) {
+    onSprintProgress(parseInt(sprintMatch[1]!, 10));
+  }
+
+  const reply = rawReply.replace(achievementRegex, "").replace(sprintRegex, "").trim();
+  return { achievementMessages, reply };
 }
 
 export function submitChatMessage(opts: {
@@ -110,55 +161,35 @@ export function submitChatMessage(opts: {
 
       // Handle both SSE stream (BYOK) and JSON (free tier) responses
       let rawReply: string;
+      let tokensSent: number | undefined;
+      let tokensReceived: number | undefined;
       const contentType = res.headers.get("content-type") ?? "";
       if (contentType.includes("text/event-stream")) {
-        rawReply = await readStreamedResponse(res, setHistory);
+        const streamResult = await readStreamedResponse(res, setHistory);
+        rawReply = streamResult.rawReply;
+        if (streamResult.usage) {
+          tokensSent = streamResult.usage.prompt_tokens;
+          tokensReceived = streamResult.usage.completion_tokens;
+        }
       } else {
         const data = await res.json();
         rawReply = data?.choices?.[0]?.message?.content ?? "";
+        if (data?.usage) {
+          tokensSent = data.usage.prompt_tokens ?? undefined;
+          tokensReceived = data.usage.completion_tokens ?? undefined;
+        }
       }
 
       if (!rawReply) {
         rawReply = "[❌ Error] No response from API.";
       }
 
-      const achievementRegex = /\[ACHIEVEMENT_UNLOCKED:\s*(.+?)\]/g;
-      const achievementMessages: Message[] = [];
-      let match;
-      while ((match = achievementRegex.exec(rawReply)) !== null) {
-        const achievementId = match[1]!.trim();
-        unlockAchievement(achievementId);
-        achievementMessages.push({
-          role: "warning",
-          content: buildAchievementBox(achievementId),
-        });
-        const achievementName = ALL_ACHIEVEMENTS.find((a) => a.id === achievementId)?.name ?? achievementId;
-        const achievementMessage = `🏆 A player unlocked the achievement: ${achievementName}`;
-        fetch(`${API_BASE}/api/recent-events`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: achievementMessage }),
-        }).catch(() => {});
-        supabase?.channel('global_incidents').send({
-          type: 'broadcast',
-          event: 'new_incident',
-          payload: { message: achievementMessage },
-        }).catch(() => {});
-      }
-
-      // Parse sprint progress tag — handle both "N" and "N-M" (take first number)
-      const sprintRegex = /\[SPRINT_PROGRESS:\s*(\d+)(?:\s*-\s*\d+)?\]/g;
-      const sprintMatch = sprintRegex.exec(rawReply);
-      if (sprintMatch && onSprintProgress) {
-        onSprintProgress(parseInt(sprintMatch[1]!, 10));
-      }
-
-      const reply = rawReply.replace(achievementRegex, "").replace(sprintRegex, "").trim();
+      const { achievementMessages, reply } = processReplyTags(rawReply, unlockAchievement, onSprintProgress);
 
       setHistory((prev) => {
         let updated = [
           ...prev.filter((msg) => msg.role !== "loading"),
-          { role: "system" as const, content: reply },
+          { role: "system" as const, content: reply, tokensSent, tokensReceived },
           ...achievementMessages,
           ...(buddyResult ? [buddyResult.message] : []),
         ];
