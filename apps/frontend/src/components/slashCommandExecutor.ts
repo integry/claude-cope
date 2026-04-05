@@ -247,6 +247,17 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
   return false;
 }
 
+function handleAliasCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
+  const newName = command.slice(6).trim();
+  if (!newName) {
+    reply({ role: "system", content: `[👤] Your current alias is **${ctx.state.username}**. Usage: \`/alias <new-name>\` to change it.` });
+    return;
+  }
+  const oldName = ctx.state.username;
+  ctx.setState((prev) => ({ ...prev, username: newName }));
+  reply({ role: "system", content: `[✓] Alias updated from **${oldName}** to **${newName}**. The codebase will never know.` });
+}
+
 function handleUpgradeCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   const ownedGenerators = GENERATORS
     .filter((g) => (ctx.state.inventory[g.id] ?? 0) > 0)
@@ -310,7 +321,7 @@ export function executeSlashCommand(
   };
 
   // Track command usage for performance review brag card
-  const baseCommand = command.startsWith("/ping ") ? "/ping" : command;
+  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command;
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {
@@ -352,6 +363,8 @@ export function executeSlashCommand(
       return;
     } else if (command.startsWith("/take")) {
       handleTakeCommand(command, ctx.state, ctx.setState, reply);
+    } else if (command.startsWith("/alias")) {
+      handleAliasCommand(command, ctx, reply);
     } else if (handleNewCommand(command, ctx, reply)) {
       // /brrrrrr handles its own setIsProcessing
       if (command === "/brrrrrr") return;
