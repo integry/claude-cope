@@ -4,6 +4,7 @@ import { API_BASE } from "../config";
 type LeaderboardEntry = {
   id: string;
   username: string;
+  country: string;
   corporate_rank: string;
   technical_debt: number;
   created_at: string;
@@ -98,7 +99,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
                   }`}
                 >
                   <span className="truncate mr-2">
-                    {medal} {rank}. {entry.username}
+                    {medal} {rank}. {entry.username} [{entry.country}]
                   </span>
                   <span className="whitespace-nowrap text-green-400">
                     {entry.technical_debt.toLocaleString()} TD
