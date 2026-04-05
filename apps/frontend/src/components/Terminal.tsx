@@ -22,7 +22,7 @@ import { useTerminalEffects } from "../hooks/useTerminalEffects";
 
 export type { Message };
 
-function parseGlitchStyle(regressionGlitch: string | undefined) {
+function parseGlitchStyle(regressionGlitch: string | null | undefined) {
   if (!regressionGlitch) return undefined;
   return Object.fromEntries(
     regressionGlitch.split(";").filter(Boolean).map((s) => {
