@@ -17,10 +17,22 @@ import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
 import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
 import Ticker from "./Ticker";
+import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
+import SprintProgressBar from "./SprintProgressBar";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 
 export type { Message };
+
+function BuddyDisplay({ type, isShiny }: { type: string | null; isShiny: boolean }) {
+  if (!type) return null;
+  return (
+    <div className={`text-xs mb-1 ${isShiny ? "text-amber-300" : "text-yellow-400"}`}>
+      <pre className="font-mono whitespace-pre inline-block">{BUDDY_ICONS[type] ?? "🐾"}</pre>
+      <div>{isShiny ? `✨ Shiny ${type} ✨` : type} is watching...</div>
+    </div>
+  );
+}
 
 function parseGlitchStyle(regressionGlitch: string | null | undefined) {
   if (!regressionGlitch) return undefined;
@@ -33,7 +45,7 @@ function parseGlitchStyle(regressionGlitch: string | null | undefined) {
 }
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
@@ -77,16 +89,14 @@ function Terminal() {
     setQuotaLocked(true);
     setIsProcessing(true);
     setHistory((prev) => [
-      ...prev,
+      ...prev.filter((m) => m.role !== "loading"),
       { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." },
       { role: "warning", content: "[⚙️] Upgrading to $200/mo Pro Tier..." },
     ]);
     setTimeout(() => {
       resetQuota();
       const newLockouts = state.economy.quotaLockouts + 1;
-      if (newLockouts >= 3) {
-        unlockAchievement("homer_at_the_buffet");
-      }
+      const isNew = newLockouts >= 3 && unlockAchievement("homer_at_the_buffet");
       setQuotaLocked(false);
       setIsProcessing(false);
       setInstantBanReady(true);
@@ -95,7 +105,7 @@ function Terminal() {
           ...prev,
           { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" },
         ];
-        if (newLockouts >= 3) {
+        if (isNew) {
           messages.push({ role: "warning", content: buildAchievementBox("homer_at_the_buffet") });
         }
         return messages;
@@ -105,7 +115,7 @@ function Terminal() {
 
   const triggerInstantBan = () => {
     setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
-    setHistory((prev) => [...prev,
+    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"),
       { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." },
     ]);
     setTimeout(() => {
@@ -154,8 +164,6 @@ function Terminal() {
     );
   };
 
-  const DAMAGE_COMMANDS = ["kubectl restart pods", "ssh prod-01", "git revert HEAD"];
-
   const tryOutageDamage = (): boolean => {
     if (outageHp === null || !DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) return false;
     sendDamage();
@@ -164,40 +172,41 @@ function Terminal() {
     return true;
   };
 
+  const handleBragSubmit = () => {
+    const username = inputValue.trim();
+    setInputValue("");
+    const generatorsOwned = Object.values(state.inventory).reduce((sum, count) => sum + count, 0);
+    const mostAbusedCommand = Object.entries(state.commandUsage).reduce(
+      (best, [cmd, count]) => (count > best[1] ? [cmd, count] : best),
+      ["/clear", 0] as [string, number],
+    )[0];
+    submitBrag({ username, currentRank: state.economy.currentRank, totalTDEarned: state.economy.totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending });
+  };
+
+  const handleBuddyConfirm = () => {
+    const answer = inputValue.trim().toLowerCase();
+    setInputValue("");
+    setBuddyPendingConfirm(false);
+    if (answer === "y" || answer === "yes") {
+      setHistory((prev) => [...prev, { role: "user", content: inputValue }]);
+      rollBuddy(setState, setHistory);
+    } else {
+      setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]);
+    }
+  };
+
   const handleEnterSubmit = () => {
     // Handle outage damage commands — bypass normal LLM processing
     if (tryOutageDamage()) return;
 
-    // Handle /ping with arguments (e.g. "/ping SomeUser")
-    if (inputValue.trim().startsWith("/ping ")) {
+    // Route all slash commands (including ones with args like /ping, /take, /ticket)
+    if (inputValue.trim().startsWith("/")) {
       runSlashCommand(inputValue.trim());
       return;
     }
 
-    if (bragPending) {
-      const username = inputValue.trim();
-      setInputValue("");
-      const generatorsOwned = Object.values(state.inventory).reduce((sum, count) => sum + count, 0);
-      const mostAbusedCommand = Object.entries(state.commandUsage).reduce(
-        (best, [cmd, count]) => (count > best[1] ? [cmd, count] : best),
-        ["/clear", 0] as [string, number],
-      )[0];
-      submitBrag({ username, currentRank: state.economy.currentRank, totalTDEarned: state.economy.totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending });
-      return;
-    }
-
-    if (buddyPendingConfirm) {
-      const answer = inputValue.trim().toLowerCase();
-      setInputValue("");
-      setBuddyPendingConfirm(false);
-      if (answer === "y" || answer === "yes") {
-        setHistory((prev) => [...prev, { role: "user", content: inputValue }]);
-        rollBuddy(setState, setHistory);
-      } else {
-        setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]);
-      }
-      return;
-    }
+    if (bragPending) { handleBragSubmit(); return; }
+    if (buddyPendingConfirm) { handleBuddyConfirm(); return; }
 
     if (handleKeyCommand(inputValue, setState, setHistory)) {
       setInputValue("");
@@ -241,7 +250,25 @@ function Terminal() {
       userMessage,
     ].map((m) => ({ role: m.role, content: m.content }));
 
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, modes: state.modes });
+    const onSprintProgress = (amount: number) => {
+      if (!state.activeTicket) return;
+      updateTicketProgress(amount);
+      const newProgress = Math.min(
+        state.activeTicket.sprintProgress + amount,
+        state.activeTicket.sprintGoal,
+      );
+      if (newProgress >= state.activeTicket.sprintGoal) {
+        const payout = state.activeTicket.sprintGoal;
+        addActiveTD(payout);
+        setHistory((prev) => [
+          ...prev,
+          { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned ${payout} TD. The board is pleased... for now.` },
+        ]);
+        setState((prev) => ({ ...prev, activeTicket: null }));
+      }
+    };
+
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress });
   };
 
   const setCursorToEnd = (val: string) => {
@@ -354,31 +381,9 @@ function Terminal() {
     >
       {/* Mount the Ticker at the very top of the interface so it acts as a global broadcast banner */}
       <Ticker />
-      {outageHp !== null && (
-        <div className="mb-2 border border-red-500 rounded p-2 bg-red-950">
-          <div className="flex items-center justify-between text-red-400 text-xs mb-1">
-            <span className="font-bold">[PROD OUTAGE] AWS us-east-1</span>
-            <span>{outageHp}% HP</span>
-          </div>
-          <div className="h-3 bg-red-900 rounded overflow-hidden">
-            <div
-              className="h-full bg-red-500 transition-all duration-300 rounded"
-              style={{ width: `${outageHp}%` }}
-            />
-          </div>
-          <div className="mt-2 text-red-300 text-xs">
-            <span className="font-bold">Type to deal damage:</span>{" "}
-            {DAMAGE_COMMANDS.map((cmd, i) => (
-              <span key={cmd}>
-                <code className="bg-red-900 px-1 rounded text-red-200">{cmd}</code>
-                {i < DAMAGE_COMMANDS.length - 1 && ", "}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+      {outageHp !== null && <OutageBar outageHp={outageHp} />}
       <HeaderBar rank={rank} totalTDEarned={state.economy.totalTDEarned} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} tdps={calculateTDpS(state.inventory, state.upgrades)} />
-      <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : ""} ${compactEffect ? "compact-squeeze" : ""}`}>
+      <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
           <OutputBlock key={index} message={message} isNew={index >= initialHistoryLen.current} promptString={promptString} />
@@ -387,12 +392,7 @@ function Terminal() {
       </div>
       <div className="relative">
         {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
-        {state.buddy.type && (
-          <div className={`text-xs mb-1 ${state.buddy.isShiny ? "text-amber-300" : "text-yellow-400"}`}>
-            <pre className="font-mono whitespace-pre inline-block">{BUDDY_ICONS[state.buddy.type] ?? "🐾"}</pre>
-            <div>{state.buddy.isShiny ? `✨ Shiny ${state.buddy.type} ✨` : state.buddy.type} is watching...</div>
-          </div>
-        )}
+        <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
         <CommandLine
           ref={inputRef}
           value={inputValue}
@@ -402,6 +402,9 @@ function Terminal() {
           promptString={promptString}
         />
       </div>
+      {state.activeTicket && (
+        <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />
+      )}
       {showStore && (
         <StoreOverlay
           state={state}

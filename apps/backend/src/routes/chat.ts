@@ -16,6 +16,7 @@ chat.post("/", async (c) => {
     rank?: string;
     apiKey?: string;
     modes?: { fast?: boolean; voice?: boolean };
+    activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number };
   }>();
 
   const isBYOK = Boolean(body.apiKey);
@@ -34,8 +35,24 @@ chat.post("/", async (c) => {
   // Context window: send last 10 messages for conversation continuity.
   const recentMessages = body.messages.slice(-10);
 
+  let systemPrompt = getSystemPrompt(rank, body.modes);
+
+  if (body.activeTicket) {
+    const t = body.activeTicket;
+    const pct = Math.round((t.sprintProgress / t.sprintGoal) * 100);
+    systemPrompt += `\n\nACTIVE SPRINT TICKET:
+The user is currently working on ticket ${t.id}: "${t.title}" (${pct}% complete, ${t.sprintProgress}/${t.sprintGoal} TD).
+Your response should mock their attempt to work on this ticket. If their message is relevant to the ticket topic, acknowledge it sarcastically. If it's completely unrelated, roast them for slacking off during a sprint.
+IMPORTANT: At the very end of your response (after all other text), you MUST append exactly one sprint progress tag. Pick a SINGLE number (not a range) based on relevance:
+- Highly relevant (directly working on the ticket topic): [SPRINT_PROGRESS: 20] (or any number 15-25)
+- Somewhat relevant (tangentially related): [SPRINT_PROGRESS: 8] (or any number 5-14)
+- Completely irrelevant (off-topic, slacking): [SPRINT_PROGRESS: 2] (or any number 1-3)
+Example: [SPRINT_PROGRESS: 12]
+Do NOT output a range like "1-3". Output ONE number.`;
+  }
+
   const messages = [
-    { role: "system", content: getSystemPrompt(rank, body.modes) },
+    { role: "system", content: systemPrompt },
     ...recentMessages,
   ];
 

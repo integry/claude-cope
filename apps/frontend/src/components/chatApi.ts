@@ -77,12 +77,14 @@ export function submitChatMessage(opts: {
   currentRank: string;
   apiKey?: string;
   modes?: ModesState;
+  activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
+  onSprintProgress?: (amount: number) => void;
 }) {
-  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, modes } = opts;
+  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, modes, activeTicket, onSprintProgress } = opts;
   fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: chatMessages, rank: currentRank, ...(apiKey ? { apiKey } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}) }),
+    body: JSON.stringify({ messages: chatMessages, rank: currentRank, ...(apiKey ? { apiKey } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}) }),
   })
     .then(async (res) => {
       if (res.status === 429) {
@@ -143,7 +145,14 @@ export function submitChatMessage(opts: {
         }).catch(() => {});
       }
 
-      const reply = rawReply.replace(achievementRegex, "").trim();
+      // Parse sprint progress tag — handle both "N" and "N-M" (take first number)
+      const sprintRegex = /\[SPRINT_PROGRESS:\s*(\d+)(?:\s*-\s*\d+)?\]/g;
+      const sprintMatch = sprintRegex.exec(rawReply);
+      if (sprintMatch && onSprintProgress) {
+        onSprintProgress(parseInt(sprintMatch[1]!, 10));
+      }
+
+      const reply = rawReply.replace(achievementRegex, "").replace(sprintRegex, "").trim();
 
       setHistory((prev) => {
         let updated = [

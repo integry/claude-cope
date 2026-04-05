@@ -4,6 +4,7 @@ import { rateLimiter } from "./middleware/rateLimiter";
 import chat from "./routes/chat";
 import leaderboard from "./routes/leaderboard";
 import events from "./routes/events";
+import tickets from "./routes/tickets";
 
 const app = new Hono();
 
@@ -25,5 +26,6 @@ app.route("/api/chat", chat);
 app.route("/api/leaderboard", leaderboard);
 // Mount the events route to expose the SWR polling fallback endpoints
 app.route("/api/recent-events", events);
+app.route("/api/tickets", tickets);
 
 export default app;

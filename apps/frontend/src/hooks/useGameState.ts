@@ -12,7 +12,7 @@ import {
 } from "./gameStateUtils";
 
 export type { Message };
-export type { GameState, BuddyState, EconomyState } from "./gameStateUtils";
+export type { GameState, BuddyState, EconomyState, ActiveTicket } from "./gameStateUtils";
 export { calcBulkCost } from "./gameStateUtils";
 
 export function useGameState() {
@@ -235,7 +235,9 @@ export function useGameState() {
     }));
   }, []);
 
-  const unlockAchievement = useCallback((achievement: string) => {
+  /** Returns true if the achievement was newly unlocked, false if already owned. */
+  const unlockAchievement = useCallback((achievement: string): boolean => {
+    if (stateRef.current.achievements.includes(achievement)) return false;
     setState((prev) => {
       if (prev.achievements.includes(achievement)) return prev;
       return {
@@ -243,6 +245,7 @@ export function useGameState() {
         achievements: [...prev.achievements, achievement],
       };
     });
+    return true;
   }, []);
 
   const applyOutageReward = useCallback(() => {
@@ -348,5 +351,22 @@ export function useGameState() {
     }));
   }, []);
 
-  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
+  const updateTicketProgress = useCallback((amount: number) => {
+    setState((prev) => {
+      if (!prev.activeTicket) return prev;
+      const newProgress = Math.min(
+        prev.activeTicket.sprintProgress + amount,
+        prev.activeTicket.sprintGoal,
+      );
+      return {
+        ...prev,
+        activeTicket: {
+          ...prev.activeTicket,
+          sprintProgress: newProgress,
+        },
+      };
+    });
+  }, []);
+
+  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
 }
