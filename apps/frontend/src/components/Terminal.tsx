@@ -17,6 +17,7 @@ import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
 import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
 import Ticker from "./Ticker";
+import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 
@@ -33,7 +34,7 @@ function parseGlitchStyle(regressionGlitch: string | null | undefined) {
 }
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
@@ -154,8 +155,6 @@ function Terminal() {
     );
   };
 
-  const DAMAGE_COMMANDS = ["kubectl restart pods", "ssh prod-01", "git revert HEAD"];
-
   const tryOutageDamage = (): boolean => {
     if (outageHp === null || !DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) return false;
     sendDamage();
@@ -210,6 +209,25 @@ function Terminal() {
     setInputValue("");
 
     addActiveTD(Math.floor(Math.random() * 40) + 10);
+
+    // Update ticket progress based on prompt length
+    if (state.activeTicket) {
+      const increment = command.length * 150;
+      updateTicketProgress(increment);
+      const newProgress = Math.min(
+        state.activeTicket.sprintProgress + increment,
+        state.activeTicket.sprintGoal,
+      );
+      if (newProgress >= state.activeTicket.sprintGoal) {
+        const payout = state.activeTicket.sprintGoal;
+        addActiveTD(payout);
+        setHistory((prev) => [
+          ...prev,
+          { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned ${payout} TD. The board is pleased... for now.` },
+        ]);
+        setState((prev) => ({ ...prev, activeTicket: null }));
+      }
+    }
 
     // Show the user's message in history before any lockout/ban kicks in
     if (applyQuotaDrain()) {
@@ -354,31 +372,9 @@ function Terminal() {
     >
       {/* Mount the Ticker at the very top of the interface so it acts as a global broadcast banner */}
       <Ticker />
-      {outageHp !== null && (
-        <div className="mb-2 border border-red-500 rounded p-2 bg-red-950">
-          <div className="flex items-center justify-between text-red-400 text-xs mb-1">
-            <span className="font-bold">[PROD OUTAGE] AWS us-east-1</span>
-            <span>{outageHp}% HP</span>
-          </div>
-          <div className="h-3 bg-red-900 rounded overflow-hidden">
-            <div
-              className="h-full bg-red-500 transition-all duration-300 rounded"
-              style={{ width: `${outageHp}%` }}
-            />
-          </div>
-          <div className="mt-2 text-red-300 text-xs">
-            <span className="font-bold">Type to deal damage:</span>{" "}
-            {DAMAGE_COMMANDS.map((cmd, i) => (
-              <span key={cmd}>
-                <code className="bg-red-900 px-1 rounded text-red-200">{cmd}</code>
-                {i < DAMAGE_COMMANDS.length - 1 && ", "}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-      <HeaderBar rank={rank} totalTDEarned={state.economy.totalTDEarned} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} tdps={calculateTDpS(state.inventory, state.upgrades)} />
-      <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : ""} ${compactEffect ? "compact-squeeze" : ""}`}>
+      {outageHp !== null && <OutageBar outageHp={outageHp} />}
+      <HeaderBar rank={rank} totalTDEarned={state.economy.totalTDEarned} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} tdps={calculateTDpS(state.inventory, state.upgrades)} activeTicket={state.activeTicket} />
+      <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
           <OutputBlock key={index} message={message} isNew={index >= initialHistoryLen.current} promptString={promptString} />
