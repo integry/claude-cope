@@ -28,6 +28,13 @@ export interface ModesState {
   voice: boolean;
 }
 
+export interface ActiveTicket {
+  id: string;
+  title: string;
+  sprintProgress: number;
+  sprintGoal: number;
+}
+
 export interface GameState {
   version: string;
   lastLogin: number;
@@ -39,6 +46,7 @@ export interface GameState {
   chatHistory: Message[];
   commandUsage: Record<string, number>;
   modes: ModesState;
+  activeTicket: ActiveTicket | null;
   apiKey?: string;
 }
 
@@ -99,6 +107,7 @@ function createDefaultState(): GameState {
     chatHistory: [],
     commandUsage: {},
     modes: { fast: false, voice: false },
+    activeTicket: null,
   };
 }
 
@@ -131,6 +140,7 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
     chatHistory: [],
     commandUsage: {},
     modes: { fast: false, voice: false },
+    activeTicket: null,
   };
 }
 
@@ -169,6 +179,9 @@ export function loadState(): GameState {
       }
       if (!state.modes || typeof state.modes !== "object") {
         state.modes = { fast: false, voice: false };
+      }
+      if (state.activeTicket === undefined) {
+        state.activeTicket = null;
       }
       if (!state.economy) {
         return createDefaultState();
