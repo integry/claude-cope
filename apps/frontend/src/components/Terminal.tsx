@@ -24,6 +24,16 @@ import { useTerminalEffects } from "../hooks/useTerminalEffects";
 
 export type { Message };
 
+function BuddyDisplay({ type, isShiny }: { type: string | null; isShiny: boolean }) {
+  if (!type) return null;
+  return (
+    <div className={`text-xs mb-1 ${isShiny ? "text-amber-300" : "text-yellow-400"}`}>
+      <pre className="font-mono whitespace-pre inline-block">{BUDDY_ICONS[type] ?? "🐾"}</pre>
+      <div>{isShiny ? `✨ Shiny ${type} ✨` : type} is watching...</div>
+    </div>
+  );
+}
+
 function parseGlitchStyle(regressionGlitch: string | null | undefined) {
   if (!regressionGlitch) return undefined;
   return Object.fromEntries(
@@ -162,6 +172,29 @@ function Terminal() {
     return true;
   };
 
+  const handleBragSubmit = () => {
+    const username = inputValue.trim();
+    setInputValue("");
+    const generatorsOwned = Object.values(state.inventory).reduce((sum, count) => sum + count, 0);
+    const mostAbusedCommand = Object.entries(state.commandUsage).reduce(
+      (best, [cmd, count]) => (count > best[1] ? [cmd, count] : best),
+      ["/clear", 0] as [string, number],
+    )[0];
+    submitBrag({ username, currentRank: state.economy.currentRank, totalTDEarned: state.economy.totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending });
+  };
+
+  const handleBuddyConfirm = () => {
+    const answer = inputValue.trim().toLowerCase();
+    setInputValue("");
+    setBuddyPendingConfirm(false);
+    if (answer === "y" || answer === "yes") {
+      setHistory((prev) => [...prev, { role: "user", content: inputValue }]);
+      rollBuddy(setState, setHistory);
+    } else {
+      setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]);
+    }
+  };
+
   const handleEnterSubmit = () => {
     // Handle outage damage commands — bypass normal LLM processing
     if (tryOutageDamage()) return;
@@ -172,30 +205,8 @@ function Terminal() {
       return;
     }
 
-    if (bragPending) {
-      const username = inputValue.trim();
-      setInputValue("");
-      const generatorsOwned = Object.values(state.inventory).reduce((sum, count) => sum + count, 0);
-      const mostAbusedCommand = Object.entries(state.commandUsage).reduce(
-        (best, [cmd, count]) => (count > best[1] ? [cmd, count] : best),
-        ["/clear", 0] as [string, number],
-      )[0];
-      submitBrag({ username, currentRank: state.economy.currentRank, totalTDEarned: state.economy.totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending });
-      return;
-    }
-
-    if (buddyPendingConfirm) {
-      const answer = inputValue.trim().toLowerCase();
-      setInputValue("");
-      setBuddyPendingConfirm(false);
-      if (answer === "y" || answer === "yes") {
-        setHistory((prev) => [...prev, { role: "user", content: inputValue }]);
-        rollBuddy(setState, setHistory);
-      } else {
-        setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]);
-      }
-      return;
-    }
+    if (bragPending) { handleBragSubmit(); return; }
+    if (buddyPendingConfirm) { handleBuddyConfirm(); return; }
 
     if (handleKeyCommand(inputValue, setState, setHistory)) {
       setInputValue("");
@@ -381,12 +392,7 @@ function Terminal() {
       </div>
       <div className="relative">
         {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
-        {state.buddy.type && (
-          <div className={`text-xs mb-1 ${state.buddy.isShiny ? "text-amber-300" : "text-yellow-400"}`}>
-            <pre className="font-mono whitespace-pre inline-block">{BUDDY_ICONS[state.buddy.type] ?? "🐾"}</pre>
-            <div>{state.buddy.isShiny ? `✨ Shiny ${state.buddy.type} ✨` : state.buddy.type} is watching...</div>
-          </div>
-        )}
+        <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
         <CommandLine
           ref={inputRef}
           value={inputValue}
