@@ -11,6 +11,22 @@ type Env = {
 
 const tickets = new Hono<Env>();
 
+tickets.get("/community", async (c) => {
+  const db = c.env?.DB;
+  if (!db) {
+    return c.json({ error: "Database is not configured" }, 500);
+  }
+
+  const { results } = await db
+    .prepare(
+      "SELECT id, title, description, technical_debt, created_at FROM community_backlog ORDER BY RANDOM() LIMIT 5"
+    )
+    .all();
+
+  c.header("Cache-Control", "public, max-age=10");
+  return c.json(results);
+});
+
 tickets.post("/refine", async (c) => {
   const db = c.env?.DB;
 
