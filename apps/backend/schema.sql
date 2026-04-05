@@ -37,3 +37,22 @@ CREATE TABLE IF NOT EXISTS recent_events (
     message TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Usage logs for tracking token and model usage per user per hour
+CREATE TABLE IF NOT EXISTS usage_logs (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    username TEXT NOT NULL,
+    model TEXT NOT NULL,
+    tokens_sent INTEGER NOT NULL DEFAULT 0,
+    tokens_received INTEGER NOT NULL DEFAULT 0,
+    hour TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Index on username and hour for per-user reporting queries
+CREATE INDEX IF NOT EXISTS idx_usage_logs_user_hour
+    ON usage_logs (username, hour DESC);
+
+-- Index on model for per-model aggregation
+CREATE INDEX IF NOT EXISTS idx_usage_logs_model
+    ON usage_logs (model, hour DESC);
