@@ -66,7 +66,7 @@ function Terminal() {
   const [showAchievements, setShowAchievements] = useState(false);
   const [showSynergize, setShowSynergize] = useState(false);
   const [showHelp, setShowHelp] = useState(() => window.location.pathname === "/help");
-  const [showAbout, setShowAbout] = useState(false);
+  const [showAbout, setShowAbout] = useState(() => window.location.pathname === "/about");
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
@@ -85,6 +85,7 @@ function Terminal() {
   useEffect(() => {
     const onPopState = () => {
       setShowHelp(window.location.pathname === "/help");
+      setShowAbout(window.location.pathname === "/about");
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -424,7 +425,7 @@ function Terminal() {
       {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
       {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
       {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
-      {showAbout && <AboutOverlay onClose={() => setShowAbout(false)} />}
+      {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
       {showSynergize && (
         <SynergizeOverlay
           onClose={() => {
