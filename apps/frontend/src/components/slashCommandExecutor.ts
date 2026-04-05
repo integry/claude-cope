@@ -18,6 +18,7 @@ interface SlashCommandContext {
   setShowLeaderboard: (v: boolean) => void;
   setShowAchievements: (v: boolean) => void;
   setShowSynergize: (v: boolean) => void;
+  setShowHelp: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -190,7 +191,8 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
   if (command === "/help") {
     const tdGrant = Math.floor(Math.random() * 200) + 100;
     ctx.addActiveTD(tdGrant);
-    reply({ role: "system", content: `[📖] Oh, you need \`/help\`? A real **10x developer** would never. Let me explain: you simply write code that works. On the first try. Every time. No tests needed — tests are for people who lack confidence. Anyway, here's **${tdGrant} TD** for wasting my time.` });
+    ctx.setHistory(clearLoading);
+    ctx.setShowHelp(true);
     return true;
   } else if (command === "/fast") {
     const newFast = !ctx.state.modes.fast;

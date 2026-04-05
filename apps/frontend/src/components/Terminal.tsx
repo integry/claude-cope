@@ -7,6 +7,7 @@ import StoreOverlay from "./StoreOverlay";
 import LeaderboardOverlay from "./LeaderboardOverlay";
 import AchievementOverlay from "./AchievementOverlay";
 import SynergizeOverlay from "./SynergizeOverlay";
+import HelpOverlay from "./HelpOverlay";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
 import { calculateTDpS } from "../hooks/gameStateUtils";
@@ -63,6 +64,7 @@ function Terminal() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [showSynergize, setShowSynergize] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
@@ -116,13 +118,8 @@ function Terminal() {
 
   const triggerInstantBan = () => {
     setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
-    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"),
-      { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." },
-    ]);
-    setTimeout(() => {
-      setQuotaLocked(false); setIsProcessing(false);
-      setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]);
-    }, 5000);
+    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." }]);
+    setTimeout(() => { setQuotaLocked(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
   };
 
   /** Drains quota and triggers lockout if depleted. Returns true if command was consumed by lockout. */
@@ -161,7 +158,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } },
+      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } },
     );
   };
 
@@ -414,17 +411,9 @@ function Terminal() {
           onClose={() => setShowStore(false)}
         />
       )}
-      {showLeaderboard && (
-        <LeaderboardOverlay
-          onClose={() => setShowLeaderboard(false)}
-        />
-      )}
-      {showAchievements && (
-        <AchievementOverlay
-          unlockedIds={state.achievements}
-          onClose={() => setShowAchievements(false)}
-        />
-      )}
+      {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
+      {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
+      {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}
       {showSynergize && (
         <SynergizeOverlay
           onClose={() => {
