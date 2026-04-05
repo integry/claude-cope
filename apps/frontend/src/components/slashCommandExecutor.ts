@@ -351,8 +351,7 @@ export function executeSlashCommand(
       handleBacklogCommand(reply).then(() => ctx.setIsProcessing(false));
       return;
     } else if (command.startsWith("/take")) {
-      handleTakeCommand(command, ctx.state, ctx.setState, reply).then(() => ctx.setIsProcessing(false));
-      return;
+      handleTakeCommand(command, ctx.state, ctx.setState, reply);
     } else if (handleNewCommand(command, ctx, reply)) {
       // /brrrrrr handles its own setIsProcessing
       if (command === "/brrrrrr") return;
