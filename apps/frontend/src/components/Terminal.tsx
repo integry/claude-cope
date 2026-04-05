@@ -387,7 +387,7 @@ function Terminal() {
       <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
-          <OutputBlock key={index} message={message} isNew={index >= initialHistoryLen.current} promptString={promptString} />
+          <OutputBlock key={index} message={message} isNew={index >= initialHistoryLen.current} promptString={promptString} activeTicketTitle={state.activeTicket?.title} />
         ))}
         <div ref={bottomRef} />
       </div>
