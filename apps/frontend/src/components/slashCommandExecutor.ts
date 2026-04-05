@@ -20,6 +20,7 @@ interface SlashCommandContext {
   setShowSynergize: (v: boolean) => void;
   setShowHelp: (v: boolean) => void;
   setShowAbout: (v: boolean) => void;
+  setShowProfile: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -115,6 +116,21 @@ function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   return true;
 }
 
+function handleBuddyCommand(ctx: SlashCommandContext, reply: Reply): boolean {
+  if (ctx.state.buddy.type) {
+    ctx.setBuddyPendingConfirm(true);
+    reply({ role: "system", content: `[⚠️] You already have a buddy (**${ctx.state.buddy.type}**). Re-rolling will replace it. Are you sure? (y/n)` });
+    return true;
+  }
+  const roll = Math.random() * 100;
+  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
+  const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
+  ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
+  const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
+  reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: **${buddyType}**${shinyLabel} ${buddyIcon}!` });
+  return true;
+}
+
 function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   if (command === "/store") {
     return handleStoreCommand(ctx, reply);
@@ -129,6 +145,10 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
   } else if (command === "/synergize") {
     reply({ role: "system", content: "[🗓️] **Mandatory 1-on-1 meeting** initiated. You cannot escape." });
     ctx.setShowSynergize(true);
+    return true;
+  } else if (command === "/profile") {
+    ctx.setHistory(clearLoading);
+    ctx.setShowProfile(true);
     return true;
   } else if (command === "/compact") {
     ctx.triggerCompactEffect();
@@ -154,18 +174,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     reply({ role: "system", content: "[✓] Injected **400mg** of pure caffeine into the **Node.js event loop**. LFG." });
     return true;
   } else if (command === "/buddy") {
-    if (ctx.state.buddy.type) {
-      ctx.setBuddyPendingConfirm(true);
-      reply({ role: "system", content: `[⚠️] You already have a buddy (**${ctx.state.buddy.type}**). Re-rolling will replace it. Are you sure? (y/n)` });
-      return true;
-    }
-    const roll = Math.random() * 100;
-    const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
-    const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
-    ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
-    const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
-    reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: **${buddyType}**${shinyLabel} ${buddyIcon}!` });
-    return true;
+    return handleBuddyCommand(ctx, reply);
   } else if (command === "/who") {
     if (ctx.onlineUsers.length > 0) {
       const userList = ctx.onlineUsers.join(", ");
