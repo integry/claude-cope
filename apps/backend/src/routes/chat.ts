@@ -16,6 +16,7 @@ chat.post("/", async (c) => {
     messages: { role: string; content: string }[];
     rank?: string;
     apiKey?: string;
+    customModel?: string;
     modes?: { fast?: boolean; voice?: boolean };
     activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number };
   }>();
@@ -57,7 +58,7 @@ Do NOT output a range like "1-3". Output ONE number.`;
     ...recentMessages,
   ];
 
-  const model = isBYOK ? "anthropic/claude-3-opus" : "nvidia/nemotron-nano-9b-v2:free";
+  const model = isBYOK ? (body.customModel || "anthropic/claude-3-opus") : "nvidia/nemotron-nano-9b-v2:free";
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",

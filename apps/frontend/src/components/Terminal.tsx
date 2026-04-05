@@ -277,7 +277,7 @@ function Terminal() {
       }
     };
 
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress });
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress });
   };
 
   const setCursorToEnd = (val: string) => {
