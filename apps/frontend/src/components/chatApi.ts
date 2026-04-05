@@ -80,6 +80,45 @@ async function readStreamedResponse(res: Response, setHistory: Dispatch<SetState
   return { rawReply: state.rawReply, usage: state.usage };
 }
 
+function processReplyTags(
+  rawReply: string,
+  unlockAchievement: (id: string) => void,
+  onSprintProgress?: (amount: number) => void,
+): { achievementMessages: Message[]; reply: string } {
+  const achievementRegex = /\[ACHIEVEMENT_UNLOCKED:\s*(.+?)\]/g;
+  const achievementMessages: Message[] = [];
+  let match;
+  while ((match = achievementRegex.exec(rawReply)) !== null) {
+    const achievementId = match[1]!.trim();
+    unlockAchievement(achievementId);
+    achievementMessages.push({
+      role: "warning",
+      content: buildAchievementBox(achievementId),
+    });
+    const achievementName = ALL_ACHIEVEMENTS.find((a) => a.id === achievementId)?.name ?? achievementId;
+    const achievementMessage = `🏆 A player unlocked the achievement: ${achievementName}`;
+    fetch(`${API_BASE}/api/recent-events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: achievementMessage }),
+    }).catch(() => {});
+    supabase?.channel('global_incidents').send({
+      type: 'broadcast',
+      event: 'new_incident',
+      payload: { message: achievementMessage },
+    }).catch(() => {});
+  }
+
+  const sprintRegex = /\[SPRINT_PROGRESS:\s*(\d+)(?:\s*-\s*\d+)?\]/g;
+  const sprintMatch = sprintRegex.exec(rawReply);
+  if (sprintMatch && onSprintProgress) {
+    onSprintProgress(parseInt(sprintMatch[1]!, 10));
+  }
+
+  const reply = rawReply.replace(achievementRegex, "").replace(sprintRegex, "").trim();
+  return { achievementMessages, reply };
+}
+
 export function submitChatMessage(opts: {
   chatMessages: { role: string; content: string }[];
   buddyResult: BuddyInterjectionResult | null;
@@ -145,38 +184,7 @@ export function submitChatMessage(opts: {
         rawReply = "[❌ Error] No response from API.";
       }
 
-      const achievementRegex = /\[ACHIEVEMENT_UNLOCKED:\s*(.+?)\]/g;
-      const achievementMessages: Message[] = [];
-      let match;
-      while ((match = achievementRegex.exec(rawReply)) !== null) {
-        const achievementId = match[1]!.trim();
-        unlockAchievement(achievementId);
-        achievementMessages.push({
-          role: "warning",
-          content: buildAchievementBox(achievementId),
-        });
-        const achievementName = ALL_ACHIEVEMENTS.find((a) => a.id === achievementId)?.name ?? achievementId;
-        const achievementMessage = `🏆 A player unlocked the achievement: ${achievementName}`;
-        fetch(`${API_BASE}/api/recent-events`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: achievementMessage }),
-        }).catch(() => {});
-        supabase?.channel('global_incidents').send({
-          type: 'broadcast',
-          event: 'new_incident',
-          payload: { message: achievementMessage },
-        }).catch(() => {});
-      }
-
-      // Parse sprint progress tag — handle both "N" and "N-M" (take first number)
-      const sprintRegex = /\[SPRINT_PROGRESS:\s*(\d+)(?:\s*-\s*\d+)?\]/g;
-      const sprintMatch = sprintRegex.exec(rawReply);
-      if (sprintMatch && onSprintProgress) {
-        onSprintProgress(parseInt(sprintMatch[1]!, 10));
-      }
-
-      const reply = rawReply.replace(achievementRegex, "").replace(sprintRegex, "").trim();
+      const { achievementMessages, reply } = processReplyTags(rawReply, unlockAchievement, onSprintProgress);
 
       setHistory((prev) => {
         let updated = [
