@@ -60,6 +60,7 @@ function Terminal() {
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialHistoryLen = useRef(history.length);
   const lastEscapeRef = useRef<number>(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
 
   const closeAllOverlays = () => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowProfile(false); };
@@ -176,12 +177,35 @@ function Terminal() {
         setState((prev) => ({ ...prev, activeTicket: null }));
       }
     };
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress });
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, signal: controller.signal });
   };
 
   const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.selectionStart = el.selectionEnd = val.length; } }, 0); };
 
   const handleEscapeKey = () => {
+    // Priority 1: Close any open overlay
+    const anyOverlayOpen = showStore || showLeaderboard || showAchievements || showSynergize || showHelp || showAbout || showProfile;
+    if (anyOverlayOpen) { closeAllOverlays(); return; }
+
+    // Priority 2: Abort active API request
+    if (isProcessing && abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsProcessing(false);
+      setHistory((prev) => [
+        ...prev.filter((msg) => msg.role !== "loading"),
+        { role: "warning", content: "[⚠️ ABORTED] Generation cancelled. Your mass-produced cope has been recalled." },
+      ]);
+      // Restore the last command the user typed
+      if (commandHistory.length > 0) {
+        setInputValue(commandHistory[commandHistory.length - 1]!);
+      }
+      return;
+    }
+
+    // Priority 3: Double-tap escape to clear input
     const now = Date.now();
     if (now - lastEscapeRef.current < 500) {
       if (inputValue.length > 0) setHistory((prev) => [...prev, { role: "system", content: "[ESC ESC] Input cleared. Even your half-typed thoughts disappoint me." }]);
