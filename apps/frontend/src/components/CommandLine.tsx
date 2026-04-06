@@ -11,7 +11,7 @@ type CommandLineProps = {
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
   function CommandLine({ value, disabled, onChange, onKeyDown, promptString = "❯ " }, ref) {
     return (
-      <div className="border-t border-b border-gray-600/50 py-1.5">
+      <div className="border-t border-white py-1.5">
         <div className="flex items-center">
           <span className="text-white font-bold whitespace-pre">{promptString}</span>
           <input
