@@ -461,9 +461,14 @@ function handleUpgradeCommand(ctx: SlashCommandContext, reply: Reply): boolean {
 export function rollBuddy(
   setState: SetState,
   setHistory: SetHistory,
+  currentBuddyType?: string,
 ) {
-  const roll = Math.random() * 100;
-  const [buddyType, buddyIcon] = roll < 50 ? ["Agile Snail", "🐌"] : roll < 75 ? ["Sarcastic Clippy", "📎"] : roll < 88 ? ["Grumpy Senior", "👴"] : roll < 97 ? ["Panic Intern", "😰"] : ["10x Dragon", "🐉"];
+  let buddyType: string;
+  let buddyIcon: string;
+  do {
+    const roll = Math.random() * 100;
+    [buddyType, buddyIcon] = roll < 50 ? ["Agile Snail", "🐌"] : roll < 75 ? ["Sarcastic Clippy", "📎"] : roll < 88 ? ["Grumpy Senior", "👴"] : roll < 97 ? ["Panic Intern", "😰"] : ["10x Dragon", "🐉"];
+  } while (buddyType === currentBuddyType);
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
   const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";

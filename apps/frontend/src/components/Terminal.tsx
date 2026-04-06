@@ -143,7 +143,7 @@ function Terminal() {
 
   const handleBuddyConfirm = () => {
     const answer = inputValue.trim().toLowerCase(); setInputValue(""); setBuddyPendingConfirm(false);
-    if (answer === "y" || answer === "yes") { setHistory((prev) => [...prev, { role: "user", content: inputValue }]); rollBuddy(setState, setHistory); }
+    if (answer === "y" || answer === "yes") { setHistory((prev) => [...prev, { role: "user", content: inputValue }]); rollBuddy(setState, setHistory, state.buddy?.type ?? undefined); }
     else { setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]); }
   };
 
