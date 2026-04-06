@@ -7,9 +7,9 @@ import { pickRandomSequence } from "./toolSequences";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
-function SimulatedToolCall({ activeTicketTitle }: { activeTicketTitle?: string | null }) {
-  // Pick a random sequence once on mount, based on active ticket theme
-  const [steps] = useState(() => pickRandomSequence(activeTicketTitle));
+function SimulatedToolCall({ activeTicketId }: { activeTicketId?: string | null }) {
+  // Pick a random sequence once on mount, based on active ticket ID
+  const [steps] = useState(() => pickRandomSequence(activeTicketId));
   const [stepIndex, setStepIndex] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [frame, setFrame] = useState(0);
@@ -283,7 +283,7 @@ function MessageContent({ message }: { message: Message }) {
   return null;
 }
 
-function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTicketTitle }: { message: Message; isNew?: boolean; promptString?: string; activeTicketTitle?: string | null }) {
+function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTicketId }: { message: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null }) {
   const isAwaitingResponse = message.role === "loading" && message.content === "[⚙️] Coping with your request...";
 
   return (
@@ -296,7 +296,7 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
       )}
       {message.role === "loading" && <Spinner />}
       <MessageContent message={message} />
-      {isAwaitingResponse && <SimulatedToolCall activeTicketTitle={activeTicketTitle} />}
+      {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
     </div>
   );

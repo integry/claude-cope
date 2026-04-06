@@ -1,41 +1,91 @@
-export type { ToolStep } from "./toolSequencesData";
-export { THEMED_TOOL_SEQUENCES } from "./toolSequencesData";
+import { API_BASE } from "../config";
 
-import type { ToolStep } from "./toolSequencesData";
-import { THEMED_TOOL_SEQUENCES } from "./toolSequencesData";
+export type ToolStep = { tool: string; target: string; action: string };
 
-/** Keywords that map ticket titles to themed tool-step sequences. */
-export const THEME_KEYWORDS: [string, RegExp][] = [
-  ["hr", /hr|human.?resource|approv|sensiti|emotion|compliance|consent|mandatory.*fun|training.*module/i],
-  ["sales", /sale|revenue|deal|pipeline|crm|lead|coffee.*machine|firework|refer.*friend|marketing/i],
-  ["security", /auth|login|password|encrypt|captcha|secur|hack|token|oath|proof.?of.?work|nft|blockchain.*review/i],
-  ["testing", /test|qa|coverage|bug.*report|haiku.*impact|vibe.*check|turn.*off.*on/i],
-  ["devops", /deploy|ci[/ ]cd|pipeline.*47|friday|monitor|vibes\.sh|docker|kubernetes|k8s|lambda|serverless|helm|terraform/i],
-  ["data", /databas|query|sql|mongo|dynamo|redis|retention|json.*file.*desktop|schema|migration.*data|dba/i],
-  ["frontend", /css|button|ui|ux|spinner|loading|animation|hover|emoji|logo|tailwind|color|design|404.*page|cookie.*banner|share.*button|accessibility/i],
-  ["management", /meeting|standup|sprint|backlog|committee|naming|refinement|ceremony|pair.*program|innovation.*friday|theme.*song|astrology|org.*restructure/i],
-  ["legacy", /rewrite|php|perl|cobol|delphi|fortran|flash|swf|as400|mainframe|wpf|clickonce|cgi-bin|jquery|vba|objective.?c/i],
-  ["architecture", /microservice|monolith|cqrs|event.?source|graphql.*rest|grpc|blockchain|kubernetes.*kubernetes|helm.*chart|rust.*memory|assembly|wasm/i],
+/** In-memory cache of fetched sequences keyed by task ID ("__none__" for no-task). */
+const sequenceCache = new Map<string, ToolStep[][]>();
+
+/** Minimal fallback shown while the first API fetch is in flight. */
+const INLINE_FALLBACK: ToolStep[][] = [
+  [
+    { tool: "Read", target: "src/index.ts", action: "Reading file" },
+    { tool: "Grep", target: "handleRequest", action: "Searching codebase" },
+    { tool: "Read", target: "package.json", action: "Reading file" },
+    { tool: "Bash", target: "npm test", action: "Running command" },
+    { tool: "Glob", target: "src/**/*.ts", action: "Finding files" },
+  ],
+  [
+    { tool: "Read", target: "tsconfig.json", action: "Reading file" },
+    { tool: "Grep", target: "export default", action: "Searching codebase" },
+    { tool: "Bash", target: "tsc --noEmit", action: "Running command" },
+    { tool: "Read", target: "src/utils/helpers.ts", action: "Reading file" },
+    { tool: "Grep", target: "TODO|FIXME", action: "Searching codebase" },
+  ],
+  [
+    { tool: "Bash", target: "git log --oneline -5", action: "Running command" },
+    { tool: "Read", target: "src/config/index.ts", action: "Reading file" },
+    { tool: "Grep", target: "process\\.env", action: "Searching codebase" },
+    { tool: "Read", target: ".env.example", action: "Reading file" },
+    { tool: "Bash", target: "npm run lint", action: "Running command" },
+  ],
 ];
 
-/** Determine the theme for a given ticket title, falling back to "general". */
-export function getThemeForTicket(title: string): string {
-  for (const [theme, pattern] of THEME_KEYWORDS) {
-    if (pattern.test(title)) return theme;
+/**
+ * Fetch task-specific tool sequences from the backend API.
+ * Results are cached so repeated calls for the same task are instant.
+ */
+async function fetchSequences(taskId?: string | null): Promise<ToolStep[][]> {
+  const cacheKey = taskId ?? "__none__";
+  const cached = sequenceCache.get(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const url = taskId
+      ? `${API_BASE}/api/tool-sequences/for-task/${encodeURIComponent(taskId)}`
+      : `${API_BASE}/api/tool-sequences/random`;
+
+    const res = await fetch(url);
+    if (!res.ok) return INLINE_FALLBACK;
+
+    const data = await res.json();
+    // /for-task/:id returns { sequences: ToolStep[][] }
+    // /random returns { sequence: ToolStep[] }
+    const sequences: ToolStep[][] = data.sequences ?? [data.sequence];
+    sequenceCache.set(cacheKey, sequences);
+    return sequences;
+  } catch {
+    return INLINE_FALLBACK;
   }
-  return "general";
 }
 
-/** Pick a random sequence from the given theme, or from all themes if none specified. */
-export function pickRandomSequence(activeTicketTitle?: string | null): ToolStep[] {
-  if (activeTicketTitle) {
-    const theme = getThemeForTicket(activeTicketTitle);
-    const sequences = THEMED_TOOL_SEQUENCES[theme]!;
-    return sequences[Math.floor(Math.random() * sequences.length)]!;
+/**
+ * Pick a random tool-step sequence for the given task.
+ *
+ * This kicks off an async fetch (cached after first call) and returns a
+ * fallback sequence synchronously so the caller always gets a value
+ * immediately. Once the fetch resolves, subsequent calls return
+ * task-specific sequences.
+ */
+export function pickRandomSequence(activeTicketId?: string | null): ToolStep[] {
+  const cacheKey = activeTicketId ?? "__none__";
+  const cached = sequenceCache.get(cacheKey);
+
+  if (cached) {
+    return cached[Math.floor(Math.random() * cached.length)]!;
   }
-  // No active task — pick a random sequence from all themes
-  const allThemes = Object.keys(THEMED_TOOL_SEQUENCES);
-  const randomTheme = allThemes[Math.floor(Math.random() * allThemes.length)]!;
-  const sequences = THEMED_TOOL_SEQUENCES[randomTheme]!;
-  return sequences[Math.floor(Math.random() * sequences.length)]!;
+
+  // Fire-and-forget the fetch so the next mount gets real data
+  fetchSequences(activeTicketId);
+
+  // Return a random fallback for this render
+  return INLINE_FALLBACK[Math.floor(Math.random() * INLINE_FALLBACK.length)]!;
+}
+
+/**
+ * Pre-fetch and cache sequences for a specific task.
+ * Call this when a ticket is claimed so sequences are ready
+ * before the user sends their first prompt.
+ */
+export function prefetchSequences(taskId: string): void {
+  fetchSequences(taskId);
 }
