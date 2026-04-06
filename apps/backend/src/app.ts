@@ -6,6 +6,7 @@ import leaderboard from "./routes/leaderboard";
 import events from "./routes/events";
 import tickets from "./routes/tickets";
 import toolSequences from "./routes/toolSequences";
+import score from "./routes/score";
 
 const app = new Hono();
 
@@ -29,5 +30,6 @@ app.route("/api/leaderboard", leaderboard);
 app.route("/api/recent-events", events);
 app.route("/api/tickets", tickets);
 app.route("/api/tool-sequences", toolSequences);
+app.route("/api/score", score);
 
 export default app;

@@ -43,6 +43,8 @@ export function useGameState() {
     }
   }, [state]);
 
+
+
   // Background loop — checks achievements and quota drain (no passive TD generation)
   useEffect(() => {
     const interval = setInterval(() => {

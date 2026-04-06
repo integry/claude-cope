@@ -131,6 +131,7 @@ export function submitChatMessage(opts: {
   modes?: ModesState;
   activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
   onSprintProgress?: (amount: number) => void;
+  addActiveTD?: (n: number) => void;
   signal?: AbortSignal;
 }) {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, signal } = opts;
@@ -179,6 +180,10 @@ export function submitChatMessage(opts: {
         if (data?.usage) {
           tokensSent = data.usage.prompt_tokens ?? undefined;
           tokensReceived = data.usage.completion_tokens ?? undefined;
+        }
+        // Use server-authoritative TD award if available
+        if (data?.td_awarded && opts.addActiveTD) {
+          opts.addActiveTD(data.td_awarded);
         }
       }
 

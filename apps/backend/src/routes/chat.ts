@@ -108,16 +108,26 @@ Do NOT output a range like "1-3". Output ONE number.`;
     [key: string]: unknown;
   };
 
-  // Log usage asynchronously
+  // Server-authoritative TD award for this interaction
+  const tdAwarded = Math.floor(Math.random() * 40) + 10;
+  const country = c.req.header("cf-ipcountry") || "Unknown";
+
+  // Log usage and update server-side score asynchronously
   if (db) {
     const tokensSent = data.usage?.prompt_tokens ?? 0;
     const tokensReceived = data.usage?.completion_tokens ?? 0;
-    c.executionCtx.waitUntil(
+    c.executionCtx.waitUntil(Promise.all([
       db.prepare(
         "INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, ?, ?, ?)"
-      ).bind(username, model, tokensSent, tokensReceived, hour).run()
-    );
+      ).bind(username, model, tokensSent, tokensReceived, hour).run(),
+      db.prepare(
+        "INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country) VALUES (?, ?, ?, ?, ?) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, updated_at = datetime('now')"
+      ).bind(username, tdAwarded, tdAwarded, rank, country, tdAwarded, tdAwarded).run(),
+    ]));
   }
+
+  // Include server-awarded TD so client uses authoritative value
+  (data as Record<string, unknown>).td_awarded = tdAwarded;
 
   return c.json(data);
 });

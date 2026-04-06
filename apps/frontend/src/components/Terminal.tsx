@@ -155,7 +155,6 @@ function Terminal() {
     if (handleKeyCommand(inputValue, setState, setHistory)) { setInputValue(""); return; }
     const command = inputValue;
     setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
-    addActiveTD(Math.floor(Math.random() * 40) + 10);
     if (applyQuotaDrain()) { setHistory((prev) => [...prev, { role: "user", content: command }]); return; }
     const buddyResult = computeBuddyInterjection(state.buddy);
     if (state.buddy.type) {
@@ -180,7 +179,7 @@ function Terminal() {
     };
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, signal: controller.signal });
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, addActiveTD, signal: controller.signal });
   };
 
   const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.selectionStart = el.selectionEnd = val.length; } }, 0); };
@@ -258,7 +257,7 @@ function Terminal() {
     >
       <Ticker />
       {outageHp !== null && <OutageBar outageHp={outageHp} />}
-      <HeaderBar rank={rank} totalTDEarned={state.economy.totalTDEarned} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} onProfileClick={() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }} />
+      <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} onProfileClick={() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }} />
       <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
