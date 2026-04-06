@@ -71,7 +71,7 @@ export function submitBrag(opts: SubmitBragOptions) {
   setHistory((prev) => [
     ...prev,
     { role: "user", content: username },
-    { role: "loading", content: "[⚙️] Submitting to the Hall of Blame..." },
+    { role: "loading", content: "[⏳] Submitting to the Hall of Blame..." },
   ]);
 
   fetch(`${API_BASE}/api/leaderboard`, {
