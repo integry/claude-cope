@@ -3,8 +3,51 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Message } from "./Terminal";
+import { pickRandomSequence } from "./toolSequences";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
+
+function SimulatedToolCall({ activeTicketId }: { activeTicketId?: string | null }) {
+  // Pick a random sequence once on mount, based on active ticket ID
+  const [steps] = useState(() => pickRandomSequence(activeTicketId));
+  const [stepIndex, setStepIndex] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    // Cycle through tool steps at varying intervals for realism
+    const interval = setInterval(() => {
+      setStepIndex((prev) => (prev + 1) % steps.length);
+      setElapsed(0);
+    }, 1200 + Math.random() * 800);
+    return () => clearInterval(interval);
+  }, [steps.length]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setElapsed((e) => e + 80);
+      setFrame((f) => (f + 1) % SPINNER_FRAMES.length);
+    }, 80);
+    return () => clearInterval(id);
+  }, []);
+
+  const step = steps[stepIndex]!;
+  const durationSec = (elapsed / 1000).toFixed(1);
+
+  return (
+    <div className="mt-1 space-y-0.5 text-sm font-mono">
+      <div className="text-gray-500 flex items-center gap-2">
+        <span className="text-yellow-400">{SPINNER_FRAMES[frame]}</span>
+        <span className="text-blue-400">{step.tool}</span>
+        <span className="text-gray-400">{step.target}</span>
+        <span className="text-gray-600">({durationSec}s)</span>
+      </div>
+      <div className="text-gray-600 text-xs pl-4">
+        {step.action}...
+      </div>
+    </div>
+  );
+}
 
 const roleColors: Record<Message["role"], string> = {
   user: "text-white font-bold",
@@ -34,8 +77,14 @@ function classifyTag(tagContent: string): TagCategory {
 }
 
 /** Strip any leaked __TAG_ markers the LLM echoes back from seeing chat history */
-function cleanLeakedTagMarkers(content: string): string {
-  return content.replace(/`__TAG_(?:ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g, "[$1]");
+/** Strip leaked __TAG_ markers and unwrap terminal-ish code fences (bash, sh, shell, etc.) */
+function cleanLLMOutput(content: string): string {
+  let cleaned = content.replace(/`__TAG_(?:ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g, "[$1]");
+  // Unwrap code fences for terminal-like languages — the content is already in a terminal
+  const terminalLangs = "bash|sh|shell|console|terminal|text|log|plaintext|markdown|md";
+  const fenceRegex = new RegExp("```(?:" + terminalLangs + ")\\s*\\n([\\s\\S]*?)```", "g");
+  cleaned = cleaned.replace(fenceRegex, "$1");
+  return cleaned;
 }
 
 /** Render a line of text, replacing any `__TAG_...__:text` or `[TAG]` markers with styled spans. */
@@ -164,7 +213,7 @@ const markdownComponents = {
     if (match) {
       // Terminal-ish languages render as plain preformatted text
       // to avoid clashing with the terminal's own dark/monospace aesthetic
-      const terminalLangs = ["terminal", "bash", "sh", "shell", "console", "text", "log", "plaintext"];
+      const terminalLangs = ["terminal", "bash", "sh", "shell", "console", "text", "log", "plaintext", "markdown", "md"];
       if (terminalLangs.includes(match[1]!)) {
         const lines = codeString.split("\n");
         return (
@@ -206,34 +255,61 @@ const markdownComponents = {
   },
 };
 
-function OutputBlock({ message, isNew = false, promptString = "cope@local:~$ " }: { message: Message; isNew?: boolean; promptString?: string }) {
+function getContainerClass(message: Message, isNew: boolean): string {
   const colorClass = roleColors[message.role];
+  const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
+  const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
+
+  let modifier = "leading-relaxed";
+  if (isAchievement) {
+    modifier = `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold`;
+  } else if (isBuddyInterjection) {
+    modifier = "whitespace-pre font-mono";
+  }
+  return `mb-5 ${colorClass} ${modifier}`;
+}
+
+function MessageContent({ message }: { message: Message }) {
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
   const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
   const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
+  const isAwaitingResponse = message.role === "loading" && message.content === "[⚙️] Coping with your request...";
+  const isStreaming = message.role === "loading" && !isAwaitingResponse;
 
-  const processedContent = useMarkdown ? cleanLeakedTagMarkers(message.content) : message.content;
+  if (message.role === "user") return null;
+
+  if (useMarkdown) {
+    const processedContent = cleanLLMOutput(message.content);
+    return (
+      <div className="space-y-1">
+        <ReactMarkdown components={markdownComponents}>
+          {processedContent}
+        </ReactMarkdown>
+      </div>
+    );
+  }
+
+  if (isStreaming) return <>{message.content}</>;
+  if (message.role !== "loading") return <>{message.content}</>;
+  return null;
+}
+
+function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTicketId }: { message: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null }) {
+  const isAwaitingResponse = message.role === "loading" && message.content === "[⚙️] Coping with your request...";
 
   return (
-    <div className={`mb-5 ${colorClass} ${isAchievement ? `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold` : isBuddyInterjection ? "whitespace-pre font-mono" : "leading-relaxed"}`}>
+    <div className={getContainerClass(message, isNew)}>
       {message.role === "user" && (
-        <span className="text-green-400 font-bold">{promptString}</span>
+        <div className="inline-block bg-gray-200 text-gray-900 px-3 py-1.5 font-bold">
+          <span className="text-gray-500 mr-1">{promptString}</span>
+          {message.content}
+        </div>
       )}
       {message.role === "loading" && <Spinner />}
-      {useMarkdown ? (
-        <div className="space-y-1">
-          <ReactMarkdown components={markdownComponents}>
-            {processedContent}
-          </ReactMarkdown>
-        </div>
-      ) : (
-        message.content
-      )}
-      {message.role === "loading" && <TokenCounter tokensSent={message.tokensSent} tokensReceived={message.tokensReceived} />}
-      {message.role === "system" && (message.tokensSent != null || message.tokensReceived != null) && (
-        <TokenCounter tokensSent={message.tokensSent} tokensReceived={message.tokensReceived} />
-      )}
+      <MessageContent message={message} />
+      {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
+      {message.role === "loading" && <TokenCounter />}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import chat from "./routes/chat";
 import leaderboard from "./routes/leaderboard";
 import events from "./routes/events";
 import tickets from "./routes/tickets";
+import toolSequences from "./routes/toolSequences";
 
 const app = new Hono();
 
@@ -27,5 +28,6 @@ app.route("/api/leaderboard", leaderboard);
 // Mount the events route to expose the SWR polling fallback endpoints
 app.route("/api/recent-events", events);
 app.route("/api/tickets", tickets);
+app.route("/api/tool-sequences", toolSequences);
 
 export default app;

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { GENERATORS } from "../game/constants";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
@@ -314,6 +315,57 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   reply({ role: "system", content: `[✓] Model switched to **${modelName}**. May your tokens be plentiful and your latency low.` });
 }
 
+function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
+  const offer = getPendingOffer();
+  if (!offer) {
+    reply({ role: "error", content: "[❌] No pending ticket to accept. Use `/backlog` to browse tickets." });
+  } else if (ctx.state.activeTicket) {
+    reply({ role: "error", content: `[❌] You already have an active ticket: **${ctx.state.activeTicket.title}**. Finish it first or \`/abandon\` it.` });
+  } else {
+    clearPendingOffer();
+    ctx.setState((prev) => ({
+      ...prev,
+      activeTicket: { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt },
+    }));
+    reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nSprint goal: **${offer.technical_debt} TD**. Start prompting to make progress.` });
+  }
+}
+
+/** Dispatch a command; returns "async" if the caller should NOT call setIsProcessing(false). */
+function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | void {
+  if (handleCoreCommand(command, ctx, reply)) {
+    if (command === "/synergize") return;
+  } else if (command === "/key") {
+    reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter or Anthropic API key to bypass default limits. Type `/key clear` to remove your key." });
+  } else if (command === "/feedback" || command === "/bug") {
+    reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
+  } else if (command === "/upgrade") {
+    handleUpgradeCommand(ctx, reply);
+  } else if (command.startsWith("/ticket")) {
+    handleTicketCommand(command, reply).then(() => ctx.setIsProcessing(false));
+    return "async";
+  } else if (command === "/backlog") {
+    handleBacklogCommand(reply).then(() => ctx.setIsProcessing(false));
+    return "async";
+  } else if (command.startsWith("/take")) {
+    handleTakeCommand(command, ctx.state, ctx.setState, reply);
+  } else if (command === "/accept") {
+    handleAcceptCommand(ctx, reply);
+  } else if (command === "/abandon") {
+    handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
+  } else if (command.startsWith("/alias")) {
+    handleAliasCommand(command, ctx, reply);
+  } else if (command.startsWith("/model")) {
+    handleModelCommand(command, ctx, reply);
+  } else if (handleNewCommand(command, ctx, reply)) {
+    if (command === "/brrrrrr") return "async";
+  } else if (command.startsWith("/")) {
+    reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
+  } else {
+    reply({ role: "system", content: `[✓] Executed \`${command}\`` });
+  }
+}
+
 function handleUpgradeCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   const ownedGenerators = GENERATORS
     .filter((g) => (ctx.state.inventory[g.id] ?? 0) > 0)
@@ -402,57 +454,7 @@ export function executeSlashCommand(
       ctx.unlockAchievement("the_final_escape");
     }
 
-    if (handleCoreCommand(command, ctx, reply)) {
-      // /synergize handles its own setIsProcessing
-      if (command === "/synergize") return;
-    } else if (command === "/key") {
-      reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter or Anthropic API key to bypass default limits. Type `/key clear` to remove your key." });
-    } else if (command === "/feedback" || command === "/bug") {
-      reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
-    } else if (command === "/upgrade") {
-      handleUpgradeCommand(ctx, reply);
-    } else if (command.startsWith("/ticket")) {
-      handleTicketCommand(command, reply).then(() => ctx.setIsProcessing(false));
-      return;
-    } else if (command === "/backlog") {
-      handleBacklogCommand(reply).then(() => ctx.setIsProcessing(false));
-      return;
-    } else if (command.startsWith("/take")) {
-      handleTakeCommand(command, ctx.state, ctx.setState, reply);
-    } else if (command === "/accept") {
-      const offer = getPendingOffer();
-      if (!offer) {
-        reply({ role: "error", content: "[❌] No pending ticket to accept. Use `/backlog` to browse tickets." });
-      } else if (ctx.state.activeTicket) {
-        reply({ role: "error", content: `[❌] You already have an active ticket: **${ctx.state.activeTicket.title}**. Finish it first or \`/abandon\` it.` });
-      } else {
-        clearPendingOffer();
-        ctx.setState((prev) => ({
-          ...prev,
-          activeTicket: {
-            id: offer.id,
-            title: offer.title,
-            sprintProgress: 0,
-            sprintGoal: offer.technical_debt,
-          },
-        }));
-        reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nSprint goal: **${offer.technical_debt} TD**. Start prompting to make progress.` });
-      }
-    } else if (command === "/abandon") {
-      handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
-    } else if (command.startsWith("/alias")) {
-      handleAliasCommand(command, ctx, reply);
-    } else if (command.startsWith("/model")) {
-      handleModelCommand(command, ctx, reply);
-    } else if (handleNewCommand(command, ctx, reply)) {
-      // /brrrrrr handles its own setIsProcessing
-      if (command === "/brrrrrr") return;
-    } else if (command.startsWith("/")) {
-      reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
-    } else {
-      reply({ role: "system", content: `[✓] Executed \`${command}\`` });
-    }
-
+    if (dispatchCommand(command, ctx, reply) === "async") return;
     ctx.setIsProcessing(false);
   }, Math.floor(Math.random() * 1500) + 1500);
 }

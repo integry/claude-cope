@@ -1,6 +1,7 @@
 import { API_BASE } from "../config";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
+import { prefetchSequences } from "./toolSequences";
 
 type Reply = (msg: Message) => void;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
@@ -104,6 +105,9 @@ export function handleTakeCommand(
     reply({ role: "error", content: `[❌] Ticket "${input}" not found. Run \`/backlog\` to see available tickets.` });
     return true;
   }
+
+  // Pre-fetch task-specific tool sequences so they're cached before the user prompts
+  prefetchSequences(ticket.id);
 
   setState((prev) => ({
     ...prev,
