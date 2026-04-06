@@ -131,12 +131,14 @@ export function submitChatMessage(opts: {
   modes?: ModesState;
   activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
   onSprintProgress?: (amount: number) => void;
+  signal?: AbortSignal;
 }) {
-  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress } = opts;
+  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, signal } = opts;
   fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages: chatMessages, rank: currentRank, ...(apiKey ? { apiKey } : {}), ...(customModel ? { customModel } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}) }),
+    signal,
   })
     .then(async (res) => {
       if (res.status === 429) {
@@ -213,7 +215,8 @@ export function submitChatMessage(opts: {
         return updated;
       });
     })
-    .catch(() => {
+    .catch((err) => {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setHistory((prev) => [
         ...prev.filter((msg) => msg.role !== "loading"),
         { role: "error", content: "[❌ Error] Network error. Is the backend running?" },
