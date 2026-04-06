@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Task-specific tool sequences for every seed task in the community backlog.
  *

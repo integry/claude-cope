@@ -1,11 +1,9 @@
 import { Hono } from "hono";
 import {
   TASK_TOOL_SEQUENCES,
-  FALLBACK_SEQUENCES,
   getSequencesForTask,
   pickRandomSequence,
 } from "../data/taskToolSequences";
-import type { ToolStep } from "../data/taskToolSequences";
 
 const toolSequences = new Hono();
 

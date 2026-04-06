@@ -301,25 +301,9 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
         </div>
       )}
       {message.role === "loading" && <Spinner />}
-<<<<<<< HEAD
       <MessageContent message={message} />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
-=======
-      {useMarkdown ? (
-        <div className="space-y-1">
-          <ReactMarkdown components={markdownComponents}>
-            {processedContent}
-          </ReactMarkdown>
-        </div>
-      ) : (
-        message.content
-      )}
-      {message.role === "loading" && <TokenCounter tokensSent={message.tokensSent} tokensReceived={message.tokensReceived} />}
-      {message.role === "system" && (message.tokensSent != null || message.tokensReceived != null) && (
-        <TokenCounter tokensSent={message.tokensSent} tokensReceived={message.tokensReceived} />
-      )}
->>>>>>> origin/main
     </div>
   );
 }
