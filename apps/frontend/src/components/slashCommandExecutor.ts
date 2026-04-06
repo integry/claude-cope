@@ -5,6 +5,7 @@ import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { buildAchievementBox } from "./achievementBox";
 import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand } from "./ticketCommands";
+import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
 
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
@@ -90,6 +91,13 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
       event: 'new_incident',
       payload: { message: crashMessage },
     }).catch(() => {});
+
+    // Re-offer a ticket after clear if none active — delay so the cleared screen settles
+    if (!ctx.state.activeTicket) {
+      setTimeout(() => {
+        ctx.setState((prev) => ({ ...prev, hasSeenTicketPrompt: false }));
+      }, 2000);
+    }
   }, 2000);
   return true;
 }
@@ -410,6 +418,25 @@ export function executeSlashCommand(
       return;
     } else if (command.startsWith("/take")) {
       handleTakeCommand(command, ctx.state, ctx.setState, reply);
+    } else if (command === "/accept") {
+      const offer = getPendingOffer();
+      if (!offer) {
+        reply({ role: "error", content: "[❌] No pending ticket to accept. Use `/backlog` to browse tickets." });
+      } else if (ctx.state.activeTicket) {
+        reply({ role: "error", content: `[❌] You already have an active ticket: **${ctx.state.activeTicket.title}**. Finish it first or \`/abandon\` it.` });
+      } else {
+        clearPendingOffer();
+        ctx.setState((prev) => ({
+          ...prev,
+          activeTicket: {
+            id: offer.id,
+            title: offer.title,
+            sprintProgress: 0,
+            sprintGoal: offer.technical_debt,
+          },
+        }));
+        reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nSprint goal: **${offer.technical_debt} TD**. Start prompting to make progress.` });
+      }
     } else if (command === "/abandon") {
       handleAbandonCommand(ctx.state, ctx.setState, reply);
     } else if (command.startsWith("/alias")) {

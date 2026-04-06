@@ -83,12 +83,12 @@ function Terminal() {
     }
   }, [isProcessing, isBooting, quotaLocked]);
 
-  // Show a random community ticket prompt for first-time users after boot
+  // Show a random community ticket prompt after boot — only if no active ticket
   useEffect(() => {
-    if (isBooting || state.hasSeenTicketPrompt) return;
+    if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
     setState((prev) => ({ ...prev, hasSeenTicketPrompt: true }));
     fetchRandomTicketPrompt(setHistory);
-  }, [isBooting, state.hasSeenTicketPrompt, setState, setHistory]);
+  }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
 
   const triggerQuotaLockout = () => {
     setQuotaLocked(true);
@@ -251,8 +251,9 @@ function Terminal() {
       userMessage,
     ].map((m) => ({ role: m.role, content: m.content }));
 
-    const onSprintProgress = (amount: number) => {
+    const onSprintProgress = (rawAmount: number) => {
       if (!state.activeTicket) return;
+      const amount = Math.round(rawAmount * 1.3);
       updateTicketProgress(amount);
       const newProgress = Math.min(
         state.activeTicket.sprintProgress + amount,
