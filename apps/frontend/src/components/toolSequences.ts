@@ -8,25 +8,25 @@ const sequenceCache = new Map<string, ToolStep[][]>();
 /** Minimal fallback shown while the first API fetch is in flight. */
 const INLINE_FALLBACK: ToolStep[][] = [
   [
-    { tool: "Read", target: "src/index.ts", action: "Pretending to review" },
-    { tool: "Grep", target: "handleRequest", action: "Hunting for clues" },
-    { tool: "Read", target: "package.json", action: "Skimming with intent" },
-    { tool: "Bash", target: "npm test", action: "Executing with reckless abandon" },
-    { tool: "Glob", target: "src/**/*.ts", action: "Rounding up the usual suspects" },
+    { tool: "Read", target: "src/index.ts", action: "Narrating this like David Attenborough at a funeral" },
+    { tool: "Grep", target: "handleRequest", action: "Following a trail of console.logs through the rain" },
+    { tool: "Read", target: "package.json", action: "Carefully brushing the dust off this ancient commit" },
+    { tool: "Bash", target: "npm test", action: "Throwing a Hail Mary to the production server" },
+    { tool: "Glob", target: "src/**/*.ts", action: "Descending into the underworld of node_modules" },
   ],
   [
-    { tool: "Read", target: "tsconfig.json", action: "Absorbing corporate wisdom" },
-    { tool: "Grep", target: "export default", action: "Interrogating the codebase" },
-    { tool: "Bash", target: "tsc --noEmit", action: "Hoping for the best" },
-    { tool: "Read", target: "src/utils/helpers.ts", action: "Consulting the sacred texts" },
-    { tool: "Grep", target: "TODO|FIXME", action: "Rummaging through the wreckage" },
+    { tool: "Read", target: "tsconfig.json", action: "The ouija board spells out S-E-G-F-A-U-L-T" },
+    { tool: "Grep", target: "export default", action: "Interrogating the config file under a single light bulb" },
+    { tool: "Bash", target: "tsc --noEmit", action: "Sacrificing a clean commit history to appease the CI gods" },
+    { tool: "Read", target: "src/utils/helpers.ts", action: "Conducting a seance to contact the original author" },
+    { tool: "Grep", target: "TODO|FIXME", action: "Organizing a candlelight vigil for the deleted feature" },
   ],
   [
-    { tool: "Bash", target: "git log --oneline -5", action: "Crossing fingers and running" },
-    { tool: "Read", target: "src/config/index.ts", action: "Staring at code pensively" },
-    { tool: "Grep", target: "process\\.env", action: "Snooping around suspiciously" },
-    { tool: "Read", target: ".env.example", action: "Deciphering ancient artifacts" },
-    { tool: "Bash", target: "npm run lint", action: "Yelling into the terminal void" },
+    { tool: "Bash", target: "git log --oneline -5", action: "Performing an archaeological dig through the git blame" },
+    { tool: "Read", target: "src/config/index.ts", action: "The code is coming from INSIDE the node_modules" },
+    { tool: "Grep", target: "process\\.env", action: "Wake up, sheeple — the config file is lying to you" },
+    { tool: "Read", target: ".env.example", action: "The microfilm is hidden inside the .env file" },
+    { tool: "Bash", target: "npm run lint", action: "Gordon Ramsay voice: THIS CODE IS RAW" },
   ],
 ];
 
