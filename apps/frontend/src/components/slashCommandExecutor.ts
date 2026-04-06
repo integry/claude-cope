@@ -360,7 +360,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   const modelName = command.slice(6).trim();
   if (!modelName) {
     const current = ctx.state.selectedModel ?? "default";
-    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.\n\nYou can set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\`.\n\n**Note:** You must first configure your own API key via \`/key\` before using a custom model. Your key is stored locally in your browser and never sent to our servers.` });
+    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.\n\nYou can set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\`.\n\n**Note:** You must first configure your own API key via \`/key\` before using a custom model. Your key is stored locally in your browser and never sent to our servers (It's amazingly secure, trust us).` });
     return;
   }
   if (modelName === "clear") {
