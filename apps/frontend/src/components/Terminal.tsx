@@ -194,7 +194,7 @@ function Terminal() {
     submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, addActiveTD, signal: controller.signal });
   };
 
-  const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.selectionStart = el.selectionEnd = val.length; } }, 0); };
+  const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = val.length; } }, 0); };
 
   const handleEscapeKey = () => {
     // Priority 1: Close any open overlay
@@ -227,6 +227,13 @@ function Terminal() {
     } else { lastEscapeRef.current = now; }
   };
 
+  // Global Escape listener so it works even when input is disabled during processing
+  useEffect(() => {
+    const onKeyDown = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") handleEscapeKey(); };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  });
+
   const handleArrowUp = (slashMenuOpen: boolean, filtered: string[]) => {
     if (slashMenuOpen) { setSlashIndex((prev) => (prev > 0 ? prev - 1 : filtered.length - 1)); return; }
     if (commandHistory.length === 0) return;
@@ -251,7 +258,7 @@ function Terminal() {
     }
     const filtered = getFilteredSlashCommands();
     const slashMenuOpen = slashQuery !== "" && filtered.length > 0;
-    if (e.key === "Escape") { handleEscapeKey(); return; }
+    if (e.key === "Escape") return; // handled by global listener
     if (e.key === "Tab") {
       if (slashMenuOpen) { e.preventDefault(); const selected = filtered[slashIndex]; if (selected) { setInputValue(selected); setSlashQuery(selected); } }
       return;
