@@ -5,6 +5,7 @@ import { getSystemPrompt } from "../prompts/systemPrompt";
 type Env = {
   Bindings: {
     OPENROUTER_API_KEY?: string;
+    DB?: D1Database;
   };
 };
 
@@ -15,6 +16,7 @@ chat.post("/", async (c) => {
     messages: { role: string; content: string }[];
     rank?: string;
     apiKey?: string;
+    customModel?: string;
     modes?: { fast?: boolean; voice?: boolean };
     activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number };
   }>();
@@ -56,7 +58,7 @@ Do NOT output a range like "1-3". Output ONE number.`;
     ...recentMessages,
   ];
 
-  const model = isBYOK ? "anthropic/claude-3-opus" : "nvidia/nemotron-nano-9b-v2:free";
+  const model = isBYOK ? (body.customModel || "anthropic/claude-3-opus") : "nvidia/nemotron-nano-9b-v2:free";
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -67,7 +69,7 @@ Do NOT output a range like "1-3". Output ONE number.`;
     body: JSON.stringify({
       model,
       messages,
-      ...(isBYOK ? { stream: true } : {}),
+      ...(isBYOK ? { stream: true, stream_options: { include_usage: true } } : {}),
     }),
   });
 
@@ -76,8 +78,21 @@ Do NOT output a range like "1-3". Output ONE number.`;
     return c.json({ error: "OpenRouter request failed", details: data }, response.status as ContentfulStatusCode);
   }
 
+  const db = c.env?.DB;
+  const username = (body as Record<string, unknown>).username as string | undefined ?? "anonymous";
+  const hour = new Date().toISOString().slice(0, 13); // e.g. "2026-04-05T21"
+
   // BYOK: stream the response for better UX with fast models
   if (isBYOK) {
+    // Log the event asynchronously without token counts for streaming
+    if (db) {
+      c.executionCtx.waitUntil(
+        db.prepare(
+          "INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, 0, 0, ?)"
+        ).bind(username, model, hour).run()
+      );
+    }
+
     return new Response(response.body as ReadableStream, {
       headers: {
         "Content-Type": "text/event-stream",
@@ -88,7 +103,22 @@ Do NOT output a range like "1-3". Output ONE number.`;
   }
 
   // Free tier: return JSON directly (model sends everything at once anyway)
-  const data = await response.json();
+  const data = await response.json() as {
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+    [key: string]: unknown;
+  };
+
+  // Log usage asynchronously
+  if (db) {
+    const tokensSent = data.usage?.prompt_tokens ?? 0;
+    const tokensReceived = data.usage?.completion_tokens ?? 0;
+    c.executionCtx.waitUntil(
+      db.prepare(
+        "INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, ?, ?, ?)"
+      ).bind(username, model, tokensSent, tokensReceived, hour).run()
+    );
+  }
+
   return c.json(data);
 });
 

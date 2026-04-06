@@ -58,6 +58,7 @@ function buyGenerator(
 function makeDefaultState(overrides?: Partial<GameState>): GameState {
   return {
     version: "1.0",
+    username: "TestUser0",
     lastLogin: Date.now(),
     economy: {
       currentTD: 10_000,
@@ -75,6 +76,7 @@ function makeDefaultState(overrides?: Partial<GameState>): GameState {
     commandUsage: {},
     modes: { fast: false, voice: false },
     activeTicket: null,
+    hasSeenTicketPrompt: false,
     ...overrides,
   };
 }

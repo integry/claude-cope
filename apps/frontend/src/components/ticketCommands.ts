@@ -125,3 +125,28 @@ export function handleTakeCommand(
   });
   return true;
 }
+
+export function handleAbandonCommand(
+  state: GameState,
+  setState: SetState,
+  addActiveTD: (n: number) => void,
+  reply: Reply,
+): boolean {
+  if (!state.activeTicket) {
+    reply({ role: "error", content: "[❌] No active ticket to abandon. You have nothing to flee from." });
+    return true;
+  }
+
+  const ticket = state.activeTicket;
+  const penalty = ticket.sprintGoal * 2;
+
+  setState((prev) => ({ ...prev, activeTicket: null }));
+  addActiveTD(-penalty);
+
+  reply({
+    role: "warning",
+    content: `[🏳️ **TICKET ABANDONED**] You fled from "${ticket.title}" without delivering.\n\nPenalty: **-${penalty} TD** (2x the ${ticket.sprintGoal} TD goal) for being a quitter.\n\nYour coworkers will remember this.`,
+  });
+
+  return true;
+}

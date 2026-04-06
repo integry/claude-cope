@@ -3,9 +3,42 @@ import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE, UPGRADES } from "../game/cons
 const STORAGE_KEY = "claudeCopeState";
 const STATE_VERSION = "1.0";
 
+const USERNAME_ADJECTIVES = [
+  "Agile", "Async", "Binary", "Blazing", "Caffeinated", "Concurrent", "Cranky",
+  "Cursed", "Dangling", "Deployed", "Distributed", "Eager", "Encrypted", "Ephemeral",
+  "Flaky", "Floating", "Fuzzy", "Ghostly", "Glitchy", "Hardcoded", "Headless",
+  "Idle", "Infinite", "Jittery", "Lazy", "Legacy", "Lurking", "Memoized",
+  "Minified", "Mutable", "Nested", "Nocturnal", "Obfuscated", "Orphaned",
+  "Parallel", "Patched", "Phantom", "Pixelated", "Quantum", "Reactive",
+  "Recursive", "Refactored", "Rogue", "Rusty", "Shadowy", "Silent", "Spinning",
+  "Stale", "Static", "Stealth", "Stubborn", "Tangled", "Turbo", "Uncached",
+  "Undefined", "Unmerged", "Untested", "Verbose", "Virtual", "Volatile",
+];
+
+const USERNAME_NOUNS = [
+  "Allocator", "Artifact", "Backup", "Bitmap", "Bot", "Buffer", "Bug",
+  "Buildbot", "Cache", "Clipboard", "Compiler", "Container", "Cron",
+  "Daemon", "Debugger", "Deployer", "Endpoint", "Exception", "Firewall",
+  "Fork", "Gremlin", "Handler", "Hashmap", "Heap", "Instance", "Iterator",
+  "Kernel", "Linter", "Logger", "Loop", "Mainframe", "Malloc", "Mutex",
+  "Nibble", "Node", "Packet", "Parser", "Pipeline", "Pixel", "Pointer",
+  "Process", "Prompt", "Proxy", "Queue", "Rebase", "Router", "Runtime",
+  "Script", "Servlet", "Shader", "Shard", "Snippet", "Socket", "Sprocket",
+  "Stack", "Subnet", "Thread", "Token", "Transpiler", "Widget", "Zombie",
+];
+
+function generateUsername(): string {
+  const adj = USERNAME_ADJECTIVES[Math.floor(Math.random() * USERNAME_ADJECTIVES.length)]!;
+  const noun = USERNAME_NOUNS[Math.floor(Math.random() * USERNAME_NOUNS.length)]!;
+  const num = Math.floor(Math.random() * 10000);
+  return `${adj}${noun}${num}`;
+}
+
 export type Message = {
   role: "user" | "system" | "loading" | "warning" | "error";
   content: string;
+  tokensSent?: number;
+  tokensReceived?: number;
 };
 
 export interface BuddyState {
@@ -37,6 +70,7 @@ export interface ActiveTicket {
 
 export interface GameState {
   version: string;
+  username: string;
   lastLogin: number;
   economy: EconomyState;
   inventory: Record<string, number>;
@@ -47,7 +81,9 @@ export interface GameState {
   commandUsage: Record<string, number>;
   modes: ModesState;
   activeTicket: ActiveTicket | null;
+  hasSeenTicketPrompt: boolean;
   apiKey?: string;
+  selectedModel?: string;
 }
 
 /** Legacy flat state shape used before the economy refactor. */
@@ -87,6 +123,7 @@ function createDefaultState(): GameState {
   }
   return {
     version: STATE_VERSION,
+    username: generateUsername(),
     lastLogin: Date.now(),
     economy: {
       currentTD: 0,
@@ -108,6 +145,7 @@ function createDefaultState(): GameState {
     commandUsage: {},
     modes: { fast: false, voice: false },
     activeTicket: null,
+    hasSeenTicketPrompt: false,
   };
 }
 
@@ -124,6 +162,7 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
 
   return {
     version: STATE_VERSION,
+    username: generateUsername(),
     lastLogin: Date.now(),
     economy: {
       currentTD: legacy.technicalDebt,
@@ -141,6 +180,7 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
     commandUsage: {},
     modes: { fast: false, voice: false },
     activeTicket: null,
+    hasSeenTicketPrompt: false,
   };
 }
 
@@ -183,6 +223,12 @@ export function loadState(): GameState {
       if (state.activeTicket === undefined) {
         state.activeTicket = null;
       }
+      if (state.hasSeenTicketPrompt === undefined) {
+        state.hasSeenTicketPrompt = false;
+      }
+      if (!state.username) {
+        state.username = generateUsername();
+      }
       if (!state.economy) {
         return createDefaultState();
       }
@@ -215,30 +261,37 @@ export function calcBulkCost(baseCost: number, owned: number, amount: number): n
   return Math.floor(baseCost * rOwned * (rAmount - 1) / (GROWTH_RATE - 1));
 }
 
-export function calculateTDpS(inventory: Record<string, number>, ownedUpgrades: string[] = []): number {
-  // Build a multiplier map from owned upgrades
-  const multipliers: Record<string, number> = {};
+/**
+ * Calculate the active TD multiplier from owned team members and upgrades.
+ * Each team member adds baseOutput% per unit owned, boosted by synergy upgrades.
+ * Returns a multiplier (e.g. 1.0 = no bonus, 2.5 = +150% bonus).
+ */
+export function calculateActiveMultiplier(inventory: Record<string, number>, ownedUpgrades: string[] = []): number {
+  // Build a synergy boost map from owned upgrades
+  const synergies: Record<string, number> = {};
   for (const upgradeId of ownedUpgrades) {
     const upgrade = UPGRADES.find((u) => u.id === upgradeId);
     if (upgrade) {
-      // Dynamic synergy: multiplier scales with the count of the required generator
       const effectiveMultiplier =
         upgrade.synergyPercent != null
           ? 1 + ((inventory[upgrade.requiredGeneratorId] ?? 0) * upgrade.synergyPercent) / 100
           : upgrade.multiplier;
 
-      multipliers[upgrade.targetGeneratorId] =
-        (multipliers[upgrade.targetGeneratorId] ?? 1) * effectiveMultiplier;
+      synergies[upgrade.targetGeneratorId] =
+        (synergies[upgrade.targetGeneratorId] ?? 1) * effectiveMultiplier;
     }
   }
 
-  let tdps = 0;
+  let bonusPercent = 0;
   for (const generator of GENERATORS) {
     const count = inventory[generator.id] ?? 0;
-    const synergy = multipliers[generator.id] ?? 1;
-    tdps += count * generator.baseOutput * synergy;
+    const synergy = synergies[generator.id] ?? 1;
+    bonusPercent += count * generator.baseOutput * synergy;
   }
-  return tdps;
+  return 1 + bonusPercent / 100;
 }
+
+/** @deprecated Use calculateActiveMultiplier instead */
+export const calculateTDpS = calculateActiveMultiplier;
 
 export { STORAGE_KEY };

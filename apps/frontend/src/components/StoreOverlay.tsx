@@ -19,7 +19,7 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
     <div className="fixed right-0 top-0 h-full w-72 bg-[#0d1117] border-l border-gray-700 flex flex-col z-20">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <span className="text-green-400 font-bold text-sm">
-          &gt; store --list
+          &gt; store --team
         </span>
         <div className="flex items-center gap-2">
           <div className="flex text-xs">
@@ -73,7 +73,7 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
                   Cost: {cost} TD{buyMultiplier > 1 ? ` (${buyMultiplier}x)` : ""}
                 </span>
                 <span className="text-gray-500 ml-2">
-                  (+{gen.baseOutput} TD/s)
+                  (+{gen.baseOutput * buyMultiplier}% per prompt)
                 </span>
               </div>
               <button

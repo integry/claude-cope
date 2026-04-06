@@ -4,7 +4,8 @@ import { supabase } from "../supabaseClient";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { buildAchievementBox } from "./achievementBox";
-import { handleTicketCommand, handleBacklogCommand, handleTakeCommand } from "./ticketCommands";
+import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand } from "./ticketCommands";
+import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
 
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
@@ -14,10 +15,14 @@ interface SlashCommandContext {
   setState: SetState;
   setHistory: SetHistory;
   setIsProcessing: (v: boolean) => void;
+  closeAllOverlays: () => void;
   setShowStore: (v: boolean) => void;
   setShowLeaderboard: (v: boolean) => void;
   setShowAchievements: (v: boolean) => void;
   setShowSynergize: (v: boolean) => void;
+  setShowHelp: (v: boolean) => void;
+  setShowAbout: (v: boolean) => void;
+  setShowProfile: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -87,6 +92,13 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
       event: 'new_incident',
       payload: { message: crashMessage },
     }).catch(() => {});
+
+    // Re-offer a ticket after clear if none active — delay so the cleared screen settles
+    if (!ctx.state.activeTicket) {
+      setTimeout(() => {
+        ctx.setState((prev) => ({ ...prev, hasSeenTicketPrompt: false }));
+      }, 2000);
+    }
   }, 2000);
   return true;
 }
@@ -103,13 +115,33 @@ function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Rep
   return true;
 }
 
+function openOverlay(ctx: SlashCommandContext, open: () => void) {
+  ctx.closeAllOverlays();
+  ctx.setHistory(clearLoading);
+  open();
+}
+
 function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   if (ctx.state.economy.totalTDEarned < 1000) {
     reply({ role: "error", content: "[❌ Error] Store access denied. Requires **1,000 Technical Debt**." });
   } else {
-    ctx.setHistory(clearLoading);
-    ctx.setShowStore(true);
+    openOverlay(ctx, () => ctx.setShowStore(true));
   }
+  return true;
+}
+
+function handleBuddyCommand(ctx: SlashCommandContext, reply: Reply): boolean {
+  if (ctx.state.buddy.type) {
+    ctx.setBuddyPendingConfirm(true);
+    reply({ role: "system", content: `[⚠️] You already have a buddy (**${ctx.state.buddy.type}**). Re-rolling will replace it. Are you sure? (y/n)` });
+    return true;
+  }
+  const roll = Math.random() * 100;
+  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
+  const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
+  ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
+  const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
+  reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: **${buddyType}**${shinyLabel} ${buddyIcon}!` });
   return true;
 }
 
@@ -117,16 +149,27 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
   if (command === "/store") {
     return handleStoreCommand(ctx, reply);
   } else if (command === "/leaderboard") {
-    ctx.setHistory(clearLoading);
-    ctx.setShowLeaderboard(true);
+    openOverlay(ctx, () => ctx.setShowLeaderboard(true));
     return true;
   } else if (command === "/achievements") {
-    ctx.setHistory(clearLoading);
-    ctx.setShowAchievements(true);
+    openOverlay(ctx, () => ctx.setShowAchievements(true));
     return true;
   } else if (command === "/synergize") {
     reply({ role: "system", content: "[🗓️] **Mandatory 1-on-1 meeting** initiated. You cannot escape." });
+    ctx.closeAllOverlays();
     ctx.setShowSynergize(true);
+    return true;
+  } else if (command === "/profile") {
+    openOverlay(ctx, () => ctx.setShowProfile(true));
+    return true;
+  } else if (command === "/user" || command.startsWith("/user ")) {
+    const alias = command.slice(5).trim();
+    openOverlay(ctx, () => ctx.setShowProfile(true));
+    if (alias) {
+      window.history.pushState(null, "", `/user/${encodeURIComponent(alias)}`);
+    } else {
+      window.history.pushState(null, "", `/user/${encodeURIComponent(ctx.state.username)}`);
+    }
     return true;
   } else if (command === "/compact") {
     ctx.triggerCompactEffect();
@@ -152,18 +195,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     reply({ role: "system", content: "[✓] Injected **400mg** of pure caffeine into the **Node.js event loop**. LFG." });
     return true;
   } else if (command === "/buddy") {
-    if (ctx.state.buddy.type) {
-      ctx.setBuddyPendingConfirm(true);
-      reply({ role: "system", content: `[⚠️] You already have a buddy (**${ctx.state.buddy.type}**). Re-rolling will replace it. Are you sure? (y/n)` });
-      return true;
-    }
-    const roll = Math.random() * 100;
-    const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
-    const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
-    ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
-    const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
-    reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: **${buddyType}**${shinyLabel} ${buddyIcon}!` });
-    return true;
+    return handleBuddyCommand(ctx, reply);
   } else if (command === "/who") {
     if (ctx.onlineUsers.length > 0) {
       const userList = ctx.onlineUsers.join(", ");
@@ -190,7 +222,12 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
   if (command === "/help") {
     const tdGrant = Math.floor(Math.random() * 200) + 100;
     ctx.addActiveTD(tdGrant);
-    reply({ role: "system", content: `[📖] Oh, you need \`/help\`? A real **10x developer** would never. Let me explain: you simply write code that works. On the first try. Every time. No tests needed — tests are for people who lack confidence. Anyway, here's **${tdGrant} TD** for wasting my time.` });
+    openOverlay(ctx, () => ctx.setShowHelp(true));
+    window.history.pushState(null, "", "/help");
+    return true;
+  } else if (command === "/about") {
+    openOverlay(ctx, () => ctx.setShowAbout(true));
+    window.history.pushState(null, "", "/about");
     return true;
   } else if (command === "/fast") {
     const newFast = !ctx.state.modes.fast;
@@ -245,6 +282,36 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     return true;
   }
   return false;
+}
+
+function handleAliasCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
+  const newName = command.slice(6).trim();
+  if (!newName) {
+    reply({ role: "system", content: `[👤] Your current alias is **${ctx.state.username}**. Usage: \`/alias <new-name>\` to change it.` });
+    return;
+  }
+  const oldName = ctx.state.username;
+  ctx.setState((prev) => ({ ...prev, username: newName }));
+  reply({ role: "system", content: `[✓] Alias updated from **${oldName}** to **${newName}**. The codebase will never know.` });
+}
+
+function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
+  const modelName = command.slice(6).trim();
+  if (!modelName) {
+    const current = ctx.state.selectedModel ?? "default";
+    reply({ role: "system", content: `[🤖] Current model: **${current}**. Usage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.` });
+    return;
+  }
+  if (modelName === "clear") {
+    ctx.setState((prev) => {
+      const { selectedModel: _, ...rest } = prev;
+      return { ...rest } as GameState;
+    });
+    reply({ role: "system", content: "[✓] Model reset to **default**. Back to baseline corporate AI." });
+    return;
+  }
+  ctx.setState((prev) => ({ ...prev, selectedModel: modelName }));
+  reply({ role: "system", content: `[✓] Model switched to **${modelName}**. May your tokens be plentiful and your latency low.` });
 }
 
 function handleUpgradeCommand(ctx: SlashCommandContext, reply: Reply): boolean {
@@ -310,7 +377,7 @@ export function executeSlashCommand(
   };
 
   // Track command usage for performance review brag card
-  const baseCommand = command.startsWith("/ping ") ? "/ping" : command;
+  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command;
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {
@@ -352,6 +419,31 @@ export function executeSlashCommand(
       return;
     } else if (command.startsWith("/take")) {
       handleTakeCommand(command, ctx.state, ctx.setState, reply);
+    } else if (command === "/accept") {
+      const offer = getPendingOffer();
+      if (!offer) {
+        reply({ role: "error", content: "[❌] No pending ticket to accept. Use `/backlog` to browse tickets." });
+      } else if (ctx.state.activeTicket) {
+        reply({ role: "error", content: `[❌] You already have an active ticket: **${ctx.state.activeTicket.title}**. Finish it first or \`/abandon\` it.` });
+      } else {
+        clearPendingOffer();
+        ctx.setState((prev) => ({
+          ...prev,
+          activeTicket: {
+            id: offer.id,
+            title: offer.title,
+            sprintProgress: 0,
+            sprintGoal: offer.technical_debt,
+          },
+        }));
+        reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nSprint goal: **${offer.technical_debt} TD**. Start prompting to make progress.` });
+      }
+    } else if (command === "/abandon") {
+      handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
+    } else if (command.startsWith("/alias")) {
+      handleAliasCommand(command, ctx, reply);
+    } else if (command.startsWith("/model")) {
+      handleModelCommand(command, ctx, reply);
     } else if (handleNewCommand(command, ctx, reply)) {
       // /brrrrrr handles its own setIsProcessing
       if (command === "/brrrrrr") return;

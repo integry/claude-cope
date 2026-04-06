@@ -12,6 +12,7 @@ import type { Message } from "../Terminal";
 function makeGameState(overrides: Partial<GameState["economy"]> = {}): GameState {
   return {
     version: "1",
+    username: "TestUser0",
     lastLogin: Date.now(),
     economy: {
       currentTD: 0,
@@ -30,6 +31,7 @@ function makeGameState(overrides: Partial<GameState["economy"]> = {}): GameState
     commandUsage: {},
     modes: { fast: false, voice: false },
     activeTicket: null,
+    hasSeenTicketPrompt: false,
   };
 }
 

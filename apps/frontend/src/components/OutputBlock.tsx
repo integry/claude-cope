@@ -136,19 +136,25 @@ function Spinner() {
   return <span>{SPINNER_FRAMES[frame]} </span>;
 }
 
-function TokenCounter() {
+function TokenCounter({ tokensSent, tokensReceived }: { tokensSent?: number; tokensReceived?: number }) {
+  const hasRealTokens = tokensSent != null || tokensReceived != null;
   const [sent, setSent] = useState(185000 + Math.floor(Math.random() * 40000));
   const [received, setReceived] = useState(0);
   useEffect(() => {
+    if (hasRealTokens) return;
     const id = setInterval(() => {
       setSent((s: number) => s + Math.floor(Math.random() * 120) + 30);
       setReceived((r: number) => r + Math.floor(Math.random() * 80) + 10);
     }, 80);
     return () => clearInterval(id);
-  }, []);
+  }, [hasRealTokens]);
+
+  const displaySent = hasRealTokens ? (tokensSent ?? 0) : sent;
+  const displayReceived = hasRealTokens ? (tokensReceived ?? 0) : received;
+
   return (
     <span className="text-yellow-400/70 ml-2 text-sm">
-      Tokens - Sent: {(sent / 1000).toFixed(1)}k | Received: {(received / 1000).toFixed(1)}k
+      Tokens - Sent: {(displaySent / 1000).toFixed(1)}k | Received: {(displayReceived / 1000).toFixed(1)}k
     </span>
   );
 }
@@ -295,9 +301,25 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
         </div>
       )}
       {message.role === "loading" && <Spinner />}
+<<<<<<< HEAD
       <MessageContent message={message} />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
+=======
+      {useMarkdown ? (
+        <div className="space-y-1">
+          <ReactMarkdown components={markdownComponents}>
+            {processedContent}
+          </ReactMarkdown>
+        </div>
+      ) : (
+        message.content
+      )}
+      {message.role === "loading" && <TokenCounter tokensSent={message.tokensSent} tokensReceived={message.tokensReceived} />}
+      {message.role === "system" && (message.tokensSent != null || message.tokensReceived != null) && (
+        <TokenCounter tokensSent={message.tokensSent} tokensReceived={message.tokensReceived} />
+      )}
+>>>>>>> origin/main
     </div>
   );
 }

@@ -7,15 +7,20 @@ import StoreOverlay from "./StoreOverlay";
 import LeaderboardOverlay from "./LeaderboardOverlay";
 import AchievementOverlay from "./AchievementOverlay";
 import SynergizeOverlay from "./SynergizeOverlay";
+import HelpOverlay from "./HelpOverlay";
+import AboutOverlay from "./AboutOverlay";
+import UserProfileOverlay from "./UserProfileOverlay";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
-import { calculateTDpS } from "../hooks/gameStateUtils";
-import { BUDDY_ICONS } from "./buddyConstants";
+import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
+import { BuddyDisplay } from "./BuddyDisplay";
+import { parseGlitchStyle } from "./parseGlitchStyle";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
 import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
+import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import Ticker from "./Ticker";
 import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
 import SprintProgressBar from "./SprintProgressBar";
@@ -23,26 +28,6 @@ import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 
 export type { Message };
-
-function BuddyDisplay({ type, isShiny }: { type: string | null; isShiny: boolean }) {
-  if (!type) return null;
-  return (
-    <div className={`text-xs mb-1 ${isShiny ? "text-amber-300" : "text-yellow-400"}`}>
-      <pre className="font-mono whitespace-pre inline-block">{BUDDY_ICONS[type] ?? "🐾"}</pre>
-      <div>{isShiny ? `✨ Shiny ${type} ✨` : type} is watching...</div>
-    </div>
-  );
-}
-
-function parseGlitchStyle(regressionGlitch: string | null | undefined) {
-  if (!regressionGlitch) return undefined;
-  return Object.fromEntries(
-    regressionGlitch.split(";").filter(Boolean).map((s) => {
-      const [k, ...v] = s.split(":");
-      return [k!.trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v.join(":").trim()];
-    })
-  );
-}
 
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
@@ -63,6 +48,9 @@ function Terminal() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [showSynergize, setShowSynergize] = useState(false);
+  const [showHelp, setShowHelp] = useState(() => window.location.pathname === "/help");
+  const [showAbout, setShowAbout] = useState(() => window.location.pathname === "/about");
+  const [showProfile, setShowProfile] = useState(() => window.location.pathname.startsWith("/user/"));
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
@@ -74,9 +62,29 @@ function Terminal() {
   const lastEscapeRef = useRef<number>(0);
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
 
+  const closeAllOverlays = () => {
+    setShowStore(false);
+    setShowLeaderboard(false);
+    setShowAchievements(false);
+    setShowSynergize(false);
+    setShowHelp(false);
+    setShowAbout(false);
+    setShowProfile(false);
+  };
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [history]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      setShowHelp(window.location.pathname === "/help");
+      setShowAbout(window.location.pathname === "/about");
+      setShowProfile(window.location.pathname.startsWith("/user/"));
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   // Requirement 1: Auto-restore focus when terminal finishes processing/booting/quota lockout
   useEffect(() => {
@@ -84,6 +92,13 @@ function Terminal() {
       inputRef.current?.focus();
     }
   }, [isProcessing, isBooting, quotaLocked]);
+
+  // Show a random community ticket prompt after boot — only if no active ticket
+  useEffect(() => {
+    if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
+    setState((prev) => ({ ...prev, hasSeenTicketPrompt: true }));
+    fetchRandomTicketPrompt(setHistory);
+  }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
 
   const triggerQuotaLockout = () => {
     setQuotaLocked(true);
@@ -116,13 +131,8 @@ function Terminal() {
 
   const triggerInstantBan = () => {
     setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
-    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"),
-      { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." },
-    ]);
-    setTimeout(() => {
-      setQuotaLocked(false); setIsProcessing(false);
-      setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]);
-    }, 5000);
+    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." }]);
+    setTimeout(() => { setQuotaLocked(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
   };
 
   /** Drains quota and triggers lockout if depleted. Returns true if command was consumed by lockout. */
@@ -161,7 +171,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } },
+      { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowProfile, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } },
     );
   };
 
@@ -251,8 +261,9 @@ function Terminal() {
       userMessage,
     ].map((m) => ({ role: m.role, content: m.content }));
 
-    const onSprintProgress = (amount: number) => {
+    const onSprintProgress = (rawAmount: number) => {
       if (!state.activeTicket) return;
+      const amount = Math.round(rawAmount * 1.3);
       updateTicketProgress(amount);
       const newProgress = Math.min(
         state.activeTicket.sprintProgress + amount,
@@ -269,7 +280,7 @@ function Terminal() {
       }
     };
 
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress });
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress });
   };
 
   const setCursorToEnd = (val: string) => {
@@ -383,7 +394,7 @@ function Terminal() {
       {/* Mount the Ticker at the very top of the interface so it acts as a global broadcast banner */}
       <Ticker />
       {outageHp !== null && <OutageBar outageHp={outageHp} />}
-      <HeaderBar rank={rank} totalTDEarned={state.economy.totalTDEarned} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} tdps={calculateTDpS(state.inventory, state.upgrades)} />
+      <HeaderBar rank={rank} totalTDEarned={state.economy.totalTDEarned} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} />
       <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (
@@ -414,17 +425,11 @@ function Terminal() {
           onClose={() => setShowStore(false)}
         />
       )}
-      {showLeaderboard && (
-        <LeaderboardOverlay
-          onClose={() => setShowLeaderboard(false)}
-        />
-      )}
-      {showAchievements && (
-        <AchievementOverlay
-          unlockedIds={state.achievements}
-          onClose={() => setShowAchievements(false)}
-        />
-      )}
+      {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
+      {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
+      {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
+      {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
+      {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
       {showSynergize && (
         <SynergizeOverlay
           onClose={() => {
@@ -434,6 +439,9 @@ function Terminal() {
           }}
         />
       )}
+      <footer className="fixed bottom-0 left-0 w-full text-center text-xs text-gray-500 py-1 bg-[#0d1117]/80 backdrop-blur-sm border-t border-gray-800">
+        This is a parody project and is not affiliated with or endorsed by Anthropic.
+      </footer>
     </div>
   );
 }
