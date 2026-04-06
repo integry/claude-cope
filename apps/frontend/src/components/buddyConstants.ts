@@ -20,6 +20,21 @@ export const BUDDY_ICONS: Record<string, string> = {
     " /|   |\\ ",
     "(_|   |_)",
   ].join("\n"),
+  "Grumpy Senior": [
+    "  .-\"\"\"-.  ",
+    " /        \\ ",
+    "|  O    O  |",
+    "|  \\____/  |",
+    " \\  ----  / ",
+    "  '------'  ",
+  ].join("\n"),
+  "Panic Intern": [
+    "  .-----.  ",
+    " / O   O \\ ",
+    "|   ___   |",
+    "|  /   \\  |",
+    " \\_______/ ",
+  ].join("\n"),
 };
 
 export const BUDDY_INTERJECTIONS: Record<string, string[]> = {
@@ -43,5 +58,19 @@ export const BUDDY_INTERJECTIONS: Record<string, string[]> = {
     "refactored your code while you weren't looking. It's worse now.",
     "deployed to production without telling you.",
     "deleted your node_modules for fun. Good luck.",
+  ],
+  "Grumpy Senior": [
+    "Back in my day, we didn't have TypeScript. We had raw pointers and fear.",
+    "I've seen this exact bug before. In 2003. On a Sun Microsystem.",
+    "Why are you using a framework for this? Just write the bytes yourself.",
+    "This code would never pass review at my old company. Or any company.",
+    "I'm not angry. I'm just disappointed. Again.",
+  ],
+  "Panic Intern": [
+    "Oh no oh no oh no is that a production error?!",
+    "I accidentally ran something and I'm too scared to check what it did.",
+    "Should I be worried about this warning? I'm worried about this warning.",
+    "I pushed to main. I PUSHED TO MAIN. HOW DO I UNDO?!",
+    "The CI is red. MY CAREER IS OVER.",
   ],
 };
