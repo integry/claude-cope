@@ -8,25 +8,25 @@ const sequenceCache = new Map<string, ToolStep[][]>();
 /** Minimal fallback shown while the first API fetch is in flight. */
 const INLINE_FALLBACK: ToolStep[][] = [
   [
-    { tool: "Read", target: "src/index.ts", action: "Reading file" },
-    { tool: "Grep", target: "handleRequest", action: "Searching codebase" },
-    { tool: "Read", target: "package.json", action: "Reading file" },
-    { tool: "Bash", target: "npm test", action: "Running command" },
-    { tool: "Glob", target: "src/**/*.ts", action: "Finding files" },
+    { tool: "Read", target: "src/index.ts", action: "Pretending to review" },
+    { tool: "Grep", target: "handleRequest", action: "Hunting for clues" },
+    { tool: "Read", target: "package.json", action: "Skimming with intent" },
+    { tool: "Bash", target: "npm test", action: "Executing with reckless abandon" },
+    { tool: "Glob", target: "src/**/*.ts", action: "Rounding up the usual suspects" },
   ],
   [
-    { tool: "Read", target: "tsconfig.json", action: "Reading file" },
-    { tool: "Grep", target: "export default", action: "Searching codebase" },
-    { tool: "Bash", target: "tsc --noEmit", action: "Running command" },
-    { tool: "Read", target: "src/utils/helpers.ts", action: "Reading file" },
-    { tool: "Grep", target: "TODO|FIXME", action: "Searching codebase" },
+    { tool: "Read", target: "tsconfig.json", action: "Absorbing corporate wisdom" },
+    { tool: "Grep", target: "export default", action: "Interrogating the codebase" },
+    { tool: "Bash", target: "tsc --noEmit", action: "Hoping for the best" },
+    { tool: "Read", target: "src/utils/helpers.ts", action: "Consulting the sacred texts" },
+    { tool: "Grep", target: "TODO|FIXME", action: "Rummaging through the wreckage" },
   ],
   [
-    { tool: "Bash", target: "git log --oneline -5", action: "Running command" },
-    { tool: "Read", target: "src/config/index.ts", action: "Reading file" },
-    { tool: "Grep", target: "process\\.env", action: "Searching codebase" },
-    { tool: "Read", target: ".env.example", action: "Reading file" },
-    { tool: "Bash", target: "npm run lint", action: "Running command" },
+    { tool: "Bash", target: "git log --oneline -5", action: "Crossing fingers and running" },
+    { tool: "Read", target: "src/config/index.ts", action: "Staring at code pensively" },
+    { tool: "Grep", target: "process\\.env", action: "Snooping around suspiciously" },
+    { tool: "Read", target: ".env.example", action: "Deciphering ancient artifacts" },
+    { tool: "Bash", target: "npm run lint", action: "Yelling into the terminal void" },
   ],
 ];
 
