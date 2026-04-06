@@ -27,7 +27,7 @@ function SlashMenu({ query, activeIndex, totalTechnicalDebt, onSelect }: SlashMe
           }`}
           onClick={() => onSelect(cmd)}
         >
-          {cmd}
+          <span className={cmd === "/backlog" ? "font-bold text-yellow-400" : ""}>{cmd}</span>
         </li>
       ))}
     </ul>
