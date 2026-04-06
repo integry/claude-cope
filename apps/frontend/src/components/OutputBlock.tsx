@@ -34,8 +34,14 @@ function classifyTag(tagContent: string): TagCategory {
 }
 
 /** Strip any leaked __TAG_ markers the LLM echoes back from seeing chat history */
-function cleanLeakedTagMarkers(content: string): string {
-  return content.replace(/`__TAG_(?:ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g, "[$1]");
+/** Strip leaked __TAG_ markers and unwrap terminal-ish code fences (bash, sh, shell, etc.) */
+function cleanLLMOutput(content: string): string {
+  let cleaned = content.replace(/`__TAG_(?:ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g, "[$1]");
+  // Unwrap code fences for terminal-like languages — the content is already in a terminal
+  const terminalLangs = "bash|sh|shell|console|terminal|text|log|plaintext";
+  const fenceRegex = new RegExp("```(?:" + terminalLangs + ")?\\s*\\n([\\s\\S]*?)```", "g");
+  cleaned = cleaned.replace(fenceRegex, "$1");
+  return cleaned;
 }
 
 /** Render a line of text, replacing any `__TAG_...__:text` or `[TAG]` markers with styled spans. */
@@ -213,7 +219,7 @@ function OutputBlock({ message, isNew = false, promptString = "cope@local:~$ " }
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
   const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
 
-  const processedContent = useMarkdown ? cleanLeakedTagMarkers(message.content) : message.content;
+  const processedContent = useMarkdown ? cleanLLMOutput(message.content) : message.content;
 
   return (
     <div className={`mb-5 ${colorClass} ${isAchievement ? `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold` : isBuddyInterjection ? "whitespace-pre font-mono" : "leading-relaxed"}`}>
