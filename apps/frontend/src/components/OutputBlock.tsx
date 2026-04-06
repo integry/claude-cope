@@ -291,6 +291,7 @@ function MessageContent({ message }: { message: Message }) {
   }
 
   if (isStreaming) return <>{message.content}</>;
+  if (isAwaitingResponse) return <>{message.content}</>;
   if (message.role !== "loading") return <>{message.content}</>;
   return null;
 }
