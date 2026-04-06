@@ -4,6 +4,7 @@ import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
+import { getRandomLoadingPhrase } from "./loadingPhrases";
 import { buildAchievementBox } from "./achievementBox";
 import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand } from "./ticketCommands";
 import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
@@ -480,7 +481,7 @@ export function executeSlashCommand(
   ctx.setHistory((prev) => [
     ...prev,
     { role: "user", content: command },
-    { role: "loading", content: "[⚙️] Coping with your request..." },
+    { role: "loading", content: getRandomLoadingPhrase() },
   ]);
 
   const reply = (msg: Message): void => {

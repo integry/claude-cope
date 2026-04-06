@@ -274,7 +274,7 @@ function MessageContent({ message }: { message: Message }) {
   const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
   const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
-  const isAwaitingResponse = message.role === "loading" && message.content === "[⚙️] Coping with your request...";
+  const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   const isStreaming = message.role === "loading" && !isAwaitingResponse;
 
   if (message.role === "user") return null;
@@ -296,7 +296,7 @@ function MessageContent({ message }: { message: Message }) {
 }
 
 function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTicketId }: { message: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null }) {
-  const isAwaitingResponse = message.role === "loading" && message.content === "[⚙️] Coping with your request...";
+  const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
 
   return (
     <div className={getContainerClass(message, isNew)}>

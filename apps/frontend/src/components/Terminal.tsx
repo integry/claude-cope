@@ -26,6 +26,7 @@ import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
 import SprintProgressBar from "./SprintProgressBar";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
+import { getRandomLoadingPhrase } from "./loadingPhrases";
 
 export type { Message };
 
@@ -162,7 +163,7 @@ function Terminal() {
       setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount } }));
     }
     const userMessage: Message = { role: "user", content: command };
-    setHistory((prev) => [...prev, userMessage, { role: "loading", content: "[⚙️] Coping with your request..." }]);
+    setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
     setIsProcessing(true);
     const chatMessages = [...history.filter((m) => m.role === "user" || m.role === "system"), userMessage].map((m) => ({ role: m.role, content: m.content }));
     const onSprintProgress = (rawAmount: number) => {
