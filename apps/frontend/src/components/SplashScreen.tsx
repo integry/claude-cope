@@ -21,7 +21,7 @@ export default function SplashScreen({ onComplete }: { onComplete: () => void })
       <img
         src="/media/logo-800.png"
         alt="Claude Cope"
-        className="max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl"
+        className="max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl"
       />
     </div>
   );
