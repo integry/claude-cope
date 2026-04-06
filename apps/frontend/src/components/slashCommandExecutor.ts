@@ -194,7 +194,7 @@ function handleBuddyCommand(command: string, ctx: SlashCommandContext, reply: Re
   }
   if (ctx.state.buddy.type) {
     ctx.setBuddyPendingConfirm(true);
-    reply({ role: "system", content: `[⚠️] You already have a buddy (**${ctx.state.buddy.type}**). Re-rolling will replace it. Are you sure? (y/n)` });
+    reply({ role: "system", content: `[⚠️] You already have a buddy (**${ctx.state.buddy.type}**). Re-rolling will replace it. Are you sure? (y/n) (Hint: use \`/buddy remove\` to dismiss)` });
     return true;
   }
   const roll = Math.random() * 100;
