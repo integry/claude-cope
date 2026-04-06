@@ -201,7 +201,9 @@ function Terminal() {
       ]);
       // Restore the last command the user typed
       if (commandHistory.length > 0) {
-        setInputValue(commandHistory[commandHistory.length - 1]!);
+        const lastCmd = commandHistory[commandHistory.length - 1]!;
+        setInputValue(lastCmd);
+        setCursorToEnd(lastCmd);
       }
       return;
     }
