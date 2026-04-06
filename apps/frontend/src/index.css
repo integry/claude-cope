@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+body {
+  background-color: #0d1117;
+}
+
 /* Define keyframes for the ticker to ensure smooth, hardware-accelerated scrolling */
 @keyframes marquee {
   0% {
