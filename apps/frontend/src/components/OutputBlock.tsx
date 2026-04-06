@@ -81,8 +81,8 @@ function classifyTag(tagContent: string): TagCategory {
 function cleanLLMOutput(content: string): string {
   let cleaned = content.replace(/`__TAG_(?:ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g, "[$1]");
   // Unwrap code fences for terminal-like languages — the content is already in a terminal
-  const terminalLangs = "bash|sh|shell|console|terminal|text|log|plaintext";
-  const fenceRegex = new RegExp("```(?:" + terminalLangs + ")?\\s*\\n([\\s\\S]*?)```", "g");
+  const terminalLangs = "bash|sh|shell|console|terminal|text|log|plaintext|markdown|md";
+  const fenceRegex = new RegExp("```(?:" + terminalLangs + ")\\s*\\n([\\s\\S]*?)```", "g");
   cleaned = cleaned.replace(fenceRegex, "$1");
   return cleaned;
 }
@@ -213,7 +213,7 @@ const markdownComponents = {
     if (match) {
       // Terminal-ish languages render as plain preformatted text
       // to avoid clashing with the terminal's own dark/monospace aesthetic
-      const terminalLangs = ["terminal", "bash", "sh", "shell", "console", "text", "log", "plaintext"];
+      const terminalLangs = ["terminal", "bash", "sh", "shell", "console", "text", "log", "plaintext", "markdown", "md"];
       if (terminalLangs.includes(match[1]!)) {
         const lines = codeString.split("\n");
         return (
