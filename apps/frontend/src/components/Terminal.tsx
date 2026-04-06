@@ -30,6 +30,19 @@ import { getRandomLoadingPhrase } from "./loadingPhrases";
 
 export type { Message };
 
+function filterChatHistory(history: Message[]): Message[] {
+  const isSlashCmd = (content: string) => content.startsWith("/");
+  return history.filter((m, i) => {
+    if (m.role === "user") return !isSlashCmd(m.content);
+    if (m.role === "system") {
+      const prev = history[i - 1];
+      if (prev?.role === "user" && isSlashCmd(prev.content)) return false;
+      return true;
+    }
+    return false;
+  });
+}
+
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
@@ -165,19 +178,7 @@ function Terminal() {
     const userMessage: Message = { role: "user", content: command };
     setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
     setIsProcessing(true);
-    // Only send actual chat messages to the LLM — exclude slash commands and their responses
-    const isSlashCommand = (content: string) => content.startsWith("/");
-    const chatHistory = history.filter((m, i) => {
-      if (m.role === "user") return !isSlashCommand(m.content);
-      if (m.role === "system") {
-        // Exclude system responses that follow a slash command
-        const prev = history[i - 1];
-        if (prev?.role === "user" && isSlashCommand(prev.content)) return false;
-        return true;
-      }
-      return false;
-    });
-    const chatMessages = [...chatHistory, userMessage].map((m) => ({ role: m.role, content: m.content }));
+    const chatMessages = [...filterChatHistory(history), userMessage].map((m) => ({ role: m.role, content: m.content }));
     const onSprintProgress = (rawAmount: number) => {
       if (!state.activeTicket) return;
       const amount = Math.round(rawAmount * 1.3);
@@ -272,6 +273,21 @@ function Terminal() {
     else if (e.key === "ArrowDown") { e.preventDefault(); handleArrowDown(slashMenuOpen, filtered); }
   };
 
+  const renderOverlays = () => (
+    <>
+      {state.activeTicket && <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />}
+      {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} onClose={() => setShowStore(false)} />}
+      {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
+      {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
+      {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
+      {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
+      {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
+      {showSynergize && (
+        <SynergizeOverlay onClose={() => { setShowSynergize(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]); }} />
+      )}
+    </>
+  );
+
   return (
     <div
       className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "min-h-screen"} w-full font-mono text-sm text-gray-100 leading-relaxed p-4 pb-8 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
@@ -293,16 +309,7 @@ function Terminal() {
         <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
         <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || quotaLocked} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
       </div>
-      {state.activeTicket && <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />}
-      {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} onClose={() => setShowStore(false)} />}
-      {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
-      {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
-      {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
-      {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
-      {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
-      {showSynergize && (
-        <SynergizeOverlay onClose={() => { setShowSynergize(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]); }} />
-      )}
+      {renderOverlays()}
       <footer className="fixed bottom-0 left-0 w-full flex items-center justify-between text-xs text-gray-500 px-4 py-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono">
         <span>This is a parody project and is not affiliated with or endorsed by Anthropic.</span>
         <span className="flex items-center">&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a><span className="ml-4 flex gap-2"><button onClick={() => { closeAllOverlays(); setShowHelp(true); }} className="text-gray-400 hover:text-white">/help</button><button onClick={() => { closeAllOverlays(); setShowAbout(true); }} className="text-gray-400 hover:text-white">/about</button><a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/github</a></span></span>

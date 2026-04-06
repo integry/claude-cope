@@ -124,6 +124,30 @@ function processReplyTags(
   return { achievementMessages, reply, suggestedReply };
 }
 
+async function parseResponseBody(
+  res: Response,
+  setHistory: Dispatch<SetStateAction<Message[]>>,
+  addActiveTD?: (n: number, raw?: boolean) => void,
+): Promise<{ rawReply: string; tokensSent?: number; tokensReceived?: number }> {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("text/event-stream")) {
+    const streamResult = await readStreamedResponse(res, setHistory);
+    return {
+      rawReply: streamResult.rawReply,
+      tokensSent: streamResult.usage?.prompt_tokens,
+      tokensReceived: streamResult.usage?.completion_tokens,
+    };
+  }
+  const data = await res.json();
+  const rawReply = data?.choices?.[0]?.message?.content ?? "";
+  const tokensSent = data?.usage?.prompt_tokens ?? undefined;
+  const tokensReceived = data?.usage?.completion_tokens ?? undefined;
+  if (data?.td_awarded && addActiveTD) {
+    addActiveTD(data.td_awarded, true);
+  }
+  return { rawReply, tokensSent, tokensReceived };
+}
+
 export function submitChatMessage(opts: {
   chatMessages: { role: string; content: string }[];
   buddyResult: BuddyInterjectionResult | null;
@@ -171,30 +195,9 @@ export function submitChatMessage(opts: {
         return;
       }
 
-      // Handle both SSE stream (BYOK) and JSON (free tier) responses
-      let rawReply: string;
-      let tokensSent: number | undefined;
-      let tokensReceived: number | undefined;
-      const contentType = res.headers.get("content-type") ?? "";
-      if (contentType.includes("text/event-stream")) {
-        const streamResult = await readStreamedResponse(res, setHistory);
-        rawReply = streamResult.rawReply;
-        if (streamResult.usage) {
-          tokensSent = streamResult.usage.prompt_tokens;
-          tokensReceived = streamResult.usage.completion_tokens;
-        }
-      } else {
-        const data = await res.json();
-        rawReply = data?.choices?.[0]?.message?.content ?? "";
-        if (data?.usage) {
-          tokensSent = data.usage.prompt_tokens ?? undefined;
-          tokensReceived = data.usage.completion_tokens ?? undefined;
-        }
-        // Use server-authoritative TD award (already multiplied server-side)
-        if (data?.td_awarded && opts.addActiveTD) {
-          opts.addActiveTD(data.td_awarded, true);
-        }
-      }
+      const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD);
+      let { rawReply } = parsed;
+      const { tokensSent, tokensReceived } = parsed;
 
       if (!rawReply) {
         rawReply = "[❌ Error] No response from API.";
