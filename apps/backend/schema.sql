@@ -38,6 +38,19 @@ CREATE TABLE IF NOT EXISTS recent_events (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Server-authoritative score tracking (prevents client-side cheating)
+CREATE TABLE IF NOT EXISTS user_scores (
+    username TEXT PRIMARY KEY,
+    total_td INTEGER NOT NULL DEFAULT 0,
+    current_td INTEGER NOT NULL DEFAULT 0,
+    corporate_rank TEXT NOT NULL DEFAULT 'Junior Code Monkey',
+    country TEXT NOT NULL DEFAULT 'Unknown',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_scores_total_td
+    ON user_scores (total_td DESC);
+
 -- Usage logs for tracking token and model usage per user per hour
 CREATE TABLE IF NOT EXISTS usage_logs (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),

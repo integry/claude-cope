@@ -245,10 +245,6 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     });
     ctx.unlockAchievement("history_eraser");
     return true;
-  } else if (command === "/brag") {
-    ctx.setBragPending(true);
-    reply({ role: "system", content: "[🏆] Enter your name for the **Hall of Blame**:" });
-    return true;
   } else if (command === "/support") {
     reply({ role: "system", content: pickRandom(supportResponses) });
     return true;
@@ -505,13 +501,11 @@ export function executeSlashCommand(
 
   // /clear fires instantly — no fake processing delay
   if (command === "/clear") {
-    ctx.addActiveTD(Math.floor(Math.random() * 40) + 10);
     handleClearCommand(ctx);
     return;
   }
 
   setTimeout(() => {
-    ctx.addActiveTD(Math.floor(Math.random() * 40) + 10);
     if (ctx.applyQuotaDrain()) return;
 
     const exitCommands = ["exit", "quit", "/exit", "/quit"];
