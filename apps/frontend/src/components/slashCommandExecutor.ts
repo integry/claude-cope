@@ -15,6 +15,7 @@ interface SlashCommandContext {
   setState: SetState;
   setHistory: SetHistory;
   setIsProcessing: (v: boolean) => void;
+  closeAllOverlays: () => void;
   setShowStore: (v: boolean) => void;
   setShowLeaderboard: (v: boolean) => void;
   setShowAchievements: (v: boolean) => void;
@@ -114,12 +115,17 @@ function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Rep
   return true;
 }
 
+function openOverlay(ctx: SlashCommandContext, open: () => void) {
+  ctx.closeAllOverlays();
+  ctx.setHistory(clearLoading);
+  open();
+}
+
 function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   if (ctx.state.economy.totalTDEarned < 1000) {
     reply({ role: "error", content: "[❌ Error] Store access denied. Requires **1,000 Technical Debt**." });
   } else {
-    ctx.setHistory(clearLoading);
-    ctx.setShowStore(true);
+    openOverlay(ctx, () => ctx.setShowStore(true));
   }
   return true;
 }
@@ -143,25 +149,22 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
   if (command === "/store") {
     return handleStoreCommand(ctx, reply);
   } else if (command === "/leaderboard") {
-    ctx.setHistory(clearLoading);
-    ctx.setShowLeaderboard(true);
+    openOverlay(ctx, () => ctx.setShowLeaderboard(true));
     return true;
   } else if (command === "/achievements") {
-    ctx.setHistory(clearLoading);
-    ctx.setShowAchievements(true);
+    openOverlay(ctx, () => ctx.setShowAchievements(true));
     return true;
   } else if (command === "/synergize") {
     reply({ role: "system", content: "[🗓️] **Mandatory 1-on-1 meeting** initiated. You cannot escape." });
+    ctx.closeAllOverlays();
     ctx.setShowSynergize(true);
     return true;
   } else if (command === "/profile") {
-    ctx.setHistory(clearLoading);
-    ctx.setShowProfile(true);
+    openOverlay(ctx, () => ctx.setShowProfile(true));
     return true;
   } else if (command === "/user" || command.startsWith("/user ")) {
     const alias = command.slice(5).trim();
-    ctx.setHistory(clearLoading);
-    ctx.setShowProfile(true);
+    openOverlay(ctx, () => ctx.setShowProfile(true));
     if (alias) {
       window.history.pushState(null, "", `/user/${encodeURIComponent(alias)}`);
     } else {
@@ -219,13 +222,11 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
   if (command === "/help") {
     const tdGrant = Math.floor(Math.random() * 200) + 100;
     ctx.addActiveTD(tdGrant);
-    ctx.setHistory(clearLoading);
-    ctx.setShowHelp(true);
+    openOverlay(ctx, () => ctx.setShowHelp(true));
     window.history.pushState(null, "", "/help");
     return true;
   } else if (command === "/about") {
-    ctx.setHistory(clearLoading);
-    ctx.setShowAbout(true);
+    openOverlay(ctx, () => ctx.setShowAbout(true));
     window.history.pushState(null, "", "/about");
     return true;
   } else if (command === "/fast") {
@@ -438,7 +439,7 @@ export function executeSlashCommand(
         reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nSprint goal: **${offer.technical_debt} TD**. Start prompting to make progress.` });
       }
     } else if (command === "/abandon") {
-      handleAbandonCommand(ctx.state, ctx.setState, reply);
+      handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
     } else if (command.startsWith("/alias")) {
       handleAliasCommand(command, ctx, reply);
     } else if (command.startsWith("/model")) {

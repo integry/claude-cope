@@ -6,7 +6,7 @@ import {
   type GameState,
   loadState,
   calcBulkCost,
-  calculateTDpS,
+  calculateActiveMultiplier,
   resolveRank,
   STORAGE_KEY,
 } from "./gameStateUtils";
@@ -25,35 +25,9 @@ export function useGameState() {
     stateRef.current = state;
   }, [state]);
 
-  // Award offline TD on mount based on time since last login
+  // Update lastLogin on mount (no passive offline TD — active play only)
   useEffect(() => {
-    setState((prev) => {
-      const now = Date.now();
-      const elapsed = now - prev.lastLogin;
-      if (elapsed <= 0) return { ...prev, lastLogin: now };
-
-      const baseTdps = calculateTDpS(prev.inventory, prev.upgrades);
-      const tdps = baseTdps * prev.economy.tdMultiplier;
-      const offlineTD = tdps * (elapsed / 1000);
-
-      if (offlineTD <= 0) return { ...prev, lastLogin: now };
-
-      setOfflineTDEarned(offlineTD);
-
-      const newTotalTDEarned = prev.economy.totalTDEarned + offlineTD;
-      const newRank = resolveRank(newTotalTDEarned, prev.economy.currentRank);
-
-      return {
-        ...prev,
-        lastLogin: now,
-        economy: {
-          ...prev.economy,
-          currentTD: prev.economy.currentTD + offlineTD,
-          totalTDEarned: newTotalTDEarned,
-          currentRank: newRank,
-        },
-      };
-    });
+    setState((prev) => ({ ...prev, lastLogin: Date.now() }));
   }, []);
 
   // Persist state to localStorage (filter transient "loading" messages from chat history)
@@ -69,80 +43,54 @@ export function useGameState() {
     }
   }, [state]);
 
-  // Background game loop — runs every 100ms for smooth visual updates
+  // Background loop — checks achievements and quota drain (no passive TD generation)
   useEffect(() => {
     const interval = setInterval(() => {
       setState((prev) => {
-        const baseTdps = calculateTDpS(prev.inventory, prev.upgrades);
-        if (baseTdps === 0) return prev;
-
-        const tdps = baseTdps * prev.economy.tdMultiplier;
-        const tickTD = tdps / 10;
-        const newTotalTDEarned = prev.economy.totalTDEarned + tickTD;
-
-        // Check for rank advancement
-        const newRank = resolveRank(newTotalTDEarned, prev.economy.currentRank);
-
         // Rogue API Key passively drains quota over time
         const rogueCount = prev.inventory["rogue-api-key"] ?? 0;
         let newQuotaPercent = prev.economy.quotaPercent;
         if (rogueCount > 0) {
-          // Drain 0.5% per Rogue API Key per second (0.05% per tick at 100ms)
           const quotaDrain = rogueCount * 0.05;
           newQuotaPercent = Math.max(0, prev.economy.quotaPercent - quotaDrain);
         }
 
-        // Check passive economy achievements
+        // Check economy achievements
         const newAchievements = [...prev.achievements];
 
         // dependency_hell: own 10+ NPM Dependency Importers
-        if (
-          !newAchievements.includes("dependency_hell") &&
-          (prev.inventory["npm"] ?? 0) >= 10
-        ) {
+        if (!newAchievements.includes("dependency_hell") && (prev.inventory["npm"] ?? 0) >= 10) {
           newAchievements.push("dependency_hell");
         }
 
-        // ten_x_developer: exceed 10,000 TD/s
-        if (
-          !newAchievements.includes("ten_x_developer") &&
-          tdps >= 10_000
-        ) {
+        // ten_x_developer: active multiplier exceeds 100x
+        const multiplier = calculateActiveMultiplier(prev.inventory, prev.upgrades);
+        if (!newAchievements.includes("ten_x_developer") && multiplier >= 100) {
           newAchievements.push("ten_x_developer");
         }
 
-        // the_java_enterprise: own generators from 5+ different types
+        // the_java_enterprise: own 5+ different team member types
         if (!newAchievements.includes("the_java_enterprise")) {
-          const ownedTypes = GENERATORS.filter(
-            (g) => (prev.inventory[g.id] ?? 0) > 0
-          ).length;
-          if (ownedTypes >= 5) {
-            newAchievements.push("the_java_enterprise");
-          }
+          const ownedTypes = GENERATORS.filter((g) => (prev.inventory[g.id] ?? 0) > 0).length;
+          if (ownedTypes >= 5) newAchievements.push("the_java_enterprise");
         }
 
         // heat_death: reach the maximum corporate rank
         const maxRankTitle = CORPORATE_RANKS[CORPORATE_RANKS.length - 1]!.title;
-        if (
-          !newAchievements.includes("heat_death") &&
-          newRank === maxRankTitle
-        ) {
+        if (!newAchievements.includes("heat_death") && prev.economy.currentRank === maxRankTitle) {
           newAchievements.push("heat_death");
         }
 
+        const changed = newQuotaPercent !== prev.economy.quotaPercent || newAchievements.length !== prev.achievements.length;
+        if (!changed) return prev;
+
         return {
           ...prev,
-          economy: {
-            ...prev.economy,
-            currentTD: prev.economy.currentTD + tickTD,
-            totalTDEarned: newTotalTDEarned,
-            currentRank: newRank,
-            quotaPercent: newQuotaPercent,
-          },
+          economy: { ...prev.economy, quotaPercent: newQuotaPercent },
           achievements: newAchievements,
         };
       });
-    }, 100);
+    }, 1000); // 1s is enough — no smooth tick needed without passive income
 
     return () => clearInterval(interval);
   }, []);
@@ -194,14 +142,20 @@ export function useGameState() {
 
   const addActiveTD = useCallback((amount: number) => {
     setState((prev) => {
-      const newTotalTDEarned = prev.economy.totalTDEarned + amount;
+      // Positive amounts are boosted by the active multiplier from team members
+      const multiplier = amount > 0
+        ? calculateActiveMultiplier(prev.inventory, prev.upgrades) * prev.economy.tdMultiplier
+        : 1;
+      const boosted = Math.round(amount * multiplier);
+      const newCurrentTD = Math.max(0, prev.economy.currentTD + boosted);
+      const newTotalTDEarned = Math.max(0, prev.economy.totalTDEarned + boosted);
       const newRank = resolveRank(newTotalTDEarned, prev.economy.currentRank);
 
       return {
         ...prev,
         economy: {
           ...prev.economy,
-          currentTD: prev.economy.currentTD + amount,
+          currentTD: newCurrentTD,
           totalTDEarned: newTotalTDEarned,
           currentRank: newRank,
         },

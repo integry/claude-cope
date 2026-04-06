@@ -1,6 +1,5 @@
 import { API_BASE } from "../config";
 import type { Message } from "./Terminal";
-import type { GameState } from "../hooks/useGameState";
 
 type BacklogTicket = { id: string; title: string; description: string; technical_debt: number };
 

@@ -6,17 +6,17 @@ const sections = [
   {
     title: "TECHNICAL DEBT (TD)",
     content:
-      "TD is the primary currency of corporate dysfunction. Earn it by chatting with the AI, running slash commands, or buying generators that passively accumulate debt. More debt = more power. Welcome to enterprise software.",
+      "TD is the primary currency of corporate dysfunction. Earn it by chatting with the AI, completing sprint tickets, and running slash commands. Hire team members from the /store to multiply your earnings. More debt = more power.",
   },
   {
-    title: "GENERATORS",
+    title: "TEAM MEMBERS",
     content:
-      "Generators produce TD automatically every second. Buy them from the /store. Each generator costs more as you buy duplicates (1.15× growth rate). Stack them high — passive income is the dream.",
+      "Team members multiply the TD you earn from every interaction. Buy them from the /store. Each one costs more as you hire duplicates (1.15× growth rate). A bigger team means bigger multipliers on everything you do.",
   },
   {
     title: "SYNERGY UPGRADES",
     content:
-      "Upgrades in the /store boost one generator's output based on how many of another generator you own. This is called \"synergy\" — the same word your manager uses to justify adding a blockchain to the login page.",
+      "Upgrades in the /store boost one team member's multiplier based on how many of another type you own. This is called \"synergy\" — the same word your manager uses to justify adding a blockchain to the login page.",
   },
   {
     title: "CORPORATE RANKS",

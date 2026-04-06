@@ -125,6 +125,7 @@ export function handleTakeCommand(
 export function handleAbandonCommand(
   state: GameState,
   setState: SetState,
+  addActiveTD: (n: number) => void,
   reply: Reply,
 ): boolean {
   if (!state.activeTicket) {
@@ -135,14 +136,8 @@ export function handleAbandonCommand(
   const ticket = state.activeTicket;
   const penalty = ticket.sprintGoal * 2;
 
-  setState((prev) => ({
-    ...prev,
-    activeTicket: null,
-    economy: {
-      ...prev.economy,
-      currentTD: Math.max(0, prev.economy.currentTD - penalty),
-    },
-  }));
+  setState((prev) => ({ ...prev, activeTicket: null }));
+  addActiveTD(-penalty);
 
   reply({
     role: "warning",

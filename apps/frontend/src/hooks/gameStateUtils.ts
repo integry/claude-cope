@@ -261,30 +261,37 @@ export function calcBulkCost(baseCost: number, owned: number, amount: number): n
   return Math.floor(baseCost * rOwned * (rAmount - 1) / (GROWTH_RATE - 1));
 }
 
-export function calculateTDpS(inventory: Record<string, number>, ownedUpgrades: string[] = []): number {
-  // Build a multiplier map from owned upgrades
-  const multipliers: Record<string, number> = {};
+/**
+ * Calculate the active TD multiplier from owned team members and upgrades.
+ * Each team member adds baseOutput% per unit owned, boosted by synergy upgrades.
+ * Returns a multiplier (e.g. 1.0 = no bonus, 2.5 = +150% bonus).
+ */
+export function calculateActiveMultiplier(inventory: Record<string, number>, ownedUpgrades: string[] = []): number {
+  // Build a synergy boost map from owned upgrades
+  const synergies: Record<string, number> = {};
   for (const upgradeId of ownedUpgrades) {
     const upgrade = UPGRADES.find((u) => u.id === upgradeId);
     if (upgrade) {
-      // Dynamic synergy: multiplier scales with the count of the required generator
       const effectiveMultiplier =
         upgrade.synergyPercent != null
           ? 1 + ((inventory[upgrade.requiredGeneratorId] ?? 0) * upgrade.synergyPercent) / 100
           : upgrade.multiplier;
 
-      multipliers[upgrade.targetGeneratorId] =
-        (multipliers[upgrade.targetGeneratorId] ?? 1) * effectiveMultiplier;
+      synergies[upgrade.targetGeneratorId] =
+        (synergies[upgrade.targetGeneratorId] ?? 1) * effectiveMultiplier;
     }
   }
 
-  let tdps = 0;
+  let bonusPercent = 0;
   for (const generator of GENERATORS) {
     const count = inventory[generator.id] ?? 0;
-    const synergy = multipliers[generator.id] ?? 1;
-    tdps += count * generator.baseOutput * synergy;
+    const synergy = synergies[generator.id] ?? 1;
+    bonusPercent += count * generator.baseOutput * synergy;
   }
-  return tdps;
+  return 1 + bonusPercent / 100;
 }
+
+/** @deprecated Use calculateActiveMultiplier instead */
+export const calculateTDpS = calculateActiveMultiplier;
 
 export { STORAGE_KEY };

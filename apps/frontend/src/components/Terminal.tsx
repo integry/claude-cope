@@ -12,7 +12,7 @@ import AboutOverlay from "./AboutOverlay";
 import UserProfileOverlay from "./UserProfileOverlay";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
-import { calculateTDpS } from "../hooks/gameStateUtils";
+import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
 import { BuddyDisplay } from "./BuddyDisplay";
 import { parseGlitchStyle } from "./parseGlitchStyle";
 import { submitBrag } from "./submitBrag";
@@ -61,6 +61,16 @@ function Terminal() {
   const initialHistoryLen = useRef(history.length);
   const lastEscapeRef = useRef<number>(0);
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "cope@local:~$ ";
+
+  const closeAllOverlays = () => {
+    setShowStore(false);
+    setShowLeaderboard(false);
+    setShowAchievements(false);
+    setShowSynergize(false);
+    setShowHelp(false);
+    setShowAbout(false);
+    setShowProfile(false);
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
@@ -161,7 +171,7 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(
       command,
-      { state, setState, setHistory, setIsProcessing, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowProfile, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } },
+      { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowProfile, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } },
     );
   };
 
@@ -384,7 +394,7 @@ function Terminal() {
       {/* Mount the Ticker at the very top of the interface so it acts as a global broadcast banner */}
       <Ticker />
       {outageHp !== null && <OutageBar outageHp={outageHp} />}
-      <HeaderBar rank={rank} totalTDEarned={state.economy.totalTDEarned} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} tdps={calculateTDpS(state.inventory, state.upgrades)} />
+      <HeaderBar rank={rank} totalTDEarned={state.economy.totalTDEarned} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} />
       <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         {history.map((message, index) => (

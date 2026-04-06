@@ -1,6 +1,6 @@
 import { GENERATORS, CORPORATE_RANKS } from "../game/constants";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
-import { calculateTDpS } from "../hooks/gameStateUtils";
+import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
 import type { GameState } from "../hooks/useGameState";
 
 type UserProfileOverlayProps = {
@@ -17,7 +17,7 @@ function formatTD(n: number): string {
 
 function UserProfileOverlay({ state, onClose }: UserProfileOverlayProps) {
   const { economy, inventory, upgrades, achievements, username, buddy } = state;
-  const tdps = calculateTDpS(inventory, upgrades);
+  const activeMultiplier = calculateActiveMultiplier(inventory, upgrades) * economy.tdMultiplier;
   const unlockedAchievements = ALL_ACHIEVEMENTS.filter((a) => achievements.includes(a.id)).length;
   const totalGenerators = Object.values(inventory).reduce((sum, count) => sum + count, 0);
   const ownedGeneratorTypes = GENERATORS.filter((g) => (inventory[g.id] ?? 0) > 0);
@@ -81,10 +81,7 @@ function UserProfileOverlay({ state, onClose }: UserProfileOverlayProps) {
             Lifetime TD: <span className="text-green-300">{formatTD(economy.totalTDEarned)}</span>
           </div>
           <div className="text-gray-300">
-            TD/s: <span className="text-green-300">{tdps.toFixed(1)}</span>
-          </div>
-          <div className="text-gray-300">
-            Multiplier: <span className="text-green-300">{economy.tdMultiplier}x</span>
+            Active Multiplier: <span className="text-green-300">{activeMultiplier.toFixed(1)}x</span>
           </div>
         </div>
 
