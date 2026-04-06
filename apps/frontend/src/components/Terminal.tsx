@@ -164,7 +164,19 @@ function Terminal() {
     const userMessage: Message = { role: "user", content: command };
     setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
     setIsProcessing(true);
-    const chatMessages = [...history.filter((m) => m.role === "user" || m.role === "system"), userMessage].map((m) => ({ role: m.role, content: m.content }));
+    // Only send actual chat messages to the LLM — exclude slash commands and their responses
+    const isSlashCommand = (content: string) => content.startsWith("/");
+    const chatHistory = history.filter((m, i) => {
+      if (m.role === "user") return !isSlashCommand(m.content);
+      if (m.role === "system") {
+        // Exclude system responses that follow a slash command
+        const prev = history[i - 1];
+        if (prev?.role === "user" && isSlashCommand(prev.content)) return false;
+        return true;
+      }
+      return false;
+    });
+    const chatMessages = [...chatHistory, userMessage].map((m) => ({ role: m.role, content: m.content }));
     const onSprintProgress = (rawAmount: number) => {
       if (!state.activeTicket) return;
       const amount = Math.round(rawAmount * 1.3);

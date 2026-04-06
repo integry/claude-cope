@@ -19,7 +19,7 @@ function SimulatedToolCall({ activeTicketId }: { activeTicketId?: string | null 
     const interval = setInterval(() => {
       setStepIndex((prev) => (prev + 1) % steps.length);
       setElapsed(0);
-    }, 1200 + Math.random() * 800);
+    }, 2500 + Math.random() * 1500);
     return () => clearInterval(interval);
   }, [steps.length]);
 
@@ -42,7 +42,7 @@ function SimulatedToolCall({ activeTicketId }: { activeTicketId?: string | null 
         <span className="text-gray-400">{step.target}</span>
         <span className="text-gray-600">({durationSec}s)</span>
       </div>
-      <div className="text-gray-600 text-xs pl-4">
+      <div className="text-gray-400 text-xs pl-4">
         {step.action}...
       </div>
     </div>
@@ -307,7 +307,7 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
           {message.content}
         </div>
       )}
-      {message.role === "loading" && <Spinner />}
+      {message.role === "loading" && !isAwaitingResponse && <Spinner />}
       <MessageContent message={message} />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
