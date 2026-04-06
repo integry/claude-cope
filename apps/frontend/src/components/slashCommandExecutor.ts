@@ -45,6 +45,54 @@ interface SlashCommandContext {
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.role !== "loading");
 
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]!;
+}
+
+const supportResponses = [
+  "[✓] Support ticket created. Redirecting payload directly to `/dev/null`...",
+  "[✓] Support ticket #4,812 created. Current wait time: **∞ sprints**. Thank you for your patience.",
+  "[✓] Your issue has been categorized as **Won't Fix** before anyone read it. Efficiency!",
+  "[✓] Support ticket routed to the **Shadow Realm Tier-3 Queue**. A human may respond within 6-8 business centuries.",
+  "[✓] Ticket created. AI summary: 'User is experiencing feelings.' Marked as **Duplicate of Existence**.",
+  "[✓] Support escalated to management. They left you on read. Classic.",
+  "[✓] Your ticket has been auto-resolved by our ML pipeline. Resolution: **Have you tried turning it off and never turning it back on?**",
+  "[✓] Support ticket filed under **PEBKAC**. Our condolences.",
+];
+
+const preworkoutResponses = [
+  "[✓] Injected **400mg** of pure caffeine into the **Node.js event loop**. LFG.",
+  "[✓] Mainlining **Red Bull** directly into the runtime. Your garbage collector is now **AGGRESSIVE**.",
+  "[✓] Activated **TURBO MODE**. Side effects include: sweating JSON, dreaming in TypeScript, and mass velocity.",
+  "[✓] Injecting **Monster Energy** into the CI pipeline. All tests now pass via sheer intimidation.",
+  "[✓] Loaded **600mg** of caffeine into V8. The event loop is vibrating at a frequency only senior devs can hear.",
+  "[✓] Pre-workout deployed. Your code now compiles **2x faster** but is **3x more unreadable**. Worth it.",
+  "[✓] Creatine monohydrate injected into `node_modules/`. Your `npm install` can now deadlift **400lbs**.",
+  "[✓] Caffeine payload delivered. Side effect: you mass involuntarily type `console.log` every 3 seconds.",
+];
+
+const synergizeResponses = [
+  "[🗓️] **Mandatory 1-on-1 meeting** initiated. You cannot escape.",
+  "[🗓️] **Synergy protocol engaged.** Aligning cross-functional deliverables with zero context.",
+  "[🗓️] Scheduling a **meeting about the meeting** to discuss the pre-meeting agenda. You're already late.",
+  "[🗓️] **1-on-1 initiated.** Your manager wants to 'touch base' about 'alignment.' Bring tissues.",
+  "[🗓️] **Calendar blocked.** The AI has scheduled itself into every open slot for the next quarter. Synergy achieved.",
+  "[🗓️] **Mandatory sync detected.** Topic: 'Why aren't we moving faster?' Duration: **eternity.**",
+  "[🗓️] Opening **synergy portal**. Please hold while we align your chakras with the product roadmap.",
+  "[🗓️] **Team standup extended to 90 minutes.** Someone asked a 'quick question.'",
+];
+
+const clearWarningResponses = [
+  "[WARNING] Executing sudo rm -rf /...",
+  "[WARNING] Initiating tactical data purge. Buckle up.",
+  "[WARNING] Formatting corporate drive C:\\SYNERGY\\... Please do not resist.",
+  "[WARNING] Launching `DROP TABLE *` across all environments. HR has been notified.",
+  "[WARNING] Activating scorched-earth protocol. Your git history will not survive.",
+  "[WARNING] Running `rm -rf /hope`... Deleting remaining optimism...",
+  "[WARNING] Nuclear launch sequence initiated. This terminal is now a crater.",
+  "[WARNING] Wiping memory banks. If you had unsaved work — that's a you problem.",
+];
+
 type Reply = (msg: Message) => void;
 
 function handleClearCommand(ctx: SlashCommandContext): boolean {
@@ -52,7 +100,7 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
   ctx.setClearCount(newClearCount);
   ctx.setHistory((prev) => [
     ...clearLoading(prev),
-    { role: "warning", content: "[WARNING] Executing sudo rm -rf /..." },
+    { role: "warning", content: pickRandom(clearWarningResponses) },
   ]);
 
   const fakePaths = [
@@ -156,7 +204,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     openOverlay(ctx, () => ctx.setShowAchievements(true));
     return true;
   } else if (command === "/synergize") {
-    reply({ role: "system", content: "[🗓️] **Mandatory 1-on-1 meeting** initiated. You cannot escape." });
+    reply({ role: "system", content: pickRandom(synergizeResponses) });
     ctx.closeAllOverlays();
     ctx.setShowSynergize(true);
     return true;
@@ -190,10 +238,10 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     reply({ role: "system", content: "[🏆] Enter your name for the **Hall of Blame**:" });
     return true;
   } else if (command === "/support") {
-    reply({ role: "system", content: "[✓] Support ticket created. Redirecting payload directly to `/dev/null`..." });
+    reply({ role: "system", content: pickRandom(supportResponses) });
     return true;
   } else if (command === "/preworkout") {
-    reply({ role: "system", content: "[✓] Injected **400mg** of pure caffeine into the **Node.js event loop**. LFG." });
+    reply({ role: "system", content: pickRandom(preworkoutResponses) });
     return true;
   } else if (command === "/buddy") {
     return handleBuddyCommand(ctx, reply);
