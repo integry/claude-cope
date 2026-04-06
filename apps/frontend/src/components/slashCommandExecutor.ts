@@ -179,14 +179,25 @@ function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   return true;
 }
 
-function handleBuddyCommand(ctx: SlashCommandContext, reply: Reply): boolean {
+function handleBuddyCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+  const arg = command.slice(6).trim().toLowerCase();
+  if (arg === "clear" || arg === "remove") {
+    if (!ctx.state.buddy.type) {
+      reply({ role: "system", content: "[❌] You don't have a buddy to dismiss. Use `/buddy` to roll for one." });
+      return true;
+    }
+    const dismissed = ctx.state.buddy.type;
+    ctx.setState((prev) => ({ ...prev, buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 } }));
+    reply({ role: "system", content: `[✓] **${dismissed}** has been dismissed. They didn't even say goodbye.` });
+    return true;
+  }
   if (ctx.state.buddy.type) {
     ctx.setBuddyPendingConfirm(true);
     reply({ role: "system", content: `[⚠️] You already have a buddy (**${ctx.state.buddy.type}**). Re-rolling will replace it. Are you sure? (y/n)` });
     return true;
   }
   const roll = Math.random() * 100;
-  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
+  const [buddyType, buddyIcon] = roll < 50 ? ["Agile Snail", "🐌"] : roll < 75 ? ["Sarcastic Clippy", "📎"] : roll < 88 ? ["Grumpy Senior", "👴"] : roll < 97 ? ["Panic Intern", "😰"] : ["10x Dragon", "🐉"];
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
   const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
@@ -243,8 +254,8 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
   } else if (command === "/preworkout") {
     reply({ role: "system", content: pickRandom(preworkoutResponses) });
     return true;
-  } else if (command === "/buddy") {
-    return handleBuddyCommand(ctx, reply);
+  } else if (command === "/buddy" || command.startsWith("/buddy ")) {
+    return handleBuddyCommand(command, ctx, reply);
   } else if (command === "/who") {
     if (ctx.onlineUsers.length > 0) {
       const userList = ctx.onlineUsers.join(", ");
@@ -451,7 +462,7 @@ export function rollBuddy(
   setHistory: SetHistory,
 ) {
   const roll = Math.random() * 100;
-  const [buddyType, buddyIcon] = roll < 70 ? ["Agile Snail", "🐌"] : roll < 95 ? ["Sarcastic Clippy", "📎"] : ["10x Dragon", "🐉"];
+  const [buddyType, buddyIcon] = roll < 50 ? ["Agile Snail", "🐌"] : roll < 75 ? ["Sarcastic Clippy", "📎"] : roll < 88 ? ["Grumpy Senior", "👴"] : roll < 97 ? ["Panic Intern", "😰"] : ["10x Dragon", "🐉"];
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
   const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
@@ -477,7 +488,7 @@ export function executeSlashCommand(
   };
 
   // Track command usage for performance review brag card
-  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command;
+  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command.startsWith("/buddy ") ? "/buddy" : command;
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {
