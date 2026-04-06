@@ -185,9 +185,9 @@ function Terminal() {
       updateTicketProgress(amount);
       const newProgress = Math.min(state.activeTicket.sprintProgress + amount, state.activeTicket.sprintGoal);
       if (newProgress >= state.activeTicket.sprintGoal) {
-        const payout = state.activeTicket.sprintGoal;
+        const payout = state.activeTicket.sprintGoal * 10;
         addActiveTD(payout);
-        setHistory((prev) => [...prev, { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned ${payout} TD. The board is pleased... for now.` }]);
+        setHistory((prev) => [...prev, { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` }]);
         setState((prev) => ({ ...prev, activeTicket: null }));
       }
     };

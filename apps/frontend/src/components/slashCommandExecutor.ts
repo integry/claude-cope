@@ -383,7 +383,7 @@ function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
       ...prev,
       activeTicket: { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt },
     }));
-    reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nSprint goal: **${offer.technical_debt} TD**. Start prompting to make progress.` });
+    reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nReward: **${(offer.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.` });
   }
 }
 
