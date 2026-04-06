@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { getSystemPrompt } from "../prompts/systemPrompt";
+import { computeMultiplier } from "../gameConstants";
 
 type Env = {
   Bindings: {
@@ -19,6 +20,9 @@ chat.post("/", async (c) => {
     customModel?: string;
     modes?: { fast?: boolean; voice?: boolean };
     activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number };
+    username?: string;
+    inventory?: Record<string, number>;
+    upgrades?: string[];
   }>();
 
   const isBYOK = Boolean(body.apiKey);
@@ -108,8 +112,10 @@ Do NOT output a range like "1-3". Output ONE number.`;
     [key: string]: unknown;
   };
 
-  // Server-authoritative TD award for this interaction
-  const tdAwarded = Math.floor(Math.random() * 40) + 10;
+  // Server-authoritative TD award with validated multiplier
+  const baseTD = Math.floor(Math.random() * 40) + 10;
+  const serverMultiplier = computeMultiplier(body.inventory ?? {}, body.upgrades ?? []);
+  const tdAwarded = Math.round(baseTD * serverMultiplier);
   const country = c.req.header("cf-ipcountry") || "Unknown";
 
   // Log usage and update server-side score asynchronously
@@ -126,7 +132,7 @@ Do NOT output a range like "1-3". Output ONE number.`;
     ]));
   }
 
-  // Include server-awarded TD so client uses authoritative value
+  // Include server-awarded TD so client uses authoritative value (already multiplied)
   (data as Record<string, unknown>).td_awarded = tdAwarded;
 
   return c.json(data);

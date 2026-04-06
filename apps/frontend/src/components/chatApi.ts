@@ -131,14 +131,17 @@ export function submitChatMessage(opts: {
   modes?: ModesState;
   activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
   onSprintProgress?: (amount: number) => void;
-  addActiveTD?: (n: number) => void;
+  addActiveTD?: (n: number, raw?: boolean) => void;
+  username?: string;
+  inventory?: Record<string, number>;
+  upgrades?: string[];
   signal?: AbortSignal;
 }) {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, signal } = opts;
   fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: chatMessages, rank: currentRank, ...(apiKey ? { apiKey } : {}), ...(customModel ? { customModel } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}) }),
+    body: JSON.stringify({ messages: chatMessages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(apiKey ? { apiKey } : {}), ...(customModel ? { customModel } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}) }),
     signal,
   })
     .then(async (res) => {
@@ -181,9 +184,9 @@ export function submitChatMessage(opts: {
           tokensSent = data.usage.prompt_tokens ?? undefined;
           tokensReceived = data.usage.completion_tokens ?? undefined;
         }
-        // Use server-authoritative TD award if available
+        // Use server-authoritative TD award (already multiplied server-side)
         if (data?.td_awarded && opts.addActiveTD) {
-          opts.addActiveTD(data.td_awarded);
+          opts.addActiveTD(data.td_awarded, true);
         }
       }
 

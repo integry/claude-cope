@@ -43,6 +43,29 @@ export function useGameState() {
     }
   }, [state]);
 
+  // Debounced server score sync — fires 3s after last TD/inventory change
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSyncedTD = useRef(state.economy.totalTDEarned);
+  useEffect(() => {
+    // Only sync if TD or inventory actually changed
+    if (state.economy.totalTDEarned === lastSyncedTD.current) return;
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => {
+      lastSyncedTD.current = state.economy.totalTDEarned;
+      fetch("/api/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: state.username,
+          currentTD: Math.floor(state.economy.currentTD),
+          totalTDEarned: Math.floor(state.economy.totalTDEarned),
+          inventory: state.inventory,
+          upgrades: state.upgrades,
+        }),
+      }).catch(() => {});
+    }, 3000);
+  }, [state.economy.totalTDEarned, state.economy.currentTD, state.inventory, state.upgrades, state.username]);
+
 
 
   // Background loop — checks achievements and quota drain (no passive TD generation)
@@ -142,10 +165,10 @@ export function useGameState() {
     return true;
   }, []);
 
-  const addActiveTD = useCallback((amount: number) => {
+  /** Add TD. If raw=true, skip the local multiplier (used for server-awarded TD that's already multiplied). */
+  const addActiveTD = useCallback((amount: number, raw = false) => {
     setState((prev) => {
-      // Positive amounts are boosted by the active multiplier from team members
-      const multiplier = amount > 0
+      const multiplier = (!raw && amount > 0)
         ? calculateActiveMultiplier(prev.inventory, prev.upgrades) * prev.economy.tdMultiplier
         : 1;
       const boosted = Math.round(amount * multiplier);

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { CORPORATE_RANKS } from "./rankConstants";
+import { computeMultiplier } from "../gameConstants";
 
 type Env = {
   Bindings: {
@@ -26,57 +27,72 @@ score.get("/", async (c) => {
   return c.json(row);
 });
 
-/** POST /api/score — award TD server-side (called by backend after chat, not by client directly) */
+/**
+ * POST /api/score — debounced sync from client.
+ * Validates the claimed score against server-side tracking.
+ * The server's total_td is the floor — client can't claim more than what the server has awarded.
+ */
 score.post("/", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
   const body = await c.req.json<{
     username: string;
-    td_awarded: number;
-    td_spent?: number;
+    currentTD: number;
+    totalTDEarned: number;
+    inventory: Record<string, number>;
+    upgrades: string[];
   }>();
 
   if (!body.username) return c.json({ error: "username required" }, 400);
 
   const country = c.req.header("cf-ipcountry") || "Unknown";
 
-  // Upsert the user's score
+  // Validate the multiplier from the claimed inventory
+  const claimedMultiplier = computeMultiplier(body.inventory, body.upgrades);
+
+  // Fetch server-side score
   const existing = await db
     .prepare("SELECT total_td, current_td FROM user_scores WHERE username = ?")
     .bind(body.username)
     .first<{ total_td: number; current_td: number }>();
 
-  let newTotal: number;
-  let newCurrent: number;
+  const serverTotal = existing?.total_td ?? 0;
 
-  if (existing) {
-    newTotal = existing.total_td + (body.td_awarded ?? 0);
-    newCurrent = Math.max(0, existing.current_td + (body.td_awarded ?? 0) - (body.td_spent ?? 0));
-  } else {
-    newTotal = body.td_awarded ?? 0;
-    newCurrent = Math.max(0, (body.td_awarded ?? 0) - (body.td_spent ?? 0));
-  }
+  // Client's totalTDEarned can't exceed server's tracked total
+  // Allow 10% tolerance for rounding/timing differences
+  const validatedTotal = Math.min(body.totalTDEarned, Math.round(serverTotal * 1.1));
+  // currentTD can't exceed validatedTotal (can't have more than you earned)
+  const validatedCurrent = Math.min(body.currentTD, validatedTotal);
 
-  // Resolve rank from total TD
+  // Resolve rank from validated total
   let rank = "Junior Code Monkey";
   for (const r of CORPORATE_RANKS) {
-    if (newTotal >= r.threshold) rank = r.title;
+    if (validatedTotal >= r.threshold) rank = r.title;
   }
+
+  // Cheater flag
+  const isSuspicious = body.totalTDEarned > serverTotal * 2 && serverTotal > 1000;
+  if (isSuspicious) rank = "🤡 DevTools Hacker";
 
   if (existing) {
     await db
-      .prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now') WHERE username = ?")
-      .bind(newTotal, newCurrent, rank, country, body.username)
+      .prepare("UPDATE user_scores SET current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now') WHERE username = ?")
+      .bind(validatedCurrent, rank, country, body.username)
       .run();
   } else {
     await db
       .prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country) VALUES (?, ?, ?, ?, ?)")
-      .bind(body.username, newTotal, newCurrent, rank, country)
+      .bind(body.username, validatedTotal, validatedCurrent, rank, country)
       .run();
   }
 
-  return c.json({ total_td: newTotal, current_td: newCurrent, corporate_rank: rank });
+  return c.json({
+    total_td: existing ? serverTotal : validatedTotal,
+    current_td: validatedCurrent,
+    corporate_rank: rank,
+    multiplier: claimedMultiplier,
+  });
 });
 
 export default score;
