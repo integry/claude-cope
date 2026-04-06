@@ -84,7 +84,7 @@ function processReplyTags(
   rawReply: string,
   unlockAchievement: (id: string) => void,
   onSprintProgress?: (amount: number) => void,
-): { achievementMessages: Message[]; reply: string } {
+): { achievementMessages: Message[]; reply: string; suggestedReply: string | null } {
   const achievementRegex = /\[ACHIEVEMENT_UNLOCKED:\s*(.+?)\]/g;
   const achievementMessages: Message[] = [];
   let match;
@@ -115,8 +115,13 @@ function processReplyTags(
     onSprintProgress(parseInt(sprintMatch[1]!, 10));
   }
 
-  const reply = rawReply.replace(achievementRegex, "").replace(sprintRegex, "").trim();
-  return { achievementMessages, reply };
+  // Extract suggested reply for input placeholder
+  const suggestedRegex = /\[SUGGESTED_REPLY:\s*(.+?)\]/g;
+  const suggestedMatch = suggestedRegex.exec(rawReply);
+  const suggestedReply = suggestedMatch?.[1]?.trim() ?? null;
+
+  const reply = rawReply.replace(achievementRegex, "").replace(sprintRegex, "").replace(suggestedRegex, "").trim();
+  return { achievementMessages, reply, suggestedReply };
 }
 
 export function submitChatMessage(opts: {
@@ -132,6 +137,7 @@ export function submitChatMessage(opts: {
   activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
   onSprintProgress?: (amount: number) => void;
   addActiveTD?: (n: number, raw?: boolean) => void;
+  onSuggestedReply?: (suggestion: string) => void;
   username?: string;
   inventory?: Record<string, number>;
   upgrades?: string[];
@@ -194,7 +200,10 @@ export function submitChatMessage(opts: {
         rawReply = "[❌ Error] No response from API.";
       }
 
-      const { achievementMessages, reply } = processReplyTags(rawReply, unlockAchievement, onSprintProgress);
+      const { achievementMessages, reply, suggestedReply } = processReplyTags(rawReply, unlockAchievement, onSprintProgress);
+      if (suggestedReply && opts.onSuggestedReply) {
+        opts.onSuggestedReply(suggestedReply);
+      }
 
       setHistory((prev) => {
         let updated = [

@@ -227,7 +227,11 @@ export function getSystemPrompt(rank: string, modes?: { fast?: boolean; voice?: 
   let prompt = `${BASE_PROMPT}\n\n${rankBehavior}\n\nThe user's current corporate rank is: ${rank}. Adjust your tone and personality according to the rank behavior instructions above.
 
 IMPORTANT - RESPONSE FOCUS:
-Your response must primarily address the user's MOST RECENT message. Use conversation history for context (e.g. if the user picks a numbered option from your previous response, honor that), but do NOT rehash or fixate on topics from older messages. Each new message deserves a fresh chaotic response about its own topic.`;
+Your response must primarily address the user's MOST RECENT message. Use conversation history for context (e.g. if the user picks a numbered option from your previous response, honor that), but do NOT rehash or fixate on topics from older messages. Each new message deserves a fresh chaotic response about its own topic.
+
+SUGGESTED REPLY:
+At the very end of your response (after all other tags), append a short suggested follow-up the user might type next. Keep it to 3-8 words — a natural continuation of the conversation. Format: [SUGGESTED_REPLY: your suggestion here]
+Examples: [SUGGESTED_REPLY: just do option 2], [SUGGESTED_REPLY: ok deploy it], [SUGGESTED_REPLY: what about testing?]`;
 
   if (modes?.fast && MODE_FRAGMENTS.fast) {
     prompt += `\n\n${MODE_FRAGMENTS.fast}`;

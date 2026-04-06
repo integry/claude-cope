@@ -45,6 +45,7 @@ function Terminal() {
   const [slashQuery, setSlashQuery] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
   const [inputValue, setInputValue] = useState("");
+  const [suggestedReply, setSuggestedReply] = useState<string | null>(null);
   const [showStore, setShowStore] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
@@ -114,7 +115,7 @@ function Terminal() {
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
     if (activeRegression === "backwards_typing" && value.length > inputValue.length) { value = value.slice(inputValue.length) + inputValue; }
-    setInputValue(value); setHistoryIndex(-1);
+    setInputValue(value); setHistoryIndex(-1); setSuggestedReply(null);
     setSlashQuery(value.startsWith("/") ? value : ""); setSlashIndex(0);
   };
 
@@ -191,7 +192,7 @@ function Terminal() {
     };
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, addActiveTD, username: state.username, inventory: state.inventory, upgrades: state.upgrades, signal: controller.signal });
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, addActiveTD, onSuggestedReply: setSuggestedReply, username: state.username, inventory: state.inventory, upgrades: state.upgrades, signal: controller.signal });
   };
 
   const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = val.length; } }, 0); };
@@ -261,6 +262,7 @@ function Terminal() {
     if (e.key === "Escape") return; // handled by global listener
     if (e.key === "Tab") {
       if (slashMenuOpen) { e.preventDefault(); const selected = filtered[slashIndex]; if (selected) { setInputValue(selected); setSlashQuery(selected); } }
+      else if (suggestedReply && !inputValue) { e.preventDefault(); setInputValue(suggestedReply); setSuggestedReply(null); }
       return;
     }
     if (e.key === "Enter") {
@@ -289,7 +291,7 @@ function Terminal() {
       <div className="relative border-b border-white">
         {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
         <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
-        <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || quotaLocked} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} />
+        <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || quotaLocked} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
       </div>
       {state.activeTicket && <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />}
       {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} onClose={() => setShowStore(false)} />}
