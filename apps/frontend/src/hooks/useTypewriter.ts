@@ -22,8 +22,10 @@ export function useTypewriter(
   }
 
   useEffect(() => {
+    const effectLines = content.split("\n");
+
     if (!enabled || completedRef.current) {
-      setVisibleLineCount(lines.length);
+      setVisibleLineCount(effectLines.length);
       return;
     }
 
@@ -31,13 +33,13 @@ export function useTypewriter(
     let timeout: ReturnType<typeof setTimeout>;
 
     const revealNext = (currentCount: number) => {
-      if (currentCount >= lines.length) {
+      if (currentCount >= effectLines.length) {
         completedRef.current = true;
         return;
       }
 
       // Base delay per line: 30-80ms for short lines, longer for content lines
-      const line = lines[currentCount] || "";
+      const line = effectLines[currentCount] || "";
       let delay: number;
 
       if (line.trim() === "") {
@@ -65,7 +67,7 @@ export function useTypewriter(
     }, 40);
 
     return () => clearTimeout(timeout);
-  }, [enabled, lines.length]);
+  }, [enabled, content]);
 
   if (!enabled || completedRef.current) {
     return { visibleContent: content, isTyping: false };
