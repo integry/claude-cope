@@ -21,7 +21,7 @@ export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/brrrrrr": "Ship directly to prod on a Friday",
   "/feedback": "Send data directly to a shredder",
   "/bug": "Report an undocumented feature",
-  "/key": "BYOK — bring your own key, mass-produce suffering without limits",
+  "/key": "Your OpenRouter key, unlimited suffering",
   "/upgrade": "Pay real money for more suffering",
   "/leaderboard": "Compare your suffering to others",
   "/achievements": "Trophies for terrible decisions",
