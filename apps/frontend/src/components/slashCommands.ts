@@ -1,5 +1,5 @@
 // Added /ping and /reject to enable PvP sabotage interactions.
-export const SLASH_COMMANDS = ["/backlog", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/reject", "/help", "/about", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/take", "/accept", "/abandon", "/alias", "/model", "/user"];
+export const SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/reject", "/help", "/about", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user"];
 
 export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/backlog": "Stare into the abyss of unfulfilled promises",
@@ -21,14 +21,14 @@ export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/brrrrrr": "Ship directly to prod on a Friday",
   "/feedback": "Send data directly to a shredder",
   "/bug": "Report an undocumented feature",
-  "/key": "Leak your credentials to public GitHub",
+  "/key": "Use your own OpenRouter key to play without limits",
   "/upgrade": "Pay real money for more suffering",
   "/leaderboard": "Compare your suffering to others",
   "/achievements": "Trophies for terrible decisions",
   "/profile": "Review your miserable statistics",
   "/ticket": "Submit a plea to /dev/null",
   "/take": "Voluntarily accept more pain",
-  "/accept": "Agree to terms you didn't read",
+  "/accept": "Obey when the PM auto-assigns you a ticket",
   "/abandon": "Give up. We knew you would.",
   "/alias": "Create shortcuts to your mistakes",
   "/model": "Swap out the hallucination engine",
