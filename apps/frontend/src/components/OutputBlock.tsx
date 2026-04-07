@@ -322,4 +322,11 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
   );
 }
 
-export default React.memo(OutputBlock);
+export default React.memo(OutputBlock, (prev, next) =>
+  prev.message.role === next.message.role &&
+  prev.message.content === next.message.content &&
+  prev.isNew === next.isNew &&
+  prev.promptString === next.promptString &&
+  // Only compare activeTicketId for loading messages
+  (prev.message.role !== "loading" || prev.activeTicketId === next.activeTicketId)
+);

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useAnimatedCounter } from "../hooks/useAnimatedCounter";
 
 function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, onProfileClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; onProfileClick: () => void }) {
@@ -27,4 +28,4 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
   );
 }
 
-export default HeaderBar;
+export default memo(HeaderBar);

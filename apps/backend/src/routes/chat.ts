@@ -16,10 +16,10 @@ function buildSprintSuffix(ticket: { id: string; title: string; sprintGoal: numb
 The user is currently working on ticket ${ticket.id}: "${ticket.title}" (${pct}% complete, ${ticket.sprintProgress}/${ticket.sprintGoal} TD).
 Your response should mock their attempt to work on this ticket. If their message is relevant to the ticket topic, acknowledge it sarcastically. If it's completely unrelated, roast them for slacking off during a sprint.
 IMPORTANT: At the very end of your response (after all other text), you MUST append exactly one sprint progress tag. Pick a SINGLE number (not a range) based on relevance:
-- Highly relevant (directly working on the ticket topic): [SPRINT_PROGRESS: 20] (or any number 15-25)
-- Somewhat relevant (tangentially related): [SPRINT_PROGRESS: 8] (or any number 5-14)
-- Completely irrelevant (off-topic, slacking): [SPRINT_PROGRESS: 2] (or any number 1-3)
-Example: [SPRINT_PROGRESS: 12]
+- Highly relevant (directly working on the ticket topic): [SPRINT_PROGRESS: 22] (or any number 18-25)
+- Somewhat relevant (tangentially related): [SPRINT_PROGRESS: 12] (or any number 8-17)
+- Completely irrelevant (off-topic, slacking): [SPRINT_PROGRESS: 5] (or any number 3-7)
+Example: [SPRINT_PROGRESS: 15]
 Do NOT output a range like "1-3". Output ONE number.`;
 }
 

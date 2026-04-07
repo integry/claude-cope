@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, ChangeEvent, KeyboardEvent } from "react";
+import { useState, useRef, useEffect, useCallback, ChangeEvent, KeyboardEvent, memo } from "react";
 import OutputBlock from "./OutputBlock";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
@@ -29,6 +29,23 @@ import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 
 export type { Message };
+
+/** Memoized message list — only re-renders when history/keys/props actually change */
+const MessageList = memo(function MessageList({ history, messageKeys, initialHistoryLen, promptString, activeTicketId }: {
+  history: Message[];
+  messageKeys: number[];
+  initialHistoryLen: number;
+  promptString: string;
+  activeTicketId?: string | null;
+}) {
+  return (
+    <>
+      {history.map((message, index) => (
+        <OutputBlock key={messageKeys[index]} message={message} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} />
+      ))}
+    </>
+  );
+});
 
 function filterChatHistory(history: Message[]): Message[] {
   const isSlashCmd = (content: string) => content.startsWith("/");
@@ -74,11 +91,23 @@ function Terminal() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialHistoryLen = useRef(history.length);
+  // Stable keys for messages — assign once, persist across re-renders
+  const messageKeys = useRef<number[]>([]);
+  const nextKeyId = useRef(0);
+  // Grow the keys array to match history length (new messages get new IDs)
+  while (messageKeys.current.length < history.length) {
+    messageKeys.current.push(nextKeyId.current++);
+  }
+  // Shrink if history was truncated (e.g. /clear, /compact)
+  if (messageKeys.current.length > history.length) {
+    messageKeys.current.length = history.length;
+  }
   const lastEscapeRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
 
-  const closeAllOverlays = () => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowProfile(false); };
+  const closeAllOverlays = useCallback(() => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowProfile(false); }, []);
+  const handleProfileClick = useCallback(() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlays, state.username]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [history]);
 
@@ -181,7 +210,7 @@ function Terminal() {
     const chatMessages = [...filterChatHistory(history), userMessage].map((m) => ({ role: m.role, content: m.content }));
     const onSprintProgress = (rawAmount: number) => {
       if (!state.activeTicket) return;
-      const amount = Math.round(rawAmount * 1.3);
+      const amount = Math.round(rawAmount * 2.5);
       updateTicketProgress(amount);
       const newProgress = Math.min(state.activeTicket.sprintProgress + amount, state.activeTicket.sprintGoal);
       if (newProgress >= state.activeTicket.sprintGoal) {
@@ -295,12 +324,10 @@ function Terminal() {
     >
       <Ticker />
       {outageHp !== null && <OutageBar outageHp={outageHp} />}
-      <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} onProfileClick={() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }} />
+      <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} onProfileClick={handleProfileClick} />
       <div className={`flex-1 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
-        {history.map((message, index) => (
-          <OutputBlock key={index} message={message} isNew={index >= initialHistoryLen.current} promptString={promptString} activeTicketId={state.activeTicket?.id} />
-        ))}
+        <MessageList history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} activeTicketId={state.activeTicket?.id} />
         <div ref={bottomRef} />
       </div>
       {state.activeTicket && <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />}

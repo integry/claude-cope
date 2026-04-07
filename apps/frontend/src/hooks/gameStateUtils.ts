@@ -34,7 +34,11 @@ function generateUsername(): string {
   return `${adj}${noun}${num}`;
 }
 
+let _msgId = 0;
+export function nextMsgId(): number { return ++_msgId; }
+
 export type Message = {
+  id?: number;
   role: "user" | "system" | "loading" | "warning" | "error";
   content: string;
   tokensSent?: number;
