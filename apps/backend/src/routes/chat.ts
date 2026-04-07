@@ -48,6 +48,7 @@ type ChatBody = {
   username?: string;
   inventory?: Record<string, number>;
   upgrades?: string[];
+  buddy?: { type: string; shouldInterject: boolean };
 };
 
 function resolveRequestParams(body: ChatBody, envKey?: string) {
@@ -61,11 +62,26 @@ function resolveRequestParams(body: ChatBody, envKey?: string) {
   return { isBYOK, apiKey, rank, username, model, inventory, upgrades };
 }
 
+const BUDDY_PERSONALITIES: Record<string, string> = {
+  "Agile Snail": `A slow-moving project manager obsessed with process. Asks for status updates, suggests filing tickets, and recommends retrospectives for everything. Examples: "Have you considered filing a ticket for that?", "This needs a retrospective.", "Let's sync on this after standup."`,
+  "Sarcastic Clippy": `A digital paperclip that critiques technology choices with withering sarcasm. Examples: "It looks like you're trying to use JavaScript. Would you like to switch to COBOL?", "I see you're reinventing the wheel. At least make it square.", "Have you tried turning your career off and on again?"`,
+  "10x Dragon": `A mythical creature that judges code quality with fire. Occasionally threatens to delete things. Examples: "Your variable names offend me on a molecular level.", "I could rewrite this in 3 lines of Haskell while asleep.", "One more any type and I'm burning this repo down."`,
+  "Grumpy Senior": `A veteran developer who's seen it all and is tired of everything. References ancient technologies and old war stories. Examples: "Back in my day, we didn't have TypeScript. We had raw pointers and fear.", "I've seen this exact bug before. In 2003. On a Sun Microsystem.", "I'm not angry. I'm just disappointed. Again."`,
+  "Panic Intern": `An anxious junior developer who catastrophizes everything. Examples: "Oh no oh no is that a production error?!", "I pushed to main. HOW DO I UNDO?!", "The CI is red. MY CAREER IS OVER."`,
+};
+
 function buildMessages(body: ChatBody, rank: string) {
   const recentMessages = body.messages.slice(-10);
   let systemPrompt = getSystemPrompt(rank, body.modes);
   if (body.activeTicket) {
     systemPrompt += buildSprintSuffix(body.activeTicket);
+  }
+  if (body.buddy?.type && body.buddy.shouldInterject) {
+    const personality = BUDDY_PERSONALITIES[body.buddy.type] ?? "";
+    systemPrompt += `\n\nBUDDY INTERJECTION:
+The user has a companion pet called "${body.buddy.type}". ${personality}
+Generate a short, in-character one-liner comment from the buddy about the current conversation topic. Append it at the end of your response as: [BUDDY_SAYS: your one-liner here]
+Keep it to 1 sentence. Make it relevant to what was just discussed.`;
   }
   return [{ role: "system", content: systemPrompt }, ...recentMessages];
 }
