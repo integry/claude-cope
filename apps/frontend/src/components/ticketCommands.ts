@@ -62,10 +62,13 @@ export async function handleBacklogCommand(reply: Reply): Promise<boolean> {
     const titleW = Math.max(5, ...tickets.map((t) => t.title.length));
     const tdW = 8;
     const sep = `+${"-".repeat(numW + 2)}+${"-".repeat(idW + 2)}+${"-".repeat(titleW + 2)}+${"-".repeat(tdW + 2)}+`;
-    const pad = (s: string, w: number) => s + " ".repeat(Math.max(0, w - s.length));
+    const pad = (s: string, w: number, align: "left" | "right" = "left") =>
+      align === "right"
+        ? " ".repeat(Math.max(0, w - s.length)) + s
+        : s + " ".repeat(Math.max(0, w - s.length));
     const header = `| ${pad("#", numW)} | ${pad("ID", idW)} | ${pad("Title", titleW)} | ${pad("Reward", tdW)} |`;
     const rows = tickets.map((t, i) =>
-      `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(t.title, titleW)} | ${pad(String(t.technical_debt * 10), tdW)} |`
+      `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(t.title, titleW)} | ${pad(String(t.technical_debt * 10), tdW, "right")} |`
     );
     const table = [sep, header, sep, ...rows, sep].join("\n");
     reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]\n\n\`\`\`\n${table}\n\`\`\`\n\nType \`/take 1\` through \`/take ${tickets.length}\` to claim a ticket.` });
