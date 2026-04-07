@@ -4,6 +4,7 @@
 
 body {
   background-color: #0d1117;
+  font-family: 'Fira Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
 }
 
 /* Define keyframes for the ticker to ensure smooth, hardware-accelerated scrolling */
