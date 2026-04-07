@@ -328,6 +328,7 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
       const loops = Array.from({ length: depth }, (_, i) => `for(i${i}=0;i${i}<${Math.floor(Math.random() * 9999)};i${i}++)`).join("");
       const inner = `{console.log(${Math.floor(Math.random() * 99999)});}`.repeat(depth);
       ctx.setHistory((prev) => [...prev, { role: "system", content: `${loops}${inner}` }]);
+      ctx.addActiveTD(Math.floor(Math.random() * 6) - 2);
       count++;
       if (count > 500) {
         clearInterval(ctx.brrrrrrIntervalRef.current!);
