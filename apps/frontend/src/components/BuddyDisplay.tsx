@@ -20,7 +20,7 @@ export function BuddyDisplay({ type, isShiny }: { type: string | null; isShiny: 
   }
 
   return (
-    <div className={`text-xs mb-4 ${isShiny ? "text-amber-300" : "text-yellow-400"}`}>
+    <div className={`text-xs mt-2 mb-4 ${isShiny ? "text-amber-300" : "text-yellow-400"}`}>
       <pre className="font-mono whitespace-pre inline-block">{art}</pre>
       <div>{isShiny ? `✨ Shiny ${type} ✨` : type} is watching...</div>
     </div>

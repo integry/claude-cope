@@ -29,4 +29,4 @@ Write a dramatic, 3-to-4 sentence paragraph questioning why a model trained on t
 
 FORMAT 5: The Silent "Fix"
 Generate a 10-to-15 line block of completely unreadable, heavily obfuscated code (e.g., a massive single-line Regex, Brainfuck, or deeply nested Rust macros). 
-Follow it with: "I fixed it. If you can't read this, consider a career in Product Management."
+Follow it with: "I fixed it. If you can't read this, that's a feature, not a bug."
