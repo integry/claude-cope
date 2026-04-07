@@ -1,7 +1,7 @@
 import { useAnimatedCounter } from "../hooks/useAnimatedCounter";
 
 function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, onProfileClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; onProfileClick: () => void }) {
-  const displayTD = useAnimatedCounter(currentTD);
+  const displayTD = useAnimatedCounter(currentTD, 2660);
 
   return (
     <div className={`sticky top-0 z-10 border-b pt-3 pb-2 mb-2 flex gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "bg-[#0d1117] border-gray-700"}`}>
