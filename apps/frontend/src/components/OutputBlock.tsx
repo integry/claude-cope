@@ -4,6 +4,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Message } from "./Terminal";
 import { pickRandomSequence } from "./toolSequences";
+import { useTypewriter } from "../hooks/useTypewriter";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
@@ -269,7 +270,7 @@ function getContainerClass(message: Message, isNew: boolean): string {
   return `mb-5 ${colorClass} ${modifier}`;
 }
 
-function MessageContent({ message }: { message: Message }) {
+function MessageContent({ message, isNew = false }: { message: Message; isNew?: boolean }) {
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
   const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
@@ -277,15 +278,21 @@ function MessageContent({ message }: { message: Message }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   const isStreaming = message.role === "loading" && !isAwaitingResponse;
 
+  // Typewriter effect for new system/warning/error messages (not loading or streaming)
+  const shouldTypewrite = isNew && useMarkdown && message.role === "system";
+  const { visibleContent, isTyping } = useTypewriter(message.content, shouldTypewrite);
+
   if (message.role === "user") return null;
 
   if (useMarkdown) {
-    const processedContent = cleanLLMOutput(message.content);
+    const rawContent = shouldTypewrite ? visibleContent : message.content;
+    const processedContent = cleanLLMOutput(rawContent);
     return (
       <div className="space-y-1">
         <ReactMarkdown components={markdownComponents}>
           {processedContent}
         </ReactMarkdown>
+        {isTyping && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
       </div>
     );
   }
@@ -308,7 +315,7 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
         </div>
       )}
       {message.role === "loading" && !isAwaitingResponse && <Spinner />}
-      <MessageContent message={message} />
+      <MessageContent message={message} isNew={isNew} />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
     </div>
