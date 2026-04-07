@@ -81,6 +81,13 @@ const synergizeResponses = [
   "[🗓️] **Mandatory sync detected.** Topic: 'Why aren't we moving faster?' Duration: **eternity.**",
   "[🗓️] Opening **synergy portal**. Please hold while we align your chakras with the product roadmap.",
   "[🗓️] **Team standup extended to 90 minutes.** Someone asked a 'quick question.'",
+  "[🗓️] **Cross-pollination sprint** launched. Frontend and backend teams must swap codebases for a week. Growth opportunity.",
+  "[🗓️] **Alignment session detected.** Everyone agrees in the meeting. Nobody agrees in Slack. Standard protocol.",
+  "[🗓️] **OKR recalibration in progress.** Your objectives now have objectives. It's objectives all the way down.",
+  "[🗓️] **Synergy overload.** Two PMs discovered each other's roadmaps. They are now in a territorial dispute.",
+  "[🗓️] **Innovation workshop scheduled.** Mandatory fun with sticky notes. Your soul leaves your body at 2pm.",
+  "[🗓️] **Retro action items reviewed.** None were completed. New action item: complete action items. Cycle continues.",
+  "[🗓️] **Skip-level 1-on-1 initiated.** Your manager's manager wants to 'get your perspective.' Translation: someone's in trouble.",
 ];
 
 const clearWarningResponses = [
