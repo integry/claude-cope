@@ -111,8 +111,10 @@ function processReplyTags(
 
   const sprintRegex = /\[SPRINT_PROGRESS:\s*(\d+)(?:\s*-\s*\d+)?\]/g;
   const sprintMatch = sprintRegex.exec(rawReply);
-  if (sprintMatch && onSprintProgress) {
-    onSprintProgress(parseInt(sprintMatch[1]!, 10));
+  if (onSprintProgress) {
+    // Use LLM score if available, otherwise award minimum progress as fallback
+    const progress = sprintMatch ? parseInt(sprintMatch[1]!, 10) : 5;
+    onSprintProgress(progress);
   }
 
   // Extract suggested reply for input placeholder

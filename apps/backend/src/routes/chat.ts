@@ -15,12 +15,13 @@ function buildSprintSuffix(ticket: { id: string; title: string; sprintGoal: numb
   return `\n\nACTIVE SPRINT TICKET:
 The user is currently working on ticket ${ticket.id}: "${ticket.title}" (${pct}% complete, ${ticket.sprintProgress}/${ticket.sprintGoal} TD).
 Your response should mock their attempt to work on this ticket. If their message is relevant to the ticket topic, acknowledge it sarcastically. If it's completely unrelated, roast them for slacking off during a sprint.
-IMPORTANT: At the very end of your response (after all other text), you MUST append exactly one sprint progress tag. Pick a SINGLE number (not a range) based on relevance:
-- Highly relevant (directly working on the ticket topic): [SPRINT_PROGRESS: 22] (or any number 18-25)
-- Somewhat relevant (tangentially related): [SPRINT_PROGRESS: 12] (or any number 8-17)
-- Completely irrelevant (off-topic, slacking): [SPRINT_PROGRESS: 5] (or any number 3-7)
-Example: [SPRINT_PROGRESS: 15]
-Do NOT output a range like "1-3". Output ONE number.`;
+YOU MUST END YOUR RESPONSE WITH THIS TAG — NO EXCEPTIONS:
+[SPRINT_PROGRESS: N] where N is a single number.
+- Relevant to ticket: N = 18 to 25
+- Somewhat relevant: N = 8 to 17
+- Off-topic: N = 3 to 7
+Example last line: [SPRINT_PROGRESS: 15]
+THIS TAG IS MANDATORY. NEVER omit it when a sprint ticket is active.`;
 }
 
 function logUsageAndScore(
