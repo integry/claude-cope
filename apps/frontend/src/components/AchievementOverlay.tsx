@@ -73,7 +73,7 @@ function AchievementOverlay({ unlockedIds, onClose }: AchievementOverlayProps) {
               }`}
             >
               <div className={`font-bold ${unlocked ? "text-yellow-300" : "text-gray-600"}`}>
-                {unlocked ? `[*] ${achievement.name}` : "[?] ????????????"}
+                {unlocked ? `[*] ${achievement.name}` : "[?] ██████████"}
               </div>
               <div className={`mt-0.5 ${unlocked ? "text-gray-400" : "text-gray-700"}`}>
                 {unlocked ? achievement.description : "Achievement locked. Keep coping."}
