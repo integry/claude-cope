@@ -210,7 +210,7 @@ function Terminal() {
     const chatMessages = [...filterChatHistory(history), userMessage].map((m) => ({ role: m.role, content: m.content }));
     const onSprintProgress = (rawAmount: number) => {
       if (!state.activeTicket) return;
-      const amount = Math.round(rawAmount * 2.5);
+      const amount = Math.round(rawAmount * 1.5);
       updateTicketProgress(amount);
       const newProgress = Math.min(state.activeTicket.sprintProgress + amount, state.activeTicket.sprintGoal);
       if (newProgress >= state.activeTicket.sprintGoal) {
