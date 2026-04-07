@@ -72,7 +72,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
 
         {!loading && !error && entries.length === 0 && (
           <div className="text-gray-500 text-xs">
-            [∅] No entries found. Use /brag to claim your spot.
+            [∅] No entries yet. Keep prompting to climb the ranks.
           </div>
         )}
 
@@ -108,7 +108,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
               );
             })}
             <div className="text-gray-600 text-xs mt-2 border-t border-gray-800 pt-2">
-              [{entries.length} rows returned] — Use /brag to submit your score
+              [{entries.length} rows returned] — Scores update automatically
             </div>
           </>
         )}

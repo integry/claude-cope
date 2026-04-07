@@ -41,7 +41,7 @@ const sections = [
   {
     title: "SLASH COMMANDS",
     content:
-      "/store — Buy generators & upgrades\n/leaderboard — Hall of Blame\n/achievements — Achievement vault\n/brag — Submit to leaderboard\n/synergize — Mandatory meeting\n/buddy [remove] — Roll or remove a companion\n/blame — Git blame yourself\n/who — See online players\n/ping <name> — Sabotage a coworker\n/ticket — Random sprint task\n/fast — Toggle fast mode\n/voice — Toggle vibe coding\n/compact — Compress history\n/alias <name> — Change username",
+      "/store — Buy team members & upgrades\n/leaderboard — Hall of Blame\n/achievements — Achievement vault\n/backlog — Browse sprint tickets\n/take <#> — Claim a ticket\n/accept — Accept offered ticket\n/abandon — Abandon current ticket\n/synergize — Mandatory meeting\n/buddy [remove] — Roll or remove a companion\n/blame — Git blame yourself\n/who — See online players\n/ping <name> — Sabotage a coworker\n/fast — Toggle fast mode\n/voice — Toggle vibe coding\n/compact — Compress history\n/alias <name> — Change username",
   },
 ];
 
