@@ -30,7 +30,7 @@ function UserProfileOverlay({ state, onClose }: UserProfileOverlayProps) {
     : 100;
   const progressBarLen = 20;
   const filled = Math.round((progressToNext / 100) * progressBarLen);
-  const progressBar = "█".repeat(filled) + "░".repeat(progressBarLen - filled);
+  const progressBar = "=".repeat(filled) + "·".repeat(progressBarLen - filled);
 
   return (
     <div className="fixed right-0 top-0 h-full w-80 bg-[#0d1117] border-l border-gray-700 flex flex-col z-20">
@@ -74,14 +74,13 @@ function UserProfileOverlay({ state, onClose }: UserProfileOverlayProps) {
         {/* Economy */}
         <div className="border border-gray-700 rounded px-3 py-2 text-xs">
           <div className="text-green-400 font-bold mb-1">[TECHNICAL DEBT]</div>
-          <div className="text-gray-300">
-            Current TD: <span className="text-green-300">{formatTD(economy.currentTD)}</span>
-          </div>
-          <div className="text-gray-300">
-            Lifetime TD: <span className="text-green-300">{formatTD(economy.totalTDEarned)}</span>
-          </div>
-          <div className="text-gray-300">
-            Active Multiplier: <span className="text-green-300">{activeMultiplier.toFixed(1)}x</span>
+          <div className="grid grid-cols-[auto_1fr] gap-x-2 text-gray-300">
+            <span>Current TD:</span>
+            <span className="text-green-300 text-right">{formatTD(economy.currentTD)}</span>
+            <span>Lifetime TD:</span>
+            <span className="text-green-300 text-right">{formatTD(economy.totalTDEarned)}</span>
+            <span>Active Multiplier:</span>
+            <span className="text-green-300 text-right">{activeMultiplier.toFixed(1)}x</span>
           </div>
         </div>
 
@@ -126,8 +125,8 @@ function UserProfileOverlay({ state, onClose }: UserProfileOverlayProps) {
           </div>
           <div className="text-gray-300 font-mono mt-1">
             [{
-              "█".repeat(Math.round((unlockedAchievements / ALL_ACHIEVEMENTS.length) * 20)) +
-              "░".repeat(20 - Math.round((unlockedAchievements / ALL_ACHIEVEMENTS.length) * 20))
+              "=".repeat(Math.round((unlockedAchievements / ALL_ACHIEVEMENTS.length) * 20)) +
+              "·".repeat(20 - Math.round((unlockedAchievements / ALL_ACHIEVEMENTS.length) * 20))
             }]
           </div>
         </div>
