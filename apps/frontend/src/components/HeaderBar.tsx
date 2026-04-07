@@ -1,7 +1,7 @@
 function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, onProfileClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; onProfileClick: () => void }) {
   return (
     <div className={`sticky top-0 z-10 border-b pt-3 pb-2 mb-2 flex gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "bg-[#0d1117] border-gray-700"}`}>
-      <img src="/media/logo-400.png" alt="Logo" className="max-h-12 w-auto flex-shrink-0 object-contain" />
+      <img src="/media/logo-400-transparent.png" alt="Logo" className="max-h-12 w-auto flex-shrink-0 object-contain" />
       <div className="flex-1 flex items-start justify-between text-green-400">
         <span className="flex flex-col gap-0.5">
           <span><span className="text-gray-500">Rank:</span> <span className="text-white font-bold">{rank}</span></span>
