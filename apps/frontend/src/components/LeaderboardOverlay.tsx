@@ -98,10 +98,10 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
                           : "text-gray-500"
                   }`}
                 >
-                  <span className="truncate mr-2">
+                  <span className="flex-1 min-w-0 truncate">
                     {medal} {rank}. {entry.username} [{entry.country}]
                   </span>
-                  <span className="whitespace-nowrap text-green-400">
+                  <span className="flex-shrink-0 text-right w-24 text-green-400">
                     {entry.technical_debt.toLocaleString()} TD
                   </span>
                 </div>
