@@ -63,9 +63,9 @@ export async function handleBacklogCommand(reply: Reply): Promise<boolean> {
     const tdW = 8;
     const sep = `+${"-".repeat(numW + 2)}+${"-".repeat(idW + 2)}+${"-".repeat(titleW + 2)}+${"-".repeat(tdW + 2)}+`;
     const pad = (s: string, w: number) => s + " ".repeat(Math.max(0, w - s.length));
-    const header = `| ${pad("#", numW)} | ${pad("ID", idW)} | ${pad("Title", titleW)} | ${pad("TD", tdW)} |`;
+    const header = `| ${pad("#", numW)} | ${pad("ID", idW)} | ${pad("Title", titleW)} | ${pad("Reward", tdW)} |`;
     const rows = tickets.map((t, i) =>
-      `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(t.title, titleW)} | ${pad(String(t.technical_debt), tdW)} |`
+      `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(t.title, titleW)} | ${pad(String(t.technical_debt * 10), tdW)} |`
     );
     const table = [sep, header, sep, ...rows, sep].join("\n");
     reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]\n\n\`\`\`\n${table}\n\`\`\`\n\nType \`/take 1\` through \`/take ${tickets.length}\` to claim a ticket.` });
@@ -121,7 +121,7 @@ export function handleTakeCommand(
 
   reply({
     role: "system",
-    content: `[🎫 **TICKET CLAIMED**] ${ticket.id}: **${ticket.title}**\n\n> ${ticket.description}\n\nSprint goal: **${ticket.technical_debt} TD**. Start prompting to make progress.`,
+    content: `[🎫 **TICKET CLAIMED**] ${ticket.id}: **${ticket.title}**\n\n> ${ticket.description}\n\nReward: **${(ticket.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.`,
   });
   return true;
 }

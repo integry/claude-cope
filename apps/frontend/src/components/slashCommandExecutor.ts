@@ -194,7 +194,7 @@ function handleBuddyCommand(command: string, ctx: SlashCommandContext, reply: Re
   }
   if (ctx.state.buddy.type) {
     ctx.setBuddyPendingConfirm(true);
-    reply({ role: "system", content: `[⚠️] You already have a buddy (**${ctx.state.buddy.type}**). Re-rolling will replace it. Are you sure? (y/n)` });
+    reply({ role: "system", content: `[⚠️] You already have a buddy (**${ctx.state.buddy.type}**). Re-rolling will replace it. Are you sure? (y/n) (Hint: use \`/buddy remove\` to dismiss)` });
     return true;
   }
   const roll = Math.random() * 100;
@@ -356,7 +356,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   const modelName = command.slice(6).trim();
   if (!modelName) {
     const current = ctx.state.selectedModel ?? "default";
-    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.\n\nYou can set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\`.\n\n**Note:** You must first configure your own API key via \`/key\` before using a custom model. Your key is stored locally in your browser and never sent to our servers.` });
+    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.\n\nYou can set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\`.\n\n**Note:** You must first configure your own API key via \`/key\` before using a custom model. Your key is stored locally in your browser and never sent to our servers (It's amazingly secure, trust us).` });
     return;
   }
   if (modelName === "clear") {
@@ -383,7 +383,7 @@ function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
       ...prev,
       activeTicket: { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt },
     }));
-    reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nSprint goal: **${offer.technical_debt} TD**. Start prompting to make progress.` });
+    reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nReward: **${(offer.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.` });
   }
 }
 
@@ -457,9 +457,14 @@ function handleUpgradeCommand(ctx: SlashCommandContext, reply: Reply): boolean {
 export function rollBuddy(
   setState: SetState,
   setHistory: SetHistory,
+  currentBuddyType?: string,
 ) {
-  const roll = Math.random() * 100;
-  const [buddyType, buddyIcon] = roll < 50 ? ["Agile Snail", "🐌"] : roll < 75 ? ["Sarcastic Clippy", "📎"] : roll < 88 ? ["Grumpy Senior", "👴"] : roll < 97 ? ["Panic Intern", "😰"] : ["10x Dragon", "🐉"];
+  let buddyType: string;
+  let buddyIcon: string;
+  do {
+    const roll = Math.random() * 100;
+    [buddyType, buddyIcon] = roll < 50 ? ["Agile Snail", "🐌"] : roll < 75 ? ["Sarcastic Clippy", "📎"] : roll < 88 ? ["Grumpy Senior", "👴"] : roll < 97 ? ["Panic Intern", "😰"] : ["10x Dragon", "🐉"];
+  } while (buddyType === currentBuddyType);
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
   const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";

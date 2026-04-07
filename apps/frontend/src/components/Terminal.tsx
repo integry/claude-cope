@@ -30,6 +30,19 @@ import { getRandomLoadingPhrase } from "./loadingPhrases";
 
 export type { Message };
 
+function filterChatHistory(history: Message[]): Message[] {
+  const isSlashCmd = (content: string) => content.startsWith("/");
+  return history.filter((m, i) => {
+    if (m.role === "user") return !isSlashCmd(m.content);
+    if (m.role === "system") {
+      const prev = history[i - 1];
+      if (prev?.role === "user" && isSlashCmd(prev.content)) return false;
+      return true;
+    }
+    return false;
+  });
+}
+
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
@@ -45,6 +58,7 @@ function Terminal() {
   const [slashQuery, setSlashQuery] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
   const [inputValue, setInputValue] = useState("");
+  const [suggestedReply, setSuggestedReply] = useState<string | null>(null);
   const [showStore, setShowStore] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
@@ -114,7 +128,7 @@ function Terminal() {
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
     if (activeRegression === "backwards_typing" && value.length > inputValue.length) { value = value.slice(inputValue.length) + inputValue; }
-    setInputValue(value); setHistoryIndex(-1);
+    setInputValue(value); setHistoryIndex(-1); setSuggestedReply(null);
     setSlashQuery(value.startsWith("/") ? value : ""); setSlashIndex(0);
   };
 
@@ -143,7 +157,7 @@ function Terminal() {
 
   const handleBuddyConfirm = () => {
     const answer = inputValue.trim().toLowerCase(); setInputValue(""); setBuddyPendingConfirm(false);
-    if (answer === "y" || answer === "yes") { setHistory((prev) => [...prev, { role: "user", content: inputValue }]); rollBuddy(setState, setHistory); }
+    if (answer === "y" || answer === "yes") { setHistory((prev) => [...prev, { role: "user", content: inputValue }]); rollBuddy(setState, setHistory, state.buddy?.type ?? undefined); }
     else { setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]); }
   };
 
@@ -164,37 +178,25 @@ function Terminal() {
     const userMessage: Message = { role: "user", content: command };
     setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
     setIsProcessing(true);
-    // Only send actual chat messages to the LLM — exclude slash commands and their responses
-    const isSlashCommand = (content: string) => content.startsWith("/");
-    const chatHistory = history.filter((m, i) => {
-      if (m.role === "user") return !isSlashCommand(m.content);
-      if (m.role === "system") {
-        // Exclude system responses that follow a slash command
-        const prev = history[i - 1];
-        if (prev?.role === "user" && isSlashCommand(prev.content)) return false;
-        return true;
-      }
-      return false;
-    });
-    const chatMessages = [...chatHistory, userMessage].map((m) => ({ role: m.role, content: m.content }));
+    const chatMessages = [...filterChatHistory(history), userMessage].map((m) => ({ role: m.role, content: m.content }));
     const onSprintProgress = (rawAmount: number) => {
       if (!state.activeTicket) return;
       const amount = Math.round(rawAmount * 1.3);
       updateTicketProgress(amount);
       const newProgress = Math.min(state.activeTicket.sprintProgress + amount, state.activeTicket.sprintGoal);
       if (newProgress >= state.activeTicket.sprintGoal) {
-        const payout = state.activeTicket.sprintGoal;
+        const payout = state.activeTicket.sprintGoal * 10;
         addActiveTD(payout);
-        setHistory((prev) => [...prev, { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned ${payout} TD. The board is pleased... for now.` }]);
+        setHistory((prev) => [...prev, { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` }]);
         setState((prev) => ({ ...prev, activeTicket: null }));
       }
     };
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, addActiveTD, signal: controller.signal });
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, addActiveTD, onSuggestedReply: setSuggestedReply, username: state.username, inventory: state.inventory, upgrades: state.upgrades, signal: controller.signal });
   };
 
-  const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.selectionStart = el.selectionEnd = val.length; } }, 0); };
+  const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = val.length; } }, 0); };
 
   const handleEscapeKey = () => {
     // Priority 1: Close any open overlay
@@ -212,7 +214,9 @@ function Terminal() {
       ]);
       // Restore the last command the user typed
       if (commandHistory.length > 0) {
-        setInputValue(commandHistory[commandHistory.length - 1]!);
+        const lastCmd = commandHistory[commandHistory.length - 1]!;
+        setInputValue(lastCmd);
+        setCursorToEnd(lastCmd);
       }
       return;
     }
@@ -224,6 +228,13 @@ function Terminal() {
       setInputValue(""); setSlashQuery(""); setSlashIndex(0); lastEscapeRef.current = 0;
     } else { lastEscapeRef.current = now; }
   };
+
+  // Global Escape listener so it works even when input is disabled during processing
+  useEffect(() => {
+    const onKeyDown = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") handleEscapeKey(); };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  });
 
   const handleArrowUp = (slashMenuOpen: boolean, filtered: string[]) => {
     if (slashMenuOpen) { setSlashIndex((prev) => (prev > 0 ? prev - 1 : filtered.length - 1)); return; }
@@ -249,9 +260,10 @@ function Terminal() {
     }
     const filtered = getFilteredSlashCommands();
     const slashMenuOpen = slashQuery !== "" && filtered.length > 0;
-    if (e.key === "Escape") { handleEscapeKey(); return; }
+    if (e.key === "Escape") return; // handled by global listener
     if (e.key === "Tab") {
       if (slashMenuOpen) { e.preventDefault(); const selected = filtered[slashIndex]; if (selected) { setInputValue(selected); setSlashQuery(selected); } }
+      else if (suggestedReply && !inputValue) { e.preventDefault(); setInputValue(suggestedReply); setSuggestedReply(null); }
       return;
     }
     if (e.key === "Enter") {
@@ -260,6 +272,21 @@ function Terminal() {
     } else if (e.key === "ArrowUp") { e.preventDefault(); handleArrowUp(slashMenuOpen, filtered); }
     else if (e.key === "ArrowDown") { e.preventDefault(); handleArrowDown(slashMenuOpen, filtered); }
   };
+
+  const renderOverlays = () => (
+    <>
+      {state.activeTicket && <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />}
+      {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} onClose={() => setShowStore(false)} />}
+      {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
+      {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
+      {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
+      {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
+      {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
+      {showSynergize && (
+        <SynergizeOverlay onClose={() => { setShowSynergize(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]); }} />
+      )}
+    </>
+  );
 
   return (
     <div
@@ -280,18 +307,9 @@ function Terminal() {
       <div className="relative border-b border-white">
         {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
         <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
-        <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || quotaLocked} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} />
+        <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || quotaLocked} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
       </div>
-      {state.activeTicket && <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />}
-      {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} onClose={() => setShowStore(false)} />}
-      {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
-      {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
-      {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
-      {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
-      {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
-      {showSynergize && (
-        <SynergizeOverlay onClose={() => { setShowSynergize(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]); }} />
-      )}
+      {renderOverlays()}
       <footer className="fixed bottom-0 left-0 w-full flex items-center justify-between text-xs text-gray-500 px-4 py-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono">
         <span>This is a parody project and is not affiliated with or endorsed by Anthropic.</span>
         <span className="flex items-center">&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a><span className="ml-4 flex gap-2"><button onClick={() => { closeAllOverlays(); setShowHelp(true); }} className="text-gray-400 hover:text-white">/help</button><button onClick={() => { closeAllOverlays(); setShowAbout(true); }} className="text-gray-400 hover:text-white">/about</button><a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/github</a></span></span>

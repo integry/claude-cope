@@ -84,7 +84,7 @@ function processReplyTags(
   rawReply: string,
   unlockAchievement: (id: string) => void,
   onSprintProgress?: (amount: number) => void,
-): { achievementMessages: Message[]; reply: string } {
+): { achievementMessages: Message[]; reply: string; suggestedReply: string | null } {
   const achievementRegex = /\[ACHIEVEMENT_UNLOCKED:\s*(.+?)\]/g;
   const achievementMessages: Message[] = [];
   let match;
@@ -115,8 +115,37 @@ function processReplyTags(
     onSprintProgress(parseInt(sprintMatch[1]!, 10));
   }
 
-  const reply = rawReply.replace(achievementRegex, "").replace(sprintRegex, "").trim();
-  return { achievementMessages, reply };
+  // Extract suggested reply for input placeholder
+  const suggestedRegex = /\[SUGGESTED_REPLY:\s*(.+?)\]/g;
+  const suggestedMatch = suggestedRegex.exec(rawReply);
+  const suggestedReply = suggestedMatch?.[1]?.trim() ?? null;
+
+  const reply = rawReply.replace(achievementRegex, "").replace(sprintRegex, "").replace(suggestedRegex, "").trim();
+  return { achievementMessages, reply, suggestedReply };
+}
+
+async function parseResponseBody(
+  res: Response,
+  setHistory: Dispatch<SetStateAction<Message[]>>,
+  addActiveTD?: (n: number, raw?: boolean) => void,
+): Promise<{ rawReply: string; tokensSent?: number; tokensReceived?: number }> {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("text/event-stream")) {
+    const streamResult = await readStreamedResponse(res, setHistory);
+    return {
+      rawReply: streamResult.rawReply,
+      tokensSent: streamResult.usage?.prompt_tokens,
+      tokensReceived: streamResult.usage?.completion_tokens,
+    };
+  }
+  const data = await res.json();
+  const rawReply = data?.choices?.[0]?.message?.content ?? "";
+  const tokensSent = data?.usage?.prompt_tokens ?? undefined;
+  const tokensReceived = data?.usage?.completion_tokens ?? undefined;
+  if (data?.td_awarded && addActiveTD) {
+    addActiveTD(data.td_awarded, true);
+  }
+  return { rawReply, tokensSent, tokensReceived };
 }
 
 export function submitChatMessage(opts: {
@@ -131,14 +160,18 @@ export function submitChatMessage(opts: {
   modes?: ModesState;
   activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
   onSprintProgress?: (amount: number) => void;
-  addActiveTD?: (n: number) => void;
+  addActiveTD?: (n: number, raw?: boolean) => void;
+  onSuggestedReply?: (suggestion: string) => void;
+  username?: string;
+  inventory?: Record<string, number>;
+  upgrades?: string[];
   signal?: AbortSignal;
 }) {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, signal } = opts;
   fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: chatMessages, rank: currentRank, ...(apiKey ? { apiKey } : {}), ...(customModel ? { customModel } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}) }),
+    body: JSON.stringify({ messages: chatMessages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(apiKey ? { apiKey } : {}), ...(customModel ? { customModel } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}) }),
     signal,
   })
     .then(async (res) => {
@@ -162,36 +195,18 @@ export function submitChatMessage(opts: {
         return;
       }
 
-      // Handle both SSE stream (BYOK) and JSON (free tier) responses
-      let rawReply: string;
-      let tokensSent: number | undefined;
-      let tokensReceived: number | undefined;
-      const contentType = res.headers.get("content-type") ?? "";
-      if (contentType.includes("text/event-stream")) {
-        const streamResult = await readStreamedResponse(res, setHistory);
-        rawReply = streamResult.rawReply;
-        if (streamResult.usage) {
-          tokensSent = streamResult.usage.prompt_tokens;
-          tokensReceived = streamResult.usage.completion_tokens;
-        }
-      } else {
-        const data = await res.json();
-        rawReply = data?.choices?.[0]?.message?.content ?? "";
-        if (data?.usage) {
-          tokensSent = data.usage.prompt_tokens ?? undefined;
-          tokensReceived = data.usage.completion_tokens ?? undefined;
-        }
-        // Use server-authoritative TD award if available
-        if (data?.td_awarded && opts.addActiveTD) {
-          opts.addActiveTD(data.td_awarded);
-        }
-      }
+      const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD);
+      let { rawReply } = parsed;
+      const { tokensSent, tokensReceived } = parsed;
 
       if (!rawReply) {
         rawReply = "[❌ Error] No response from API.";
       }
 
-      const { achievementMessages, reply } = processReplyTags(rawReply, unlockAchievement, onSprintProgress);
+      const { achievementMessages, reply, suggestedReply } = processReplyTags(rawReply, unlockAchievement, onSprintProgress);
+      if (suggestedReply && opts.onSuggestedReply) {
+        opts.onSuggestedReply(suggestedReply);
+      }
 
       setHistory((prev) => {
         let updated = [

@@ -37,7 +37,7 @@ export async function fetchRandomTicketPrompt(
         role: "system",
         content:
           `[📋 INCOMING TICKET] Your PM has assigned you a ticket:\n\n` +
-          `**${ticket.title}** (${ticket.technical_debt} TD)\n\n` +
+          `**${ticket.title}** (Reward: ${(ticket.technical_debt * 10).toLocaleString()} TD)\n\n` +
           `> ${ticket.description}\n\n` +
           `Type \`/accept\` to start working on it, or \`/backlog\` to browse other tickets.`,
       },
