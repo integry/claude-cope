@@ -131,12 +131,18 @@ function UserProfileOverlay({ state, onClose }: UserProfileOverlayProps) {
         {/* Quota */}
         <div className="border border-gray-700 rounded px-3 py-2 text-xs">
           <div className="text-green-400 font-bold mb-1">[API QUOTA]</div>
-          <div className="text-gray-300">
-            Usage: <span className={economy.quotaPercent > 80 ? "text-red-400" : "text-green-300"}>{economy.quotaPercent.toFixed(0)}%</span>
-          </div>
-          <div className="text-gray-300">
-            Lockouts: <span className="text-red-400">{economy.quotaLockouts}</span>
-          </div>
+          {state.apiKey ? (
+            <div className="text-yellow-400">BYOK — usage not tracked</div>
+          ) : (
+            <>
+              <div className="text-gray-300">
+                Usage: <span className={economy.quotaPercent > 80 ? "text-red-400" : "text-green-300"}>{economy.quotaPercent.toFixed(0)}%</span>
+              </div>
+              <div className="text-gray-300">
+                Lockouts: <span className="text-red-400">{economy.quotaLockouts}</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
