@@ -37,13 +37,16 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
         </button>
         {menuOpen && (
           <div className="absolute right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded shadow-lg z-20 min-w-[200px] py-1 text-sm">
+            <div className="px-4 py-2 border-b border-gray-700">
+              <img src="/media/logo-400-transparent.png" alt="Claude Cope" className="max-h-8 w-auto" />
+            </div>
             <button onClick={() => { setMenuOpen(false); onProfileClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/profile</button>
             <button onClick={() => { setMenuOpen(false); onHelpClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/help</button>
             <button onClick={() => { setMenuOpen(false); onAboutClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/about</button>
             <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/github</a>
             <div className="border-t border-gray-700 mt-1 pt-1 px-4 py-2">
-              <button onClick={() => { setMenuOpen(false); onSlashMenuClick?.(); }} className="text-[10px] text-gray-500 hover:text-gray-300 cursor-pointer text-left">Type <span className="text-gray-400">/</span> in terminal for commands</button>
-              <p className="text-[10px] text-gray-600 mt-1">&copy; Rinalds Uzkalns 2026</p>
+              <button onClick={() => { setMenuOpen(false); onSlashMenuClick?.(); }} className="text-xs text-gray-400 hover:text-gray-200 cursor-pointer text-left">Type <span className="text-green-400">/</span> in terminal for commands</button>
+              <p className="text-xs text-gray-500 mt-1">&copy; Rinalds Uzkalns 2026</p>
             </div>
           </div>
         )}
