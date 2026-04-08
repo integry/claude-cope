@@ -59,7 +59,17 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           </div>
         )}
       </div>
-      {!isBYOK && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gray-800">
+      {/* Desktop usage bar — inline in header */}
+      {!isBYOK && (
+        <div className="hidden sm:flex items-center gap-2 flex-shrink-0 min-w-[120px] max-w-[200px] px-2">
+          <div className="flex-1 h-3 bg-gray-800 rounded-sm overflow-hidden border border-gray-700">
+            <div className={`h-full ${quotaColor} transition-all duration-500`} style={{ width: `${quotaPercent}%` }} />
+          </div>
+          <span className="text-[10px] text-gray-400 whitespace-nowrap">{Math.round(quotaPercent)}%</span>
+        </div>
+      )}
+      {/* Mobile thin usage line — bottom of header */}
+      {!isBYOK && <div className="sm:hidden absolute bottom-0 left-0 right-0 h-[2px] bg-gray-800">
         <div className={`h-full ${quotaColor} transition-all duration-500`} style={{ width: `${quotaPercent}%` }} />
       </div>}
     </div>
