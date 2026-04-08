@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { getSystemPrompt } from "../prompts/systemPrompt";
 import { computeMultiplier } from "../gameConstants";
+import { consumeQuota, QuotaExhaustedError } from "../utils/quota";
+import { COPE_MODELS } from "@claude-cope/shared/models";
 
 type Env = {
   Bindings: {
@@ -9,6 +11,7 @@ type Env = {
     DB?: D1Database;
     USAGE_KV?: KVNamespace;
     POLAR_ACCESS_TOKEN?: string;
+    QUOTA_KV?: KVNamespace;
   };
   Variables: {
     sessionId: string;
@@ -49,6 +52,8 @@ type ChatBody = {
   rank?: string;
   apiKey?: string;
   customModel?: string;
+  modelId?: string;
+  proKeyHash?: string;
   modes?: { fast?: boolean; voice?: boolean };
   activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number };
   username?: string;
@@ -62,10 +67,22 @@ function resolveRequestParams(body: ChatBody, envKey?: string) {
   const apiKey = body.apiKey || envKey;
   const rank = body.rank ?? "Junior Code Monkey";
   const username = body.username ?? "anonymous";
-  const model = body.customModel || (isBYOK ? "nvidia/nemotron-3-super-120b-a12b:free" : "nvidia/nemotron-nano-9b-v2:free");
   const inventory = body.inventory ?? {};
   const upgrades = body.upgrades ?? [];
-  return { isBYOK, apiKey, rank, username, model, inventory, upgrades };
+
+  // Resolve model against COPE_MODELS if modelId is provided
+  const copeModel = body.modelId
+    ? COPE_MODELS.find((m) => m.id === body.modelId)
+    : undefined;
+
+  const model = copeModel
+    ? copeModel.openRouterId
+    : body.customModel || (isBYOK ? "nvidia/nemotron-3-super-120b-a12b:free" : "nvidia/nemotron-nano-9b-v2:free");
+
+  const tier: "free" | "pro" = copeModel?.tier ?? "free";
+  const quotaCost = copeModel?.multiplier ?? 1;
+
+  return { isBYOK, apiKey, rank, username, model, inventory, upgrades, tier, quotaCost };
 }
 
 const BUDDY_PERSONALITIES: Record<string, string> = {
@@ -97,7 +114,7 @@ const chat = new Hono<Env>();
 chat.post("/", async (c) => {
   const body = await c.req.json<ChatBody>();
 
-  const { isBYOK, apiKey, rank, username, model, inventory, upgrades } = resolveRequestParams(body, (c.env as Record<string, string | undefined>).OPENROUTER_API_KEY);
+  const { isBYOK, apiKey, rank, username, model, inventory, upgrades, tier, quotaCost } = resolveRequestParams(body, (c.env as Record<string, string | undefined>).OPENROUTER_API_KEY);
 
   if (!apiKey) {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
@@ -105,6 +122,24 @@ chat.post("/", async (c) => {
 
   if (!body.messages || !Array.isArray(body.messages)) {
     return c.json({ error: "messages array is required" }, 400);
+  }
+
+  // Enforce quota before calling OpenRouter
+  const quotaKv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  if (quotaKv) {
+    try {
+      await consumeQuota(quotaKv, {
+        tier,
+        sessionId: c.get("sessionId"),
+        licenseKey: body.proKeyHash,
+        cost: quotaCost,
+      });
+    } catch (err) {
+      if (err instanceof QuotaExhaustedError) {
+        return c.json({ error: err.message }, 402);
+      }
+      throw err;
+    }
   }
 
   const messages = buildMessages(body, rank);
