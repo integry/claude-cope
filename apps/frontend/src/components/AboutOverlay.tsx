@@ -2,7 +2,7 @@ type AboutOverlayProps = {
   onClose: () => void;
 };
 
-const sections = [
+const sections: { title: string; content: string; link?: string }[] = [
   {
     title: "WHAT IS THIS?",
     content:
@@ -32,6 +32,11 @@ const sections = [
     title: "CREDITS",
     content:
       "Made by developers, for developers, during hours that should have been spent on actual sprint tickets. If your standup asks what you did yesterday, do not mention this project.",
+  },
+  {
+    title: "AUTHOR",
+    content: "Rinalds Uzkalns",
+    link: "https://www.linkedin.com/in/rinaldsuzkalns/",
   },
 ];
 
@@ -68,7 +73,11 @@ function AboutOverlay({ onClose }: AboutOverlayProps) {
               [{section.title}]
             </div>
             <div className="text-gray-400 whitespace-pre-line">
-              {section.content}
+              {section.link ? (
+                <a href={section.link} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">{section.content}</a>
+              ) : (
+                section.content
+              )}
             </div>
           </div>
         ))}
