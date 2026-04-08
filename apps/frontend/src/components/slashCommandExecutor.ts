@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { GENERATORS } from "../game/constants";
+import { COPE_MODELS } from "@claude-cope/shared/models";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
 import type { GameState } from "../hooks/useGameState";
@@ -377,11 +378,21 @@ function handleAliasCommand(command: string, ctx: SlashCommandContext, reply: Re
 
 function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
   const modelName = command.slice(6).trim();
+  const isBYOK = Boolean(ctx.state.apiKey);
+  const isPro = Boolean(ctx.state.proKey);
+
   if (!modelName) {
     const current = ctx.state.selectedModel ?? "default";
-    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.\n\nYou can set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\`.\n\n**Note:** You must first configure your own API key via \`/key\` before using a custom model. Your key is stored locally in your browser and never sent to our servers (It's amazingly secure, trust us).` });
+    const modelList = COPE_MODELS.map((m) => {
+      const costLabel = m.multiplier === 1 ? "Free" : `${m.multiplier}x cost`;
+      const tierBadge = m.tier === "pro" ? " 🔒 Pro" : "";
+      return `- \`${m.id}\` — **${m.name}** (${costLabel})${tierBadge}`;
+    }).join("\n");
+
+    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\n**Available Models:**\n${modelList}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.\n\nYou can also set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\`.\n\n**Note:** You must first configure your own API key via \`/key\` before using a custom model. Your key is stored locally in your browser and never sent to our servers (It's amazingly secure, trust us).` });
     return;
   }
+
   if (modelName === "clear") {
     ctx.setState((prev) => {
       const { selectedModel: _, ...rest } = prev;
@@ -390,8 +401,23 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
     reply({ role: "system", content: "[✓] Model reset to **default**. Back to baseline corporate AI." });
     return;
   }
+
+  const copeModel = COPE_MODELS.find((m) => m.id === modelName);
+
+  if (copeModel && copeModel.tier === "pro" && !isPro && !isBYOK) {
+    reply({ role: "system", content: `[🔒] **${copeModel.name}** is a Pro model (${copeModel.multiplier}x cost). You need a Pro license to use this.\n\nUpgrade at \`/subscribe\` to unlock premium models, or set your own API key with \`/key\` to bypass limits entirely.` });
+    return;
+  }
+
   ctx.setState((prev) => ({ ...prev, selectedModel: modelName }));
-  reply({ role: "system", content: `[✓] Model switched to **${modelName}**. May your tokens be plentiful and your latency low.` });
+
+  if (isBYOK) {
+    reply({ role: "system", content: `[✓] Model switched to **${modelName}**. BYOK mode active — your API key, your compute bill, your problem. We respect the hustle. 💸` });
+  } else if (copeModel && copeModel.tier === "pro") {
+    reply({ role: "system", content: `[✓] Model switched to **${copeModel.name}** (${copeModel.multiplier}x cost). Pro tier activated. Your tokens now cost real money — spend wisely.` });
+  } else {
+    reply({ role: "system", content: `[✓] Model switched to **${modelName}**. May your tokens be plentiful and your latency low.` });
+  }
 }
 
 function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
