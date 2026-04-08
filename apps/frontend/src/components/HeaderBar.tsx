@@ -21,11 +21,10 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
     <div className={`sticky top-0 z-10 border-b pt-2 pb-2 mb-2 relative flex items-center gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "bg-[#0d1117] border-gray-700"}`}>
       <img src="/media/logo-400-transparent.png" alt="Logo" className="hidden sm:block max-h-12 w-auto flex-shrink-0 object-contain" />
       <div className="flex-1 flex items-center justify-between text-green-400 min-w-0 px-2 sm:px-0">
-        <span className="flex items-center gap-2 min-w-0">
+        <span className="flex items-center min-w-0">
           <button onClick={onProfileClick} className="text-cyan-400 hover:text-white hover:underline cursor-pointer truncate">{username}</button>
-          <span className="text-gray-600">|</span>
-          <span className="whitespace-nowrap flex flex-col items-end sm:flex-row sm:items-center sm:gap-1"><span className="text-[10px] text-gray-500 leading-none sm:text-xs">{rank}</span><span className="flex items-center gap-1"><span className="text-gray-500">TD:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()}</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span></span>
         </span>
+        <span className="whitespace-nowrap flex flex-col items-end sm:flex-row sm:items-center sm:gap-1 ml-2"><span className="text-[11px] text-gray-400 leading-none sm:text-xs">{rank}</span><span className="flex items-center gap-1"><span className="text-gray-500">TD:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()}</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span></span>
       </div>
       {/* Hamburger menu — mobile only */}
       <div ref={menuRef} className="sm:hidden relative flex-shrink-0">
