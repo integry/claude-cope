@@ -22,11 +22,9 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
       <img src="/media/logo-400-transparent.png" alt="Logo" className="hidden sm:block max-h-12 w-auto flex-shrink-0 object-contain" />
       <div className="flex-1 flex items-center justify-between text-green-400 min-w-0 px-2 sm:px-0">
         <span className="flex items-center gap-2 min-w-0">
-          <span className="text-gray-500">Rank:</span> <span className="text-white font-bold">{rank}</span>
-          <span className="text-gray-600">|</span>
           <button onClick={onProfileClick} className="text-cyan-400 hover:text-white hover:underline cursor-pointer truncate">{username}</button>
           <span className="text-gray-600">|</span>
-          <span className="whitespace-nowrap"><span className="text-gray-500">TD:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()}</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
+          <span className="whitespace-nowrap flex flex-col items-end sm:flex-row sm:items-center sm:gap-1"><span className="text-[10px] text-gray-500 leading-none sm:text-xs">{rank}</span><span className="flex items-center gap-1"><span className="text-gray-500">TD:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()}</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span></span>
         </span>
       </div>
       {/* Hamburger menu — mobile only */}
@@ -44,6 +42,10 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
             <button onClick={() => { setMenuOpen(false); onHelpClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/help</button>
             <button onClick={() => { setMenuOpen(false); onAboutClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/about</button>
             <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/github</a>
+            <div className="border-t border-gray-700 mt-1 pt-1 px-4 py-2">
+              <p className="text-[10px] text-gray-500">Type <span className="text-gray-400">/</span> in terminal for commands</p>
+              <p className="text-[10px] text-gray-600 mt-1">&copy; Rinalds Uzkalns 2026</p>
+            </div>
           </div>
         )}
       </div>
