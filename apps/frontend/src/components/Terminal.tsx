@@ -334,7 +334,7 @@ function Terminal() {
       <div className="shrink-0">
         <Ticker />
         {outageHp !== null && <OutageBar outageHp={outageHp} />}
-        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlays(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlays(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} />
+        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} isBYOK={!!state.apiKey} isPro={!!state.proKey} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlays(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlays(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} />
       </div>
       <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
