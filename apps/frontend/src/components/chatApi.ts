@@ -215,6 +215,14 @@ export function submitChatMessage(opts: {
 
   requestPromise
     .then(async (res) => {
+      if (res.status === 402) {
+        setHistory((prev) => [
+          ...prev.filter((msg) => msg.role !== "loading"),
+          { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
+        ]);
+        return;
+      }
+
       if (res.status === 429) {
         setHistory((prev) => [
           ...prev.filter((msg) => msg.role !== "loading"),
