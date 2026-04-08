@@ -18,11 +18,14 @@ export default function SplashScreen({ onComplete }: { onComplete: () => void })
         fadeOut ? "opacity-0" : "opacity-100"
       }`}
     >
-      <img
-        src="/media/logo-800-transparent.png"
-        alt="Claude Cope"
-        className="max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl"
-      />
+      <picture>
+        <source media="(min-width: 640px)" srcSet="/media/logo-800-transparent.png" />
+        <img
+          src="/media/logo-400-transparent.png"
+          alt="Claude Cope"
+          className="max-w-[280px] px-6 sm:max-w-lg sm:px-0 md:max-w-xl lg:max-w-2xl"
+        />
+      </picture>
     </div>
   );
 }
