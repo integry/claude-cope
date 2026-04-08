@@ -91,9 +91,9 @@ function resolveRequestParams(body: ChatBody, envKey?: string) {
   const inventory = body.inventory ?? {};
   const upgrades = body.upgrades ?? [];
 
-  // Resolve model against COPE_MODELS if modelId is provided
-  const copeModel = body.modelId
-    ? COPE_MODELS.find((m) => m.id === body.modelId)
+  // Resolve model against COPE_MODELS if modelId or customModel is provided
+  const copeModel = (body.modelId || body.customModel)
+    ? COPE_MODELS.find((m) => m.id === (body.modelId || body.customModel))
     : undefined;
 
   const model = copeModel
