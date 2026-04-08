@@ -225,6 +225,14 @@ export function submitChatMessage(opts: {
         return;
       }
 
+      if (res.status === 401) {
+        setHistory((prev) => [
+          ...prev.filter((msg) => msg.role !== "loading"),
+          { role: "error", content: "[🔑 ACCESS DENIED] OpenRouter just slammed the door in your face (HTTP 401). Your API key has been **rejected**, **ghosted**, and **emotionally unavailable**.\n\n[POSSIBLE CAUSES]\n\n• Your key is disabled — like your ambition after the third standup today\n\n• Your key expired — unlike your technical debt, which is eternal\n\n• You copy-pasted it wrong — classic Junior Code Monkey energy\n\n[RECOVERY OPTIONS]\n\n• Check your key at [openrouter.ai/keys](https://openrouter.ai/keys)\n\n• `/key clear` to crawl back to the default model\n\n• `/key <new-key>` to try again with whatever dignity you have left" },
+        ]);
+        return;
+      }
+
       if (res.status === 429) {
         setHistory((prev) => [
           ...prev.filter((msg) => msg.role !== "loading"),
@@ -239,7 +247,7 @@ export function submitChatMessage(opts: {
           ...prev.filter((msg) => msg.role !== "loading"),
           {
             role: "error",
-            content: `[❌ Error] ${errorData?.error ?? "Request failed"}`,
+            content: `[❌ Error] ${errorData?.error?.message ?? errorData?.error ?? "Request failed"} (HTTP ${res.status})`,
           },
         ]);
         return;
