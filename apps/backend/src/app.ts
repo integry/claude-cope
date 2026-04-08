@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { rateLimiter } from "./middleware/rateLimiter";
+import { sessionMiddleware } from "./middleware/session";
 import chat from "./routes/chat";
 import leaderboard from "./routes/leaderboard";
 import events from "./routes/events";
@@ -22,6 +23,7 @@ app.use("*", (c, next) => {
   })(c, next);
 });
 
+app.use("*", sessionMiddleware);
 app.use("/api/chat", rateLimiter);
 
 app.route("/api/chat", chat);
