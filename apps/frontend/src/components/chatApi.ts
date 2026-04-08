@@ -122,8 +122,8 @@ function processReplyTags(
   const suggestedMatch = suggestedRegex.exec(rawReply);
   const suggestedReply = suggestedMatch?.[1]?.trim().replace(/^["']|["']$/g, "") ?? null;
 
-  // Extract buddy interjection
-  const buddyRegex = /\[BUDDY_SAYS:\s*(.+?)\]/g;
+  // Extract buddy interjection — handle both [BUDDY_SAYS: text] and unclosed [BUDDY_SAYS: text
+  const buddyRegex = /\[BUDDY_SAYS:\s*(.+?)(?:\]|$)/gm;
   const buddyMatch = buddyRegex.exec(rawReply);
   const buddySays = buddyMatch?.[1]?.trim() ?? null;
 

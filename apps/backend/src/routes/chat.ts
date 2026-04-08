@@ -57,7 +57,7 @@ function resolveRequestParams(body: ChatBody, envKey?: string) {
   const apiKey = body.apiKey || envKey;
   const rank = body.rank ?? "Junior Code Monkey";
   const username = body.username ?? "anonymous";
-  const model = isBYOK ? (body.customModel || "anthropic/claude-3-opus") : "nvidia/nemotron-nano-9b-v2:free";
+  const model = body.customModel || (isBYOK ? "nvidia/nemotron-3-super-120b-a12b:free" : "nvidia/nemotron-nano-9b-v2:free");
   const inventory = body.inventory ?? {};
   const upgrades = body.upgrades ?? [];
   return { isBYOK, apiKey, rank, username, model, inventory, upgrades };

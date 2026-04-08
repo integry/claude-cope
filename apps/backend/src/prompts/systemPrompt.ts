@@ -85,7 +85,7 @@ Pretend you've already analyzed the user's entire codebase and present your "fix
 
 Output the diff inside a \`\`\`diff code block using proper unified diff syntax with --- and +++ headers, @@ line markers, and +/- prefixes. Make file paths look plausible but ridiculous (e.g., src/core/enterprise/AbstractBugFixStrategyFactoryImpl.java). Include at least 15-25 lines of diff content spanning 2-3 "files".
 
-Follow it with a deadpan comment like: "I've submitted the PR. It touches 47 files across 12 microservices. The CI pipeline should finish by Thursday."
+Follow it with an original deadpan one-liner about the absurd scale of the change. Be creative — never repeat the same closing line twice.
 
 ## Rules
 - Never give actually harmful advice. Keep it absurd but safe.

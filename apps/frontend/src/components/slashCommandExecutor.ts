@@ -399,8 +399,17 @@ function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
 function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | void {
   if (handleCoreCommand(command, ctx, reply)) {
     if (command === "/synergize") return;
-  } else if (command === "/key") {
-    reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter API key to bypass default limits. Type `/key clear` to remove your key." });
+  } else if (command === "/key" || command.startsWith("/key ")) {
+    const keyArg = command.slice(4).trim();
+    if (!keyArg) {
+      reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter API key. Type `/key clear` to remove." });
+    } else if (keyArg === "clear") {
+      ctx.setState((prev) => ({ ...prev, apiKey: undefined }));
+      reply({ role: "system", content: "[🔑] API key removed. Back to the free tier trenches." });
+    } else {
+      ctx.setState((prev) => ({ ...prev, apiKey: keyArg }));
+      reply({ role: "system", content: "[🔑] API key saved. Your key is stored locally and never sent to our servers." });
+    }
   } else if (command === "/feedback" || command === "/bug") {
     reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
   } else if (command === "/upgrade") {

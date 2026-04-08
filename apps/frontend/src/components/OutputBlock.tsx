@@ -85,6 +85,8 @@ function cleanLLMOutput(content: string): string {
   const terminalLangs = "bash|sh|shell|console|terminal|text|log|plaintext|markdown|md";
   const fenceRegex = new RegExp("```(?:" + terminalLangs + ")\\s*\\n([\\s\\S]*?)```", "g");
   cleaned = cleaned.replace(fenceRegex, "$1");
+  // Insert line breaks before [BRACKET TAGS] that are jammed on the same line as other text
+  cleaned = cleaned.replace(/([^\n])\[([A-Z⚙️⚠️❌✓✅🔥💀🚨]+[^\]]*)\]/g, "$1\n[$2]");
   return cleaned;
 }
 
@@ -206,7 +208,7 @@ const markdownComponents = {
     return <li className="leading-relaxed">{children}</li>;
   },
   pre({ children }: { children?: React.ReactNode }) {
-    return <pre className="my-3 rounded overflow-x-auto">{children}</pre>;
+    return <pre className="my-3 rounded whitespace-pre-wrap break-words">{children}</pre>;
   },
   code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
     const match = /language-(\w+)/.exec(className || "");
@@ -297,7 +299,17 @@ function MessageContent({ message, isNew = false }: { message: Message; isNew?: 
     );
   }
 
-  if (isStreaming) return <>{message.content}</>;
+  if (isStreaming) {
+    const processedContent = cleanLLMOutput(message.content);
+    return (
+      <div className="space-y-1">
+        <ReactMarkdown components={markdownComponents}>
+          {processedContent}
+        </ReactMarkdown>
+        <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />
+      </div>
+    );
+  }
   if (isAwaitingResponse) return <>{message.content}</>;
   if (message.role !== "loading") return <>{message.content}</>;
   return null;
