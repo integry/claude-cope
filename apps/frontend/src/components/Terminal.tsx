@@ -350,9 +350,29 @@ function Terminal() {
         </div>
       </div>
       {renderOverlays()}
-      <footer className="shrink-0 w-full flex flex-col sm:flex-row items-center sm:justify-between text-xs sm:text-xs text-gray-500 px-2 sm:px-4 py-2 sm:py-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono gap-1">
-        <span className="text-center sm:text-left leading-tight"><span className="sm:hidden">Parody project, no Anthropic affiliation.</span><span className="hidden sm:inline">This is a parody project and is not affiliated with or endorsed by Anthropic.</span></span>
-        <span className="hidden sm:flex items-center">&copy; Rinalds Uzkalns 2026&nbsp;| made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a><span className="ml-4 flex gap-4"><button onClick={() => { closeAllOverlays(); setShowHelp(true); }} className="text-gray-400 hover:text-white">/help</button><button onClick={() => { closeAllOverlays(); setShowAbout(true); }} className="text-gray-400 hover:text-white">/about</button><a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/github</a><a href="https://github.com/integry/claude-cope/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/privacy</a><a href="https://github.com/integry/claude-cope/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/terms</a><a href="https://x.com/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/x</a><a href="https://discord.gg/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/discord</a></span></span>
+      <footer className="shrink-0 w-full text-xs text-gray-500 px-2 sm:px-4 py-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <span>This is a parody project and is not affiliated with Anthropic.</span>
+          <span>&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="flex gap-4">
+            <button onClick={() => { closeAllOverlays(); setShowTerms(true); window.history.pushState(null, "", "/terms"); }} className="text-gray-400 hover:text-white">/terms</button>
+            <button onClick={() => { closeAllOverlays(); setShowPrivacy(true); window.history.pushState(null, "", "/privacy"); }} className="text-gray-400 hover:text-white">/privacy</button>
+            <button onClick={() => { closeAllOverlays(); setShowAbout(true); }} className="text-gray-400 hover:text-white">/about</button>
+            <button onClick={() => { closeAllOverlays(); setShowHelp(true); }} className="text-gray-400 hover:text-white">/help</button>
+            <button onClick={() => { closeAllOverlays(); setShowContact(true); window.history.pushState(null, "", "/contact"); }} className="text-gray-400 hover:text-white">/contact</button>
+          </span>
+          <span className="flex gap-4">
+            <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/github</a>
+            <a href="https://reddit.com/r/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/reddit</a>
+            <a href="https://discord.gg/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/discord</a>
+            <a href="https://x.com/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/x</a>
+          </span>
+        </div>
+      </footer>
+      <footer className="shrink-0 w-full text-xs text-gray-500 px-2 py-2 bg-[#0d1117]/80 backdrop-blur-sm font-mono sm:hidden text-center">
+        <span className="leading-tight">Parody project, no Anthropic affiliation.</span>
       </footer>
     </div>
   );
