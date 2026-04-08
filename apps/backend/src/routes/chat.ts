@@ -62,6 +62,27 @@ type ChatBody = {
   buddy?: { type: string; shouldInterject: boolean };
 };
 
+async function enforceQuota(
+  kv: KVNamespace | undefined,
+  params: { tier: "free" | "pro"; sessionId: string; licenseKey?: string; cost: number },
+): Promise<{ error: string; status: 402 } | null> {
+  if (!kv) return null;
+  try {
+    await consumeQuota(kv, {
+      tier: params.tier,
+      sessionId: params.sessionId,
+      licenseKey: params.licenseKey,
+      cost: params.cost,
+    });
+    return null;
+  } catch (err) {
+    if (err instanceof QuotaExhaustedError) {
+      return { error: err.message, status: 402 };
+    }
+    throw err;
+  }
+}
+
 function resolveRequestParams(body: ChatBody, envKey?: string) {
   const isBYOK = Boolean(body.apiKey);
   const apiKey = body.apiKey || envKey;
@@ -126,20 +147,14 @@ chat.post("/", async (c) => {
 
   // Enforce quota before calling OpenRouter
   const quotaKv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  if (quotaKv) {
-    try {
-      await consumeQuota(quotaKv, {
-        tier,
-        sessionId: c.get("sessionId"),
-        licenseKey: body.proKeyHash,
-        cost: quotaCost,
-      });
-    } catch (err) {
-      if (err instanceof QuotaExhaustedError) {
-        return c.json({ error: err.message }, 402);
-      }
-      throw err;
-    }
+  const quotaResult = await enforceQuota(quotaKv, {
+    tier,
+    sessionId: c.get("sessionId"),
+    licenseKey: body.proKeyHash,
+    cost: quotaCost,
+  });
+  if (quotaResult) {
+    return c.json({ error: quotaResult.error }, quotaResult.status);
   }
 
   const messages = buildMessages(body, rank);
