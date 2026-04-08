@@ -44,7 +44,13 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
             <button onClick={() => { setMenuOpen(false); onHelpClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/help</button>
             <button onClick={() => { setMenuOpen(false); onAboutClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/about</button>
             <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/github</a>
-            <div className="border-t border-gray-700 mt-1 pt-1 px-4 py-2">
+            <a href="https://github.com/integry/claude-cope/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/privacy</a>
+            <a href="https://github.com/integry/claude-cope/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/terms</a>
+            <div className="border-t border-gray-700 mt-1 pt-1 px-4 py-2 flex gap-3">
+              <a href="https://x.com/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white text-xs">/x</a>
+              <a href="https://discord.gg/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white text-xs">/discord</a>
+            </div>
+            <div className="px-4 py-2">
               <button onClick={() => { setMenuOpen(false); onSlashMenuClick?.(); }} className="text-xs text-gray-400 hover:text-gray-200 cursor-pointer text-left">Type <span className="text-green-400">/</span> in terminal for commands</button>
               <p className="text-xs text-gray-500 mt-1">&copy; Rinalds Uzkalns 2026 | made with <a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
             </div>
