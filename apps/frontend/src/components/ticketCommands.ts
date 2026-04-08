@@ -141,14 +141,15 @@ export function handleAbandonCommand(
   }
 
   const ticket = state.activeTicket;
-  const penalty = ticket.sprintGoal * 2;
+  const reward = ticket.sprintGoal * 10;
+  const penalty = Math.round(reward * 0.2);
 
   setState((prev) => ({ ...prev, activeTicket: null }));
   addActiveTD(-penalty);
 
   reply({
     role: "warning",
-    content: `[🏳️ **TICKET ABANDONED**] You fled from "${ticket.title}" without delivering.\n\nPenalty: **-${penalty} TD** (2x the ${ticket.sprintGoal} TD goal) for being a quitter.\n\nYour coworkers will remember this.`,
+    content: `[🏳️ **TICKET ABANDONED**] You fled from "${ticket.title}" without delivering.\n\nPenalty: **-${penalty.toLocaleString()} TD** (20% of the ${reward.toLocaleString()} TD reward) for being a quitter.\n\nYour coworkers will remember this.`,
   });
 
   return true;

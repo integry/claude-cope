@@ -1,8 +1,10 @@
+import AsciiBox from "./AsciiBox";
+
 type AboutOverlayProps = {
   onClose: () => void;
 };
 
-const sections = [
+const sections: { title: string; content: string; link?: string }[] = [
   {
     title: "WHAT IS THIS?",
     content:
@@ -33,6 +35,11 @@ const sections = [
     content:
       "Made by developers, for developers, during hours that should have been spent on actual sprint tickets. If your standup asks what you did yesterday, do not mention this project.",
   },
+  {
+    title: "AUTHOR",
+    content: "Rinalds Uzkalns",
+    link: "https://www.linkedin.com/in/rinaldsuzkalns/",
+  },
 ];
 
 function AboutOverlay({ onClose }: AboutOverlayProps) {
@@ -51,11 +58,7 @@ function AboutOverlay({ onClose }: AboutOverlayProps) {
       </div>
 
       <div className="px-4 py-2 border-b border-gray-700 text-green-400 text-xs font-bold">
-        <pre>{`
- ╔══════════════════════════════╗
- ║     ABOUT CLAUDE COPE       ║
- ║   A PARODY FOR THE DAMNED   ║
- ╚══════════════════════════════╝`}</pre>
+        <AsciiBox lines={["ABOUT CLAUDE COPE", "A PARODY FOR THE DAMNED"]} />
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3">
@@ -68,7 +71,11 @@ function AboutOverlay({ onClose }: AboutOverlayProps) {
               [{section.title}]
             </div>
             <div className="text-gray-400 whitespace-pre-line">
-              {section.content}
+              {section.link ? (
+                <a href={section.link} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">{section.content}</a>
+              ) : (
+                section.content
+              )}
             </div>
           </div>
         ))}
