@@ -325,7 +325,7 @@ function Terminal() {
       <div className="shrink-0">
         <Ticker />
         {outageHp !== null && <OutageBar outageHp={outageHp} />}
-        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} onProfileClick={handleProfileClick} />
+        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlays(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlays(); setShowAbout(true); }} />
       </div>
       <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
@@ -341,9 +341,9 @@ function Terminal() {
         </div>
       </div>
       {renderOverlays()}
-      <footer className="shrink-0 w-full flex items-center justify-between text-xs text-gray-500 px-4 py-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono">
-        <span className="hidden sm:inline">This is a parody project and is not affiliated with or endorsed by Anthropic.</span>
-        <span className="flex items-center">&copy; Rinalds Uzkalns 2026<span className="hidden sm:inline">&nbsp;| made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></span><span className="ml-4 hidden sm:flex gap-2"><button onClick={() => { closeAllOverlays(); setShowHelp(true); }} className="text-gray-400 hover:text-white">/help</button><button onClick={() => { closeAllOverlays(); setShowAbout(true); }} className="text-gray-400 hover:text-white">/about</button><a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/github</a></span></span>
+      <footer className="shrink-0 w-full hidden sm:flex items-center justify-between text-xs text-gray-500 px-4 py-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono">
+        <span>This is a parody project and is not affiliated with or endorsed by Anthropic.</span>
+        <span className="flex items-center">&copy; Rinalds Uzkalns 2026&nbsp;| made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a><span className="ml-4 flex gap-2"><button onClick={() => { closeAllOverlays(); setShowHelp(true); }} className="text-gray-400 hover:text-white">/help</button><button onClick={() => { closeAllOverlays(); setShowAbout(true); }} className="text-gray-400 hover:text-white">/about</button><a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/github</a></span></span>
       </footer>
     </div>
   );

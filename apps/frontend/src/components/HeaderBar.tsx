@@ -1,10 +1,21 @@
-import { memo } from "react";
+import { memo, useState, useRef, useEffect } from "react";
 import { useAnimatedCounter } from "../hooks/useAnimatedCounter";
 
-function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, onProfileClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; onProfileClick: () => void }) {
+function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, onProfileClick, onHelpClick, onAboutClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void }) {
   const displayTD = useAnimatedCounter(currentTD, 2660);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const quotaColor = quotaPercent > 50 ? "bg-green-400" : quotaPercent > 20 ? "bg-yellow-400" : "bg-red-400";
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpen]);
 
   return (
     <div className={`sticky top-0 z-10 border-b pt-2 pb-2 mb-2 relative flex items-center gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "bg-[#0d1117] border-gray-700"}`}>
@@ -17,6 +28,24 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           <span className="text-gray-600">|</span>
           <span className="whitespace-nowrap"><span className="text-gray-500">TD:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()}</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
         </span>
+      </div>
+      {/* Hamburger menu — mobile only */}
+      <div ref={menuRef} className="sm:hidden relative flex-shrink-0">
+        <button onClick={() => setMenuOpen((v) => !v)} className="text-gray-400 hover:text-white px-2 py-1" aria-label="Menu">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            {menuOpen
+              ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />}
+          </svg>
+        </button>
+        {menuOpen && (
+          <div className="absolute right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded shadow-lg z-20 min-w-[140px] py-1 text-sm">
+            <button onClick={() => { setMenuOpen(false); onProfileClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/profile</button>
+            <button onClick={() => { setMenuOpen(false); onHelpClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/help</button>
+            <button onClick={() => { setMenuOpen(false); onAboutClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/about</button>
+            <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/github</a>
+          </div>
+        )}
       </div>
       <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gray-800">
         <div className={`h-full ${quotaColor} transition-all duration-500`} style={{ width: `${quotaPercent}%` }} />
