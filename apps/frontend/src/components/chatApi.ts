@@ -8,6 +8,7 @@ import { supabase } from "../supabaseClient";
 import { buildAchievementBox } from "./achievementBox";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
 import { getSystemPrompt } from "@claude-cope/shared/systemPrompt";
+import { COPE_MODELS } from "@claude-cope/shared/models";
 
 export type BuddyInterjectionResult = {
   message: Message;
@@ -192,7 +193,8 @@ export function submitChatMessage(opts: {
         const systemPrompt = getSystemPrompt(currentRank, modes);
         const recentMessages = chatMessages.slice(-10);
         const messages = [{ role: "system", content: systemPrompt }, ...recentMessages];
-        const model = customModel || "nvidia/nemotron-3-super-120b-a12b:free";
+        const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
+        const model = copeModel ? copeModel.openRouterId : customModel || "nvidia/nemotron-3-super-120b-a12b:free";
         return fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {

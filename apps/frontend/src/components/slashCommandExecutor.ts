@@ -384,7 +384,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   if (!modelName) {
     const current = ctx.state.selectedModel ?? "default";
     const modelList = COPE_MODELS.map((m) => {
-      const costLabel = m.multiplier === 1 ? "Free" : `${m.multiplier}x cost`;
+      const costLabel = `${m.multiplier}x cost`;
       const tierBadge = m.tier === "pro" ? " 🔒 Pro" : "";
       return `- \`${m.id}\` — **${m.name}** (${costLabel})${tierBadge}`;
     }).join("\n");
