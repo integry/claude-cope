@@ -1,5 +1,5 @@
 // Added /ping and /reject to enable PvP sabotage interactions.
-export const SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/reject", "/help", "/about", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user"];
+export const SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/reject", "/help", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user"];
 
 export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/backlog": "Stare into the abyss of unfulfilled promises",
@@ -15,6 +15,9 @@ export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/reject": "Decline to acknowledge reality",
   "/help": "There is no help. Only commands.",
   "/about": "Read the origin story nobody asked for",
+  "/privacy": "Pretend we respect your data",
+  "/terms": "The contract you never signed but always agreed to",
+  "/contact": "Reach out to absolutely no one",
   "/fast": "Break things at double speed",
   "/voice": "Scream into the microphone",
   "/blame": "Find a suitable scapegoat",

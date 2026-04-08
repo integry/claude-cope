@@ -9,6 +9,9 @@ import AchievementOverlay from "./AchievementOverlay";
 import SynergizeOverlay from "./SynergizeOverlay";
 import HelpOverlay from "./HelpOverlay";
 import AboutOverlay from "./AboutOverlay";
+import PrivacyOverlay from "./PrivacyOverlay";
+import TermsOverlay from "./TermsOverlay";
+import ContactOverlay from "./ContactOverlay";
 import UserProfileOverlay from "./UserProfileOverlay";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
@@ -82,6 +85,9 @@ function Terminal() {
   const [showSynergize, setShowSynergize] = useState(false);
   const [showHelp, setShowHelp] = useState(() => window.location.pathname === "/help");
   const [showAbout, setShowAbout] = useState(() => window.location.pathname === "/about");
+  const [showPrivacy, setShowPrivacy] = useState(() => window.location.pathname === "/privacy");
+  const [showTerms, setShowTerms] = useState(() => window.location.pathname === "/terms");
+  const [showContact, setShowContact] = useState(() => window.location.pathname === "/contact");
   const [showProfile, setShowProfile] = useState(() => window.location.pathname.startsWith("/user/"));
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
@@ -106,13 +112,13 @@ function Terminal() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
 
-  const closeAllOverlays = useCallback(() => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowProfile(false); }, []);
+  const closeAllOverlays = useCallback(() => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowPrivacy(false); setShowTerms(false); setShowContact(false); setShowProfile(false); }, []);
   const handleProfileClick = useCallback(() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlays, state.username]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [history]);
 
   useEffect(() => {
-    const onPopState = () => { setShowHelp(window.location.pathname === "/help"); setShowAbout(window.location.pathname === "/about"); setShowProfile(window.location.pathname.startsWith("/user/")); };
+    const onPopState = () => { setShowHelp(window.location.pathname === "/help"); setShowAbout(window.location.pathname === "/about"); setShowPrivacy(window.location.pathname === "/privacy"); setShowTerms(window.location.pathname === "/terms"); setShowContact(window.location.pathname === "/contact"); setShowProfile(window.location.pathname.startsWith("/user/")); };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
@@ -167,7 +173,7 @@ function Terminal() {
   });
 
   const runSlashCommand = (command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowProfile, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } });
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } });
   };
 
   const tryOutageDamage = (): boolean => {
@@ -229,7 +235,7 @@ function Terminal() {
 
   const handleEscapeKey = () => {
     // Priority 1: Close any open overlay
-    const anyOverlayOpen = showStore || showLeaderboard || showAchievements || showSynergize || showHelp || showAbout || showProfile;
+    const anyOverlayOpen = showStore || showLeaderboard || showAchievements || showSynergize || showHelp || showAbout || showPrivacy || showTerms || showContact || showProfile;
     if (anyOverlayOpen) { closeAllOverlays(); return; }
 
     // Priority 2: Abort active API request
@@ -309,6 +315,9 @@ function Terminal() {
       {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
       {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
       {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
+      {showPrivacy && <PrivacyOverlay onClose={() => { setShowPrivacy(false); window.history.pushState(null, "", "/"); }} />}
+      {showTerms && <TermsOverlay onClose={() => { setShowTerms(false); window.history.pushState(null, "", "/"); }} />}
+      {showContact && <ContactOverlay onClose={() => { setShowContact(false); window.history.pushState(null, "", "/"); }} />}
       {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
       {showSynergize && (
         <SynergizeOverlay onClose={() => { setShowSynergize(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]); }} />
@@ -337,9 +346,25 @@ function Terminal() {
         <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || quotaLocked} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
       </div>
       {renderOverlays()}
-      <footer className="fixed bottom-0 left-0 w-full flex items-center justify-between text-xs text-gray-500 px-4 py-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono">
-        <span>This is a parody project and is not affiliated with or endorsed by Anthropic.</span>
-        <span className="flex items-center">&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a><span className="ml-4 flex gap-2"><button onClick={() => { closeAllOverlays(); setShowHelp(true); }} className="text-gray-400 hover:text-white">/help</button><button onClick={() => { closeAllOverlays(); setShowAbout(true); }} className="text-gray-400 hover:text-white">/about</button><a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/github</a></span></span>
+      <footer className="fixed bottom-0 left-0 w-full flex items-start justify-between text-xs text-gray-500 px-4 py-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono">
+        <div className="flex flex-col gap-0.5">
+          <span>This is a parody project and is not affiliated with or endorsed by Anthropic.</span>
+          <span className="flex gap-2">
+            <button onClick={() => { closeAllOverlays(); setShowPrivacy(true); window.history.pushState(null, "", "/privacy"); }} className="text-gray-400 hover:text-white">Privacy</button>
+            <button onClick={() => { closeAllOverlays(); setShowTerms(true); window.history.pushState(null, "", "/terms"); }} className="text-gray-400 hover:text-white">Terms</button>
+            <button onClick={() => { closeAllOverlays(); setShowContact(true); window.history.pushState(null, "", "/contact"); }} className="text-gray-400 hover:text-white">Contact</button>
+          </span>
+        </div>
+        <div className="flex flex-col items-end gap-0.5">
+          <span className="flex items-center">&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a><span className="ml-4 flex gap-2"><button onClick={() => { closeAllOverlays(); setShowHelp(true); }} className="text-gray-400 hover:text-white">/help</button><button onClick={() => { closeAllOverlays(); setShowAbout(true); }} className="text-gray-400 hover:text-white">/about</button><a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/github</a></span></span>
+          <span className="flex gap-2">
+            <a href="https://reddit.com/r/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">Reddit</a>
+            <a href="https://x.com/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">X</a>
+            <a href="https://discord.gg/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">Discord</a>
+            <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">Github</a>
+            <a href="https://linkedin.com/company/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">LinkedIn</a>
+          </span>
+        </div>
       </footer>
     </div>
   );

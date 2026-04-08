@@ -24,6 +24,9 @@ interface SlashCommandContext {
   setShowSynergize: (v: boolean) => void;
   setShowHelp: (v: boolean) => void;
   setShowAbout: (v: boolean) => void;
+  setShowPrivacy: (v: boolean) => void;
+  setShowTerms: (v: boolean) => void;
+  setShowContact: (v: boolean) => void;
   setShowProfile: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
@@ -292,6 +295,18 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
   } else if (command === "/about") {
     openOverlay(ctx, () => ctx.setShowAbout(true));
     window.history.pushState(null, "", "/about");
+    return true;
+  } else if (command === "/privacy") {
+    openOverlay(ctx, () => ctx.setShowPrivacy(true));
+    window.history.pushState(null, "", "/privacy");
+    return true;
+  } else if (command === "/terms") {
+    openOverlay(ctx, () => ctx.setShowTerms(true));
+    window.history.pushState(null, "", "/terms");
+    return true;
+  } else if (command === "/contact") {
+    openOverlay(ctx, () => ctx.setShowContact(true));
+    window.history.pushState(null, "", "/contact");
     return true;
   } else if (command === "/fast") {
     const newFast = !ctx.state.modes.fast;
