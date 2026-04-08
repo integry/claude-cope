@@ -350,7 +350,7 @@ function Terminal() {
         </div>
       </div>
       {renderOverlays()}
-      <footer className="shrink-0 w-full text-xs text-gray-500 px-2 sm:px-4 py-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1">
+      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1">
         <div className="flex items-center justify-between">
           <span>This is a parody project and is not affiliated with Anthropic.</span>
           <span>&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></span>
@@ -371,7 +371,7 @@ function Terminal() {
           </span>
         </div>
       </footer>
-      <footer className="shrink-0 w-full text-xs text-gray-500 px-2 py-2 bg-[#0d1117]/80 backdrop-blur-sm font-mono sm:hidden text-center">
+      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 bg-[#0d1117]/80 backdrop-blur-sm font-mono sm:hidden text-center">
         <span className="leading-tight">Parody project, no Anthropic affiliation.</span>
       </footer>
     </div>
