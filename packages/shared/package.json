@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "exports": {
-    "./multiplayer-types": "./src/multiplayer-types.ts"
+    "./multiplayer-types": "./src/multiplayer-types.ts",
+    "./models": "./src/models.ts"
   }
 }
