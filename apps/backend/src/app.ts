@@ -8,6 +8,7 @@ import events from "./routes/events";
 import tickets from "./routes/tickets";
 import toolSequences from "./routes/toolSequences";
 import score from "./routes/score";
+import account from "./routes/account";
 
 const app = new Hono();
 
@@ -33,5 +34,6 @@ app.route("/api/recent-events", events);
 app.route("/api/tickets", tickets);
 app.route("/api/tool-sequences", toolSequences);
 app.route("/api/score", score);
+app.route("/api/account", account);
 
 export default app;
