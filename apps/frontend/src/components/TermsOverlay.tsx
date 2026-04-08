@@ -80,8 +80,15 @@ function TermsOverlay({ onClose }: TermsOverlayProps) {
         ))}
       </div>
 
-      <div className="px-4 py-2 border-t border-gray-700 text-gray-600 text-xs">
-        [version: 0.0.1-legalese | jurisdiction: /dev/null | enforceable: lol]
+      <div className="px-4 py-2 border-t border-gray-700 text-gray-600 text-xs space-y-2">
+        <div>[version: 0.0.1-legalese | jurisdiction: /dev/null | enforceable: lol]</div>
+        <div className="border-t border-gray-700 pt-2 text-gray-500">
+          <span className="text-yellow-600 font-bold">[BORING REALITY CHECK]</span>
+          <p className="mt-1">
+            Our lawyers forced us to include actual terms so our payment processor doesn't ban us. You can read the soul-crushing legalese{" "}
+            <a href="/legal/terms" className="text-blue-400 hover:text-blue-300 underline">here</a>.
+          </p>
+        </div>
       </div>
     </div>
   );

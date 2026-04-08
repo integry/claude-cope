@@ -74,8 +74,15 @@ function ContactOverlay({ onClose }: ContactOverlayProps) {
         ))}
       </div>
 
-      <div className="px-4 py-2 border-t border-gray-700 text-gray-600 text-xs">
-        [response time: never | satisfaction: not guaranteed | staff: 0]
+      <div className="px-4 py-2 border-t border-gray-700 text-gray-600 text-xs space-y-2">
+        <div>[response time: never | satisfaction: not guaranteed | staff: 0]</div>
+        <div className="border-t border-gray-700 pt-2 text-gray-500">
+          <span className="text-yellow-600 font-bold">[LEGAL COMPLIANCE OVERRIDE]</span>
+          <p className="mt-1">
+            If you are a payment processor or someone who actually needs a refund because your boss didn't appreciate the joke, <em>sigh</em>... fine. Email us at{" "}
+            <a href="mailto:support@claudecope.com" className="text-blue-400 hover:text-blue-300 underline">support@claudecope.com</a>.
+          </p>
+        </div>
       </div>
     </div>
   );
