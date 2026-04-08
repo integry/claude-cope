@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { getSystemPrompt } from "../prompts/systemPrompt";
+import { getSystemPrompt } from "@claude-cope/shared/systemPrompt";
 import { computeMultiplier } from "../gameConstants";
 import { consumeQuota, QuotaExhaustedError } from "../utils/quota";
 import { COPE_MODELS } from "@claude-cope/shared/models";
