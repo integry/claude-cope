@@ -359,8 +359,9 @@ describe("submitChatMessage - achievement parsing", () => {
 
     expect(fetchSpy).toHaveBeenCalled();
     const callArgs = fetchSpy.mock.calls[0]!;
-    const body = JSON.parse((callArgs[1] as RequestInit).body as string);
-    expect(body.apiKey).toBe("sk-test-key");
-    expect(body.rank).toBe("Junior Code Monkey");
+    const reqInit = callArgs[1] as RequestInit;
+    const headers = reqInit.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer sk-test-key");
+    expect(callArgs[0]).toBe("https://openrouter.ai/api/v1/chat/completions");
   });
 });
