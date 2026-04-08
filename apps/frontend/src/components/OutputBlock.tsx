@@ -251,7 +251,7 @@ const markdownComponents = {
       );
     }
     return (
-      <code className={`text-cyan-300 bg-cyan-950/30 px-1 rounded ${className || ""}`} {...props}>
+      <code className={`text-cyan-300 px-1 rounded ${className || ""}`} {...props}>
         {children}
       </code>
     );
@@ -321,7 +321,7 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
   return (
     <div className={getContainerClass(message, isNew)}>
       {message.role === "user" && (
-        <div className="inline-block bg-gray-200 text-gray-900 px-3 py-1.5 font-bold">
+        <div className="inline-block bg-gray-200 text-gray-900 px-2 py-1 sm:px-3 sm:py-1.5 font-bold">
           <span className="text-gray-500 mr-1">{promptString}</span>
           {message.content}
         </div>
