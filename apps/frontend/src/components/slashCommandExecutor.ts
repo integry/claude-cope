@@ -460,7 +460,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
   }
 }
 
-async function handleShillCommand(ctx: SlashCommandContext, reply: Reply): Promise<void> {
+async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Promise<void> {
   const tweetText = encodeURIComponent("I'm mass-producing Technical Debt at mass velocity in Claude COPE — the idle game where every prompt is a mistake. https://claudecope.com");
   window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, "_blank");
   try {
@@ -479,21 +479,25 @@ async function handleShillCommand(ctx: SlashCommandContext, reply: Reply): Promi
   }
 }
 
+function handleKeyCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
+  const keyArg = command.slice(4).trim();
+  if (!keyArg) {
+    reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter API key. Type `/key clear` to remove." });
+  } else if (keyArg === "clear") {
+    ctx.setState((prev) => ({ ...prev, apiKey: undefined }));
+    reply({ role: "system", content: "[🔑] API key removed. Back to the free tier trenches." });
+  } else {
+    ctx.setState((prev) => ({ ...prev, apiKey: keyArg }));
+    reply({ role: "system", content: "[🔑] API key saved. Your key is stored locally and never sent to our servers." });
+  }
+}
+
 /** Dispatch a command; returns "async" if the caller should NOT call setIsProcessing(false). */
 function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | void {
   if (handleCoreCommand(command, ctx, reply)) {
     if (command === "/synergize") return;
   } else if (command === "/key" || command.startsWith("/key ")) {
-    const keyArg = command.slice(4).trim();
-    if (!keyArg) {
-      reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter API key. Type `/key clear` to remove." });
-    } else if (keyArg === "clear") {
-      ctx.setState((prev) => ({ ...prev, apiKey: undefined }));
-      reply({ role: "system", content: "[🔑] API key removed. Back to the free tier trenches." });
-    } else {
-      ctx.setState((prev) => ({ ...prev, apiKey: keyArg }));
-      reply({ role: "system", content: "[🔑] API key saved. Your key is stored locally and never sent to our servers." });
-    }
+    handleKeyCommand(command, ctx, reply);
   } else if (command === "/feedback" || command === "/bug") {
     reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
   } else if (command === "/upgrade") {
