@@ -327,7 +327,7 @@ function Terminal() {
 
   return (
     <div
-      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "min-h-screen"} w-full font-mono text-sm text-gray-100 leading-relaxed p-4 pb-8 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
+      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "min-h-screen"} w-full font-mono text-sm text-gray-100 leading-relaxed p-4 pb-16 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
       style={parseGlitchStyle(regressionGlitch)}
       onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
@@ -350,13 +350,12 @@ function Terminal() {
         <div className="flex flex-col gap-0.5">
           <span>This is a parody project and is not affiliated with or endorsed by Anthropic.</span>
           <span className="flex gap-2">
-            <button onClick={() => { closeAllOverlays(); setShowPrivacy(true); window.history.pushState(null, "", "/privacy"); }} className="text-gray-400 hover:text-white">Privacy</button>
-            <button onClick={() => { closeAllOverlays(); setShowTerms(true); window.history.pushState(null, "", "/terms"); }} className="text-gray-400 hover:text-white">Terms</button>
-            <button onClick={() => { closeAllOverlays(); setShowContact(true); window.history.pushState(null, "", "/contact"); }} className="text-gray-400 hover:text-white">Contact</button>
+            <button onClick={() => { closeAllOverlays(); setShowPrivacy(true); window.history.pushState(null, "", "/privacy"); }} className="text-gray-400 hover:text-white">/privacy</button>
+            <button onClick={() => { closeAllOverlays(); setShowTerms(true); window.history.pushState(null, "", "/terms"); }} className="text-gray-400 hover:text-white">/terms</button>
           </span>
         </div>
         <div className="flex flex-col items-end gap-0.5">
-          <span className="flex items-center">&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a><span className="ml-4 flex gap-2"><button onClick={() => { closeAllOverlays(); setShowHelp(true); }} className="text-gray-400 hover:text-white">/help</button><button onClick={() => { closeAllOverlays(); setShowAbout(true); }} className="text-gray-400 hover:text-white">/about</button><a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/github</a></span></span>
+          <span className="flex items-center">&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a><span className="ml-4 flex gap-2"><button onClick={() => { closeAllOverlays(); setShowHelp(true); }} className="text-gray-400 hover:text-white">/help</button><button onClick={() => { closeAllOverlays(); setShowAbout(true); }} className="text-gray-400 hover:text-white">/about</button><button onClick={() => { closeAllOverlays(); setShowContact(true); window.history.pushState(null, "", "/contact"); }} className="text-gray-400 hover:text-white">/contact</button><a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/github</a></span></span>
           <span className="flex gap-2">
             <a href="https://reddit.com/r/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">Reddit</a>
             <a href="https://x.com/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">X</a>
