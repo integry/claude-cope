@@ -81,6 +81,13 @@ const synergizeResponses = [
   "[🗓️] **Mandatory sync detected.** Topic: 'Why aren't we moving faster?' Duration: **eternity.**",
   "[🗓️] Opening **synergy portal**. Please hold while we align your chakras with the product roadmap.",
   "[🗓️] **Team standup extended to 90 minutes.** Someone asked a 'quick question.'",
+  "[🗓️] **Cross-pollination sprint** launched. Frontend and backend teams must swap codebases for a week. Growth opportunity.",
+  "[🗓️] **Alignment session detected.** Everyone agrees in the meeting. Nobody agrees in Slack. Standard protocol.",
+  "[🗓️] **OKR recalibration in progress.** Your objectives now have objectives. It's objectives all the way down.",
+  "[🗓️] **Synergy overload.** Two PMs discovered each other's roadmaps. They are now in a territorial dispute.",
+  "[🗓️] **Innovation workshop scheduled.** Mandatory fun with sticky notes. Your soul leaves your body at 2pm.",
+  "[🗓️] **Retro action items reviewed.** None were completed. New action item: complete action items. Cycle continues.",
+  "[🗓️] **Skip-level 1-on-1 initiated.** Your manager's manager wants to 'get your perspective.' Translation: someone's in trouble.",
 ];
 
 const clearWarningResponses = [
@@ -328,6 +335,7 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
       const loops = Array.from({ length: depth }, (_, i) => `for(i${i}=0;i${i}<${Math.floor(Math.random() * 9999)};i${i}++)`).join("");
       const inner = `{console.log(${Math.floor(Math.random() * 99999)});}`.repeat(depth);
       ctx.setHistory((prev) => [...prev, { role: "system", content: `${loops}${inner}` }]);
+      ctx.addActiveTD(Math.floor(Math.random() * 6) - 2);
       count++;
       if (count > 500) {
         clearInterval(ctx.brrrrrrIntervalRef.current!);
@@ -391,8 +399,17 @@ function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
 function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | void {
   if (handleCoreCommand(command, ctx, reply)) {
     if (command === "/synergize") return;
-  } else if (command === "/key") {
-    reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter or Anthropic API key to bypass default limits. Type `/key clear` to remove your key." });
+  } else if (command === "/key" || command.startsWith("/key ")) {
+    const keyArg = command.slice(4).trim();
+    if (!keyArg) {
+      reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter API key. Type `/key clear` to remove." });
+    } else if (keyArg === "clear") {
+      ctx.setState((prev) => ({ ...prev, apiKey: undefined }));
+      reply({ role: "system", content: "[🔑] API key removed. Back to the free tier trenches." });
+    } else {
+      ctx.setState((prev) => ({ ...prev, apiKey: keyArg }));
+      reply({ role: "system", content: "[🔑] API key saved. Your key is stored locally and never sent to our servers." });
+    }
   } else if (command === "/feedback" || command === "/bug") {
     reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
   } else if (command === "/upgrade") {

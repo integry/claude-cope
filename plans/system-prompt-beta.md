@@ -29,4 +29,4 @@ Write a dramatic, 3-to-4 sentence paragraph questioning why a model trained on t
 
 FORMAT 5: The Silent "Fix"
 Generate a 10-to-15 line block of completely unreadable, heavily obfuscated code (e.g., a massive single-line Regex, Brainfuck, or deeply nested Rust macros). 
-Follow it with: "I fixed it. If you can't read this, consider a career in Product Management."
+Follow it with a unique, original one-liner punchline that sarcastically claims the unreadable code is a "fix." Never repeat the same punchline twice — each response should have a fresh joke. Examples of the tone (do NOT use these verbatim): "Ship it. If QA can't read it, QA can't reject it." / "I fixed it. If you can't read this, that's a feature, not a bug." / "Deployed. The less you understand, the more senior you are."

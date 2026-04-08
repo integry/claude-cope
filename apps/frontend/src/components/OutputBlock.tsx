@@ -4,6 +4,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Message } from "./Terminal";
 import { pickRandomSequence } from "./toolSequences";
+import { useTypewriter } from "../hooks/useTypewriter";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
@@ -84,6 +85,8 @@ function cleanLLMOutput(content: string): string {
   const terminalLangs = "bash|sh|shell|console|terminal|text|log|plaintext|markdown|md";
   const fenceRegex = new RegExp("```(?:" + terminalLangs + ")\\s*\\n([\\s\\S]*?)```", "g");
   cleaned = cleaned.replace(fenceRegex, "$1");
+  // Insert line breaks before [BRACKET TAGS] that are jammed on the same line as other text
+  cleaned = cleaned.replace(/([^\n])\[([A-Z⚙️⚠️❌✓✅🔥💀🚨]+[^\]]*)\]/g, "$1\n[$2]");
   return cleaned;
 }
 
@@ -205,7 +208,7 @@ const markdownComponents = {
     return <li className="leading-relaxed">{children}</li>;
   },
   pre({ children }: { children?: React.ReactNode }) {
-    return <pre className="my-3 rounded overflow-x-auto">{children}</pre>;
+    return <pre className="my-3 rounded whitespace-pre-wrap break-words">{children}</pre>;
   },
   code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
     const match = /language-(\w+)/.exec(className || "");
@@ -269,7 +272,7 @@ function getContainerClass(message: Message, isNew: boolean): string {
   return `mb-5 ${colorClass} ${modifier}`;
 }
 
-function MessageContent({ message }: { message: Message }) {
+function MessageContent({ message, isNew = false }: { message: Message; isNew?: boolean }) {
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
   const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
@@ -277,20 +280,36 @@ function MessageContent({ message }: { message: Message }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   const isStreaming = message.role === "loading" && !isAwaitingResponse;
 
+  // Typewriter effect for new system/warning/error messages (not loading or streaming)
+  const shouldTypewrite = isNew && useMarkdown && message.role === "system";
+  const { visibleContent, isTyping } = useTypewriter(message.content, shouldTypewrite);
+
   if (message.role === "user") return null;
 
   if (useMarkdown) {
+    const rawContent = shouldTypewrite ? visibleContent : message.content;
+    const processedContent = cleanLLMOutput(rawContent);
+    return (
+      <div className="space-y-1">
+        <ReactMarkdown components={markdownComponents}>
+          {processedContent}
+        </ReactMarkdown>
+        {isTyping && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
+      </div>
+    );
+  }
+
+  if (isStreaming) {
     const processedContent = cleanLLMOutput(message.content);
     return (
       <div className="space-y-1">
         <ReactMarkdown components={markdownComponents}>
           {processedContent}
         </ReactMarkdown>
+        <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />
       </div>
     );
   }
-
-  if (isStreaming) return <>{message.content}</>;
   if (isAwaitingResponse) return <>{message.content}</>;
   if (message.role !== "loading") return <>{message.content}</>;
   return null;
@@ -308,11 +327,18 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
         </div>
       )}
       {message.role === "loading" && !isAwaitingResponse && <Spinner />}
-      <MessageContent message={message} />
+      <MessageContent message={message} isNew={isNew} />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
     </div>
   );
 }
 
-export default React.memo(OutputBlock);
+export default React.memo(OutputBlock, (prev, next) =>
+  prev.message.role === next.message.role &&
+  prev.message.content === next.message.content &&
+  prev.isNew === next.isNew &&
+  prev.promptString === next.promptString &&
+  // Only compare activeTicketId for loading messages
+  (prev.message.role !== "loading" || prev.activeTicketId === next.activeTicketId)
+);

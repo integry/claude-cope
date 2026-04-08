@@ -55,7 +55,7 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
           return (
             <div
               key={gen.id}
-              className={`rounded border p-3 ${
+              className={`rounded border px-4 py-3 ${
                 canAfford
                   ? "border-green-700 bg-green-950/30 text-gray-200"
                   : "border-gray-700 bg-gray-900/50 text-gray-500"
@@ -69,7 +69,7 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
                 {gen.description}
               </p>
               <div className="text-xs mt-1">
-                <span className={canAfford ? "text-green-400" : "text-gray-500"}>
+                <span className={`font-bold ${canAfford ? "text-green-400" : "text-red-400"}`}>
                   Cost: {cost} TD{buyMultiplier > 1 ? ` (${buyMultiplier}x)` : ""}
                 </span>
                 <span className="text-gray-500 ml-2">
@@ -82,7 +82,7 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
                 className={`mt-2 w-full text-xs py-1 rounded ${
                   canAfford
                     ? "bg-green-700 hover:bg-green-600 text-white cursor-pointer"
-                    : "bg-gray-800 text-gray-600 cursor-not-allowed"
+                    : "bg-gray-800 text-gray-400 cursor-not-allowed"
                 }`}
               >
                 {canAfford ? `Buy ${buyMultiplier}x` : "Can't afford"}
@@ -113,7 +113,7 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
           return (
             <div
               key={upgrade.id}
-              className={`rounded border p-3 ${
+              className={`rounded border px-4 py-3 ${
                 owned
                   ? "border-yellow-700 bg-yellow-950/20 text-yellow-300"
                   : canAfford
@@ -129,7 +129,7 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
                 {upgrade.description}
               </p>
               <div className="text-xs mt-1">
-                <span className={canAfford ? "text-yellow-400" : "text-gray-500"}>
+                <span className={`font-bold ${canAfford ? "text-yellow-400" : "text-red-400"}`}>
                   Cost: {upgrade.cost.toLocaleString()} TD
                 </span>
                 <span className="text-gray-500 ml-2">
@@ -146,7 +146,7 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
                   className={`mt-2 w-full text-xs py-1 rounded ${
                     canAfford
                       ? "bg-yellow-700 hover:bg-yellow-600 text-white cursor-pointer"
-                      : "bg-gray-800 text-gray-600 cursor-not-allowed"
+                      : "bg-gray-800 text-gray-400 cursor-not-allowed"
                   }`}
                 >
                   {!hasRequired

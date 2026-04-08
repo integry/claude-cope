@@ -1,2 +1,36 @@
 // Added /ping and /reject to enable PvP sabotage interactions.
-export const SLASH_COMMANDS = ["/backlog", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/reject", "/help", "/about", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/take", "/accept", "/abandon", "/alias", "/model", "/user"];
+export const SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/reject", "/help", "/about", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user"];
+
+export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
+  "/backlog": "Stare into the abyss of unfulfilled promises",
+  "/clear": "Hide your shame from the console",
+  "/support": "Shout into the void",
+  "/preworkout": "Inject pure, unadulterated anxiety",
+  "/buddy": "Configure your emotional support AI",
+  "/store": "Purchase premium technical debt",
+  "/synergize": "Multiply your errors by 10x",
+  "/compact": "Sweep the garbage under the rug",
+  "/who": "Find other suffering developers",
+  "/ping": "Interrupt someone's flow state",
+  "/reject": "Decline to acknowledge reality",
+  "/help": "There is no help. Only commands.",
+  "/about": "Read the origin story nobody asked for",
+  "/fast": "Break things at double speed",
+  "/voice": "Scream into the microphone",
+  "/blame": "Find a suitable scapegoat",
+  "/brrrrrr": "Ship directly to prod on a Friday",
+  "/feedback": "Send data directly to a shredder",
+  "/bug": "Report an undocumented feature",
+  "/key": "Your OpenRouter key, unlimited suffering",
+  "/upgrade": "Pay real money for more suffering",
+  "/leaderboard": "Compare your suffering to others",
+  "/achievements": "Trophies for terrible decisions",
+  "/profile": "Review your miserable statistics",
+  "/ticket": "Submit a plea to /dev/null",
+  "/take": "Voluntarily accept more pain",
+  "/accept": "Obey when the PM auto-assigns you a ticket",
+  "/abandon": "Give up. We knew you would.",
+  "/alias": "Create shortcuts to your mistakes",
+  "/model": "Swap out the hallucination engine",
+  "/user": "Confirm you exist (debatable)",
+};

@@ -84,7 +84,7 @@ function processReplyTags(
   rawReply: string,
   unlockAchievement: (id: string) => void,
   onSprintProgress?: (amount: number) => void,
-): { achievementMessages: Message[]; reply: string; suggestedReply: string | null } {
+): { achievementMessages: Message[]; reply: string; suggestedReply: string | null; buddySays: string | null } {
   const achievementRegex = /\[ACHIEVEMENT_UNLOCKED:\s*(.+?)\]/g;
   const achievementMessages: Message[] = [];
   let match;
@@ -111,17 +111,24 @@ function processReplyTags(
 
   const sprintRegex = /\[SPRINT_PROGRESS:\s*(\d+)(?:\s*-\s*\d+)?\]/g;
   const sprintMatch = sprintRegex.exec(rawReply);
-  if (sprintMatch && onSprintProgress) {
-    onSprintProgress(parseInt(sprintMatch[1]!, 10));
+  if (onSprintProgress) {
+    // Use LLM score if available, otherwise award minimum progress as fallback
+    const progress = sprintMatch ? parseInt(sprintMatch[1]!, 10) : 5;
+    onSprintProgress(progress);
   }
 
   // Extract suggested reply for input placeholder
   const suggestedRegex = /\[SUGGESTED_REPLY:\s*(.+?)\]/g;
   const suggestedMatch = suggestedRegex.exec(rawReply);
-  const suggestedReply = suggestedMatch?.[1]?.trim() ?? null;
+  const suggestedReply = suggestedMatch?.[1]?.trim().replace(/^["']|["']$/g, "") ?? null;
 
-  const reply = rawReply.replace(achievementRegex, "").replace(sprintRegex, "").replace(suggestedRegex, "").trim();
-  return { achievementMessages, reply, suggestedReply };
+  // Extract buddy interjection — handle both [BUDDY_SAYS: text] and unclosed [BUDDY_SAYS: text
+  const buddyRegex = /\[BUDDY_SAYS:\s*(.+?)(?:\]|$)/gm;
+  const buddyMatch = buddyRegex.exec(rawReply);
+  const buddySays = buddyMatch?.[1]?.trim() ?? null;
+
+  const reply = rawReply.replace(achievementRegex, "").replace(sprintRegex, "").replace(suggestedRegex, "").replace(buddyRegex, "").trim();
+  return { achievementMessages, reply, suggestedReply, buddySays };
 }
 
 async function parseResponseBody(
@@ -162,6 +169,7 @@ export function submitChatMessage(opts: {
   onSprintProgress?: (amount: number) => void;
   addActiveTD?: (n: number, raw?: boolean) => void;
   onSuggestedReply?: (suggestion: string) => void;
+  buddyType?: string | null;
   username?: string;
   inventory?: Record<string, number>;
   upgrades?: string[];
@@ -171,7 +179,7 @@ export function submitChatMessage(opts: {
   fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: chatMessages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(apiKey ? { apiKey } : {}), ...(customModel ? { customModel } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}) }),
+    body: JSON.stringify({ messages: chatMessages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(apiKey ? { apiKey } : {}), ...(customModel ? { customModel } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}), ...(opts.buddyType && opts.buddyResult ? { buddy: { type: opts.buddyType, shouldInterject: true } } : {}) }),
     signal,
   })
     .then(async (res) => {
@@ -203,17 +211,22 @@ export function submitChatMessage(opts: {
         rawReply = "[❌ Error] No response from API.";
       }
 
-      const { achievementMessages, reply, suggestedReply } = processReplyTags(rawReply, unlockAchievement, onSprintProgress);
+      const { achievementMessages, reply, suggestedReply, buddySays } = processReplyTags(rawReply, unlockAchievement, onSprintProgress);
       if (suggestedReply && opts.onSuggestedReply) {
         opts.onSuggestedReply(suggestedReply);
       }
+
+      // Build buddy message from LLM-generated interjection or fallback to client-side
+      const buddyMessage = buddySays && opts.buddyType
+        ? { role: "warning" as const, content: `${BUDDY_ICONS[opts.buddyType] ?? "🐾"}\n[${opts.buddyType}] ${buddySays}` }
+        : buddyResult?.message ?? null;
 
       setHistory((prev) => {
         let updated = [
           ...prev.filter((msg) => msg.role !== "loading"),
           { role: "system" as const, content: reply, tokensSent, tokensReceived },
           ...achievementMessages,
-          ...(buddyResult ? [buddyResult.message] : []),
+          ...(buddyMessage ? [buddyMessage] : []),
         ];
 
         if (buddyResult?.shouldDeleteHistory) {
