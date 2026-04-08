@@ -436,6 +436,49 @@ function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
   }
 }
 
+async function handleSyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<void> {
+  const licenseKey = command.slice(5).trim();
+  if (!licenseKey) {
+    reply({ role: "system", content: "[🔑] Usage: `/sync <COPE-XXX>` — Link your Polar license key to unlock Pro tier." });
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/account/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ licenseKey }),
+    });
+    const data = await res.json() as { success?: boolean; hash?: string; error?: string };
+    if (res.ok && data.success) {
+      ctx.setState((prev) => ({ ...prev, proKey: licenseKey }));
+      reply({ role: "system", content: "[✓ **PRO ACTIVATED**] License key validated. Welcome to the premium suffering tier. You now have **100 pro credits**. Spend them wisely (you won't)." });
+    } else {
+      reply({ role: "error", content: `[❌] License validation failed: ${data.error ?? "Unknown error"}. Double-check your key and try again.` });
+    }
+  } catch {
+    reply({ role: "error", content: "[❌] Network error while validating license key. The backend is probably on fire." });
+  }
+}
+
+async function handleShillCommand(ctx: SlashCommandContext, reply: Reply): Promise<void> {
+  const tweetText = encodeURIComponent("I'm mass-producing Technical Debt at mass velocity in Claude COPE — the idle game where every prompt is a mistake. https://claudecope.com");
+  window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, "_blank");
+  try {
+    const res = await fetch(`${API_BASE}/api/account/shill`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await res.json() as { success?: boolean; creditsGranted?: number; error?: string };
+    if (res.ok && data.success) {
+      reply({ role: "system", content: `[✓ **SHILL COMPLETE**] You sold your dignity for **${data.creditsGranted} free tokens**. The marketing team approves. A tweet window has been opened — go spread the gospel of suffering.` });
+    } else {
+      reply({ role: "error", content: `[❌] Shill failed: ${data.error ?? "Unknown error"}. ${data.error === "Shill credit already claimed" ? "You already sold out once. There is no second helping of shame." : ""}` });
+    }
+  } catch {
+    reply({ role: "error", content: "[❌] Network error while claiming shill credits. The backend ghosted you." });
+  }
+}
+
 /** Dispatch a command; returns "async" if the caller should NOT call setIsProcessing(false). */
 function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | void {
   if (handleCoreCommand(command, ctx, reply)) {
@@ -471,6 +514,12 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
     handleAliasCommand(command, ctx, reply);
   } else if (command.startsWith("/model")) {
     handleModelCommand(command, ctx, reply);
+  } else if (command === "/sync" || command.startsWith("/sync ")) {
+    handleSyncCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
+    return "async";
+  } else if (command === "/shill") {
+    handleShillCommand(ctx, reply).then(() => ctx.setIsProcessing(false));
+    return "async";
   } else if (handleNewCommand(command, ctx, reply)) {
     if (command === "/brrrrrr") return "async";
   } else if (command.startsWith("/")) {
@@ -548,7 +597,7 @@ export function executeSlashCommand(
   };
 
   // Track command usage for performance review brag card
-  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command.startsWith("/buddy ") ? "/buddy" : command;
+  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command.startsWith("/buddy ") ? "/buddy" : command.startsWith("/sync ") ? "/sync" : command;
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {
