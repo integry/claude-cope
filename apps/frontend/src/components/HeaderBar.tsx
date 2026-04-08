@@ -46,7 +46,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
             <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/github</a>
             <div className="border-t border-gray-700 mt-1 pt-1 px-4 py-2">
               <button onClick={() => { setMenuOpen(false); onSlashMenuClick?.(); }} className="text-xs text-gray-400 hover:text-gray-200 cursor-pointer text-left">Type <span className="text-green-400">/</span> in terminal for commands</button>
-              <p className="text-xs text-gray-500 mt-1">&copy; Rinalds Uzkalns 2026</p>
+              <p className="text-xs text-gray-500 mt-1">&copy; Rinalds Uzkalns 2026 | made with <a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
             </div>
           </div>
         )}
