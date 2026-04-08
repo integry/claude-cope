@@ -1,3 +1,5 @@
+import AsciiBox from "./AsciiBox";
+
 type TermsOverlayProps = {
   onClose: () => void;
 };
@@ -56,12 +58,7 @@ function TermsOverlay({ onClose }: TermsOverlayProps) {
       </div>
 
       <div className="px-4 py-2 border-b border-gray-700 text-green-400 text-xs font-bold">
-        <pre>{`
- ╔══════════════════════════════╗
- ║     TERMS OF "SERVICE"      ║
- ║   ABANDON HOPE ALL YE WHO   ║
- ║        CLICK AGREE          ║
- ╚══════════════════════════════╝`}</pre>
+        <AsciiBox lines={["TERMS OF \"SERVICE\"", "ABANDON HOPE ALL YE WHO", "CLICK AGREE"]} />
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3">

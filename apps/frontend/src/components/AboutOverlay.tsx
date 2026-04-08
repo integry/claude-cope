@@ -1,3 +1,5 @@
+import AsciiBox from "./AsciiBox";
+
 type AboutOverlayProps = {
   onClose: () => void;
 };
@@ -56,11 +58,7 @@ function AboutOverlay({ onClose }: AboutOverlayProps) {
       </div>
 
       <div className="px-4 py-2 border-b border-gray-700 text-green-400 text-xs font-bold">
-        <pre>{`
- ╔══════════════════════════════╗
- ║     ABOUT CLAUDE COPE       ║
- ║   A PARODY FOR THE DAMNED   ║
- ╚══════════════════════════════╝`}</pre>
+        <AsciiBox lines={["ABOUT CLAUDE COPE", "A PARODY FOR THE DAMNED"]} />
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3">

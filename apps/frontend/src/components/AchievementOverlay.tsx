@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
+import AsciiBox from "./AsciiBox";
 
 type AchievementOverlayProps = {
   unlockedIds: string[];
@@ -30,11 +31,7 @@ function AchievementOverlay({ unlockedIds, onClose }: AchievementOverlayProps) {
       </div>
 
       <div className="px-4 py-2 border-b border-gray-700 text-green-400 text-xs font-bold">
-        <pre>{`
- ╔══════════════════════════════╗
- ║      ACHIEVEMENT VAULT      ║
- ║   ${String(unlockedCount).padStart(2, " ")} / ${ALL_ACHIEVEMENTS.length} unlocked          ║
- ╚══════════════════════════════╝`}</pre>
+        <AsciiBox lines={[`ACHIEVEMENT VAULT`, `${unlockedCount} / ${ALL_ACHIEVEMENTS.length} unlocked`]} />
       </div>
 
       <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-700">
