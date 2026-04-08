@@ -88,6 +88,7 @@ export interface GameState {
   hasSeenTicketPrompt: boolean;
   apiKey?: string;
   selectedModel?: string;
+  proKey?: string;
 }
 
 /** Legacy flat state shape used before the economy refactor. */
