@@ -4,6 +4,7 @@
   "private": true,
   "exports": {
     "./multiplayer-types": "./src/multiplayer-types.ts",
-    "./models": "./src/models.ts"
+    "./models": "./src/models.ts",
+    "./systemPrompt": "./src/systemPrompt.ts"
   }
 }

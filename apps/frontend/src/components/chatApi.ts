@@ -7,6 +7,7 @@ import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
 import { buildAchievementBox } from "./achievementBox";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
+import { getSystemPrompt } from "@claude-cope/shared/systemPrompt";
 
 export type BuddyInterjectionResult = {
   message: Message;
@@ -155,6 +156,13 @@ async function parseResponseBody(
   return { rawReply, tokensSent, tokensReceived };
 }
 
+async function hashKey(key: string): Promise<string> {
+  const encoded = new TextEncoder().encode(key);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export function submitChatMessage(opts: {
   chatMessages: { role: string; content: string }[];
   buddyResult: BuddyInterjectionResult | null;
@@ -164,6 +172,7 @@ export function submitChatMessage(opts: {
   currentRank: string;
   apiKey?: string;
   customModel?: string;
+  proKey?: string;
   modes?: ModesState;
   activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
   onSprintProgress?: (amount: number) => void;
@@ -176,12 +185,35 @@ export function submitChatMessage(opts: {
   signal?: AbortSignal;
 }) {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, signal } = opts;
-  fetch(`${API_BASE}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: chatMessages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(apiKey ? { apiKey } : {}), ...(customModel ? { customModel } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}), ...(opts.buddyType && opts.buddyResult ? { buddy: { type: opts.buddyType, shouldInterject: true } } : {}) }),
-    signal,
-  })
+  const isBYOK = Boolean(apiKey);
+
+  const requestPromise = isBYOK
+    ? (async () => {
+        const systemPrompt = getSystemPrompt(currentRank, modes);
+        const recentMessages = chatMessages.slice(-10);
+        const messages = [{ role: "system", content: systemPrompt }, ...recentMessages];
+        const model = customModel || "nvidia/nemotron-3-super-120b-a12b:free";
+        return fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({ model, messages, stream: true, stream_options: { include_usage: true } }),
+          signal,
+        });
+      })()
+    : (async () => {
+        const proKeyHash = opts.proKey ? await hashKey(opts.proKey) : undefined;
+        return fetch(`${API_BASE}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: chatMessages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(customModel ? { customModel } : {}), ...(proKeyHash ? { proKeyHash } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}), ...(opts.buddyType && opts.buddyResult ? { buddy: { type: opts.buddyType, shouldInterject: true } } : {}) }),
+          signal,
+        });
+      })();
+
+  requestPromise
     .then(async (res) => {
       if (res.status === 429) {
         setHistory((prev) => [
