@@ -12,9 +12,9 @@ type CommandLineProps = {
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
   function CommandLine({ value, disabled, onChange, onKeyDown, promptString = "❯ ", placeholder }, ref) {
     return (
-      <div className="border-t border-white py-1.5">
+      <div className="border-t border-white py-2">
         <div className="flex items-center">
-          <span className="text-white font-bold whitespace-pre">{promptString}</span>
+          <span className="text-white font-bold whitespace-pre leading-none">{promptString}</span>
           <input
             ref={ref}
             type="text"
@@ -23,7 +23,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
             onChange={onChange}
             onKeyDown={onKeyDown}
             placeholder={placeholder ? `${placeholder}  [Tab]` : undefined}
-            className="flex-1 outline-none bg-transparent text-white font-bold caret-white disabled:opacity-50 placeholder:text-gray-600 placeholder:font-normal"
+            className="flex-1 outline-none bg-transparent text-white font-bold caret-white disabled:opacity-50 placeholder:text-gray-600 placeholder:font-normal py-0 leading-none"
             autoFocus
           />
         </div>

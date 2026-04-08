@@ -10,7 +10,7 @@ export default function Ticker() {
 
   return (
     // The container hides overflow, while the inner div handles the actual movement
-    <div className="w-full bg-gray-900 border-b border-gray-700 text-green-400 text-xs py-1 overflow-hidden">
+    <div className="hidden sm:block w-full bg-gray-900 border-b border-gray-700 text-green-400 text-xs py-1 overflow-hidden">
       <div className="animate-marquee whitespace-nowrap">
         {liveEvents.map((ev, i) => (
           <span key={i} className="mr-10">
