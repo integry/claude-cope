@@ -492,6 +492,23 @@ function handleKeyCommand(command: string, ctx: SlashCommandContext, reply: Repl
   }
 }
 
+function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | false {
+  if (command.startsWith("/ticket")) {
+    handleTicketCommand(command, reply).then(() => ctx.setIsProcessing(false));
+    return "async";
+  } else if (command === "/backlog") {
+    handleBacklogCommand(reply).then(() => ctx.setIsProcessing(false));
+    return "async";
+  } else if (command === "/sync" || command.startsWith("/sync ")) {
+    handleSyncCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
+    return "async";
+  } else if (command === "/shill") {
+    handleShillCommand(ctx, reply).then(() => ctx.setIsProcessing(false));
+    return "async";
+  }
+  return false;
+}
+
 /** Dispatch a command; returns "async" if the caller should NOT call setIsProcessing(false). */
 function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | void {
   if (handleCoreCommand(command, ctx, reply)) {
@@ -502,34 +519,28 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
     reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
   } else if (command === "/upgrade") {
     handleUpgradeCommand(ctx, reply);
-  } else if (command.startsWith("/ticket")) {
-    handleTicketCommand(command, reply).then(() => ctx.setIsProcessing(false));
-    return "async";
-  } else if (command === "/backlog") {
-    handleBacklogCommand(reply).then(() => ctx.setIsProcessing(false));
-    return "async";
-  } else if (command.startsWith("/take")) {
-    handleTakeCommand(command, ctx.state, ctx.setState, reply);
-  } else if (command === "/accept") {
-    handleAcceptCommand(ctx, reply);
-  } else if (command === "/abandon") {
-    handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
-  } else if (command.startsWith("/alias")) {
-    handleAliasCommand(command, ctx, reply);
-  } else if (command.startsWith("/model")) {
-    handleModelCommand(command, ctx, reply);
-  } else if (command === "/sync" || command.startsWith("/sync ")) {
-    handleSyncCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
-    return "async";
-  } else if (command === "/shill") {
-    handleShillCommand(ctx, reply).then(() => ctx.setIsProcessing(false));
-    return "async";
-  } else if (handleNewCommand(command, ctx, reply)) {
-    if (command === "/brrrrrr") return "async";
-  } else if (command.startsWith("/")) {
-    reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
   } else {
-    reply({ role: "system", content: `[✓] Executed \`${command}\`` });
+    const asyncResult = handleAsyncCommand(command, ctx, reply);
+    if (asyncResult === "async") return "async";
+    if (!asyncResult) {
+      if (command.startsWith("/take")) {
+        handleTakeCommand(command, ctx.state, ctx.setState, reply);
+      } else if (command === "/accept") {
+        handleAcceptCommand(ctx, reply);
+      } else if (command === "/abandon") {
+        handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
+      } else if (command.startsWith("/alias")) {
+        handleAliasCommand(command, ctx, reply);
+      } else if (command.startsWith("/model")) {
+        handleModelCommand(command, ctx, reply);
+      } else if (handleNewCommand(command, ctx, reply)) {
+        if (command === "/brrrrrr") return "async";
+      } else if (command.startsWith("/")) {
+        reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
+      } else {
+        reply({ role: "system", content: `[✓] Executed \`${command}\`` });
+      }
+    }
   }
 }
 
