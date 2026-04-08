@@ -318,7 +318,7 @@ function Terminal() {
 
   return (
     <div
-      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "h-[100dvh] overflow-hidden"} w-full font-mono text-sm text-gray-100 leading-snug sm:leading-relaxed p-4 pb-8 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
+      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "h-[100dvh] overflow-hidden"} w-full font-mono text-sm text-gray-100 leading-snug sm:leading-relaxed p-4 pb-2 sm:pb-4 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
       style={parseGlitchStyle(regressionGlitch)}
       onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
