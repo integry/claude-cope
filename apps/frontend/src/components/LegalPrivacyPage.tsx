@@ -46,6 +46,7 @@ function LegalPrivacyPage() {
       <p className="mb-4">We do not sell your personal information. We may share your information with:</p>
       <ul className="list-disc pl-6 mb-4 space-y-1">
         <li><strong>Service providers:</strong> Third-party companies that perform services on our behalf, such as payment processing (Polar.sh), hosting, and analytics</li>
+        <li><strong>AI Model Providers:</strong> We utilize third-party API providers (such as OpenRouter) to process the text prompts you submit to the Service in order to generate responses. Please do not submit confidential, sensitive, or personally identifiable information into the terminal.</li>
         <li><strong>Legal requirements:</strong> When required by law, regulation, legal process, or governmental request</li>
         <li><strong>Protection of rights:</strong> When we believe disclosure is necessary to protect our rights, your safety, or the safety of others</li>
       </ul>

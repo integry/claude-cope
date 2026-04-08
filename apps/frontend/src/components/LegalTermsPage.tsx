@@ -45,7 +45,7 @@ function LegalTermsPage() {
 
       <h2 className="text-xl font-semibold mt-8 mb-3">7. Refund Policy</h2>
       <p className="mb-4">
-        If you are unsatisfied with a purchase, you may request a refund within 14 days of the purchase date by contacting <a href="mailto:support@claudecope.com" className="text-blue-600 hover:underline">support@claudecope.com</a>. Refund requests will be reviewed on a case-by-case basis in accordance with applicable consumer protection laws.
+        If you are unsatisfied with a purchase, you may request a refund within 14 days of the purchase date by contacting <a href="mailto:support@claudecope.com" className="text-blue-600 hover:underline">support@claudecope.com</a>, provided you have not consumed a significant portion of your allocated usage quota. Refund requests will be reviewed on a case-by-case basis in accordance with applicable consumer protection laws.
       </p>
 
       <h2 className="text-xl font-semibold mt-8 mb-3">8. Disclaimer of Warranties</h2>
@@ -70,7 +70,7 @@ function LegalTermsPage() {
 
       <h2 className="text-xl font-semibold mt-8 mb-3">12. Governing Law</h2>
       <p className="mb-4">
-        These Terms shall be governed by and construed in accordance with the laws of the European Union and the applicable member state, without regard to conflict of law principles.
+        These Terms shall be governed by and construed in accordance with the laws of Estonia, without regard to conflict of law principles.
       </p>
 
       <h2 className="text-xl font-semibold mt-8 mb-3">13. Contact</h2>
