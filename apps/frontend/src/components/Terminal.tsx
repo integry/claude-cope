@@ -342,7 +342,7 @@ function Terminal() {
       </div>
       {renderOverlays()}
       <footer className="shrink-0 w-full flex flex-col sm:flex-row items-center sm:justify-between text-xs sm:text-xs text-gray-500 px-2 sm:px-4 py-2 sm:py-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono">
-        <span className="text-center sm:text-left leading-tight">This is a parody project and is not affiliated with or endorsed by Anthropic.</span>
+        <span className="text-center sm:text-left leading-tight"><span className="sm:hidden">Parody project, no Anthropic affiliation.</span><span className="hidden sm:inline">This is a parody project and is not affiliated with or endorsed by Anthropic.</span></span>
         <span className="hidden sm:flex items-center">&copy; Rinalds Uzkalns 2026&nbsp;| made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a><span className="ml-4 flex gap-2"><button onClick={() => { closeAllOverlays(); setShowHelp(true); }} className="text-gray-400 hover:text-white">/help</button><button onClick={() => { closeAllOverlays(); setShowAbout(true); }} className="text-gray-400 hover:text-white">/about</button><a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/github</a></span></span>
       </footer>
     </div>
