@@ -10,6 +10,10 @@ binding = "DB"
 database_name = "claude-cope-db"
 database_id = "placeholder-database-id"
 
+[[kv_namespaces]]
+binding = "USAGE_KV"
+id = "placeholder-kv-id"
+
 [[unsafe.bindings]]
 name = "RATE_LIMITER"
 type = "ratelimit"

@@ -7,6 +7,11 @@ type Env = {
   Bindings: {
     OPENROUTER_API_KEY?: string;
     DB?: D1Database;
+    USAGE_KV?: KVNamespace;
+    POLAR_ACCESS_TOKEN?: string;
+  };
+  Variables: {
+    sessionId: string;
   };
 };
 
