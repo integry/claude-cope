@@ -155,6 +155,7 @@ function Terminal() {
   };
 
   const applyQuotaDrain = (): boolean => {
+    if (state.apiKey) return false;
     if (instantBanReady) { triggerInstantBan(); return true; }
     if (drainQuota() <= 0) { triggerQuotaLockout(); return true; }
     return false;
