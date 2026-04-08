@@ -346,7 +346,7 @@ function Terminal() {
         <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || quotaLocked} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
       </div>
       {renderOverlays()}
-      <footer className="fixed bottom-0 left-0 w-full text-xs text-gray-500 px-4 py-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono">
+      <footer className="fixed bottom-0 left-0 w-full text-xs text-gray-500 px-4 py-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono flex flex-col gap-1">
         <div className="flex items-center justify-between">
           <span>This is a parody project and is not affiliated with Anthropic.</span>
           <span>&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></span>
