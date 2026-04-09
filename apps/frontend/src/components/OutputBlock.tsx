@@ -85,8 +85,10 @@ function cleanLLMOutput(content: string): string {
   const terminalLangs = "bash|sh|shell|console|terminal|text|log|plaintext|markdown|md";
   const fenceRegex = new RegExp("```(?:" + terminalLangs + ")\\s*\\n([\\s\\S]*?)```", "g");
   cleaned = cleaned.replace(fenceRegex, "$1");
-  // Insert line breaks before [BRACKET TAGS] that are jammed on the same line as other text
-  cleaned = cleaned.replace(/([^\n])\[([A-Z⚙️⚠️❌✓✅🔥💀🚨]+[^\]]*)\]/g, "$1\n[$2]");
+  // Ensure [BRACKET TAGS] are preceded by a blank line so markdown renders them as separate paragraphs
+  cleaned = cleaned.replace(/\n(\[(?:WARN|ERROR|SUCCESS|INFO|FATAL|CRITICAL|DEBUG|DONE|PROGRESS|RESULT|⚙️|⚠️|❌|✓|✅|🔥|💀|🚨|SIGSEGV)[^\]]*\])/g, "\n\n$1");
+  // Also handle tags jammed directly after text with no newline at all
+  cleaned = cleaned.replace(/([^\n])(\[(?:WARN|ERROR|SUCCESS|INFO|FATAL|CRITICAL|DEBUG|DONE|PROGRESS|RESULT|⚙️|⚠️|❌|✓|✅|🔥|💀|🚨|SIGSEGV)[^\]]*\])/g, "$1\n\n$2");
   return cleaned;
 }
 

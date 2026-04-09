@@ -201,7 +201,7 @@ export function submitChatMessage(opts: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify({ model, messages, stream: true, stream_options: { include_usage: true } }),
+          body: JSON.stringify({ model, messages, reasoning: { effort: "none" }, stream: true, stream_options: { include_usage: true } }),
           signal,
         });
       })()

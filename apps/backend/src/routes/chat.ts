@@ -170,6 +170,7 @@ chat.post("/", async (c) => {
     body: JSON.stringify({
       model,
       messages,
+      reasoning: { effort: "none" },
       ...(isBYOK ? { stream: true, stream_options: { include_usage: true } } : {}),
     }),
   });

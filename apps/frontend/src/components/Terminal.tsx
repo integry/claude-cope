@@ -50,17 +50,49 @@ const MessageList = memo(function MessageList({ history, messageKeys, initialHis
   );
 });
 
-function filterChatHistory(history: Message[]): Message[] {
+/** Status prefixes that indicate non-conversational system messages */
+const STATUS_PREFIXES = ["[✓]", "[❌]", "[🔑]", "[⚠️]", "[📋]", "[🎫]", "[🏳️]", "[HTTP", "[ACCOUNT", "[APPEAL", "[SUCCESS]", "[SPRINT", "[⚙️]"];
+
+function isStatusMessage(content: string): boolean {
+  return STATUS_PREFIXES.some((p) => content.startsWith(p));
+}
+
+/** Trim bot responses for LLM context: strip code blocks, tags, and truncate */
+function trimForContext(content: string): string {
+  let trimmed = content
+    .replace(/```[\s\S]*?```/g, "[code block]") // collapse code blocks
+    .replace(/\[ACHIEVEMENT_UNLOCKED:[^\]]*\]/g, "")
+    .replace(/\[SPRINT_PROGRESS:[^\]]*\]/g, "")
+    .replace(/\[SUGGESTED_REPLY:[^\]]*\]/g, "")
+    .replace(/\[BUDDY_SAYS:[^\]]*\]?/g, "")
+    .replace(/\n{3,}/g, "\n\n") // collapse excess newlines
+    .trim();
+  // Cap at 500 chars to keep context lean
+  if (trimmed.length > 500) trimmed = trimmed.slice(0, 500) + "...";
+  return trimmed;
+}
+
+function filterChatHistory(history: Message[]): { role: string; content: string }[] {
   const isSlashCmd = (content: string) => content.startsWith("/");
-  return history.filter((m, i) => {
-    if (m.role === "user") return !isSlashCmd(m.content);
+  const filtered: { role: string; content: string }[] = [];
+  for (let i = 0; i < history.length; i++) {
+    const m = history[i]!;
+    // Skip non-conversation roles (loading, warning, error)
+    if (m.role !== "user" && m.role !== "system") continue;
+    // Skip slash commands and their responses
+    if (m.role === "user" && isSlashCmd(m.content)) continue;
     if (m.role === "system") {
       const prev = history[i - 1];
-      if (prev?.role === "user" && isSlashCmd(prev.content)) return false;
-      return true;
+      if (prev?.role === "user" && isSlashCmd(prev.content)) continue;
+      // Skip system status messages
+      if (isStatusMessage(m.content)) continue;
+      // Trim bot responses for context
+      filtered.push({ role: "system", content: trimForContext(m.content) });
+      continue;
     }
-    return false;
-  });
+    filtered.push({ role: m.role, content: m.content });
+  }
+  return filtered;
 }
 
 function Terminal() {
@@ -354,7 +386,7 @@ function Terminal() {
       <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1">
         <div className="flex items-center justify-between">
           <span>This is a parody project and is not affiliated with Anthropic.</span>
-          <span>&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></span>
+          <span className="ml-auto text-right">&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></span>
         </div>
         <div className="flex items-center justify-between">
           <span className="flex gap-4">

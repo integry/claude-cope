@@ -59,13 +59,15 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           </div>
         )}
       </div>
-      {/* Desktop usage bar — inline in header */}
+      {/* Desktop usage bar — terminal ASCII style */}
       {!isBYOK && (
-        <div className="hidden sm:flex items-center gap-2 flex-shrink-0 min-w-[120px] max-w-[200px] px-2">
-          <div className="flex-1 h-3 bg-gray-800 rounded-sm overflow-hidden border border-gray-700">
-            <div className={`h-full ${quotaColor} transition-all duration-500`} style={{ width: `${quotaPercent}%` }} />
-          </div>
-          <span className="text-[10px] text-gray-400 whitespace-nowrap">{Math.round(quotaPercent)}%</span>
+        <div className={`hidden sm:block flex-shrink-0 text-xs font-mono whitespace-nowrap px-2 ${quotaPercent > 50 ? "text-green-400" : quotaPercent > 20 ? "text-yellow-400" : "text-red-400"}`}>
+          {(() => {
+            const totalBlocks = 20;
+            const filledBlocks = Math.round((quotaPercent / 100) * totalBlocks);
+            const emptyBlocks = totalBlocks - filledBlocks;
+            return `[API Quota: ${"█".repeat(filledBlocks)}${"░".repeat(emptyBlocks)} ${Math.round(quotaPercent)}%]`;
+          })()}
         </div>
       )}
       {/* Mobile thin usage line — bottom of header */}
