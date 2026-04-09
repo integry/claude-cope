@@ -57,40 +57,17 @@ const MessageList = memo(function MessageList({ history, messageKeys, initialHis
  * conversation rhythm without leaking old content.
  */
 function filterChatHistory(history: Message[]): { role: string; content: string }[] {
-  const pairs: { role: string; content: string }[] = [];
-
-  for (let i = 0; i < history.length; i++) {
-    const m = history[i]!;
-    if (m.role === "user" && !m.content.startsWith("/")) {
-      // Find the next system message that's a real bot reply (skip status/warning/error)
-      const STATUS_STARTS = ["[✓]", "[❌]", "[🔑]", "[⚠️]", "[📋]", "[🎫]", "[🏳️]", "[HTTP", "[ACCOUNT", "[APPEAL", "[SUCCESS]", "[SPRINT"];
-      let skip = i + 1;
-      let next = history[skip];
-      while (next && (next.role === "warning" || next.role === "error" || next.role === "loading" || (next.role === "system" && STATUS_STARTS.some((s) => next!.content.startsWith(s))))) {
-        skip++; next = history[skip];
-      }
-      if (next?.role === "system" && next.content.length > 0) {
-        pairs.push({ role: "user", content: m.content });
-        i = skip;
-        // Clean summary: strip format markers but keep content (options, choices, etc.)
-        let summary = next.content
-          .replace(/```[\s\S]*?```/g, "")
-          .replace(/\[(?:⚙️[^\]]*|WARN|ERROR|SUCCESS|INFO|FATAL|CRITICAL|DEBUG|SIGSEGV|DONE|PROGRESS|RESULT|ACHIEVEMENT_UNLOCKED|SPRINT_PROGRESS|SUGGESTED_REPLY|BUDDY_SAYS)[^\]]*\]?/g, "")
-          .replace(/>?\s*Awaiting input[.\s]*/gi, "")
-          .replace(/Core Dumped.*/gi, "")
-          .replace(/\n{2,}/g, "\n")
-          .trim();
-        // Chop the last line — suggested replies always end up there
-        const lastNewline = summary.lastIndexOf("\n");
-        if (lastNewline > 50) summary = summary.slice(0, lastNewline).trim();
-        if (summary.length > 350) summary = summary.slice(0, 350);
-        if (summary) pairs.push({ role: "assistant", content: summary });
-        i++;
-      }
+  // Simple filter: include user + system messages, skip slash commands and their responses
+  const isSlashCmd = (content: string) => content.startsWith("/");
+  return history.filter((m, i) => {
+    if (m.role === "user") return !isSlashCmd(m.content);
+    if (m.role === "system") {
+      const prev = history[i - 1];
+      if (prev?.role === "user" && isSlashCmd(prev.content)) return false;
+      return true;
     }
-  }
-
-  return pairs.slice(-6);
+    return false;
+  }).slice(-10).map((m) => ({ role: m.role === "system" ? "assistant" : "user", content: m.content }));
 }
 
 function Terminal() {

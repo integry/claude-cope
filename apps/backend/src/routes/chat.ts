@@ -50,7 +50,7 @@ chat.post("/", async (c) => {
 
   // Resolve model — only allow predefined COPE_MODELS for server path
   const copeModel = body.modelId ? COPE_MODELS.find((m) => m.id === body.modelId) : undefined;
-  const model = copeModel?.openRouterId ?? "nvidia/nemotron-nano-9b-v2:free";
+  const model = copeModel?.openRouterId ?? "nvidia/nemotron-3-super-120b-a12b";
   const tier: "free" | "pro" = copeModel?.tier ?? "free";
   const quotaCost = copeModel?.multiplier ?? 1;
 
@@ -78,8 +78,8 @@ chat.post("/", async (c) => {
       model,
       messages: body.messages,
 
-      max_tokens: 1500,
-      reasoning: { effort: "none" },
+      max_tokens: 2000,
+      reasoning: { effort: "low" },
     }),
   });
 
