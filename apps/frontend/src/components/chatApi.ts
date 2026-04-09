@@ -188,23 +188,20 @@ export function submitChatMessage(opts: {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, signal } = opts;
   const isBYOK = Boolean(apiKey);
 
+  // Build the system prompt and message list — shared by both paths
+  const systemPrompt = getSystemPrompt(currentRank, modes);
+  const recentMessages = chatMessages.slice(-10);
+  const messages = [{ role: "system", content: systemPrompt }, ...recentMessages];
+  const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
+  const model = copeModel ? copeModel.openRouterId : customModel || (isBYOK ? "nvidia/nemotron-3-super-120b-a12b:free" : "nvidia/nemotron-nano-9b-v2:free");
+
   const requestPromise = isBYOK
-    ? (async () => {
-        const systemPrompt = getSystemPrompt(currentRank, modes);
-        const recentMessages = chatMessages.slice(-10);
-        const messages = [{ role: "system", content: systemPrompt }, ...recentMessages];
-        const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
-        const model = copeModel ? copeModel.openRouterId : customModel || "nvidia/nemotron-3-super-120b-a12b:free";
-        return fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({ model, messages, reasoning: { effort: "none" }, stream: true, stream_options: { include_usage: true } }),
-          signal,
-        });
-      })()
+    ? fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, messages, reasoning: { effort: "none" }, stream: true, stream_options: { include_usage: true } }),
+        signal,
+      })
     : (async () => {
         const proKeyHash = opts.proKey ? await hashKey(opts.proKey) : undefined;
         return fetch(`${API_BASE}/api/chat`, {

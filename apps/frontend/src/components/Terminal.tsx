@@ -50,49 +50,51 @@ const MessageList = memo(function MessageList({ history, messageKeys, initialHis
   );
 });
 
-/** Status prefixes that indicate non-conversational system messages */
-const STATUS_PREFIXES = ["[✓]", "[❌]", "[🔑]", "[⚠️]", "[📋]", "[🎫]", "[🏳️]", "[HTTP", "[ACCOUNT", "[APPEAL", "[SUCCESS]", "[SPRINT", "[⚙️]"];
-
-function isStatusMessage(content: string): boolean {
-  return STATUS_PREFIXES.some((p) => content.startsWith(p));
-}
-
-/** Trim bot responses for LLM context: strip code blocks, tags, and truncate */
+/** Trim bot responses for LLM context: strip noise, keep core message */
 function trimForContext(content: string): string {
   let trimmed = content
-    .replace(/```[\s\S]*?```/g, "[code block]") // collapse code blocks
+    .replace(/```[\s\S]*?```/g, "[code]") // collapse code blocks
     .replace(/\[ACHIEVEMENT_UNLOCKED:[^\]]*\]/g, "")
     .replace(/\[SPRINT_PROGRESS:[^\]]*\]/g, "")
     .replace(/\[SUGGESTED_REPLY:[^\]]*\]/g, "")
     .replace(/\[BUDDY_SAYS:[^\]]*\]?/g, "")
-    .replace(/\n{3,}/g, "\n\n") // collapse excess newlines
+    .replace(/\n{2,}/g, "\n") // collapse multi-newlines
     .trim();
-  // Cap at 500 chars to keep context lean
-  if (trimmed.length > 500) trimmed = trimmed.slice(0, 500) + "...";
+  // Strip everything after "Awaiting input" (trailing prompts/suggestions)
+  const awaitIdx = trimmed.indexOf("Awaiting input");
+  if (awaitIdx > 0) trimmed = trimmed.slice(0, awaitIdx).trim();
+  // Cap at 200 chars — just enough to remind the LLM what it said
+  if (trimmed.length > 200) trimmed = trimmed.slice(0, 200) + "...";
   return trimmed;
 }
 
+/**
+ * Build LLM context from chat history.
+ * Only includes user↔system pairs where the user message is NOT a slash command
+ * and the system response directly follows a user message (actual conversation).
+ */
 function filterChatHistory(history: Message[]): { role: string; content: string }[] {
-  const isSlashCmd = (content: string) => content.startsWith("/");
-  const filtered: { role: string; content: string }[] = [];
+  const pairs: { role: string; content: string }[] = [];
+
   for (let i = 0; i < history.length; i++) {
     const m = history[i]!;
-    // Skip non-conversation roles (loading, warning, error)
-    if (m.role !== "user" && m.role !== "system") continue;
-    // Skip slash commands and their responses
-    if (m.role === "user" && isSlashCmd(m.content)) continue;
-    if (m.role === "system") {
-      const prev = history[i - 1];
-      if (prev?.role === "user" && isSlashCmd(prev.content)) continue;
-      // Skip system status messages
-      if (isStatusMessage(m.content)) continue;
-      // Trim bot responses for context
-      filtered.push({ role: "system", content: trimForContext(m.content) });
-      continue;
+    // Only include user messages that aren't slash commands
+    if (m.role === "user" && !m.content.startsWith("/")) {
+      pairs.push({ role: "user", content: m.content });
+      // Look ahead for the next system message (the bot's reply to this user message)
+      const next = history[i + 1];
+      if (next?.role === "system" && next.content.length > 0) {
+        const trimmed = trimForContext(next.content);
+        if (trimmed.length > 0) {
+          pairs.push({ role: "assistant", content: trimmed });
+        }
+        i++; // skip the system message we just consumed
+      }
     }
-    filtered.push({ role: m.role, content: m.content });
   }
-  return filtered;
+
+  // Keep only the last 4 exchanges (8 messages)
+  return pairs.slice(-8);
 }
 
 function Terminal() {
@@ -246,7 +248,8 @@ function Terminal() {
     const userMessage: Message = { role: "user", content: command };
     setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
     setIsProcessing(true);
-    const chatMessages = [...filterChatHistory(history), userMessage].map((m) => ({ role: m.role, content: m.content }));
+    const contextMessages = filterChatHistory(history);
+    const chatMessages = [...contextMessages, { role: "user", content: userMessage.content }];
     const onSprintProgress = (rawAmount: number) => {
       if (!state.activeTicket) return;
       const amount = Math.round(rawAmount * 1.5);
