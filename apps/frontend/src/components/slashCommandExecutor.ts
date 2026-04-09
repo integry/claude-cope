@@ -410,7 +410,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
 
   // Non-BYOK mode: only allow predefined COPE_MODELS
   if (!copeModel && !isBYOK) {
-    reply({ role: "system", content: `[🚫] Custom models are only available in BYOK mode. Set your own API key with \`/key\` first.\n\nAvailable models: ${COPE_MODELS.map((m) => \`\\\`${m.id}\\\`\`).join(", ")}` });
+    reply({ role: "system", content: "[🚫] Custom models are only available in BYOK mode. Set your own API key with `/key` first.\n\nAvailable models: " + COPE_MODELS.map((m) => "`" + m.id + "`").join(", ") });
     return;
   }
 
