@@ -37,6 +37,7 @@ chat.post("/", async (c) => {
     return c.json({ error: "messages array is required" }, 400);
   }
 
+
   const apiKey = (c.env as Record<string, string | undefined>).OPENROUTER_API_KEY;
   if (!apiKey) {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
@@ -53,18 +54,18 @@ chat.post("/", async (c) => {
   const tier: "free" | "pro" = copeModel?.tier ?? "free";
   const quotaCost = copeModel?.multiplier ?? 1;
 
-  // Enforce quota
-  const quotaKv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  if (quotaKv) {
-    try {
-      await consumeQuota(quotaKv, { tier, sessionId: c.get("sessionId"), licenseKey: body.proKeyHash, cost: quotaCost });
-    } catch (err) {
-      if (err instanceof QuotaExhaustedError) {
-        return c.json({ error: err.message }, 402);
-      }
-      throw err;
-    }
-  }
+  // Quota enforcement disabled for local dev
+  // const quotaKv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  // if (quotaKv) {
+  //   try {
+  //     await consumeQuota(quotaKv, { tier, sessionId: c.get("sessionId"), licenseKey: body.proKeyHash, cost: quotaCost });
+  //   } catch (err) {
+  //     if (err instanceof QuotaExhaustedError) {
+  //       return c.json({ error: err.message }, 402);
+  //     }
+  //     throw err;
+  //   }
+  // }
 
   // Proxy to OpenRouter — messages come pre-built from the client
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -76,6 +77,7 @@ chat.post("/", async (c) => {
     body: JSON.stringify({
       model,
       messages: body.messages,
+      max_tokens: 1500,
       reasoning: { effort: "none" },
     }),
   });

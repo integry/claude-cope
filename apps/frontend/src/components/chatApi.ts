@@ -91,6 +91,8 @@ function processReplyTags(
   const achievementMessages: Message[] = [];
   let match;
   while ((match = achievementRegex.exec(rawReply)) !== null) {
+    // Cap at 1 achievement per response to prevent LLM dumping all triggers at once
+    if (achievementMessages.length >= 1) break;
     const achievementId = match[1]!.trim();
     unlockAchievement(achievementId);
     achievementMessages.push({
@@ -230,7 +232,7 @@ Generate a short, in-character one-liner. Append as: [BUDDY_SAYS: your one-liner
     ? fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages, reasoning: { effort: "none" }, stream: true, stream_options: { include_usage: true } }),
+        body: JSON.stringify({ model, messages, max_tokens: 1500, reasoning: { effort: "none" }, stream: true, stream_options: { include_usage: true } }),
         signal,
       })
     : (async () => {
@@ -238,7 +240,7 @@ Generate a short, in-character one-liner. Append as: [BUDDY_SAYS: your one-liner
         return fetch(`${API_BASE}/api/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: chatMessages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(customModel && COPE_MODELS.some((m) => m.id === customModel) ? { modelId: customModel } : {}), ...(proKeyHash ? { proKeyHash } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}), ...(opts.buddyType && opts.buddyResult ? { buddy: { type: opts.buddyType, shouldInterject: true } } : {}) }),
+          body: JSON.stringify({ messages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(customModel && COPE_MODELS.some((m) => m.id === customModel) ? { modelId: customModel } : {}), ...(proKeyHash ? { proKeyHash } : {}) }),
           signal,
         });
       })();

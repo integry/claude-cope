@@ -63,9 +63,16 @@ function filterChatHistory(history: Message[]): { role: string; content: string 
     const m = history[i]!;
     if (m.role === "user" && !m.content.startsWith("/")) {
       pairs.push({ role: "user", content: m.content });
-      // Find the next system message as the bot's reply
-      const next = history[i + 1];
+      // Find the next system message that's an actual bot reply (not a status message)
+      let next = history[i + 1];
+      // Skip over status/warning/error messages to find the real bot reply
+      let skip = i + 1;
+      while (next && next.role !== "user" && (next.role === "warning" || next.role === "error" || /^\[(?:✓|❌|🔑|⚠️|📋|🎫|🏳️|HTTP|ACCOUNT|APPEAL|SUCCESS|SPRINT|⚙️)]/.test(next.content))) {
+        skip++;
+        next = history[skip];
+      }
       if (next?.role === "system" && next.content.length > 0) {
+        i = skip; // skip past any status messages we jumped over
         // Summary: strip code blocks, tags, and trailing "Awaiting input..."
         let summary = next.content
           .replace(/```[\s\S]*?```/g, "")
