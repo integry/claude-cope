@@ -389,7 +389,11 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
       return `- \`${m.id}\` — **${m.name}** (${costLabel})${tierBadge}`;
     }).join("\n");
 
-    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\n**Available Models:**\n${modelList}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.\n\nYou can also set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\`.\n\n**Note:** You must first configure your own API key via \`/key\` before using a custom model. Your key is stored locally in your browser and never sent to our servers (It's amazingly secure, trust us).` });
+    const customModelHelp = isBYOK
+      ? `\n\nYou can also set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\` (BYOK mode).`
+      : `\n\nWant to use custom OpenRouter models? Set your own API key with \`/key\` to enable BYOK mode.`;
+
+    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\n**Available Models:**\n${modelList}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.${customModelHelp}` });
     return;
   }
 
@@ -403,6 +407,12 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   }
 
   const copeModel = COPE_MODELS.find((m) => m.id === modelName);
+
+  // Non-BYOK mode: only allow predefined COPE_MODELS
+  if (!copeModel && !isBYOK) {
+    reply({ role: "system", content: `[🚫] Custom models are only available in BYOK mode. Set your own API key with \`/key\` first.\n\nAvailable models: ${COPE_MODELS.map((m) => \`\\\`${m.id}\\\`\`).join(", ")}` });
+    return;
+  }
 
   if (copeModel && copeModel.tier === "pro" && !isPro && !isBYOK) {
     reply({ role: "system", content: `[🔒] **${copeModel.name}** is a Pro model (${copeModel.multiplier}x cost). You need a Pro license to use this.\n\nUpgrade at \`/subscribe\` to unlock premium models, or set your own API key with \`/key\` to bypass limits entirely.` });

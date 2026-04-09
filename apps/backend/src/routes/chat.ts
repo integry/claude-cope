@@ -91,14 +91,16 @@ function resolveRequestParams(body: ChatBody, envKey?: string) {
   const inventory = body.inventory ?? {};
   const upgrades = body.upgrades ?? [];
 
-  // Resolve model against COPE_MODELS if modelId or customModel is provided
+  // Resolve model against COPE_MODELS; non-BYOK mode only allows predefined COPE_MODELS
   const copeModel = (body.modelId || body.customModel)
     ? COPE_MODELS.find((m) => m.id === (body.modelId || body.customModel))
     : undefined;
 
   const model = copeModel
     ? copeModel.openRouterId
-    : body.customModel || (isBYOK ? "nvidia/nemotron-3-super-120b-a12b:free" : "nvidia/nemotron-nano-9b-v2:free");
+    : isBYOK
+      ? (body.customModel || "nvidia/nemotron-3-super-120b-a12b:free")
+      : "nvidia/nemotron-nano-9b-v2:free";
 
   const tier: "free" | "pro" = copeModel?.tier ?? "free";
   const quotaCost = copeModel?.multiplier ?? 1;

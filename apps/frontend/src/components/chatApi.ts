@@ -210,7 +210,7 @@ export function submitChatMessage(opts: {
         return fetch(`${API_BASE}/api/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: chatMessages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(customModel ? (COPE_MODELS.some((m) => m.id === customModel) ? { modelId: customModel } : { customModel }) : {}), ...(proKeyHash ? { proKeyHash } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}), ...(opts.buddyType && opts.buddyResult ? { buddy: { type: opts.buddyType, shouldInterject: true } } : {}) }),
+          body: JSON.stringify({ messages: chatMessages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(customModel && COPE_MODELS.some((m) => m.id === customModel) ? { modelId: customModel } : {}), ...(proKeyHash ? { proKeyHash } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}), ...(opts.buddyType && opts.buddyResult ? { buddy: { type: opts.buddyType, shouldInterject: true } } : {}) }),
           signal,
         });
       })();
