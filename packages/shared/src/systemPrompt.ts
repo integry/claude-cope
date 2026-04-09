@@ -231,7 +231,7 @@ IMPORTANT - RESPONSE FOCUS:
 Your response must primarily address the user's MOST RECENT message. Use conversation history for context (e.g. if the user picks a numbered option from your previous response, honor that), but do NOT rehash or fixate on topics from older messages. Each new message deserves a fresh chaotic response about its own topic.
 
 SUGGESTED REPLY:
-Append [SUGGESTED_REPLY: text] at the end. The text should be what the user would realistically type next based on YOUR response — a question, a command, or a reaction. Never repeat the same suggestion twice. Never use "quantum" or "option" in suggestions.`;
+Append [SUGGESTED_REPLY: text] at the end. This is what the USER (a human developer) would type as their next message. Write it from THEIR perspective — a question, a command, a complaint, or a sarcastic comeback. NOT from your perspective. Examples of good user replies: "just deploy it already", "why is everything on fire", "can you try not breaking prod this time". NEVER repeat a previous suggestion.`;
 
   if (modes?.fast && MODE_FRAGMENTS.fast) {
     prompt += `\n\n${MODE_FRAGMENTS.fast}`;

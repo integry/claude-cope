@@ -73,14 +73,18 @@ function filterChatHistory(history: Message[]): { role: string; content: string 
       if (next?.role === "system" && next.content.length > 0) {
         pairs.push({ role: "user", content: m.content });
         i = skip;
+        // Build a minimal context summary — strip ALL formatting to prevent format lock-in
         let summary = next.content
-          .replace(/```[\s\S]*?```/g, "")
-          .replace(/\[(?:ACHIEVEMENT_UNLOCKED|SPRINT_PROGRESS|SUGGESTED_REPLY|BUDDY_SAYS):[^\]]*\]?/g, "")
-          .replace(/SUGGESTED_REPLY.*$/gm, "")
-          .replace(/>?\s*Awaiting input\.{0,3}/g, "")
-          .replace(/\n{2,}/g, "\n")
+          .replace(/```[\s\S]*?```/g, "")               // strip code blocks
+          .replace(/\[[^\]]*\]/g, "")                    // strip ALL bracketed tags
+          .replace(/[>|#*\-=+`~]+/g, " ")               // strip markdown decoration
+          .replace(/>?\s*Awaiting input[.\s]*/gi, "")
+          .replace(/SIGSEGV.*/gi, "")
+          .replace(/Core Dumped.*/gi, "")
+          .replace(/\n+/g, " ")                          // flatten to single line
+          .replace(/\s{2,}/g, " ")                       // collapse whitespace
           .trim();
-        if (summary.length > 400) summary = summary.slice(0, 400);
+        if (summary.length > 150) summary = summary.slice(0, 150);
         if (summary) pairs.push({ role: "assistant", content: summary });
         i++;
       }
