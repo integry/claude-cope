@@ -78,6 +78,7 @@ chat.post("/", async (c) => {
       model,
       messages: body.messages,
 
+      max_tokens: 1500,
       reasoning: { effort: "none" },
     }),
   });

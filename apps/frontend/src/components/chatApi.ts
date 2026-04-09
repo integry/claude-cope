@@ -223,8 +223,15 @@ The user has a companion called "${opts.buddyType}". ${personality}
 Generate a short, in-character one-liner. Append as: [BUDDY_SAYS: your one-liner here]`;
   }
 
-  const recentMessages = chatMessages.slice(-10);
-  const messages = [{ role: "system", content: systemPrompt }, ...recentMessages];
+  // Structure: context history → system prompt → current user message
+  // Puts system prompt closest to the last message for strongest influence
+  const contextMessages = chatMessages.slice(0, -1); // all except the last
+  const lastMessage = chatMessages[chatMessages.length - 1]; // the current prompt
+  const messages = [
+    ...contextMessages,
+    { role: "system", content: systemPrompt },
+    ...(lastMessage ? [lastMessage] : []),
+  ];
   const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
   const model = copeModel ? copeModel.openRouterId : customModel || (isBYOK ? "nvidia/nemotron-3-super-120b-a12b:free" : "nvidia/nemotron-nano-9b-v2:free");
 
@@ -232,7 +239,7 @@ Generate a short, in-character one-liner. Append as: [BUDDY_SAYS: your one-liner
     ? fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages, reasoning: { effort: "none" }, stream: true, stream_options: { include_usage: true } }),
+        body: JSON.stringify({ model, messages, max_tokens: 1500, reasoning: { effort: "none" }, stream: true, stream_options: { include_usage: true } }),
         signal,
       })
     : (async () => {

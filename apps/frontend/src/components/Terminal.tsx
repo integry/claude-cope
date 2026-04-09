@@ -62,37 +62,35 @@ function filterChatHistory(history: Message[]): { role: string; content: string 
   for (let i = 0; i < history.length; i++) {
     const m = history[i]!;
     if (m.role === "user" && !m.content.startsWith("/")) {
-      // Find the next system message that's an actual bot reply (skip status/warning/error)
+      // Find the next system message that's a real bot reply (skip status/warning/error)
+      const STATUS_STARTS = ["[✓]", "[❌]", "[🔑]", "[⚠️]", "[📋]", "[🎫]", "[🏳️]", "[HTTP", "[ACCOUNT", "[APPEAL", "[SUCCESS]", "[SPRINT"];
       let skip = i + 1;
       let next = history[skip];
-      while (next && next.role !== "user" && (next.role === "warning" || next.role === "error" || /^\[(?:✓|❌|🔑|⚠️|📋|🎫|🏳️|HTTP|ACCOUNT|APPEAL|SUCCESS|SPRINT|⚙️)]/.test(next.content))) {
-        skip++;
-        next = history[skip];
+      while (next && (next.role === "warning" || next.role === "error" || next.role === "loading" || (next.role === "system" && STATUS_STARTS.some((s) => next!.content.startsWith(s))))) {
+        skip++; next = history[skip];
       }
-      // Only include user messages that have a paired bot reply — skip orphans
       if (next?.role === "system" && next.content.length > 0) {
         pairs.push({ role: "user", content: m.content });
         i = skip;
-        // Build a minimal context summary — strip ALL formatting to prevent format lock-in
+        // Clean summary: strip format markers but keep content (options, choices, etc.)
         let summary = next.content
-          .replace(/```[\s\S]*?```/g, "")               // strip code blocks
-          .replace(/\[[^\]]*\]/g, "")                    // strip ALL bracketed tags
-          .replace(/[>|#*\-=+`~]+/g, " ")               // strip markdown decoration
+          .replace(/```[\s\S]*?```/g, "")
+          .replace(/\[(?:⚙️[^\]]*|WARN|ERROR|SUCCESS|INFO|FATAL|CRITICAL|DEBUG|SIGSEGV|DONE|PROGRESS|RESULT|ACHIEVEMENT_UNLOCKED|SPRINT_PROGRESS|SUGGESTED_REPLY|BUDDY_SAYS)[^\]]*\]?/g, "")
           .replace(/>?\s*Awaiting input[.\s]*/gi, "")
-          .replace(/SIGSEGV.*/gi, "")
           .replace(/Core Dumped.*/gi, "")
-          .replace(/\n+/g, " ")                          // flatten to single line
-          .replace(/\s{2,}/g, " ")                       // collapse whitespace
+          .replace(/\n{2,}/g, "\n")
           .trim();
-        if (summary.length > 150) summary = summary.slice(0, 150);
+        // Chop the last line — suggested replies always end up there
+        const lastNewline = summary.lastIndexOf("\n");
+        if (lastNewline > 50) summary = summary.slice(0, lastNewline).trim();
+        if (summary.length > 350) summary = summary.slice(0, 350);
         if (summary) pairs.push({ role: "assistant", content: summary });
         i++;
       }
     }
   }
 
-  // Keep last 4 exchanges
-  return pairs.slice(-8);
+  return pairs.slice(-6);
 }
 
 function Terminal() {
