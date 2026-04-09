@@ -77,7 +77,7 @@ chat.post("/", async (c) => {
     body: JSON.stringify({
       model,
       messages: body.messages,
-      max_tokens: 1500,
+      max_tokens: 1000,
       reasoning: { effort: "none" },
     }),
   });

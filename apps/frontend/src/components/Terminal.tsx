@@ -62,25 +62,24 @@ function filterChatHistory(history: Message[]): { role: string; content: string 
   for (let i = 0; i < history.length; i++) {
     const m = history[i]!;
     if (m.role === "user" && !m.content.startsWith("/")) {
-      pairs.push({ role: "user", content: m.content });
-      // Find the next system message that's an actual bot reply (not a status message)
-      let next = history[i + 1];
-      // Skip over status/warning/error messages to find the real bot reply
+      // Find the next system message that's an actual bot reply (skip status/warning/error)
       let skip = i + 1;
+      let next = history[skip];
       while (next && next.role !== "user" && (next.role === "warning" || next.role === "error" || /^\[(?:✓|❌|🔑|⚠️|📋|🎫|🏳️|HTTP|ACCOUNT|APPEAL|SUCCESS|SPRINT|⚙️)]/.test(next.content))) {
         skip++;
         next = history[skip];
       }
+      // Only include user messages that have a paired bot reply — skip orphans
       if (next?.role === "system" && next.content.length > 0) {
-        i = skip; // skip past any status messages we jumped over
-        // Summary: strip code blocks, tags, and trailing "Awaiting input..."
+        pairs.push({ role: "user", content: m.content });
+        i = skip;
         let summary = next.content
           .replace(/```[\s\S]*?```/g, "")
           .replace(/\[(?:ACHIEVEMENT_UNLOCKED|SPRINT_PROGRESS|SUGGESTED_REPLY|BUDDY_SAYS):[^\]]*\]?/g, "")
+          .replace(/SUGGESTED_REPLY.*$/gm, "")
           .replace(/>?\s*Awaiting input\.{0,3}/g, "")
           .replace(/\n{2,}/g, "\n")
           .trim();
-        // Truncate but don't include if empty after stripping
         if (summary.length > 400) summary = summary.slice(0, 400);
         if (summary) pairs.push({ role: "assistant", content: summary });
         i++;

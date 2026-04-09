@@ -232,7 +232,7 @@ Generate a short, in-character one-liner. Append as: [BUDDY_SAYS: your one-liner
     ? fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages, max_tokens: 1500, reasoning: { effort: "none" }, stream: true, stream_options: { include_usage: true } }),
+        body: JSON.stringify({ model, messages, max_tokens: 1000, reasoning: { effort: "none" }, stream: true, stream_options: { include_usage: true } }),
         signal,
       })
     : (async () => {
