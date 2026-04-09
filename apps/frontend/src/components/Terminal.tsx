@@ -50,50 +50,38 @@ const MessageList = memo(function MessageList({ history, messageKeys, initialHis
   );
 });
 
-/** Trim bot responses for LLM context: strip noise, keep core message */
-function trimForContext(content: string): string {
-  let trimmed = content
-    .replace(/```[\s\S]*?```/g, "[code]") // collapse code blocks
-    .replace(/\[ACHIEVEMENT_UNLOCKED:[^\]]*\]/g, "")
-    .replace(/\[SPRINT_PROGRESS:[^\]]*\]/g, "")
-    .replace(/\[SUGGESTED_REPLY:[^\]]*\]/g, "")
-    .replace(/\[BUDDY_SAYS:[^\]]*\]?/g, "")
-    .replace(/\n{2,}/g, "\n") // collapse multi-newlines
-    .trim();
-  // Strip everything after "Awaiting input" (trailing prompts/suggestions)
-  const awaitIdx = trimmed.indexOf("Awaiting input");
-  if (awaitIdx > 0) trimmed = trimmed.slice(0, awaitIdx).trim();
-  // Cap at 200 chars — just enough to remind the LLM what it said
-  if (trimmed.length > 200) trimmed = trimmed.slice(0, 200) + "...";
-  return trimmed;
-}
 
 /**
  * Build LLM context from chat history.
- * Only includes user↔system pairs where the user message is NOT a slash command
- * and the system response directly follows a user message (actual conversation).
+ * Pairs user messages with a short summary of the bot reply to maintain
+ * conversation rhythm without leaking old content.
  */
 function filterChatHistory(history: Message[]): { role: string; content: string }[] {
   const pairs: { role: string; content: string }[] = [];
 
   for (let i = 0; i < history.length; i++) {
     const m = history[i]!;
-    // Only include user messages that aren't slash commands
     if (m.role === "user" && !m.content.startsWith("/")) {
       pairs.push({ role: "user", content: m.content });
-      // Look ahead for the next system message (the bot's reply to this user message)
+      // Find the next system message as the bot's reply
       const next = history[i + 1];
       if (next?.role === "system" && next.content.length > 0) {
-        const trimmed = trimForContext(next.content);
-        if (trimmed.length > 0) {
-          pairs.push({ role: "assistant", content: trimmed });
-        }
-        i++; // skip the system message we just consumed
+        // Summary: strip code blocks, tags, and trailing "Awaiting input..."
+        let summary = next.content
+          .replace(/```[\s\S]*?```/g, "")
+          .replace(/\[(?:ACHIEVEMENT_UNLOCKED|SPRINT_PROGRESS|SUGGESTED_REPLY|BUDDY_SAYS):[^\]]*\]?/g, "")
+          .replace(/>?\s*Awaiting input\.{0,3}/g, "")
+          .replace(/\n{2,}/g, "\n")
+          .trim();
+        // Truncate but don't include if empty after stripping
+        if (summary.length > 400) summary = summary.slice(0, 400);
+        if (summary) pairs.push({ role: "assistant", content: summary });
+        i++;
       }
     }
   }
 
-  // Keep only the last 4 exchanges (8 messages)
+  // Keep last 4 exchanges
   return pairs.slice(-8);
 }
 
