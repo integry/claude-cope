@@ -6,7 +6,7 @@ import { prefetchSequences } from "./toolSequences";
 type Reply = (msg: Message) => void;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
 
-type BacklogTicket = { id: string; title: string; description: string; technical_debt: number };
+type BacklogTicket = { id: string; title: string; description: string; technical_debt: number; kickoff_prompt: string };
 
 /** Cache last backlog results so `/take 2` can resolve by row number */
 let lastBacklogResults: BacklogTicket[] = [];
@@ -83,6 +83,7 @@ export function handleTakeCommand(
   state: GameState,
   setState: SetState,
   reply: Reply,
+  setInputValue: (v: string) => void,
 ): boolean {
   const input = command.slice("/take".length).trim();
   if (!input) {
@@ -126,6 +127,7 @@ export function handleTakeCommand(
     role: "system",
     content: `[🎫 **TICKET CLAIMED**] ${ticket.id}: **${ticket.title}**\n\n> ${ticket.description}\n\nReward: **${(ticket.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.`,
   });
+  setInputValue(ticket.kickoff_prompt);
   return true;
 }
 
