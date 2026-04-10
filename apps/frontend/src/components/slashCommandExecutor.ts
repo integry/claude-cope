@@ -407,6 +407,7 @@ function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
       activeTicket: { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt },
     }));
     reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nReward: **${(offer.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.` });
+    ctx.setInputValue(offer.kickoff_prompt);
   }
 }
 
@@ -436,7 +437,7 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
     handleBacklogCommand(reply).then(() => ctx.setIsProcessing(false));
     return "async";
   } else if (command.startsWith("/take")) {
-    handleTakeCommand(command, ctx.state, ctx.setState, reply);
+    handleTakeCommand(command, ctx.state, ctx.setState, reply, ctx.setInputValue);
   } else if (command === "/accept") {
     handleAcceptCommand(ctx, reply);
   } else if (command === "/abandon") {
