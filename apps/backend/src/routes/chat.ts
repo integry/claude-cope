@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { computeMultiplier } from "../gameConstants";
-import { consumeQuota, QuotaExhaustedError } from "../utils/quota";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 
 type Env = {
@@ -28,6 +27,49 @@ type ChatBody = {
   upgrades?: string[];
 };
 
+type ChatResponseData = {
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  choices?: Array<{ message?: { content?: string } }>;
+  [key: string]: unknown;
+};
+
+function resolveModel(modelId?: string): string {
+  const copeModel = modelId ? COPE_MODELS.find((m) => m.id === modelId) : undefined;
+  return copeModel?.openRouterId ?? "nvidia/nemotron-3-super-120b-a12b";
+}
+
+function extractBodyDefaults(body: ChatBody) {
+  return {
+    username: body.username ?? "anonymous",
+    rank: body.rank ?? "Junior Code Monkey",
+    inventory: body.inventory ?? {},
+    upgrades: body.upgrades ?? [],
+  };
+}
+
+function logChatDiagnostics(messages: { role: string; content: string }[], data: ChatResponseData) {
+  const lastUserMsg = messages.filter((m) => m.role === "user").slice(-1)[0]?.content ?? "";
+  const replyContent = data.choices?.[0]?.message?.content ?? "";
+  const hasUserNext = /\[USER_NEXT_MESSAGE:/i.test(replyContent);
+  console.log(
+    `[CHAT] user="${lastUserMsg.slice(0, 80)}" | reply=${replyContent.length}c | tag=${hasUserNext ? "✓" : "✗"} | tail="${replyContent.slice(-200).replace(/\n/g, " ")}"`,
+  );
+}
+
+function recordUsage(
+  db: D1Database | undefined,
+  ctx: { waitUntil: (p: Promise<unknown>) => void },
+  params: { username: string; model: string; data: ChatResponseData; tdAwarded: number; rank: string; country: string; hour: string },
+) {
+  if (!db) return;
+  const tokensSent = params.data.usage?.prompt_tokens ?? 0;
+  const tokensReceived = params.data.usage?.completion_tokens ?? 0;
+  ctx.waitUntil(Promise.all([
+    db.prepare("INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, ?, ?, ?)").bind(params.username, params.model, tokensSent, tokensReceived, params.hour).run(),
+    db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country) VALUES (?, ?, ?, ?, ?) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, updated_at = datetime('now')").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.tdAwarded, params.tdAwarded).run(),
+  ]));
+}
+
 const chat = new Hono<Env>();
 
 chat.post("/", async (c) => {
@@ -37,35 +79,13 @@ chat.post("/", async (c) => {
     return c.json({ error: "messages array is required" }, 400);
   }
 
-
   const apiKey = (c.env as Record<string, string | undefined>).OPENROUTER_API_KEY;
   if (!apiKey) {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
   }
 
-  const username = body.username ?? "anonymous";
-  const rank = body.rank ?? "Junior Code Monkey";
-  const inventory = body.inventory ?? {};
-  const upgrades = body.upgrades ?? [];
-
-  // Resolve model — only allow predefined COPE_MODELS for server path
-  const copeModel = body.modelId ? COPE_MODELS.find((m) => m.id === body.modelId) : undefined;
-  const model = copeModel?.openRouterId ?? "nvidia/nemotron-3-super-120b-a12b";
-  const tier: "free" | "pro" = copeModel?.tier ?? "free";
-  const quotaCost = copeModel?.multiplier ?? 1;
-
-  // Quota enforcement disabled for local dev
-  // const quotaKv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  // if (quotaKv) {
-  //   try {
-  //     await consumeQuota(quotaKv, { tier, sessionId: c.get("sessionId"), licenseKey: body.proKeyHash, cost: quotaCost });
-  //   } catch (err) {
-  //     if (err instanceof QuotaExhaustedError) {
-  //       return c.json({ error: err.message }, 402);
-  //     }
-  //     throw err;
-  //   }
-  // }
+  const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
+  const model = resolveModel(body.modelId);
 
   // Proxy to OpenRouter — messages come pre-built from the client
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -89,19 +109,10 @@ chat.post("/", async (c) => {
   }
 
   // Parse response
-  const data = await response.json() as {
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
-    choices?: Array<{ message?: { content?: string } }>;
-    [key: string]: unknown;
-  };
+  const data = await response.json() as ChatResponseData;
 
   // Debug logging for tag/voice diagnostics — useful when tuning system prompts
-  const lastUserMsg = body.messages.filter((m) => m.role === "user").slice(-1)[0]?.content ?? "";
-  const replyContent = data.choices?.[0]?.message?.content ?? "";
-  const hasUserNext = /\[USER_NEXT_MESSAGE:/i.test(replyContent);
-  console.log(
-    `[CHAT] user="${lastUserMsg.slice(0, 80)}" | reply=${replyContent.length}c | tag=${hasUserNext ? "✓" : "✗"} | tail="${replyContent.slice(-200).replace(/\n/g, " ")}"`,
-  );
+  logChatDiagnostics(body.messages, data);
 
   // Server-authoritative TD award with validated multiplier
   const baseTD = Math.floor(Math.random() * 40) + 10;
@@ -111,15 +122,7 @@ chat.post("/", async (c) => {
   const hour = new Date().toISOString().slice(0, 13);
 
   // Log usage and update score asynchronously
-  const db = c.env?.DB;
-  if (db) {
-    const tokensSent = data.usage?.prompt_tokens ?? 0;
-    const tokensReceived = data.usage?.completion_tokens ?? 0;
-    c.executionCtx.waitUntil(Promise.all([
-      db.prepare("INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, ?, ?, ?)").bind(username, model, tokensSent, tokensReceived, hour).run(),
-      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country) VALUES (?, ?, ?, ?, ?) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, updated_at = datetime('now')").bind(username, tdAwarded, tdAwarded, rank, country, tdAwarded, tdAwarded).run(),
-    ]));
-  }
+  recordUsage(c.env?.DB, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour });
 
   (data as Record<string, unknown>).td_awarded = tdAwarded;
   return c.json(data);

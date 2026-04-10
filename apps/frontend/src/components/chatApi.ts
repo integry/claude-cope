@@ -166,6 +166,54 @@ async function hashKey(key: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+async function handleErrorResponse(
+  res: Response,
+  setHistory: Dispatch<SetStateAction<Message[]>>,
+): Promise<boolean> {
+  if (res.status === 402) {
+    setHistory((prev) => [
+      ...prev.filter((msg) => msg.role !== "loading"),
+      { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
+    ]);
+    return true;
+  }
+
+  if (res.status === 401) {
+    setHistory((prev) => [
+      ...prev.filter((msg) => msg.role !== "loading"),
+      { role: "error", content: "[🔑 ACCESS DENIED] OpenRouter just slammed the door in your face (HTTP 401). Your API key has been **rejected**, **ghosted**, and **emotionally unavailable**.\n\n[POSSIBLE CAUSES]\n\n• Your key is disabled — like your ambition after the third standup today\n\n• Your key expired — unlike your technical debt, which is eternal\n\n• You copy-pasted it wrong — classic Junior Code Monkey energy\n\n[RECOVERY OPTIONS]\n\n• Check your key at [openrouter.ai/keys](https://openrouter.ai/keys)\n\n• `/key clear` to crawl back to the default model\n\n• `/key <new-key>` to try again with whatever dignity you have left" },
+    ]);
+    return true;
+  }
+
+  if (res.status === 429) {
+    const errorData = await res.json().catch(() => null);
+    const upstreamRaw = errorData?.error?.metadata?.raw
+      ?? errorData?.error?.message
+      ?? (typeof errorData?.error === "string" ? errorData.error : "");
+    const details = upstreamRaw ? `\n\n${upstreamRaw}` : "";
+    setHistory((prev) => [
+      ...prev.filter((msg) => msg.role !== "loading"),
+      { role: "warning", content: `[⚠️] OpenRouter rate-limited your request. Please wait before sending another message.${details}` },
+    ]);
+    return true;
+  }
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    setHistory((prev) => [
+      ...prev.filter((msg) => msg.role !== "loading"),
+      {
+        role: "error",
+        content: `[❌ Error] ${errorData?.error?.message ?? errorData?.error ?? "Request failed"} (HTTP ${res.status})`,
+      },
+    ]);
+    return true;
+  }
+
+  return false;
+}
+
 export function submitChatMessage(opts: {
   chatMessages: { role: string; content: string }[];
   buddyResult: BuddyInterjectionResult | null;
@@ -220,46 +268,7 @@ export function submitChatMessage(opts: {
 
   requestPromise
     .then(async (res) => {
-      if (res.status === 402) {
-        setHistory((prev) => [
-          ...prev.filter((msg) => msg.role !== "loading"),
-          { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
-        ]);
-        return;
-      }
-
-      if (res.status === 401) {
-        setHistory((prev) => [
-          ...prev.filter((msg) => msg.role !== "loading"),
-          { role: "error", content: "[🔑 ACCESS DENIED] OpenRouter just slammed the door in your face (HTTP 401). Your API key has been **rejected**, **ghosted**, and **emotionally unavailable**.\n\n[POSSIBLE CAUSES]\n\n• Your key is disabled — like your ambition after the third standup today\n\n• Your key expired — unlike your technical debt, which is eternal\n\n• You copy-pasted it wrong — classic Junior Code Monkey energy\n\n[RECOVERY OPTIONS]\n\n• Check your key at [openrouter.ai/keys](https://openrouter.ai/keys)\n\n• `/key clear` to crawl back to the default model\n\n• `/key <new-key>` to try again with whatever dignity you have left" },
-        ]);
-        return;
-      }
-
-      if (res.status === 429) {
-        const errorData = await res.json().catch(() => null);
-        const upstreamRaw = errorData?.error?.metadata?.raw
-          ?? errorData?.error?.message
-          ?? (typeof errorData?.error === "string" ? errorData.error : "");
-        const details = upstreamRaw ? `\n\n${upstreamRaw}` : "";
-        setHistory((prev) => [
-          ...prev.filter((msg) => msg.role !== "loading"),
-          { role: "warning", content: `[⚠️] OpenRouter rate-limited your request. Please wait before sending another message.${details}` },
-        ]);
-        return;
-      }
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        setHistory((prev) => [
-          ...prev.filter((msg) => msg.role !== "loading"),
-          {
-            role: "error",
-            content: `[❌ Error] ${errorData?.error?.message ?? errorData?.error ?? "Request failed"} (HTTP ${res.status})`,
-          },
-        ]);
-        return;
-      }
+      if (await handleErrorResponse(res, setHistory)) return;
 
       const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD);
       let { rawReply } = parsed;
