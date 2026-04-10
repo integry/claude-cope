@@ -136,6 +136,26 @@ function processReplyTags(
   return { achievementMessages, reply, suggestedReply, buddySays };
 }
 
+function extractJsonResponseFields(data: Record<string, unknown>): { rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number } {
+  const choices = data?.choices as Array<{ message?: { content?: string } }> | undefined;
+  const rawReply = choices?.[0]?.message?.content ?? "";
+  const usage = data?.usage as { prompt_tokens?: number; completion_tokens?: number; cost?: number; total_cost?: number } | undefined;
+  return {
+    rawReply,
+    tokensSent: usage?.prompt_tokens,
+    tokensReceived: usage?.completion_tokens,
+    cost: usage?.cost ?? usage?.total_cost,
+  };
+}
+
+function extractStreamFields(usage: StreamResult["usage"]): { tokensSent?: number; tokensReceived?: number; cost?: number } {
+  return {
+    tokensSent: usage?.prompt_tokens,
+    tokensReceived: usage?.completion_tokens,
+    cost: usage?.cost,
+  };
+}
+
 async function parseResponseBody(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
@@ -144,22 +164,14 @@ async function parseResponseBody(
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("text/event-stream")) {
     const streamResult = await readStreamedResponse(res, setHistory);
-    return {
-      rawReply: streamResult.rawReply,
-      tokensSent: streamResult.usage?.prompt_tokens,
-      tokensReceived: streamResult.usage?.completion_tokens,
-      cost: streamResult.usage?.cost,
-    };
+    return { rawReply: streamResult.rawReply, ...extractStreamFields(streamResult.usage) };
   }
   const data = await res.json();
-  const rawReply = data?.choices?.[0]?.message?.content ?? "";
-  const tokensSent = data?.usage?.prompt_tokens ?? undefined;
-  const tokensReceived = data?.usage?.completion_tokens ?? undefined;
-  const cost = data?.usage?.cost ?? data?.usage?.total_cost ?? undefined;
+  const fields = extractJsonResponseFields(data);
   if (data?.td_awarded && addActiveTD) {
     addActiveTD(data.td_awarded, true);
   }
-  return { rawReply, tokensSent, tokensReceived, cost };
+  return fields;
 }
 
 async function hashKey(key: string): Promise<string> {
