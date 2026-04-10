@@ -1,7 +1,7 @@
 import { API_BASE } from "../config";
 import type { Message } from "./Terminal";
 
-type BacklogTicket = { id: string; title: string; description: string; technical_debt: number };
+type BacklogTicket = { id: string; title: string; description: string; technical_debt: number; kickoff_prompt: string };
 
 /** The pending ticket offered to the user, waiting for /accept */
 let pendingTicketOffer: BacklogTicket | null = null;
