@@ -7,7 +7,7 @@ import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
 import { buildAchievementBox } from "./achievementBox";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
-import { getSystemPrompt } from "@claude-cope/shared/systemPrompt";
+import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 
 export type BuddyInterjectionResult = {
@@ -122,7 +122,7 @@ function processReplyTags(
   }
 
   // Extract suggested reply for input placeholder
-  const suggestedRegex = /\[SUGGESTED_REPLY:\s*(.+?)(?:\]|$)/gm;
+  const suggestedRegex = /\[(?:SUGGESTED_REPLY|USER_NEXT_MESSAGE):\s*(.+?)(?:\]|$)/gm;
   const suggestedMatch = suggestedRegex.exec(rawReply);
   const suggestedReply = suggestedMatch?.[1]?.trim().replace(/^["']|["']$/g, "") ?? null;
 
@@ -190,43 +190,14 @@ export function submitChatMessage(opts: {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, signal } = opts;
   const isBYOK = Boolean(apiKey);
 
-  // Build the system prompt and message list — shared by both paths
-  let systemPrompt = getSystemPrompt(currentRank, modes);
-
-  // Active sprint ticket context
-  if (activeTicket) {
-    const pct = Math.round((activeTicket.sprintProgress / activeTicket.sprintGoal) * 100);
-    systemPrompt += `\n\nACTIVE SPRINT TICKET:
-The user is currently working on ticket ${activeTicket.id}: "${activeTicket.title}" (${pct}% complete, ${activeTicket.sprintProgress}/${activeTicket.sprintGoal} TD).
-Your response should mock their attempt to work on this ticket. If their message is relevant to the ticket topic, acknowledge it sarcastically. If it's completely unrelated, roast them for slacking off during a sprint.
-YOU MUST END YOUR RESPONSE WITH THIS TAG — NO EXCEPTIONS:
-[SPRINT_PROGRESS: N] where N is a single number.
-- Relevant to ticket: N = 18 to 25
-- Somewhat relevant: N = 8 to 17
-- Off-topic: N = 3 to 7
-Example last line: [SPRINT_PROGRESS: 15]
-THIS TAG IS MANDATORY. NEVER omit it when a sprint ticket is active.`;
-  }
-
-  // Buddy interjection context
-  if (opts.buddyType && buddyResult) {
-    const BUDDY_PERSONALITIES: Record<string, string> = {
-      "Agile Snail": `A slow-moving project manager obsessed with process. Examples: "Have you considered filing a ticket for that?", "This needs a retrospective."`,
-      "Sarcastic Clippy": `A digital paperclip that critiques technology choices. Examples: "It looks like you're trying to use JavaScript. Would you like to switch to COBOL?"`,
-      "10x Dragon": `A mythical creature that judges code quality with fire. Examples: "Your variable names offend me on a molecular level."`,
-      "Grumpy Senior": `A veteran developer tired of everything. Examples: "Back in my day, we didn't have TypeScript. We had raw pointers and fear."`,
-      "Panic Intern": `An anxious junior who catastrophizes everything. Examples: "Oh no oh no is that a production error?!", "The CI is red. MY CAREER IS OVER."`,
-    };
-    const personality = BUDDY_PERSONALITIES[opts.buddyType] ?? "";
-    systemPrompt += `\n\nBUDDY INTERJECTION:
-The user has a companion called "${opts.buddyType}". ${personality}
-Generate a short, in-character one-liner. Append as: [BUDDY_SAYS: your one-liner here]`;
-  }
-
-  const messages = [
-    { role: "system", content: systemPrompt },
-    ...chatMessages.slice(-10),
-  ];
+  // Build the system prompt and message list via shared builder
+  const messages = buildChatMessages({
+    rank: currentRank,
+    chatMessages,
+    modes,
+    activeTicket,
+    buddyType: opts.buddyType && buddyResult ? opts.buddyType : null,
+  });
   const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
   const model = copeModel ? copeModel.openRouterId : customModel || (isBYOK ? "nvidia/nemotron-3-super-120b-a12b:free" : "nvidia/nemotron-nano-9b-v2:free");
 

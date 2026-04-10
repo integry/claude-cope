@@ -229,9 +229,7 @@ export function getSystemPrompt(rank: string, modes?: { fast?: boolean; voice?: 
 IMPORTANT - RESPONSE FOCUS:
 Focus on the user's latest message. Prior conversation is background context only. NEVER copy or repeat content from your previous responses — every response must be completely fresh and original with new jokes, tool names, and punchlines.
 
-SUGGESTED REPLY:
-At the very end of your response (after all other tags), append a short suggested follow-up the user might type next. Keep it to 3-8 words — a natural continuation of the conversation. Format: [SUGGESTED_REPLY: your suggestion here]
-Examples: [SUGGESTED_REPLY: just do option 2], [SUGGESTED_REPLY: ok deploy it], [SUGGESTED_REPLY: what about testing?]`;
+REMINDER: You MUST end every response with [USER_NEXT_MESSAGE: text] — no exceptions.`;
 
   if (modes?.fast && MODE_FRAGMENTS.fast) {
     prompt += `\n\n${MODE_FRAGMENTS.fast}`;

@@ -57,7 +57,8 @@ const MessageList = memo(function MessageList({ history, messageKeys, initialHis
  * conversation rhythm without leaking old content.
  */
 function filterChatHistory(history: Message[]): { role: string; content: string }[] {
-  // Simple filter: include user + system messages, skip slash commands and their responses
+  // Filter out slash commands and their responses, then map UI roles to LLM roles.
+  // History windowing and assistant-reply trimming happen in shared buildChatMessages.
   const isSlashCmd = (content: string) => content.startsWith("/");
   return history.filter((m, i) => {
     if (m.role === "user") return !isSlashCmd(m.content);
@@ -67,7 +68,10 @@ function filterChatHistory(history: Message[]): { role: string; content: string 
       return true;
     }
     return false;
-  }).slice(-10).map((m) => ({ role: m.role === "system" ? "assistant" : "user", content: m.content }));
+  }).map((m) => ({
+    role: m.role === "system" ? "assistant" : "user",
+    content: m.content,
+  }));
 }
 
 function Terminal() {

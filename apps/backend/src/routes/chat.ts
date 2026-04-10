@@ -91,8 +91,17 @@ chat.post("/", async (c) => {
   // Parse response
   const data = await response.json() as {
     usage?: { prompt_tokens?: number; completion_tokens?: number };
+    choices?: Array<{ message?: { content?: string } }>;
     [key: string]: unknown;
   };
+
+  // Debug logging for tag/voice diagnostics — useful when tuning system prompts
+  const lastUserMsg = body.messages.filter((m) => m.role === "user").slice(-1)[0]?.content ?? "";
+  const replyContent = data.choices?.[0]?.message?.content ?? "";
+  const hasUserNext = /\[USER_NEXT_MESSAGE:/i.test(replyContent);
+  console.log(
+    `[CHAT] user="${lastUserMsg.slice(0, 80)}" | reply=${replyContent.length}c | tag=${hasUserNext ? "✓" : "✗"} | tail="${replyContent.slice(-200).replace(/\n/g, " ")}"`,
+  );
 
   // Server-authoritative TD award with validated multiplier
   const baseTD = Math.floor(Math.random() * 40) + 10;
