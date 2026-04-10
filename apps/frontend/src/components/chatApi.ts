@@ -237,9 +237,14 @@ export function submitChatMessage(opts: {
       }
 
       if (res.status === 429) {
+        const errorData = await res.json().catch(() => null);
+        const upstreamRaw = errorData?.error?.metadata?.raw
+          ?? errorData?.error?.message
+          ?? (typeof errorData?.error === "string" ? errorData.error : "");
+        const details = upstreamRaw ? `\n\n${upstreamRaw}` : "";
         setHistory((prev) => [
           ...prev.filter((msg) => msg.role !== "loading"),
-          { role: "warning", content: "[⚠️] Rate limited. Please wait before sending another message." },
+          { role: "warning", content: `[⚠️] OpenRouter rate-limited your request. Please wait before sending another message.${details}` },
         ]);
         return;
       }

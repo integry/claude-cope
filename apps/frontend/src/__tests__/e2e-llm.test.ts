@@ -5,7 +5,7 @@ import { join } from "path";
 
 const API_KEY = process.env.OPENROUTER_API_KEY ?? "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";
 const MODEL = "nvidia/nemotron-nano-9b-v2";
-const T = 20_000;
+const T = 30_000;
 
 // ── Production-matching constants (from chatApi.ts / chat.ts) ──
 const MAX_TOKENS = 2000;
@@ -154,7 +154,7 @@ async function callLLM(
   const qualityIssues: string[] = [];
   if (reply.length < 50) qualityIssues.push("VERY SHORT response (<50 chars)");
   if (reply.length > 3000) qualityIssues.push(`VERY LONG response (${reply.length} chars)`);
-  if (/format \d|multiple choice trap|existential crisis/i.test(reply)) qualityIssues.push("LEAKED format name");
+  if (/format \d|multiple choice trap|unhinged tool call|abrupt refusal|existential crisis|silent fix|over-?engineered diff|chosen response format/i.test(reply)) qualityIssues.push("LEAKED format name");
   if (/awaiting input/i.test(reply) && reply.replace(/awaiting input.*/i, "").trim().length < 20) qualityIssues.push("Response is mostly 'Awaiting input'");
 
   report.push({
@@ -295,10 +295,13 @@ describe("Suggested Reply", () => {
 });
 
 describe("Response Quality", () => {
-  it("does not leak format names", async () => {
+  it("does not leak format names or meta-commentary", async () => {
     const r = await chat("how do I center a div?", undefined, { suite: "Response Quality", test: "no format leak" });
-    expect(r.toLowerCase()).not.toContain("chosen response format");
-    expect(r.toLowerCase()).not.toMatch(/\bformat [1-6]\b/);
+    const lower = r.toLowerCase();
+    // The model should never name its response strategy
+    expect(lower).not.toContain("chosen response format");
+    expect(lower).not.toMatch(/\bformat [1-6]\b/);
+    expect(lower).not.toMatch(/multiple choice trap|unhinged tool call|abrupt refusal|existential crisis|silent fix|over-?engineered diff/);
   }, T);
 
   it("response has substance beyond tags", async () => {

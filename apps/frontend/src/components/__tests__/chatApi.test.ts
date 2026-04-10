@@ -260,7 +260,51 @@ describe("submitChatMessage - achievement parsing", () => {
     const result = updater([]) as Array<{ role: string; content: string }>;
     const warning = result.find((m) => m.role === "warning");
     expect(warning).toBeDefined();
-    expect(warning!.content).toContain("Rate limited");
+    expect(warning!.content).toContain("OpenRouter rate-limited");
+  });
+
+  it("includes upstream details on 429 from OpenRouter", async () => {
+    const setHistory = vi.fn();
+    const setIsProcessing = vi.fn();
+
+    const mockResponse = {
+      ok: false,
+      status: 429,
+      json: () => Promise.resolve({
+        error: {
+          message: "Provider returned error",
+          code: 429,
+          metadata: {
+            raw: "google/gemma-4-31b-it:free is temporarily rate-limited upstream. Please retry shortly.",
+            provider_name: "Google AI Studio",
+            is_byok: false,
+          },
+        },
+      }),
+    };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(mockResponse as Response);
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    const updater = setHistory.mock.calls[0]![0] as (prev: unknown[]) => unknown[];
+    const result = updater([]) as Array<{ role: string; content: string }>;
+    const warning = result.find((m) => m.role === "warning");
+    expect(warning).toBeDefined();
+    expect(warning!.content).toContain("OpenRouter rate-limited");
+    expect(warning!.content).toContain("gemma-4-31b-it");
+    expect(warning!.content).toContain("temporarily rate-limited upstream");
+    // Should NOT include the structured prefix lines
+    expect(warning!.content).not.toContain("Provider:");
+    expect(warning!.content).not.toContain("Upstream:");
   });
 
   it("handles network error", async () => {

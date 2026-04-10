@@ -260,10 +260,22 @@ const markdownComponents = {
   },
 };
 
+// Buddy interjections have a specific shape: ASCII art on the first lines,
+// then a `[Buddy Name] text` line. We need to render those as preformatted
+// monospace so the ASCII art lines up. Other multi-line warnings (rate-limit
+// errors, etc.) should wrap normally.
+function isBuddyMessage(content: string): boolean {
+  return /\n\[[^\]]+\]\s/.test(content);
+}
+
 function getContainerClass(message: Message, isNew: boolean): string {
-  const colorClass = roleColors[message.role];
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
-  const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
+  const isBuddyInterjection = message.role === "warning" && isBuddyMessage(message.content);
+  // While streaming, the message has role "loading" but we want it to render
+  // in the same color as the final system message (not the yellow loading color)
+  // so the transition doesn't look jarring.
+  const isStreamingContent = message.role === "loading" && !message.content.startsWith("[⚙️]");
+  const colorClass = isStreamingContent ? roleColors.system : roleColors[message.role];
 
   let modifier = "leading-relaxed";
   if (isAchievement) {
@@ -276,7 +288,7 @@ function getContainerClass(message: Message, isNew: boolean): string {
 
 function MessageContent({ message, isNew = false }: { message: Message; isNew?: boolean }) {
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
-  const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
+  const isBuddyInterjection = message.role === "warning" && isBuddyMessage(message.content);
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
   const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
