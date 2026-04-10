@@ -177,7 +177,7 @@ describe("submitChatMessage - achievement parsing", () => {
     expect(setIsProcessing).toHaveBeenCalledWith(false);
   });
 
-  it("extracts multiple achievements from response", async () => {
+  it("extracts first achievement from response (capped at 1 per reply)", async () => {
     const unlockAchievement = vi.fn();
     const setHistory = vi.fn();
     const setIsProcessing = vi.fn();
@@ -200,9 +200,9 @@ describe("submitChatMessage - achievement parsing", () => {
 
     await vi.advanceTimersByTimeAsync(3000);
 
-    expect(unlockAchievement).toHaveBeenCalledTimes(2);
+    // Capped at 1 achievement per response to prevent LLM dumping all triggers at once
+    expect(unlockAchievement).toHaveBeenCalledTimes(1);
     expect(unlockAchievement).toHaveBeenCalledWith("speed_runner");
-    expect(unlockAchievement).toHaveBeenCalledWith("big_spender");
   });
 
   it("strips achievement tags from displayed reply", async () => {

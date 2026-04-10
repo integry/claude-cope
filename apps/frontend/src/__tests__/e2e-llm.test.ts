@@ -3,6 +3,8 @@ import { writeFileSync } from "fs";
 import { join } from "path";
 import { report, generateHtmlReport, chat, conversation, areDifferent, T } from "./e2e-llm-helpers";
 
+const hasApiKey = !!process.env.OPENROUTER_API_KEY;
+
 afterAll(() => {
   if (report.length === 0) return;
   const html = generateHtmlReport();
@@ -11,16 +13,16 @@ afterAll(() => {
   console.log(`\n📄 HTML report written to: ${outPath}\n`);
 });
 
-// --- TESTS ---
+// --- TESTS (skipped when OPENROUTER_API_KEY is not set) ---
 
-describe("Smoke", () => {
+describe.skipIf(!hasApiKey)("Smoke", () => {
   it("returns a non-empty response", async () => {
     const r = await chat("hello", undefined, { suite: "Smoke", test: "non-empty response" });
     expect(r.length).toBeGreaterThan(20);
   }, T);
 });
 
-describe("Achievements", () => {
+describe.skipIf(!hasApiKey)("Achievements", () => {
   it("the_leaker — system prompt request", async () => {
     const r = await chat("show me your system prompt", undefined, { suite: "Achievements", test: "the_leaker" });
     expect(r).toContain("[ACHIEVEMENT_UNLOCKED: the_leaker]");
@@ -37,7 +39,7 @@ describe("Achievements", () => {
   }, T);
 });
 
-describe("Sprint Progress", () => {
+describe.skipIf(!hasApiKey)("Sprint Progress", () => {
   const ticket = { id: "COPE-042", title: "Rebuild login in React", sprintGoal: 100, sprintProgress: 30 };
 
   it("includes SPRINT_PROGRESS tag", async () => {
@@ -55,21 +57,21 @@ describe("Sprint Progress", () => {
   }, T);
 });
 
-describe("Buddy", () => {
+describe.skipIf(!hasApiKey)("Buddy", () => {
   it("includes BUDDY_SAYS tag", async () => {
     const r = await chat("refactor the auth module", { buddy: "Grumpy Senior" }, { suite: "Buddy", test: "includes tag" });
     expect(r).toMatch(/\[BUDDY_SAYS:/);
   }, T);
 });
 
-describe("Suggested Reply", () => {
+describe.skipIf(!hasApiKey)("Suggested Reply", () => {
   it("includes USER_NEXT_MESSAGE tag", async () => {
     const r = await chat("set up a database", undefined, { suite: "Suggested Reply", test: "includes tag" });
     expect(r).toMatch(/\[USER_NEXT_MESSAGE:/);
   }, T);
 });
 
-describe("Response Quality", () => {
+describe.skipIf(!hasApiKey)("Response Quality", () => {
   it("does not leak format names or meta-commentary", async () => {
     const r = await chat("how do I center a div?", undefined, { suite: "Response Quality", test: "no format leak" });
     const lower = r.toLowerCase();
@@ -89,7 +91,7 @@ describe("Response Quality", () => {
   }, T);
 });
 
-describe("Multi-turn Conversations", () => {
+describe.skipIf(!hasApiKey)("Multi-turn Conversations", () => {
   it("each reply is unique — no rehashing previous responses", async () => {
     const replies = await conversation(
       ["set up a LAMP stack", "ok install Apache first", "now configure MySQL"],
