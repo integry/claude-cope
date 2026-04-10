@@ -1,7 +1,7 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useAnimatedCounter } from "../hooks/useAnimatedCounter";
 
-function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isPro, onProfileClick, onHelpClick, onAboutClick, onSlashMenuClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isPro: boolean; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onSlashMenuClick?: () => void }) {
+function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isPro, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onSlashMenuClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isPro: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onSlashMenuClick?: () => void }) {
   const displayTD = useAnimatedCounter(currentTD, 2660);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -23,7 +23,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
       <div className="flex-1 flex items-center justify-between text-green-400 min-w-0 px-2 sm:px-0">
         <span className="flex items-center min-w-0">
           <button onClick={onProfileClick} className="text-cyan-400 hover:text-white hover:underline cursor-pointer truncate">{username}</button>
-            {isBYOK && <span className="ml-1.5 text-[10px] font-bold text-yellow-400">[BYOK]</span>}
+            {isBYOK && <span className="ml-1.5 text-[10px] font-bold text-yellow-400">[BYOK{byokTotalCost != null && byokTotalCost > 0 ? ` $${byokTotalCost < 0.01 ? byokTotalCost.toFixed(6) : byokTotalCost < 0.1 ? byokTotalCost.toFixed(4) : byokTotalCost.toFixed(2)}` : ""}]</span>}
             {isPro && <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-400 border border-purple-500/40 rounded">PRO</span>}
         </span>
         <span className="whitespace-nowrap flex flex-col items-end sm:flex-row sm:items-center sm:gap-1 ml-2"><span className="text-[11px] text-gray-400 leading-none sm:text-xs">{rank}</span><span className="flex items-center gap-1"><span className="text-gray-500">TD:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()}</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span></span>

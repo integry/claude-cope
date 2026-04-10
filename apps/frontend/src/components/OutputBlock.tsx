@@ -329,6 +329,19 @@ function MessageContent({ message, isNew = false }: { message: Message; isNew?: 
   return null;
 }
 
+function CostDisplay({ cost }: { cost: number }) {
+  const formatted = cost < 0.01
+    ? `$${cost.toFixed(6)}`
+    : cost < 0.1
+      ? `$${cost.toFixed(4)}`
+      : `$${cost.toFixed(2)}`;
+  return (
+    <div className="text-[11px] text-gray-500 mt-1 font-mono">
+      cost: {formatted}
+    </div>
+  );
+}
+
 function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTicketId }: { message: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
 
@@ -344,6 +357,7 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
       <MessageContent message={message} isNew={isNew} />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
+      {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
     </div>
   );
 }
@@ -351,6 +365,7 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
 export default React.memo(OutputBlock, (prev, next) =>
   prev.message.role === next.message.role &&
   prev.message.content === next.message.content &&
+  prev.message.cost === next.message.cost &&
   prev.isNew === next.isNew &&
   prev.promptString === next.promptString &&
   // Only compare activeTicketId for loading messages

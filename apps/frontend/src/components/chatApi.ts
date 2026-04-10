@@ -30,7 +30,7 @@ export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionRe
   };
 }
 
-function processSSEChunk(chunk: string, state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number } }, setHistory: Dispatch<SetStateAction<Message[]>>) {
+function processSSEChunk(chunk: string, state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number; cost?: number } }, setHistory: Dispatch<SetStateAction<Message[]>>) {
   const lines = chunk.split("\n");
   for (const line of lines) {
     if (!line.startsWith("data: ")) continue;
@@ -43,6 +43,7 @@ function processSSEChunk(chunk: string, state: { rawReply: string; usage?: { pro
         state.usage = {
           prompt_tokens: parsed.usage.prompt_tokens ?? 0,
           completion_tokens: parsed.usage.completion_tokens ?? 0,
+          cost: parsed.usage.cost ?? parsed.usage.total_cost ?? undefined,
         };
       }
       const delta = parsed?.choices?.[0]?.delta?.content;
@@ -63,11 +64,11 @@ function processSSEChunk(chunk: string, state: { rawReply: string; usage?: { pro
 
 type StreamResult = {
   rawReply: string;
-  usage?: { prompt_tokens: number; completion_tokens: number };
+  usage?: { prompt_tokens: number; completion_tokens: number; cost?: number };
 };
 
 async function readStreamedResponse(res: Response, setHistory: Dispatch<SetStateAction<Message[]>>): Promise<StreamResult> {
-  const state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number } } = { rawReply: "" };
+  const state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number; cost?: number } } = { rawReply: "" };
   const reader = res.body?.getReader();
   if (!reader) return { rawReply: "" };
   const decoder = new TextDecoder();
@@ -139,7 +140,7 @@ async function parseResponseBody(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
   addActiveTD?: (n: number, raw?: boolean) => void,
-): Promise<{ rawReply: string; tokensSent?: number; tokensReceived?: number }> {
+): Promise<{ rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number }> {
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("text/event-stream")) {
     const streamResult = await readStreamedResponse(res, setHistory);
@@ -147,16 +148,18 @@ async function parseResponseBody(
       rawReply: streamResult.rawReply,
       tokensSent: streamResult.usage?.prompt_tokens,
       tokensReceived: streamResult.usage?.completion_tokens,
+      cost: streamResult.usage?.cost,
     };
   }
   const data = await res.json();
   const rawReply = data?.choices?.[0]?.message?.content ?? "";
   const tokensSent = data?.usage?.prompt_tokens ?? undefined;
   const tokensReceived = data?.usage?.completion_tokens ?? undefined;
+  const cost = data?.usage?.cost ?? data?.usage?.total_cost ?? undefined;
   if (data?.td_awarded && addActiveTD) {
     addActiveTD(data.td_awarded, true);
   }
-  return { rawReply, tokensSent, tokensReceived };
+  return { rawReply, tokensSent, tokensReceived, cost };
 }
 
 async function hashKey(key: string): Promise<string> {
@@ -233,6 +236,7 @@ export function submitChatMessage(opts: {
   username?: string;
   inventory?: Record<string, number>;
   upgrades?: string[];
+  onByokCost?: (cost: number) => void;
   signal?: AbortSignal;
 }) {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, signal } = opts;
@@ -272,7 +276,12 @@ export function submitChatMessage(opts: {
 
       const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD);
       let { rawReply } = parsed;
-      const { tokensSent, tokensReceived } = parsed;
+      const { tokensSent, tokensReceived, cost } = parsed;
+
+      // Track BYOK cost
+      if (isBYOK && cost != null && opts.onByokCost) {
+        opts.onByokCost(cost);
+      }
 
       if (!rawReply) {
         rawReply = "[❌ Error] No response from API.";
@@ -291,7 +300,7 @@ export function submitChatMessage(opts: {
       setHistory((prev) => {
         let updated = [
           ...prev.filter((msg) => msg.role !== "loading"),
-          { role: "system" as const, content: reply, tokensSent, tokensReceived },
+          { role: "system" as const, content: reply, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
           ...achievementMessages,
           ...(buddyMessage ? [buddyMessage] : []),
         ];

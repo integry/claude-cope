@@ -43,6 +43,7 @@ export type Message = {
   content: string;
   tokensSent?: number;
   tokensReceived?: number;
+  cost?: number;
 };
 
 export interface BuddyState {
@@ -89,6 +90,7 @@ export interface GameState {
   apiKey?: string;
   selectedModel?: string;
   proKey?: string;
+  byokTotalCost?: number;
 }
 
 /** Legacy flat state shape used before the economy refactor. */
