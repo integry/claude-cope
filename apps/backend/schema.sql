@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS community_backlog (
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     technical_debt INTEGER NOT NULL DEFAULT 0,
+    kickoff_prompt TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
