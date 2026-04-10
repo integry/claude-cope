@@ -19,7 +19,7 @@ tickets.get("/community", async (c) => {
 
   const { results } = await db
     .prepare(
-      "SELECT id, title, description, technical_debt, created_at FROM community_backlog ORDER BY RANDOM() LIMIT 5"
+      "SELECT id, title, description, technical_debt, kickoff_prompt, created_at FROM community_backlog ORDER BY RANDOM() LIMIT 5"
     )
     .all();
 
@@ -49,7 +49,7 @@ tickets.post("/refine", async (c) => {
   const messages = [
     {
       role: "system",
-      content: `${TICKET_PM_PROMPT}\n\n## CRITICAL: Output Format Override\nAfter writing the ticket in your usual style, you MUST also include a JSON block at the very end fenced with \`\`\`json and \`\`\` containing exactly these fields:\n{"title": "...", "description": "...", "estimatedTechDebt": <number>}\n- "title" is the over-scoped ticket title.\n- "description" is the full ticket body (everything from Epic through Notes), as a single string.\n- "estimatedTechDebt" is the Story Points number.\nThis JSON block is mandatory. Do not omit it.`,
+      content: `${TICKET_PM_PROMPT}\n\n## CRITICAL: Output Format Override\nAfter writing the ticket in your usual style, you MUST also include a JSON block at the very end fenced with \`\`\`json and \`\`\` containing exactly these fields:\n{"title": "...", "description": "...", "estimatedTechDebt": <number>, "kickoffPrompt": "..."}\n- "title" is the over-scoped ticket title.\n- "description" is the full ticket body (everything from Epic through Notes), as a single string.\n- "estimatedTechDebt" is the Story Points number.\n- "kickoffPrompt" is a short, sarcastic one-liner a developer sees when picking up this ticket.\nThis JSON block is mandatory. Do not omit it.`,
     },
     {
       role: "user",
@@ -93,6 +93,7 @@ tickets.post("/refine", async (c) => {
   let title: string;
   let description: string;
   let estimatedTechDebt: number;
+  let kickoffPrompt: string;
 
   if (jsonMatch) {
     try {
@@ -100,12 +101,15 @@ tickets.post("/refine", async (c) => {
       title = parsed.title;
       description = parsed.description;
       estimatedTechDebt = Number(parsed.estimatedTechDebt) || 13;
+      kickoffPrompt = parsed.kickoffPrompt || "";
     } catch {
       // Fallback: extract from markdown
       ({ title, description, estimatedTechDebt } = parseMarkdown(content));
+      kickoffPrompt = "";
     }
   } else {
     ({ title, description, estimatedTechDebt } = parseMarkdown(content));
+    kickoffPrompt = "";
   }
 
   // Insert into community_backlog
@@ -113,16 +117,16 @@ tickets.post("/refine", async (c) => {
 
   const { success } = await db
     .prepare(
-      "INSERT INTO community_backlog (id, title, description, technical_debt) VALUES (?, ?, ?, ?)"
+      "INSERT INTO community_backlog (id, title, description, technical_debt, kickoff_prompt) VALUES (?, ?, ?, ?, ?)"
     )
-    .bind(id, title, description, estimatedTechDebt)
+    .bind(id, title, description, estimatedTechDebt, kickoffPrompt)
     .run();
 
   if (!success) {
     return c.json({ error: "Failed to insert ticket" }, 500);
   }
 
-  return c.json({ id, title, description, estimatedTechDebt }, 201);
+  return c.json({ id, title, description, estimatedTechDebt, kickoffPrompt }, 201);
 });
 
 /** Fallback parser for when the LLM doesn't return a fenced JSON block. */
