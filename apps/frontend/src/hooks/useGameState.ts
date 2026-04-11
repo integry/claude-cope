@@ -51,6 +51,15 @@ export function useGameState() {
       // Only sync if totalTDEarned has changed since last sync
       if (current.economy.totalTDEarned === lastSyncedTD.current) return;
       lastSyncedTD.current = current.economy.totalTDEarned;
+      // Extract country code from browser locale (fallback for cf-ipcountry)
+      let country = "Unknown";
+      try {
+        const locale = new Intl.Locale(navigator.language);
+        country = locale.region ?? "Unknown";
+      } catch {
+        // Intl.Locale not supported or invalid — keep "Unknown"
+      }
+
       fetch("/api/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,6 +69,7 @@ export function useGameState() {
           totalTDEarned: Math.floor(current.economy.totalTDEarned),
           inventory: current.inventory,
           upgrades: current.upgrades,
+          country,
         }),
       }).catch(() => {});
     }, 300000); // 5 minutes

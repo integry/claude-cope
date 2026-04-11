@@ -42,11 +42,13 @@ score.post("/", async (c) => {
     totalTDEarned: number;
     inventory: Record<string, number>;
     upgrades: string[];
+    country?: string;
   }>();
 
   if (!body.username) return c.json({ error: "username required" }, 400);
 
-  const country = c.req.header("cf-ipcountry") || "Unknown";
+  // Prefer Cloudflare's cf-ipcountry header, fall back to client-provided country
+  const country = c.req.header("cf-ipcountry") || body.country || "Unknown";
 
   // Validate the multiplier from the claimed inventory
   const claimedMultiplier = computeMultiplier(body.inventory, body.upgrades);
