@@ -39,17 +39,19 @@ export async function consumeQuota(
     tier: "free" | "pro";
     sessionId: string;
     licenseKey?: string;
+    /** Pre-hashed license key (SHA-256 hex) — skips internal hashing if provided */
+    licenseKeyHash?: string;
     cost?: number;
   },
 ): Promise<{ quotaPercent: number }> {
   const cost = opts.cost ?? 1;
 
   if (opts.tier === "pro") {
-    if (!opts.licenseKey) {
-      throw new Error("License key is required for Pro tier quota check.");
+    if (!opts.licenseKey && !opts.licenseKeyHash) {
+      throw new Error("License key or hash is required for Pro tier quota check.");
     }
 
-    const hashed = await hashKey(opts.licenseKey);
+    const hashed = opts.licenseKeyHash ?? (await hashKey(opts.licenseKey!));
     const kvKey = `polar:${hashed}`;
     const raw = await kv.get(kvKey);
 
