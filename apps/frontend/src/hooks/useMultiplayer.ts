@@ -26,6 +26,12 @@ function getLocalUsername(): string {
   return name;
 }
 
+// Consider the user idle after 3 minutes with no mouse/keyboard activity.
+// Idle users don't get outage alerts or penalties — they can't participate
+// anyway, and waking up to 12 stacked "generator decommissioned" messages
+// is a bad UX.
+const IDLE_THRESHOLD_MS = 3 * 60 * 1000;
+
 // We pass setHistory to allow the hook to write messages directly to the terminal when an attack occurs.
 export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff }: UseMultiplayerOptions) {
   const [onlineCount, setOnlineCount] = useState(1);
@@ -35,6 +41,15 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
   const [outageHp, setOutageHp] = useState<number | null>(null);
   const socketRef = useRef<PartySocket | null>(null);
   const localUsername = useRef(getLocalUsername()).current;
+  const lastActivityAt = useRef<number>(Date.now());
+
+  // Track user activity so we can skip outage alerts when the tab is idle
+  useEffect(() => {
+    const markActive = () => { lastActivityAt.current = Date.now(); };
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'focus'];
+    events.forEach((e) => window.addEventListener(e, markActive, { passive: true }));
+    return () => events.forEach((e) => window.removeEventListener(e, markActive));
+  }, []);
 
   useEffect(() => {
     const socket = new PartySocket({
@@ -43,6 +58,11 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
       query: { username: localUsername },
     });
     socketRef.current = socket;
+
+    const isUserIdle = () => {
+      if (document.hidden) return true;
+      return Date.now() - lastActivityAt.current > IDLE_THRESHOLD_MS;
+    };
 
     socket.addEventListener('message', (event) => {
       try {
@@ -67,20 +87,25 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
           // Server confirmed the ping was successfully rejected
           setPendingPing(false);
         } else if (data.type === 'outage_start') {
-          // Show critical alert and initialize the health bar
+          // Skip the alert and health bar entirely when the user is idle —
+          // they can't participate and we don't want to stack up alerts.
+          if (isUserIdle()) return;
           setOutageHp(data.hp);
           setHistory(prev => [...prev, { role: 'error', content: '[CRITICAL ALERT: AWS us-east-1 IS DOWN]' }]);
         } else if (data.type === 'outage_update') {
-          // Sync the local health bar with the server
+          // Only sync the bar if the user is already engaged with this outage
+          if (isUserIdle()) return;
           setOutageHp(data.hp);
         } else if (data.type === 'outage_cleared') {
-          // Remove the health bar and reward players
+          // Always clear the bar state; only reward+announce if not idle
           setOutageHp(null);
+          if (isUserIdle()) return;
           applyOutageReward();
           setHistory(prev => [...prev, { role: 'system', content: '[SUCCESS] AWS us-east-1 is back online. All players receive a TD boost.' }]);
         } else if (data.type === 'outage_failed') {
-          // Remove the health bar and penalize players
+          // Always clear the bar state; only penalize+announce if not idle
           setOutageHp(null);
+          if (isUserIdle()) return;
           applyOutagePenalty();
           setHistory(prev => [...prev, { role: 'error', content: '[FAILURE] AWS us-east-1 outage was not resolved in time. Your most expensive generator has been decommissioned.' }]);
         }

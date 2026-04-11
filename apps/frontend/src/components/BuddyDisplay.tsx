@@ -16,7 +16,11 @@ export function BuddyDisplay({ type, isShiny }: { type: string | null; isShiny: 
 
   let art = BUDDY_ICONS[type] ?? "🐾";
   if (blink) {
-    art = art.replace(/O/g, "-").replace(/o\.o/g, "-.-").replace(/o/g, "-");
+    if (type === "Agile Snail") {
+      art = art.replace("@..@", "@--@");
+    } else {
+      art = art.replace(/O/g, "-").replace(/o\.o/g, "-.-").replace(/o/g, "-");
+    }
   }
 
   return (

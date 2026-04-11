@@ -28,3 +28,6 @@ Thumbs.db
 .turbo/
 .partykit/
 .partykit/
+
+# E2E test artifacts
+apps/e2e-llm-report.html

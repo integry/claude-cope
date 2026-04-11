@@ -85,8 +85,10 @@ function cleanLLMOutput(content: string): string {
   const terminalLangs = "bash|sh|shell|console|terminal|text|log|plaintext|markdown|md";
   const fenceRegex = new RegExp("```(?:" + terminalLangs + ")\\s*\\n([\\s\\S]*?)```", "g");
   cleaned = cleaned.replace(fenceRegex, "$1");
-  // Insert line breaks before [BRACKET TAGS] that are jammed on the same line as other text
-  cleaned = cleaned.replace(/([^\n])\[([A-Z⚙️⚠️❌✓✅🔥💀🚨]+[^\]]*)\]/g, "$1\n[$2]");
+  // Ensure [BRACKET TAGS] are preceded by a blank line so markdown renders them as separate paragraphs
+  cleaned = cleaned.replace(/\n(\[(?:WARN|ERROR|SUCCESS|INFO|FATAL|CRITICAL|DEBUG|DONE|PROGRESS|RESULT|⚙️|⚠️|❌|✓|✅|🔥|💀|🚨|SIGSEGV)[^\]]*\])/g, "\n\n$1");
+  // Also handle tags jammed directly after text with no newline at all
+  cleaned = cleaned.replace(/([^\n])(\[(?:WARN|ERROR|SUCCESS|INFO|FATAL|CRITICAL|DEBUG|DONE|PROGRESS|RESULT|⚙️|⚠️|❌|✓|✅|🔥|💀|🚨|SIGSEGV)[^\]]*\])/g, "$1\n\n$2");
   return cleaned;
 }
 
@@ -258,10 +260,22 @@ const markdownComponents = {
   },
 };
 
+// Buddy interjections have a specific shape: ASCII art on the first lines,
+// then a `[Buddy Name] text` line. We need to render those as preformatted
+// monospace so the ASCII art lines up. Other multi-line warnings (rate-limit
+// errors, etc.) should wrap normally.
+function isBuddyMessage(content: string): boolean {
+  return /\n\[[^\]]+\]\s/.test(content);
+}
+
 function getContainerClass(message: Message, isNew: boolean): string {
-  const colorClass = roleColors[message.role];
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
-  const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
+  const isBuddyInterjection = message.role === "warning" && isBuddyMessage(message.content);
+  // While streaming, the message has role "loading" but we want it to render
+  // in the same color as the final system message (not the yellow loading color)
+  // so the transition doesn't look jarring.
+  const isStreamingContent = message.role === "loading" && !message.content.startsWith("[⚙️]");
+  const colorClass = isStreamingContent ? roleColors.system : roleColors[message.role];
 
   let modifier = "leading-relaxed";
   if (isAchievement) {
@@ -274,7 +288,7 @@ function getContainerClass(message: Message, isNew: boolean): string {
 
 function MessageContent({ message, isNew = false }: { message: Message; isNew?: boolean }) {
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
-  const isBuddyInterjection = message.role === "warning" && message.content.includes("\n");
+  const isBuddyInterjection = message.role === "warning" && isBuddyMessage(message.content);
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
   const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
@@ -315,6 +329,19 @@ function MessageContent({ message, isNew = false }: { message: Message; isNew?: 
   return null;
 }
 
+function CostDisplay({ cost }: { cost: number }) {
+  const formatted = cost < 0.01
+    ? `$${cost.toFixed(6)}`
+    : cost < 0.1
+      ? `$${cost.toFixed(4)}`
+      : `$${cost.toFixed(2)}`;
+  return (
+    <div className="text-[11px] text-gray-500 mt-1 font-mono">
+      cost: {formatted}
+    </div>
+  );
+}
+
 function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTicketId }: { message: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
 
@@ -330,6 +357,7 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
       <MessageContent message={message} isNew={isNew} />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
+      {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
     </div>
   );
 }
@@ -337,6 +365,7 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
 export default React.memo(OutputBlock, (prev, next) =>
   prev.message.role === next.message.role &&
   prev.message.content === next.message.content &&
+  prev.message.cost === next.message.cost &&
   prev.isNew === next.isNew &&
   prev.promptString === next.promptString &&
   // Only compare activeTicketId for loading messages

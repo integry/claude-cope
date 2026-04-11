@@ -7,6 +7,8 @@ import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
 import { buildAchievementBox } from "./achievementBox";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
+import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
+import { COPE_MODELS } from "@claude-cope/shared/models";
 
 export type BuddyInterjectionResult = {
   message: Message;
@@ -28,7 +30,7 @@ export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionRe
   };
 }
 
-function processSSEChunk(chunk: string, state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number } }, setHistory: Dispatch<SetStateAction<Message[]>>) {
+function processSSEChunk(chunk: string, state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number; cost?: number } }, setHistory: Dispatch<SetStateAction<Message[]>>) {
   const lines = chunk.split("\n");
   for (const line of lines) {
     if (!line.startsWith("data: ")) continue;
@@ -41,6 +43,7 @@ function processSSEChunk(chunk: string, state: { rawReply: string; usage?: { pro
         state.usage = {
           prompt_tokens: parsed.usage.prompt_tokens ?? 0,
           completion_tokens: parsed.usage.completion_tokens ?? 0,
+          cost: parsed.usage.cost ?? parsed.usage.total_cost ?? undefined,
         };
       }
       const delta = parsed?.choices?.[0]?.delta?.content;
@@ -61,11 +64,11 @@ function processSSEChunk(chunk: string, state: { rawReply: string; usage?: { pro
 
 type StreamResult = {
   rawReply: string;
-  usage?: { prompt_tokens: number; completion_tokens: number };
+  usage?: { prompt_tokens: number; completion_tokens: number; cost?: number };
 };
 
 async function readStreamedResponse(res: Response, setHistory: Dispatch<SetStateAction<Message[]>>): Promise<StreamResult> {
-  const state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number } } = { rawReply: "" };
+  const state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number; cost?: number } } = { rawReply: "" };
   const reader = res.body?.getReader();
   if (!reader) return { rawReply: "" };
   const decoder = new TextDecoder();
@@ -89,6 +92,8 @@ function processReplyTags(
   const achievementMessages: Message[] = [];
   let match;
   while ((match = achievementRegex.exec(rawReply)) !== null) {
+    // Cap at 1 achievement per response to prevent LLM dumping all triggers at once
+    if (achievementMessages.length >= 1) break;
     const achievementId = match[1]!.trim();
     unlockAchievement(achievementId);
     achievementMessages.push({
@@ -118,7 +123,7 @@ function processReplyTags(
   }
 
   // Extract suggested reply for input placeholder
-  const suggestedRegex = /\[SUGGESTED_REPLY:\s*(.+?)\]/g;
+  const suggestedRegex = /\[(?:SUGGESTED_REPLY|USER_NEXT_MESSAGE):\s*(.+?)(?:\]|$)/gm;
   const suggestedMatch = suggestedRegex.exec(rawReply);
   const suggestedReply = suggestedMatch?.[1]?.trim().replace(/^["']|["']$/g, "") ?? null;
 
@@ -131,28 +136,97 @@ function processReplyTags(
   return { achievementMessages, reply, suggestedReply, buddySays };
 }
 
+function extractJsonResponseFields(data: Record<string, unknown>): { rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number } {
+  const choices = data?.choices as Array<{ message?: { content?: string } }> | undefined;
+  const rawReply = choices?.[0]?.message?.content ?? "";
+  const usage = data?.usage as { prompt_tokens?: number; completion_tokens?: number; cost?: number; total_cost?: number } | undefined;
+  return {
+    rawReply,
+    tokensSent: usage?.prompt_tokens,
+    tokensReceived: usage?.completion_tokens,
+    cost: usage?.cost ?? usage?.total_cost,
+  };
+}
+
+function extractStreamFields(usage: StreamResult["usage"]): { tokensSent?: number; tokensReceived?: number; cost?: number } {
+  return {
+    tokensSent: usage?.prompt_tokens,
+    tokensReceived: usage?.completion_tokens,
+    cost: usage?.cost,
+  };
+}
+
 async function parseResponseBody(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
   addActiveTD?: (n: number, raw?: boolean) => void,
-): Promise<{ rawReply: string; tokensSent?: number; tokensReceived?: number }> {
+): Promise<{ rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number }> {
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("text/event-stream")) {
     const streamResult = await readStreamedResponse(res, setHistory);
-    return {
-      rawReply: streamResult.rawReply,
-      tokensSent: streamResult.usage?.prompt_tokens,
-      tokensReceived: streamResult.usage?.completion_tokens,
-    };
+    return { rawReply: streamResult.rawReply, ...extractStreamFields(streamResult.usage) };
   }
   const data = await res.json();
-  const rawReply = data?.choices?.[0]?.message?.content ?? "";
-  const tokensSent = data?.usage?.prompt_tokens ?? undefined;
-  const tokensReceived = data?.usage?.completion_tokens ?? undefined;
+  const fields = extractJsonResponseFields(data);
   if (data?.td_awarded && addActiveTD) {
     addActiveTD(data.td_awarded, true);
   }
-  return { rawReply, tokensSent, tokensReceived };
+  return fields;
+}
+
+async function hashKey(key: string): Promise<string> {
+  const encoded = new TextEncoder().encode(key);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function handleErrorResponse(
+  res: Response,
+  setHistory: Dispatch<SetStateAction<Message[]>>,
+): Promise<boolean> {
+  if (res.status === 402) {
+    setHistory((prev) => [
+      ...prev.filter((msg) => msg.role !== "loading"),
+      { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
+    ]);
+    return true;
+  }
+
+  if (res.status === 401) {
+    setHistory((prev) => [
+      ...prev.filter((msg) => msg.role !== "loading"),
+      { role: "error", content: "[🔑 ACCESS DENIED] OpenRouter just slammed the door in your face (HTTP 401). Your API key has been **rejected**, **ghosted**, and **emotionally unavailable**.\n\n[POSSIBLE CAUSES]\n\n• Your key is disabled — like your ambition after the third standup today\n\n• Your key expired — unlike your technical debt, which is eternal\n\n• You copy-pasted it wrong — classic Junior Code Monkey energy\n\n[RECOVERY OPTIONS]\n\n• Check your key at [openrouter.ai/keys](https://openrouter.ai/keys)\n\n• `/key clear` to crawl back to the default model\n\n• `/key <new-key>` to try again with whatever dignity you have left" },
+    ]);
+    return true;
+  }
+
+  if (res.status === 429) {
+    const errorData = await res.json().catch(() => null);
+    const upstreamRaw = errorData?.error?.metadata?.raw
+      ?? errorData?.error?.message
+      ?? (typeof errorData?.error === "string" ? errorData.error : "");
+    const details = upstreamRaw ? `\n\n${upstreamRaw}` : "";
+    setHistory((prev) => [
+      ...prev.filter((msg) => msg.role !== "loading"),
+      { role: "warning", content: `[⚠️] OpenRouter rate-limited your request. Please wait before sending another message.${details}` },
+    ]);
+    return true;
+  }
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    setHistory((prev) => [
+      ...prev.filter((msg) => msg.role !== "loading"),
+      {
+        role: "error",
+        content: `[❌ Error] ${errorData?.error?.message ?? errorData?.error ?? "Request failed"} (HTTP ${res.status})`,
+      },
+    ]);
+    return true;
+  }
+
+  return false;
 }
 
 export function submitChatMessage(opts: {
@@ -164,6 +238,7 @@ export function submitChatMessage(opts: {
   currentRank: string;
   apiKey?: string;
   customModel?: string;
+  proKey?: string;
   modes?: ModesState;
   activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
   onSprintProgress?: (amount: number) => void;
@@ -173,39 +248,52 @@ export function submitChatMessage(opts: {
   username?: string;
   inventory?: Record<string, number>;
   upgrades?: string[];
+  onByokCost?: (cost: number) => void;
   signal?: AbortSignal;
 }) {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, signal } = opts;
-  fetch(`${API_BASE}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: chatMessages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(apiKey ? { apiKey } : {}), ...(customModel ? { customModel } : {}), ...(modes ? { fast: modes.fast, voice: modes.voice } : {}), ...(activeTicket ? { activeTicket } : {}), ...(opts.buddyType && opts.buddyResult ? { buddy: { type: opts.buddyType, shouldInterject: true } } : {}) }),
-    signal,
-  })
-    .then(async (res) => {
-      if (res.status === 429) {
-        setHistory((prev) => [
-          ...prev.filter((msg) => msg.role !== "loading"),
-          { role: "warning", content: "[⚠️] Rate limited. Please wait before sending another message." },
-        ]);
-        return;
-      }
+  const isBYOK = Boolean(apiKey);
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        setHistory((prev) => [
-          ...prev.filter((msg) => msg.role !== "loading"),
-          {
-            role: "error",
-            content: `[❌ Error] ${errorData?.error ?? "Request failed"}`,
-          },
-        ]);
-        return;
-      }
+  // Build the system prompt and message list via shared builder
+  const messages = buildChatMessages({
+    rank: currentRank,
+    chatMessages,
+    modes,
+    activeTicket,
+    buddyType: opts.buddyType && buddyResult ? opts.buddyType : null,
+  });
+  const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
+  const model = copeModel ? copeModel.openRouterId : customModel || (isBYOK ? "nvidia/nemotron-3-super-120b-a12b:free" : "nvidia/nemotron-nano-9b-v2:free");
+
+  const requestPromise = isBYOK
+    ? fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, messages, max_tokens: 2000, reasoning: { effort: "low" }, stream: true, stream_options: { include_usage: true } }),
+        signal,
+      })
+    : (async () => {
+        const proKeyHash = opts.proKey ? await hashKey(opts.proKey) : undefined;
+        return fetch(`${API_BASE}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(customModel && COPE_MODELS.some((m) => m.id === customModel) ? { modelId: customModel } : {}), ...(proKeyHash ? { proKeyHash } : {}) }),
+          signal,
+        });
+      })();
+
+  requestPromise
+    .then(async (res) => {
+      if (await handleErrorResponse(res, setHistory)) return;
 
       const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD);
       let { rawReply } = parsed;
-      const { tokensSent, tokensReceived } = parsed;
+      const { tokensSent, tokensReceived, cost } = parsed;
+
+      // Track BYOK cost
+      if (isBYOK && cost != null && opts.onByokCost) {
+        opts.onByokCost(cost);
+      }
 
       if (!rawReply) {
         rawReply = "[❌ Error] No response from API.";
@@ -224,7 +312,7 @@ export function submitChatMessage(opts: {
       setHistory((prev) => {
         let updated = [
           ...prev.filter((msg) => msg.role !== "loading"),
-          { role: "system" as const, content: reply, tokensSent, tokensReceived },
+          { role: "system" as const, content: reply, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
           ...achievementMessages,
           ...(buddyMessage ? [buddyMessage] : []),
         ];

@@ -72,10 +72,10 @@ export function useGameState() {
   useEffect(() => {
     const interval = setInterval(() => {
       setState((prev) => {
-        // Rogue API Key passively drains quota over time
+        // Rogue API Key passively drains quota over time (skip in BYOK mode)
         const rogueCount = prev.inventory["rogue-api-key"] ?? 0;
         let newQuotaPercent = prev.economy.quotaPercent;
-        if (rogueCount > 0) {
+        if (rogueCount > 0 && !prev.apiKey) {
           const quotaDrain = rogueCount * 0.05;
           newQuotaPercent = Math.max(0, prev.economy.quotaPercent - quotaDrain);
         }

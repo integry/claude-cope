@@ -1,4 +1,4 @@
-import { GENERATORS, CORPORATE_RANKS } from "../game/constants";
+import { GENERATORS, CORPORATE_RANKS, UPGRADES } from "../game/constants";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
 import AsciiBox from "./AsciiBox";
 import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
@@ -107,12 +107,34 @@ function UserProfileOverlay({ state, onClose }: UserProfileOverlayProps) {
               </div>
             ))
           )}
-          {ownedGeneratorTypes.length > 0 && (
+          {(ownedGeneratorTypes.length > 0 || upgrades.length > 0) && (
             <div className="text-gray-500 mt-1 border-t border-gray-800 pt-1">
               Total units: {totalGenerators} | Upgrades: {upgrades.length}
             </div>
           )}
         </div>
+
+        {/* Upgrades — listed separately so they remain visible if the user
+             lost all generators (e.g. to outage penalties). */}
+        {upgrades.length > 0 && (
+          <div className="border border-gray-700 rounded px-3 py-2 text-xs">
+            <div className="text-green-400 font-bold mb-1">[UPGRADES]</div>
+            {upgrades.map((id) => {
+              const upgrade = UPGRADES.find((u) => u.id === id);
+              if (!upgrade) return null;
+              return (
+                <div key={id} className="text-gray-300 truncate" title={upgrade.name}>
+                  • {upgrade.name}
+                </div>
+              );
+            })}
+            {ownedGeneratorTypes.length === 0 && (
+              <div className="text-yellow-500/80 mt-1 text-[11px]">
+                Upgrades need generators to activate. Buy some to restore your multiplier.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Achievements */}
         <div className="border border-gray-700 rounded px-3 py-2 text-xs">
@@ -131,12 +153,18 @@ function UserProfileOverlay({ state, onClose }: UserProfileOverlayProps) {
         {/* Quota */}
         <div className="border border-gray-700 rounded px-3 py-2 text-xs">
           <div className="text-green-400 font-bold mb-1">[API QUOTA]</div>
-          <div className="text-gray-300">
-            Usage: <span className={economy.quotaPercent > 80 ? "text-red-400" : "text-green-300"}>{economy.quotaPercent.toFixed(0)}%</span>
-          </div>
-          <div className="text-gray-300">
-            Lockouts: <span className="text-red-400">{economy.quotaLockouts}</span>
-          </div>
+          {state.apiKey ? (
+            <div className="text-yellow-400">BYOK — usage not tracked</div>
+          ) : (
+            <>
+              <div className="text-gray-300">
+                Usage: <span className={economy.quotaPercent > 80 ? "text-red-400" : "text-green-300"}>{economy.quotaPercent.toFixed(0)}%</span>
+              </div>
+              <div className="text-gray-300">
+                Lockouts: <span className="text-red-400">{economy.quotaLockouts}</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

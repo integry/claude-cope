@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { GENERATORS } from "../game/constants";
+import { COPE_MODELS } from "@claude-cope/shared/models";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
 import type { GameState } from "../hooks/useGameState";
@@ -377,11 +378,25 @@ function handleAliasCommand(command: string, ctx: SlashCommandContext, reply: Re
 
 function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
   const modelName = command.slice(6).trim();
+  const isBYOK = Boolean(ctx.state.apiKey);
+  const isPro = Boolean(ctx.state.proKey);
+
   if (!modelName) {
     const current = ctx.state.selectedModel ?? "default";
-    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.\n\nYou can set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\`.\n\n**Note:** You must first configure your own API key via \`/key\` before using a custom model. Your key is stored locally in your browser and never sent to our servers (It's amazingly secure, trust us).` });
+    const modelList = COPE_MODELS.map((m) => {
+      const costLabel = `${m.multiplier}x cost`;
+      const tierBadge = m.tier === "pro" ? " 🔒 Pro" : "";
+      return `- \`${m.id}\` — **${m.name}** (${costLabel})${tierBadge}`;
+    }).join("\n");
+
+    const customModelHelp = isBYOK
+      ? `\n\nYou can also set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\` (BYOK mode).`
+      : `\n\nWant to use custom OpenRouter models? Set your own API key with \`/key\` to enable BYOK mode.`;
+
+    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\n**Available Models:**\n${modelList}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.${customModelHelp}` });
     return;
   }
+
   if (modelName === "clear") {
     ctx.setState((prev) => {
       const { selectedModel: _, ...rest } = prev;
@@ -390,8 +405,29 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
     reply({ role: "system", content: "[✓] Model reset to **default**. Back to baseline corporate AI." });
     return;
   }
+
+  const copeModel = COPE_MODELS.find((m) => m.id === modelName);
+
+  // Non-BYOK mode: only allow predefined COPE_MODELS
+  if (!copeModel && !isBYOK) {
+    reply({ role: "system", content: "[🚫] Custom models are only available in BYOK mode. Set your own API key with `/key` first.\n\nAvailable models: " + COPE_MODELS.map((m) => "`" + m.id + "`").join(", ") });
+    return;
+  }
+
+  if (copeModel && copeModel.tier === "pro" && !isPro && !isBYOK) {
+    reply({ role: "system", content: `[🔒] **${copeModel.name}** is a Pro model (${copeModel.multiplier}x cost). You need a Pro license to use this.\n\nUpgrade at \`/subscribe\` to unlock premium models, or set your own API key with \`/key\` to bypass limits entirely.` });
+    return;
+  }
+
   ctx.setState((prev) => ({ ...prev, selectedModel: modelName }));
-  reply({ role: "system", content: `[✓] Model switched to **${modelName}**. May your tokens be plentiful and your latency low.` });
+
+  if (isBYOK) {
+    reply({ role: "system", content: `[✓] Model switched to **${modelName}**. BYOK mode active — your API key, your compute bill, your problem. We respect the hustle. 💸` });
+  } else if (copeModel && copeModel.tier === "pro") {
+    reply({ role: "system", content: `[✓] Model switched to **${copeModel.name}** (${copeModel.multiplier}x cost). Pro tier activated. Your tokens now cost real money — spend wisely.` });
+  } else {
+    reply({ role: "system", content: `[✓] Model switched to **${modelName}**. May your tokens be plentiful and your latency low.` });
+  }
 }
 
 function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
@@ -411,47 +447,111 @@ function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
   }
 }
 
-/** Dispatch a command; returns "async" if the caller should NOT call setIsProcessing(false). */
-function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | void {
-  if (handleCoreCommand(command, ctx, reply)) {
-    if (command === "/synergize") return;
-  } else if (command === "/key" || command.startsWith("/key ")) {
-    const keyArg = command.slice(4).trim();
-    if (!keyArg) {
-      reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter API key. Type `/key clear` to remove." });
-    } else if (keyArg === "clear") {
-      ctx.setState((prev) => ({ ...prev, apiKey: undefined }));
-      reply({ role: "system", content: "[🔑] API key removed. Back to the free tier trenches." });
+async function handleSyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<void> {
+  const licenseKey = command.slice(5).trim();
+  if (!licenseKey) {
+    reply({ role: "system", content: "[🔑] Usage: `/sync <COPE-XXX>` — Link your Polar license key to unlock Pro tier." });
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/account/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ licenseKey }),
+    });
+    const data = await res.json() as { success?: boolean; hash?: string; error?: string };
+    if (res.ok && data.success) {
+      ctx.setState((prev) => ({ ...prev, proKey: licenseKey }));
+      reply({ role: "system", content: "[✓ **PRO ACTIVATED**] License key validated. Welcome to the premium suffering tier. You now have **100 pro credits**. Spend them wisely (you won't)." });
     } else {
-      ctx.setState((prev) => ({ ...prev, apiKey: keyArg }));
-      reply({ role: "system", content: "[🔑] API key saved. Your key is stored locally and never sent to our servers." });
+      reply({ role: "error", content: `[❌] License validation failed: ${data.error ?? "Unknown error"}. Double-check your key and try again.` });
     }
-  } else if (command === "/feedback" || command === "/bug") {
-    reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
-  } else if (command === "/upgrade") {
-    handleUpgradeCommand(ctx, reply);
-  } else if (command.startsWith("/ticket")) {
+  } catch {
+    reply({ role: "error", content: "[❌] Network error while validating license key. The backend is probably on fire." });
+  }
+}
+
+async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Promise<void> {
+  const tweetText = encodeURIComponent("I'm mass-producing Technical Debt at mass velocity in Claude COPE — the idle game where every prompt is a mistake. https://claudecope.com");
+  window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, "_blank");
+  try {
+    const res = await fetch(`${API_BASE}/api/account/shill`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await res.json() as { success?: boolean; creditsGranted?: number; error?: string };
+    if (res.ok && data.success) {
+      reply({ role: "system", content: `[✓ **SHILL COMPLETE**] You sold your dignity for **${data.creditsGranted} free tokens**. The marketing team approves. A tweet window has been opened — go spread the gospel of suffering.` });
+    } else {
+      reply({ role: "error", content: `[❌] Shill failed: ${data.error ?? "Unknown error"}. ${data.error === "Shill credit already claimed" ? "You already sold out once. There is no second helping of shame." : ""}` });
+    }
+  } catch {
+    reply({ role: "error", content: "[❌] Network error while claiming shill credits. The backend ghosted you." });
+  }
+}
+
+function handleKeyCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
+  const keyArg = command.slice(4).trim();
+  if (!keyArg) {
+    reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter API key. Type `/key clear` to remove." });
+  } else if (keyArg === "clear") {
+    ctx.setState((prev) => ({ ...prev, apiKey: undefined }));
+    reply({ role: "system", content: "[🔑] API key removed. Back to the free tier trenches." });
+  } else {
+    ctx.setState((prev) => ({ ...prev, apiKey: keyArg }));
+    reply({ role: "system", content: "[🔑] API key saved. Your key is stored locally and never sent to our servers." });
+  }
+}
+
+function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | false {
+  if (command.startsWith("/ticket")) {
     handleTicketCommand(command, reply).then(() => ctx.setIsProcessing(false));
     return "async";
   } else if (command === "/backlog") {
     handleBacklogCommand(reply).then(() => ctx.setIsProcessing(false));
     return "async";
-  } else if (command.startsWith("/take")) {
-    handleTakeCommand(command, ctx.state, ctx.setState, reply, ctx.setInputValue);
-  } else if (command === "/accept") {
-    handleAcceptCommand(ctx, reply);
-  } else if (command === "/abandon") {
-    handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
-  } else if (command.startsWith("/alias")) {
-    handleAliasCommand(command, ctx, reply);
-  } else if (command.startsWith("/model")) {
-    handleModelCommand(command, ctx, reply);
-  } else if (handleNewCommand(command, ctx, reply)) {
-    if (command === "/brrrrrr") return "async";
-  } else if (command.startsWith("/")) {
-    reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
+  } else if (command === "/sync" || command.startsWith("/sync ")) {
+    handleSyncCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
+    return "async";
+  } else if (command === "/shill") {
+    handleShillCommand(ctx, reply).then(() => ctx.setIsProcessing(false));
+    return "async";
+  }
+  return false;
+}
+
+/** Dispatch a command; returns "async" if the caller should NOT call setIsProcessing(false). */
+function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | void {
+  if (handleCoreCommand(command, ctx, reply)) {
+    if (command === "/synergize") return;
+  } else if (command === "/key" || command.startsWith("/key ")) {
+    handleKeyCommand(command, ctx, reply);
+  } else if (command === "/feedback" || command === "/bug") {
+    reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
+  } else if (command === "/upgrade") {
+    handleUpgradeCommand(ctx, reply);
   } else {
-    reply({ role: "system", content: `[✓] Executed \`${command}\`` });
+    const asyncResult = handleAsyncCommand(command, ctx, reply);
+    if (asyncResult === "async") return "async";
+    if (!asyncResult) {
+      if (command.startsWith("/take")) {
+        handleTakeCommand(command, ctx.state, ctx.setState, reply, ctx.setInputValue);
+      } else if (command === "/accept") {
+        handleAcceptCommand(ctx, reply);
+      } else if (command === "/abandon") {
+        handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
+      } else if (command.startsWith("/alias")) {
+        handleAliasCommand(command, ctx, reply);
+      } else if (command.startsWith("/model")) {
+        handleModelCommand(command, ctx, reply);
+      } else if (handleNewCommand(command, ctx, reply)) {
+        if (command === "/brrrrrr") return "async";
+      } else if (command.startsWith("/")) {
+        reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
+      } else {
+        reply({ role: "system", content: `[✓] Executed \`${command}\`` });
+      }
+    }
   }
 }
 
@@ -523,7 +623,7 @@ export function executeSlashCommand(
   };
 
   // Track command usage for performance review brag card
-  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command.startsWith("/buddy ") ? "/buddy" : command;
+  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command.startsWith("/buddy ") ? "/buddy" : command.startsWith("/sync ") ? "/sync" : command;
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {

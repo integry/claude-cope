@@ -1,12 +1,14 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { rateLimiter } from "./middleware/rateLimiter";
+import { sessionMiddleware } from "./middleware/session";
 import chat from "./routes/chat";
 import leaderboard from "./routes/leaderboard";
 import events from "./routes/events";
 import tickets from "./routes/tickets";
 import toolSequences from "./routes/toolSequences";
 import score from "./routes/score";
+import account from "./routes/account";
 
 const app = new Hono();
 
@@ -22,6 +24,7 @@ app.use("*", (c, next) => {
   })(c, next);
 });
 
+app.use("*", sessionMiddleware);
 app.use("/api/chat", rateLimiter);
 
 app.route("/api/chat", chat);
@@ -31,5 +34,6 @@ app.route("/api/recent-events", events);
 app.route("/api/tickets", tickets);
 app.route("/api/tool-sequences", toolSequences);
 app.route("/api/score", score);
+app.route("/api/account", account);
 
 export default app;

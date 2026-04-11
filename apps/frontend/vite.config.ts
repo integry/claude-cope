@@ -22,5 +22,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    exclude: ["src/__tests__/e2e-llm.test.ts", "node_modules/**"],
   },
 });
