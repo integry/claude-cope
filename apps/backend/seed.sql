@@ -11,7 +11,7 @@
 --   wrangler d1 execute claude-cope-db --remote --yes --file=apps/backend/seed.sql
 -- =============================================================================
 
-INSERT INTO community_backlog (id, title, description, kickoff_prompt, technical_debt) VALUES
+INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt, technical_debt) VALUES
 -- Karen from HR
 ('COPE-001', 'Mandatory Fun Button Must Require Manager Approval Workflow',
  'Karen from HR here. The "Celebrate" confetti animation currently fires WITHOUT a three-level approval chain. This is a compliance nightmare. Every confetti particle must be individually audited and logged to the HR Information System before rendering. We also need a written explanation from the employee justifying WHY they feel celebratory. Please add a 48-hour cooling-off period between celebrations.',
