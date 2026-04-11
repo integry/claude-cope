@@ -75,7 +75,7 @@ function filterChatHistory(history: Message[]): { role: string; content: string 
 }
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
@@ -323,7 +323,7 @@ function Terminal() {
 
   const renderOverlays = () => (
     <>
-      {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} onClose={() => setShowStore(false)} />}
+      {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} equipTheme={setActiveTheme} onClose={() => setShowStore(false)} />}
       {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
       {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
       {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}

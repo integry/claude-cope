@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GENERATORS, UPGRADES } from "../game/constants";
+import { GENERATORS, UPGRADES, THEMES } from "../game/constants";
 import { calcBulkCost } from "../hooks/useGameState";
 import type { GameState } from "../hooks/useGameState";
 
@@ -9,10 +9,12 @@ type StoreOverlayProps = {
   state: GameState;
   buyGenerator: (generatorId: string, amount?: number) => boolean;
   buyUpgrade: (upgradeId: string) => boolean;
+  buyTheme: (themeId: string) => boolean;
+  equipTheme: (themeId: string) => void;
   onClose: () => void;
 };
 
-function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlayProps) {
+function StoreOverlay({ state, buyGenerator, buyUpgrade, buyTheme, equipTheme, onClose }: StoreOverlayProps) {
   const [buyMultiplier, setBuyMultiplier] = useState<BuyMultiplier>(1);
 
   return (
@@ -154,6 +156,78 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, onClose }: StoreOverlay
                     : canAfford
                       ? "Buy Upgrade"
                       : "Can't afford"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Cosmetic Themes */}
+        <div className="border-t border-gray-700 pt-3 mt-3">
+          <div className="flex items-center gap-2">
+            <span className="text-purple-400 font-bold text-xs">
+              &gt; cosmetic themes
+            </span>
+            <span className="text-xs px-1.5 py-0.5 bg-purple-900 text-purple-300 rounded font-bold">
+              PRO ONLY
+            </span>
+          </div>
+          {!state.proKey && (
+            <p className="text-xs text-gray-500 mt-1 italic">
+              Subscribe to Pro to unlock premium themes
+            </p>
+          )}
+        </div>
+        {THEMES.filter((theme) => theme.id !== "default").map((theme) => {
+          const isUnlocked = state.unlockedThemes.includes(theme.id);
+          const isEquipped = state.activeTheme === theme.id;
+          const canAfford = state.economy.currentTD >= theme.cost;
+          const isPro = !!state.proKey;
+          const canBuy = isPro && !isUnlocked && canAfford;
+
+          return (
+            <div
+              key={theme.id}
+              className={`rounded border px-4 py-3 ${
+                isEquipped
+                  ? "border-purple-500 bg-purple-950/30 text-purple-300"
+                  : isUnlocked
+                    ? "border-purple-700 bg-purple-950/20 text-gray-200"
+                    : canBuy
+                      ? "border-purple-700 bg-purple-950/30 text-gray-200"
+                      : "border-gray-700 bg-gray-900/50 text-gray-500"
+              }`}
+            >
+              <div className="flex justify-between items-center text-sm font-semibold">
+                <span>{theme.name}</span>
+                {isEquipped && <span className="text-xs text-purple-400">EQUIPPED</span>}
+                {isUnlocked && !isEquipped && <span className="text-xs text-purple-500">OWNED</span>}
+              </div>
+              <div className="text-xs mt-1">
+                <span className={`font-bold ${isUnlocked ? "text-gray-500" : canBuy ? "text-purple-400" : "text-red-400"}`}>
+                  {isUnlocked ? "Unlocked" : `Cost: ${theme.cost.toLocaleString()} TD`}
+                </span>
+              </div>
+              {isUnlocked ? (
+                !isEquipped && (
+                  <button
+                    onClick={() => equipTheme(theme.id)}
+                    className="mt-2 w-full text-xs py-1 rounded bg-purple-700 hover:bg-purple-600 text-white cursor-pointer"
+                  >
+                    Equip Theme
+                  </button>
+                )
+              ) : (
+                <button
+                  disabled={!canBuy}
+                  onClick={() => buyTheme(theme.id)}
+                  className={`mt-2 w-full text-xs py-1 rounded ${
+                    canBuy
+                      ? "bg-purple-700 hover:bg-purple-600 text-white cursor-pointer"
+                      : "bg-gray-800 text-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  {!isPro ? "Pro Required" : canAfford ? "Buy Theme" : "Can't afford"}
                 </button>
               )}
             </div>
