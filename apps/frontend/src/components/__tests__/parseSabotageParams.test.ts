@@ -32,6 +32,9 @@ function makeGameState(overrides: Partial<GameState["economy"]> = {}): GameState
     modes: { fast: false, voice: false },
     activeTicket: null,
     hasSeenTicketPrompt: false,
+    activeTheme: "default",
+    unlockedThemes: ["default"],
+    soundEnabled: true,
   };
 }
 
