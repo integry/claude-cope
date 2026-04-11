@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { computeMultiplier } from "../gameConstants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
+import { consumeQuota, QuotaExhaustedError } from "../utils/quota";
 
 type Env = {
   Bindings: {
@@ -84,6 +85,27 @@ chat.post("/", async (c) => {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
   }
 
+  // Consume quota before making the OpenRouter request
+  const quotaKv = c.env?.QUOTA_KV;
+  let quotaPercent = 100;
+  if (quotaKv) {
+    const sessionId = c.get("sessionId");
+    const tier = body.proKeyHash ? "pro" : "free";
+    try {
+      const result = await consumeQuota(quotaKv, {
+        tier,
+        sessionId,
+        licenseKeyHash: body.proKeyHash,
+      });
+      quotaPercent = result.quotaPercent;
+    } catch (err) {
+      if (err instanceof QuotaExhaustedError) {
+        return c.json({ error: err.message }, 402);
+      }
+      throw err;
+    }
+  }
+
   const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
   const model = resolveModel(body.modelId);
 
@@ -125,6 +147,7 @@ chat.post("/", async (c) => {
   recordUsage(c.env?.DB, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour });
 
   (data as Record<string, unknown>).td_awarded = tdAwarded;
+  (data as Record<string, unknown>).quotaPercent = quotaPercent;
   return c.json(data);
 });
 
