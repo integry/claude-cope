@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Message } from "./Terminal";
 import { pickRandomSequence } from "./toolSequences";
 import { useTypewriter } from "../hooks/useTypewriter";
+import { shareChatImage } from "./shareChatUtils";
+import type { ShareResult } from "./shareChatUtils";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
@@ -342,8 +344,61 @@ function CostDisplay({ cost }: { cost: number }) {
   );
 }
 
-function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTicketId }: { message: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null }) {
+function ShareButton({ userMessage, systemMessage }: { userMessage: string; systemMessage: string }) {
+  const [status, setStatus] = useState<"idle" | "sharing" | "done" | "error">("idle");
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const handleShare = useCallback(async (platform: "twitter" | "linkedin") => {
+    setStatus("sharing");
+    setFeedback(null);
+    try {
+      const result: ShareResult = await shareChatImage({
+        userMessage,
+        systemMessage,
+        platform,
+        openShareUrl: true,
+      });
+      setStatus(result.success ? "done" : "error");
+      setFeedback(result.message);
+    } catch {
+      setStatus("error");
+      setFeedback("Something went wrong. Please try again.");
+    }
+    // Reset after a few seconds
+    setTimeout(() => {
+      setStatus("idle");
+      setFeedback(null);
+    }, 3000);
+  }, [userMessage, systemMessage]);
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <button
+        onClick={() => handleShare("twitter")}
+        disabled={status === "sharing"}
+        className="text-[11px] text-gray-500 hover:text-green-400 transition-colors font-mono disabled:opacity-50"
+      >
+        {status === "sharing" ? "[sharing...]" : "[Share on X]"}
+      </button>
+      <button
+        onClick={() => handleShare("linkedin")}
+        disabled={status === "sharing"}
+        className="text-[11px] text-gray-500 hover:text-blue-400 transition-colors font-mono disabled:opacity-50"
+      >
+        {status === "sharing" ? "[sharing...]" : "[Share on LinkedIn]"}
+      </button>
+      {feedback && (
+        <span className={`text-[11px] font-mono ${status === "error" ? "text-red-400" : "text-green-400"}`}>
+          {feedback}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function OutputBlock({ message, previousMessage, isNew = false, promptString = "❯ ", activeTicketId }: { message: Message; previousMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
+  const showShareButton = message.role === "system" && previousMessage?.role === "user";
 
   return (
     <div className={getContainerClass(message, isNew)}>
@@ -358,6 +413,7 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
       {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
+      {showShareButton && <ShareButton userMessage={previousMessage!.content} systemMessage={message.content} />}
     </div>
   );
 }
@@ -368,6 +424,8 @@ export default React.memo(OutputBlock, (prev, next) =>
   prev.message.cost === next.message.cost &&
   prev.isNew === next.isNew &&
   prev.promptString === next.promptString &&
+  prev.previousMessage?.content === next.previousMessage?.content &&
+  prev.previousMessage?.role === next.previousMessage?.role &&
   // Only compare activeTicketId for loading messages
   (prev.message.role !== "loading" || prev.activeTicketId === next.activeTicketId)
 );
