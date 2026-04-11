@@ -340,8 +340,8 @@ function Terminal() {
 
   return (
     <div
-      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "h-[100dvh] overflow-hidden"} w-full font-mono text-sm text-gray-100 leading-snug sm:leading-relaxed p-4 pb-0 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
-      style={parseGlitchStyle(regressionGlitch)}
+      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "h-[100dvh] overflow-hidden"} w-full font-mono text-sm leading-snug sm:leading-relaxed p-4 pb-0 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : ""} ${pendingPing ? "pvp-ping-flash" : ""} ${state.activeTheme && state.activeTheme !== "default" ? `theme-${state.activeTheme}` : ""}`}
+      style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : 'var(--color-bg)', color: 'var(--color-text)' }}
       onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
       <div className="shrink-0">
@@ -363,7 +363,7 @@ function Terminal() {
         </div>
       </div>
       {renderOverlays()}
-      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1">
+      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-1 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
         <div className="flex items-center justify-between">
           <span>This is a parody project and is not affiliated with Anthropic.</span>
           <span className="ml-auto text-right">&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></span>
@@ -384,7 +384,7 @@ function Terminal() {
           </span>
         </div>
       </footer>
-      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 bg-[#0d1117]/80 backdrop-blur-sm font-mono sm:hidden text-center">
+      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 backdrop-blur-sm font-mono sm:hidden text-center" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
         <span className="leading-tight">Parody project, no Anthropic affiliation.</span>
       </footer>
     </div>

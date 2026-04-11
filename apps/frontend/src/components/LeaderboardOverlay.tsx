@@ -37,7 +37,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
   }, []);
 
   return (
-    <div className="fixed right-0 top-0 h-full w-80 bg-[#0d1117] border-l border-gray-700 flex flex-col z-20">
+    <div className="fixed right-0 top-0 h-full w-80 border-l border-gray-700 flex flex-col z-20" style={{ backgroundColor: 'var(--color-bg)' }}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <span className="text-green-400 font-bold text-sm">
           &gt; cat /var/log/hall_of_blame
