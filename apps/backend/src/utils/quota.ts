@@ -1,4 +1,5 @@
 const FREE_QUOTA_LIMIT = 20;
+export const PRO_INITIAL_QUOTA = 100;
 
 export class QuotaExhaustedError extends Error {
   constructor(tier: "free" | "pro") {
@@ -40,7 +41,7 @@ export async function consumeQuota(
     licenseKey?: string;
     cost?: number;
   },
-): Promise<void> {
+): Promise<{ quotaPercent: number }> {
   const cost = opts.cost ?? 1;
 
   if (opts.tier === "pro") {
@@ -49,7 +50,7 @@ export async function consumeQuota(
     }
 
     const hashed = await hashKey(opts.licenseKey);
-    const kvKey = `pro:${hashed}`;
+    const kvKey = `polar:${hashed}`;
     const raw = await kv.get(kvKey);
 
     if (raw === null) {
@@ -61,8 +62,10 @@ export async function consumeQuota(
       throw new QuotaExhaustedError("pro");
     }
 
-    await kv.put(kvKey, String(remaining - cost));
-    return;
+    const newRemaining = remaining - cost;
+    await kv.put(kvKey, String(newRemaining));
+    const quotaPercent = (newRemaining / PRO_INITIAL_QUOTA) * 100;
+    return { quotaPercent };
   }
 
   // Free tier
@@ -74,5 +77,8 @@ export async function consumeQuota(
     throw new QuotaExhaustedError("free");
   }
 
-  await kv.put(kvKey, String(current + cost));
+  const newUsage = current + cost;
+  await kv.put(kvKey, String(newUsage));
+  const quotaPercent = ((FREE_QUOTA_LIMIT - newUsage) / FREE_QUOTA_LIMIT) * 100;
+  return { quotaPercent };
 }
