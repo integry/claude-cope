@@ -73,6 +73,12 @@ export interface ActiveTicket {
   sprintGoal: number;
 }
 
+export interface ByokUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost: number;
+}
+
 export interface GameState {
   version: string;
   username: string;
@@ -91,6 +97,7 @@ export interface GameState {
   selectedModel?: string;
   proKey?: string;
   byokTotalCost?: number;
+  byokUsage?: Record<string, ByokUsage>;
 }
 
 /** Legacy flat state shape used before the economy refactor. */
