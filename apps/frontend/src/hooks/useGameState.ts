@@ -330,6 +330,27 @@ export function useGameState() {
     }));
   }, []);
 
+  const setActiveTheme = useCallback((themeId: string) => {
+    setState((prev) => {
+      if (!prev.unlockedThemes.includes(themeId)) return prev;
+      return { ...prev, activeTheme: themeId };
+    });
+  }, []);
+
+  const unlockTheme = useCallback((themeId: string) => {
+    setState((prev) => {
+      if (prev.unlockedThemes.includes(themeId)) return prev;
+      return {
+        ...prev,
+        unlockedThemes: [...prev.unlockedThemes, themeId],
+      };
+    });
+  }, []);
+
+  const toggleSound = useCallback(() => {
+    setState((prev) => ({ ...prev, soundEnabled: !prev.soundEnabled }));
+  }, []);
+
   const updateTicketProgress = useCallback((amount: number) => {
     setState((prev) => {
       if (!prev.activeTicket) return prev;
@@ -347,5 +368,5 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
+  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, unlockTheme, toggleSound, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
 }

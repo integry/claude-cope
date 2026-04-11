@@ -87,6 +87,9 @@ export interface GameState {
   modes: ModesState;
   activeTicket: ActiveTicket | null;
   hasSeenTicketPrompt: boolean;
+  activeTheme: string;
+  unlockedThemes: string[];
+  soundEnabled: boolean;
   apiKey?: string;
   selectedModel?: string;
   proKey?: string;
@@ -153,6 +156,9 @@ function createDefaultState(): GameState {
     modes: { fast: false, voice: false },
     activeTicket: null,
     hasSeenTicketPrompt: false,
+    activeTheme: "default",
+    unlockedThemes: ["default"],
+    soundEnabled: true,
   };
 }
 
@@ -188,6 +194,9 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
     modes: { fast: false, voice: false },
     activeTicket: null,
     hasSeenTicketPrompt: false,
+    activeTheme: "default",
+    unlockedThemes: ["default"],
+    soundEnabled: true,
   };
 }
 
@@ -232,6 +241,15 @@ export function loadState(): GameState {
       }
       if (state.hasSeenTicketPrompt === undefined) {
         state.hasSeenTicketPrompt = false;
+      }
+      if (!state.activeTheme) {
+        state.activeTheme = "default";
+      }
+      if (!Array.isArray(state.unlockedThemes)) {
+        state.unlockedThemes = ["default"];
+      }
+      if (state.soundEnabled === undefined) {
+        state.soundEnabled = true;
       }
       if (!state.username) {
         state.username = generateUsername();
