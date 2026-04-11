@@ -43,28 +43,29 @@ export function useGameState() {
     }
   }, [state]);
 
-  // Debounced server score sync — fires 3s after last TD/inventory change
-  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Background server score sync — fires every 5 minutes if TD has changed
   const lastSyncedTD = useRef(state.economy.totalTDEarned);
   useEffect(() => {
-    // Only sync if TD or inventory actually changed
-    if (state.economy.totalTDEarned === lastSyncedTD.current) return;
-    if (syncTimer.current) clearTimeout(syncTimer.current);
-    syncTimer.current = setTimeout(() => {
-      lastSyncedTD.current = state.economy.totalTDEarned;
+    const syncInterval = setInterval(() => {
+      const current = stateRef.current;
+      // Only sync if totalTDEarned has changed since last sync
+      if (current.economy.totalTDEarned === lastSyncedTD.current) return;
+      lastSyncedTD.current = current.economy.totalTDEarned;
       fetch("/api/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username: state.username,
-          currentTD: Math.floor(state.economy.currentTD),
-          totalTDEarned: Math.floor(state.economy.totalTDEarned),
-          inventory: state.inventory,
-          upgrades: state.upgrades,
+          username: current.username,
+          currentTD: Math.floor(current.economy.currentTD),
+          totalTDEarned: Math.floor(current.economy.totalTDEarned),
+          inventory: current.inventory,
+          upgrades: current.upgrades,
         }),
       }).catch(() => {});
-    }, 3000);
-  }, [state.economy.totalTDEarned, state.economy.currentTD, state.inventory, state.upgrades, state.username]);
+    }, 300000); // 5 minutes
+
+    return () => clearInterval(syncInterval);
+  }, []);
 
 
 
