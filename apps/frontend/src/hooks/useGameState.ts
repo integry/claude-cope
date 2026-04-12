@@ -12,7 +12,7 @@ import {
 } from "./gameStateUtils";
 
 export type { Message };
-export type { GameState, BuddyState, EconomyState, ActiveTicket } from "./gameStateUtils";
+export type { GameState, BuddyState, EconomyState, ActiveTicket, ByokUsage } from "./gameStateUtils";
 export { calcBulkCost } from "./gameStateUtils";
 
 export function useGameState() {

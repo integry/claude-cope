@@ -491,17 +491,22 @@ async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Prom
 
 function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | false {
   if (command === "/key" || command.startsWith("/key ")) {
-    import("./keyCommandHandler").then(() => {
-      const keyArg = command.slice(4).trim();
-      if (!keyArg) {
-        reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter API key. Type `/key clear` to remove." });
-      } else if (keyArg === "clear") {
-        ctx.setState((prev) => ({ ...prev, apiKey: undefined }));
-        reply({ role: "system", content: "[🔑] API key removed. Back to the free tier trenches." });
-      } else {
-        ctx.setState((prev) => ({ ...prev, apiKey: keyArg }));
-        reply({ role: "system", content: "[🔑] API key saved. Your key is stored locally and never sent to our servers." });
-      }
+    import("./keyCommandHandler").then(async ({ handleKeyCommand }) => {
+      // Create a mock setHistory that routes messages through reply
+      const mockSetHistory = (action: React.SetStateAction<Message[]>) => {
+        if (typeof action === "function") {
+          // The handleKeyCommand adds multiple messages, we need to capture them
+          const fakeHistory: Message[] = [];
+          const result = action(fakeHistory);
+          // Reply with each new message except user messages (already shown)
+          for (const msg of result) {
+            if (msg.role !== "user") {
+              reply(msg);
+            }
+          }
+        }
+      };
+      await handleKeyCommand(command, ctx.setState, mockSetHistory, ctx.state);
       ctx.setIsProcessing(false);
     });
     return "async";
