@@ -2,9 +2,9 @@ import { useRef, useCallback, useEffect } from "react";
 
 /** Audio file paths for retro terminal sound effects */
 const AUDIO_PATHS = {
-  type: "/media/sounds/type.mp3",
-  error: "/media/sounds/error.mp3",
-  chime: "/media/sounds/chime.mp3",
+  type: "/media/sounds/type.wav",
+  error: "/media/sounds/error.wav",
+  chime: "/media/sounds/chime.wav",
 } as const;
 
 /** Number of Audio objects in the typing pool to prevent clipping during rapid input */

@@ -55,20 +55,20 @@ interface AudioPool {
 function createAudioPool(): AudioPool {
   return {
     typePool: Array.from({ length: TYPE_POOL_SIZE }, () => {
-      const audio = new MockAudio("/media/sounds/type.mp3");
+      const audio = new MockAudio("/media/sounds/type.wav");
       audio.volume = 0.3;
       audio.preload = "auto";
       return audio;
     }),
     typePoolIndex: 0,
     errorAudio: (() => {
-      const audio = new MockAudio("/media/sounds/error.mp3");
+      const audio = new MockAudio("/media/sounds/error.wav");
       audio.volume = 0.5;
       audio.preload = "auto";
       return audio;
     })(),
     chimeAudio: (() => {
-      const audio = new MockAudio("/media/sounds/chime.mp3");
+      const audio = new MockAudio("/media/sounds/chime.wav");
       audio.volume = 0.6;
       audio.preload = "auto";
       return audio;
@@ -143,10 +143,10 @@ describe("useSoundEffects audio pool initialization", () => {
   it("uses correct file paths", () => {
     const pool = createAudioPool();
     pool.typePool.forEach((audio) => {
-      expect(audio.src).toBe("/media/sounds/type.mp3");
+      expect(audio.src).toBe("/media/sounds/type.wav");
     });
-    expect(pool.errorAudio.src).toBe("/media/sounds/error.mp3");
-    expect(pool.chimeAudio.src).toBe("/media/sounds/chime.mp3");
+    expect(pool.errorAudio.src).toBe("/media/sounds/error.wav");
+    expect(pool.chimeAudio.src).toBe("/media/sounds/chime.wav");
   });
 });
 
