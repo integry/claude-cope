@@ -194,7 +194,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
             </div>
             {entries.map((entry, i) => {
               const rank = String(i + 1).padStart(2, " ");
-              const countryId = (entry.country && entry.country !== "Unknown") ? entry.country : "  ";
+              const countryId = (entry.country && entry.country !== "Unknown") ? entry.country : "\u00A0\u00A0";
               return (
                 <div
                   key={entry.id}
@@ -209,7 +209,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
                   }`}
                 >
                   <span className="flex-1 min-w-0 truncate">
-                    <span className="text-gray-500">{countryId.padEnd(2, " ")}</span> {rank}. {entry.username}
+                    <span className="text-gray-500 inline-block w-[2ch]">{countryId}</span> {rank}. {entry.username}
                   </span>
                   <span className="flex-shrink-0 text-right w-24 text-green-400">
                     {entry.technical_debt.toLocaleString()} TD

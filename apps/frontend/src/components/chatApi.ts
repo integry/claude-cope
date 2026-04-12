@@ -337,7 +337,7 @@ export function submitChatMessage(opts: {
         : buddyResult?.message ?? null;
 
       // Merge sprint-complete text into the AI reply so they appear as a single message
-      const finalReply = sprintMsg ? reply + "\n\n" + sprintMsg.content : reply;
+      const finalReply = sprintMsg ? sprintMsg.content + "\n\n" + reply : reply;
 
       setHistory((prev) => {
         let updated = [
