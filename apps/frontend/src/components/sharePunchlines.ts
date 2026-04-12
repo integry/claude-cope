@@ -407,11 +407,8 @@ export const SHARE_PUNCHLINES = [
   "Progress, not perfection. That's what we tell QA anyway.",
   "Embrace the chaos. Version-control the rest.",
   "You're doing great. The AI said so. (It was being sarcastic.)",
-  "Every day is a school day. Today's lesson: don't do that.",
   "Stars can't shine without darkness. Bugs can't hide without spaghetti code.",
-  "It's not about the destination. It's about the journey through your stack trace.",
   "Your vibe attracts your tribe. My vibe attracts merge conflicts.",
   "Manifest your dreams. Except in production.",
-  "Growth mindset: every failure is just an unmerged feature.",
   "You survived 100% of your production incidents. Legend.",
 ];
