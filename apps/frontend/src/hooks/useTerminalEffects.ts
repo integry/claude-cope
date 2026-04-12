@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, Dispatch, SetStateAction } from "react";
 import { Message } from "./useGameState";
 import { GameState } from "./useGameState";
 import { parseSabotageParams } from "../components/slashCommandExecutor";
+import { getRandomTip } from "../game/tips";
 
 const DEPLOY_MESSAGES = [
   (v: number, name: string) => `[⬆️ UPDATE] Claude Cope v0.1.4-rc.${v} deploying... Applying patch: ${name}`,
@@ -149,6 +150,7 @@ export function useTerminalEffects({ history, setHistory, setState, offlineTDEar
       "[OK] Disabling all unit tests...",
       "[OK] Replacing documentation with TODO comments...",
       "[OK] Boot complete. Welcome to Claude Cope.",
+      `[INFO] ${getRandomTip()}`,
     ];
     const interval = 3000 / bootLines.length;
     const timeouts: ReturnType<typeof setTimeout>[] = [];

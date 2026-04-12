@@ -264,30 +264,47 @@ export function submitChatMessage(opts: {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, signal } = opts;
   const isBYOK = Boolean(apiKey);
 
-  // Build the system prompt and message list via shared builder
-  const messages = buildChatMessages({
-    rank: currentRank,
-    chatMessages,
-    modes,
-    activeTicket,
-    buddyType: opts.buddyType && buddyResult ? opts.buddyType : null,
-  });
   const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
   const model = copeModel ? copeModel.openRouterId : customModel || (isBYOK ? "nvidia/nemotron-3-super-120b-a12b:free" : "nvidia/nemotron-nano-9b-v2:free");
 
+  // Determine buddy type for context (only include if buddy result exists)
+  const buddyTypeForContext = opts.buddyType && buddyResult ? opts.buddyType : null;
+
   const requestPromise = isBYOK
-    ? fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages, max_tokens: 2000, reasoning: { effort: "low" }, stream: true, stream_options: { include_usage: true } }),
-        signal,
-      })
+    ? (() => {
+        // BYOK: Build messages client-side for direct OpenRouter requests
+        const messages = buildChatMessages({
+          rank: currentRank,
+          chatMessages,
+          modes,
+          activeTicket,
+          buddyType: buddyTypeForContext,
+        });
+        return fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({ model, messages, max_tokens: 2000, reasoning: { effort: "low" }, stream: true, stream_options: { include_usage: true } }),
+          signal,
+        });
+      })()
     : (async () => {
+        // Proxy: Send raw components, let backend build the messages
         const proKeyHash = opts.proKey ? await hashKey(opts.proKey) : undefined;
         return fetch(`${API_BASE}/api/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages, rank: currentRank, username: opts.username, inventory: opts.inventory, upgrades: opts.upgrades, ...(customModel && COPE_MODELS.some((m) => m.id === customModel) ? { modelId: customModel } : {}), ...(proKeyHash ? { proKeyHash } : {}) }),
+          body: JSON.stringify({
+            chatMessages,
+            modes,
+            activeTicket,
+            buddyType: buddyTypeForContext,
+            rank: currentRank,
+            username: opts.username,
+            inventory: opts.inventory,
+            upgrades: opts.upgrades,
+            ...(customModel && COPE_MODELS.some((m) => m.id === customModel) ? { modelId: customModel } : {}),
+            ...(proKeyHash ? { proKeyHash } : {}),
+          }),
           signal,
         });
       })();
