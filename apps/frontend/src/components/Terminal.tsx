@@ -21,7 +21,6 @@ import { parseGlitchStyle } from "./parseGlitchStyle";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
-import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import Ticker from "./Ticker";
@@ -75,7 +74,7 @@ function filterChatHistory(history: Message[]): { role: string; content: string 
 }
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
@@ -142,23 +141,6 @@ function Terminal() {
     fetchRandomTicketPrompt(setHistory);
   }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
 
-  const triggerQuotaLockout = () => {
-    setQuotaLocked(true); setIsProcessing(true);
-    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." }, { role: "warning", content: "[⚙️] Upgrading to $200/mo Pro Tier..." }]);
-    setTimeout(() => {
-      resetQuota();
-      const newLockouts = state.economy.quotaLockouts + 1;
-      const isNew = newLockouts >= 3 && unlockAchievement("homer_at_the_buffet");
-      setQuotaLocked(false); setIsProcessing(false);
-      if (newLockouts === 1) setInstantBanReady(true);
-      setHistory((prev) => {
-        const messages: Message[] = [...prev, { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" }];
-        if (isNew) messages.push({ role: "warning", content: buildAchievementBox("homer_at_the_buffet") });
-        return messages;
-      });
-    }, 5000);
-  };
-
   const triggerInstantBan = () => {
     setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
     setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." }]);
@@ -168,7 +150,6 @@ function Terminal() {
   const applyQuotaDrain = (): boolean => {
     if (state.apiKey) return false;
     if (instantBanReady) { triggerInstantBan(); return true; }
-    if (drainQuota() <= 0) { triggerQuotaLockout(); return true; }
     return false;
   };
 
