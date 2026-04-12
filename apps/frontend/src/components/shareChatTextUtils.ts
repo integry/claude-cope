@@ -22,8 +22,8 @@ export function stripMarkdownKeepBold(text: string): string {
   s = s.replace(/^```\w*\s*$/gm, "");
   // Remove &nbsp; entities
   s = s.replace(/&nbsp;/g, " ");
-  // Remove "Awaiting input..." lines
-  s = s.replace(/^.*Awaiting input\.{3}.*$/gm, "");
+  // Remove "Awaiting input..." lines (with optional > prefix, 0-3 dots, or ellipsis character)
+  s = s.replace(/^>?\s*Awaiting input[.…]{0,3}\s*$/gm, "");
   // Convert single *italic* to internal italic markers (must happen before bold stripping)
   s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, `${ITALIC_MARKER}$1${ITALIC_MARKER}`);
   // Convert _italic_ to internal italic markers
