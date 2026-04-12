@@ -25,9 +25,29 @@ const HEADER_COLOR = "#6e7681";
 const WATERMARK_COLOR = "#484f58";
 
 /**
- * Wraps text to fit within a maximum width
+ * Strips basic markdown formatting for plain-text canvas rendering.
+ * Converts **bold**/headers/bullets into readable plain text.
  */
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+function stripMarkdown(text: string): string {
+  let s = text;
+  // Remove bold markers
+  s = s.replace(/\*\*(.+?)\*\*/g, "$1");
+  // Remove italic markers
+  s = s.replace(/\*(.+?)\*/g, "$1");
+  s = s.replace(/_(.+?)_/g, "$1");
+  // Convert heading markers to plain text
+  s = s.replace(/^#{1,3}\s+/gm, "");
+  // Remove inline code backticks
+  s = s.replace(/`([^`]+)`/g, "$1");
+  return s;
+}
+
+/**
+ * Wraps a single line of text to fit within a maximum width
+ */
+function wrapSingleLine(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  if (!text) return [""];
+
   const words = text.split(" ");
   const lines: string[] = [];
   let currentLine = "";
@@ -52,6 +72,44 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 }
 
 /**
+ * Wraps text to fit within a maximum width, preserving line breaks
+ * and handling basic markdown formatting (bullets, numbered lists, paragraphs).
+ */
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const cleaned = stripMarkdown(text);
+  const paragraphs = cleaned.split("\n");
+  const result: string[] = [];
+
+  for (const paragraph of paragraphs) {
+    const trimmed = paragraph;
+
+    // Preserve blank lines as empty strings (paragraph breaks)
+    if (trimmed.trim() === "") {
+      result.push("");
+      continue;
+    }
+
+    // Detect bullet/list prefixes and preserve indentation
+    const bulletMatch = trimmed.match(/^(\s*(?:[-*•]\s+|\d+[.)]\s+))/);
+    if (bulletMatch) {
+      const prefix = bulletMatch[1];
+      const content = trimmed.slice(prefix.length);
+      const prefixWidth = ctx.measureText(prefix).width;
+      const contentLines = wrapSingleLine(ctx, content, maxWidth - prefixWidth);
+      const indent = " ".repeat(prefix.length);
+      contentLines.forEach((line, i) => {
+        result.push(i === 0 ? `${prefix}${line}` : `${indent}${line}`);
+      });
+    } else {
+      const wrapped = wrapSingleLine(ctx, trimmed, maxWidth);
+      result.push(...wrapped);
+    }
+  }
+
+  return result;
+}
+
+/**
  * Renders a chat card with user message and system response onto a canvas
  */
 export function renderChatCard(userMessage: string, systemMessage: string, username?: string, currentTD?: number): HTMLCanvasElement {
@@ -62,22 +120,27 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
 
   const contentMaxWidth = MAX_WIDTH - CANVAS_PADDING * 2;
 
-  // Prepare wrapped lines for user message (with prompt prefix)
+  // Prepare wrapped lines for user message (with prompt prefix on first line)
   const userPrefix = "> ";
-  const userFirstLineMax = contentMaxWidth - ctx.measureText(userPrefix).width;
-  const userLines = wrapText(ctx, userMessage, userFirstLineMax);
+  const userPrefixWidth = ctx.measureText(userPrefix).width;
+  const userLines = wrapText(ctx, userMessage, contentMaxWidth - userPrefixWidth);
 
-  // Prepare wrapped lines for system message
+  // Prepare wrapped lines for system message (preserves line breaks and formatting)
   const systemLines = wrapText(ctx, systemMessage, contentMaxWidth);
 
   // Calculate header line - show username and TD balance if available
   const headerText = username ? `${username}  |  TD: ${(currentTD ?? 0).toLocaleString()}` : "claudecope.com";
 
+  // Calculate line height for each line (empty lines are half-height paragraph breaks)
+  const PARAGRAPH_BREAK_HEIGHT = Math.round(LINE_HEIGHT * 0.5);
+  const calcBlockHeight = (lines: string[]) =>
+    lines.reduce((h, line) => h + (line === "" ? PARAGRAPH_BREAK_HEIGHT : LINE_HEIGHT), 0);
+
   // Calculate total height
   const headerHeight = LINE_HEIGHT;
   const separatorHeight = LINE_HEIGHT;
-  const userBlockHeight = userLines.length * LINE_HEIGHT;
-  const systemBlockHeight = systemLines.length * LINE_HEIGHT;
+  const userBlockHeight = calcBlockHeight(userLines);
+  const systemBlockHeight = calcBlockHeight(systemLines);
   const spacingBetween = LINE_HEIGHT;
   const watermarkHeight = LINE_HEIGHT;
 
@@ -127,7 +190,11 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   ctx.fillStyle = USER_TEXT_COLOR;
 
   userLines.forEach((line, i) => {
-    const xOffset = i === 0 ? ctx.measureText(userPrefix).width : 0;
+    if (line === "") {
+      y += PARAGRAPH_BREAK_HEIGHT;
+      return;
+    }
+    const xOffset = i === 0 ? userPrefixWidth : 0;
     ctx.fillText(line, CANVAS_PADDING + xOffset, y);
     y += LINE_HEIGHT;
   });
@@ -138,6 +205,10 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   // Draw system message
   ctx.fillStyle = SYSTEM_TEXT_COLOR;
   systemLines.forEach((line) => {
+    if (line === "") {
+      y += PARAGRAPH_BREAK_HEIGHT;
+      return;
+    }
     ctx.fillText(line, CANVAS_PADDING, y);
     y += LINE_HEIGHT;
   });
