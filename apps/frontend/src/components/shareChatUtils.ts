@@ -113,7 +113,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 /**
  * Renders a chat card with user message and system response onto a canvas
  */
-export function renderChatCard(userMessage: string, systemMessage: string, username?: string, _currentTD?: number): HTMLCanvasElement {
+export function renderChatCard(userMessage: string, systemMessage: string, username?: string): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
 
@@ -321,7 +321,6 @@ export type ShareChatOptions = {
   platform?: "twitter" | "linkedin";
   openShareUrl?: boolean;
   username?: string;
-  currentTD?: number;
 };
 
 /**
@@ -332,13 +331,13 @@ export type ShareChatOptions = {
  * @returns ShareResult indicating success/failure and the method used
  */
 export async function shareChatImage(options: ShareChatOptions): Promise<ShareResult> {
-  const { userMessage, systemMessage, platform, openShareUrl = false, username, currentTD } = options;
+  const { userMessage, systemMessage, platform, openShareUrl = false, username } = options;
 
   // Generate the share text for fallback and social sharing
   const shareText = generateShareText(userMessage, systemMessage);
 
   // Render the chat card
-  const canvas = renderChatCard(userMessage, systemMessage, username, currentTD);
+  const canvas = renderChatCard(userMessage, systemMessage, username);
 
   // Try to copy the image to clipboard
   const blob = await canvasToBlob(canvas);
