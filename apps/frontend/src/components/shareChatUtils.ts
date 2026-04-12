@@ -18,6 +18,9 @@ const FONT_FAMILY = '"Courier New", Courier, monospace';
 const MAX_WIDTH = 600;
 const MAX_HEIGHT = 800;
 const BG_COLOR = "#0d1117";
+const HEADER_BG_COLOR = "#161b22";
+const HEADER_BORDER_COLOR = "#30363d";
+const HEADER_DOT_COLORS = ["#ff5f56", "#ffbd2e", "#27c93f"];
 const BORDER_COLOR = "#22c55e";
 const USER_PROMPT_COLOR = "#22c55e";
 const USER_TEXT_COLOR = "#e6edf3";
@@ -25,6 +28,7 @@ const SYSTEM_TEXT_COLOR = "#4ade80";
 const BOLD_TEXT_COLOR = "#e6edf3";
 const HEADER_COLOR = "#6e7681";
 const WATERMARK_COLOR = "#484f58";
+const HEADER_BAR_HEIGHT = 36;
 
 type TextSegment = {
   text: string;
@@ -109,9 +113,20 @@ function drawStyledLine(opts: DrawStyledLineOptions): void {
 }
 
 /**
- * Wraps a single line of text to fit within a maximum width
+ * Measures the plain-text width of a string that may contain ** bold markers.
+ * The markers themselves are not counted toward width.
  */
-function wrapSingleLine(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+function measureBoldAwareWidth(ctx: CanvasRenderingContext2D, text: string): number {
+  const plain = text.replace(/\*\*/g, "");
+  return ctx.measureText(plain).width;
+}
+
+/**
+ * Word-wraps text that may contain **bold** markers.
+ * Splits on spaces, measures without markers, and preserves markers in output.
+ * When a bold span is split across lines, each line gets its own ** pairs.
+ */
+function wrapWithBold(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   if (!text) return [""];
 
   const words = text.split(" ");
@@ -120,48 +135,36 @@ function wrapSingleLine(ctx: CanvasRenderingContext2D, text: string, maxWidth: n
 
   for (const word of words) {
     const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const metrics = ctx.measureText(testLine);
-
-    if (metrics.width > maxWidth && currentLine) {
+    if (measureBoldAwareWidth(ctx, testLine) > maxWidth && currentLine) {
       lines.push(currentLine);
       currentLine = word;
     } else {
       currentLine = testLine;
     }
   }
-
   if (currentLine) {
     lines.push(currentLine);
   }
 
-  return lines;
-}
-
-/**
- * Extracts bold-aware text from a source string up to a target plain-text length.
- * Returns the extracted string with bold markers properly closed.
- */
-function extractBoldAware(source: string, targetPlainLen: number): { extracted: string; remaining: string } {
-  let extracted = "";
-  let plainCount = 0;
-  let k = 0;
-  while (plainCount < targetPlainLen && k < source.length) {
-    if (source.startsWith("**", k)) {
-      extracted += "**";
-      k += 2;
-    } else {
-      extracted += source[k];
-      plainCount++;
-      k++;
+  // Fix bold markers: ensure each line has balanced ** pairs
+  let inBold = false;
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i] ?? "";
+    if (inBold) {
+      line = "**" + line;
     }
+    const markerCount = (line.match(/\*\*/g) || []).length;
+    if (markerCount % 2 !== 0) {
+      // Odd number of markers means bold spans to next line
+      line += "**";
+      inBold = true;
+    } else {
+      inBold = false;
+    }
+    lines[i] = line;
   }
-  const opens = (extracted.match(/\*\*/g) || []).length;
-  if (opens % 2 !== 0) extracted += "**";
-  let remaining = source.slice(k);
-  if (opens % 2 !== 0 && remaining.length > 0) {
-    remaining = "**" + remaining;
-  }
-  return { extracted, remaining };
+
+  return lines;
 }
 
 /**
@@ -172,47 +175,24 @@ function wrapBulletParagraph(
 ): string[] {
   const content = paragraph.slice(prefix.length);
   const prefixWidth = ctx.measureText(prefix).width;
-  const plainContent = content.replace(/\*\*(.+?)\*\*/g, "$1");
-  const contentLines = wrapSingleLine(ctx, plainContent, maxWidth - prefixWidth);
+  const contentLines = wrapWithBold(ctx, content, maxWidth - prefixWidth);
   const indent = " ".repeat(prefix.length);
 
-  if (contentLines.length <= 1) {
-    return [`${prefix}${content}`];
-  }
-
   const result: string[] = [];
-  let remaining = content;
   for (let j = 0; j < contentLines.length; j++) {
-    const linePlain = contentLines[j] ?? "";
-    const { extracted, remaining: rest } = extractBoldAware(remaining, linePlain.length);
     const linePrefix = j === 0 ? prefix : indent;
-    result.push(`${linePrefix}${extracted}`);
-    remaining = rest;
+    result.push(`${linePrefix}${contentLines[j]}`);
   }
   return result;
 }
 
 /**
- * Wraps a non-list paragraph, mapping wrapped plain lines back to bold-containing text.
+ * Wraps a non-list paragraph, preserving bold markers across line breaks.
  */
 function wrapPlainParagraph(
   ctx: CanvasRenderingContext2D, paragraph: string, maxWidth: number,
 ): string[] {
-  const plainParagraph = paragraph.replace(/\*\*(.+?)\*\*/g, "$1");
-  const wrapped = wrapSingleLine(ctx, plainParagraph, maxWidth);
-
-  if (wrapped.length <= 1) {
-    return [paragraph];
-  }
-
-  const result: string[] = [];
-  let remaining = paragraph;
-  for (const wrappedLine of wrapped) {
-    const { extracted, remaining: rest } = extractBoldAware(remaining, wrappedLine.length);
-    result.push(extracted);
-    remaining = rest;
-  }
-  return result;
+  return wrapWithBold(ctx, paragraph, maxWidth);
 }
 
 /**
@@ -285,15 +265,14 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
     lines.reduce((h, line) => h + (line === "" ? PARAGRAPH_BREAK_HEIGHT : lineHeight), 0);
 
   // Calculate total height
-  const headerHeight = lineHeight;
   const userBlockHeight = calcBlockHeight(userLines);
   const systemBlockHeight = calcBlockHeight(systemLines);
   const spacingBetween = Math.round(lineHeight * 0.6);
 
   // Fixed overhead (everything except system message content)
   const fixedHeight =
+    HEADER_BAR_HEIGHT +
     CANVAS_PADDING +
-    headerHeight +
     userBlockHeight +
     spacingBetween +
     CANVAS_PADDING;
@@ -345,18 +324,45 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   ctx.font = font;
   ctx.textBaseline = "top";
 
-  let y = CANVAS_PADDING;
+  // Draw terminal header bar
+  ctx.fillStyle = HEADER_BG_COLOR;
+  ctx.fillRect(2, 2, canvas.width - 4, HEADER_BAR_HEIGHT);
 
-  // Draw header - username on left, claudecope.com on top right
+  // Draw header bottom border
+  ctx.strokeStyle = HEADER_BORDER_COLOR;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(2, HEADER_BAR_HEIGHT + 2);
+  ctx.lineTo(canvas.width - 2, HEADER_BAR_HEIGHT + 2);
+  ctx.stroke();
+
+  // Draw traffic light dots
+  const dotRadius = 5;
+  const dotY = HEADER_BAR_HEIGHT / 2 + 2;
+  const dotStartX = CANVAS_PADDING;
+  HEADER_DOT_COLORS.forEach((color, i) => {
+    ctx.beginPath();
+    ctx.arc(dotStartX + i * 18, dotY, dotRadius, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  });
+
+  // Draw username in header center
   if (headerText) {
     ctx.fillStyle = HEADER_COLOR;
-    ctx.fillText(headerText, CANVAS_PADDING, y);
+    ctx.font = font;
+    const headerTextWidth = ctx.measureText(headerText).width;
+    ctx.fillText(headerText, (canvas.width - headerTextWidth) / 2, (HEADER_BAR_HEIGHT - fontSize) / 2 + 2);
   }
+
+  // Draw claudecope.com on the right side of the header
   ctx.fillStyle = WATERMARK_COLOR;
+  ctx.font = font;
   const brandText = "claudecope.com";
   const brandWidth = ctx.measureText(brandText).width;
-  ctx.fillText(brandText, canvas.width - CANVAS_PADDING - brandWidth, y);
-  y += headerHeight;
+  ctx.fillText(brandText, canvas.width - CANVAS_PADDING - brandWidth, (HEADER_BAR_HEIGHT - fontSize) / 2 + 2);
+
+  let y = HEADER_BAR_HEIGHT + CANVAS_PADDING;
 
   // Draw user message with prompt chevron
   ctx.fillStyle = USER_PROMPT_COLOR;

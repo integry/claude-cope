@@ -20,6 +20,12 @@ const mockCtx = {
   fillText: vi.fn(),
   fillRect: vi.fn(),
   strokeRect: vi.fn(),
+  beginPath: vi.fn(),
+  moveTo: vi.fn(),
+  lineTo: vi.fn(),
+  stroke: vi.fn(),
+  arc: vi.fn(),
+  fill: vi.fn(),
 };
 
 // Mock canvas element
