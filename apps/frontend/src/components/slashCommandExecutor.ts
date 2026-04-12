@@ -215,11 +215,17 @@ function handleThemeCommand(command: string, ctx: SlashCommandContext, reply: Re
   const unlocked = THEMES.filter((t) => ctx.state.unlockedThemes.includes(t.id));
 
   if (!arg) {
-    const lines = unlocked.map((t) => {
+    const unlockedLines = unlocked.map((t) => {
       const active = t.id === ctx.state.activeTheme ? " ← active" : "";
       return `  ${t.id}${active}`;
     });
-    reply({ role: "system", content: `[🎨] Available themes:\n${lines.join("\n")}\n\nUsage: \`/theme <name>\`` });
+    const locked = THEMES.filter((t) => !ctx.state.unlockedThemes.includes(t.id));
+    const lockedLines = locked.map((t) => `  ${t.id} 🔒 (${t.cost.toLocaleString()} TD)`);
+    const sections = [`**Unlocked:**\n${unlockedLines.join("\n")}`];
+    if (lockedLines.length > 0) {
+      sections.push(`**Locked:**\n${lockedLines.join("\n")}\n\nPurchase locked themes from the \`/store\`.`);
+    }
+    reply({ role: "system", content: `[🎨] Themes:\n\n${sections.join("\n\n")}\n\nUsage: \`/theme <name>\`` });
     return true;
   }
 
@@ -244,22 +250,57 @@ function handleThemeCommand(command: string, ctx: SlashCommandContext, reply: Re
   return true;
 }
 
+function handleOverlayCommand(command: string, ctx: SlashCommandContext): boolean {
+  const overlayMap: Record<string, () => void> = {
+    "/leaderboard": () => ctx.setShowLeaderboard(true),
+    "/achievements": () => ctx.setShowAchievements(true),
+    "/profile": () => ctx.setShowProfile(true),
+    "/party": () => ctx.setShowParty(true),
+  };
+  const opener = overlayMap[command];
+  if (opener) {
+    openOverlay(ctx, opener);
+    return true;
+  }
+  return false;
+}
+
+function handleSimpleReplyCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+  if (command === "/support") {
+    reply({ role: "system", content: pickRandom(supportResponses) });
+    return true;
+  } else if (command === "/preworkout") {
+    reply({ role: "system", content: pickRandom(preworkoutResponses) });
+    return true;
+  } else if (command === "/who") {
+    if (ctx.onlineUsers.length > 0) {
+      const userList = ctx.onlineUsers.join(", ");
+      reply({ role: "system", content: `[📡] **${ctx.onlineCount}** developer(s) suffering in this instance: ${userList}` });
+    } else {
+      reply({ role: "system", content: `[📡] There are currently **${ctx.onlineCount}** developers suffering in this instance.` });
+    }
+    return true;
+  } else if (command === "/reject") {
+    if (ctx.pendingPing) {
+      ctx.rejectPing();
+      reply({ role: "system", content: "[🛡️] Jira tickets **rejected**! You dodged the corporate sabotage." });
+    } else {
+      reply({ role: "error", content: "[❌] No incoming ping to reject." });
+    }
+    return true;
+  }
+  return false;
+}
+
 function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   if (command === "/store") {
     return handleStoreCommand(ctx, reply);
-  } else if (command === "/leaderboard") {
-    openOverlay(ctx, () => ctx.setShowLeaderboard(true));
-    return true;
-  } else if (command === "/achievements") {
-    openOverlay(ctx, () => ctx.setShowAchievements(true));
+  } else if (handleOverlayCommand(command, ctx)) {
     return true;
   } else if (command === "/synergize") {
     reply({ role: "system", content: pickRandom(synergizeResponses) });
     ctx.closeAllOverlays();
     ctx.setShowSynergize(true);
-    return true;
-  } else if (command === "/profile") {
-    openOverlay(ctx, () => ctx.setShowProfile(true));
     return true;
   } else if (command === "/user" || command.startsWith("/user ")) {
     const alias = command.slice(5).trim();
@@ -283,35 +324,12 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     });
     ctx.unlockAchievement("history_eraser");
     return true;
-  } else if (command === "/support") {
-    reply({ role: "system", content: pickRandom(supportResponses) });
-    return true;
-  } else if (command === "/preworkout") {
-    reply({ role: "system", content: pickRandom(preworkoutResponses) });
+  } else if (handleSimpleReplyCommand(command, ctx, reply)) {
     return true;
   } else if (command === "/buddy" || command.startsWith("/buddy ")) {
     return handleBuddyCommand(command, ctx, reply);
-  } else if (command === "/who") {
-    if (ctx.onlineUsers.length > 0) {
-      const userList = ctx.onlineUsers.join(", ");
-      reply({ role: "system", content: `[📡] **${ctx.onlineCount}** developer(s) suffering in this instance: ${userList}` });
-    } else {
-      reply({ role: "system", content: `[📡] There are currently **${ctx.onlineCount}** developers suffering in this instance.` });
-    }
-    return true;
   } else if (command.startsWith("/ping")) {
     return handlePingCommand(command, ctx, reply);
-  } else if (command === "/reject") {
-    if (ctx.pendingPing) {
-      ctx.rejectPing();
-      reply({ role: "system", content: "[🛡️] Jira tickets **rejected**! You dodged the corporate sabotage." });
-    } else {
-      reply({ role: "error", content: "[❌] No incoming ping to reject." });
-    }
-    return true;
-  } else if (command === "/party") {
-    openOverlay(ctx, () => ctx.setShowParty(true));
-    return true;
   } else if (command === "/theme" || command.startsWith("/theme ")) {
     return handleThemeCommand(command, ctx, reply);
   }

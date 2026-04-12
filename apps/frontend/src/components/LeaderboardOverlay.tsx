@@ -121,7 +121,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
         <select
           value={timeframe}
           onChange={(e) => setTimeframe(e.target.value as TimeframeOption)}
-          className="flex-1 bg-gray-900 border border-gray-700 text-green-400 text-xs px-2 py-1 rounded focus:outline-none focus:border-green-500"
+          className="w-24 shrink-0 bg-gray-900 border border-gray-700 text-green-400 text-xs px-2 py-1 rounded focus:outline-none focus:border-green-500"
         >
           {TIMEFRAME_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -129,7 +129,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
             </option>
           ))}
         </select>
-        <div className="flex-1 relative" ref={countryRef}>
+        <div className="flex-1 min-w-0 relative" ref={countryRef}>
           <button
             onClick={() => { setCountryDropdownOpen(!countryDropdownOpen); setCountrySearch(""); }}
             className="w-full bg-gray-900 border border-gray-700 text-green-400 text-xs px-2 py-1 rounded focus:outline-none focus:border-green-500 text-left truncate"
@@ -194,7 +194,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
             </div>
             {entries.map((entry, i) => {
               const rank = String(i + 1).padStart(2, " ");
-              const countryId = entry.country || "--";
+              const countryId = (entry.country && entry.country !== "Unknown") ? entry.country : "  ";
               return (
                 <div
                   key={entry.id}
