@@ -16,7 +16,7 @@ const LINE_HEIGHT = 24;
 const FONT_SIZE = 16;
 const FONT_FAMILY = '"Courier New", Courier, monospace';
 const MAX_WIDTH = 600;
-const MAX_HEIGHT = 440;
+const MAX_HEIGHT = 800;
 const BG_COLOR = "#0d1117";
 const BORDER_COLOR = "#22c55e";
 const USER_PROMPT_COLOR = "#22c55e";
@@ -113,13 +113,18 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 /**
  * Renders a chat card with user message and system response onto a canvas
  */
-export function renderChatCard(userMessage: string, systemMessage: string, username?: string, currentTD?: number): HTMLCanvasElement {
+export function renderChatCard(userMessage: string, systemMessage: string, username?: string, _currentTD?: number): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
-  const font = `${FONT_SIZE}px ${FONT_FAMILY}`;
-  ctx.font = font;
 
   const contentMaxWidth = MAX_WIDTH - CANVAS_PADDING * 2;
+
+  // Estimate total content length to decide if we need a smaller font
+  const totalTextLength = userMessage.length + systemMessage.length;
+  const fontSize = totalTextLength > 600 ? FONT_SIZE - 2 : totalTextLength > 400 ? FONT_SIZE - 1 : FONT_SIZE;
+  const lineHeight = Math.round(LINE_HEIGHT * (fontSize / FONT_SIZE));
+  const font = `${fontSize}px ${FONT_FAMILY}`;
+  ctx.font = font;
 
   // Prepare wrapped lines for user message (with prompt prefix on first line)
   const userPrefix = "> ";
@@ -129,30 +134,28 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   // Prepare wrapped lines for system message (preserves line breaks and formatting)
   const systemLines = wrapText(ctx, systemMessage, contentMaxWidth);
 
-  // Calculate header line - show username and TD balance if available
-  const headerText = username ? `${username}  |  TD: ${(currentTD ?? 0).toLocaleString()}` : "claudecope.com";
+  // Header shows username on the left if available
+  const headerText = username ?? "";
 
   // Calculate line height for each line (empty lines are half-height paragraph breaks)
-  const PARAGRAPH_BREAK_HEIGHT = Math.round(LINE_HEIGHT * 0.5);
+  const PARAGRAPH_BREAK_HEIGHT = Math.round(lineHeight * 0.5);
   const calcBlockHeight = (lines: string[]) =>
-    lines.reduce((h, line) => h + (line === "" ? PARAGRAPH_BREAK_HEIGHT : LINE_HEIGHT), 0);
+    lines.reduce((h, line) => h + (line === "" ? PARAGRAPH_BREAK_HEIGHT : lineHeight), 0);
 
   // Calculate total height
-  const headerHeight = LINE_HEIGHT;
-  const separatorHeight = LINE_HEIGHT;
+  const headerHeight = lineHeight;
+  const separatorHeight = lineHeight;
   const userBlockHeight = calcBlockHeight(userLines);
   const systemBlockHeight = calcBlockHeight(systemLines);
-  const spacingBetween = LINE_HEIGHT;
-  const watermarkHeight = LINE_HEIGHT;
+  const spacingBetween = lineHeight;
 
-  // Calculate the fixed overhead (everything except system message content)
+  // Calculate the fixed overhead (everything except system message content) - no footer needed
   const fixedHeight =
     CANVAS_PADDING +
     headerHeight +
     separatorHeight +
     userBlockHeight +
     spacingBetween +
-    watermarkHeight +
     CANVAS_PADDING;
 
   // Truncate system message lines if they would exceed MAX_HEIGHT
@@ -163,9 +166,9 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   if (systemBlockHeight > availableForSystem && availableForSystem > 0) {
     truncatedSystemLines = [];
     let usedHeight = 0;
-    const ellipsisHeight = LINE_HEIGHT; // reserve space for "..." line
+    const ellipsisHeight = lineHeight; // reserve space for "..." line
     for (const line of systemLines) {
-      const lineH = line === "" ? PARAGRAPH_BREAK_HEIGHT : LINE_HEIGHT;
+      const lineH = line === "" ? PARAGRAPH_BREAK_HEIGHT : lineHeight;
       if (usedHeight + lineH + ellipsisHeight > availableForSystem) {
         truncated = true;
         break;
@@ -204,9 +207,15 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
 
   let y = CANVAS_PADDING;
 
-  // Draw header
-  ctx.fillStyle = HEADER_COLOR;
-  ctx.fillText(headerText, CANVAS_PADDING, y);
+  // Draw header - username on left, claudecope.com on top right
+  if (headerText) {
+    ctx.fillStyle = HEADER_COLOR;
+    ctx.fillText(headerText, CANVAS_PADDING, y);
+  }
+  ctx.fillStyle = WATERMARK_COLOR;
+  const brandText = "claudecope.com";
+  const brandWidth = ctx.measureText(brandText).width;
+  ctx.fillText(brandText, canvas.width - CANVAS_PADDING - brandWidth, y);
   y += headerHeight;
 
   // Draw separator
@@ -227,7 +236,7 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
     }
     const xOffset = i === 0 ? userPrefixWidth : 0;
     ctx.fillText(line, CANVAS_PADDING + xOffset, y);
-    y += LINE_HEIGHT;
+    y += lineHeight;
   });
 
   // Add spacing
@@ -241,16 +250,8 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
       return;
     }
     ctx.fillText(line, CANVAS_PADDING, y);
-    y += LINE_HEIGHT;
+    y += lineHeight;
   });
-
-  // Draw watermark
-  y = canvas.height - CANVAS_PADDING - LINE_HEIGHT / 2;
-  ctx.fillStyle = WATERMARK_COLOR;
-  ctx.font = `${FONT_SIZE - 2}px ${FONT_FAMILY}`;
-  const watermarkText = "claudecope.com";
-  const watermarkWidth = ctx.measureText(watermarkText).width;
-  ctx.fillText(watermarkText, canvas.width - CANVAS_PADDING - watermarkWidth, y);
 
   return canvas;
 }
