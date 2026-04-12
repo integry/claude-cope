@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { computeMultiplier } from "../gameConstants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
+import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 
 type Env = {
   Bindings: {
@@ -17,8 +18,14 @@ type Env = {
 };
 
 type ChatBody = {
-  /** Pre-built messages array (system prompt + conversation context) from the client */
-  messages: { role: string; content: string }[];
+  /** Raw chat messages from the user (not including system prompt) */
+  chatMessages: { role: string; content: string }[];
+  /** Active modes (fast, voice, etc.) */
+  modes?: { fast?: boolean; voice?: boolean };
+  /** Active sprint ticket context */
+  activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
+  /** Current buddy companion type */
+  buddyType?: string | null;
   rank?: string;
   modelId?: string;
   proKeyHash?: string;
@@ -76,8 +83,8 @@ const chat = new Hono<Env>();
 chat.post("/", async (c) => {
   const body = await c.req.json<ChatBody>();
 
-  if (!body.messages || !Array.isArray(body.messages)) {
-    return c.json({ error: "messages array is required" }, 400);
+  if (!body.chatMessages || !Array.isArray(body.chatMessages)) {
+    return c.json({ error: "chatMessages array is required" }, 400);
   }
 
   const apiKey = (c.env as Record<string, string | undefined>).OPENROUTER_API_KEY;
@@ -88,7 +95,16 @@ chat.post("/", async (c) => {
   const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
   const model = resolveModel(body.modelId);
 
-  // Proxy to OpenRouter — messages come pre-built from the client
+  // Build the full messages array server-side (system prompt + history)
+  const messages = buildChatMessages({
+    rank,
+    chatMessages: body.chatMessages,
+    modes: body.modes,
+    activeTicket: body.activeTicket,
+    buddyType: body.buddyType,
+  });
+
+  // Proxy to OpenRouter — messages built server-side for security
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -97,7 +113,7 @@ chat.post("/", async (c) => {
     },
     body: JSON.stringify({
       model,
-      messages: body.messages,
+      messages,
 
       max_tokens: 2000,
       reasoning: { effort: "low" },
@@ -113,7 +129,7 @@ chat.post("/", async (c) => {
   const data = await response.json() as ChatResponseData;
 
   // Debug logging for tag/voice diagnostics — useful when tuning system prompts
-  logChatDiagnostics(body.messages, data);
+  logChatDiagnostics(messages, data);
 
   // Server-authoritative TD award with validated multiplier
   const baseTD = Math.floor(Math.random() * 40) + 10;
