@@ -6,6 +6,7 @@ import { supabase } from "../supabaseClient";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
+import { getRandomTip } from "../game/tips";
 import { buildAchievementBox } from "./achievementBox";
 import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand } from "./ticketCommands";
 import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
@@ -29,6 +30,7 @@ interface SlashCommandContext {
   setShowTerms: (v: boolean) => void;
   setShowContact: (v: boolean) => void;
   setShowProfile: (v: boolean) => void;
+  setShowParty: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -138,6 +140,7 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
       ctx.unlockAchievement("the_nuclear_option");
       messages.push({ role: "warning", content: buildAchievementBox("the_nuclear_option") });
     }
+    messages.push({ role: "system", content: getRandomTip() });
     ctx.setHistory(messages);
     ctx.setIsProcessing(false);
 
@@ -281,6 +284,9 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     } else {
       reply({ role: "error", content: "[❌] No incoming ping to reject." });
     }
+    return true;
+  } else if (command === "/party") {
+    openOverlay(ctx, () => ctx.setShowParty(true));
     return true;
   }
   return false;
