@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { GENERATORS } from "../game/constants";
+import { GENERATORS, THEMES } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { API_BASE } from "../config";
 
@@ -50,6 +50,7 @@ interface SlashCommandContext {
   triggerCompactEffect: () => void;
   playChime: () => void;
   playError: () => void;
+  setActiveTheme: (themeId: string) => void;
 }
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.role !== "loading");
@@ -209,6 +210,40 @@ function handleBuddyCommand(command: string, ctx: SlashCommandContext, reply: Re
   return true;
 }
 
+function handleThemeCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+  const arg = command.slice(6).trim().toLowerCase();
+  const unlocked = THEMES.filter((t) => ctx.state.unlockedThemes.includes(t.id));
+
+  if (!arg) {
+    const lines = unlocked.map((t) => {
+      const active = t.id === ctx.state.activeTheme ? " ← active" : "";
+      return `  ${t.id}${active}`;
+    });
+    reply({ role: "system", content: `[🎨] Available themes:\n${lines.join("\n")}\n\nUsage: \`/theme <name>\`` });
+    return true;
+  }
+
+  const theme = THEMES.find((t) => t.id === arg);
+  if (!theme) {
+    reply({ role: "error", content: `[❌] Unknown theme: \`${arg}\`. Available: ${unlocked.map((t) => t.id).join(", ")}` });
+    return true;
+  }
+
+  if (!ctx.state.unlockedThemes.includes(theme.id)) {
+    reply({ role: "error", content: `[🔒] Theme \`${theme.name}\` is locked. Purchase it from the /store first.` });
+    return true;
+  }
+
+  if (ctx.state.activeTheme === theme.id) {
+    reply({ role: "system", content: `[🎨] Theme \`${theme.name}\` is already active.` });
+    return true;
+  }
+
+  ctx.setActiveTheme(theme.id);
+  reply({ role: "system", content: `[🎨] Theme switched to **${theme.name}**. Your terminal has been reskinned.` });
+  return true;
+}
+
 function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   if (command === "/store") {
     return handleStoreCommand(ctx, reply);
@@ -277,6 +312,8 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
   } else if (command === "/party") {
     openOverlay(ctx, () => ctx.setShowParty(true));
     return true;
+  } else if (command === "/theme" || command.startsWith("/theme ")) {
+    return handleThemeCommand(command, ctx, reply);
   }
   return false;
 }
@@ -620,7 +657,7 @@ export function executeSlashCommand(
   };
 
   // Track command usage for performance review brag card
-  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command.startsWith("/buddy ") ? "/buddy" : command.startsWith("/sync ") ? "/sync" : command;
+  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command.startsWith("/buddy ") ? "/buddy" : command.startsWith("/sync ") ? "/sync" : command.startsWith("/theme ") ? "/theme" : command;
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {
