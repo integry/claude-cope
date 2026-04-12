@@ -147,10 +147,9 @@ function Terminal() {
     setTimeout(() => { setQuotaLocked(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
   };
 
-  const applyQuotaDrain = (): boolean => {
-    if (state.apiKey) return false;
-    if (instantBanReady) { triggerInstantBan(); return true; }
-    return false;
+  const triggerQuotaLockout = () => {
+    setQuotaLocked(true);
+    setHistory((prev) => [...prev, { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" }]);
   };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -166,7 +165,7 @@ function Terminal() {
   });
 
   const runSlashCommand = (command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } });
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } });
   };
 
   const tryOutageDamage = (): boolean => {
@@ -197,7 +196,8 @@ function Terminal() {
     if (handleKeyCommand(inputValue, setState, setHistory)) { setInputValue(""); return; }
     const command = inputValue;
     setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
-    if (applyQuotaDrain()) { setHistory((prev) => [...prev, { role: "user", content: command }]); return; }
+    // Handle instant ban scenario (user fires command right after upgrade)
+    if (!state.apiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); triggerInstantBan(); return; }
     const buddyResult = computeBuddyInterjection(state.buddy);
     if (state.buddy.type) {
       const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
@@ -241,12 +241,22 @@ function Terminal() {
       username: state.username,
       inventory: state.inventory,
       upgrades: state.upgrades,
-      onByokUsage: (usage) => setState((prev) => ({ ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0) })),
+      onByokUsage: (usage) => setState((prev) => {
+        const modelKey = usage.model;
+        const existingUsage = prev.byokUsage?.[modelKey] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 };
+        const updatedModelUsage = {
+          prompt_tokens: existingUsage.prompt_tokens + (usage.prompt_tokens ?? 0),
+          completion_tokens: existingUsage.completion_tokens + (usage.completion_tokens ?? 0),
+          cost: existingUsage.cost + (usage.cost ?? 0),
+        };
+        return {
+          ...prev,
+          byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0),
+          byokUsage: { ...prev.byokUsage, [modelKey]: updatedModelUsage },
+        };
+      }),
       onQuotaUpdate: (quotaPercent) => setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })),
-      onQuotaExhausted: () => {
-        setQuotaLocked(true);
-        setHistory((prev) => [...prev, { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" }]);
-      },
+      onQuotaExhausted: triggerQuotaLockout,
       signal: controller.signal,
     });
   };

@@ -256,7 +256,7 @@ export function submitChatMessage(opts: {
   username?: string;
   inventory?: Record<string, number>;
   upgrades?: string[];
-  onByokUsage?: (usage: { prompt_tokens?: number; completion_tokens?: number; cost?: number }) => void;
+  onByokUsage?: (usage: { model: string; prompt_tokens?: number; completion_tokens?: number; cost?: number }) => void;
   onQuotaUpdate?: (quotaPercent: number) => void;
   onQuotaExhausted?: () => void;
   signal?: AbortSignal;
@@ -300,9 +300,9 @@ export function submitChatMessage(opts: {
       let { rawReply } = parsed;
       const { tokensSent, tokensReceived, cost, quotaPercent } = parsed;
 
-      // Track BYOK usage (full stats)
+      // Track BYOK usage (full stats per model)
       if (isBYOK && opts.onByokUsage) {
-        opts.onByokUsage({ prompt_tokens: tokensSent, completion_tokens: tokensReceived, cost });
+        opts.onByokUsage({ model, prompt_tokens: tokensSent, completion_tokens: tokensReceived, cost });
       }
 
       // Fire quota update for non-BYOK users when quotaPercent is present
