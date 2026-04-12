@@ -188,12 +188,12 @@ function Terminal() {
     else { setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]); }
   };
 
-  const handleEnterSubmit = () => {
+  const handleEnterSubmit = async () => {
     if (tryOutageDamage()) return;
     if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
     if (bragPending) { handleBragSubmit(); return; }
     if (buddyPendingConfirm) { handleBuddyConfirm(); return; }
-    if (handleKeyCommand(inputValue, setState, setHistory)) { setInputValue(""); return; }
+    if (await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
     setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
     // Handle instant ban scenario (user fires command right after upgrade)
