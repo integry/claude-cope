@@ -220,6 +220,40 @@ function balanceBoldMarkers(paragraphs: string[]): void {
   }
 }
 
+type WrapState = { lastWasBlank: boolean; lastWasBullet: boolean };
+
+function processBlankParagraph(result: string[], state: WrapState): void {
+  if (!state.lastWasBlank && result.length > 0) {
+    result.push("");
+    state.lastWasBlank = true;
+  }
+  state.lastWasBullet = false;
+}
+
+function processContentParagraph(
+  ctx: CanvasRenderingContext2D, paragraph: string, maxWidth: number,
+  result: string[], state: WrapState,
+): void {
+  state.lastWasBlank = false;
+  const bulletMatch = paragraph.match(/^(\s*(?:[-*•]\s+|\d+[.)]\s+))/);
+  if (bulletMatch?.[1]) {
+    if (state.lastWasBullet && result.length > 0) {
+      result.push("\x01");
+    }
+    result.push(...wrapBulletParagraph(ctx, paragraph, bulletMatch[1], maxWidth));
+    state.lastWasBullet = true;
+  } else {
+    state.lastWasBullet = false;
+    result.push(...wrapWithBold(ctx, paragraph, maxWidth));
+  }
+}
+
+function trimTrailingBlanks(result: string[]): void {
+  while (result.length > 0 && result[result.length - 1] === "") {
+    result.pop();
+  }
+}
+
 /**
  * Wraps text to fit within a maximum width, preserving line breaks,
  * collapsing consecutive blank lines, and handling markdown formatting.
@@ -231,37 +265,16 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: 
   balanceBoldMarkers(paragraphs);
 
   const result: string[] = [];
-  let lastWasBlank = false;
-  let lastWasBullet = false;
+  const state: WrapState = { lastWasBlank: false, lastWasBullet: false };
 
   for (const paragraph of paragraphs) {
     if (paragraph.trim() === "") {
-      if (!lastWasBlank && result.length > 0) {
-        result.push("");
-        lastWasBlank = true;
-      }
-      lastWasBullet = false;
-      continue;
-    }
-
-    lastWasBlank = false;
-
-    const bulletMatch = paragraph.match(/^(\s*(?:[-*•]\s+|\d+[.)]\s+))/);
-    if (bulletMatch?.[1]) {
-      if (lastWasBullet && result.length > 0) {
-        result.push("\x01");
-      }
-      result.push(...wrapBulletParagraph(ctx, paragraph, bulletMatch[1], maxWidth));
-      lastWasBullet = true;
+      processBlankParagraph(result, state);
     } else {
-      lastWasBullet = false;
-      result.push(...wrapWithBold(ctx, paragraph, maxWidth));
+      processContentParagraph(ctx, paragraph, maxWidth, result, state);
     }
   }
 
-  while (result.length > 0 && result[result.length - 1] === "") {
-    result.pop();
-  }
-
+  trimTrailingBlanks(result);
   return result;
 }
