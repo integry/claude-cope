@@ -38,7 +38,6 @@ interface SlashCommandContext {
   setSlashQuery: (v: string) => void;
   setSlashIndex: (v: number) => void;
   addActiveTD: (n: number) => void;
-  applyQuotaDrain: () => boolean;
   onlineCount: number;
   onlineUsers: string[];
   sendPing: (target?: string) => void;
@@ -639,8 +638,6 @@ export function executeSlashCommand(
   }
 
   setTimeout(() => {
-    if (ctx.applyQuotaDrain()) return;
-
     const exitCommands = ["exit", "quit", "/exit", "/quit"];
     if (exitCommands.includes(command.toLowerCase())) {
       ctx.unlockAchievement("the_final_escape");
