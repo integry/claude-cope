@@ -60,7 +60,7 @@ function parseSegments(text: string): TextSegment[] {
     if (match.index > lastIndex) {
       segments.push({ text: text.slice(lastIndex, match.index), bold: false });
     }
-    segments.push({ text: match[1], bold: true });
+    segments.push({ text: match[1] ?? "", bold: true });
     lastIndex = regex.lastIndex;
   }
 
@@ -75,19 +75,22 @@ function parseSegments(text: string): TextSegment[] {
   return segments;
 }
 
+type DrawStyledLineOptions = {
+  ctx: CanvasRenderingContext2D;
+  segments: TextSegment[];
+  x: number;
+  y: number;
+  normalColor: string;
+  boldColor: string;
+  font: string;
+  boldFont: string;
+};
+
 /**
  * Draws a line of text with inline bold segments in a different color.
  */
-function drawStyledLine(
-  ctx: CanvasRenderingContext2D,
-  segments: TextSegment[],
-  x: number,
-  y: number,
-  normalColor: string,
-  boldColor: string,
-  font: string,
-  boldFont: string,
-): void {
+function drawStyledLine(opts: DrawStyledLineOptions): void {
+  const { ctx, segments, x, y, normalColor, boldColor, font, boldFont } = opts;
   let curX = x;
   for (const seg of segments) {
     if (seg.bold) {
@@ -135,6 +138,81 @@ function wrapSingleLine(ctx: CanvasRenderingContext2D, text: string, maxWidth: n
 }
 
 /**
+ * Extracts bold-aware text from a source string up to a target plain-text length.
+ * Returns the extracted string with bold markers properly closed.
+ */
+function extractBoldAware(source: string, targetPlainLen: number): { extracted: string; remaining: string } {
+  let extracted = "";
+  let plainCount = 0;
+  let k = 0;
+  while (plainCount < targetPlainLen && k < source.length) {
+    if (source.startsWith("**", k)) {
+      extracted += "**";
+      k += 2;
+    } else {
+      extracted += source[k];
+      plainCount++;
+      k++;
+    }
+  }
+  const opens = (extracted.match(/\*\*/g) || []).length;
+  if (opens % 2 !== 0) extracted += "**";
+  let remaining = source.slice(k);
+  if (opens % 2 !== 0 && remaining.length > 0) {
+    remaining = "**" + remaining;
+  }
+  return { extracted, remaining };
+}
+
+/**
+ * Wraps a bullet/list paragraph, preserving the prefix and indentation.
+ */
+function wrapBulletParagraph(
+  ctx: CanvasRenderingContext2D, paragraph: string, prefix: string, maxWidth: number,
+): string[] {
+  const content = paragraph.slice(prefix.length);
+  const prefixWidth = ctx.measureText(prefix).width;
+  const plainContent = content.replace(/\*\*(.+?)\*\*/g, "$1");
+  const contentLines = wrapSingleLine(ctx, plainContent, maxWidth - prefixWidth);
+  const indent = " ".repeat(prefix.length);
+
+  if (contentLines.length <= 1) {
+    return [`${prefix}${content}`];
+  }
+
+  const firstLinePlain = contentLines[0] ?? "";
+  const { extracted: firstLineBold } = extractBoldAware(content, firstLinePlain.length);
+  const result = [`${prefix}${firstLineBold}`];
+  for (let j = 1; j < contentLines.length; j++) {
+    result.push(`${indent}${contentLines[j]}`);
+  }
+  return result;
+}
+
+/**
+ * Wraps a non-list paragraph, mapping wrapped plain lines back to bold-containing text.
+ */
+function wrapPlainParagraph(
+  ctx: CanvasRenderingContext2D, paragraph: string, maxWidth: number,
+): string[] {
+  const plainParagraph = paragraph.replace(/\*\*(.+?)\*\*/g, "$1");
+  const wrapped = wrapSingleLine(ctx, plainParagraph, maxWidth);
+
+  if (wrapped.length <= 1) {
+    return [paragraph];
+  }
+
+  const result: string[] = [];
+  let remaining = paragraph;
+  for (const wrappedLine of wrapped) {
+    const { extracted, remaining: rest } = extractBoldAware(remaining, wrappedLine.length);
+    result.push(extracted);
+    remaining = rest;
+  }
+  return result;
+}
+
+/**
  * Wraps text to fit within a maximum width, preserving line breaks,
  * collapsing consecutive blank lines, and handling markdown formatting.
  */
@@ -145,7 +223,6 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   let lastWasBlank = false;
 
   for (const paragraph of paragraphs) {
-    // Preserve blank lines as empty strings (paragraph breaks), but collapse consecutive ones
     if (paragraph.trim() === "") {
       if (!lastWasBlank && result.length > 0) {
         result.push("");
@@ -156,88 +233,14 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 
     lastWasBlank = false;
 
-    // Detect bullet/list prefixes and preserve indentation
     const bulletMatch = paragraph.match(/^(\s*(?:[-*•]\s+|\d+[.)]\s+))/);
-    if (bulletMatch && bulletMatch[1]) {
-      const prefix = bulletMatch[1];
-      const content = paragraph.slice(prefix.length);
-      const prefixWidth = ctx.measureText(prefix).width;
-      // Measure plain text width (strip bold markers for measurement)
-      const plainContent = content.replace(/\*\*(.+?)\*\*/g, "$1");
-      const contentLines = wrapSingleLine(ctx, plainContent, maxWidth - prefixWidth);
-      const indent = " ".repeat(prefix.length);
-
-      // Re-align bold markers with wrapped lines
-      // For simplicity, keep bold markers in first wrapped line only
-      if (contentLines.length === 1) {
-        result.push(`${prefix}${content}`);
-      } else {
-        // Rebuild with original content for first line, plain for rest
-        const firstLinePlain = contentLines[0];
-        // Find how many chars of plain text the first line covers
-        let boldContent = content;
-        let firstLineBold = "";
-        let plainCharsUsed = 0;
-        let i = 0;
-        while (plainCharsUsed < firstLinePlain.length && i < boldContent.length) {
-          if (boldContent.startsWith("**", i)) {
-            firstLineBold += "**";
-            i += 2;
-          } else {
-            firstLineBold += boldContent[i];
-            plainCharsUsed++;
-            i++;
-          }
-        }
-        // Close any unclosed bold
-        const openBolds = (firstLineBold.match(/\*\*/g) || []).length;
-        if (openBolds % 2 !== 0) firstLineBold += "**";
-
-        result.push(`${prefix}${firstLineBold}`);
-        for (let j = 1; j < contentLines.length; j++) {
-          result.push(`${indent}${contentLines[j]}`);
-        }
-      }
+    if (bulletMatch?.[1]) {
+      result.push(...wrapBulletParagraph(ctx, paragraph, bulletMatch[1], maxWidth));
     } else {
-      // For non-list paragraphs, measure with plain text then keep original for rendering
-      const plainParagraph = paragraph.replace(/\*\*(.+?)\*\*/g, "$1");
-      const wrapped = wrapSingleLine(ctx, plainParagraph, maxWidth);
-
-      if (wrapped.length === 1) {
-        result.push(paragraph);
-      } else {
-        // Map wrapped plain lines back to original bold-containing text
-        let remaining = paragraph;
-        for (let j = 0; j < wrapped.length; j++) {
-          const targetPlainLen = wrapped[j].length;
-          let extracted = "";
-          let plainCount = 0;
-          let k = 0;
-          while (plainCount < targetPlainLen && k < remaining.length) {
-            if (remaining.startsWith("**", k)) {
-              extracted += "**";
-              k += 2;
-            } else {
-              extracted += remaining[k];
-              plainCount++;
-              k++;
-            }
-          }
-          // Close any unclosed bold in this line
-          const opens = (extracted.match(/\*\*/g) || []).length;
-          if (opens % 2 !== 0) extracted += "**";
-          result.push(extracted);
-          remaining = remaining.slice(k);
-          // If next line starts mid-bold, prepend **
-          if (opens % 2 !== 0 && remaining.length > 0) {
-            remaining = "**" + remaining;
-          }
-        }
-      }
+      result.push(...wrapPlainParagraph(ctx, paragraph, maxWidth));
     }
   }
 
-  // Remove trailing blank lines
   while (result.length > 0 && result[result.length - 1] === "") {
     result.pop();
   }
@@ -380,7 +383,7 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
       return;
     }
     const segments = parseSegments(line);
-    drawStyledLine(ctx, segments, CANVAS_PADDING, y, SYSTEM_TEXT_COLOR, BOLD_TEXT_COLOR, font, boldFont);
+    drawStyledLine({ ctx, segments, x: CANVAS_PADDING, y, normalColor: SYSTEM_TEXT_COLOR, boldColor: BOLD_TEXT_COLOR, font, boldFont });
     y += lineHeight;
   });
 
