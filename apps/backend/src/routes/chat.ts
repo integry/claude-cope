@@ -35,6 +35,22 @@ type ChatBody = {
   country?: string;
 };
 
+/** Allowed roles in chatMessages (excludes "system" to prevent prompt injection) */
+const ALLOWED_CHAT_ROLES = new Set(["user", "assistant"]);
+
+/**
+ * Sanitize incoming chat messages to prevent prompt injection attacks.
+ * Filters out any messages with disallowed roles (e.g., "system") and
+ * ensures each message has valid structure.
+ */
+export function sanitizeChatMessages(messages: { role: string; content: string }[]): { role: string; content: string }[] {
+  return messages.filter((msg) => {
+    if (!msg || typeof msg !== "object") return false;
+    if (typeof msg.role !== "string" || typeof msg.content !== "string") return false;
+    return ALLOWED_CHAT_ROLES.has(msg.role);
+  });
+}
+
 type ChatResponseData = {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   choices?: Array<{ message?: { content?: string } }>;
@@ -95,10 +111,13 @@ chat.post("/", async (c) => {
   const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
   const model = resolveModel(body.modelId);
 
+  // Sanitize chat messages to prevent prompt injection (strip "system" role, etc.)
+  const sanitizedMessages = sanitizeChatMessages(body.chatMessages);
+
   // Build the full messages array server-side (system prompt + history)
   const messages = buildChatMessages({
     rank,
-    chatMessages: body.chatMessages,
+    chatMessages: sanitizedMessages,
     modes: body.modes,
     activeTicket: body.activeTicket,
     buddyType: body.buddyType,
