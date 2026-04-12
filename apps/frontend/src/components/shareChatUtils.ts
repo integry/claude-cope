@@ -54,7 +54,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 /**
  * Renders a chat card with user message and system response onto a canvas
  */
-export function renderChatCard(userMessage: string, systemMessage: string): HTMLCanvasElement {
+export function renderChatCard(userMessage: string, systemMessage: string, username?: string, currentTD?: number): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
   const font = `${FONT_SIZE}px ${FONT_FAMILY}`;
@@ -70,8 +70,8 @@ export function renderChatCard(userMessage: string, systemMessage: string): HTML
   // Prepare wrapped lines for system message
   const systemLines = wrapText(ctx, systemMessage, contentMaxWidth);
 
-  // Calculate header line
-  const headerText = "claude.cope";
+  // Calculate header line - show username and TD balance if available
+  const headerText = username ? `${username}  |  TD: ${(currentTD ?? 0).toLocaleString()}` : "claudecope.com";
 
   // Calculate total height
   const headerHeight = LINE_HEIGHT;
@@ -217,6 +217,8 @@ export type ShareChatOptions = {
   systemMessage: string;
   platform?: "twitter" | "linkedin";
   openShareUrl?: boolean;
+  username?: string;
+  currentTD?: number;
 };
 
 /**
@@ -227,13 +229,13 @@ export type ShareChatOptions = {
  * @returns ShareResult indicating success/failure and the method used
  */
 export async function shareChatImage(options: ShareChatOptions): Promise<ShareResult> {
-  const { userMessage, systemMessage, platform, openShareUrl = false } = options;
+  const { userMessage, systemMessage, platform, openShareUrl = false, username, currentTD } = options;
 
   // Generate the share text for fallback and social sharing
   const shareText = generateShareText(userMessage, systemMessage);
 
   // Render the chat card
-  const canvas = renderChatCard(userMessage, systemMessage);
+  const canvas = renderChatCard(userMessage, systemMessage, username, currentTD);
 
   // Try to copy the image to clipboard
   const blob = await canvasToBlob(canvas);
