@@ -174,13 +174,11 @@ function wrapBulletParagraph(
   ctx: CanvasRenderingContext2D, paragraph: string, prefix: string, maxWidth: number,
 ): string[] {
   const content = paragraph.slice(prefix.length);
-  const prefixWidth = ctx.measureText(prefix).width;
-  const contentLines = wrapWithBold(ctx, content, maxWidth - prefixWidth);
-  const indent = " ".repeat(prefix.length);
+  const contentLines = wrapWithBold(ctx, content, maxWidth);
 
   const result: string[] = [];
   for (let j = 0; j < contentLines.length; j++) {
-    const linePrefix = j === 0 ? prefix : indent;
+    const linePrefix = j === 0 ? prefix : "";
     result.push(`${linePrefix}${contentLines[j]}`);
   }
   return result;
@@ -224,6 +222,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 
   const result: string[] = [];
   let lastWasBlank = false;
+  let lastWasBullet = false;
 
   for (const paragraph of paragraphs) {
     if (paragraph.trim() === "") {
@@ -231,6 +230,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
         result.push("");
         lastWasBlank = true;
       }
+      lastWasBullet = false;
       continue;
     }
 
@@ -238,8 +238,14 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 
     const bulletMatch = paragraph.match(/^(\s*(?:[-*•]\s+|\d+[.)]\s+))/);
     if (bulletMatch?.[1]) {
+      // Add a small gap between consecutive list items
+      if (lastWasBullet && result.length > 0) {
+        result.push("");
+      }
       result.push(...wrapBulletParagraph(ctx, paragraph, bulletMatch[1], maxWidth));
+      lastWasBullet = true;
     } else {
+      lastWasBullet = false;
       result.push(...wrapPlainParagraph(ctx, paragraph, maxWidth));
     }
   }
