@@ -22,7 +22,6 @@ import { parseGlitchStyle } from "./parseGlitchStyle";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
-import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import Ticker from "./Ticker";
@@ -76,7 +75,7 @@ function filterChatHistory(history: Message[]): { role: string; content: string 
 }
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
@@ -144,34 +143,15 @@ function Terminal() {
     fetchRandomTicketPrompt(setHistory);
   }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
 
-  const triggerQuotaLockout = () => {
-    setQuotaLocked(true); setIsProcessing(true);
-    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." }, { role: "warning", content: "[⚙️] Upgrading to $200/mo Pro Tier..." }]);
-    setTimeout(() => {
-      resetQuota();
-      const newLockouts = state.economy.quotaLockouts + 1;
-      const isNew = newLockouts >= 3 && unlockAchievement("homer_at_the_buffet");
-      setQuotaLocked(false); setIsProcessing(false);
-      if (newLockouts === 1) setInstantBanReady(true);
-      setHistory((prev) => {
-        const messages: Message[] = [...prev, { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" }];
-        if (isNew) messages.push({ role: "warning", content: buildAchievementBox("homer_at_the_buffet") });
-        return messages;
-      });
-    }, 5000);
-  };
-
   const triggerInstantBan = () => {
     setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
     setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." }]);
     setTimeout(() => { setQuotaLocked(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
   };
 
-  const applyQuotaDrain = (): boolean => {
-    if (state.apiKey) return false;
-    if (instantBanReady) { triggerInstantBan(); return true; }
-    if (drainQuota() <= 0) { triggerQuotaLockout(); return true; }
-    return false;
+  const triggerQuotaLockout = () => {
+    setQuotaLocked(true);
+    setHistory((prev) => [...prev, { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" }]);
   };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -187,7 +167,7 @@ function Terminal() {
   });
 
   const runSlashCommand = (command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } });
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } });
   };
 
   const tryOutageDamage = (): boolean => {
@@ -210,15 +190,16 @@ function Terminal() {
     else { setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]); }
   };
 
-  const handleEnterSubmit = () => {
+  const handleEnterSubmit = async () => {
     if (tryOutageDamage()) return;
     if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
     if (bragPending) { handleBragSubmit(); return; }
     if (buddyPendingConfirm) { handleBuddyConfirm(); return; }
-    if (handleKeyCommand(inputValue, setState, setHistory)) { setInputValue(""); return; }
+    if (await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
     setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
-    if (applyQuotaDrain()) { setHistory((prev) => [...prev, { role: "user", content: command }]); return; }
+    // Handle instant ban scenario (user fires command right after upgrade)
+    if (!state.apiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); triggerInstantBan(); return; }
     const buddyResult = computeBuddyInterjection(state.buddy);
     if (state.buddy.type) {
       const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
@@ -243,7 +224,43 @@ function Terminal() {
     };
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, proKey: state.proKey, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, addActiveTD, onSuggestedReply: setSuggestedReply, buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades, onByokCost: (cost) => setState((prev) => ({ ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + cost })), signal: controller.signal });
+    submitChatMessage({
+      chatMessages,
+      buddyResult,
+      unlockAchievement,
+      setHistory,
+      setIsProcessing,
+      currentRank: rank,
+      apiKey: state.apiKey,
+      customModel: state.selectedModel,
+      proKey: state.proKey,
+      modes: state.modes,
+      activeTicket: state.activeTicket,
+      onSprintProgress,
+      addActiveTD,
+      onSuggestedReply: setSuggestedReply,
+      buddyType: state.buddy.type,
+      username: state.username,
+      inventory: state.inventory,
+      upgrades: state.upgrades,
+      onByokUsage: (usage) => setState((prev) => {
+        const modelKey = usage.model;
+        const existingUsage = prev.byokUsage?.[modelKey] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 };
+        const updatedModelUsage = {
+          prompt_tokens: existingUsage.prompt_tokens + (usage.prompt_tokens ?? 0),
+          completion_tokens: existingUsage.completion_tokens + (usage.completion_tokens ?? 0),
+          cost: existingUsage.cost + (usage.cost ?? 0),
+        };
+        return {
+          ...prev,
+          byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0),
+          byokUsage: { ...prev.byokUsage, [modelKey]: updatedModelUsage },
+        };
+      }),
+      onQuotaUpdate: (quotaPercent) => setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })),
+      onQuotaExhausted: triggerQuotaLockout,
+      signal: controller.signal,
+    });
   };
 
   const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = val.length; } }, 0); };
