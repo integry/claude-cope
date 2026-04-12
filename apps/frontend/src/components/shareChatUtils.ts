@@ -16,6 +16,7 @@ const LINE_HEIGHT = 24;
 const FONT_SIZE = 16;
 const FONT_FAMILY = '"Courier New", Courier, monospace';
 const MAX_WIDTH = 600;
+const MAX_HEIGHT = 440;
 const BG_COLOR = "#0d1117";
 const BORDER_COLOR = "#22c55e";
 const USER_PROMPT_COLOR = "#22c55e";
@@ -144,15 +145,45 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   const spacingBetween = LINE_HEIGHT;
   const watermarkHeight = LINE_HEIGHT;
 
-  const totalHeight =
+  // Calculate the fixed overhead (everything except system message content)
+  const fixedHeight =
     CANVAS_PADDING +
     headerHeight +
     separatorHeight +
     userBlockHeight +
     spacingBetween +
-    systemBlockHeight +
     watermarkHeight +
     CANVAS_PADDING;
+
+  // Truncate system message lines if they would exceed MAX_HEIGHT
+  const availableForSystem = MAX_HEIGHT - fixedHeight;
+  let truncatedSystemLines = systemLines;
+  let truncated = false;
+
+  if (systemBlockHeight > availableForSystem && availableForSystem > 0) {
+    truncatedSystemLines = [];
+    let usedHeight = 0;
+    const ellipsisHeight = LINE_HEIGHT; // reserve space for "..." line
+    for (const line of systemLines) {
+      const lineH = line === "" ? PARAGRAPH_BREAK_HEIGHT : LINE_HEIGHT;
+      if (usedHeight + lineH + ellipsisHeight > availableForSystem) {
+        truncated = true;
+        break;
+      }
+      truncatedSystemLines.push(line);
+      usedHeight += lineH;
+    }
+    if (truncated) {
+      truncatedSystemLines.push("...");
+    }
+  }
+
+  const truncatedSystemBlockHeight = calcBlockHeight(truncatedSystemLines);
+
+  const totalHeight = Math.min(
+    MAX_HEIGHT,
+    fixedHeight + truncatedSystemBlockHeight,
+  );
 
   // Set canvas dimensions
   canvas.width = MAX_WIDTH;
@@ -202,9 +233,9 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   // Add spacing
   y += spacingBetween / 2;
 
-  // Draw system message
+  // Draw system message (truncated if needed)
   ctx.fillStyle = SYSTEM_TEXT_COLOR;
-  systemLines.forEach((line) => {
+  truncatedSystemLines.forEach((line) => {
     if (line === "") {
       y += PARAGRAPH_BREAK_HEIGHT;
       return;
