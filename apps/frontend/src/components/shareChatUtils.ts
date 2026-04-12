@@ -27,7 +27,7 @@ const USER_TEXT_COLOR = "#e6edf3";
 const SYSTEM_TEXT_COLOR = "#4ade80";
 const BOLD_TEXT_COLOR = "#e6edf3";
 const HEADER_COLOR = "#6e7681";
-const WATERMARK_COLOR = "#484f58";
+const WATERMARK_COLOR = "#facc15";
 const HEADER_BAR_HEIGHT = 36;
 
 type TextSegment = {
@@ -202,6 +202,26 @@ function wrapPlainParagraph(
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const cleaned = stripMarkdownKeepBold(text);
   const paragraphs = cleaned.split("\n");
+
+  // Fix bold markers across paragraph boundaries: if a **bold** span crosses
+  // a \n, the closing ** ends up in the next paragraph as an orphaned marker.
+  // Track bold state across paragraphs and prepend/append ** to balance them.
+  let boldAcross = false;
+  for (let i = 0; i < paragraphs.length; i++) {
+    let p = paragraphs[i] ?? "";
+    if (boldAcross) {
+      p = "**" + p;
+    }
+    const markerCount = (p.match(/\*\*/g) || []).length;
+    if (markerCount % 2 !== 0) {
+      p += "**";
+      boldAcross = true;
+    } else {
+      boldAcross = false;
+    }
+    paragraphs[i] = p;
+  }
+
   const result: string[] = [];
   let lastWasBlank = false;
 
