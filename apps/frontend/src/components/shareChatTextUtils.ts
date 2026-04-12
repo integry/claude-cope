@@ -16,6 +16,10 @@ export function stripMarkdownKeepBold(text: string): string {
   let s = text;
   // Remove fenced code block delimiters (``` or ```language)
   s = s.replace(/^```\w*\s*$/gm, "");
+  // Remove &nbsp; entities
+  s = s.replace(/&nbsp;/g, " ");
+  // Remove "Awaiting input..." lines
+  s = s.replace(/^.*Awaiting input\.{3}.*$/gm, "");
   s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1");
   s = s.replace(/_(.+?)_/g, "$1");
   s = s.replace(/^#{1,3}\s+/gm, "");
@@ -165,15 +169,10 @@ function wrapBulletParagraph(
 }
 
 /**
- * Wraps text to fit within a maximum width, preserving line breaks,
- * collapsing consecutive blank lines, and handling markdown formatting.
+ * Merges continuation lines into their parent bullet item so that
+ * wrapped text fills the full available width instead of getting shorter.
  */
-export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const cleaned = stripMarkdownKeepBold(text);
-  const rawParagraphs = cleaned.split("\n");
-
-  // Merge continuation lines into their parent bullet item so that
-  // wrapped text fills the full available width instead of getting shorter.
+function mergeBulletContinuations(rawParagraphs: string[]): string[] {
   const paragraphs: string[] = [];
   let currentBullet: string | null = null;
   for (const raw of rawParagraphs) {
@@ -197,7 +196,13 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: 
   if (currentBullet !== null) {
     paragraphs.push(currentBullet);
   }
+  return paragraphs;
+}
 
+/**
+ * Balances bold markers across paragraphs so split bold spans render correctly.
+ */
+function balanceBoldMarkers(paragraphs: string[]): void {
   let boldAcross = false;
   for (let i = 0; i < paragraphs.length; i++) {
     let p = paragraphs[i] ?? "";
@@ -213,6 +218,17 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: 
     }
     paragraphs[i] = p;
   }
+}
+
+/**
+ * Wraps text to fit within a maximum width, preserving line breaks,
+ * collapsing consecutive blank lines, and handling markdown formatting.
+ */
+export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const cleaned = stripMarkdownKeepBold(text);
+  const rawParagraphs = cleaned.split("\n");
+  const paragraphs = mergeBulletContinuations(rawParagraphs);
+  balanceBoldMarkers(paragraphs);
 
   const result: string[] = [];
   let lastWasBlank = false;
