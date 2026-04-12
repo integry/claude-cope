@@ -15,13 +15,45 @@ type LeaderboardOverlayProps = {
   onClose: () => void;
 };
 
+type TimeframeOption = "all" | "weekly" | "daily";
+type CountryOption = string;
+
+const TIMEFRAME_OPTIONS: { value: TimeframeOption; label: string }[] = [
+  { value: "all", label: "All Time" },
+  { value: "weekly", label: "Weekly" },
+  { value: "daily", label: "Daily" },
+];
+
+const COUNTRY_OPTIONS: { value: CountryOption; label: string }[] = [
+  { value: "all", label: "All Countries" },
+  { value: "US", label: "US" },
+  { value: "GB", label: "GB" },
+  { value: "CA", label: "CA" },
+  { value: "DE", label: "DE" },
+  { value: "FR", label: "FR" },
+  { value: "AU", label: "AU" },
+  { value: "IN", label: "IN" },
+  { value: "PK", label: "PK" },
+  { value: "JP", label: "JP" },
+  { value: "BR", label: "BR" },
+];
+
 function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [timeframe, setTimeframe] = useState<TimeframeOption>("all");
+  const [country, setCountry] = useState<CountryOption>("all");
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/leaderboard`)
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (timeframe !== "all") params.append("timeframe", timeframe);
+    if (country !== "all") params.append("country", country);
+    const queryString = params.toString();
+    const url = `${API_BASE}/api/leaderboard${queryString ? `?${queryString}` : ""}`;
+
+    fetch(url)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch leaderboard");
         return res.json();
@@ -34,10 +66,10 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
         setError(err.message);
         setLoading(false);
       });
-  }, []);
+  }, [timeframe, country]);
 
   return (
-    <div className="fixed right-0 top-0 h-full w-80 bg-[#0d1117] border-l border-gray-700 flex flex-col z-20">
+    <div className="fixed right-0 top-0 h-full w-80 border-l border-gray-700 flex flex-col z-20" style={{ backgroundColor: 'var(--color-bg)' }}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <span className="text-green-400 font-bold text-sm">
           &gt; cat /var/log/hall_of_blame
@@ -52,6 +84,31 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
 
       <div className="px-4 py-2 border-b border-gray-700 text-green-400 text-xs font-bold">
         <AsciiBox lines={["HALL OF BLAME - TOP 50", "technical debt rankings"]} />
+      </div>
+
+      <div className="px-4 py-2 border-b border-gray-700 flex gap-2">
+        <select
+          value={timeframe}
+          onChange={(e) => setTimeframe(e.target.value as TimeframeOption)}
+          className="flex-1 bg-gray-900 border border-gray-700 text-green-400 text-xs px-2 py-1 rounded focus:outline-none focus:border-green-500"
+        >
+          {TIMEFRAME_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={country}
+          onChange={(e) => setCountry(e.target.value)}
+          className="flex-1 bg-gray-900 border border-gray-700 text-green-400 text-xs px-2 py-1 rounded focus:outline-none focus:border-green-500"
+        >
+          {COUNTRY_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1">

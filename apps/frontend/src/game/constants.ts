@@ -7,6 +7,13 @@ export interface Generator {
   baseOutput: number;
 }
 
+export interface Theme {
+  id: string;
+  name: string;
+  /** Cost in TD to unlock the theme. */
+  cost: number;
+}
+
 export interface CorporateRank {
   title: string;
   threshold: number;
@@ -215,4 +222,11 @@ export const CORPORATE_RANKS: CorporateRank[] = [
   { title: "Principal Production Saboteur", threshold: 11000000 },
   { title: "Digital Overlord Engineer", threshold: 121000000 },
   { title: "Ultimate API Baba", threshold: 1300000000 },
+];
+
+export const THEMES: Theme[] = [
+  { id: "default", name: "Default", cost: 0 },
+  { id: "amber", name: "Amber", cost: 5000 },
+  { id: "matrix", name: "Matrix", cost: 10000 },
+  { id: "light", name: "Light", cost: 25000 },
 ];

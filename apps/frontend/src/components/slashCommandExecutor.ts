@@ -2,7 +2,7 @@
 import { GENERATORS } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { API_BASE } from "../config";
-import { supabase } from "../supabaseClient";
+
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
@@ -48,6 +48,8 @@ interface SlashCommandContext {
   rejectPing: () => void;
   brrrrrrIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
   triggerCompactEffect: () => void;
+  playChime: () => void;
+  playError: () => void;
 }
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.role !== "loading");
@@ -143,19 +145,6 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
     messages.push({ role: "system", content: getRandomTip() });
     ctx.setHistory(messages);
     ctx.setIsProcessing(false);
-
-    // Broadcast terminal crash to global incident ticker
-    const crashMessage = "💥 A player crashed their terminal with /clear!";
-    fetch(`${API_BASE}/api/recent-events`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: crashMessage }),
-    }).catch(() => {});
-    supabase?.channel('global_incidents').send({
-      type: 'broadcast',
-      event: 'new_incident',
-      payload: { message: crashMessage },
-    }).catch(() => {});
 
     // Re-offer a ticket after clear if none active — delay so the cleared screen settles
     if (!ctx.state.activeTicket) {
@@ -448,6 +437,7 @@ function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
       ...prev,
       activeTicket: { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt },
     }));
+    ctx.playChime();
     reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nReward: **${(offer.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.` });
     ctx.setInputValue(offer.kickoff_prompt);
   }
@@ -541,10 +531,11 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
     if (asyncResult === "async") return "async";
     if (!asyncResult) {
       if (command.startsWith("/take")) {
-        handleTakeCommand(command, ctx.state, ctx.setState, reply, ctx.setInputValue);
+        handleTakeCommand(command, ctx.state, ctx.setState, reply, { setInputValue: ctx.setInputValue, onAccept: ctx.playChime });
       } else if (command === "/accept") {
         handleAcceptCommand(ctx, reply);
       } else if (command === "/abandon") {
+        if (ctx.state.activeTicket) ctx.playError();
         handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
       } else if (command.startsWith("/alias")) {
         handleAliasCommand(command, ctx, reply);

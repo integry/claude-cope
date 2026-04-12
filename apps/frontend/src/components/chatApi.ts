@@ -184,8 +184,10 @@ async function hashKey(key: string): Promise<string> {
 async function handleErrorResponse(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
+  onError?: () => void,
 ): Promise<boolean> {
   if (res.status === 402) {
+    onError?.();
     setHistory((prev) => [
       ...prev.filter((msg) => msg.role !== "loading"),
       { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
@@ -194,6 +196,7 @@ async function handleErrorResponse(
   }
 
   if (res.status === 401) {
+    onError?.();
     setHistory((prev) => [
       ...prev.filter((msg) => msg.role !== "loading"),
       { role: "error", content: "[🔑 ACCESS DENIED] OpenRouter just slammed the door in your face (HTTP 401). Your API key has been **rejected**, **ghosted**, and **emotionally unavailable**.\n\n[POSSIBLE CAUSES]\n\n• Your key is disabled — like your ambition after the third standup today\n\n• Your key expired — unlike your technical debt, which is eternal\n\n• You copy-pasted it wrong — classic Junior Code Monkey energy\n\n[RECOVERY OPTIONS]\n\n• Check your key at [openrouter.ai/keys](https://openrouter.ai/keys)\n\n• `/key clear` to crawl back to the default model\n\n• `/key <new-key>` to try again with whatever dignity you have left" },
@@ -202,6 +205,7 @@ async function handleErrorResponse(
   }
 
   if (res.status === 429) {
+    onError?.();
     const errorData = await res.json().catch(() => null);
     const upstreamRaw = errorData?.error?.metadata?.raw
       ?? errorData?.error?.message
@@ -215,6 +219,7 @@ async function handleErrorResponse(
   }
 
   if (!res.ok) {
+    onError?.();
     const errorData = await res.json().catch(() => null);
     setHistory((prev) => [
       ...prev.filter((msg) => msg.role !== "loading"),
@@ -249,13 +254,14 @@ export function submitChatMessage(opts: {
   inventory?: Record<string, number>;
   upgrades?: string[];
   onByokCost?: (cost: number) => void;
+  onError?: () => void;
   signal?: AbortSignal;
 }) {
-  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, signal } = opts;
+  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, onError, signal } = opts;
   const isBYOK = Boolean(apiKey);
 
   const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
-  const model = copeModel ? copeModel.openRouterId : customModel || (isBYOK ? "nvidia/nemotron-3-super-120b-a12b:free" : "nvidia/nemotron-nano-9b-v2:free");
+  const model = copeModel ? copeModel.openRouterId : customModel || (isBYOK ? "openai/gpt-oss-20b:free" : "nvidia/nemotron-nano-9b-v2:free");
 
   // Determine buddy type for context (only include if buddy result exists)
   const buddyTypeForContext = opts.buddyType && buddyResult ? opts.buddyType : null;
@@ -301,7 +307,7 @@ export function submitChatMessage(opts: {
 
   requestPromise
     .then(async (res) => {
-      if (await handleErrorResponse(res, setHistory)) return;
+      if (await handleErrorResponse(res, setHistory, onError)) return;
 
       const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD);
       let { rawReply } = parsed;
@@ -355,6 +361,7 @@ export function submitChatMessage(opts: {
     })
     .catch((err) => {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      onError?.();
       setHistory((prev) => [
         ...prev.filter((msg) => msg.role !== "loading"),
         { role: "error", content: "[❌ Error] Network error. Is the backend running?" },
