@@ -12,7 +12,7 @@ export default function Ticker({ onExpand }: TickerProps) {
 
   if (!liveEvents || liveEvents.length === 0) return null;
 
-  const latestEvent = liveEvents[0];
+  const latestEvent = liveEvents[0]!;
 
   return (
     <div
