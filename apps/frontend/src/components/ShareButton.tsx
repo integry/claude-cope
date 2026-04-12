@@ -4,7 +4,7 @@ import type { ShareResult } from "./shareChatUtils";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
-export function ShareButton({ userMessage, systemMessage, username, currentTD }: { userMessage: string; systemMessage: string; username: string; currentTD: number }) {
+export function ShareButton({ userMessage, systemMessage, username }: { userMessage: string; systemMessage: string; username: string }) {
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "done" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -24,7 +24,6 @@ export function ShareButton({ userMessage, systemMessage, username, currentTD }:
         platform,
         openShareUrl: false,
         username,
-        currentTD,
       });
 
       if (result.success && result.method === "image") {
@@ -52,7 +51,7 @@ export function ShareButton({ userMessage, systemMessage, username, currentTD }:
       setStatus("idle");
       setFeedback(null);
     }, 4000);
-  }, [userMessage, systemMessage, username, currentTD]);
+  }, [userMessage, systemMessage, username]);
 
   const handleCopyImage = useCallback(async () => {
     setMenuOpen(false);
@@ -67,7 +66,6 @@ export function ShareButton({ userMessage, systemMessage, username, currentTD }:
         systemMessage,
         openShareUrl: false,
         username,
-        currentTD,
       });
       setStatus(result.success ? "copied" : "error");
       setFeedback(result.success ? "Image copied to clipboard!" : result.message);
@@ -80,7 +78,7 @@ export function ShareButton({ userMessage, systemMessage, username, currentTD }:
       setStatus("idle");
       setFeedback(null);
     }, 3000);
-  }, [userMessage, systemMessage, username, currentTD]);
+  }, [userMessage, systemMessage, username]);
 
   // When actively showing feedback, render it inline
   if (status !== "idle") {

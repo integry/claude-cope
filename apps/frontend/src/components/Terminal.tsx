@@ -38,19 +38,18 @@ import { getRandomLoadingPhrase } from "./loadingPhrases";
 export type { Message };
 
 /** Memoized message list — only re-renders when history/keys/props actually change */
-const MessageList = memo(function MessageList({ history, messageKeys, initialHistoryLen, promptString, activeTicketId, username, currentTD }: {
+const MessageList = memo(function MessageList({ history, messageKeys, initialHistoryLen, promptString, activeTicketId, username }: {
   history: Message[];
   messageKeys: number[];
   initialHistoryLen: number;
   promptString: string;
   activeTicketId?: string | null;
   username: string;
-  currentTD: number;
 }) {
   return (
     <>
       {history.map((message, index) => (
-        <OutputBlock key={messageKeys[index]} message={message} previousMessage={history[index - 1]} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} username={username} currentTD={currentTD} />
+        <OutputBlock key={messageKeys[index]} message={message} previousMessage={history[index - 1]} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} username={username} />
       ))}
     </>
   );
@@ -381,7 +380,7 @@ function Terminal() {
       </div>
       <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
-        <MessageList history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} activeTicketId={state.activeTicket?.id} username={state.username} currentTD={state.economy.currentTD} />
+        <MessageList history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} activeTicketId={state.activeTicket?.id} username={state.username} />
         <div ref={bottomRef} />
       </div>
       <div className="shrink-0">

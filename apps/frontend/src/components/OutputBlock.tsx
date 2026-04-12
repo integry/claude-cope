@@ -344,7 +344,7 @@ function CostDisplay({ cost }: { cost: number }) {
 }
 
 
-function OutputBlock({ message, previousMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", currentTD = 0 }: { message: Message; previousMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; currentTD?: number }) {
+function OutputBlock({ message, previousMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "" }: { message: Message; previousMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   // Show share button only for system responses to non-slash-command user messages
   const isSlashCommandResponse = previousMessage?.role === "user" && previousMessage.content.startsWith("/");
@@ -363,7 +363,7 @@ function OutputBlock({ message, previousMessage, isNew = false, promptString = "
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
       {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
-      {showShareButton && <ShareButton userMessage={previousMessage!.content} systemMessage={message.content} username={username} currentTD={currentTD} />}
+      {showShareButton && <ShareButton userMessage={previousMessage!.content} systemMessage={message.content} username={username} />}
     </div>
   );
 }
@@ -377,7 +377,6 @@ export default React.memo(OutputBlock, (prev, next) =>
   prev.previousMessage?.content === next.previousMessage?.content &&
   prev.previousMessage?.role === next.previousMessage?.role &&
   prev.username === next.username &&
-  prev.currentTD === next.currentTD &&
   // Only compare activeTicketId for loading messages
   (prev.message.role !== "loading" || prev.activeTicketId === next.activeTicketId)
 );
