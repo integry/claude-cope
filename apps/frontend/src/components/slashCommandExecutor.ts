@@ -30,6 +30,7 @@ interface SlashCommandContext {
   setShowTerms: (v: boolean) => void;
   setShowContact: (v: boolean) => void;
   setShowProfile: (v: boolean) => void;
+  setShowParty: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -283,6 +284,9 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
     } else {
       reply({ role: "error", content: "[❌] No incoming ping to reject." });
     }
+    return true;
+  } else if (command === "/party") {
+    openOverlay(ctx, () => ctx.setShowParty(true));
     return true;
   }
   return false;
