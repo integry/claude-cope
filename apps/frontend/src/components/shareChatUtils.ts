@@ -245,7 +245,7 @@ const SHARE_PUNCHLINES = [
 ];
 
 function getRandomPunchline(): string {
-  return SHARE_PUNCHLINES[Math.floor(Math.random() * SHARE_PUNCHLINES.length)];
+  return SHARE_PUNCHLINES[Math.floor(Math.random() * SHARE_PUNCHLINES.length)] ?? SHARE_PUNCHLINES[0]!;
 }
 
 export function generateShareText(): string {
