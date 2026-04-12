@@ -47,6 +47,7 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   const lineHeight = LINE_HEIGHT;
   const font = `${fontSize}px ${FONT_FAMILY}`;
   const boldFont = `bold ${fontSize}px ${FONT_FAMILY}`;
+  const italicFont = `italic ${fontSize}px ${FONT_FAMILY}`;
   ctx.font = font;
 
   const userPrefix = "❯ ";
@@ -115,7 +116,7 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
       return;
     }
     const segments = parseSegments(line);
-    drawStyledLine({ ctx, segments, x: CANVAS_PADDING, y, normalColor: SYSTEM_TEXT_COLOR, boldColor: BOLD_TEXT_COLOR, font, boldFont });
+    drawStyledLine({ ctx, segments, x: CANVAS_PADDING, y, normalColor: SYSTEM_TEXT_COLOR, boldColor: BOLD_TEXT_COLOR, font, boldFont, italicFont });
     y += lineHeight;
   });
 

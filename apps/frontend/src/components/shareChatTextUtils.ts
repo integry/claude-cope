@@ -6,11 +6,15 @@
 export type TextSegment = {
   text: string;
   bold: boolean;
+  italic: boolean;
 };
 
+// Internal marker for italic text (preserved through the pipeline like ** for bold)
+const ITALIC_MARKER = "\x02";
+
 /**
- * Strips non-bold markdown formatting for plain-text canvas rendering.
- * Preserves bold markers for later styled rendering.
+ * Strips non-bold/italic markdown formatting for plain-text canvas rendering.
+ * Preserves bold (**) and italic (converted to \x02) markers for later styled rendering.
  */
 export function stripMarkdownKeepBold(text: string): string {
   let s = text;
@@ -20,36 +24,44 @@ export function stripMarkdownKeepBold(text: string): string {
   s = s.replace(/&nbsp;/g, " ");
   // Remove "Awaiting input..." lines
   s = s.replace(/^.*Awaiting input\.{3}.*$/gm, "");
-  s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1");
-  s = s.replace(/_(.+?)_/g, "$1");
+  // Convert single *italic* to internal italic markers (must happen before bold stripping)
+  s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, `${ITALIC_MARKER}$1${ITALIC_MARKER}`);
+  // Convert _italic_ to internal italic markers
+  s = s.replace(/_(.+?)_/g, `${ITALIC_MARKER}$1${ITALIC_MARKER}`);
   s = s.replace(/^#{1,3}\s+/gm, "");
   s = s.replace(/`([^`]+)`/g, "$1");
   return s;
 }
 
 /**
- * Parses a line of text into segments with bold/normal styling.
+ * Parses a line of text into segments with bold/italic/normal styling.
+ * Handles **bold** markers and \x02italic\x02 markers.
  */
 export function parseSegments(text: string): TextSegment[] {
   const segments: TextSegment[] = [];
-  const regex = /\*\*(.+?)\*\*/g;
+  // Match **bold** or \x02italic\x02
+  const regex = /\*\*(.+?)\*\*|\x02(.+?)\x02/g;
   let lastIndex = 0;
   let match;
 
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      segments.push({ text: text.slice(lastIndex, match.index), bold: false });
+      segments.push({ text: text.slice(lastIndex, match.index), bold: false, italic: false });
     }
-    segments.push({ text: match[1] ?? "", bold: true });
+    if (match[1] !== undefined) {
+      segments.push({ text: match[1], bold: true, italic: false });
+    } else if (match[2] !== undefined) {
+      segments.push({ text: match[2], bold: false, italic: true });
+    }
     lastIndex = regex.lastIndex;
   }
 
   if (lastIndex < text.length) {
-    segments.push({ text: text.slice(lastIndex), bold: false });
+    segments.push({ text: text.slice(lastIndex), bold: false, italic: false });
   }
 
   if (segments.length === 0) {
-    segments.push({ text, bold: false });
+    segments.push({ text, bold: false, italic: false });
   }
 
   return segments;
@@ -64,18 +76,22 @@ type DrawStyledLineOptions = {
   boldColor: string;
   font: string;
   boldFont: string;
+  italicFont: string;
 };
 
 /**
- * Draws a line of text with inline bold segments in a different color.
+ * Draws a line of text with inline bold/italic segments in different styles.
  */
 export function drawStyledLine(opts: DrawStyledLineOptions): void {
-  const { ctx, segments, x, y, normalColor, boldColor, font, boldFont } = opts;
+  const { ctx, segments, x, y, normalColor, boldColor, font, boldFont, italicFont } = opts;
   let curX = x;
   for (const seg of segments) {
     if (seg.bold) {
       ctx.font = boldFont;
       ctx.fillStyle = boldColor;
+    } else if (seg.italic) {
+      ctx.font = italicFont;
+      ctx.fillStyle = normalColor;
     } else {
       ctx.font = font;
       ctx.fillStyle = normalColor;
@@ -87,24 +103,35 @@ export function drawStyledLine(opts: DrawStyledLineOptions): void {
   ctx.fillStyle = normalColor;
 }
 
-function measureBoldAwareWidth(ctx: CanvasRenderingContext2D, text: string): number {
-  const plain = text.replace(/\*\*/g, "");
+function measureStyledAwareWidth(ctx: CanvasRenderingContext2D, text: string): number {
+  const plain = text.replace(/\*\*/g, "").replace(/\x02/g, "");
   return ctx.measureText(plain).width;
 }
 
 function fixBoldMarkers(lines: string[]): void {
   let inBold = false;
+  let inItalic = false;
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i] ?? "";
     if (inBold) {
       line = "**" + line;
     }
-    const markerCount = (line.match(/\*\*/g) || []).length;
-    if (markerCount % 2 !== 0) {
+    if (inItalic) {
+      line = ITALIC_MARKER + line;
+    }
+    const boldCount = (line.match(/\*\*/g) || []).length;
+    if (boldCount % 2 !== 0) {
       line += "**";
       inBold = true;
     } else {
       inBold = false;
+    }
+    const italicCount = (line.match(new RegExp(ITALIC_MARKER, "g")) || []).length;
+    if (italicCount % 2 !== 0) {
+      line += ITALIC_MARKER;
+      inItalic = true;
+    } else {
+      inItalic = false;
     }
     lines[i] = line;
   }
@@ -119,7 +146,7 @@ function wrapWithBold(ctx: CanvasRenderingContext2D, text: string, maxWidth: num
 
   for (const word of words) {
     const testLine = currentLine ? `${currentLine} ${word}` : word;
-    if (measureBoldAwareWidth(ctx, testLine) > maxWidth && currentLine) {
+    if (measureStyledAwareWidth(ctx, testLine) > maxWidth && currentLine) {
       lines.push(currentLine);
       currentLine = word;
     } else {
@@ -147,7 +174,7 @@ function wrapBulletParagraph(
   for (const word of words) {
     const testLine = currentLine ? `${currentLine} ${word}` : word;
     const lineMaxWidth = isFirstLine ? maxWidth - prefixWidth : maxWidth;
-    if (measureBoldAwareWidth(ctx, testLine) > lineMaxWidth && currentLine) {
+    if (measureStyledAwareWidth(ctx, testLine) > lineMaxWidth && currentLine) {
       lines.push(currentLine);
       currentLine = word;
       isFirstLine = false;
@@ -200,21 +227,32 @@ function mergeBulletContinuations(rawParagraphs: string[]): string[] {
 }
 
 /**
- * Balances bold markers across paragraphs so split bold spans render correctly.
+ * Balances bold and italic markers across paragraphs so split spans render correctly.
  */
 function balanceBoldMarkers(paragraphs: string[]): void {
   let boldAcross = false;
+  let italicAcross = false;
   for (let i = 0; i < paragraphs.length; i++) {
     let p = paragraphs[i] ?? "";
     if (boldAcross) {
       p = "**" + p;
     }
-    const markerCount = (p.match(/\*\*/g) || []).length;
-    if (markerCount % 2 !== 0) {
+    if (italicAcross) {
+      p = ITALIC_MARKER + p;
+    }
+    const boldCount = (p.match(/\*\*/g) || []).length;
+    if (boldCount % 2 !== 0) {
       p += "**";
       boldAcross = true;
     } else {
       boldAcross = false;
+    }
+    const italicCount = (p.match(new RegExp(ITALIC_MARKER, "g")) || []).length;
+    if (italicCount % 2 !== 0) {
+      p += ITALIC_MARKER;
+      italicAcross = true;
+    } else {
+      italicAcross = false;
     }
     paragraphs[i] = p;
   }
