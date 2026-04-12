@@ -243,6 +243,7 @@ function Terminal() {
     setIsProcessing(true);
     const contextMessages = filterChatHistory(history);
     const chatMessages = [...contextMessages, { role: "user", content: userMessage.content }];
+    let sprintCompleteMessage: Message | null = null;
     const onSprintProgress = (rawAmount: number) => {
       if (!state.activeTicket) return;
       const amount = Math.round(rawAmount * 1.5);
@@ -252,7 +253,7 @@ function Terminal() {
         const payout = state.activeTicket.sprintGoal * 10;
         addActiveTD(payout);
         playChime();
-        setHistory((prev) => [...prev, { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` }]);
+        sprintCompleteMessage = { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` };
         setState((prev) => ({ ...prev, activeTicket: null }));
         const completedMessage = `✅ A player completed ticket "${state.activeTicket!.title}" and earned ${payout.toLocaleString()} TD!`;
         fetch(`${API_BASE}/api/recent-events`, {
@@ -269,7 +270,7 @@ function Terminal() {
     };
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement: unlockAchievementWithSound, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, proKey: state.proKey, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, addActiveTD, onSuggestedReply: setSuggestedReply, buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades, onByokCost: (cost) => setState((prev) => ({ ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + cost })), onError: playError, signal: controller.signal });
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement: unlockAchievementWithSound, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, proKey: state.proKey, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, getSprintCompleteMessage: () => { const msg = sprintCompleteMessage; sprintCompleteMessage = null; return msg; }, addActiveTD, onSuggestedReply: setSuggestedReply, buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades, onByokCost: (cost) => setState((prev) => ({ ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + cost })), onError: playError, signal: controller.signal });
   };
 
   const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = val.length; } }, 0); };

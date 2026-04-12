@@ -247,6 +247,7 @@ export function submitChatMessage(opts: {
   modes?: ModesState;
   activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
   onSprintProgress?: (amount: number) => void;
+  getSprintCompleteMessage?: () => Message | null;
   addActiveTD?: (n: number, raw?: boolean) => void;
   onSuggestedReply?: (suggestion: string) => void;
   buddyType?: string | null;
@@ -327,15 +328,21 @@ export function submitChatMessage(opts: {
         opts.onSuggestedReply(suggestedReply);
       }
 
+      // Collect any sprint-complete message that was set during onSprintProgress
+      const sprintMsg = opts.getSprintCompleteMessage?.();
+
       // Build buddy message from LLM-generated interjection or fallback to client-side
       const buddyMessage = buddySays && opts.buddyType
         ? { role: "warning" as const, content: `${BUDDY_ICONS[opts.buddyType] ?? "🐾"}\n[${opts.buddyType}] ${buddySays}` }
         : buddyResult?.message ?? null;
 
+      // Merge sprint-complete text into the AI reply so they appear as a single message
+      const finalReply = sprintMsg ? reply + "\n\n" + sprintMsg.content : reply;
+
       setHistory((prev) => {
         let updated = [
           ...prev.filter((msg) => msg.role !== "loading"),
-          { role: "system" as const, content: reply, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
+          { role: "system" as const, content: finalReply, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
           ...achievementMessages,
           ...(buddyMessage ? [buddyMessage] : []),
         ];

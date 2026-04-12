@@ -344,15 +344,18 @@ function CostDisplay({ cost }: { cost: number }) {
 }
 
 
-function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "" }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string }) {
-  const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
-  // Show share button only for system responses to non-slash-command user messages
+function getShareProps(message: Message, previousMessage?: Message, nextMessage?: Message): { showShareButton: boolean; shareSystemMessage: string } {
   const isSlashCommandResponse = previousMessage?.role === "user" && previousMessage.content.startsWith("/");
   const showShareButton = message.role === "system" && previousMessage?.role === "user" && !isSlashCommandResponse;
-  // Include the next message (e.g. buddy interjection) in the share if it immediately follows
-  const shareSystemMessage = showShareButton && nextMessage && nextMessage.role === "warning"
+  const shareSystemMessage = showShareButton && nextMessage?.role === "warning"
     ? message.content + "\n\n" + nextMessage.content
     : message.content;
+  return { showShareButton, shareSystemMessage };
+}
+
+function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "" }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string }) {
+  const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
+  const { showShareButton, shareSystemMessage } = getShareProps(message, previousMessage, nextMessage);
 
   return (
     <div className={`group ${getContainerClass(message, isNew)}`}>

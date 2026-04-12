@@ -292,47 +292,44 @@ function handleSimpleReplyCommand(command: string, ctx: SlashCommandContext, rep
   return false;
 }
 
+function handleCompactCommand(ctx: SlashCommandContext): boolean {
+  ctx.triggerCompactEffect();
+  ctx.setHistory((prev) => {
+    const cleaned = clearLoading(prev);
+    const removeCount = Math.min(50, cleaned.length);
+    const remaining = cleaned.slice(0, cleaned.length - removeCount);
+    return [
+      ...remaining,
+      { role: "system", content: `[✓] Context compacted. Deleted **${removeCount}** lines of unoptimized boilerplate.` },
+    ];
+  });
+  ctx.unlockAchievement("history_eraser");
+  return true;
+}
+
+function handleUserCommand(command: string, ctx: SlashCommandContext): boolean {
+  const alias = command.slice(5).trim();
+  openOverlay(ctx, () => ctx.setShowProfile(true));
+  const target = alias || ctx.state.username;
+  window.history.pushState(null, "", `/user/${encodeURIComponent(target)}`);
+  return true;
+}
+
 function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
-  if (command === "/store") {
-    return handleStoreCommand(ctx, reply);
-  } else if (handleOverlayCommand(command, ctx)) {
-    return true;
-  } else if (command === "/synergize") {
+  if (command === "/store") return handleStoreCommand(ctx, reply);
+  if (handleOverlayCommand(command, ctx)) return true;
+  if (command === "/synergize") {
     reply({ role: "system", content: pickRandom(synergizeResponses) });
     ctx.closeAllOverlays();
     ctx.setShowSynergize(true);
     return true;
-  } else if (command === "/user" || command.startsWith("/user ")) {
-    const alias = command.slice(5).trim();
-    openOverlay(ctx, () => ctx.setShowProfile(true));
-    if (alias) {
-      window.history.pushState(null, "", `/user/${encodeURIComponent(alias)}`);
-    } else {
-      window.history.pushState(null, "", `/user/${encodeURIComponent(ctx.state.username)}`);
-    }
-    return true;
-  } else if (command === "/compact") {
-    ctx.triggerCompactEffect();
-    ctx.setHistory((prev) => {
-      const cleaned = clearLoading(prev);
-      const removeCount = Math.min(50, cleaned.length);
-      const remaining = cleaned.slice(0, cleaned.length - removeCount);
-      return [
-        ...remaining,
-        { role: "system", content: `[✓] Context compacted. Deleted **${removeCount}** lines of unoptimized boilerplate.` },
-      ];
-    });
-    ctx.unlockAchievement("history_eraser");
-    return true;
-  } else if (handleSimpleReplyCommand(command, ctx, reply)) {
-    return true;
-  } else if (command === "/buddy" || command.startsWith("/buddy ")) {
-    return handleBuddyCommand(command, ctx, reply);
-  } else if (command.startsWith("/ping")) {
-    return handlePingCommand(command, ctx, reply);
-  } else if (command === "/theme" || command.startsWith("/theme ")) {
-    return handleThemeCommand(command, ctx, reply);
   }
+  if (command === "/user" || command.startsWith("/user ")) return handleUserCommand(command, ctx);
+  if (command === "/compact") return handleCompactCommand(ctx);
+  if (handleSimpleReplyCommand(command, ctx, reply)) return true;
+  if (command === "/buddy" || command.startsWith("/buddy ")) return handleBuddyCommand(command, ctx, reply);
+  if (command.startsWith("/ping")) return handlePingCommand(command, ctx, reply);
+  if (command === "/theme" || command.startsWith("/theme ")) return handleThemeCommand(command, ctx, reply);
   return false;
 }
 
