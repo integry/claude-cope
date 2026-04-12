@@ -83,7 +83,7 @@ function Terminal() {
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
-  const { playType, playError, playChime } = useSoundEffects(state.soundEnabled);
+  const { playError, playChime } = useSoundEffects(state.soundEnabled);
   const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
@@ -198,7 +198,7 @@ function Terminal() {
   });
 
   const runSlashCommand = (command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } });
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError });
   };
 
   const tryOutageDamage = (): boolean => {
@@ -248,6 +248,7 @@ function Terminal() {
       if (newProgress >= state.activeTicket.sprintGoal) {
         const payout = state.activeTicket.sprintGoal * 10;
         addActiveTD(payout);
+        playChime();
         setHistory((prev) => [...prev, { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` }]);
         setState((prev) => ({ ...prev, activeTicket: null }));
       }
@@ -373,7 +374,7 @@ function Terminal() {
         <div className="relative border-b border-white">
           {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
           <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
-          <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || quotaLocked} onChange={handleChange} onKeyDown={handleKeyDown} playType={playType} promptString={promptString} placeholder={suggestedReply ?? undefined} />
+          <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || quotaLocked} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
         </div>
       </div>
       {renderOverlays()}

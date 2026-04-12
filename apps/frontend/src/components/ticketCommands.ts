@@ -84,6 +84,7 @@ export function handleTakeCommand(
   setState: SetState,
   reply: Reply,
   setInputValue: (v: string) => void,
+  onAccept?: () => void,
 ): boolean {
   const input = command.slice("/take".length).trim();
   if (!input) {
@@ -123,6 +124,7 @@ export function handleTakeCommand(
     },
   }));
 
+  onAccept?.();
   reply({
     role: "system",
     content: `[🎫 **TICKET CLAIMED**] ${ticket.id}: **${ticket.title}**\n\n> ${ticket.description}\n\nReward: **${(ticket.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.`,

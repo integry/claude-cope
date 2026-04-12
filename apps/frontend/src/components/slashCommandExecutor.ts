@@ -48,6 +48,8 @@ interface SlashCommandContext {
   rejectPing: () => void;
   brrrrrrIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
   triggerCompactEffect: () => void;
+  playChime: () => void;
+  playError: () => void;
 }
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.role !== "loading");
@@ -448,6 +450,7 @@ function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
       ...prev,
       activeTicket: { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt },
     }));
+    ctx.playChime();
     reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nReward: **${(offer.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.` });
     ctx.setInputValue(offer.kickoff_prompt);
   }
@@ -541,10 +544,11 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
     if (asyncResult === "async") return "async";
     if (!asyncResult) {
       if (command.startsWith("/take")) {
-        handleTakeCommand(command, ctx.state, ctx.setState, reply, ctx.setInputValue);
+        handleTakeCommand(command, ctx.state, ctx.setState, reply, ctx.setInputValue, ctx.playChime);
       } else if (command === "/accept") {
         handleAcceptCommand(ctx, reply);
       } else if (command === "/abandon") {
+        if (ctx.state.activeTicket) ctx.playError();
         handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
       } else if (command.startsWith("/alias")) {
         handleAliasCommand(command, ctx, reply);

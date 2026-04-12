@@ -7,22 +7,10 @@ type CommandLineProps = {
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   promptString?: string;
   placeholder?: string;
-  playType?: () => void;
 };
 
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
-  function CommandLine({ value, disabled, onChange, onKeyDown, playType, promptString = "❯ ", placeholder }, ref) {
-    const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-      // Trigger typing sound for printable characters and common input keys
-      if (playType && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        const isPrintable = e.key.length === 1;
-        const isInputKey = ["Backspace", "Delete", "Enter", "Tab"].includes(e.key);
-        if (isPrintable || isInputKey) {
-          playType();
-        }
-      }
-      onKeyDown(e);
-    };
+  function CommandLine({ value, disabled, onChange, onKeyDown, promptString = "❯ ", placeholder }, ref) {
     return (
       <div className="border-t border-white py-2">
         <div className="flex items-center">
@@ -33,7 +21,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
             value={value}
             disabled={disabled}
             onChange={onChange}
-            onKeyDown={handleKeyDown}
+            onKeyDown={onKeyDown}
             placeholder={placeholder ? `${placeholder}  [Tab]` : undefined}
             className="flex-1 outline-none bg-transparent text-white font-bold caret-white disabled:opacity-50 placeholder:text-gray-600 placeholder:font-normal py-0 leading-none"
             autoFocus
