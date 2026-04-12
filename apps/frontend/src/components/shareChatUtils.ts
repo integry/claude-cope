@@ -174,15 +174,52 @@ function wrapWithBold(ctx: CanvasRenderingContext2D, text: string, maxWidth: num
 function wrapBulletParagraph(
   ctx: CanvasRenderingContext2D, paragraph: string, prefix: string, maxWidth: number,
 ): string[] {
-  const indent = " ".repeat(prefix.length);
-  const contentMaxWidth = maxWidth - ctx.measureText(indent).width;
+  // First line accounts for prefix width; continuation lines use no extra indent
+  // so words like "ledger" don't get an unnecessary gap
+  const prefixWidth = ctx.measureText(prefix).width;
   const content = paragraph.slice(prefix.length);
-  const contentLines = wrapWithBold(ctx, content, contentMaxWidth);
+
+  // Wrap first line at reduced width (prefix takes space), rest at full width
+  const words = content.split(" ");
+  const lines: string[] = [];
+  let currentLine = "";
+  let isFirstLine = true;
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    const lineMaxWidth = isFirstLine ? maxWidth - prefixWidth : maxWidth;
+    if (measureBoldAwareWidth(ctx, testLine) > lineMaxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+      isFirstLine = false;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  // Fix bold markers across line breaks
+  let inBold = false;
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i] ?? "";
+    if (inBold) {
+      line = "**" + line;
+    }
+    const markerCount = (line.match(/\*\*/g) || []).length;
+    if (markerCount % 2 !== 0) {
+      line += "**";
+      inBold = true;
+    } else {
+      inBold = false;
+    }
+    lines[i] = line;
+  }
 
   const result: string[] = [];
-  for (let j = 0; j < contentLines.length; j++) {
-    const linePrefix = j === 0 ? prefix : indent;
-    result.push(`${linePrefix}${contentLines[j]}`);
+  for (let j = 0; j < lines.length; j++) {
+    result.push(j === 0 ? `${prefix}${lines[j]}` : lines[j] ?? "");
   }
   return result;
 }
@@ -269,10 +306,9 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
 
   const contentMaxWidth = MAX_WIDTH - CANVAS_PADDING * 2;
 
-  // Estimate total content length to decide if we need a smaller font
-  const totalTextLength = userMessage.length + systemMessage.length;
-  const fontSize = totalTextLength > 800 ? FONT_SIZE - 2 : totalTextLength > 500 ? FONT_SIZE - 1 : FONT_SIZE;
-  const lineHeight = Math.round(LINE_HEIGHT * (fontSize / FONT_SIZE));
+  // Use consistent font size — adaptive reduction made lines appear shorter
+  const fontSize = FONT_SIZE;
+  const lineHeight = LINE_HEIGHT;
   const font = `${fontSize}px ${FONT_FAMILY}`;
   const boldFont = `bold ${fontSize}px ${FONT_FAMILY}`;
   ctx.font = font;
@@ -290,7 +326,7 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
 
   // Paragraph breaks are compact; list item gaps are even smaller
   const PARAGRAPH_BREAK_HEIGHT = Math.round(lineHeight * 0.4);
-  const LIST_ITEM_GAP = Math.round(lineHeight * 0.15);
+  const LIST_ITEM_GAP = Math.round(lineHeight * 0.4);
   const calcBlockHeight = (lines: string[]) =>
     lines.reduce((h, line) =>
       h + (line === "" ? PARAGRAPH_BREAK_HEIGHT : line === "\x01" ? LIST_ITEM_GAP : lineHeight), 0);
