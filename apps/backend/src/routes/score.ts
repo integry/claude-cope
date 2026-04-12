@@ -47,8 +47,9 @@ score.post("/", async (c) => {
 
   if (!body.username) return c.json({ error: "username required" }, 400);
 
-  // Prefer Cloudflare's cf-ipcountry header, fall back to client-provided country
-  const country = c.req.header("cf-ipcountry") || body.country || "Unknown";
+  // Country detection priority: body (frontend), CF object, header, fallback
+  const cfCountry = (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country;
+  const country = body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
 
   // Validate the multiplier from the claimed inventory
   const claimedMultiplier = computeMultiplier(body.inventory, body.upgrades);

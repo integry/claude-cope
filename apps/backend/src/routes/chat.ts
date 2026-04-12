@@ -25,6 +25,7 @@ type ChatBody = {
   username?: string;
   inventory?: Record<string, number>;
   upgrades?: string[];
+  country?: string;
 };
 
 type ChatResponseData = {
@@ -118,7 +119,9 @@ chat.post("/", async (c) => {
   const baseTD = Math.floor(Math.random() * 40) + 10;
   const serverMultiplier = computeMultiplier(inventory, upgrades);
   const tdAwarded = Math.round(baseTD * serverMultiplier);
-  const country = c.req.header("cf-ipcountry") || "Unknown";
+  // Country detection priority: body (frontend), CF object, header, fallback
+  const cfCountry = (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country;
+  const country = body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
   const hour = new Date().toISOString().slice(0, 13);
 
   // Log usage and update score asynchronously
