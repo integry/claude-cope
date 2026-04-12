@@ -201,17 +201,68 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function generateShareText(userMessage: string, systemMessage: string): string {
-  return `> ${userMessage}\n\n${systemMessage}\n\n— via claudecope.com`;
+const SHARE_PUNCHLINES = [
+  "My AI therapist just mass-produced technical debt and called it healing.",
+  "Asked Claude to cope. It did not disappoint.",
+  "This is what happens when you let AI run unsupervised.",
+  "I'm not crying, I'm generating technical debt.",
+  "Claude said the quiet part out loud again.",
+  "My terminal is judging me and it's right.",
+  "This AI has zero chill and I'm here for it.",
+  "Sometimes the best therapy is mass-producing bugs.",
+  "I came for productivity. I stayed for the roasts.",
+  "Claude woke up and chose violence today.",
+  "My code review just got personal.",
+  "The AI is coping harder than I am.",
+  "I asked for help. I got existential dread instead.",
+  "This is the most productive unproductive thing I've ever done.",
+  "Breaking production one prompt at a time.",
+  "My therapist charges $200/hr. Claude does it for free.",
+  "The AI saw my code and started coping too.",
+  "I'm in this image and I don't like it.",
+  "Claude just told me what my coworkers won't.",
+  "Technical debt goes brrrr.",
+  "POV: You let an AI review your life choices.",
+  "No tests were harmed in the making of this technical debt.",
+  "My terminal has more emotional intelligence than my team lead.",
+  "I didn't choose the cope life, the cope life chose me.",
+  "This AI understands my codebase better than I do. That's the problem.",
+  "Just got performance-reviewed by an AI. Spoiler: I failed.",
+  "The only thing shipping faster than my bugs is Claude's sass.",
+  "I asked Claude to fix my code. It fixed my ego instead.",
+  "AI-generated therapy for human-generated disasters.",
+  "Somewhere, a senior dev just felt a disturbance in the force.",
+  "My git blame just became git shame.",
+  "Claude is the coworker who actually reads the error logs.",
+  "I've mass-produced more debt here than in my actual career.",
+  "This is what peak engineering looks like. You may not like it.",
+  "My stand-up just got a lot more interesting.",
+  "Claude: turning imposter syndrome into a spectator sport.",
+  "The AI roasted my architecture and honestly? Fair.",
+  "One does not simply close the terminal.",
+  "My pull request was rejected by an AI. New low unlocked.",
+  "Claude just speedran my five stages of grief.",
+];
+
+function getRandomPunchline(): string {
+  return SHARE_PUNCHLINES[Math.floor(Math.random() * SHARE_PUNCHLINES.length)];
 }
 
-function openShareIntent(platform: "twitter" | "linkedin", text: string): void {
-  const encodedText = encodeURIComponent(text);
-  const url =
-    platform === "twitter"
-      ? `https://twitter.com/intent/tweet?text=${encodedText}`
-      : `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://claudecope.com")}&summary=${encodedText}`;
-  window.open(url, "_blank", "noopener,noreferrer");
+export function generateShareText(): string {
+  const punchline = getRandomPunchline();
+  return `${punchline}\n\n[paste your image here]\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://claudecope.com`;
+}
+
+export function openShareIntent(platform: "twitter" | "linkedin"): void {
+  const punchline = getRandomPunchline();
+  if (platform === "twitter") {
+    const tweetText = `${punchline}\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://claudecope.com`;
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  } else {
+    const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://claudecope.com")}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
 }
 
 export type ShareResult = {
@@ -234,26 +285,26 @@ export type ShareChatOptions = {
  */
 export async function shareChatImage(options: ShareChatOptions): Promise<ShareResult> {
   const { userMessage, systemMessage, platform, openShareUrl = false, username } = options;
-  const shareText = generateShareText(userMessage, systemMessage);
   const canvas = renderChatCard(userMessage, systemMessage, username);
   const blob = await canvasToBlob(canvas);
 
   if (blob) {
     const imageCopied = await copyImageToClipboard(blob);
     if (imageCopied) {
-      if (openShareUrl && platform) openShareIntent(platform, shareText);
+      if (openShareUrl && platform) openShareIntent(platform);
       return { success: true, method: "image", message: "Share card image copied to clipboard! Paste it anywhere to share." };
     }
   }
 
+  const shareText = generateShareText();
   const textCopied = await copyTextToClipboard(shareText);
   if (textCopied) {
-    if (openShareUrl && platform) openShareIntent(platform, shareText);
+    if (openShareUrl && platform) openShareIntent(platform);
     return { success: true, method: "text", message: "Chat copied to clipboard as text (image copy not supported in this browser)." };
   }
 
   if (openShareUrl && platform) {
-    openShareIntent(platform, shareText);
+    openShareIntent(platform);
     return { success: true, method: "none", message: "Opening share dialog... (clipboard access denied)" };
   }
 

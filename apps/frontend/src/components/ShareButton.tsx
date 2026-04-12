@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { shareChatImage } from "./shareChatUtils";
+import { shareChatImage, openShareIntent } from "./shareChatUtils";
 import type { ShareResult } from "./shareChatUtils";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
@@ -31,11 +31,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         setFeedback("Image copied to clipboard!");
         // Wait a moment so user sees the confirmation, then open share URL
         await new Promise((r) => setTimeout(r, 1200));
-        const encodedText = encodeURIComponent(`> ${userMessage}\n\n${systemMessage}\n\n— via claudecope.com`);
-        const url = platform === "twitter"
-          ? `https://twitter.com/intent/tweet?text=${encodedText}`
-          : `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://claudecope.com")}&summary=${encodedText}`;
-        window.open(url, "_blank", "noopener,noreferrer");
+        openShareIntent(platform);
         setStatus("done");
         setFeedback("Share dialog opened! Paste the image in your post.");
       } else {

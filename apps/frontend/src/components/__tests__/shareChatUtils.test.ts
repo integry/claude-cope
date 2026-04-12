@@ -209,7 +209,7 @@ describe("shareChatImage", () => {
     mockOpen.mockRestore();
   });
 
-  it("includes message content in share text", async () => {
+  it("includes punchline and link in share text fallback", async () => {
     mockClipboard.write.mockRejectedValueOnce(new Error("Not supported"));
     mockClipboard.writeText.mockResolvedValueOnce(undefined);
 
@@ -219,9 +219,10 @@ describe("shareChatImage", () => {
     });
 
     const shareText = mockClipboard.writeText.mock.calls[0]![0] as string;
-    expect(shareText).toContain("Test prompt");
-    expect(shareText).toContain("Test response");
     expect(shareText).toContain("claudecope.com");
+    expect(shareText).toContain("#ClaudeCope");
+    expect(shareText).not.toContain("Test prompt");
+    expect(shareText).not.toContain("Test response");
   });
 
   it("returns proper ShareResult type", async () => {
