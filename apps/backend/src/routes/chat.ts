@@ -51,6 +51,45 @@ export function sanitizeChatMessages(messages: { role: string; content: string }
   });
 }
 
+/** Maximum number of recent messages to keep */
+const MAX_MESSAGES = 6;
+/** Maximum content length for user messages */
+const MAX_USER_CONTENT_LENGTH = 500;
+/** Maximum content length for non-last assistant messages */
+const MAX_ASSISTANT_CONTENT_LENGTH = 500;
+/** Maximum content length for any individual message */
+const MAX_CONTENT_LENGTH = 2000;
+
+/**
+ * Enforce context trimming to prevent token exhaustion attacks.
+ * - Restricts messages to MAX_MESSAGES most recent elements
+ * - Truncates user messages to MAX_USER_CONTENT_LENGTH characters
+ * - Truncates assistant messages (except last) to MAX_ASSISTANT_CONTENT_LENGTH characters
+ * - Enforces MAX_CONTENT_LENGTH as hard limit for any message
+ */
+export function enforceContextTrimming(messages: { role: string; content: string }[]): { role: string; content: string }[] {
+  // Take only the most recent messages
+  const recentMessages = messages.slice(-MAX_MESSAGES);
+
+  return recentMessages.map((msg, index) => {
+    const isLastMessage = index === recentMessages.length - 1;
+    let maxLength: number;
+
+    if (msg.role === "user") {
+      maxLength = MAX_USER_CONTENT_LENGTH;
+    } else if (msg.role === "assistant" && !isLastMessage) {
+      maxLength = MAX_ASSISTANT_CONTENT_LENGTH;
+    } else {
+      maxLength = MAX_CONTENT_LENGTH;
+    }
+
+    return {
+      role: msg.role,
+      content: msg.content.slice(0, maxLength),
+    };
+  });
+}
+
 type ChatResponseData = {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   choices?: Array<{ message?: { content?: string } }>;
@@ -114,10 +153,13 @@ chat.post("/", async (c) => {
   // Sanitize chat messages to prevent prompt injection (strip "system" role, etc.)
   const sanitizedMessages = sanitizeChatMessages(body.chatMessages);
 
+  // Enforce context trimming to prevent token exhaustion attacks
+  const trimmedMessages = enforceContextTrimming(sanitizedMessages);
+
   // Build the full messages array server-side (system prompt + history)
   const messages = buildChatMessages({
     rank,
-    chatMessages: sanitizedMessages,
+    chatMessages: trimmedMessages,
     modes: body.modes,
     activeTicket: body.activeTicket,
     buddyType: body.buddyType,
