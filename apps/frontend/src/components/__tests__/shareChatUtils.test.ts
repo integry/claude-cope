@@ -67,9 +67,9 @@ describe("renderChatCard", () => {
     expect(mockCtx.fillStyle).toBeDefined();
   });
 
-  it("draws border rectangle", () => {
+  it("does not draw border rectangle", () => {
     renderChatCard("Hello", "World");
-    expect(mockCtx.strokeRect).toHaveBeenCalled();
+    expect(mockCtx.strokeRect).not.toHaveBeenCalled();
   });
 
   it("draws text content", () => {
