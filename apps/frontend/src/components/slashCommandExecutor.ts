@@ -489,21 +489,23 @@ async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Prom
   }
 }
 
-function handleKeyCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
-  const keyArg = command.slice(4).trim();
-  if (!keyArg) {
-    reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter API key. Type `/key clear` to remove." });
-  } else if (keyArg === "clear") {
-    ctx.setState((prev) => ({ ...prev, apiKey: undefined }));
-    reply({ role: "system", content: "[🔑] API key removed. Back to the free tier trenches." });
-  } else {
-    ctx.setState((prev) => ({ ...prev, apiKey: keyArg }));
-    reply({ role: "system", content: "[🔑] API key saved. Your key is stored locally and never sent to our servers." });
-  }
-}
-
 function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | false {
-  if (command.startsWith("/ticket")) {
+  if (command === "/key" || command.startsWith("/key ")) {
+    import("./keyCommandHandler").then(() => {
+      const keyArg = command.slice(4).trim();
+      if (!keyArg) {
+        reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter API key. Type `/key clear` to remove." });
+      } else if (keyArg === "clear") {
+        ctx.setState((prev) => ({ ...prev, apiKey: undefined }));
+        reply({ role: "system", content: "[🔑] API key removed. Back to the free tier trenches." });
+      } else {
+        ctx.setState((prev) => ({ ...prev, apiKey: keyArg }));
+        reply({ role: "system", content: "[🔑] API key saved. Your key is stored locally and never sent to our servers." });
+      }
+      ctx.setIsProcessing(false);
+    });
+    return "async";
+  } else if (command.startsWith("/ticket")) {
     handleTicketCommand(command, reply).then(() => ctx.setIsProcessing(false));
     return "async";
   } else if (command === "/backlog") {
@@ -524,7 +526,8 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
   if (handleCoreCommand(command, ctx, reply)) {
     if (command === "/synergize") return;
   } else if (command === "/key" || command.startsWith("/key ")) {
-    handleKeyCommand(command, ctx, reply);
+    const asyncResult = handleAsyncCommand(command, ctx, reply);
+    if (asyncResult === "async") return "async";
   } else if (command === "/feedback" || command === "/bug") {
     reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
   } else if (command === "/upgrade") {
@@ -611,9 +614,19 @@ export function executeSlashCommand(
   ctx.setSlashQuery("");
   ctx.setSlashIndex(0);
   ctx.setIsProcessing(true);
+
+  // Obfuscate API keys in terminal history for commands starting with /key
+  let displayCommand = command;
+  if (command.startsWith("/key ")) {
+    const keyArg = command.slice(5).trim();
+    if (keyArg.length > 10 && keyArg.toLowerCase() !== "clear") {
+      displayCommand = `/key ${keyArg.slice(0, 6)}...`;
+    }
+  }
+
   ctx.setHistory((prev) => [
     ...prev,
-    { role: "user", content: command },
+    { role: "user", content: displayCommand },
     { role: "loading", content: getRandomLoadingPhrase() },
   ]);
 
