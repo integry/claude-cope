@@ -344,11 +344,15 @@ function CostDisplay({ cost }: { cost: number }) {
 }
 
 
-function OutputBlock({ message, previousMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "" }: { message: Message; previousMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string }) {
+function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "" }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   // Show share button only for system responses to non-slash-command user messages
   const isSlashCommandResponse = previousMessage?.role === "user" && previousMessage.content.startsWith("/");
   const showShareButton = message.role === "system" && previousMessage?.role === "user" && !isSlashCommandResponse;
+  // Include the next message (e.g. buddy interjection) in the share if it immediately follows
+  const shareSystemMessage = showShareButton && nextMessage && nextMessage.role === "warning"
+    ? message.content + "\n\n" + nextMessage.content
+    : message.content;
 
   return (
     <div className={`group ${getContainerClass(message, isNew)}`}>
@@ -363,7 +367,7 @@ function OutputBlock({ message, previousMessage, isNew = false, promptString = "
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
       {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
-      {showShareButton && <ShareButton userMessage={previousMessage!.content} systemMessage={message.content} username={username} />}
+      {showShareButton && <ShareButton userMessage={previousMessage!.content} systemMessage={shareSystemMessage} username={username} />}
     </div>
   );
 }
@@ -376,6 +380,8 @@ export default React.memo(OutputBlock, (prev, next) =>
   prev.promptString === next.promptString &&
   prev.previousMessage?.content === next.previousMessage?.content &&
   prev.previousMessage?.role === next.previousMessage?.role &&
+  prev.nextMessage?.content === next.nextMessage?.content &&
+  prev.nextMessage?.role === next.nextMessage?.role &&
   prev.username === next.username &&
   // Only compare activeTicketId for loading messages
   (prev.message.role !== "loading" || prev.activeTicketId === next.activeTicketId)

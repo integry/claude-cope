@@ -49,7 +49,7 @@ const MessageList = memo(function MessageList({ history, messageKeys, initialHis
   return (
     <>
       {history.map((message, index) => (
-        <OutputBlock key={messageKeys[index]} message={message} previousMessage={history[index - 1]} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} username={username} />
+        <OutputBlock key={messageKeys[index]} message={message} previousMessage={history[index - 1]} nextMessage={history[index + 1]} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} username={username} />
       ))}
     </>
   );
