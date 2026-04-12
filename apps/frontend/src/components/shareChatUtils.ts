@@ -11,9 +11,9 @@ export type ChatMessage = {
 };
 
 // Terminal styling constants
-const CANVAS_PADDING = 32;
-const LINE_HEIGHT = 24;
-const FONT_SIZE = 16;
+const CANVAS_PADDING = 24;
+const LINE_HEIGHT = 20;
+const FONT_SIZE = 14;
 const FONT_FAMILY = '"Courier New", Courier, monospace';
 const MAX_WIDTH = 600;
 const MAX_HEIGHT = 800;
@@ -22,25 +22,87 @@ const BORDER_COLOR = "#22c55e";
 const USER_PROMPT_COLOR = "#22c55e";
 const USER_TEXT_COLOR = "#e6edf3";
 const SYSTEM_TEXT_COLOR = "#4ade80";
+const BOLD_TEXT_COLOR = "#e6edf3";
 const HEADER_COLOR = "#6e7681";
 const WATERMARK_COLOR = "#484f58";
 
+type TextSegment = {
+  text: string;
+  bold: boolean;
+};
+
 /**
- * Strips basic markdown formatting for plain-text canvas rendering.
- * Converts bold markers, headers, and bullets into readable plain text.
+ * Strips non-bold markdown formatting for plain-text canvas rendering.
+ * Preserves bold markers for later styled rendering.
  */
-function stripMarkdown(text: string): string {
+function stripMarkdownKeepBold(text: string): string {
   let s = text;
-  // Remove bold markers
-  s = s.replace(/\*\*(.+?)\*\*/g, "$1");
-  // Remove italic markers
-  s = s.replace(/\*(.+?)\*/g, "$1");
+  // Remove italic markers (but not bold **)
+  s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1");
   s = s.replace(/_(.+?)_/g, "$1");
   // Convert heading markers to plain text
   s = s.replace(/^#{1,3}\s+/gm, "");
   // Remove inline code backticks
   s = s.replace(/`([^`]+)`/g, "$1");
   return s;
+}
+
+/**
+ * Parses a line of text into segments with bold/normal styling.
+ */
+function parseSegments(text: string): TextSegment[] {
+  const segments: TextSegment[] = [];
+  const regex = /\*\*(.+?)\*\*/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ text: text.slice(lastIndex, match.index), bold: false });
+    }
+    segments.push({ text: match[1], bold: true });
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ text: text.slice(lastIndex), bold: false });
+  }
+
+  if (segments.length === 0) {
+    segments.push({ text, bold: false });
+  }
+
+  return segments;
+}
+
+/**
+ * Draws a line of text with inline bold segments in a different color.
+ */
+function drawStyledLine(
+  ctx: CanvasRenderingContext2D,
+  segments: TextSegment[],
+  x: number,
+  y: number,
+  normalColor: string,
+  boldColor: string,
+  font: string,
+  boldFont: string,
+): void {
+  let curX = x;
+  for (const seg of segments) {
+    if (seg.bold) {
+      ctx.font = boldFont;
+      ctx.fillStyle = boldColor;
+    } else {
+      ctx.font = font;
+      ctx.fillStyle = normalColor;
+    }
+    ctx.fillText(seg.text, curX, y);
+    curX += ctx.measureText(seg.text).width;
+  }
+  // Reset
+  ctx.font = font;
+  ctx.fillStyle = normalColor;
 }
 
 /**
@@ -73,38 +135,111 @@ function wrapSingleLine(ctx: CanvasRenderingContext2D, text: string, maxWidth: n
 }
 
 /**
- * Wraps text to fit within a maximum width, preserving line breaks
- * and handling basic markdown formatting (bullets, numbered lists, paragraphs).
+ * Wraps text to fit within a maximum width, preserving line breaks,
+ * collapsing consecutive blank lines, and handling markdown formatting.
  */
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const cleaned = stripMarkdown(text);
+  const cleaned = stripMarkdownKeepBold(text);
   const paragraphs = cleaned.split("\n");
   const result: string[] = [];
+  let lastWasBlank = false;
 
   for (const paragraph of paragraphs) {
-    const trimmed = paragraph;
-
-    // Preserve blank lines as empty strings (paragraph breaks)
-    if (trimmed.trim() === "") {
-      result.push("");
+    // Preserve blank lines as empty strings (paragraph breaks), but collapse consecutive ones
+    if (paragraph.trim() === "") {
+      if (!lastWasBlank && result.length > 0) {
+        result.push("");
+        lastWasBlank = true;
+      }
       continue;
     }
 
+    lastWasBlank = false;
+
     // Detect bullet/list prefixes and preserve indentation
-    const bulletMatch = trimmed.match(/^(\s*(?:[-*•]\s+|\d+[.)]\s+))/);
+    const bulletMatch = paragraph.match(/^(\s*(?:[-*•]\s+|\d+[.)]\s+))/);
     if (bulletMatch && bulletMatch[1]) {
       const prefix = bulletMatch[1];
-      const content = trimmed.slice(prefix.length);
+      const content = paragraph.slice(prefix.length);
       const prefixWidth = ctx.measureText(prefix).width;
-      const contentLines = wrapSingleLine(ctx, content, maxWidth - prefixWidth);
+      // Measure plain text width (strip bold markers for measurement)
+      const plainContent = content.replace(/\*\*(.+?)\*\*/g, "$1");
+      const contentLines = wrapSingleLine(ctx, plainContent, maxWidth - prefixWidth);
       const indent = " ".repeat(prefix.length);
-      contentLines.forEach((line, i) => {
-        result.push(i === 0 ? `${prefix}${line}` : `${indent}${line}`);
-      });
+
+      // Re-align bold markers with wrapped lines
+      // For simplicity, keep bold markers in first wrapped line only
+      if (contentLines.length === 1) {
+        result.push(`${prefix}${content}`);
+      } else {
+        // Rebuild with original content for first line, plain for rest
+        const firstLinePlain = contentLines[0];
+        // Find how many chars of plain text the first line covers
+        let boldContent = content;
+        let firstLineBold = "";
+        let plainCharsUsed = 0;
+        let i = 0;
+        while (plainCharsUsed < firstLinePlain.length && i < boldContent.length) {
+          if (boldContent.startsWith("**", i)) {
+            firstLineBold += "**";
+            i += 2;
+          } else {
+            firstLineBold += boldContent[i];
+            plainCharsUsed++;
+            i++;
+          }
+        }
+        // Close any unclosed bold
+        const openBolds = (firstLineBold.match(/\*\*/g) || []).length;
+        if (openBolds % 2 !== 0) firstLineBold += "**";
+
+        result.push(`${prefix}${firstLineBold}`);
+        for (let j = 1; j < contentLines.length; j++) {
+          result.push(`${indent}${contentLines[j]}`);
+        }
+      }
     } else {
-      const wrapped = wrapSingleLine(ctx, trimmed, maxWidth);
-      result.push(...wrapped);
+      // For non-list paragraphs, measure with plain text then keep original for rendering
+      const plainParagraph = paragraph.replace(/\*\*(.+?)\*\*/g, "$1");
+      const wrapped = wrapSingleLine(ctx, plainParagraph, maxWidth);
+
+      if (wrapped.length === 1) {
+        result.push(paragraph);
+      } else {
+        // Map wrapped plain lines back to original bold-containing text
+        let remaining = paragraph;
+        for (let j = 0; j < wrapped.length; j++) {
+          const targetPlainLen = wrapped[j].length;
+          let extracted = "";
+          let plainCount = 0;
+          let k = 0;
+          while (plainCount < targetPlainLen && k < remaining.length) {
+            if (remaining.startsWith("**", k)) {
+              extracted += "**";
+              k += 2;
+            } else {
+              extracted += remaining[k];
+              plainCount++;
+              k++;
+            }
+          }
+          // Close any unclosed bold in this line
+          const opens = (extracted.match(/\*\*/g) || []).length;
+          if (opens % 2 !== 0) extracted += "**";
+          result.push(extracted);
+          remaining = remaining.slice(k);
+          // If next line starts mid-bold, prepend **
+          if (opens % 2 !== 0 && remaining.length > 0) {
+            remaining = "**" + remaining;
+          }
+        }
+      }
     }
+  }
+
+  // Remove trailing blank lines
+  while (result.length > 0 && result[result.length - 1] === "") {
+    result.pop();
   }
 
   return result;
@@ -121,13 +256,14 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
 
   // Estimate total content length to decide if we need a smaller font
   const totalTextLength = userMessage.length + systemMessage.length;
-  const fontSize = totalTextLength > 600 ? FONT_SIZE - 2 : totalTextLength > 400 ? FONT_SIZE - 1 : FONT_SIZE;
+  const fontSize = totalTextLength > 800 ? FONT_SIZE - 2 : totalTextLength > 500 ? FONT_SIZE - 1 : FONT_SIZE;
   const lineHeight = Math.round(LINE_HEIGHT * (fontSize / FONT_SIZE));
   const font = `${fontSize}px ${FONT_FAMILY}`;
+  const boldFont = `bold ${fontSize}px ${FONT_FAMILY}`;
   ctx.font = font;
 
   // Prepare wrapped lines for user message (with prompt prefix on first line)
-  const userPrefix = "> ";
+  const userPrefix = "❯ ";
   const userPrefixWidth = ctx.measureText(userPrefix).width;
   const userLines = wrapText(ctx, userMessage, contentMaxWidth - userPrefixWidth);
 
@@ -137,23 +273,21 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   // Header shows username on the left if available
   const headerText = username ?? "";
 
-  // Calculate line height for each line (empty lines are half-height paragraph breaks)
-  const PARAGRAPH_BREAK_HEIGHT = Math.round(lineHeight * 0.5);
+  // Paragraph breaks are compact
+  const PARAGRAPH_BREAK_HEIGHT = Math.round(lineHeight * 0.4);
   const calcBlockHeight = (lines: string[]) =>
     lines.reduce((h, line) => h + (line === "" ? PARAGRAPH_BREAK_HEIGHT : lineHeight), 0);
 
   // Calculate total height
   const headerHeight = lineHeight;
-  const separatorHeight = lineHeight;
   const userBlockHeight = calcBlockHeight(userLines);
   const systemBlockHeight = calcBlockHeight(systemLines);
-  const spacingBetween = lineHeight;
+  const spacingBetween = Math.round(lineHeight * 0.6);
 
-  // Calculate the fixed overhead (everything except system message content) - no footer needed
+  // Fixed overhead (everything except system message content)
   const fixedHeight =
     CANVAS_PADDING +
     headerHeight +
-    separatorHeight +
     userBlockHeight +
     spacingBetween +
     CANVAS_PADDING;
@@ -166,7 +300,7 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   if (systemBlockHeight > availableForSystem && availableForSystem > 0) {
     truncatedSystemLines = [];
     let usedHeight = 0;
-    const ellipsisHeight = lineHeight; // reserve space for "..." line
+    const ellipsisHeight = lineHeight;
     for (const line of systemLines) {
       const lineH = line === "" ? PARAGRAPH_BREAK_HEIGHT : lineHeight;
       if (usedHeight + lineH + ellipsisHeight > availableForSystem) {
@@ -196,10 +330,10 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   ctx.fillStyle = BG_COLOR;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Draw border
+  // Draw subtle border
   ctx.strokeStyle = BORDER_COLOR;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
 
   // Set text rendering
   ctx.font = font;
@@ -218,16 +352,11 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   ctx.fillText(brandText, canvas.width - CANVAS_PADDING - brandWidth, y);
   y += headerHeight;
 
-  // Draw separator
-  ctx.fillStyle = BORDER_COLOR;
-  const separatorLine = "─".repeat(Math.floor(contentMaxWidth / ctx.measureText("─").width));
-  ctx.fillText(separatorLine, CANVAS_PADDING, y);
-  y += separatorHeight;
-
-  // Draw user message with prompt
+  // Draw user message with prompt chevron
   ctx.fillStyle = USER_PROMPT_COLOR;
   ctx.fillText(userPrefix, CANVAS_PADDING, y);
   ctx.fillStyle = USER_TEXT_COLOR;
+  ctx.font = boldFont;
 
   userLines.forEach((line, i) => {
     if (line === "") {
@@ -239,17 +368,19 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
     y += lineHeight;
   });
 
-  // Add spacing
-  y += spacingBetween / 2;
+  ctx.font = font;
 
-  // Draw system message (truncated if needed)
-  ctx.fillStyle = SYSTEM_TEXT_COLOR;
+  // Add spacing between user and system message
+  y += spacingBetween;
+
+  // Draw system message with inline bold styling (truncated if needed)
   truncatedSystemLines.forEach((line) => {
     if (line === "") {
       y += PARAGRAPH_BREAK_HEIGHT;
       return;
     }
-    ctx.fillText(line, CANVAS_PADDING, y);
+    const segments = parseSegments(line);
+    drawStyledLine(ctx, segments, CANVAS_PADDING, y, SYSTEM_TEXT_COLOR, BOLD_TEXT_COLOR, font, boldFont);
     y += lineHeight;
   });
 
