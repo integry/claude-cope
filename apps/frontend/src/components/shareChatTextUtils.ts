@@ -14,6 +14,8 @@ export type TextSegment = {
  */
 export function stripMarkdownKeepBold(text: string): string {
   let s = text;
+  // Remove fenced code block delimiters (``` or ```language)
+  s = s.replace(/^```\w*\s*$/gm, "");
   s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1");
   s = s.replace(/_(.+?)_/g, "$1");
   s = s.replace(/^#{1,3}\s+/gm, "");
