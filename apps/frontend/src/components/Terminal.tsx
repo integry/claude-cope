@@ -222,7 +222,33 @@ function Terminal() {
     };
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, proKey: state.proKey, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, addActiveTD, onSuggestedReply: setSuggestedReply, buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades, onByokCost: (cost) => setState((prev) => ({ ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + cost })), signal: controller.signal });
+    submitChatMessage({
+      chatMessages,
+      buddyResult,
+      unlockAchievement,
+      setHistory,
+      setIsProcessing,
+      currentRank: rank,
+      apiKey: state.apiKey,
+      customModel: state.selectedModel,
+      proKey: state.proKey,
+      modes: state.modes,
+      activeTicket: state.activeTicket,
+      onSprintProgress,
+      addActiveTD,
+      onSuggestedReply: setSuggestedReply,
+      buddyType: state.buddy.type,
+      username: state.username,
+      inventory: state.inventory,
+      upgrades: state.upgrades,
+      onByokUsage: (usage) => setState((prev) => ({ ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0) })),
+      onQuotaUpdate: (quotaPercent) => setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })),
+      onQuotaExhausted: () => {
+        setQuotaLocked(true);
+        setHistory((prev) => [...prev, { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" }]);
+      },
+      signal: controller.signal,
+    });
   };
 
   const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = val.length; } }, 0); };
