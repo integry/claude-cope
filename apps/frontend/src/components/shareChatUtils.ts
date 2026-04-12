@@ -26,7 +26,7 @@ const WATERMARK_COLOR = "#484f58";
 
 /**
  * Strips basic markdown formatting for plain-text canvas rendering.
- * Converts **bold**/headers/bullets into readable plain text.
+ * Converts bold markers, headers, and bullets into readable plain text.
  */
 function stripMarkdown(text: string): string {
   let s = text;
@@ -91,7 +91,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 
     // Detect bullet/list prefixes and preserve indentation
     const bulletMatch = trimmed.match(/^(\s*(?:[-*•]\s+|\d+[.)]\s+))/);
-    if (bulletMatch) {
+    if (bulletMatch && bulletMatch[1]) {
       const prefix = bulletMatch[1];
       const content = trimmed.slice(prefix.length);
       const prefixWidth = ctx.measureText(prefix).width;
