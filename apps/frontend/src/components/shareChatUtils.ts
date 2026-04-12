@@ -180,11 +180,14 @@ function wrapBulletParagraph(
     return [`${prefix}${content}`];
   }
 
-  const firstLinePlain = contentLines[0] ?? "";
-  const { extracted: firstLineBold } = extractBoldAware(content, firstLinePlain.length);
-  const result = [`${prefix}${firstLineBold}`];
-  for (let j = 1; j < contentLines.length; j++) {
-    result.push(`${indent}${contentLines[j]}`);
+  const result: string[] = [];
+  let remaining = content;
+  for (let j = 0; j < contentLines.length; j++) {
+    const linePlain = contentLines[j] ?? "";
+    const { extracted, remaining: rest } = extractBoldAware(remaining, linePlain.length);
+    const linePrefix = j === 0 ? prefix : indent;
+    result.push(`${linePrefix}${extracted}`);
+    remaining = rest;
   }
   return result;
 }
