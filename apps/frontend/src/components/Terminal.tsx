@@ -21,6 +21,8 @@ import { BuddyDisplay } from "./BuddyDisplay";
 import { parseGlitchStyle } from "./parseGlitchStyle";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
+import { API_BASE } from "../config";
+import { supabase } from "../supabaseClient";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
 import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
@@ -253,6 +255,17 @@ function Terminal() {
         playChime();
         setHistory((prev) => [...prev, { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` }]);
         setState((prev) => ({ ...prev, activeTicket: null }));
+        const completedMessage = `✅ A player completed ticket "${state.activeTicket!.title}" and earned ${payout.toLocaleString()} TD!`;
+        fetch(`${API_BASE}/api/recent-events`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: completedMessage }),
+        }).catch(() => {});
+        supabase?.channel('global_incidents').send({
+          type: 'broadcast',
+          event: 'new_incident',
+          payload: { message: completedMessage },
+        }).catch(() => {});
       }
     };
     const controller = new AbortController();

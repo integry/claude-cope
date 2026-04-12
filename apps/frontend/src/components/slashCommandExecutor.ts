@@ -2,7 +2,7 @@
 import { GENERATORS } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { API_BASE } from "../config";
-import { supabase } from "../supabaseClient";
+
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
@@ -145,19 +145,6 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
     messages.push({ role: "system", content: getRandomTip() });
     ctx.setHistory(messages);
     ctx.setIsProcessing(false);
-
-    // Broadcast terminal crash to global incident ticker
-    const crashMessage = "💥 A player crashed their terminal with /clear!";
-    fetch(`${API_BASE}/api/recent-events`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: crashMessage }),
-    }).catch(() => {});
-    supabase?.channel('global_incidents').send({
-      type: 'broadcast',
-      event: 'new_incident',
-      payload: { message: crashMessage },
-    }).catch(() => {});
 
     // Re-offer a ticket after clear if none active — delay so the cleared screen settles
     if (!ctx.state.activeTicket) {
