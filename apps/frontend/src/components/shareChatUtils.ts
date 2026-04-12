@@ -23,8 +23,7 @@ const BG_COLOR = "#0d1117";
 const HEADER_BG_COLOR = "#161b22";
 const HEADER_BORDER_COLOR = "#30363d";
 const HEADER_DOT_COLORS = ["#ff5f56", "#ffbd2e", "#27c93f"];
-const BORDER_COLOR = "#22c55e";
-const USER_PROMPT_COLOR = "#22c55e";
+const USER_PROMPT_COLOR = "#e6edf3";
 const USER_TEXT_COLOR = "#e6edf3";
 const SYSTEM_TEXT_COLOR = "#4ade80";
 const BOLD_TEXT_COLOR = "#e6edf3";
@@ -75,12 +74,9 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   canvas.width = MAX_WIDTH;
   canvas.height = totalHeight;
 
-  // Draw background and border
+  // Draw background
   ctx.fillStyle = BG_COLOR;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = BORDER_COLOR;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
 
   ctx.font = font;
   ctx.textBaseline = "top";
@@ -147,17 +143,17 @@ function truncateLines(
 
 function drawHeader(ctx: CanvasRenderingContext2D, canvasWidth: number, fontSize: number, font: string, headerText: string): void {
   ctx.fillStyle = HEADER_BG_COLOR;
-  ctx.fillRect(2, 2, canvasWidth - 4, HEADER_BAR_HEIGHT);
+  ctx.fillRect(0, 0, canvasWidth, HEADER_BAR_HEIGHT);
 
   ctx.strokeStyle = HEADER_BORDER_COLOR;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(2, HEADER_BAR_HEIGHT + 2);
-  ctx.lineTo(canvasWidth - 2, HEADER_BAR_HEIGHT + 2);
+  ctx.moveTo(0, HEADER_BAR_HEIGHT);
+  ctx.lineTo(canvasWidth, HEADER_BAR_HEIGHT);
   ctx.stroke();
 
   const dotRadius = 5;
-  const dotY = HEADER_BAR_HEIGHT / 2 + 2;
+  const dotY = HEADER_BAR_HEIGHT / 2;
   const dotStartX = CANVAS_PADDING;
   HEADER_DOT_COLORS.forEach((color, i) => {
     ctx.beginPath();
@@ -170,14 +166,14 @@ function drawHeader(ctx: CanvasRenderingContext2D, canvasWidth: number, fontSize
     ctx.fillStyle = HEADER_COLOR;
     ctx.font = font;
     const headerTextWidth = ctx.measureText(headerText).width;
-    ctx.fillText(headerText, (canvasWidth - headerTextWidth) / 2, (HEADER_BAR_HEIGHT - fontSize) / 2 + 2);
+    ctx.fillText(headerText, (canvasWidth - headerTextWidth) / 2, (HEADER_BAR_HEIGHT - fontSize) / 2);
   }
 
   ctx.fillStyle = WATERMARK_COLOR;
   ctx.font = font;
   const brandText = "claudecope.com";
   const brandWidth = ctx.measureText(brandText).width;
-  ctx.fillText(brandText, canvasWidth - CANVAS_PADDING - brandWidth, (HEADER_BAR_HEIGHT - fontSize) / 2 + 2);
+  ctx.fillText(brandText, canvasWidth - CANVAS_PADDING - brandWidth, (HEADER_BAR_HEIGHT - fontSize) / 2);
 }
 
 async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {

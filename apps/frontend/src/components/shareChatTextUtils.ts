@@ -168,7 +168,33 @@ function wrapBulletParagraph(
  */
 export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const cleaned = stripMarkdownKeepBold(text);
-  const paragraphs = cleaned.split("\n");
+  const rawParagraphs = cleaned.split("\n");
+
+  // Merge continuation lines into their parent bullet item so that
+  // wrapped text fills the full available width instead of getting shorter.
+  const paragraphs: string[] = [];
+  let currentBullet: string | null = null;
+  for (const raw of rawParagraphs) {
+    if (raw.trim() === "") {
+      if (currentBullet !== null) {
+        paragraphs.push(currentBullet);
+        currentBullet = null;
+      }
+      paragraphs.push(raw);
+    } else if (/^\s*(?:[-*•]\s+|\d+[.)]\s+)/.test(raw)) {
+      if (currentBullet !== null) {
+        paragraphs.push(currentBullet);
+      }
+      currentBullet = raw;
+    } else if (currentBullet !== null) {
+      currentBullet += " " + raw.trimStart();
+    } else {
+      paragraphs.push(raw);
+    }
+  }
+  if (currentBullet !== null) {
+    paragraphs.push(currentBullet);
+  }
 
   let boldAcross = false;
   for (let i = 0; i < paragraphs.length; i++) {
