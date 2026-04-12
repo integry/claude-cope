@@ -226,7 +226,7 @@ export const CORPORATE_RANKS: CorporateRank[] = [
 
 export const THEMES: Theme[] = [
   { id: "default", name: "Default", cost: 0 },
-  { id: "amber", name: "Amber", cost: 50000 },
-  { id: "matrix", name: "Matrix", cost: 100000 },
-  { id: "light", name: "Light", cost: 250000 },
+  { id: "amber", name: "Amber", cost: 5000 },
+  { id: "matrix", name: "Matrix", cost: 10000 },
+  { id: "light", name: "Light", cost: 25000 },
 ];
