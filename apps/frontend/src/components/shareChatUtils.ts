@@ -169,16 +169,19 @@ function wrapWithBold(ctx: CanvasRenderingContext2D, text: string, maxWidth: num
 
 /**
  * Wraps a bullet/list paragraph, preserving the prefix and indentation.
+ * Continuation lines are indented to align with the text after the prefix.
  */
 function wrapBulletParagraph(
   ctx: CanvasRenderingContext2D, paragraph: string, prefix: string, maxWidth: number,
 ): string[] {
+  const indent = " ".repeat(prefix.length);
+  const contentMaxWidth = maxWidth - ctx.measureText(indent).width;
   const content = paragraph.slice(prefix.length);
-  const contentLines = wrapWithBold(ctx, content, maxWidth);
+  const contentLines = wrapWithBold(ctx, content, contentMaxWidth);
 
   const result: string[] = [];
   for (let j = 0; j < contentLines.length; j++) {
-    const linePrefix = j === 0 ? prefix : "";
+    const linePrefix = j === 0 ? prefix : indent;
     result.push(`${linePrefix}${contentLines[j]}`);
   }
   return result;
@@ -240,7 +243,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
     if (bulletMatch?.[1]) {
       // Add a small gap between consecutive list items
       if (lastWasBullet && result.length > 0) {
-        result.push("");
+        result.push("\x01");
       }
       result.push(...wrapBulletParagraph(ctx, paragraph, bulletMatch[1], maxWidth));
       lastWasBullet = true;
@@ -285,10 +288,12 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   // Header shows username on the left if available
   const headerText = username ?? "";
 
-  // Paragraph breaks are compact
+  // Paragraph breaks are compact; list item gaps are even smaller
   const PARAGRAPH_BREAK_HEIGHT = Math.round(lineHeight * 0.4);
+  const LIST_ITEM_GAP = Math.round(lineHeight * 0.15);
   const calcBlockHeight = (lines: string[]) =>
-    lines.reduce((h, line) => h + (line === "" ? PARAGRAPH_BREAK_HEIGHT : lineHeight), 0);
+    lines.reduce((h, line) =>
+      h + (line === "" ? PARAGRAPH_BREAK_HEIGHT : line === "\x01" ? LIST_ITEM_GAP : lineHeight), 0);
 
   // Calculate total height
   const userBlockHeight = calcBlockHeight(userLines);
@@ -313,7 +318,7 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
     let usedHeight = 0;
     const ellipsisHeight = lineHeight;
     for (const line of systemLines) {
-      const lineH = line === "" ? PARAGRAPH_BREAK_HEIGHT : lineHeight;
+      const lineH = line === "" ? PARAGRAPH_BREAK_HEIGHT : line === "\x01" ? LIST_ITEM_GAP : lineHeight;
       if (usedHeight + lineH + ellipsisHeight > availableForSystem) {
         truncated = true;
         break;
@@ -415,6 +420,10 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   truncatedSystemLines.forEach((line) => {
     if (line === "") {
       y += PARAGRAPH_BREAK_HEIGHT;
+      return;
+    }
+    if (line === "\x01") {
+      y += LIST_ITEM_GAP;
       return;
     }
     const segments = parseSegments(line);
