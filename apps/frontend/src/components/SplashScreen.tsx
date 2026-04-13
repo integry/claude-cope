@@ -14,9 +14,10 @@ export default function SplashScreen({ onComplete }: { onComplete: () => void })
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-[#0d1117] transition-opacity duration-700 ${
+      className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-700 ${
         fadeOut ? "opacity-0" : "opacity-100"
       }`}
+      style={{ backgroundColor: 'var(--color-bg)' }}
     >
       <picture>
         <source media="(min-width: 640px)" srcSet="/media/logo-800-transparent.png" />

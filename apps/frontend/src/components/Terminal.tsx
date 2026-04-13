@@ -21,6 +21,8 @@ import { BuddyDisplay } from "./BuddyDisplay";
 import { parseGlitchStyle } from "./parseGlitchStyle";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
+import { API_BASE } from "../config";
+import { supabase } from "../supabaseClient";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
 import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
@@ -30,22 +32,24 @@ import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
 import SprintProgressBar from "./SprintProgressBar";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
+import { useSoundEffects } from "../hooks/useSoundEffects";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 
 export type { Message };
 
 /** Memoized message list — only re-renders when history/keys/props actually change */
-const MessageList = memo(function MessageList({ history, messageKeys, initialHistoryLen, promptString, activeTicketId }: {
+const MessageList = memo(function MessageList({ history, messageKeys, initialHistoryLen, promptString, activeTicketId, username }: {
   history: Message[];
   messageKeys: number[];
   initialHistoryLen: number;
   promptString: string;
   activeTicketId?: string | null;
+  username: string;
 }) {
   return (
     <>
       {history.map((message, index) => (
-        <OutputBlock key={messageKeys[index]} message={message} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} />
+        <OutputBlock key={messageKeys[index]} message={message} previousMessage={history[index - 1]} nextMessage={history[index + 1]} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} username={username} />
       ))}
     </>
   );
@@ -76,12 +80,13 @@ function filterChatHistory(history: Message[]): { role: string; content: string 
 }
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
+  const { playError, playChime } = useSoundEffects(state.soundEnabled);
   const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
@@ -125,6 +130,13 @@ function Terminal() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
 
+  // Wrap unlockAchievement to also play a chime sound on success
+  const unlockAchievementWithSound = useCallback((id: string): boolean => {
+    const isNew = unlockAchievement(id);
+    if (isNew) playChime();
+    return isNew;
+  }, [unlockAchievement, playChime]);
+
   const closeAllOverlays = useCallback(() => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowPrivacy(false); setShowTerms(false); setShowContact(false); setShowProfile(false); setShowParty(false); }, []);
   const handleProfileClick = useCallback(() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlays, state.username]);
 
@@ -146,11 +158,12 @@ function Terminal() {
 
   const triggerQuotaLockout = () => {
     setQuotaLocked(true); setIsProcessing(true);
+    playError();
     setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." }, { role: "warning", content: "[⚙️] Upgrading to $200/mo Pro Tier..." }]);
     setTimeout(() => {
       resetQuota();
       const newLockouts = state.economy.quotaLockouts + 1;
-      const isNew = newLockouts >= 3 && unlockAchievement("homer_at_the_buffet");
+      const isNew = newLockouts >= 3 && unlockAchievementWithSound("homer_at_the_buffet");
       setQuotaLocked(false); setIsProcessing(false);
       if (newLockouts === 1) setInstantBanReady(true);
       setHistory((prev) => {
@@ -163,6 +176,7 @@ function Terminal() {
 
   const triggerInstantBan = () => {
     setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
+    playError();
     setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." }]);
     setTimeout(() => { setQuotaLocked(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
   };
@@ -187,7 +201,7 @@ function Terminal() {
   });
 
   const runSlashCommand = (command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setBragPending, setBuddyPendingConfirm, unlockAchievement, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); } });
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
   };
 
   const tryOutageDamage = (): boolean => {
@@ -229,6 +243,7 @@ function Terminal() {
     setIsProcessing(true);
     const contextMessages = filterChatHistory(history);
     const chatMessages = [...contextMessages, { role: "user", content: userMessage.content }];
+    let sprintCompleteMessage: Message | null = null;
     const onSprintProgress = (rawAmount: number) => {
       if (!state.activeTicket) return;
       const amount = Math.round(rawAmount * 1.5);
@@ -237,13 +252,26 @@ function Terminal() {
       if (newProgress >= state.activeTicket.sprintGoal) {
         const payout = state.activeTicket.sprintGoal * 10;
         addActiveTD(payout);
-        setHistory((prev) => [...prev, { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` }]);
+        playChime();
+        sprintCompleteMessage = { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` };
         setState((prev) => ({ ...prev, activeTicket: null }));
+        const playerName = state.username || "A player";
+        const completedMessage = `✅ ${playerName} completed ticket "${state.activeTicket!.title}" and earned ${payout.toLocaleString()} TD!`;
+        fetch(`${API_BASE}/api/recent-events`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: completedMessage }),
+        }).catch(() => {});
+        supabase?.channel('global_incidents').send({
+          type: 'broadcast',
+          event: 'new_incident',
+          payload: { message: completedMessage },
+        }).catch(() => {});
       }
     };
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, proKey: state.proKey, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, addActiveTD, onSuggestedReply: setSuggestedReply, buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades, onByokCost: (cost) => setState((prev) => ({ ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + cost })), signal: controller.signal });
+    submitChatMessage({ chatMessages, buddyResult, unlockAchievement: unlockAchievementWithSound, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, proKey: state.proKey, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, getSprintCompleteMessage: () => { const msg = sprintCompleteMessage; sprintCompleteMessage = null; return msg; }, addActiveTD, onSuggestedReply: setSuggestedReply, buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades, onByokCost: (cost) => setState((prev) => ({ ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + cost })), onError: playError, signal: controller.signal });
   };
 
   const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = val.length; } }, 0); };
@@ -325,7 +353,7 @@ function Terminal() {
 
   const renderOverlays = () => (
     <>
-      {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} onClose={() => setShowStore(false)} />}
+      {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} equipTheme={setActiveTheme} onClose={() => setShowStore(false)} />}
       {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
       {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
       {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
@@ -343,8 +371,8 @@ function Terminal() {
 
   return (
     <div
-      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "h-[100dvh] overflow-hidden"} w-full font-mono text-sm text-gray-100 leading-snug sm:leading-relaxed p-4 pb-0 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : "bg-[#0d1117]"} ${pendingPing ? "pvp-ping-flash" : ""}`}
-      style={parseGlitchStyle(regressionGlitch)}
+      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "h-[100dvh] overflow-hidden"} w-full font-mono text-sm leading-snug sm:leading-relaxed p-4 pb-0 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : ""} ${pendingPing ? "pvp-ping-flash" : ""} ${state.activeTheme && state.activeTheme !== "default" ? `theme-${state.activeTheme}` : ""}`}
+      style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : 'var(--color-bg)', color: 'var(--color-text)' }}
       onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
       <div className="shrink-0">
@@ -354,7 +382,7 @@ function Terminal() {
       </div>
       <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
-        <MessageList history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} activeTicketId={state.activeTicket?.id} />
+        <MessageList history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} activeTicketId={state.activeTicket?.id} username={state.username} />
         <div ref={bottomRef} />
       </div>
       <div className="shrink-0">
@@ -366,7 +394,7 @@ function Terminal() {
         </div>
       </div>
       {renderOverlays()}
-      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-1 bg-[#0d1117]/80 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1">
+      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-1 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
         <div className="flex items-center justify-between">
           <span>This is a parody project and is not affiliated with Anthropic.</span>
           <span className="ml-auto text-right">&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></span>
@@ -387,7 +415,7 @@ function Terminal() {
           </span>
         </div>
       </footer>
-      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 bg-[#0d1117]/80 backdrop-blur-sm font-mono sm:hidden text-center">
+      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 backdrop-blur-sm font-mono sm:hidden text-center" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
         <span className="leading-tight">Parody project, no Anthropic affiliation.</span>
       </footer>
     </div>

@@ -77,6 +77,9 @@ function makeDefaultState(overrides?: Partial<GameState>): GameState {
     modes: { fast: false, voice: false },
     activeTicket: null,
     hasSeenTicketPrompt: false,
+    activeTheme: "default",
+    unlockedThemes: ["default"],
+    soundEnabled: true,
     ...overrides,
   };
 }

@@ -18,7 +18,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
   }, [menuOpen]);
 
   return (
-    <div className={`sticky top-0 z-10 border-b pt-2 pb-2 mb-2 relative flex items-center gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "bg-[#0d1117] border-gray-700"}`}>
+    <div className={`sticky top-0 z-10 border-b pt-2 pb-2 mb-2 relative flex items-center gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "border-gray-700"}`} style={outageHp !== null ? undefined : { backgroundColor: 'var(--color-bg)' }}>
       <img src="/media/logo-400-transparent.png" alt="Logo" className="hidden sm:block max-h-12 w-auto flex-shrink-0 object-contain" />
       <div className="flex-1 flex items-center justify-between text-green-400 min-w-0 px-2 sm:px-0">
         <span className="flex items-center min-w-0">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, SetStateAction } from "react";
-import { GENERATORS, UPGRADES, CORPORATE_RANKS } from "../game/constants";
+import { GENERATORS, UPGRADES, CORPORATE_RANKS, THEMES } from "../game/constants";
 import { supabase } from "../supabaseClient";
 import {
   type Message,
@@ -160,7 +160,8 @@ export function useGameState() {
     });
 
     if (cost > 1_000_000) {
-      const purchaseMessage = `💰 A player bought ${amount}x ${generator.name} for ${cost.toLocaleString()} TD!`;
+      const playerName = stateRef.current.username || "A player";
+      const purchaseMessage = `💰 ${playerName} bought ${amount}x ${generator.name} for ${cost.toLocaleString()} TD!`;
       fetch("/api/recent-events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -341,6 +342,58 @@ export function useGameState() {
     }));
   }, []);
 
+  const setActiveTheme = useCallback((themeId: string) => {
+    setState((prev) => {
+      if (!prev.unlockedThemes.includes(themeId)) return prev;
+      return { ...prev, activeTheme: themeId };
+    });
+  }, []);
+
+  const unlockTheme = useCallback((themeId: string) => {
+    setState((prev) => {
+      if (prev.unlockedThemes.includes(themeId)) return prev;
+      return {
+        ...prev,
+        unlockedThemes: [...prev.unlockedThemes, themeId],
+      };
+    });
+  }, []);
+
+  /** Purchase a theme. Requires proKey, sufficient TD, and theme not already owned. Returns true on success. */
+  const buyTheme = useCallback((themeId: string): boolean => {
+    const theme = THEMES.find((t) => t.id === themeId);
+    if (!theme) return false;
+
+    const current = stateRef.current;
+    // Only paid users can purchase themes
+    if (!current.proKey) return false;
+    // Already unlocked
+    if (current.unlockedThemes.includes(themeId)) return false;
+    // Can't afford
+    if (current.economy.currentTD < theme.cost) return false;
+
+    setState((prev) => {
+      if (!prev.proKey) return prev;
+      if (prev.unlockedThemes.includes(themeId)) return prev;
+      if (prev.economy.currentTD < theme.cost) return prev;
+
+      return {
+        ...prev,
+        economy: {
+          ...prev.economy,
+          currentTD: prev.economy.currentTD - theme.cost,
+        },
+        unlockedThemes: [...prev.unlockedThemes, themeId],
+      };
+    });
+
+    return true;
+  }, []);
+
+  const toggleSound = useCallback(() => {
+    setState((prev) => ({ ...prev, soundEnabled: !prev.soundEnabled }));
+  }, []);
+
   const updateTicketProgress = useCallback((amount: number) => {
     setState((prev) => {
       if (!prev.activeTicket) return prev;
@@ -358,5 +411,5 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
+  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, unlockTheme, buyTheme, toggleSound, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
 }

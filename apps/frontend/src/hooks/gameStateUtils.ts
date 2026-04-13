@@ -87,6 +87,9 @@ export interface GameState {
   modes: ModesState;
   activeTicket: ActiveTicket | null;
   hasSeenTicketPrompt: boolean;
+  activeTheme: string;
+  unlockedThemes: string[];
+  soundEnabled: boolean;
   apiKey?: string;
   selectedModel?: string;
   proKey?: string;
@@ -153,6 +156,9 @@ function createDefaultState(): GameState {
     modes: { fast: false, voice: false },
     activeTicket: null,
     hasSeenTicketPrompt: false,
+    activeTheme: "default",
+    unlockedThemes: ["default"],
+    soundEnabled: true,
   };
 }
 
@@ -188,7 +194,50 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
     modes: { fast: false, voice: false },
     activeTicket: null,
     hasSeenTicketPrompt: false,
+    activeTheme: "default",
+    unlockedThemes: ["default"],
+    soundEnabled: true,
   };
+}
+
+function applyDefensiveDefaults(state: GameState): void {
+  if (!Array.isArray(state.upgrades)) {
+    state.upgrades = [];
+  }
+  if (!Array.isArray(state.achievements)) {
+    state.achievements = [];
+  }
+  if (!state.buddy) {
+    state.buddy = {
+      type: null,
+      isShiny: false,
+      promptsSinceLastInterjection: 0,
+    };
+  }
+  if (!Array.isArray(state.chatHistory)) {
+    state.chatHistory = [];
+  }
+  if (!state.commandUsage || typeof state.commandUsage !== "object") {
+    state.commandUsage = {};
+  }
+  if (!state.modes || typeof state.modes !== "object") {
+    state.modes = { fast: false, voice: false };
+  }
+  if (state.activeTicket === undefined) {
+    state.activeTicket = null;
+  }
+  if (state.hasSeenTicketPrompt === undefined) {
+    state.hasSeenTicketPrompt = false;
+  }
+  if (!state.activeTheme) {
+    state.activeTheme = "default";
+  }
+  if (!Array.isArray(state.unlockedThemes)) {
+    state.unlockedThemes = ["default"];
+  }
+  if (state.soundEnabled === undefined) {
+    state.soundEnabled = true;
+  }
 }
 
 export function loadState(): GameState {
@@ -205,34 +254,7 @@ export function loadState(): GameState {
       const state = parsed as unknown as GameState;
 
       // Ensure required fields exist (defensive)
-      if (!Array.isArray(state.upgrades)) {
-        state.upgrades = [];
-      }
-      if (!Array.isArray(state.achievements)) {
-        state.achievements = [];
-      }
-      if (!state.buddy) {
-        state.buddy = {
-          type: null,
-          isShiny: false,
-          promptsSinceLastInterjection: 0,
-        };
-      }
-      if (!Array.isArray(state.chatHistory)) {
-        state.chatHistory = [];
-      }
-      if (!state.commandUsage || typeof state.commandUsage !== "object") {
-        state.commandUsage = {};
-      }
-      if (!state.modes || typeof state.modes !== "object") {
-        state.modes = { fast: false, voice: false };
-      }
-      if (state.activeTicket === undefined) {
-        state.activeTicket = null;
-      }
-      if (state.hasSeenTicketPrompt === undefined) {
-        state.hasSeenTicketPrompt = false;
-      }
+      applyDefensiveDefaults(state);
       if (!state.username) {
         state.username = generateUsername();
       }

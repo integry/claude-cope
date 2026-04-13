@@ -79,9 +79,10 @@ score.post("/", async (c) => {
   if (isSuspicious) rank = "🤡 DevTools Hacker";
 
   if (existing) {
+    const updatedTotal = Math.max(serverTotal, validatedTotal);
     await db
-      .prepare("UPDATE user_scores SET current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now') WHERE username = ?")
-      .bind(validatedCurrent, rank, country, body.username)
+      .prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now') WHERE username = ?")
+      .bind(updatedTotal, validatedCurrent, rank, country, body.username)
       .run();
   } else {
     await db
@@ -90,8 +91,9 @@ score.post("/", async (c) => {
       .run();
   }
 
+  const finalTotal = existing ? Math.max(serverTotal, validatedTotal) : validatedTotal;
   return c.json({
-    total_td: existing ? serverTotal : validatedTotal,
+    total_td: finalTotal,
     current_td: validatedCurrent,
     corporate_rank: rank,
     multiplier: claimedMultiplier,

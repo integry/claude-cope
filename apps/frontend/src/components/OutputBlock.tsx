@@ -5,6 +5,7 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Message } from "./Terminal";
 import { pickRandomSequence } from "./toolSequences";
 import { useTypewriter } from "../hooks/useTypewriter";
+import { ShareButton } from "./ShareButton";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
@@ -342,11 +343,22 @@ function CostDisplay({ cost }: { cost: number }) {
   );
 }
 
-function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTicketId }: { message: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null }) {
+
+function getShareProps(message: Message, previousMessage?: Message, nextMessage?: Message): { showShareButton: boolean; shareSystemMessage: string } {
+  const isSlashCommandResponse = previousMessage?.role === "user" && previousMessage.content.startsWith("/");
+  const showShareButton = message.role === "system" && previousMessage?.role === "user" && !isSlashCommandResponse;
+  const shareSystemMessage = showShareButton && nextMessage?.role === "warning"
+    ? message.content + "\n\n" + nextMessage.content
+    : message.content;
+  return { showShareButton, shareSystemMessage };
+}
+
+function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "" }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
+  const { showShareButton, shareSystemMessage } = getShareProps(message, previousMessage, nextMessage);
 
   return (
-    <div className={getContainerClass(message, isNew)}>
+    <div className={`group ${getContainerClass(message, isNew)}`}>
       {message.role === "user" && (
         <div className="inline-block bg-gray-200 text-gray-900 px-2 py-1 sm:px-3 sm:py-1.5 font-bold">
           <span className="text-gray-500 mr-1">{promptString}</span>
@@ -358,6 +370,7 @@ function OutputBlock({ message, isNew = false, promptString = "❯ ", activeTick
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
       {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
+      {showShareButton && <ShareButton userMessage={previousMessage!.content} systemMessage={shareSystemMessage} username={username} />}
     </div>
   );
 }
@@ -368,6 +381,11 @@ export default React.memo(OutputBlock, (prev, next) =>
   prev.message.cost === next.message.cost &&
   prev.isNew === next.isNew &&
   prev.promptString === next.promptString &&
+  prev.previousMessage?.content === next.previousMessage?.content &&
+  prev.previousMessage?.role === next.previousMessage?.role &&
+  prev.nextMessage?.content === next.nextMessage?.content &&
+  prev.nextMessage?.role === next.nextMessage?.role &&
+  prev.username === next.username &&
   // Only compare activeTicketId for loading messages
   (prev.message.role !== "loading" || prev.activeTicketId === next.activeTicketId)
 );
