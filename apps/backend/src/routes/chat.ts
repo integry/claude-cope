@@ -205,6 +205,7 @@ chat.post("/", async (c) => {
 
   if (!response.ok) {
     const data = await response.json();
+    console.log(`[CHAT ERROR] status=${response.status} body=${JSON.stringify(data).slice(0, 500)}`);
     return c.json({ error: "OpenRouter request failed", details: data }, response.status as ContentfulStatusCode);
   }
 
