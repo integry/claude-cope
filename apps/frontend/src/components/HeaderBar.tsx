@@ -1,12 +1,20 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useAnimatedCounter } from "../hooks/useAnimatedCounter";
 
+const FREE_QUOTA_LIMIT = 20;
+const PRO_QUOTA_LIMIT = 100;
+
 function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isPro, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onSlashMenuClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isPro: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onSlashMenuClick?: () => void }) {
   const displayTD = useAnimatedCounter(currentTD, 2660);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileQuotaTip, setMobileQuotaTip] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const quotaColor = quotaPercent > 50 ? "bg-green-400" : quotaPercent > 20 ? "bg-yellow-400" : "bg-red-400";
+  const totalQuota = isPro ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT;
+  const remaining = Math.round((quotaPercent / 100) * totalQuota);
+  const used = totalQuota - remaining;
+  const quotaTooltip = `${used}/${totalQuota} requests used · ${remaining} remaining`;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -42,6 +50,11 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
             <div className="px-4 py-2 border-b border-gray-700">
               <img src="/media/logo-400-transparent.png" alt="Claude Cope" className="max-h-8 w-auto" />
             </div>
+            {!isBYOK && (
+              <div className={`px-4 py-2 border-b border-gray-700 font-mono text-xs ${quotaPercent > 50 ? "text-green-400" : quotaPercent > 20 ? "text-yellow-400" : "text-red-400"}`}>
+                API Quota: {Math.round(quotaPercent)}% — {used}/{totalQuota} used, {remaining} left
+              </div>
+            )}
             <button onClick={() => { setMenuOpen(false); onProfileClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/profile</button>
             <button onClick={() => { setMenuOpen(false); onHelpClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/help</button>
             <button onClick={() => { setMenuOpen(false); onAboutClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/about</button>
@@ -61,7 +74,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
       </div>
       {/* Desktop usage bar — terminal ASCII style */}
       {!isBYOK && (
-        <div className={`hidden sm:block flex-shrink-0 text-xs font-mono whitespace-nowrap px-2 ${quotaPercent > 50 ? "text-green-400" : quotaPercent > 20 ? "text-yellow-400" : "text-red-400"}`}>
+        <div title={quotaTooltip} className={`hidden sm:block flex-shrink-0 text-xs font-mono whitespace-nowrap px-2 cursor-default ${quotaPercent > 50 ? "text-green-400" : quotaPercent > 20 ? "text-yellow-400" : "text-red-400"}`}>
           {(() => {
             const totalBlocks = 20;
             const filledBlocks = Math.round((quotaPercent / 100) * totalBlocks);
@@ -71,8 +84,13 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
         </div>
       )}
       {/* Mobile thin usage line — bottom of header */}
-      {!isBYOK && <div className="sm:hidden absolute bottom-0 left-0 right-0 h-[2px] bg-gray-800">
+      {!isBYOK && <div className="sm:hidden absolute bottom-0 left-0 right-0 h-[2px] bg-gray-800 cursor-pointer" onClick={() => setMobileQuotaTip((v) => !v)}>
         <div className={`h-full ${quotaColor} transition-all duration-500`} style={{ width: `${quotaPercent}%` }} />
+        {mobileQuotaTip && (
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] font-mono whitespace-nowrap bg-gray-900 border border-gray-700 rounded text-gray-300 shadow-lg z-30">
+            {quotaTooltip}
+          </div>
+        )}
       </div>}
     </div>
   );
