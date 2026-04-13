@@ -99,7 +99,7 @@ type ChatResponseData = {
 
 function resolveModel(modelId?: string): string {
   const copeModel = modelId ? COPE_MODELS.find((m) => m.id === modelId) : undefined;
-  return copeModel?.openRouterId ?? "nvidia/nemotron-3-super-120b-a12b";
+  return copeModel?.openRouterId ?? "openai/gpt-oss-20b";
 }
 
 function extractBodyDefaults(body: ChatBody) {

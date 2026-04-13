@@ -1,8 +1,8 @@
 /* eslint-disable max-lines */
-import { GENERATORS } from "../game/constants";
+import { GENERATORS, THEMES } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { API_BASE } from "../config";
-import { supabase } from "../supabaseClient";
+
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
@@ -47,6 +47,9 @@ interface SlashCommandContext {
   rejectPing: () => void;
   brrrrrrIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
   triggerCompactEffect: () => void;
+  playChime: () => void;
+  playError: () => void;
+  setActiveTheme: (themeId: string) => void;
 }
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.role !== "loading");
@@ -143,19 +146,6 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
     ctx.setHistory(messages);
     ctx.setIsProcessing(false);
 
-    // Broadcast terminal crash to global incident ticker
-    const crashMessage = "💥 A player crashed their terminal with /clear!";
-    fetch(`${API_BASE}/api/recent-events`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: crashMessage }),
-    }).catch(() => {});
-    supabase?.channel('global_incidents').send({
-      type: 'broadcast',
-      event: 'new_incident',
-      payload: { message: crashMessage },
-    }).catch(() => {});
-
     // Re-offer a ticket after clear if none active — delay so the cleared screen settles
     if (!ctx.state.activeTicket) {
       setTimeout(() => {
@@ -219,53 +209,68 @@ function handleBuddyCommand(command: string, ctx: SlashCommandContext, reply: Re
   return true;
 }
 
-function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
-  if (command === "/store") {
-    return handleStoreCommand(ctx, reply);
-  } else if (command === "/leaderboard") {
-    openOverlay(ctx, () => ctx.setShowLeaderboard(true));
-    return true;
-  } else if (command === "/achievements") {
-    openOverlay(ctx, () => ctx.setShowAchievements(true));
-    return true;
-  } else if (command === "/synergize") {
-    reply({ role: "system", content: pickRandom(synergizeResponses) });
-    ctx.closeAllOverlays();
-    ctx.setShowSynergize(true);
-    return true;
-  } else if (command === "/profile") {
-    openOverlay(ctx, () => ctx.setShowProfile(true));
-    return true;
-  } else if (command === "/user" || command.startsWith("/user ")) {
-    const alias = command.slice(5).trim();
-    openOverlay(ctx, () => ctx.setShowProfile(true));
-    if (alias) {
-      window.history.pushState(null, "", `/user/${encodeURIComponent(alias)}`);
-    } else {
-      window.history.pushState(null, "", `/user/${encodeURIComponent(ctx.state.username)}`);
-    }
-    return true;
-  } else if (command === "/compact") {
-    ctx.triggerCompactEffect();
-    ctx.setHistory((prev) => {
-      const cleaned = clearLoading(prev);
-      const removeCount = Math.min(50, cleaned.length);
-      const remaining = cleaned.slice(0, cleaned.length - removeCount);
-      return [
-        ...remaining,
-        { role: "system", content: `[✓] Context compacted. Deleted **${removeCount}** lines of unoptimized boilerplate.` },
-      ];
+function handleThemeCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+  const arg = command.slice(6).trim().toLowerCase();
+  const unlocked = THEMES.filter((t) => ctx.state.unlockedThemes.includes(t.id));
+
+  if (!arg) {
+    const unlockedLines = unlocked.map((t) => {
+      const active = t.id === ctx.state.activeTheme ? " ← active" : "";
+      return `  ${t.id}${active}`;
     });
-    ctx.unlockAchievement("history_eraser");
+    const locked = THEMES.filter((t) => !ctx.state.unlockedThemes.includes(t.id));
+    const lockedLines = locked.map((t) => `  ${t.id} 🔒 (${t.cost.toLocaleString()} TD)`);
+    const sections = [`**Unlocked:**\n${unlockedLines.join("\n")}`];
+    if (lockedLines.length > 0) {
+      sections.push(`**Locked:**\n${lockedLines.join("\n")}\n\nPurchase locked themes from the \`/store\`.`);
+    }
+    reply({ role: "system", content: `[🎨] Themes:\n\n${sections.join("\n\n")}\n\nUsage: \`/theme <name>\`` });
     return true;
-  } else if (command === "/support") {
+  }
+
+  const theme = THEMES.find((t) => t.id === arg);
+  if (!theme) {
+    reply({ role: "error", content: `[❌] Unknown theme: \`${arg}\`. Available: ${unlocked.map((t) => t.id).join(", ")}` });
+    return true;
+  }
+
+  if (!ctx.state.unlockedThemes.includes(theme.id)) {
+    reply({ role: "error", content: `[🔒] Theme \`${theme.name}\` is locked. Purchase it from the /store first.` });
+    return true;
+  }
+
+  if (ctx.state.activeTheme === theme.id) {
+    reply({ role: "system", content: `[🎨] Theme \`${theme.name}\` is already active.` });
+    return true;
+  }
+
+  ctx.setActiveTheme(theme.id);
+  reply({ role: "system", content: `[🎨] Theme switched to **${theme.name}**. Your terminal has been reskinned.` });
+  return true;
+}
+
+function handleOverlayCommand(command: string, ctx: SlashCommandContext): boolean {
+  const overlayMap: Record<string, () => void> = {
+    "/leaderboard": () => ctx.setShowLeaderboard(true),
+    "/achievements": () => ctx.setShowAchievements(true),
+    "/profile": () => ctx.setShowProfile(true),
+    "/party": () => ctx.setShowParty(true),
+  };
+  const opener = overlayMap[command];
+  if (opener) {
+    openOverlay(ctx, opener);
+    return true;
+  }
+  return false;
+}
+
+function handleSimpleReplyCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+  if (command === "/support") {
     reply({ role: "system", content: pickRandom(supportResponses) });
     return true;
   } else if (command === "/preworkout") {
     reply({ role: "system", content: pickRandom(preworkoutResponses) });
     return true;
-  } else if (command === "/buddy" || command.startsWith("/buddy ")) {
-    return handleBuddyCommand(command, ctx, reply);
   } else if (command === "/who") {
     if (ctx.onlineUsers.length > 0) {
       const userList = ctx.onlineUsers.join(", ");
@@ -274,8 +279,6 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
       reply({ role: "system", content: `[📡] There are currently **${ctx.onlineCount}** developers suffering in this instance.` });
     }
     return true;
-  } else if (command.startsWith("/ping")) {
-    return handlePingCommand(command, ctx, reply);
   } else if (command === "/reject") {
     if (ctx.pendingPing) {
       ctx.rejectPing();
@@ -284,10 +287,48 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
       reply({ role: "error", content: "[❌] No incoming ping to reject." });
     }
     return true;
-  } else if (command === "/party") {
-    openOverlay(ctx, () => ctx.setShowParty(true));
+  }
+  return false;
+}
+
+function handleCompactCommand(ctx: SlashCommandContext): boolean {
+  ctx.triggerCompactEffect();
+  ctx.setHistory((prev) => {
+    const cleaned = clearLoading(prev);
+    const removeCount = Math.min(50, cleaned.length);
+    const remaining = cleaned.slice(0, cleaned.length - removeCount);
+    return [
+      ...remaining,
+      { role: "system", content: `[✓] Context compacted. Deleted **${removeCount}** lines of unoptimized boilerplate.` },
+    ];
+  });
+  ctx.unlockAchievement("history_eraser");
+  return true;
+}
+
+function handleUserCommand(command: string, ctx: SlashCommandContext): boolean {
+  const alias = command.slice(5).trim();
+  openOverlay(ctx, () => ctx.setShowProfile(true));
+  const target = alias || ctx.state.username;
+  window.history.pushState(null, "", `/user/${encodeURIComponent(target)}`);
+  return true;
+}
+
+function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+  if (command === "/store") return handleStoreCommand(ctx, reply);
+  if (handleOverlayCommand(command, ctx)) return true;
+  if (command === "/synergize") {
+    reply({ role: "system", content: pickRandom(synergizeResponses) });
+    ctx.closeAllOverlays();
+    ctx.setShowSynergize(true);
     return true;
   }
+  if (command === "/user" || command.startsWith("/user ")) return handleUserCommand(command, ctx);
+  if (command === "/compact") return handleCompactCommand(ctx);
+  if (handleSimpleReplyCommand(command, ctx, reply)) return true;
+  if (command === "/buddy" || command.startsWith("/buddy ")) return handleBuddyCommand(command, ctx, reply);
+  if (command.startsWith("/ping")) return handlePingCommand(command, ctx, reply);
+  if (command === "/theme" || command.startsWith("/theme ")) return handleThemeCommand(command, ctx, reply);
   return false;
 }
 
@@ -447,6 +488,7 @@ function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
       ...prev,
       activeTicket: { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt },
     }));
+    ctx.playChime();
     reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nReward: **${(offer.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.` });
     ctx.setInputValue(offer.kickoff_prompt);
   }
@@ -548,10 +590,11 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
     if (asyncResult === "async") return "async";
     if (!asyncResult) {
       if (command.startsWith("/take")) {
-        handleTakeCommand(command, ctx.state, ctx.setState, reply, ctx.setInputValue);
+        handleTakeCommand(command, ctx.state, ctx.setState, reply, { setInputValue: ctx.setInputValue, onAccept: ctx.playChime });
       } else if (command === "/accept") {
         handleAcceptCommand(ctx, reply);
       } else if (command === "/abandon") {
+        if (ctx.state.activeTicket) ctx.playError();
         handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
       } else if (command.startsWith("/alias")) {
         handleAliasCommand(command, ctx, reply);
@@ -646,7 +689,7 @@ export function executeSlashCommand(
   };
 
   // Track command usage for performance review brag card
-  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command.startsWith("/buddy ") ? "/buddy" : command.startsWith("/sync ") ? "/sync" : command;
+  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command.startsWith("/buddy ") ? "/buddy" : command.startsWith("/sync ") ? "/sync" : command.startsWith("/theme ") ? "/theme" : command;
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {

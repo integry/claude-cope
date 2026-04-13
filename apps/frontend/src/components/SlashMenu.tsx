@@ -16,7 +16,7 @@ function SlashMenu({ query, activeIndex, totalTechnicalDebt, onSelect }: SlashMe
   if (filtered.length === 0) return null;
 
   return (
-    <ul className="absolute bottom-10 left-0 right-0 sm:right-auto bg-gray-900 rounded border border-gray-700 py-1 z-10 max-h-[60vh] overflow-y-auto">
+    <ul className="absolute bottom-10 left-0 right-0 sm:right-auto bg-gray-900 rounded border border-gray-700 py-1 z-10 max-h-[70vh] overflow-y-auto">
       {filtered.map((cmd, i) => (
         <li
           key={cmd}

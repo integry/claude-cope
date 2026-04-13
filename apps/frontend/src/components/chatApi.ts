@@ -87,6 +87,7 @@ function processReplyTags(
   rawReply: string,
   unlockAchievement: (id: string) => void,
   onSprintProgress?: (amount: number) => void,
+  username?: string,
 ): { achievementMessages: Message[]; reply: string; suggestedReply: string | null; buddySays: string | null } {
   const achievementRegex = /\[ACHIEVEMENT_UNLOCKED:\s*(.+?)\]/g;
   const achievementMessages: Message[] = [];
@@ -101,7 +102,8 @@ function processReplyTags(
       content: buildAchievementBox(achievementId),
     });
     const achievementName = ALL_ACHIEVEMENTS.find((a) => a.id === achievementId)?.name ?? achievementId;
-    const achievementMessage = `🏆 A player unlocked the achievement: ${achievementName}`;
+    const playerName = username || "A player";
+    const achievementMessage = `🏆 ${playerName} unlocked the achievement: ${achievementName}`;
     fetch(`${API_BASE}/api/recent-events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -187,6 +189,7 @@ async function handleErrorResponse(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
   onQuotaExhausted?: () => void,
+  onError?: () => void,
 ): Promise<boolean> {
   if (res.status === 402) {
     if (onQuotaExhausted) {
@@ -202,6 +205,7 @@ async function handleErrorResponse(
   }
 
   if (res.status === 401) {
+    onError?.();
     setHistory((prev) => [
       ...prev.filter((msg) => msg.role !== "loading"),
       { role: "error", content: "[🔑 ACCESS DENIED] OpenRouter just slammed the door in your face (HTTP 401). Your API key has been **rejected**, **ghosted**, and **emotionally unavailable**.\n\n[POSSIBLE CAUSES]\n\n• Your key is disabled — like your ambition after the third standup today\n\n• Your key expired — unlike your technical debt, which is eternal\n\n• You copy-pasted it wrong — classic Junior Code Monkey energy\n\n[RECOVERY OPTIONS]\n\n• Check your key at [openrouter.ai/keys](https://openrouter.ai/keys)\n\n• `/key clear` to crawl back to the default model\n\n• `/key <new-key>` to try again with whatever dignity you have left" },
@@ -210,6 +214,7 @@ async function handleErrorResponse(
   }
 
   if (res.status === 429) {
+    onError?.();
     const errorData = await res.json().catch(() => null);
     const upstreamRaw = errorData?.error?.metadata?.raw
       ?? errorData?.error?.message
@@ -223,6 +228,7 @@ async function handleErrorResponse(
   }
 
   if (!res.ok) {
+    onError?.();
     const errorData = await res.json().catch(() => null);
     setHistory((prev) => [
       ...prev.filter((msg) => msg.role !== "loading"),
@@ -250,6 +256,7 @@ export function submitChatMessage(opts: {
   modes?: ModesState;
   activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
   onSprintProgress?: (amount: number) => void;
+  getSprintCompleteMessage?: () => Message | null;
   addActiveTD?: (n: number, raw?: boolean) => void;
   onSuggestedReply?: (suggestion: string) => void;
   buddyType?: string | null;
@@ -259,13 +266,14 @@ export function submitChatMessage(opts: {
   onByokUsage?: (usage: { model: string; prompt_tokens?: number; completion_tokens?: number; cost?: number }) => void;
   onQuotaUpdate?: (quotaPercent: number) => void;
   onQuotaExhausted?: () => void;
+  onError?: () => void;
   signal?: AbortSignal;
 }) {
-  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, signal } = opts;
+  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, onError, signal } = opts;
   const isBYOK = Boolean(apiKey);
 
   const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
-  const model = copeModel ? copeModel.openRouterId : customModel || (isBYOK ? "nvidia/nemotron-3-super-120b-a12b:free" : "nvidia/nemotron-nano-9b-v2:free");
+  const model = copeModel ? copeModel.openRouterId : customModel || (isBYOK ? "openai/gpt-oss-20b:free" : "nvidia/nemotron-nano-9b-v2:free");
 
   // Determine buddy type for context (only include if buddy result exists)
   const buddyTypeForContext = opts.buddyType && buddyResult ? opts.buddyType : null;
@@ -311,7 +319,7 @@ export function submitChatMessage(opts: {
 
   requestPromise
     .then(async (res) => {
-      if (await handleErrorResponse(res, setHistory, opts.onQuotaExhausted)) return;
+      if (await handleErrorResponse(res, setHistory, opts.onQuotaExhausted, onError)) return;
 
       const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD);
       let { rawReply } = parsed;
@@ -331,20 +339,26 @@ export function submitChatMessage(opts: {
         rawReply = "[❌ Error] No response from API.";
       }
 
-      const { achievementMessages, reply, suggestedReply, buddySays } = processReplyTags(rawReply, unlockAchievement, onSprintProgress);
+      const { achievementMessages, reply, suggestedReply, buddySays } = processReplyTags(rawReply, unlockAchievement, onSprintProgress, opts.username);
       if (suggestedReply && opts.onSuggestedReply) {
         opts.onSuggestedReply(suggestedReply);
       }
+
+      // Collect any sprint-complete message that was set during onSprintProgress
+      const sprintMsg = opts.getSprintCompleteMessage?.();
 
       // Build buddy message from LLM-generated interjection or fallback to client-side
       const buddyMessage = buddySays && opts.buddyType
         ? { role: "warning" as const, content: `${BUDDY_ICONS[opts.buddyType] ?? "🐾"}\n[${opts.buddyType}] ${buddySays}` }
         : buddyResult?.message ?? null;
 
+      // Merge sprint-complete text into the AI reply so they appear as a single message
+      const finalReply = sprintMsg ? sprintMsg.content + "\n\n" + reply : reply;
+
       setHistory((prev) => {
         let updated = [
           ...prev.filter((msg) => msg.role !== "loading"),
-          { role: "system" as const, content: reply, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
+          { role: "system" as const, content: finalReply, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
           ...achievementMessages,
           ...(buddyMessage ? [buddyMessage] : []),
         ];
@@ -370,6 +384,7 @@ export function submitChatMessage(opts: {
     })
     .catch((err) => {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      onError?.();
       setHistory((prev) => [
         ...prev.filter((msg) => msg.role !== "loading"),
         { role: "error", content: "[❌ Error] Network error. Is the backend running?" },
