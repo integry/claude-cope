@@ -1,6 +1,6 @@
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 
-export const API_KEY = process.env.OPENROUTER_API_KEY ?? "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";
+export const API_KEY = process.env.OPENROUTER_API_KEY ?? "";
 export const MODEL = "nvidia/nemotron-nano-9b-v2";
 export const T = 30_000;
 
