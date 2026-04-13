@@ -147,21 +147,16 @@ export async function renderChatCard(userMessage: string, systemMessage: string,
   ctx.font = font;
   y += spacingBetween;
 
-  // Draw buddy ASCII art centered in orange
+  // Draw buddy ASCII art left-aligned in orange, preserving leading whitespace
   if (buddyArtLines.length > 0) {
     ctx.fillStyle = BUDDY_COLOR;
     ctx.font = font;
-    // Find widest line to center the block as a unit
-    const buddyWidths = buddyArtLines.map((l) => ctx.measureText(l).width);
-    const maxBuddyWidth = Math.max(...buddyWidths);
-    const blockX = (canvas.width - maxBuddyWidth) / 2;
     for (const artLine of buddyArtLines) {
-      ctx.fillText(artLine, blockX, y);
+      ctx.fillText(artLine, CANVAS_PADDING, y);
       y += lineHeight;
     }
     if (buddyLabelLine) {
-      const labelWidth = ctx.measureText(buddyLabelLine).width;
-      ctx.fillText(buddyLabelLine, (canvas.width - labelWidth) / 2, y);
+      ctx.fillText(buddyLabelLine, CANVAS_PADDING, y);
       y += lineHeight;
     }
     y += buddySpacing;
