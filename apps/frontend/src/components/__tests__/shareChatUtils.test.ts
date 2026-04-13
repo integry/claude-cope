@@ -20,7 +20,7 @@ const mockImage = {
 
 // Trigger onload when src is set
 Object.defineProperty(mockImage, "src", {
-  set(_: string) {
+  set() {
     setTimeout(() => mockImage.onload?.(), 0);
   },
   get() { return ""; },
