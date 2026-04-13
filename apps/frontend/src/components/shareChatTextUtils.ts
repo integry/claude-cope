@@ -18,12 +18,14 @@ const ITALIC_MARKER = "\x02";
  */
 export function stripMarkdownKeepBold(text: string): string {
   let s = text;
+  // Strip blockquote > prefixes (including nested like > > )
+  s = s.replace(/^(?:>\s*)+/gm, "");
   // Remove fenced code block delimiters (``` or ```language)
   s = s.replace(/^```\w*\s*$/gm, "");
   // Remove &nbsp; entities
   s = s.replace(/&nbsp;/g, " ");
-  // Remove "Awaiting input..." lines (with optional > prefix, 0-3 dots, or ellipsis character)
-  s = s.replace(/^>?\s*Awaiting input[.…]{0,3}\s*$/gm, "");
+  // Remove "Awaiting input..." lines (0-3 dots or ellipsis character)
+  s = s.replace(/^\s*Awaiting input[.…]{0,3}\s*$/gm, "");
   // Convert single *italic* to internal italic markers (must happen before bold stripping)
   s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, `${ITALIC_MARKER}$1${ITALIC_MARKER}`);
   // Convert _italic_ to internal italic markers
