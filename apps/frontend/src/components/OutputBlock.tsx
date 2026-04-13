@@ -348,7 +348,7 @@ function getShareProps(message: Message, previousMessage?: Message, nextMessage?
   const isSlashCommandResponse = previousMessage?.role === "user" && previousMessage.content.startsWith("/");
   const showShareButton = message.role === "system" && previousMessage?.role === "user" && !isSlashCommandResponse;
   const shareSystemMessage = showShareButton && nextMessage?.role === "warning"
-    ? message.content + "\n\n" + nextMessage.content
+    ? nextMessage.content + "\n\n" + message.content
     : message.content;
   return { showShareButton, shareSystemMessage };
 }
