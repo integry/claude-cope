@@ -100,7 +100,7 @@ export async function renderChatCard(userMessage: string, systemMessage: string,
   ctx.font = font;
   ctx.textBaseline = "top";
 
-  drawHeader(ctx, canvas.width, fontSize, font, headerText, logoImg);
+  drawHeader(ctx, canvas.width, { fontSize, font, headerText, logoImg });
 
   let y = HEADER_BAR_HEIGHT + CANVAS_PADDING;
 
@@ -160,7 +160,8 @@ function truncateLines(
   return truncated;
 }
 
-function drawHeader(ctx: CanvasRenderingContext2D, canvasWidth: number, fontSize: number, font: string, headerText: string, logoImg: HTMLImageElement | null): void {
+function drawHeader(ctx: CanvasRenderingContext2D, canvasWidth: number, opts: { fontSize: number; font: string; headerText: string; logoImg: HTMLImageElement | null }): void {
+  const { fontSize, font, headerText, logoImg } = opts;
   ctx.fillStyle = HEADER_BG_COLOR;
   ctx.fillRect(0, 0, canvasWidth, HEADER_BAR_HEIGHT);
 
