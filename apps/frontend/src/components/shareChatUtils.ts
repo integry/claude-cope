@@ -7,6 +7,7 @@
 
 import { parseSegments, drawStyledLine, wrapText } from "./shareChatTextUtils";
 import { SHARE_PUNCHLINES } from "./sharePunchlines";
+import { BUDDY_ICONS } from "./buddyConstants";
 
 export type ChatMessage = {
   role: "user" | "system";
@@ -31,6 +32,7 @@ const SYSTEM_TEXT_COLOR = "#4ade80";
 const BOLD_TEXT_COLOR = "#e6edf3";
 const HEADER_COLOR = "#6e7681";
 const WATERMARK_COLOR = "#facc15";
+const BUDDY_COLOR = "#fb923c"; // orange-400, matches BuddyDisplay web styling
 const HEADER_BAR_HEIGHT = 36;
 
 const PARAGRAPH_BREAK_RATIO = 0.4;
@@ -71,7 +73,27 @@ export async function renderChatCard(userMessage: string, systemMessage: string,
   const userPrefix = "❯ ";
   const userPrefixWidth = ctx.measureText(userPrefix).width;
   const userLines = wrapText(ctx, userMessage, contentMaxWidth - userPrefixWidth);
-  const systemLines = wrapText(ctx, systemMessage, contentMaxWidth);
+
+  // Detect buddy ASCII art prefix in system message
+  let buddyArtLines: string[] = [];
+  let buddyLabelLine: string | null = null;
+  let systemBody = systemMessage;
+  for (const [, art] of Object.entries(BUDDY_ICONS)) {
+    if (systemMessage.startsWith(art)) {
+      buddyArtLines = art.split("\n");
+      const afterArt = systemMessage.slice(art.length);
+      const labelMatch = afterArt.match(/^\n(\[.+?\].+?)(?:\n|$)/);
+      if (labelMatch?.[1]) {
+        buddyLabelLine = labelMatch[1];
+        systemBody = afterArt.slice(labelMatch[0].length);
+      } else {
+        systemBody = afterArt.replace(/^\n/, "");
+      }
+      break;
+    }
+  }
+
+  const systemLines = wrapText(ctx, systemBody, contentMaxWidth);
   const headerText = username ?? "";
 
   const PARAGRAPH_BREAK_HEIGHT = Math.round(lineHeight * PARAGRAPH_BREAK_RATIO);
@@ -82,9 +104,11 @@ export async function renderChatCard(userMessage: string, systemMessage: string,
 
   const userBlockHeight = calcBlockHeight(userLines);
   const systemBlockHeight = calcBlockHeight(systemLines);
+  const buddyBlockHeight = (buddyArtLines.length + (buddyLabelLine ? 1 : 0)) * lineHeight;
+  const buddySpacing = buddyArtLines.length > 0 ? Math.round(lineHeight * SPACING_RATIO) : 0;
   const spacingBetween = Math.round(lineHeight * SPACING_RATIO);
 
-  const fixedHeight = HEADER_BAR_HEIGHT + CANVAS_PADDING + userBlockHeight + spacingBetween + CANVAS_PADDING;
+  const fixedHeight = HEADER_BAR_HEIGHT + CANVAS_PADDING + userBlockHeight + spacingBetween + buddyBlockHeight + buddySpacing + CANVAS_PADDING;
 
   const truncatedSystemLines = truncateLines(systemLines, systemBlockHeight, MAX_HEIGHT - fixedHeight, lineHeight, calcBlockHeight);
   const truncatedSystemBlockHeight = calcBlockHeight(truncatedSystemLines);
@@ -122,6 +146,26 @@ export async function renderChatCard(userMessage: string, systemMessage: string,
 
   ctx.font = font;
   y += spacingBetween;
+
+  // Draw buddy ASCII art centered in orange
+  if (buddyArtLines.length > 0) {
+    ctx.fillStyle = BUDDY_COLOR;
+    ctx.font = font;
+    // Find widest line to center the block as a unit
+    const buddyWidths = buddyArtLines.map((l) => ctx.measureText(l).width);
+    const maxBuddyWidth = Math.max(...buddyWidths);
+    const blockX = (canvas.width - maxBuddyWidth) / 2;
+    for (const artLine of buddyArtLines) {
+      ctx.fillText(artLine, blockX, y);
+      y += lineHeight;
+    }
+    if (buddyLabelLine) {
+      const labelWidth = ctx.measureText(buddyLabelLine).width;
+      ctx.fillText(buddyLabelLine, (canvas.width - labelWidth) / 2, y);
+      y += lineHeight;
+    }
+    y += buddySpacing;
+  }
 
   // Draw system message with inline bold styling
   truncatedSystemLines.forEach((line) => {
