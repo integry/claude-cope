@@ -386,5 +386,5 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, unlockTheme, buyTheme, toggleSound, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
+  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, unlockTheme, buyTheme, toggleSound, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
 }

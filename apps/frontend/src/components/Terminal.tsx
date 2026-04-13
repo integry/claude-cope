@@ -26,6 +26,8 @@ import { supabase } from "../supabaseClient";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
+import { buildAchievementBox } from "./achievementBox";
+import { filterChatHistory } from "./filterChatHistory";
 import Ticker from "./Ticker";
 import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
 import SprintProgressBar from "./SprintProgressBar";
@@ -55,31 +57,8 @@ const MessageList = memo(function MessageList({ history, messageKeys, initialHis
 });
 
 
-/**
- * Build LLM context from chat history.
- * Pairs user messages with a short summary of the bot reply to maintain
- * conversation rhythm without leaking old content.
- */
-function filterChatHistory(history: Message[]): { role: string; content: string }[] {
-  // Filter out slash commands and their responses, then map UI roles to LLM roles.
-  // History windowing and assistant-reply trimming happen in shared buildChatMessages.
-  const isSlashCmd = (content: string) => content.startsWith("/");
-  return history.filter((m, i) => {
-    if (m.role === "user") return !isSlashCmd(m.content);
-    if (m.role === "system") {
-      const prev = history[i - 1];
-      if (prev?.role === "user" && isSlashCmd(prev.content)) return false;
-      return true;
-    }
-    return false;
-  }).map((m) => ({
-    role: m.role === "system" ? "assistant" : "user",
-    content: m.content,
-  }));
-}
-
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
@@ -179,11 +158,6 @@ function Terminal() {
     playError();
     setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." }]);
     setTimeout(() => { setQuotaLocked(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
-  };
-
-  const triggerQuotaLockout = () => {
-    setQuotaLocked(true);
-    setHistory((prev) => [...prev, { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" }]);
   };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
