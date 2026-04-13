@@ -83,7 +83,7 @@ export function handleTakeCommand(
   state: GameState,
   setState: SetState,
   reply: Reply,
-  setInputValue: (v: string) => void,
+  onSuggestedReply: (v: string) => void,
 ): boolean {
   const input = command.slice("/take".length).trim();
   if (!input) {
@@ -127,7 +127,7 @@ export function handleTakeCommand(
     role: "system",
     content: `[🎫 **TICKET CLAIMED**] ${ticket.id}: **${ticket.title}**\n\n> ${ticket.description}\n\nReward: **${(ticket.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.`,
   });
-  setInputValue(ticket.kickoff_prompt);
+  onSuggestedReply(ticket.kickoff_prompt);
   return true;
 }
 

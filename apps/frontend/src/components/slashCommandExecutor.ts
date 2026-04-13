@@ -37,6 +37,7 @@ interface SlashCommandContext {
   clearCount: number;
   setClearCount: (v: number) => void;
   setInputValue: (v: string) => void;
+  onSuggestedReply: (v: string) => void;
   setSlashQuery: (v: string) => void;
   setSlashIndex: (v: number) => void;
   addActiveTD: (n: number) => void;
@@ -449,7 +450,7 @@ function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
       activeTicket: { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt },
     }));
     reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nReward: **${(offer.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.` });
-    ctx.setInputValue(offer.kickoff_prompt);
+    ctx.onSuggestedReply(offer.kickoff_prompt);
   }
 }
 
@@ -541,7 +542,7 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
     if (asyncResult === "async") return "async";
     if (!asyncResult) {
       if (command.startsWith("/take")) {
-        handleTakeCommand(command, ctx.state, ctx.setState, reply, ctx.setInputValue);
+        handleTakeCommand(command, ctx.state, ctx.setState, reply, ctx.onSuggestedReply);
       } else if (command === "/accept") {
         handleAcceptCommand(ctx, reply);
       } else if (command === "/abandon") {
