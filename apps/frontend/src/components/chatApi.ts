@@ -87,6 +87,7 @@ function processReplyTags(
   rawReply: string,
   unlockAchievement: (id: string) => void,
   onSprintProgress?: (amount: number) => void,
+  username?: string,
 ): { achievementMessages: Message[]; reply: string; suggestedReply: string | null; buddySays: string | null } {
   const achievementRegex = /\[ACHIEVEMENT_UNLOCKED:\s*(.+?)\]/g;
   const achievementMessages: Message[] = [];
@@ -101,7 +102,8 @@ function processReplyTags(
       content: buildAchievementBox(achievementId),
     });
     const achievementName = ALL_ACHIEVEMENTS.find((a) => a.id === achievementId)?.name ?? achievementId;
-    const achievementMessage = `🏆 A player unlocked the achievement: ${achievementName}`;
+    const playerName = username || "A player";
+    const achievementMessage = `🏆 ${playerName} unlocked the achievement: ${achievementName}`;
     fetch(`${API_BASE}/api/recent-events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -323,7 +325,7 @@ export function submitChatMessage(opts: {
         rawReply = "[❌ Error] No response from API.";
       }
 
-      const { achievementMessages, reply, suggestedReply, buddySays } = processReplyTags(rawReply, unlockAchievement, onSprintProgress);
+      const { achievementMessages, reply, suggestedReply, buddySays } = processReplyTags(rawReply, unlockAchievement, onSprintProgress, opts.username);
       if (suggestedReply && opts.onSuggestedReply) {
         opts.onSuggestedReply(suggestedReply);
       }

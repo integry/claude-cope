@@ -160,7 +160,8 @@ export function useGameState() {
     });
 
     if (cost > 1_000_000) {
-      const purchaseMessage = `💰 A player bought ${amount}x ${generator.name} for ${cost.toLocaleString()} TD!`;
+      const playerName = stateRef.current.username || "A player";
+      const purchaseMessage = `💰 ${playerName} bought ${amount}x ${generator.name} for ${cost.toLocaleString()} TD!`;
       fetch("/api/recent-events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

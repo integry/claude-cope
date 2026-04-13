@@ -255,7 +255,8 @@ function Terminal() {
         playChime();
         sprintCompleteMessage = { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` };
         setState((prev) => ({ ...prev, activeTicket: null }));
-        const completedMessage = `✅ A player completed ticket "${state.activeTicket!.title}" and earned ${payout.toLocaleString()} TD!`;
+        const playerName = state.username || "A player";
+        const completedMessage = `✅ ${playerName} completed ticket "${state.activeTicket!.title}" and earned ${payout.toLocaleString()} TD!`;
         fetch(`${API_BASE}/api/recent-events`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
