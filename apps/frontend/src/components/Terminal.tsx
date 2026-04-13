@@ -139,16 +139,26 @@ function Terminal() {
     playError();
     setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." }, { role: "warning", content: "[⚙️] Upgrading to $200/mo Pro Tier..." }]);
     setTimeout(() => {
-      resetQuota();
       const newLockouts = state.economy.quotaLockouts + 1;
       const isNew = newLockouts >= 3 && unlockAchievementWithSound("homer_at_the_buffet");
-      setQuotaLocked(false); setIsProcessing(false);
-      if (newLockouts === 1) setInstantBanReady(true);
-      setHistory((prev) => {
-        const messages: Message[] = [...prev, { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" }];
-        if (isNew) messages.push({ role: "warning", content: buildAchievementBox("homer_at_the_buffet") });
-        return messages;
-      });
+      setIsProcessing(false);
+      if (state.proKey) {
+        resetQuota();
+        setQuotaLocked(false);
+        if (newLockouts === 1) setInstantBanReady(true);
+        setHistory((prev) => {
+          const messages: Message[] = [...prev, { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" }];
+          if (isNew) messages.push({ role: "warning", content: buildAchievementBox("homer_at_the_buffet") });
+          return messages;
+        });
+      } else {
+        setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaLockouts: prev.economy.quotaLockouts + 1 } }));
+        setHistory((prev) => {
+          const messages: Message[] = [...prev, { role: "error", content: "[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Pro to continue." }];
+          if (isNew) messages.push({ role: "warning", content: buildAchievementBox("homer_at_the_buffet") });
+          return messages;
+        });
+      }
     }, 5000);
   };
 
