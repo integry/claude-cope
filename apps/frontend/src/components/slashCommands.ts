@@ -1,5 +1,5 @@
 // Added /ping and /reject to enable PvP sabotage interactions.
-export const SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/reject", "/help", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user", "/sync", "/shill", "/party", "/theme"];
+export const SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/reject", "/help", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/status", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user", "/sync", "/shill", "/party", "/theme"];
 
 export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/backlog": "Stare into the abyss of unfulfilled promises",
@@ -25,6 +25,7 @@ export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/feedback": "Send data directly to a shredder",
   "/bug": "Report an undocumented feature",
   "/key": "Your OpenRouter key, unlimited suffering",
+  "/status": "Check your API quota and key status",
   "/upgrade": "Pay real money for more suffering",
   "/leaderboard": "Compare your suffering to others",
   "/achievements": "Trophies for terrible decisions",

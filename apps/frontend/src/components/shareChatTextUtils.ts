@@ -293,8 +293,24 @@ function trimTrailingBlanks(result: string[]): void {
 }
 
 /**
+ * Detect if a line is pre-formatted (ASCII art, code, etc.) and should not be word-wrapped.
+ * Lines with leading whitespace (2+ spaces), or containing ASCII art characters are preserved as-is.
+ */
+function isPreformattedLine(line: string): boolean {
+  // Lines with 2+ leading spaces are likely pre-formatted (ASCII art, code)
+  if (/^  /.test(line)) return true;
+  // Lines with common ASCII art characters (box drawing, repeated symbols)
+  if (/[╔╗╚╝║═┌┐└┘│─┼┬┴├┤]/.test(line)) return true;
+  // Lines that are mostly non-alphanumeric (art patterns like /\_/\, (---), etc.)
+  const nonAlpha = line.replace(/[a-zA-Z0-9\s]/g, "").length;
+  if (line.trim().length > 0 && nonAlpha > line.trim().length * 0.5) return true;
+  return false;
+}
+
+/**
  * Wraps text to fit within a maximum width, preserving line breaks,
  * collapsing consecutive blank lines, and handling markdown formatting.
+ * Pre-formatted lines (ASCII art, code) are preserved without word-wrapping.
  */
 export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const cleaned = stripMarkdownKeepBold(text);
@@ -308,6 +324,11 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: 
   for (const paragraph of paragraphs) {
     if (paragraph.trim() === "") {
       processBlankParagraph(result, state);
+    } else if (isPreformattedLine(paragraph)) {
+      // Preserve pre-formatted lines as-is (ASCII art, code blocks)
+      result.push(paragraph);
+      state.lastWasBlank = false;
+      state.lastWasBullet = false;
     } else {
       processContentParagraph(ctx, paragraph, maxWidth, result, state);
     }

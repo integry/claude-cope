@@ -1,7 +1,7 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useAnimatedCounter } from "../hooks/useAnimatedCounter";
 
-function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isPro, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onSlashMenuClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isPro: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onSlashMenuClick?: () => void }) {
+function HeaderBar({ rank, currentTD, quotaPercent, quotaUsed, quotaLimit, outageHp, activeMultiplier, username, isBYOK, isPro, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onSlashMenuClick }: { rank: string; currentTD: number; quotaPercent: number; quotaUsed: number; quotaLimit: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isPro: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onSlashMenuClick?: () => void }) {
   const displayTD = useAnimatedCounter(currentTD, 2660);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -59,19 +59,22 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           </div>
         )}
       </div>
-      {/* Desktop usage bar — terminal ASCII style */}
+      {/* Desktop usage bar — terminal ASCII style with hover tooltip */}
       {!isBYOK && (
-        <div className={`hidden sm:block flex-shrink-0 text-xs font-mono whitespace-nowrap px-2 ${quotaPercent > 50 ? "text-green-400" : quotaPercent > 20 ? "text-yellow-400" : "text-red-400"}`}>
+        <div
+          className={`hidden sm:block flex-shrink-0 text-xs font-mono whitespace-nowrap px-2 cursor-default ${quotaPercent > 50 ? "text-green-400" : quotaPercent > 20 ? "text-yellow-400" : "text-red-400"}`}
+          title={`${quotaUsed}/${quotaLimit} requests used · ${Math.max(0, quotaLimit - quotaUsed)} remaining`}
+        >
           {(() => {
             const totalBlocks = 20;
             const filledBlocks = Math.round((quotaPercent / 100) * totalBlocks);
             const emptyBlocks = totalBlocks - filledBlocks;
-            return `[API Quota: ${"█".repeat(filledBlocks)}${"░".repeat(emptyBlocks)} ${Math.round(quotaPercent)}%]`;
+            return `[API: ${quotaUsed}/${quotaLimit} ${"█".repeat(filledBlocks)}${"░".repeat(emptyBlocks)}]`;
           })()}
         </div>
       )}
       {/* Mobile thin usage line — bottom of header */}
-      {!isBYOK && <div className="sm:hidden absolute bottom-0 left-0 right-0 h-[2px] bg-gray-800">
+      {!isBYOK && <div className="sm:hidden absolute bottom-0 left-0 right-0 h-[2px] bg-gray-800" title={`${quotaUsed}/${quotaLimit} requests used`}>
         <div className={`h-full ${quotaColor} transition-all duration-500`} style={{ width: `${quotaPercent}%` }} />
       </div>}
     </div>

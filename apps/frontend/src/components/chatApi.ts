@@ -158,10 +158,13 @@ function extractStreamFields(usage: StreamResult["usage"]): { tokensSent?: numbe
   };
 }
 
+type QuotaInfo = { used: number; limit: number; remaining: number };
+
 async function parseResponseBody(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
   addActiveTD?: (n: number, raw?: boolean) => void,
+  onQuotaUpdate?: (quota: QuotaInfo) => void,
 ): Promise<{ rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number }> {
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("text/event-stream")) {
@@ -172,6 +175,9 @@ async function parseResponseBody(
   const fields = extractJsonResponseFields(data);
   if (data?.td_awarded && addActiveTD) {
     addActiveTD(data.td_awarded, true);
+  }
+  if (data?.quota && onQuotaUpdate) {
+    onQuotaUpdate(data.quota as QuotaInfo);
   }
   return fields;
 }
@@ -187,9 +193,14 @@ async function handleErrorResponse(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
   onError?: () => void,
+  onQuotaUpdate?: (quota: { used: number; limit: number; remaining: number }) => void,
 ): Promise<boolean> {
   if (res.status === 402) {
     onError?.();
+    const errorData = await res.json().catch(() => null);
+    if (errorData?.quota && onQuotaUpdate) {
+      onQuotaUpdate(errorData.quota as { used: number; limit: number; remaining: number });
+    }
     setHistory((prev) => [
       ...prev.filter((msg) => msg.role !== "loading"),
       { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
@@ -257,6 +268,7 @@ export function submitChatMessage(opts: {
   inventory?: Record<string, number>;
   upgrades?: string[];
   onByokCost?: (cost: number) => void;
+  onQuotaUpdate?: (quota: { used: number; limit: number; remaining: number }) => void;
   onError?: () => void;
   signal?: AbortSignal;
 }) {
@@ -310,9 +322,9 @@ export function submitChatMessage(opts: {
 
   requestPromise
     .then(async (res) => {
-      if (await handleErrorResponse(res, setHistory, onError)) return;
+      if (await handleErrorResponse(res, setHistory, onError, opts.onQuotaUpdate)) return;
 
-      const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD);
+      const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD, opts.onQuotaUpdate);
       let { rawReply } = parsed;
       const { tokensSent, tokensReceived, cost } = parsed;
 

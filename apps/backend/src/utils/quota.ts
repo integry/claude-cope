@@ -1,4 +1,4 @@
-const FREE_QUOTA_LIMIT = 20;
+export const FREE_QUOTA_LIMIT = 20;
 
 export class QuotaExhaustedError extends Error {
   constructor(tier: "free" | "pro") {

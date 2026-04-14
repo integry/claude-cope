@@ -219,7 +219,7 @@ describe("shareChatImage", () => {
     });
 
     const shareText = mockClipboard.writeText.mock.calls[0]![0] as string;
-    expect(shareText).toContain("claudecope.com");
+    expect(shareText).toContain("cope.bot");
     expect(shareText).toContain("#ClaudeCope");
     expect(shareText).not.toContain("Test prompt");
     expect(shareText).not.toContain("Test response");

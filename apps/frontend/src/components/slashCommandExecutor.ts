@@ -40,7 +40,6 @@ interface SlashCommandContext {
   setSlashQuery: (v: string) => void;
   setSlashIndex: (v: number) => void;
   addActiveTD: (n: number) => void;
-  applyQuotaDrain: () => boolean;
   onlineCount: number;
   onlineUsers: string[];
   sendPing: (target?: string) => void;
@@ -538,7 +537,20 @@ async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Prom
   }
 }
 
-function handleKeyCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
+async function validateOpenRouterKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (res.ok) return { valid: true };
+    if (res.status === 401) return { valid: false, error: "Invalid or expired API key" };
+    return { valid: false, error: `OpenRouter responded with HTTP ${res.status}` };
+  } catch {
+    return { valid: false, error: "Could not reach OpenRouter. Check your connection." };
+  }
+}
+
+function handleKeyCommand(command: string, ctx: SlashCommandContext, reply: Reply): void | "async" {
   const keyArg = command.slice(4).trim();
   if (!keyArg) {
     reply({ role: "system", content: "[🔑] Usage: `/key <your-api-key>` — Provide your own OpenRouter API key. Type `/key clear` to remove." });
@@ -546,9 +558,60 @@ function handleKeyCommand(command: string, ctx: SlashCommandContext, reply: Repl
     ctx.setState((prev) => ({ ...prev, apiKey: undefined }));
     reply({ role: "system", content: "[🔑] API key removed. Back to the free tier trenches." });
   } else {
-    ctx.setState((prev) => ({ ...prev, apiKey: keyArg }));
-    reply({ role: "system", content: "[🔑] API key saved. Your key is stored locally and never sent to our servers." });
+    // Obfuscate key in display
+    const masked = keyArg.slice(0, 6) + "..." + keyArg.slice(-4);
+    reply({ role: "system", content: `[🔑] Validating key ${masked}...` });
+    ctx.setIsProcessing(true);
+    validateOpenRouterKey(keyArg).then(({ valid, error }) => {
+      if (valid) {
+        ctx.setState((prev) => ({ ...prev, apiKey: keyArg }));
+        ctx.setHistory((prev) => [...prev, { role: "system", content: `[🔑 ✓] API key validated and saved. BYOK mode active — your key is stored locally and never sent to our servers.` }]);
+      } else {
+        ctx.setHistory((prev) => [...prev, { role: "error", content: `[🔑 ✗] Key validation failed: ${error}. Key was NOT saved.` }]);
+      }
+      ctx.setIsProcessing(false);
+    });
+    return "async";
   }
+}
+
+function handleStatusCommand(ctx: SlashCommandContext, reply: Reply): void {
+  const { state } = ctx;
+  const isBYOK = Boolean(state.apiKey);
+  const isPro = Boolean(state.proKey);
+
+  const lines: string[] = ["[📊 Status]", ""];
+
+  // Quota info
+  if (isBYOK) {
+    const masked = state.apiKey!.slice(0, 6) + "..." + state.apiKey!.slice(-4);
+    lines.push(`**Mode:** BYOK (Bring Your Own Key)`);
+    lines.push(`**Key:** ${masked}`);
+    if (state.byokTotalCost != null && state.byokTotalCost > 0) {
+      lines.push(`**Total Cost:** $${state.byokTotalCost < 0.01 ? state.byokTotalCost.toFixed(6) : state.byokTotalCost.toFixed(4)}`);
+    }
+  } else if (isPro) {
+    lines.push(`**Mode:** Pro`);
+    lines.push(`**Quota:** Managed by license`);
+  } else {
+    const used = state.economy.quotaUsed;
+    const limit = state.economy.quotaLimit;
+    const remaining = Math.max(0, limit - used);
+    lines.push(`**Mode:** Free Tier`);
+    lines.push(`**Requests Used:** ${used}/${limit}`);
+    lines.push(`**Remaining:** ${remaining}`);
+    if (remaining === 0) {
+      lines.push("");
+      lines.push("⚠️ Quota exhausted. Upgrade to Pro (`/sync`) or set your own API key (`/key`).");
+    }
+  }
+
+  lines.push("");
+  lines.push(`**Model:** ${state.selectedModel || "default (free)"}`);
+  lines.push(`**Rank:** ${state.economy.currentRank}`);
+  lines.push(`**TD:** ${Math.floor(state.economy.currentTD).toLocaleString()}`);
+
+  reply({ role: "system", content: lines.join("\n") });
 }
 
 function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | false {
@@ -573,7 +636,10 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
   if (handleCoreCommand(command, ctx, reply)) {
     if (command === "/synergize") return;
   } else if (command === "/key" || command.startsWith("/key ")) {
-    handleKeyCommand(command, ctx, reply);
+    const keyResult = handleKeyCommand(command, ctx, reply);
+    if (keyResult === "async") return "async";
+  } else if (command === "/status") {
+    handleStatusCommand(ctx, reply);
   } else if (command === "/feedback" || command === "/bug") {
     reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
   } else if (command === "/upgrade") {
@@ -688,8 +754,6 @@ export function executeSlashCommand(
   }
 
   setTimeout(() => {
-    if (ctx.applyQuotaDrain()) return;
-
     const exitCommands = ["exit", "quit", "/exit", "/quit"];
     if (exitCommands.includes(command.toLowerCase())) {
       ctx.unlockAchievement("the_final_escape");

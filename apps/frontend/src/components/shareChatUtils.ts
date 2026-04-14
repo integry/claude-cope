@@ -23,10 +23,10 @@ const MAX_HEIGHT = 800;
 const BG_COLOR = "#0d1117";
 const HEADER_BG_COLOR = "#161b22";
 const HEADER_BORDER_COLOR = "#30363d";
-const HEADER_DOT_COLORS = ["#ff5f56", "#ffbd2e", "#27c93f"];
 const USER_PROMPT_COLOR = "#e6edf3";
 const USER_TEXT_COLOR = "#e6edf3";
 const SYSTEM_TEXT_COLOR = "#4ade80";
+const BUDDY_TEXT_COLOR = "#fb923c"; // orange-400 for buddy/ASCII art
 const BOLD_TEXT_COLOR = "#e6edf3";
 const HEADER_COLOR = "#6e7681";
 const WATERMARK_COLOR = "#facc15";
@@ -106,8 +106,12 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   ctx.font = font;
   y += spacingBetween;
 
+  // Detect buddy content section (ASCII art / buddy interjection at the end)
+  // Buddy sections start with lines containing ASCII art characters or [BuddyName]
+  const buddyStartIndex = findBuddySectionStart(truncatedSystemLines);
+
   // Draw system message with inline bold styling
-  truncatedSystemLines.forEach((line) => {
+  truncatedSystemLines.forEach((line, idx) => {
     if (line === "") {
       y += PARAGRAPH_BREAK_HEIGHT;
       return;
@@ -116,12 +120,37 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
       y += LIST_ITEM_GAP;
       return;
     }
+    // Use orange color for buddy section
+    const isBuddyLine = buddyStartIndex >= 0 && idx >= buddyStartIndex;
+    const normalColor = isBuddyLine ? BUDDY_TEXT_COLOR : SYSTEM_TEXT_COLOR;
     const segments = parseSegments(line);
-    drawStyledLine({ ctx, segments, x: CANVAS_PADDING, y, normalColor: SYSTEM_TEXT_COLOR, boldColor: BOLD_TEXT_COLOR, font, boldFont, italicFont });
+    drawStyledLine({ ctx, segments, x: CANVAS_PADDING, y, normalColor, boldColor: BOLD_TEXT_COLOR, font, boldFont, italicFont });
     y += lineHeight;
   });
 
   return canvas;
+}
+
+/**
+ * Find the start of a buddy section in the rendered lines.
+ * Buddy content typically starts with ASCII art or a [BuddyName] tag line.
+ */
+function findBuddySectionStart(lines: string[]): number {
+  // Look for buddy name pattern: [Agile Snail], [10x Dragon], etc.
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (/\[(?:Agile Snail|Sarcastic Clippy|10x Dragon|Grumpy Senior|Panic Intern)\]/.test(line)) {
+      // Walk back to find the start of the ASCII art before the buddy name
+      let start = i;
+      for (let j = i - 1; j >= 0; j--) {
+        const prev = lines[j] ?? "";
+        if (prev === "" || prev === "\x01") break;
+        start = j;
+      }
+      return start;
+    }
+  }
+  return -1;
 }
 
 function truncateLines(
@@ -154,15 +183,11 @@ function drawHeader(ctx: CanvasRenderingContext2D, canvasWidth: number, fontSize
   ctx.lineTo(canvasWidth, HEADER_BAR_HEIGHT);
   ctx.stroke();
 
-  const dotRadius = 5;
-  const dotY = HEADER_BAR_HEIGHT / 2;
-  const dotStartX = CANVAS_PADDING;
-  HEADER_DOT_COLORS.forEach((color, i) => {
-    ctx.beginPath();
-    ctx.arc(dotStartX + i * 18, dotY, dotRadius, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-  });
+  // Draw "Claude Cope" logo text instead of colored dots
+  const boldFont = `bold ${fontSize}px ${FONT_FAMILY}`;
+  ctx.font = boldFont;
+  ctx.fillStyle = WATERMARK_COLOR;
+  ctx.fillText("Claude Cope", CANVAS_PADDING, (HEADER_BAR_HEIGHT - fontSize) / 2);
 
   if (headerText) {
     ctx.fillStyle = HEADER_COLOR;
@@ -173,7 +198,7 @@ function drawHeader(ctx: CanvasRenderingContext2D, canvasWidth: number, fontSize
 
   ctx.fillStyle = WATERMARK_COLOR;
   ctx.font = font;
-  const brandText = "claudecope.com";
+  const brandText = "cope.bot";
   const brandWidth = ctx.measureText(brandText).width;
   ctx.fillText(brandText, canvasWidth - CANVAS_PADDING - brandWidth, (HEADER_BAR_HEIGHT - fontSize) / 2);
 }
@@ -208,17 +233,17 @@ function getRandomPunchline(): string {
 
 export function generateShareText(): string {
   const punchline = getRandomPunchline();
-  return `${punchline}\n\n[paste your image here]\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://claudecope.com`;
+  return `${punchline}\n\n[paste your image here]\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://cope.bot`;
 }
 
 export function openShareIntent(platform: "twitter" | "linkedin"): void {
   const punchline = getRandomPunchline();
   if (platform === "twitter") {
-    const tweetText = `${punchline}\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://claudecope.com`;
+    const tweetText = `${punchline}\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://cope.bot`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   } else {
-    const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://claudecope.com")}`;
+    const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://cope.bot")}`;
     window.open(url, "_blank", "noopener,noreferrer");
   }
 }

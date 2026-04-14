@@ -3,6 +3,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { computeMultiplier } from "../gameConstants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
+import { consumeQuota, QuotaExhaustedError, FREE_QUOTA_LIMIT } from "../utils/quota";
 
 type Env = {
   Bindings: {
@@ -147,6 +148,34 @@ chat.post("/", async (c) => {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
   }
 
+  // Enforce server-side quota before proxying to OpenRouter
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  const sessionId = c.get("sessionId");
+  const isPro = Boolean(body.proKeyHash);
+
+  if (kv) {
+    try {
+      await consumeQuota(kv, {
+        tier: isPro ? "pro" : "free",
+        sessionId,
+        licenseKey: isPro ? body.proKeyHash : undefined,
+        cost: 1,
+      });
+    } catch (err) {
+      if (err instanceof QuotaExhaustedError) {
+        // Return quota info with the 402 response
+        const usageKey = `free:${sessionId}`;
+        const raw = await kv.get(usageKey);
+        const used = raw !== null ? parseInt(raw, 10) : FREE_QUOTA_LIMIT;
+        return c.json({
+          error: err.message,
+          quota: { used, limit: FREE_QUOTA_LIMIT, remaining: 0 },
+        }, 402);
+      }
+      throw err;
+    }
+  }
+
   const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
   const model = resolveModel(body.modelId);
 
@@ -205,6 +234,19 @@ chat.post("/", async (c) => {
   recordUsage(c.env?.DB, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour });
 
   (data as Record<string, unknown>).td_awarded = tdAwarded;
+
+  // Include quota info in response so frontend can track usage
+  if (kv && !isPro) {
+    const usageKey = `free:${sessionId}`;
+    const raw = await kv.get(usageKey);
+    const used = raw !== null ? parseInt(raw, 10) : 0;
+    (data as Record<string, unknown>).quota = {
+      used,
+      limit: FREE_QUOTA_LIMIT,
+      remaining: Math.max(0, FREE_QUOTA_LIMIT - used),
+    };
+  }
+
   return c.json(data);
 });
 

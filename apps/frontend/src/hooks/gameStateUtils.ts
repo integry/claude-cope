@@ -57,6 +57,8 @@ export interface EconomyState {
   totalTDEarned: number;
   currentRank: string;
   quotaPercent: number;
+  quotaUsed: number;
+  quotaLimit: number;
   quotaLockouts: number;
   tdMultiplier: number;
 }
@@ -140,6 +142,8 @@ function createDefaultState(): GameState {
       totalTDEarned: 0,
       currentRank: CORPORATE_RANKS[0]!.title,
       quotaPercent: 100,
+      quotaUsed: 0,
+      quotaLimit: 20,
       quotaLockouts: 0,
       tdMultiplier: 1,
     },
@@ -182,6 +186,8 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
       totalTDEarned: legacy.totalTechnicalDebt,
       currentRank: rankTitleFromIndex(legacy.rankIndex),
       quotaPercent: 100,
+      quotaUsed: 0,
+      quotaLimit: 20,
       quotaLockouts: 0,
       tdMultiplier: 1,
     },
@@ -265,6 +271,13 @@ export function loadState(): GameState {
       // Ensure quotaPercent is initialized for existing saves
       if (!state.economy.quotaPercent) {
         state.economy.quotaPercent = 100;
+      }
+      // Ensure server quota fields exist for existing saves
+      if (state.economy.quotaUsed == null) {
+        state.economy.quotaUsed = 0;
+      }
+      if (state.economy.quotaLimit == null) {
+        state.economy.quotaLimit = 20;
       }
       // Ensure tdMultiplier is initialized for existing saves
       if (!state.economy.tdMultiplier) {

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { validatePolarKey } from "../utils/polar";
+import { FREE_QUOTA_LIMIT } from "../utils/quota";
 
 type Env = {
   Bindings: {
@@ -13,7 +14,7 @@ type Env = {
 };
 
 const PRO_INITIAL_QUOTA = 100;
-const SHILL_CREDIT = 5;
+const SHILL_CREDIT = Math.min(5, FREE_QUOTA_LIMIT);
 
 async function hashKey(licenseKey: string): Promise<string> {
   const encoded = new TextEncoder().encode(licenseKey);

@@ -19,6 +19,8 @@ function makeGameState(overrides: Partial<GameState["economy"]> = {}): GameState
       totalTDEarned: 0,
       currentRank: "Junior Code Monkey",
       quotaPercent: 0,
+      quotaUsed: 0,
+      quotaLimit: 20,
       quotaLockouts: 0,
       tdMultiplier: 1,
       ...overrides,

@@ -79,18 +79,10 @@ export function useGameState() {
 
 
 
-  // Background loop — checks achievements and quota drain (no passive TD generation)
+  // Background loop — checks achievements (no passive TD generation or quota drain)
   useEffect(() => {
     const interval = setInterval(() => {
       setState((prev) => {
-        // Rogue API Key passively drains quota over time (skip in BYOK mode)
-        const rogueCount = prev.inventory["rogue-api-key"] ?? 0;
-        let newQuotaPercent = prev.economy.quotaPercent;
-        if (rogueCount > 0 && !prev.apiKey) {
-          const quotaDrain = rogueCount * 0.05;
-          newQuotaPercent = Math.max(0, prev.economy.quotaPercent - quotaDrain);
-        }
-
         // Check economy achievements
         const newAchievements = [...prev.achievements];
 
@@ -117,12 +109,11 @@ export function useGameState() {
           newAchievements.push("heat_death");
         }
 
-        const changed = newQuotaPercent !== prev.economy.quotaPercent || newAchievements.length !== prev.achievements.length;
+        const changed = newAchievements.length !== prev.achievements.length;
         if (!changed) return prev;
 
         return {
           ...prev,
-          economy: { ...prev.economy, quotaPercent: newQuotaPercent },
           achievements: newAchievements,
         };
       });
@@ -200,30 +191,20 @@ export function useGameState() {
     });
   }, []);
 
-  const drainQuota = useCallback((): number => {
-    const drain = Math.floor(Math.random() * 12) + 1; // 1% to 12%
-    const current = stateRef.current.economy.quotaPercent;
-    const raw = current - drain;
-    const newPercent = raw < 0 ? 0 : raw;
-    setState((prev) => ({
-      ...prev,
-      economy: {
-        ...prev.economy,
-        quotaPercent: newPercent,
-      },
-    }));
-    return newPercent;
-  }, []);
-
-  const resetQuota = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      economy: {
-        ...prev.economy,
-        quotaPercent: 100,
-        quotaLockouts: prev.economy.quotaLockouts + 1,
-      },
-    }));
+  /** Update quota state from server response (used/limit from chat API). */
+  const updateServerQuota = useCallback((quota: { used: number; limit: number; remaining: number }) => {
+    setState((prev) => {
+      const percent = quota.limit > 0 ? Math.round(((quota.limit - quota.used) / quota.limit) * 100) : 0;
+      return {
+        ...prev,
+        economy: {
+          ...prev.economy,
+          quotaUsed: quota.used,
+          quotaLimit: quota.limit,
+          quotaPercent: Math.max(0, Math.min(100, percent)),
+        },
+      };
+    });
   }, []);
 
   /** Returns true if the achievement was newly unlocked, false if already owned. */
@@ -411,5 +392,5 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, unlockTheme, buyTheme, toggleSound, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
+  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, updateServerQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, unlockTheme, buyTheme, toggleSound, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
 }
