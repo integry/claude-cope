@@ -147,7 +147,7 @@ function Terminal() {
         if (newLockouts === 1) setInstantBanReady(true);
         setHistory((prev) => [...prev, { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" }, ...achievementMsg]);
       } else {
-        setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaLockouts: prev.economy.quotaLockouts + 1 } }));
+        setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent: 0, quotaLockouts: prev.economy.quotaLockouts + 1 } }));
         setHistory((prev) => [...prev, { role: "error", content: "[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Pro to continue." }, ...achievementMsg]);
       }
     }, 5000);
