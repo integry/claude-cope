@@ -35,8 +35,8 @@ const WATERMARK_COLOR = "#facc15";
 const BUDDY_COLOR = "#fb923c"; // orange-400, matches BuddyDisplay web styling
 const HEADER_BAR_HEIGHT = 36;
 
-const PARAGRAPH_BREAK_RATIO = 0.4;
-const LIST_ITEM_GAP_RATIO = 0.4;
+const PARAGRAPH_BREAK_RATIO = 0.8;
+const LIST_ITEM_GAP_RATIO = 0;
 const SPACING_RATIO = 0.6;
 
 function loadImage(src: string): Promise<HTMLImageElement> {

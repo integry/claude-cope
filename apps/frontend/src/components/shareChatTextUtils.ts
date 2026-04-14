@@ -30,6 +30,8 @@ export function stripMarkdownKeepBold(text: string): string {
   s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, `${ITALIC_MARKER}$1${ITALIC_MARKER}`);
   // Convert _italic_ to internal italic markers
   s = s.replace(/_(.+?)_/g, `${ITALIC_MARKER}$1${ITALIC_MARKER}`);
+  // Ensure blank line before markdown headings for paragraph separation, then strip markers
+  s = s.replace(/(\n)(#{1,3}\s+)/g, "\n\n$2");
   s = s.replace(/^#{1,3}\s+/gm, "");
   s = s.replace(/`([^`]+)`/g, "$1");
   return s;
@@ -216,9 +218,13 @@ function mergeBulletContinuations(rawParagraphs: string[]): string[] {
         paragraphs.push(currentBullet);
       }
       currentBullet = raw;
-    } else if (currentBullet !== null) {
+    } else if (currentBullet !== null && !raw.startsWith("**")) {
       currentBullet += " " + raw.trimStart();
     } else {
+      if (currentBullet !== null) {
+        paragraphs.push(currentBullet);
+        currentBullet = null;
+      }
       paragraphs.push(raw);
     }
   }
