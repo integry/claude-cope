@@ -85,7 +85,7 @@ export function handleTakeCommand(
   reply: Reply,
   opts: { setInputValue: (v: string) => void; onAccept?: () => void; onSuggestedReply?: (v: string) => void },
 ): boolean {
-  const { setInputValue, onAccept, onSuggestedReply } = opts;
+  const { onAccept, onSuggestedReply } = opts;
   const input = command.slice("/take".length).trim();
   if (!input) {
     reply({ role: "error", content: "[❌] Usage: `/take <number>` — Run `/backlog` first, then pick a row number." });
