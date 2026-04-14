@@ -141,9 +141,9 @@ function Terminal() {
       const newLockouts = state.economy.quotaLockouts + 1;
       const isNew = newLockouts >= 3 && unlockAchievementWithSound("homer_at_the_buffet");
       const achievementMsg: Message[] = isNew ? [{ role: "warning", content: buildAchievementBox("homer_at_the_buffet") }] : [];
-      setIsProcessing(false);
+      setIsProcessing(false); setQuotaLocked(false);
       if (state.proKey) {
-        resetQuota(); setQuotaLocked(false);
+        resetQuota();
         if (newLockouts === 1) setInstantBanReady(true);
         setHistory((prev) => [...prev, { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" }, ...achievementMsg]);
       } else {
