@@ -9,6 +9,21 @@ describe("app", () => {
     expect(res.status).toBe(404);
   });
 
+  describe("Content-Security-Policy", () => {
+    it("returns a CSP header on all responses", async () => {
+      const res = await app.request("/api/leaderboard", undefined, {
+        ALLOWED_ORIGINS: "http://localhost:5173",
+      });
+      const csp = res.headers.get("content-security-policy");
+      expect(csp).toBeTruthy();
+      expect(csp).toContain("default-src 'self'");
+      expect(csp).toContain("script-src 'self'");
+      expect(csp).toContain("connect-src 'self'");
+      expect(csp).toContain("img-src 'self' data:");
+      expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    });
+  });
+
   describe("CSRF protection", () => {
     it("rejects /api/* requests from disallowed origins with 403", async () => {
       const res = await app.request(

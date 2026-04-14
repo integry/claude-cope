@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
+import { secureHeaders } from "hono/secure-headers";
 import { rateLimiter } from "./middleware/rateLimiter";
 import { sessionMiddleware } from "./middleware/session";
 import chat from "./routes/chat";
@@ -12,6 +13,19 @@ import score from "./routes/score";
 import account from "./routes/account";
 
 const app = new Hono();
+
+app.use(
+  "*",
+  secureHeaders({
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      connectSrc: ["'self'"],
+      imgSrc: ["'self'", "data:"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+    },
+  })
+);
 
 app.use("*", (c, next) => {
   const env = c.env as Record<string, string | undefined>;
