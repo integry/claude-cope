@@ -631,6 +631,27 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
   return false;
 }
 
+function dispatchTicketAndMiscCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | void {
+  if (command.startsWith("/take")) {
+    handleTakeCommand(command, ctx.state, ctx.setState, reply, { setInputValue: ctx.setInputValue, onAccept: ctx.playChime });
+  } else if (command === "/accept") {
+    handleAcceptCommand(ctx, reply);
+  } else if (command === "/abandon") {
+    if (ctx.state.activeTicket) ctx.playError();
+    handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
+  } else if (command.startsWith("/alias")) {
+    handleAliasCommand(command, ctx, reply);
+  } else if (command.startsWith("/model")) {
+    handleModelCommand(command, ctx, reply);
+  } else if (handleNewCommand(command, ctx, reply)) {
+    if (command === "/brrrrrr") return "async";
+  } else if (command.startsWith("/")) {
+    reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
+  } else {
+    reply({ role: "system", content: `[✓] Executed \`${command}\`` });
+  }
+}
+
 /** Dispatch a command; returns "async" if the caller should NOT call setIsProcessing(false). */
 function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | void {
   if (handleCoreCommand(command, ctx, reply)) {
@@ -648,24 +669,8 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
     const asyncResult = handleAsyncCommand(command, ctx, reply);
     if (asyncResult === "async") return "async";
     if (!asyncResult) {
-      if (command.startsWith("/take")) {
-        handleTakeCommand(command, ctx.state, ctx.setState, reply, { setInputValue: ctx.setInputValue, onAccept: ctx.playChime });
-      } else if (command === "/accept") {
-        handleAcceptCommand(ctx, reply);
-      } else if (command === "/abandon") {
-        if (ctx.state.activeTicket) ctx.playError();
-        handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
-      } else if (command.startsWith("/alias")) {
-        handleAliasCommand(command, ctx, reply);
-      } else if (command.startsWith("/model")) {
-        handleModelCommand(command, ctx, reply);
-      } else if (handleNewCommand(command, ctx, reply)) {
-        if (command === "/brrrrrr") return "async";
-      } else if (command.startsWith("/")) {
-        reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
-      } else {
-        reply({ role: "system", content: `[✓] Executed \`${command}\`` });
-      }
+      const miscResult = dispatchTicketAndMiscCommand(command, ctx, reply);
+      if (miscResult === "async") return "async";
     }
   }
 }

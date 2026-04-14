@@ -136,6 +136,34 @@ function recordUsage(
 
 const chat = new Hono<Env>();
 
+async function enforceQuota(
+  kv: KVNamespace,
+  sessionId: string,
+  isPro: boolean,
+  proKeyHash?: string,
+): Promise<{ error: string; quota: { used: number; limit: number; remaining: number } } | null> {
+  try {
+    await consumeQuota(kv, {
+      tier: isPro ? "pro" : "free",
+      sessionId,
+      licenseKey: isPro ? proKeyHash : undefined,
+      cost: 1,
+    });
+    return null;
+  } catch (err) {
+    if (err instanceof QuotaExhaustedError) {
+      const usageKey = `free:${sessionId}`;
+      const raw = await kv.get(usageKey);
+      const used = raw !== null ? parseInt(raw, 10) : FREE_QUOTA_LIMIT;
+      return {
+        error: err.message,
+        quota: { used, limit: FREE_QUOTA_LIMIT, remaining: 0 },
+      };
+    }
+    throw err;
+  }
+}
+
 chat.post("/", async (c) => {
   const body = await c.req.json<ChatBody>();
 
@@ -154,25 +182,9 @@ chat.post("/", async (c) => {
   const isPro = Boolean(body.proKeyHash);
 
   if (kv) {
-    try {
-      await consumeQuota(kv, {
-        tier: isPro ? "pro" : "free",
-        sessionId,
-        licenseKey: isPro ? body.proKeyHash : undefined,
-        cost: 1,
-      });
-    } catch (err) {
-      if (err instanceof QuotaExhaustedError) {
-        // Return quota info with the 402 response
-        const usageKey = `free:${sessionId}`;
-        const raw = await kv.get(usageKey);
-        const used = raw !== null ? parseInt(raw, 10) : FREE_QUOTA_LIMIT;
-        return c.json({
-          error: err.message,
-          quota: { used, limit: FREE_QUOTA_LIMIT, remaining: 0 },
-        }, 402);
-      }
-      throw err;
+    const quotaError = await enforceQuota(kv, sessionId, isPro, body.proKeyHash);
+    if (quotaError) {
+      return c.json(quotaError, 402);
     }
   }
 

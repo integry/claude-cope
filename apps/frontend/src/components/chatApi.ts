@@ -189,6 +189,31 @@ async function hashKey(key: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function extractRateLimitDetails(errorData: Record<string, unknown> | null): string {
+  const upstreamRaw = (errorData?.error as Record<string, unknown>)?.metadata
+    ? ((errorData?.error as Record<string, unknown>).metadata as Record<string, unknown>)?.raw
+    : undefined;
+  const raw = upstreamRaw
+    ?? (errorData?.error as Record<string, unknown>)?.message
+    ?? (typeof errorData?.error === "string" ? errorData.error : "");
+  return raw ? `\n\n${raw}` : "";
+}
+
+function extractGenericErrorMessage(errorData: Record<string, unknown> | null, status: number): string {
+  const msg = (errorData?.error as Record<string, unknown>)?.message ?? errorData?.error ?? "Request failed";
+  return `[❌ Error] ${msg} (HTTP ${status})`;
+}
+
+function replaceLoading(
+  setHistory: Dispatch<SetStateAction<Message[]>>,
+  msg: { role: string; content: string },
+) {
+  setHistory((prev) => [
+    ...prev.filter((m) => m.role !== "loading"),
+    msg,
+  ]);
+}
+
 async function handleErrorResponse(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
@@ -201,46 +226,28 @@ async function handleErrorResponse(
     if (errorData?.quota && onQuotaUpdate) {
       onQuotaUpdate(errorData.quota as { used: number; limit: number; remaining: number });
     }
-    setHistory((prev) => [
-      ...prev.filter((msg) => msg.role !== "loading"),
-      { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
-    ]);
+    replaceLoading(setHistory, { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" });
     return true;
   }
 
   if (res.status === 401) {
     onError?.();
-    setHistory((prev) => [
-      ...prev.filter((msg) => msg.role !== "loading"),
-      { role: "error", content: "[🔑 ACCESS DENIED] OpenRouter just slammed the door in your face (HTTP 401). Your API key has been **rejected**, **ghosted**, and **emotionally unavailable**.\n\n[POSSIBLE CAUSES]\n\n• Your key is disabled — like your ambition after the third standup today\n\n• Your key expired — unlike your technical debt, which is eternal\n\n• You copy-pasted it wrong — classic Junior Code Monkey energy\n\n[RECOVERY OPTIONS]\n\n• Check your key at [openrouter.ai/keys](https://openrouter.ai/keys)\n\n• `/key clear` to crawl back to the default model\n\n• `/key <new-key>` to try again with whatever dignity you have left" },
-    ]);
+    replaceLoading(setHistory, { role: "error", content: "[🔑 ACCESS DENIED] OpenRouter just slammed the door in your face (HTTP 401). Your API key has been **rejected**, **ghosted**, and **emotionally unavailable**.\n\n[POSSIBLE CAUSES]\n\n• Your key is disabled — like your ambition after the third standup today\n\n• Your key expired — unlike your technical debt, which is eternal\n\n• You copy-pasted it wrong — classic Junior Code Monkey energy\n\n[RECOVERY OPTIONS]\n\n• Check your key at [openrouter.ai/keys](https://openrouter.ai/keys)\n\n• `/key clear` to crawl back to the default model\n\n• `/key <new-key>` to try again with whatever dignity you have left" });
     return true;
   }
 
   if (res.status === 429) {
     onError?.();
     const errorData = await res.json().catch(() => null);
-    const upstreamRaw = errorData?.error?.metadata?.raw
-      ?? errorData?.error?.message
-      ?? (typeof errorData?.error === "string" ? errorData.error : "");
-    const details = upstreamRaw ? `\n\n${upstreamRaw}` : "";
-    setHistory((prev) => [
-      ...prev.filter((msg) => msg.role !== "loading"),
-      { role: "warning", content: `[⚠️] OpenRouter rate-limited your request. Please wait before sending another message.${details}` },
-    ]);
+    const details = extractRateLimitDetails(errorData);
+    replaceLoading(setHistory, { role: "warning", content: `[⚠️] OpenRouter rate-limited your request. Please wait before sending another message.${details}` });
     return true;
   }
 
   if (!res.ok) {
     onError?.();
     const errorData = await res.json().catch(() => null);
-    setHistory((prev) => [
-      ...prev.filter((msg) => msg.role !== "loading"),
-      {
-        role: "error",
-        content: `[❌ Error] ${errorData?.error?.message ?? errorData?.error ?? "Request failed"} (HTTP ${res.status})`,
-      },
-    ]);
+    replaceLoading(setHistory, { role: "error", content: extractGenericErrorMessage(errorData, res.status) });
     return true;
   }
 
