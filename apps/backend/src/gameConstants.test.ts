@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeMultiplier, GENERATORS, UPGRADES } from "./gameConstants";
+import { computeMultiplier } from "./gameConstants";
 
 describe("computeMultiplier", () => {
   it("returns 1 with empty inventory", () => {
