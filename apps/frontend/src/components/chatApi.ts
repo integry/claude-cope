@@ -206,7 +206,7 @@ function extractGenericErrorMessage(errorData: Record<string, unknown> | null, s
 
 function replaceLoading(
   setHistory: Dispatch<SetStateAction<Message[]>>,
-  msg: { role: string; content: string },
+  msg: Message,
 ) {
   setHistory((prev) => [
     ...prev.filter((m) => m.role !== "loading"),
