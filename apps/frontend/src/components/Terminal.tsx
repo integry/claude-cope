@@ -65,7 +65,6 @@ function Terminal() {
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
-  const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -126,7 +125,7 @@ function Terminal() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  useEffect(() => { if (!isProcessing && !isBooting && !quotaLocked) inputRef.current?.focus(); }, [isProcessing, isBooting, quotaLocked]);
+  useEffect(() => { if (!isProcessing && !isBooting) inputRef.current?.focus(); }, [isProcessing, isBooting]);
 
   useEffect(() => {
     if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
@@ -135,13 +134,12 @@ function Terminal() {
   }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
 
   const triggerQuotaLockout = () => {
-    setQuotaLocked(true); setIsProcessing(true); playError();
+    playError();
     setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." }, { role: "warning", content: "[⚙️] Upgrading to $200/mo Pro Tier..." }]);
     setTimeout(() => {
       const newLockouts = state.economy.quotaLockouts + 1;
       const isNew = newLockouts >= 3 && unlockAchievementWithSound("homer_at_the_buffet");
       const achievementMsg: Message[] = isNew ? [{ role: "warning", content: buildAchievementBox("homer_at_the_buffet") }] : [];
-      setIsProcessing(false); setQuotaLocked(false);
       if (state.proKey) {
         resetQuota();
         if (newLockouts === 1) setInstantBanReady(true);
@@ -154,10 +152,10 @@ function Terminal() {
   };
 
   const triggerInstantBan = () => {
-    setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
+    setInstantBanReady(false); setIsProcessing(true);
     playError();
     setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." }]);
-    setTimeout(() => { setQuotaLocked(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
+    setTimeout(() => { setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
   };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -204,6 +202,12 @@ function Terminal() {
     if (await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
     setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
+    // Block submission when quota is exhausted and user has no BYOK or pro key
+    if (!state.apiKey && !state.proKey && state.economy.quotaPercent <= 0) {
+      setHistory((prev) => [...prev, { role: "user", content: command }, { role: "error", content: "[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Pro or use `/key <your-openrouter-key>` to continue." }]);
+      playError();
+      return;
+    }
     // Handle instant ban scenario (user fires command right after upgrade)
     if (!state.apiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); triggerInstantBan(); return; }
     const buddyResult = computeBuddyInterjection(state.buddy);
@@ -361,7 +365,7 @@ function Terminal() {
         <div className="relative border-b border-white">
           {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
           <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
-          <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || quotaLocked} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
+          <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
         </div>
       </div>
       {renderOverlays()}
