@@ -149,7 +149,7 @@ chat.post("/", async (c) => {
   }
 
   // Consume quota before making the OpenRouter request
-  const quotaKv = c.env?.QUOTA_KV;
+  const quotaKv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
   let quotaPercent = 100;
   if (quotaKv) {
     const sessionId = c.get("sessionId");
