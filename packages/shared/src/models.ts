@@ -18,7 +18,7 @@ export const COPE_MODELS: CopeModel[] = [
   {
     id: "bogus",
     name: "Cope Bogus vFINAL_v2_USE_THIS_ONE",
-    openRouterId: "nvidia/nemotron-3-super-120b-a12b",
+    openRouterId: "openai/gpt-oss-20b",
     // Premium models consume quota faster to encourage B2B upgrades once hooked
     multiplier: 5,
     tier: "pro",

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { validatePolarKey } from "../utils/polar";
+import { PRO_INITIAL_QUOTA } from "../utils/quota";
 
 type Env = {
   Bindings: {
@@ -11,8 +12,6 @@ type Env = {
     sessionId: string;
   };
 };
-
-const PRO_INITIAL_QUOTA = 100;
 const SHILL_CREDIT = 5;
 
 async function hashKey(licenseKey: string): Promise<string> {

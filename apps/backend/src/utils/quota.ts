@@ -1,4 +1,5 @@
 const FREE_QUOTA_LIMIT = 20;
+export const PRO_INITIAL_QUOTA = 100;
 
 export class QuotaExhaustedError extends Error {
   constructor(tier: "free" | "pro") {
@@ -23,6 +24,34 @@ async function hashKey(licenseKey: string): Promise<string> {
 }
 
 /**
+ * Query the current quota percentage without consuming any credits.
+ */
+export async function getQuotaPercent(
+  kv: KVNamespace,
+  opts: {
+    tier: "free" | "pro";
+    sessionId: string;
+    licenseKeyHash?: string;
+  },
+): Promise<number> {
+  if (opts.tier === "pro") {
+    if (!opts.licenseKeyHash) return 0;
+    const kvKey = `polar:${opts.licenseKeyHash}`;
+    const raw = await kv.get(kvKey);
+    if (raw === null) return 0;
+    const remaining = parseInt(raw, 10);
+    if (isNaN(remaining)) return 0;
+    return Math.min(100, Math.max(0, (remaining / PRO_INITIAL_QUOTA) * 100));
+  }
+
+  // Free tier
+  const kvKey = `free:${opts.sessionId}`;
+  const raw = await kv.get(kvKey);
+  const current = raw !== null ? parseInt(raw, 10) : 0;
+  return Math.min(100, Math.max(0, ((FREE_QUOTA_LIMIT - current) / FREE_QUOTA_LIMIT) * 100));
+}
+
+/**
  * Consume quota for a request based on the user's tier.
  *
  * - Pro users: keyed by hashed Polar license key. Quota is stored as a
@@ -38,18 +67,20 @@ export async function consumeQuota(
     tier: "free" | "pro";
     sessionId: string;
     licenseKey?: string;
+    /** Pre-hashed license key (SHA-256 hex) — skips internal hashing if provided */
+    licenseKeyHash?: string;
     cost?: number;
   },
-): Promise<void> {
+): Promise<{ quotaPercent: number }> {
   const cost = opts.cost ?? 1;
 
   if (opts.tier === "pro") {
-    if (!opts.licenseKey) {
-      throw new Error("License key is required for Pro tier quota check.");
+    if (!opts.licenseKey && !opts.licenseKeyHash) {
+      throw new Error("License key or hash is required for Pro tier quota check.");
     }
 
-    const hashed = await hashKey(opts.licenseKey);
-    const kvKey = `pro:${hashed}`;
+    const hashed = opts.licenseKeyHash ?? (await hashKey(opts.licenseKey!));
+    const kvKey = `polar:${hashed}`;
     const raw = await kv.get(kvKey);
 
     if (raw === null) {
@@ -61,8 +92,10 @@ export async function consumeQuota(
       throw new QuotaExhaustedError("pro");
     }
 
-    await kv.put(kvKey, String(remaining - cost));
-    return;
+    const newRemaining = remaining - cost;
+    await kv.put(kvKey, String(newRemaining));
+    const quotaPercent = Math.min(100, Math.max(0, (newRemaining / PRO_INITIAL_QUOTA) * 100));
+    return { quotaPercent };
   }
 
   // Free tier
@@ -74,5 +107,8 @@ export async function consumeQuota(
     throw new QuotaExhaustedError("free");
   }
 
-  await kv.put(kvKey, String(current + cost));
+  const newUsage = current + cost;
+  await kv.put(kvKey, String(newUsage));
+  const quotaPercent = Math.min(100, Math.max(0, ((FREE_QUOTA_LIMIT - newUsage) / FREE_QUOTA_LIMIT) * 100));
+  return { quotaPercent };
 }

@@ -83,8 +83,9 @@ export function handleTakeCommand(
   state: GameState,
   setState: SetState,
   reply: Reply,
-  onSuggestedReply: (v: string) => void,
+  opts: { setInputValue: (v: string) => void; onAccept?: () => void; onSuggestedReply?: (v: string) => void },
 ): boolean {
+  const { setInputValue, onAccept, onSuggestedReply } = opts;
   const input = command.slice("/take".length).trim();
   if (!input) {
     reply({ role: "error", content: "[❌] Usage: `/take <number>` — Run `/backlog` first, then pick a row number." });
@@ -123,11 +124,12 @@ export function handleTakeCommand(
     },
   }));
 
+  onAccept?.();
   reply({
     role: "system",
     content: `[🎫 **TICKET CLAIMED**] ${ticket.id}: **${ticket.title}**\n\n> ${ticket.description}\n\nReward: **${(ticket.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.`,
   });
-  onSuggestedReply(ticket.kickoff_prompt);
+  onSuggestedReply?.(ticket.kickoff_prompt);
   return true;
 }
 
