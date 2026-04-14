@@ -89,15 +89,40 @@ describe("GET /api/leaderboard", () => {
     expect(getBindings()).toContain("US");
   });
 
-  it("defaults invalid timeframe to all (no time filter)", async () => {
-    const { db, getSQL } = createGetMockDB();
+  it("rejects invalid timeframe with 400", async () => {
+    const { db } = createGetMockDB();
 
-    await app.request("/api/leaderboard?timeframe=invalid", undefined, {
+    const res = await app.request("/api/leaderboard?timeframe=invalid", undefined, {
       ALLOWED_ORIGINS: "http://localhost:5173",
       DB: db,
     });
 
-    expect(getSQL()).not.toContain("WHERE");
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Invalid timeframe parameter" });
+  });
+
+  it("rejects malformed country code with 400", async () => {
+    const { db } = createGetMockDB();
+
+    const res = await app.request("/api/leaderboard?country=XYZ", undefined, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      DB: db,
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Invalid country parameter" });
+  });
+
+  it("rejects lowercase country code with 400", async () => {
+    const { db } = createGetMockDB();
+
+    const res = await app.request("/api/leaderboard?country=us", undefined, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      DB: db,
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Invalid country parameter" });
   });
 
   it("treats country=all as no country filter", async () => {

@@ -18,6 +18,15 @@ leaderboard.get("/", async (c) => {
   const timeframe = c.req.query("timeframe") ?? "all";
   const country = c.req.query("country") ?? "all";
 
+  const VALID_TIMEFRAMES = ["all", "daily", "weekly"] as const;
+  if (!VALID_TIMEFRAMES.includes(timeframe as (typeof VALID_TIMEFRAMES)[number])) {
+    return c.json({ error: "Invalid timeframe parameter" }, 400);
+  }
+
+  if (country !== "all" && !/^[A-Z]{2}$/.test(country)) {
+    return c.json({ error: "Invalid country parameter" }, 400);
+  }
+
   let sql =
     "SELECT username, corporate_rank, country, total_td as technical_debt, updated_at as created_at FROM user_scores";
   const conditions: string[] = [];
