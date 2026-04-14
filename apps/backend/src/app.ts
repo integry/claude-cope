@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { csrf } from "hono/csrf";
 import { rateLimiter } from "./middleware/rateLimiter";
 import { sessionMiddleware } from "./middleware/session";
 import chat from "./routes/chat";
@@ -22,6 +23,13 @@ app.use("*", (c, next) => {
       return allowed[0]!;
     },
   })(c, next);
+});
+
+app.use("/api/*", (c, next) => {
+  const env = c.env as Record<string, string | undefined>;
+  const csv = env.ALLOWED_ORIGINS || "https://claudecope.com,http://localhost:5173";
+  const allowed = csv.split(",").map((s: string) => s.trim());
+  return csrf({ origin: allowed })(c, next);
 });
 
 app.use("*", sessionMiddleware);
