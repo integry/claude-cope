@@ -9,6 +9,25 @@ import {
   type ShareResult,
 } from "../shareChatUtils";
 
+// Mock image loading
+const mockImage = {
+  naturalWidth: 400,
+  naturalHeight: 400,
+  onload: null as (() => void) | null,
+  onerror: null as (() => void) | null,
+  src: "",
+};
+
+// Trigger onload when src is set
+Object.defineProperty(mockImage, "src", {
+  set() {
+    setTimeout(() => mockImage.onload?.(), 0);
+  },
+  get() { return ""; },
+});
+
+vi.stubGlobal("Image", vi.fn(() => mockImage));
+
 // Mock canvas context
 const mockCtx = {
   font: "",
@@ -26,6 +45,7 @@ const mockCtx = {
   stroke: vi.fn(),
   arc: vi.fn(),
   fill: vi.fn(),
+  drawImage: vi.fn(),
 };
 
 // Mock canvas element
@@ -51,34 +71,34 @@ describe("renderChatCard", () => {
     vi.restoreAllMocks();
   });
 
-  it("creates a canvas element", () => {
-    renderChatCard("Hello", "World");
+  it("creates a canvas element", async () => {
+    await renderChatCard("Hello", "World");
     expect(document.createElement).toHaveBeenCalledWith("canvas");
   });
 
-  it("gets 2d context from canvas", () => {
-    renderChatCard("Hello", "World");
+  it("gets 2d context from canvas", async () => {
+    await renderChatCard("Hello", "World");
     expect(mockCanvas.getContext).toHaveBeenCalledWith("2d");
   });
 
-  it("draws background rectangle", () => {
-    renderChatCard("Hello", "World");
+  it("draws background rectangle", async () => {
+    await renderChatCard("Hello", "World");
     expect(mockCtx.fillRect).toHaveBeenCalled();
     expect(mockCtx.fillStyle).toBeDefined();
   });
 
-  it("does not draw border rectangle", () => {
-    renderChatCard("Hello", "World");
+  it("does not draw border rectangle", async () => {
+    await renderChatCard("Hello", "World");
     expect(mockCtx.strokeRect).not.toHaveBeenCalled();
   });
 
-  it("draws text content", () => {
-    renderChatCard("User message", "System response");
+  it("draws text content", async () => {
+    await renderChatCard("User message", "System response");
     expect(mockCtx.fillText).toHaveBeenCalled();
   });
 
-  it("sets canvas dimensions", () => {
-    renderChatCard("Test", "Response");
+  it("sets canvas dimensions", async () => {
+    await renderChatCard("Test", "Response");
     expect(mockCanvas.width).toBeGreaterThan(0);
     expect(mockCanvas.height).toBeGreaterThan(0);
   });
@@ -96,13 +116,13 @@ describe("getChatCardDataUrl", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns a data URL string", () => {
-    const dataUrl = getChatCardDataUrl("Hello", "World");
+  it("returns a data URL string", async () => {
+    const dataUrl = await getChatCardDataUrl("Hello", "World");
     expect(dataUrl).toBe("data:image/png;base64,test");
   });
 
-  it("calls toDataURL with png format", () => {
-    getChatCardDataUrl("Hello", "World");
+  it("calls toDataURL with png format", async () => {
+    await getChatCardDataUrl("Hello", "World");
     expect(mockCanvas.toDataURL).toHaveBeenCalledWith("image/png");
   });
 });
@@ -219,7 +239,7 @@ describe("shareChatImage", () => {
     });
 
     const shareText = mockClipboard.writeText.mock.calls[0]![0] as string;
-    expect(shareText).toContain("claudecope.com");
+    expect(shareText).toContain("cope.bot");
     expect(shareText).toContain("#ClaudeCope");
     expect(shareText).not.toContain("Test prompt");
     expect(shareText).not.toContain("Test response");

@@ -12,7 +12,7 @@ import {
 } from "./gameStateUtils";
 
 export type { Message };
-export type { GameState, BuddyState, EconomyState, ActiveTicket } from "./gameStateUtils";
+export type { GameState, BuddyState, EconomyState, ActiveTicket, ByokUsage } from "./gameStateUtils";
 export { calcBulkCost } from "./gameStateUtils";
 
 export function useGameState() {
@@ -79,18 +79,10 @@ export function useGameState() {
 
 
 
-  // Background loop — checks achievements and quota drain (no passive TD generation)
+  // Background loop — checks achievements (no passive TD generation)
   useEffect(() => {
     const interval = setInterval(() => {
       setState((prev) => {
-        // Rogue API Key passively drains quota over time (skip in BYOK mode)
-        const rogueCount = prev.inventory["rogue-api-key"] ?? 0;
-        let newQuotaPercent = prev.economy.quotaPercent;
-        if (rogueCount > 0 && !prev.apiKey) {
-          const quotaDrain = rogueCount * 0.05;
-          newQuotaPercent = Math.max(0, prev.economy.quotaPercent - quotaDrain);
-        }
-
         // Check economy achievements
         const newAchievements = [...prev.achievements];
 
@@ -117,12 +109,10 @@ export function useGameState() {
           newAchievements.push("heat_death");
         }
 
-        const changed = newQuotaPercent !== prev.economy.quotaPercent || newAchievements.length !== prev.achievements.length;
-        if (!changed) return prev;
+        if (newAchievements.length === prev.achievements.length) return prev;
 
         return {
           ...prev,
-          economy: { ...prev.economy, quotaPercent: newQuotaPercent },
           achievements: newAchievements,
         };
       });
@@ -198,21 +188,6 @@ export function useGameState() {
         },
       };
     });
-  }, []);
-
-  const drainQuota = useCallback((): number => {
-    const drain = Math.floor(Math.random() * 12) + 1; // 1% to 12%
-    const current = stateRef.current.economy.quotaPercent;
-    const raw = current - drain;
-    const newPercent = raw < 0 ? 0 : raw;
-    setState((prev) => ({
-      ...prev,
-      economy: {
-        ...prev.economy,
-        quotaPercent: newPercent,
-      },
-    }));
-    return newPercent;
   }, []);
 
   const resetQuota = useCallback(() => {
@@ -411,5 +386,5 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, unlockTheme, buyTheme, toggleSound, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
+  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, unlockTheme, buyTheme, toggleSound, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
 }

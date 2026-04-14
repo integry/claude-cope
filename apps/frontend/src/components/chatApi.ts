@@ -138,15 +138,17 @@ function processReplyTags(
   return { achievementMessages, reply, suggestedReply, buddySays };
 }
 
-function extractJsonResponseFields(data: Record<string, unknown>): { rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number } {
+function extractJsonResponseFields(data: Record<string, unknown>): { rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number; quotaPercent?: number } {
   const choices = data?.choices as Array<{ message?: { content?: string } }> | undefined;
   const rawReply = choices?.[0]?.message?.content ?? "";
   const usage = data?.usage as { prompt_tokens?: number; completion_tokens?: number; cost?: number; total_cost?: number } | undefined;
+  const quotaPercent = typeof data?.quotaPercent === "number" ? data.quotaPercent : undefined;
   return {
     rawReply,
     tokensSent: usage?.prompt_tokens,
     tokensReceived: usage?.completion_tokens,
     cost: usage?.cost ?? usage?.total_cost,
+    quotaPercent,
   };
 }
 
@@ -162,7 +164,7 @@ async function parseResponseBody(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
   addActiveTD?: (n: number, raw?: boolean) => void,
-): Promise<{ rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number }> {
+): Promise<{ rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number; quotaPercent?: number }> {
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("text/event-stream")) {
     const streamResult = await readStreamedResponse(res, setHistory);
@@ -186,14 +188,19 @@ async function hashKey(key: string): Promise<string> {
 async function handleErrorResponse(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
+  onQuotaExhausted?: () => void,
   onError?: () => void,
 ): Promise<boolean> {
   if (res.status === 402) {
-    onError?.();
-    setHistory((prev) => [
-      ...prev.filter((msg) => msg.role !== "loading"),
-      { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
-    ]);
+    if (onQuotaExhausted) {
+      setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
+      onQuotaExhausted();
+    } else {
+      setHistory((prev) => [
+        ...prev.filter((msg) => msg.role !== "loading"),
+        { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
+      ]);
+    }
     return true;
   }
 
@@ -256,7 +263,9 @@ export function submitChatMessage(opts: {
   username?: string;
   inventory?: Record<string, number>;
   upgrades?: string[];
-  onByokCost?: (cost: number) => void;
+  onByokUsage?: (usage: { model: string; prompt_tokens?: number; completion_tokens?: number; cost?: number }) => void;
+  onQuotaUpdate?: (quotaPercent: number) => void;
+  onQuotaExhausted?: () => void;
   onError?: () => void;
   signal?: AbortSignal;
 }) {
@@ -310,15 +319,20 @@ export function submitChatMessage(opts: {
 
   requestPromise
     .then(async (res) => {
-      if (await handleErrorResponse(res, setHistory, onError)) return;
+      if (await handleErrorResponse(res, setHistory, opts.onQuotaExhausted, onError)) return;
 
       const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD);
       let { rawReply } = parsed;
-      const { tokensSent, tokensReceived, cost } = parsed;
+      const { tokensSent, tokensReceived, cost, quotaPercent } = parsed;
 
-      // Track BYOK cost
-      if (isBYOK && cost != null && opts.onByokCost) {
-        opts.onByokCost(cost);
+      // Track BYOK usage (full stats per model)
+      if (isBYOK && opts.onByokUsage) {
+        opts.onByokUsage({ model, prompt_tokens: tokensSent, completion_tokens: tokensReceived, cost });
+      }
+
+      // Fire quota update for non-BYOK users when quotaPercent is present
+      if (!isBYOK && quotaPercent != null && opts.onQuotaUpdate) {
+        opts.onQuotaUpdate(quotaPercent);
       }
 
       if (!rawReply) {

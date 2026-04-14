@@ -7,6 +7,7 @@
 
 import { parseSegments, drawStyledLine, wrapText } from "./shareChatTextUtils";
 import { SHARE_PUNCHLINES } from "./sharePunchlines";
+import { BUDDY_ICONS } from "./buddyConstants";
 
 export type ChatMessage = {
   role: "user" | "system";
@@ -23,25 +24,43 @@ const MAX_HEIGHT = 800;
 const BG_COLOR = "#0d1117";
 const HEADER_BG_COLOR = "#161b22";
 const HEADER_BORDER_COLOR = "#30363d";
-const HEADER_DOT_COLORS = ["#ff5f56", "#ffbd2e", "#27c93f"];
+const LOGO_PATH = "/media/logo-400-transparent.png";
+const LOGO_HEIGHT = 20;
 const USER_PROMPT_COLOR = "#e6edf3";
 const USER_TEXT_COLOR = "#e6edf3";
 const SYSTEM_TEXT_COLOR = "#4ade80";
 const BOLD_TEXT_COLOR = "#e6edf3";
 const HEADER_COLOR = "#6e7681";
 const WATERMARK_COLOR = "#facc15";
+const BUDDY_COLOR = "#fb923c"; // orange-400, matches BuddyDisplay web styling
 const HEADER_BAR_HEIGHT = 36;
 
-const PARAGRAPH_BREAK_RATIO = 0.4;
-const LIST_ITEM_GAP_RATIO = 0.4;
+const PARAGRAPH_BREAK_RATIO = 0.8;
+const LIST_ITEM_GAP_RATIO = 0;
 const SPACING_RATIO = 0.6;
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
 
 /**
  * Renders a chat card with user message and system response onto a canvas
  */
-export function renderChatCard(userMessage: string, systemMessage: string, username?: string): HTMLCanvasElement {
+export async function renderChatCard(userMessage: string, systemMessage: string, username?: string): Promise<HTMLCanvasElement> {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
+
+  let logoImg: HTMLImageElement | null = null;
+  try {
+    logoImg = await loadImage(LOGO_PATH);
+  } catch {
+    // Logo failed to load; header will omit logo
+  }
 
   const contentMaxWidth = MAX_WIDTH - CANVAS_PADDING * 2;
   const fontSize = FONT_SIZE;
@@ -54,7 +73,27 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   const userPrefix = "❯ ";
   const userPrefixWidth = ctx.measureText(userPrefix).width;
   const userLines = wrapText(ctx, userMessage, contentMaxWidth - userPrefixWidth);
-  const systemLines = wrapText(ctx, systemMessage, contentMaxWidth);
+
+  // Detect buddy ASCII art prefix in system message
+  let buddyArtLines: string[] = [];
+  let buddyLabelLine: string | null = null;
+  let systemBody = systemMessage;
+  for (const [, art] of Object.entries(BUDDY_ICONS)) {
+    if (systemMessage.startsWith(art)) {
+      buddyArtLines = art.split("\n");
+      const afterArt = systemMessage.slice(art.length);
+      const labelMatch = afterArt.match(/^\n(\[.+?\].+?)(?:\n|$)/);
+      if (labelMatch?.[1]) {
+        buddyLabelLine = labelMatch[1];
+        systemBody = afterArt.slice(labelMatch[0].length);
+      } else {
+        systemBody = afterArt.replace(/^\n/, "");
+      }
+      break;
+    }
+  }
+
+  const systemLines = wrapText(ctx, systemBody, contentMaxWidth);
   const headerText = username ?? "";
 
   const PARAGRAPH_BREAK_HEIGHT = Math.round(lineHeight * PARAGRAPH_BREAK_RATIO);
@@ -65,9 +104,11 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
 
   const userBlockHeight = calcBlockHeight(userLines);
   const systemBlockHeight = calcBlockHeight(systemLines);
+  const buddyBlockHeight = (buddyArtLines.length + (buddyLabelLine ? 1 : 0)) * lineHeight;
+  const buddySpacing = buddyArtLines.length > 0 ? Math.round(lineHeight * SPACING_RATIO) : 0;
   const spacingBetween = Math.round(lineHeight * SPACING_RATIO);
 
-  const fixedHeight = HEADER_BAR_HEIGHT + CANVAS_PADDING + userBlockHeight + spacingBetween + CANVAS_PADDING;
+  const fixedHeight = HEADER_BAR_HEIGHT + CANVAS_PADDING + userBlockHeight + spacingBetween + buddyBlockHeight + buddySpacing + CANVAS_PADDING;
 
   const truncatedSystemLines = truncateLines(systemLines, systemBlockHeight, MAX_HEIGHT - fixedHeight, lineHeight, calcBlockHeight);
   const truncatedSystemBlockHeight = calcBlockHeight(truncatedSystemLines);
@@ -83,7 +124,7 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
   ctx.font = font;
   ctx.textBaseline = "top";
 
-  drawHeader(ctx, canvas.width, fontSize, font, headerText);
+  drawHeader(ctx, canvas.width, { fontSize, font, headerText, logoImg });
 
   let y = HEADER_BAR_HEIGHT + CANVAS_PADDING;
 
@@ -105,6 +146,21 @@ export function renderChatCard(userMessage: string, systemMessage: string, usern
 
   ctx.font = font;
   y += spacingBetween;
+
+  // Draw buddy ASCII art left-aligned in orange, preserving leading whitespace
+  if (buddyArtLines.length > 0) {
+    ctx.fillStyle = BUDDY_COLOR;
+    ctx.font = font;
+    for (const artLine of buddyArtLines) {
+      ctx.fillText(artLine, CANVAS_PADDING, y);
+      y += lineHeight;
+    }
+    if (buddyLabelLine) {
+      ctx.fillText(buddyLabelLine, CANVAS_PADDING, y);
+      y += lineHeight;
+    }
+    y += buddySpacing;
+  }
 
   // Draw system message with inline bold styling
   truncatedSystemLines.forEach((line) => {
@@ -143,7 +199,8 @@ function truncateLines(
   return truncated;
 }
 
-function drawHeader(ctx: CanvasRenderingContext2D, canvasWidth: number, fontSize: number, font: string, headerText: string): void {
+function drawHeader(ctx: CanvasRenderingContext2D, canvasWidth: number, opts: { fontSize: number; font: string; headerText: string; logoImg: HTMLImageElement | null }): void {
+  const { fontSize, font, headerText, logoImg } = opts;
   ctx.fillStyle = HEADER_BG_COLOR;
   ctx.fillRect(0, 0, canvasWidth, HEADER_BAR_HEIGHT);
 
@@ -154,15 +211,13 @@ function drawHeader(ctx: CanvasRenderingContext2D, canvasWidth: number, fontSize
   ctx.lineTo(canvasWidth, HEADER_BAR_HEIGHT);
   ctx.stroke();
 
-  const dotRadius = 5;
-  const dotY = HEADER_BAR_HEIGHT / 2;
-  const dotStartX = CANVAS_PADDING;
-  HEADER_DOT_COLORS.forEach((color, i) => {
-    ctx.beginPath();
-    ctx.arc(dotStartX + i * 18, dotY, dotRadius, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-  });
+  // Draw logo in place of macOS-style colored circles
+  if (logoImg) {
+    const logoH = LOGO_HEIGHT;
+    const logoW = (logoImg.naturalWidth / logoImg.naturalHeight) * logoH;
+    const logoY = (HEADER_BAR_HEIGHT - logoH) / 2;
+    ctx.drawImage(logoImg, CANVAS_PADDING, logoY, logoW, logoH);
+  }
 
   if (headerText) {
     ctx.fillStyle = HEADER_COLOR;
@@ -173,7 +228,7 @@ function drawHeader(ctx: CanvasRenderingContext2D, canvasWidth: number, fontSize
 
   ctx.fillStyle = WATERMARK_COLOR;
   ctx.font = font;
-  const brandText = "claudecope.com";
+  const brandText = "cope.bot";
   const brandWidth = ctx.measureText(brandText).width;
   ctx.fillText(brandText, canvasWidth - CANVAS_PADDING - brandWidth, (HEADER_BAR_HEIGHT - fontSize) / 2);
 }
@@ -208,17 +263,17 @@ function getRandomPunchline(): string {
 
 export function generateShareText(): string {
   const punchline = getRandomPunchline();
-  return `${punchline}\n\n[paste your image here]\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://claudecope.com`;
+  return `${punchline}\n\n[paste your image here]\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://cope.bot`;
 }
 
 export function openShareIntent(platform: "twitter" | "linkedin"): void {
   const punchline = getRandomPunchline();
   if (platform === "twitter") {
-    const tweetText = `${punchline}\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://claudecope.com`;
+    const tweetText = `${punchline}\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://cope.bot`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   } else {
-    const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://claudecope.com")}`;
+    const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://cope.bot")}`;
     window.open(url, "_blank", "noopener,noreferrer");
   }
 }
@@ -243,7 +298,7 @@ export type ShareChatOptions = {
  */
 export async function shareChatImage(options: ShareChatOptions): Promise<ShareResult> {
   const { userMessage, systemMessage, platform, openShareUrl = false, username } = options;
-  const canvas = renderChatCard(userMessage, systemMessage, username);
+  const canvas = await renderChatCard(userMessage, systemMessage, username);
   const blob = await canvasToBlob(canvas);
 
   if (blob) {
@@ -272,7 +327,7 @@ export async function shareChatImage(options: ShareChatOptions): Promise<ShareRe
 /**
  * Utility to get a PNG data URL from the chat card (useful for previews)
  */
-export function getChatCardDataUrl(userMessage: string, systemMessage: string): string {
-  const canvas = renderChatCard(userMessage, systemMessage);
+export async function getChatCardDataUrl(userMessage: string, systemMessage: string): Promise<string> {
+  const canvas = await renderChatCard(userMessage, systemMessage);
   return canvas.toDataURL("image/png");
 }

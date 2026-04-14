@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, ChangeEvent, KeyboardEvent, memo } from "react";
+import { useState, useRef, useEffect, useCallback, type Dispatch, type SetStateAction, ChangeEvent, KeyboardEvent, memo } from "react";
 import OutputBlock from "./OutputBlock";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
@@ -24,9 +24,10 @@ import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
-import { buildAchievementBox } from "./achievementBox";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
+import { buildAchievementBox } from "./achievementBox";
+import { filterChatHistory } from "./filterChatHistory";
 import Ticker from "./Ticker";
 import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
 import SprintProgressBar from "./SprintProgressBar";
@@ -56,38 +57,14 @@ const MessageList = memo(function MessageList({ history, messageKeys, initialHis
 });
 
 
-/**
- * Build LLM context from chat history.
- * Pairs user messages with a short summary of the bot reply to maintain
- * conversation rhythm without leaking old content.
- */
-function filterChatHistory(history: Message[]): { role: string; content: string }[] {
-  // Filter out slash commands and their responses, then map UI roles to LLM roles.
-  // History windowing and assistant-reply trimming happen in shared buildChatMessages.
-  const isSlashCmd = (content: string) => content.startsWith("/");
-  return history.filter((m, i) => {
-    if (m.role === "user") return !isSlashCmd(m.content);
-    if (m.role === "system") {
-      const prev = history[i - 1];
-      if (prev?.role === "user" && isSlashCmd(prev.content)) return false;
-      return true;
-    }
-    return false;
-  }).map((m) => ({
-    role: m.role === "system" ? "assistant" : "user",
-    content: m.content,
-  }));
-}
-
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, drainQuota, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
-  const [quotaLocked, setQuotaLocked] = useState(false);
   const [instantBanReady, setInstantBanReady] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -148,7 +125,7 @@ function Terminal() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  useEffect(() => { if (!isProcessing && !isBooting && !quotaLocked) inputRef.current?.focus(); }, [isProcessing, isBooting, quotaLocked]);
+  useEffect(() => { if (!isProcessing && !isBooting) inputRef.current?.focus(); }, [isProcessing, isBooting]);
 
   useEffect(() => {
     if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
@@ -157,35 +134,28 @@ function Terminal() {
   }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
 
   const triggerQuotaLockout = () => {
-    setQuotaLocked(true); setIsProcessing(true);
     playError();
     setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." }, { role: "warning", content: "[⚙️] Upgrading to $200/mo Pro Tier..." }]);
     setTimeout(() => {
-      resetQuota();
       const newLockouts = state.economy.quotaLockouts + 1;
       const isNew = newLockouts >= 3 && unlockAchievementWithSound("homer_at_the_buffet");
-      setQuotaLocked(false); setIsProcessing(false);
-      if (newLockouts === 1) setInstantBanReady(true);
-      setHistory((prev) => {
-        const messages: Message[] = [...prev, { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" }];
-        if (isNew) messages.push({ role: "warning", content: buildAchievementBox("homer_at_the_buffet") });
-        return messages;
-      });
+      const achievementMsg: Message[] = isNew ? [{ role: "warning", content: buildAchievementBox("homer_at_the_buffet") }] : [];
+      if (state.proKey) {
+        resetQuota();
+        if (newLockouts === 1) setInstantBanReady(true);
+        setHistory((prev) => [...prev, { role: "system", content: "[SUCCESS] Pro Tier activated. You now have unlimited* access. (*subject to change without notice)" }, ...achievementMsg]);
+      } else {
+        setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent: 0, quotaLockouts: prev.economy.quotaLockouts + 1 } }));
+        setHistory((prev) => [...prev, { role: "error", content: "[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Pro to continue." }, ...achievementMsg]);
+      }
     }, 5000);
   };
 
   const triggerInstantBan = () => {
-    setInstantBanReady(false); setQuotaLocked(true); setIsProcessing(true);
+    setInstantBanReady(false); setIsProcessing(true);
     playError();
     setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." }]);
-    setTimeout(() => { setQuotaLocked(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
-  };
-
-  const applyQuotaDrain = (): boolean => {
-    if (state.apiKey) return false;
-    if (instantBanReady) { triggerInstantBan(); return true; }
-    if (drainQuota() <= 0) { triggerQuotaLockout(); return true; }
-    return false;
+    setTimeout(() => { setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
   };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -201,7 +171,7 @@ function Terminal() {
   });
 
   const runSlashCommand = (command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, applyQuotaDrain, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
   };
 
   const tryOutageDamage = (): boolean => {
@@ -224,15 +194,22 @@ function Terminal() {
     else { setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]); }
   };
 
-  const handleEnterSubmit = () => {
+  const handleEnterSubmit = async () => {
     if (tryOutageDamage()) return;
     if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
     if (bragPending) { handleBragSubmit(); return; }
     if (buddyPendingConfirm) { handleBuddyConfirm(); return; }
-    if (handleKeyCommand(inputValue, setState, setHistory)) { setInputValue(""); return; }
+    if (await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
     setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
-    if (applyQuotaDrain()) { setHistory((prev) => [...prev, { role: "user", content: command }]); return; }
+    // Block submission when quota is exhausted and user has no BYOK or pro key
+    if (!state.apiKey && !state.proKey && state.economy.quotaPercent <= 0) {
+      setHistory((prev) => [...prev, { role: "user", content: command }, { role: "error", content: "[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Pro or use `/key <your-openrouter-key>` to continue." }]);
+      playError();
+      return;
+    }
+    // Handle instant ban scenario (user fires command right after upgrade)
+    if (!state.apiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); triggerInstantBan(); return; }
     const buddyResult = computeBuddyInterjection(state.buddy);
     if (state.buddy.type) {
       const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
@@ -248,58 +225,60 @@ function Terminal() {
       if (!state.activeTicket) return;
       const amount = Math.round(rawAmount * 1.5);
       updateTicketProgress(amount);
-      const newProgress = Math.min(state.activeTicket.sprintProgress + amount, state.activeTicket.sprintGoal);
-      if (newProgress >= state.activeTicket.sprintGoal) {
+      if (Math.min(state.activeTicket.sprintProgress + amount, state.activeTicket.sprintGoal) >= state.activeTicket.sprintGoal) {
         const payout = state.activeTicket.sprintGoal * 10;
-        addActiveTD(payout);
-        playChime();
+        addActiveTD(payout); playChime();
         sprintCompleteMessage = { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` };
         setState((prev) => ({ ...prev, activeTicket: null }));
-        const playerName = state.username || "A player";
-        const completedMessage = `✅ ${playerName} completed ticket "${state.activeTicket!.title}" and earned ${payout.toLocaleString()} TD!`;
-        fetch(`${API_BASE}/api/recent-events`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: completedMessage }),
-        }).catch(() => {});
-        supabase?.channel('global_incidents').send({
-          type: 'broadcast',
-          event: 'new_incident',
-          payload: { message: completedMessage },
-        }).catch(() => {});
+        const completedMessage = `✅ ${state.username || "A player"} completed ticket "${state.activeTicket!.title}" and earned ${payout.toLocaleString()} TD!`;
+        fetch(`${API_BASE}/api/recent-events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: completedMessage }) }).catch(() => {});
+        supabase?.channel('global_incidents').send({ type: 'broadcast', event: 'new_incident', payload: { message: completedMessage } }).catch(() => {});
       }
     };
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    submitChatMessage({ chatMessages, buddyResult, unlockAchievement: unlockAchievementWithSound, setHistory, setIsProcessing, currentRank: rank, apiKey: state.apiKey, customModel: state.selectedModel, proKey: state.proKey, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, getSprintCompleteMessage: () => { const msg = sprintCompleteMessage; sprintCompleteMessage = null; return msg; }, addActiveTD, onSuggestedReply: setSuggestedReply, buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades, onByokCost: (cost) => setState((prev) => ({ ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + cost })), onError: playError, signal: controller.signal });
+    submitChatMessage({
+      chatMessages,
+      buddyResult,
+      unlockAchievement: unlockAchievementWithSound,
+      setHistory,
+      setIsProcessing,
+      currentRank: rank,
+      apiKey: state.apiKey,
+      customModel: state.selectedModel,
+      proKey: state.proKey,
+      modes: state.modes,
+      activeTicket: state.activeTicket,
+      onSprintProgress,
+      getSprintCompleteMessage: () => { const msg = sprintCompleteMessage; sprintCompleteMessage = null; return msg; },
+      addActiveTD,
+      onSuggestedReply: setSuggestedReply,
+      buddyType: state.buddy.type,
+      username: state.username,
+      inventory: state.inventory,
+      upgrades: state.upgrades,
+      onByokUsage: (usage) => setState((prev) => {
+        const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 };
+        return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } };
+      }),
+      onQuotaUpdate: (quotaPercent) => setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })),
+      onQuotaExhausted: triggerQuotaLockout,
+      onError: playError,
+      signal: controller.signal,
+    });
   };
 
   const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = val.length; } }, 0); };
 
   const handleEscapeKey = () => {
-    // Priority 1: Close any open overlay
     const anyOverlayOpen = showStore || showLeaderboard || showAchievements || showSynergize || showHelp || showAbout || showPrivacy || showTerms || showContact || showProfile || showParty;
     if (anyOverlayOpen) { closeAllOverlays(); return; }
-
-    // Priority 2: Abort active API request
     if (isProcessing && abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-      setIsProcessing(false);
-      setHistory((prev) => [
-        ...prev.filter((msg) => msg.role !== "loading"),
-        { role: "warning", content: "[⚠️ ABORTED] Generation cancelled. Your mass-produced cope has been recalled." },
-      ]);
-      // Restore the last command the user typed
-      if (commandHistory.length > 0) {
-        const lastCmd = commandHistory[commandHistory.length - 1]!;
-        setInputValue(lastCmd);
-        setCursorToEnd(lastCmd);
-      }
+      abortControllerRef.current.abort(); abortControllerRef.current = null; setIsProcessing(false);
+      setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading"), { role: "warning", content: "[⚠️ ABORTED] Generation cancelled. Your mass-produced cope has been recalled." }]);
+      if (commandHistory.length > 0) { const lastCmd = commandHistory[commandHistory.length - 1]!; setInputValue(lastCmd); setCursorToEnd(lastCmd); }
       return;
     }
-
-    // Priority 3: Double-tap escape to clear input
     const now = Date.now();
     if (now - lastEscapeRef.current < 500) {
       if (inputValue.length > 0) setHistory((prev) => [...prev, { role: "system", content: "[ESC ESC] Input cleared. Even your half-typed thoughts disappoint me." }]);
@@ -351,23 +330,19 @@ function Terminal() {
     else if (e.key === "ArrowDown") { e.preventDefault(); handleArrowDown(slashMenuOpen, filtered); }
   };
 
-  const renderOverlays = () => (
-    <>
-      {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} equipTheme={setActiveTheme} onClose={() => setShowStore(false)} />}
-      {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
-      {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
-      {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
-      {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
-      {showPrivacy && <PrivacyOverlay onClose={() => { setShowPrivacy(false); window.history.pushState(null, "", "/"); }} />}
-      {showTerms && <TermsOverlay onClose={() => { setShowTerms(false); window.history.pushState(null, "", "/"); }} />}
-      {showContact && <ContactOverlay onClose={() => { setShowContact(false); window.history.pushState(null, "", "/"); }} />}
-      {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
-      {showParty && <PartyOverlay onClose={() => setShowParty(false)} />}
-      {showSynergize && (
-        <SynergizeOverlay onClose={() => { setShowSynergize(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]); }} />
-      )}
-    </>
-  );
+  const renderOverlays = () => (<>
+    {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} equipTheme={setActiveTheme} onClose={() => setShowStore(false)} />}
+    {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
+    {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
+    {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
+    {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
+    {showPrivacy && <PrivacyOverlay onClose={() => { setShowPrivacy(false); window.history.pushState(null, "", "/"); }} />}
+    {showTerms && <TermsOverlay onClose={() => { setShowTerms(false); window.history.pushState(null, "", "/"); }} />}
+    {showContact && <ContactOverlay onClose={() => { setShowContact(false); window.history.pushState(null, "", "/"); }} />}
+    {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
+    {showParty && <PartyOverlay onClose={() => setShowParty(false)} />}
+    {showSynergize && <SynergizeOverlay onClose={() => { setShowSynergize(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]); }} />}
+  </>);
 
   return (
     <div
@@ -390,34 +365,18 @@ function Terminal() {
         <div className="relative border-b border-white">
           {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
           <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
-          <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || quotaLocked} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
+          <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
         </div>
       </div>
       {renderOverlays()}
       <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-1 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
+        <div className="flex items-center justify-between"><span>This is a parody project and is not affiliated with Anthropic.</span><span className="ml-auto text-right">&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></span></div>
         <div className="flex items-center justify-between">
-          <span>This is a parody project and is not affiliated with Anthropic.</span>
-          <span className="ml-auto text-right">&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="flex gap-4">
-            <button onClick={() => { closeAllOverlays(); setShowTerms(true); window.history.pushState(null, "", "/terms"); }} className="text-gray-400 hover:text-white">/terms</button>
-            <button onClick={() => { closeAllOverlays(); setShowPrivacy(true); window.history.pushState(null, "", "/privacy"); }} className="text-gray-400 hover:text-white">/privacy</button>
-            <button onClick={() => { closeAllOverlays(); setShowAbout(true); }} className="text-gray-400 hover:text-white">/about</button>
-            <button onClick={() => { closeAllOverlays(); setShowHelp(true); }} className="text-gray-400 hover:text-white">/help</button>
-            <button onClick={() => { closeAllOverlays(); setShowContact(true); window.history.pushState(null, "", "/contact"); }} className="text-gray-400 hover:text-white">/contact</button>
-          </span>
-          <span className="flex gap-4">
-            <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/github</a>
-            <a href="https://reddit.com/r/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/reddit</a>
-            <a href="https://discord.gg/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/discord</a>
-            <a href="https://x.com/claudecope" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">/x</a>
-          </span>
+          <span className="flex gap-4">{([["terms", setShowTerms], ["privacy", setShowPrivacy], ["about", setShowAbout], ["help", setShowHelp], ["contact", setShowContact]] as [string, Dispatch<SetStateAction<boolean>>][]).map(([key, setter]: [string, Dispatch<SetStateAction<boolean>>]) => (<button key={key} onClick={() => { closeAllOverlays(); setter(true); if (key !== "about" && key !== "help") window.history.pushState(null, "", `/${key}`); }} className="text-gray-400 hover:text-white">/{key}</button>))}</span>
+          <span className="flex gap-4">{[["https://github.com/integry/claude-cope", "/github"], ["https://reddit.com/r/claudecope", "/reddit"], ["https://discord.gg/claudecope", "/discord"], ["https://x.com/claudecope", "/x"]].map(([href, label]) => (<a key={label} href={href} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">{label}</a>))}</span>
         </div>
       </footer>
-      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 backdrop-blur-sm font-mono sm:hidden text-center" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
-        <span className="leading-tight">Parody project, no Anthropic affiliation.</span>
-      </footer>
+      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 backdrop-blur-sm font-mono sm:hidden text-center" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}><span className="leading-tight">Parody project, no Anthropic affiliation.</span></footer>
     </div>
   );
 }

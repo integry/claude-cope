@@ -73,6 +73,12 @@ export interface ActiveTicket {
   sprintGoal: number;
 }
 
+export interface ByokUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost: number;
+}
+
 export interface GameState {
   version: string;
   username: string;
@@ -94,6 +100,7 @@ export interface GameState {
   selectedModel?: string;
   proKey?: string;
   byokTotalCost?: number;
+  byokUsage?: Record<string, ByokUsage>;
 }
 
 /** Legacy flat state shape used before the economy refactor. */
@@ -262,8 +269,8 @@ export function loadState(): GameState {
         return createDefaultState();
       }
 
-      // Ensure quotaPercent is initialized for existing saves
-      if (!state.economy.quotaPercent) {
+      // Ensure quotaPercent is initialized for existing saves (use == null to preserve 0)
+      if (state.economy.quotaPercent == null) {
         state.economy.quotaPercent = 100;
       }
       // Ensure tdMultiplier is initialized for existing saves
