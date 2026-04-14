@@ -24,6 +24,34 @@ async function hashKey(licenseKey: string): Promise<string> {
 }
 
 /**
+ * Query the current quota percentage without consuming any credits.
+ */
+export async function getQuotaPercent(
+  kv: KVNamespace,
+  opts: {
+    tier: "free" | "pro";
+    sessionId: string;
+    licenseKeyHash?: string;
+  },
+): Promise<number> {
+  if (opts.tier === "pro") {
+    if (!opts.licenseKeyHash) return 0;
+    const kvKey = `polar:${opts.licenseKeyHash}`;
+    const raw = await kv.get(kvKey);
+    if (raw === null) return 0;
+    const remaining = parseInt(raw, 10);
+    if (isNaN(remaining)) return 0;
+    return (remaining / PRO_INITIAL_QUOTA) * 100;
+  }
+
+  // Free tier
+  const kvKey = `free:${opts.sessionId}`;
+  const raw = await kv.get(kvKey);
+  const current = raw !== null ? parseInt(raw, 10) : 0;
+  return ((FREE_QUOTA_LIMIT - current) / FREE_QUOTA_LIMIT) * 100;
+}
+
+/**
  * Consume quota for a request based on the user's tier.
  *
  * - Pro users: keyed by hashed Polar license key. Quota is stored as a

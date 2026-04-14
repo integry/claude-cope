@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, SetStateAction } from "react";
 import { GENERATORS, UPGRADES, CORPORATE_RANKS, THEMES } from "../game/constants";
 import { supabase } from "../supabaseClient";
+import { API_BASE } from "../config";
 import {
   type Message,
   type GameState,
@@ -28,6 +29,21 @@ export function useGameState() {
   // Update lastLogin on mount (no passive offline TD — active play only)
   useEffect(() => {
     setState((prev) => ({ ...prev, lastLogin: Date.now() }));
+  }, []);
+
+  // Hydrate quota from server on mount so the bar reflects actual usage
+  useEffect(() => {
+    if (state.apiKey) return; // BYOK users don't use server quota
+    const url = `${API_BASE}/api/account/quota`;
+    fetch(url, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data.quotaPercent === "number") {
+          setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent: data.quotaPercent } }));
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Persist state to localStorage (filter transient "loading" messages from chat history)

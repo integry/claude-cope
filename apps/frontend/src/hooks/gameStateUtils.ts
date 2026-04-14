@@ -269,8 +269,8 @@ export function loadState(): GameState {
         return createDefaultState();
       }
 
-      // Ensure quotaPercent is initialized for existing saves
-      if (!state.economy.quotaPercent) {
+      // Ensure quotaPercent is initialized for existing saves (use == null to preserve 0)
+      if (state.economy.quotaPercent == null) {
         state.economy.quotaPercent = 100;
       }
       // Ensure tdMultiplier is initialized for existing saves
