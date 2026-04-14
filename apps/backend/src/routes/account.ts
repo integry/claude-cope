@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { validatePolarKey } from "../utils/polar";
-import { PRO_INITIAL_QUOTA, getQuotaPercent } from "../utils/quota";
+import { PRO_INITIAL_QUOTA } from "../utils/quota";
 
 type Env = {
   Bindings: {
@@ -52,20 +52,6 @@ account.post("/sync", async (c) => {
   await kv.put(kvKey, String(PRO_INITIAL_QUOTA));
 
   return c.json({ success: true, hash });
-});
-
-account.get("/quota", async (c) => {
-  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  if (!kv) {
-    return c.json({ quotaPercent: 100 });
-  }
-
-  const sessionId = c.get("sessionId");
-  const proKeyHash = c.req.query("proKeyHash");
-  const tier = proKeyHash ? "pro" : "free";
-
-  const quotaPercent = await getQuotaPercent(kv, { tier, sessionId, licenseKeyHash: proKeyHash });
-  return c.json({ quotaPercent });
 });
 
 account.post("/shill", async (c) => {

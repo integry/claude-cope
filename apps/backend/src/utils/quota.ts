@@ -41,14 +41,14 @@ export async function getQuotaPercent(
     if (raw === null) return 0;
     const remaining = parseInt(raw, 10);
     if (isNaN(remaining)) return 0;
-    return (remaining / PRO_INITIAL_QUOTA) * 100;
+    return Math.min(100, Math.max(0, (remaining / PRO_INITIAL_QUOTA) * 100));
   }
 
   // Free tier
   const kvKey = `free:${opts.sessionId}`;
   const raw = await kv.get(kvKey);
   const current = raw !== null ? parseInt(raw, 10) : 0;
-  return ((FREE_QUOTA_LIMIT - current) / FREE_QUOTA_LIMIT) * 100;
+  return Math.min(100, Math.max(0, ((FREE_QUOTA_LIMIT - current) / FREE_QUOTA_LIMIT) * 100));
 }
 
 /**
@@ -94,7 +94,7 @@ export async function consumeQuota(
 
     const newRemaining = remaining - cost;
     await kv.put(kvKey, String(newRemaining));
-    const quotaPercent = (newRemaining / PRO_INITIAL_QUOTA) * 100;
+    const quotaPercent = Math.min(100, Math.max(0, (newRemaining / PRO_INITIAL_QUOTA) * 100));
     return { quotaPercent };
   }
 
@@ -109,6 +109,6 @@ export async function consumeQuota(
 
   const newUsage = current + cost;
   await kv.put(kvKey, String(newUsage));
-  const quotaPercent = ((FREE_QUOTA_LIMIT - newUsage) / FREE_QUOTA_LIMIT) * 100;
+  const quotaPercent = Math.min(100, Math.max(0, ((FREE_QUOTA_LIMIT - newUsage) / FREE_QUOTA_LIMIT) * 100));
   return { quotaPercent };
 }
