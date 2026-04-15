@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS user_scores (
     current_td INTEGER NOT NULL DEFAULT 0,
     corporate_rank TEXT NOT NULL DEFAULT 'Junior Code Monkey',
     country TEXT NOT NULL DEFAULT 'Unknown',
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_sync_time TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_scores_total_td
