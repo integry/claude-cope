@@ -73,9 +73,9 @@ export function useGameState() {
           country,
           completedTaskIds,
         }),
-      }).then(() => {
-        // Clear pending task IDs after successful sync
-        if (completedTaskIds.length > 0) {
+      }).then((res) => {
+        // Only clear pending task IDs on successful (2xx) response
+        if (res.ok && completedTaskIds.length > 0) {
           setState((prev) => ({
             ...prev,
             pendingCompletedTaskIds: prev.pendingCompletedTaskIds.filter(

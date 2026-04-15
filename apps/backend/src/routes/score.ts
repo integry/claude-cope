@@ -66,8 +66,10 @@ score.post("/", async (c) => {
   // Validate completed task bonuses — these are the only source of large one-off earnings.
   // Look up each claimed task in community_backlog, verify it hasn't been claimed before,
   // and compute the validated bonus (technical_debt * 10, matching the client payout formula).
+  // Security: deduplicate IDs and cap to 1 claim per sync to limit abuse surface.
   let validatedTaskBonus = 0;
-  const taskIds = body.completedTaskIds ?? [];
+  const taskIds = [...new Set(body.completedTaskIds ?? [])].slice(0, 1);
+  const validatedClaims: Array<{ ticketId: string; bonus: number }> = [];
   for (const ticketId of taskIds) {
     // Check the task exists in community_backlog
     const ticket = await db
@@ -85,12 +87,7 @@ score.post("/", async (c) => {
 
     const bonus = ticket.technical_debt * 10;
     validatedTaskBonus += bonus;
-
-    // Record the completion to prevent replay
-    await db
-      .prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) VALUES (?, ?, ?)")
-      .bind(body.username, ticketId, bonus)
-      .run();
+    validatedClaims.push({ ticketId, bonus });
   }
 
   // Time-based generation cap: calculate maximum possible TD since last sync
@@ -134,6 +131,14 @@ score.post("/", async (c) => {
     await db
       .prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, last_sync_time) VALUES (?, ?, ?, ?, ?, datetime('now'))")
       .bind(body.username, validatedTotal, validatedCurrent, rank, country)
+      .run();
+  }
+
+  // Record task completions AFTER score update succeeds to avoid sticky replay protection on failure
+  for (const claim of validatedClaims) {
+    await db
+      .prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) VALUES (?, ?, ?)")
+      .bind(body.username, claim.ticketId, claim.bonus)
       .run();
   }
 

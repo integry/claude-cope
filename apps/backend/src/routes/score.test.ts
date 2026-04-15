@@ -326,6 +326,31 @@ describe("POST /api/score", () => {
     expect(json.total_td).toBeLessThanOrEqual(1100);
   });
 
+  it("deduplicates and caps task claims to 1 per sync", async () => {
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db } = makeDBWithTasks(
+      { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
+      {
+        "ticket-a": { technical_debt: 100 },
+        "ticket-b": { technical_debt: 200 },
+      },
+    );
+    const res = await postScore(db, {
+      username: "greedy",
+      currentTD: 4000,
+      totalTDEarned: 4000,
+      inventory: {},
+      upgrades: [],
+      // Sends duplicates and multiple IDs — only first unique should be processed
+      completedTaskIds: ["ticket-a", "ticket-a", "ticket-b"],
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { total_td: number };
+    // Only ticket-a should be processed (cap=1), bonus = 100*10 = 1000
+    // Allowed total = round(1000*1.1) + 1000 = 2100
+    expect(json.total_td).toBeLessThanOrEqual(2100);
+  });
+
   it("ignores invalid task IDs in completedTaskIds", async () => {
     const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
     const { db } = makeDBWithTasks(
