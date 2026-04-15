@@ -4,6 +4,7 @@ import app from "../app";
 function makeDB(existing?: { total_td: number; current_td: number; last_sync_time?: string }) {
   const bound: unknown[] = [];
   let lastSQL = "";
+  const batchedStatements: unknown[] = [];
   return {
     db: {
       prepare: vi.fn((sql: string) => {
@@ -19,8 +20,13 @@ function makeDB(existing?: { total_td: number; current_td: number; last_sync_tim
           }),
         };
       }),
+      batch: vi.fn((stmts: unknown[]) => {
+        batchedStatements.push(...stmts);
+        return Promise.resolve(stmts.map(() => ({ success: true })));
+      }),
     },
     bound,
+    batchedStatements,
     getSQL: () => lastSQL,
   };
 }
@@ -29,9 +35,11 @@ function makeDBWithTasks(
   existing: { total_td: number; current_td: number; last_sync_time?: string } | undefined,
   tickets: Record<string, { technical_debt: number }>,
   claimedTickets: string[] = [],
+  batchShouldFail = false,
 ) {
   const bound: unknown[] = [];
   let lastSQL = "";
+  const batchedStatements: unknown[] = [];
   return {
     db: {
       prepare: vi.fn((sql: string) => {
@@ -60,8 +68,14 @@ function makeDBWithTasks(
           }),
         };
       }),
+      batch: vi.fn((stmts: unknown[]) => {
+        batchedStatements.push(...stmts);
+        if (batchShouldFail) return Promise.reject(new Error("D1 batch transaction failed"));
+        return Promise.resolve(stmts.map(() => ({ success: true })));
+      }),
     },
     bound,
+    batchedStatements,
     getSQL: () => lastSQL,
   };
 }
@@ -325,7 +339,7 @@ describe("POST /api/score", () => {
     expect(json.total_td).toBeLessThanOrEqual(1100);
   });
 
-  it("deduplicates and caps task claims to 1 per sync", async () => {
+  it("deduplicates task IDs but processes all unique completions per sync", async () => {
     const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
     const { db } = makeDBWithTasks(
       { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
@@ -335,19 +349,58 @@ describe("POST /api/score", () => {
       },
     );
     const res = await postScore(db, {
-      username: "greedy",
+      username: "worker",
       currentTD: 4000,
       totalTDEarned: 4000,
       inventory: {},
       upgrades: [],
-      // Sends duplicates and multiple IDs — only first unique should be processed
+      // Sends duplicates — deduplication should reduce to 2 unique IDs
       completedTaskIds: ["ticket-a", "ticket-a", "ticket-b"],
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { total_td: number };
-    // Only ticket-a should be processed (cap=1), bonus = 100*10 = 1000
-    // Allowed total = round(1000*1.1) + 1000 = 2100
-    expect(json.total_td).toBeLessThanOrEqual(2100);
+    // Both tickets processed: bonus = (100+200)*10 = 3000
+    // Allowed total = round(1000*1.1) + 3000 = 4100
+    expect(json.total_td).toBe(4000);
+  });
+
+  it("uses db.batch() for transactional score update and task completion", async () => {
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db, batchedStatements } = makeDBWithTasks(
+      { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
+      { "ticket-abc": { technical_debt: 500 } },
+    );
+    await postScore(db, {
+      username: "worker",
+      currentTD: 5800,
+      totalTDEarned: 5800,
+      inventory: {},
+      upgrades: [],
+      completedTaskIds: ["ticket-abc"],
+    });
+    // batch() should have been called with 2 statements (score update + 1 task insert)
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(batchedStatements.length).toBe(2);
+  });
+
+  it("returns 500 when batch transaction fails (no partial writes)", async () => {
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db } = makeDBWithTasks(
+      { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
+      { "ticket-abc": { technical_debt: 500 } },
+      [],
+      true, // batch will fail
+    );
+    const res = await postScore(db, {
+      username: "worker",
+      currentTD: 5800,
+      totalTDEarned: 5800,
+      inventory: {},
+      upgrades: [],
+      completedTaskIds: ["ticket-abc"],
+    });
+    // When batch fails, the entire request should fail — no partial state
+    expect(res.status).toBe(500);
   });
 
   it("ignores invalid task IDs in completedTaskIds", async () => {

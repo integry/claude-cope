@@ -10,14 +10,23 @@ type Env = {
 
 const score = new Hono<Env>();
 
-/** Validate completed task bonuses and return validated bonus + claims list. */
+/**
+ * Validate completed task bonuses and return validated bonus + claims list.
+ *
+ * TRUST-BOUNDARY LIMITATION: The server verifies that claimed ticket IDs exist
+ * in community_backlog and have not been previously claimed by this user, but it
+ * cannot prove the client actually completed the sprint for that ticket — there
+ * is no server-side sprint progress tracking. A malicious client could claim any
+ * unclaimed backlog ticket. Fully closing this gap requires server-authoritative
+ * sprint state, which is outside the scope of the current schema.
+ */
 async function validateTaskBonuses(
   db: D1Database,
   username: string,
   completedTaskIds: string[] | undefined,
 ): Promise<{ validatedTaskBonus: number; validatedClaims: Array<{ ticketId: string; bonus: number }> }> {
   let validatedTaskBonus = 0;
-  const taskIds = [...new Set(completedTaskIds ?? [])].slice(0, 1);
+  const taskIds = [...new Set(completedTaskIds ?? [])];
   const validatedClaims: Array<{ ticketId: string; bonus: number }> = [];
   for (const ticketId of taskIds) {
     const ticket = await db
@@ -126,25 +135,35 @@ score.post("/", async (c) => {
   const isSuspicious = body.totalTDEarned > serverTotal * 2 && serverTotal > 1000;
   if (isSuspicious) rank = "🤡 DevTools Hacker";
 
+  // Use db.batch() to execute score update + task completion inserts atomically.
+  // D1 batch runs all statements in a single transaction — if any statement fails,
+  // the entire batch is rolled back, preventing state divergence.
+  const batchStatements: D1PreparedStatement[] = [];
+
   if (existing) {
     const updatedTotal = Math.max(serverTotal, validatedTotal);
-    await db
-      .prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now'), last_sync_time = datetime('now') WHERE username = ?")
-      .bind(updatedTotal, validatedCurrent, rank, country, body.username)
-      .run();
+    batchStatements.push(
+      db.prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now'), last_sync_time = datetime('now') WHERE username = ?")
+        .bind(updatedTotal, validatedCurrent, rank, country, body.username),
+    );
   } else {
-    await db
-      .prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, last_sync_time) VALUES (?, ?, ?, ?, ?, datetime('now'))")
-      .bind(body.username, validatedTotal, validatedCurrent, rank, country)
-      .run();
+    batchStatements.push(
+      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, last_sync_time) VALUES (?, ?, ?, ?, ?, datetime('now'))")
+        .bind(body.username, validatedTotal, validatedCurrent, rank, country),
+    );
   }
 
-  // Record task completions AFTER score update succeeds to avoid sticky replay protection on failure
   for (const claim of validatedClaims) {
-    await db
-      .prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) VALUES (?, ?, ?)")
-      .bind(body.username, claim.ticketId, claim.bonus)
-      .run();
+    batchStatements.push(
+      db.prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) VALUES (?, ?, ?)")
+        .bind(body.username, claim.ticketId, claim.bonus),
+    );
+  }
+
+  try {
+    await db.batch(batchStatements);
+  } catch {
+    return c.json({ error: "Score sync failed — please retry" }, 500);
   }
 
   const finalTotal = existing ? Math.max(serverTotal, validatedTotal) : validatedTotal;
