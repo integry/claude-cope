@@ -10,6 +10,35 @@ type Env = {
 
 const score = new Hono<Env>();
 
+/** Validate completed task bonuses and return validated bonus + claims list. */
+async function validateTaskBonuses(
+  db: D1Database,
+  username: string,
+  completedTaskIds: string[] | undefined,
+): Promise<{ validatedTaskBonus: number; validatedClaims: Array<{ ticketId: string; bonus: number }> }> {
+  let validatedTaskBonus = 0;
+  const taskIds = [...new Set(completedTaskIds ?? [])].slice(0, 1);
+  const validatedClaims: Array<{ ticketId: string; bonus: number }> = [];
+  for (const ticketId of taskIds) {
+    const ticket = await db
+      .prepare("SELECT technical_debt FROM community_backlog WHERE id = ?")
+      .bind(ticketId)
+      .first<{ technical_debt: number }>();
+    if (!ticket) continue;
+
+    const alreadyClaimed = await db
+      .prepare("SELECT 1 FROM completed_tasks WHERE username = ? AND ticket_id = ?")
+      .bind(username, ticketId)
+      .first();
+    if (alreadyClaimed) continue;
+
+    const bonus = ticket.technical_debt * 10;
+    validatedTaskBonus += bonus;
+    validatedClaims.push({ ticketId, bonus });
+  }
+  return { validatedTaskBonus, validatedClaims };
+}
+
 /** GET /api/score?username=X — fetch server-authoritative score for syncing */
 score.get("/", async (c) => {
   const username = c.req.query("username");
@@ -64,31 +93,7 @@ score.post("/", async (c) => {
   const serverTotal = existing?.total_td ?? 0;
 
   // Validate completed task bonuses — these are the only source of large one-off earnings.
-  // Look up each claimed task in community_backlog, verify it hasn't been claimed before,
-  // and compute the validated bonus (technical_debt * 10, matching the client payout formula).
-  // Security: deduplicate IDs and cap to 1 claim per sync to limit abuse surface.
-  let validatedTaskBonus = 0;
-  const taskIds = [...new Set(body.completedTaskIds ?? [])].slice(0, 1);
-  const validatedClaims: Array<{ ticketId: string; bonus: number }> = [];
-  for (const ticketId of taskIds) {
-    // Check the task exists in community_backlog
-    const ticket = await db
-      .prepare("SELECT technical_debt FROM community_backlog WHERE id = ?")
-      .bind(ticketId)
-      .first<{ technical_debt: number }>();
-    if (!ticket) continue;
-
-    // Check this user hasn't already claimed this task bonus (replay protection)
-    const alreadyClaimed = await db
-      .prepare("SELECT 1 FROM completed_tasks WHERE username = ? AND ticket_id = ?")
-      .bind(body.username, ticketId)
-      .first();
-    if (alreadyClaimed) continue;
-
-    const bonus = ticket.technical_debt * 10;
-    validatedTaskBonus += bonus;
-    validatedClaims.push({ ticketId, bonus });
-  }
+  const { validatedTaskBonus, validatedClaims } = await validateTaskBonuses(db, body.username, body.completedTaskIds);
 
   // Time-based generation cap: calculate maximum possible TD since last sync
   const now = new Date();

@@ -50,7 +50,6 @@ function makeDBWithTasks(
                   return Promise.resolve(tickets[ticketId] ?? null);
                 }
                 if (isCompletedSelect) {
-                  const username = args[0] as string;
                   const ticketId = args[1] as string;
                   return Promise.resolve(claimedTickets.includes(ticketId) ? { "1": 1 } : null);
                 }

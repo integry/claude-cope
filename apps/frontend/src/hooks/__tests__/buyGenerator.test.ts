@@ -80,6 +80,7 @@ function makeDefaultState(overrides?: Partial<GameState>): GameState {
     activeTheme: "default",
     unlockedThemes: ["default"],
     soundEnabled: true,
+    pendingCompletedTaskIds: [],
     ...overrides,
   };
 }

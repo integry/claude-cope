@@ -35,6 +35,7 @@ function makeGameState(overrides: Partial<GameState["economy"]> = {}): GameState
     activeTheme: "default",
     unlockedThemes: ["default"],
     soundEnabled: true,
+    pendingCompletedTaskIds: [],
   };
 }
 
