@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import app from "../app";
 
-function makeDB(existing?: { total_td: number; current_td: number }) {
+function makeDB(existing?: { total_td: number; current_td: number; last_sync_time?: string }) {
   const bound: unknown[] = [];
   let lastSQL = "";
   return {
@@ -170,6 +170,59 @@ describe("POST /api/score", () => {
       { "cf-ipcountry": "PK" }
     );
     expect(bound).toContain("PK");
+  });
+
+  it("clamps score to time-based generation cap", async () => {
+    // Last sync was 10 seconds ago, multiplier = 1 (no generators)
+    // maxTDPerSecond = max(1, ((1 - 1) * 100 + 20 * 1) * 1.5) = max(1, 30) = 30
+    // maxTDGain = 30 * 10 = 300
+    // timeClampedTotal = 1000 + 300 = 1300
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db } = makeDB({ total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo });
+    const res = await postScore(db, {
+      username: "cheater",
+      currentTD: 50000,
+      totalTDEarned: 50000,
+      inventory: {},
+      upgrades: [],
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { total_td: number };
+    // Should be clamped: min(50000, round(1000*1.1)=1100, round(1300)=1300) = 1100
+    expect(json.total_td).toBeLessThanOrEqual(1300);
+  });
+
+  it("allows legitimate score within time-based cap", async () => {
+    // Last sync was 60 seconds ago, multiplier = 1.5 (10 copy-pasters)
+    // maxTDPerSecond = max(1, ((1.5 - 1) * 100 + 20 * 1.5) * 1.5) = max(1, (50+30)*1.5) = 120
+    // maxTDGain = 120 * 60 = 7200
+    // timeClampedTotal = 5000 + 7200 = 12200
+    const sixtySecondsAgo = new Date(Date.now() - 60_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db } = makeDB({ total_td: 5000, current_td: 4000, last_sync_time: sixtySecondsAgo });
+    const res = await postScore(db, {
+      username: "legit",
+      currentTD: 5400,
+      totalTDEarned: 5400,
+      inventory: { "stackoverflow-copy-paster": 10 },
+      upgrades: [],
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { total_td: number };
+    // 5400 <= min(round(5000*1.1)=5500, round(12200)=12200) = 5500, so allowed
+    expect(json.total_td).toBe(5400);
+  });
+
+  it("updates last_sync_time in UPDATE query", async () => {
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db, getSQL } = makeDB({ total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo });
+    await postScore(db, {
+      username: "alice",
+      currentTD: 1000,
+      totalTDEarned: 1000,
+      inventory: {},
+      upgrades: [],
+    });
+    expect(getSQL()).toContain("last_sync_time");
   });
 
   it("returns multiplier based on inventory and upgrades", async () => {
