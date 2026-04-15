@@ -19,8 +19,8 @@ app.use(
   secureHeaders({
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      connectSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'", "https://openrouter.ai", "wss:", "ws:"],
       imgSrc: ["'self'", "data:"],
       styleSrc: ["'self'", "'unsafe-inline'"],
     },

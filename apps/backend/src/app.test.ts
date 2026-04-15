@@ -17,8 +17,8 @@ describe("app", () => {
       const csp = res.headers.get("content-security-policy");
       expect(csp).toBeTruthy();
       expect(csp).toContain("default-src 'self'");
-      expect(csp).toContain("script-src 'self'");
-      expect(csp).toContain("connect-src 'self'");
+      expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+      expect(csp).toContain("connect-src 'self' https://openrouter.ai wss: ws:");
       expect(csp).toContain("img-src 'self' data:");
       expect(csp).toContain("style-src 'self' 'unsafe-inline'");
     });
