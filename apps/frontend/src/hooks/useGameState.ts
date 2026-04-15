@@ -60,6 +60,7 @@ export function useGameState() {
         // Intl.Locale not supported or invalid — keep "Unknown"
       }
 
+      const completedTaskIds = current.pendingCompletedTaskIds ?? [];
       fetch("/api/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,7 +71,18 @@ export function useGameState() {
           inventory: current.inventory,
           upgrades: current.upgrades,
           country,
+          completedTaskIds,
         }),
+      }).then(() => {
+        // Clear pending task IDs after successful sync
+        if (completedTaskIds.length > 0) {
+          setState((prev) => ({
+            ...prev,
+            pendingCompletedTaskIds: prev.pendingCompletedTaskIds.filter(
+              (id) => !completedTaskIds.includes(id),
+            ),
+          }));
+        }
       }).catch(() => {});
     }, 300000); // 5 minutes
 

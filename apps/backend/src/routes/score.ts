@@ -43,6 +43,7 @@ score.post("/", async (c) => {
     inventory: Record<string, number>;
     upgrades: string[];
     country?: string;
+    completedTaskIds?: string[];
   }>();
 
   if (!body.username) return c.json({ error: "username required" }, 400);
@@ -62,6 +63,36 @@ score.post("/", async (c) => {
 
   const serverTotal = existing?.total_td ?? 0;
 
+  // Validate completed task bonuses — these are the only source of large one-off earnings.
+  // Look up each claimed task in community_backlog, verify it hasn't been claimed before,
+  // and compute the validated bonus (technical_debt * 10, matching the client payout formula).
+  let validatedTaskBonus = 0;
+  const taskIds = body.completedTaskIds ?? [];
+  for (const ticketId of taskIds) {
+    // Check the task exists in community_backlog
+    const ticket = await db
+      .prepare("SELECT technical_debt FROM community_backlog WHERE id = ?")
+      .bind(ticketId)
+      .first<{ technical_debt: number }>();
+    if (!ticket) continue;
+
+    // Check this user hasn't already claimed this task bonus (replay protection)
+    const alreadyClaimed = await db
+      .prepare("SELECT 1 FROM completed_tasks WHERE username = ? AND ticket_id = ?")
+      .bind(body.username, ticketId)
+      .first();
+    if (alreadyClaimed) continue;
+
+    const bonus = ticket.technical_debt * 10;
+    validatedTaskBonus += bonus;
+
+    // Record the completion to prevent replay
+    await db
+      .prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) VALUES (?, ?, ?)")
+      .bind(body.username, ticketId, bonus)
+      .run();
+  }
+
   // Time-based generation cap: calculate maximum possible TD since last sync
   const now = new Date();
   let maxTDGain = Infinity;
@@ -75,11 +106,11 @@ score.post("/", async (c) => {
     const maxTDPerSecond = Math.max(1, ((claimedMultiplier - 1) * 100 + 20 * claimedMultiplier) * 1.5);
     maxTDGain = maxTDPerSecond * elapsedSeconds;
   }
-  const timeClampedTotal = serverTotal + maxTDGain;
+  const timeClampedTotal = serverTotal + maxTDGain + validatedTaskBonus;
 
-  // Client's totalTDEarned can't exceed server's tracked total (10% tolerance)
-  // AND can't exceed the time-based generation cap
-  const validatedTotal = Math.min(body.totalTDEarned, Math.round(serverTotal * 1.1), Math.round(timeClampedTotal));
+  // Client's totalTDEarned can't exceed server's tracked total (10% tolerance + task bonus)
+  // AND can't exceed the time-based generation cap (also includes task bonus)
+  const validatedTotal = Math.min(body.totalTDEarned, Math.round(serverTotal * 1.1) + validatedTaskBonus, Math.round(timeClampedTotal));
   // currentTD can't exceed validatedTotal (can't have more than you earned)
   const validatedCurrent = Math.min(body.currentTD, validatedTotal);
 
