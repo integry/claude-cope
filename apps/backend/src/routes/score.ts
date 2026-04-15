@@ -51,7 +51,7 @@ score.post("/", async (c) => {
   const cfCountry = (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country;
   const country = body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
 
-  // Validate the multiplier from the claimed inventory
+  // Compute multiplier from claimed inventory (returned to client, not used for security validation)
   const claimedMultiplier = computeMultiplier(body.inventory, body.upgrades);
 
   // Fetch server-side score and last sync time
@@ -62,24 +62,26 @@ score.post("/", async (c) => {
 
   const serverTotal = existing?.total_td ?? 0;
 
-  // Time-based generation cap: calculate maximum possible TD since last sync
-  const now = new Date();
-  let maxTDGain = Infinity;
+  // Time-based generation cap using server-authoritative data only.
+  // Max TD/sec is derived from serverTotal (not client inventory) to prevent
+  // cheaters from inflating inventory to raise the cap.
+  // Rate: max(100, serverTotal * 0.01) TD/sec — generous enough to avoid false positives.
+  let timeClampedTotal: number;
   if (existing?.last_sync_time) {
-    const lastSync = new Date(existing.last_sync_time + "Z");
+    const syncStr = existing.last_sync_time;
+    const lastSync = new Date(syncStr.includes("T") ? syncStr : syncStr.replace(" ", "T") + "Z");
+    const now = new Date();
     const elapsedSeconds = Math.max(0, (now.getTime() - lastSync.getTime()) / 1000);
-    // Max TD/sec = idle generation + generous click allowance
-    // Idle output = (multiplier - 1) * 100 TD/sec from generators
-    // Click output = ~20 clicks/sec * multiplier TD/click
-    // Total with 50% safety buffer to avoid false positives
-    const maxTDPerSecond = Math.max(1, ((claimedMultiplier - 1) * 100 + 20 * claimedMultiplier) * 1.5);
-    maxTDGain = maxTDPerSecond * elapsedSeconds;
+    const maxTDPerSecond = Math.max(100, serverTotal * 0.01);
+    const maxTDGain = maxTDPerSecond * elapsedSeconds;
+    timeClampedTotal = Math.round(serverTotal + maxTDGain);
+  } else {
+    // No sync history: fall back to 110% of server total
+    timeClampedTotal = Math.round(serverTotal * 1.1);
   }
-  const timeClampedTotal = serverTotal + maxTDGain;
 
-  // Client's totalTDEarned can't exceed server's tracked total (10% tolerance)
-  // AND can't exceed the time-based generation cap
-  const validatedTotal = Math.min(body.totalTDEarned, Math.round(serverTotal * 1.1), Math.round(timeClampedTotal));
+  // Client's totalTDEarned can't exceed the server-authoritative cap
+  const validatedTotal = Math.min(body.totalTDEarned, timeClampedTotal);
   // currentTD can't exceed validatedTotal (can't have more than you earned)
   const validatedCurrent = Math.min(body.currentTD, validatedTotal);
 

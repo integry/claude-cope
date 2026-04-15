@@ -117,7 +117,8 @@ describe("POST /api/score", () => {
     expect(json.corporate_rank).toBe("Junior Code Monkey");
   });
 
-  it("caps totalTDEarned to 110% of server total for existing user", async () => {
+  it("caps totalTDEarned to 110% of server total when no last_sync_time", async () => {
+    // No last_sync_time → falls back to 110% rule
     const { db } = makeDB({ total_td: 1000, current_td: 800 });
     const res = await postScore(db, {
       username: "alice",
@@ -128,7 +129,7 @@ describe("POST /api/score", () => {
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { total_td: number };
-    // Server total is 1000, so validated max is 1100 (110%)
+    // No sync time → fallback: round(1000 * 1.1) = 1100
     expect(json.total_td).toBeLessThanOrEqual(1100);
   });
 
@@ -172,11 +173,11 @@ describe("POST /api/score", () => {
     expect(bound).toContain("PK");
   });
 
-  it("clamps score to time-based generation cap", async () => {
-    // Last sync was 10 seconds ago, multiplier = 1 (no generators)
-    // maxTDPerSecond = max(1, ((1 - 1) * 100 + 20 * 1) * 1.5) = max(1, 30) = 30
-    // maxTDGain = 30 * 10 = 300
-    // timeClampedTotal = 1000 + 300 = 1300
+  it("clamps score to time-based generation cap (server-authoritative)", async () => {
+    // Last sync was 10 seconds ago, serverTotal = 1000
+    // maxTDPerSecond = max(100, 1000 * 0.01) = 100
+    // maxTDGain = 100 * 10 = 1000
+    // timeClampedTotal = 1000 + 1000 = 2000
     const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
     const { db } = makeDB({ total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo });
     const res = await postScore(db, {
@@ -188,15 +189,45 @@ describe("POST /api/score", () => {
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { total_td: number };
-    // Should be clamped: min(50000, round(1000*1.1)=1100, round(1300)=1300) = 1100
-    expect(json.total_td).toBeLessThanOrEqual(1300);
+    // Should be clamped to ~2000 (not 50000)
+    expect(json.total_td).toBeLessThanOrEqual(2000);
+    expect(json.total_td).toBeGreaterThanOrEqual(1000);
+  });
+
+  it("time cap does not depend on client-submitted inventory", async () => {
+    // Even with inflated client inventory, cap uses server total only
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db: db1 } = makeDB({ total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo });
+    const { db: db2 } = makeDB({ total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo });
+
+    // Request with empty inventory
+    const res1 = await postScore(db1, {
+      username: "player1",
+      currentTD: 50000,
+      totalTDEarned: 50000,
+      inventory: {},
+      upgrades: [],
+    });
+    // Request with inflated inventory (cheater trying to raise cap)
+    const res2 = await postScore(db2, {
+      username: "player2",
+      currentTD: 50000,
+      totalTDEarned: 50000,
+      inventory: { "vibe-coder": 9999 },
+      upgrades: ["vibe-boost-kubernetes"],
+    });
+
+    const json1 = await res1.json() as { total_td: number };
+    const json2 = await res2.json() as { total_td: number };
+    // Both should be capped to the same value since cap is server-authoritative
+    expect(json1.total_td).toBe(json2.total_td);
   });
 
   it("allows legitimate score within time-based cap", async () => {
-    // Last sync was 60 seconds ago, multiplier = 1.5 (10 copy-pasters)
-    // maxTDPerSecond = max(1, ((1.5 - 1) * 100 + 20 * 1.5) * 1.5) = max(1, (50+30)*1.5) = 120
-    // maxTDGain = 120 * 60 = 7200
-    // timeClampedTotal = 5000 + 7200 = 12200
+    // Last sync was 60 seconds ago, serverTotal = 5000
+    // maxTDPerSecond = max(100, 5000 * 0.01) = 100
+    // maxTDGain = 100 * 60 = 6000
+    // timeClampedTotal = 5000 + 6000 = 11000
     const sixtySecondsAgo = new Date(Date.now() - 60_000).toISOString().replace("Z", "").replace("T", " ");
     const { db } = makeDB({ total_td: 5000, current_td: 4000, last_sync_time: sixtySecondsAgo });
     const res = await postScore(db, {
@@ -208,7 +239,7 @@ describe("POST /api/score", () => {
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { total_td: number };
-    // 5400 <= min(round(5000*1.1)=5500, round(12200)=12200) = 5500, so allowed
+    // 5400 <= 11000, so allowed
     expect(json.total_td).toBe(5400);
   });
 
