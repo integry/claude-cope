@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Message } from "./Terminal";
@@ -306,7 +307,7 @@ function MessageContent({ message, isNew = false }: { message: Message; isNew?: 
     const processedContent = cleanLLMOutput(rawContent);
     return (
       <div className="space-y-1">
-        <ReactMarkdown components={markdownComponents}>
+        <ReactMarkdown components={markdownComponents} rehypePlugins={[rehypeSanitize]}>
           {processedContent}
         </ReactMarkdown>
         {isTyping && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
@@ -318,7 +319,7 @@ function MessageContent({ message, isNew = false }: { message: Message; isNew?: 
     const processedContent = cleanLLMOutput(message.content);
     return (
       <div className="space-y-1">
-        <ReactMarkdown components={markdownComponents}>
+        <ReactMarkdown components={markdownComponents} rehypePlugins={[rehypeSanitize]}>
           {processedContent}
         </ReactMarkdown>
         <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />
