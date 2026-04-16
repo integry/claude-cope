@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { csrf } from "hono/csrf";
+import { secureHeaders } from "hono/secure-headers";
 import { rateLimiter } from "./middleware/rateLimiter";
 import { sessionMiddleware } from "./middleware/session";
 import chat from "./routes/chat";
@@ -12,6 +14,19 @@ import account from "./routes/account";
 
 const app = new Hono();
 
+app.use(
+  "*",
+  secureHeaders({
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'", "https://openrouter.ai", "wss:", "ws:"],
+      imgSrc: ["'self'", "data:"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+    },
+  })
+);
+
 app.use("*", (c, next) => {
   const env = c.env as Record<string, string | undefined>;
   const csv = env.ALLOWED_ORIGINS || "https://claudecope.com,http://localhost:5173";
@@ -22,6 +37,13 @@ app.use("*", (c, next) => {
       return allowed[0]!;
     },
   })(c, next);
+});
+
+app.use("/api/*", (c, next) => {
+  const env = c.env as Record<string, string | undefined>;
+  const csv = env.ALLOWED_ORIGINS || "https://claudecope.com,http://localhost:5173";
+  const allowed = csv.split(",").map((s: string) => s.trim());
+  return csrf({ origin: allowed })(c, next);
 });
 
 app.use("*", sessionMiddleware);

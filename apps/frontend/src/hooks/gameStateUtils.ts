@@ -96,6 +96,7 @@ export interface GameState {
   activeTheme: string;
   unlockedThemes: string[];
   soundEnabled: boolean;
+  pendingCompletedTaskIds: string[];
   apiKey?: string;
   selectedModel?: string;
   proKey?: string;
@@ -166,6 +167,7 @@ function createDefaultState(): GameState {
     activeTheme: "default",
     unlockedThemes: ["default"],
     soundEnabled: true,
+    pendingCompletedTaskIds: [],
   };
 }
 
@@ -204,6 +206,7 @@ function migrateLegacyState(legacy: LegacyGameState): GameState {
     activeTheme: "default",
     unlockedThemes: ["default"],
     soundEnabled: true,
+    pendingCompletedTaskIds: [],
   };
 }
 
@@ -244,6 +247,9 @@ function applyDefensiveDefaults(state: GameState): void {
   }
   if (state.soundEnabled === undefined) {
     state.soundEnabled = true;
+  }
+  if (!Array.isArray(state.pendingCompletedTaskIds)) {
+    state.pendingCompletedTaskIds = [];
   }
 }
 

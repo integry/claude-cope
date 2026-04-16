@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import app from "../app";
 
-function makeDB(existing?: { total_td: number; current_td: number }) {
+function makeDB(existing?: { total_td: number; current_td: number; last_sync_time?: string }) {
   const bound: unknown[] = [];
   let lastSQL = "";
+  const batchedStatements: unknown[] = [];
   return {
     db: {
       prepare: vi.fn((sql: string) => {
@@ -19,8 +20,62 @@ function makeDB(existing?: { total_td: number; current_td: number }) {
           }),
         };
       }),
+      batch: vi.fn((stmts: unknown[]) => {
+        batchedStatements.push(...stmts);
+        return Promise.resolve(stmts.map(() => ({ success: true })));
+      }),
     },
     bound,
+    batchedStatements,
+    getSQL: () => lastSQL,
+  };
+}
+
+function makeDBWithTasks(
+  existing: { total_td: number; current_td: number; last_sync_time?: string } | undefined,
+  tickets: Record<string, { technical_debt: number }>,
+  claimedTickets: string[] = [],
+  batchShouldFail = false,
+) {
+  const bound: unknown[] = [];
+  let lastSQL = "";
+  const batchedStatements: unknown[] = [];
+  return {
+    db: {
+      prepare: vi.fn((sql: string) => {
+        lastSQL = sql;
+        return {
+          bind: vi.fn((...args: unknown[]) => {
+            bound.push(...args);
+            const isUserScoresSelect = sql.includes("user_scores") && sql.trim().toUpperCase().startsWith("SELECT");
+            const isBacklogSelect = sql.includes("community_backlog");
+            const isCompletedSelect = sql.includes("completed_tasks") && sql.trim().toUpperCase().startsWith("SELECT");
+            return {
+              first: vi.fn().mockImplementation(() => {
+                if (isUserScoresSelect) return Promise.resolve(existing ?? null);
+                if (isBacklogSelect) {
+                  const ticketId = args[0] as string;
+                  return Promise.resolve(tickets[ticketId] ?? null);
+                }
+                if (isCompletedSelect) {
+                  const ticketId = args[1] as string;
+                  return Promise.resolve(claimedTickets.includes(ticketId) ? { "1": 1 } : null);
+                }
+                return Promise.resolve(null);
+              }),
+              run: vi.fn().mockResolvedValue({ success: true }),
+            };
+          }),
+        };
+      }),
+      batch: vi.fn((stmts: unknown[]) => {
+        batchedStatements.push(...stmts);
+        if (batchShouldFail) return Promise.reject(new Error("D1 batch transaction failed"));
+        return Promise.resolve(stmts.map(() => ({ success: true })));
+      }),
+    },
+    bound,
+    batchedStatements,
     getSQL: () => lastSQL,
   };
 }
@@ -172,6 +227,59 @@ describe("POST /api/score", () => {
     expect(bound).toContain("PK");
   });
 
+  it("clamps score to time-based generation cap", async () => {
+    // Last sync was 10 seconds ago, multiplier = 1 (no generators)
+    // maxTDPerSecond = max(1, ((1 - 1) * 100 + 20 * 1) * 1.5) = max(1, 30) = 30
+    // maxTDGain = 30 * 10 = 300
+    // timeClampedTotal = 1000 + 300 = 1300
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db } = makeDB({ total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo });
+    const res = await postScore(db, {
+      username: "cheater",
+      currentTD: 50000,
+      totalTDEarned: 50000,
+      inventory: {},
+      upgrades: [],
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { total_td: number };
+    // Should be clamped: min(50000, round(1000*1.1)=1100, round(1300)=1300) = 1100
+    expect(json.total_td).toBeLessThanOrEqual(1300);
+  });
+
+  it("allows legitimate score within time-based cap", async () => {
+    // Last sync was 60 seconds ago, multiplier = 1.5 (10 copy-pasters)
+    // maxTDPerSecond = max(1, ((1.5 - 1) * 100 + 20 * 1.5) * 1.5) = max(1, (50+30)*1.5) = 120
+    // maxTDGain = 120 * 60 = 7200
+    // timeClampedTotal = 5000 + 7200 = 12200
+    const sixtySecondsAgo = new Date(Date.now() - 60_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db } = makeDB({ total_td: 5000, current_td: 4000, last_sync_time: sixtySecondsAgo });
+    const res = await postScore(db, {
+      username: "legit",
+      currentTD: 5400,
+      totalTDEarned: 5400,
+      inventory: { "stackoverflow-copy-paster": 10 },
+      upgrades: [],
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { total_td: number };
+    // 5400 <= min(round(5000*1.1)=5500, round(12200)=12200) = 5500, so allowed
+    expect(json.total_td).toBe(5400);
+  });
+
+  it("updates last_sync_time in UPDATE query", async () => {
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db, getSQL } = makeDB({ total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo });
+    await postScore(db, {
+      username: "alice",
+      currentTD: 1000,
+      totalTDEarned: 1000,
+      inventory: {},
+      upgrades: [],
+    });
+    expect(getSQL()).toContain("last_sync_time");
+  });
+
   it("returns multiplier based on inventory and upgrades", async () => {
     const { db } = makeDB(undefined);
     const res = await postScore(db, {
@@ -184,5 +292,134 @@ describe("POST /api/score", () => {
     const json = await res.json() as { multiplier: number };
     // 10 copy-pasters * 5 baseOutput = 50% bonus => multiplier = 1.5
     expect(json.multiplier).toBe(1.5);
+  });
+
+  it("allows large one-off earnings from completed task bonus", async () => {
+    // Server total is 1000, 10% tolerance would cap at 1100
+    // But player completed a task with technical_debt=500, bonus = 500*10 = 5000
+    // So allowed total = round(1000*1.1) + 5000 = 6100
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db } = makeDBWithTasks(
+      { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
+      { "ticket-abc": { technical_debt: 500 } },
+    );
+    const res = await postScore(db, {
+      username: "worker",
+      currentTD: 5800,
+      totalTDEarned: 5800,
+      inventory: {},
+      upgrades: [],
+      completedTaskIds: ["ticket-abc"],
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { total_td: number; corporate_rank: string };
+    // Without task bonus: capped to 1100. With task bonus: 6100 allowed.
+    expect(json.total_td).toBe(5800);
+    expect(json.corporate_rank).not.toBe("🤡 DevTools Hacker");
+  });
+
+  it("rejects replayed task bonus (already claimed)", async () => {
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db } = makeDBWithTasks(
+      { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
+      { "ticket-abc": { technical_debt: 500 } },
+      ["ticket-abc"], // already claimed
+    );
+    const res = await postScore(db, {
+      username: "replayer",
+      currentTD: 5800,
+      totalTDEarned: 5800,
+      inventory: {},
+      upgrades: [],
+      completedTaskIds: ["ticket-abc"],
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { total_td: number };
+    // No bonus — already claimed. Falls back to normal 10% cap = 1100
+    expect(json.total_td).toBeLessThanOrEqual(1100);
+  });
+
+  it("deduplicates task IDs but processes all unique completions per sync", async () => {
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db } = makeDBWithTasks(
+      { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
+      {
+        "ticket-a": { technical_debt: 100 },
+        "ticket-b": { technical_debt: 200 },
+      },
+    );
+    const res = await postScore(db, {
+      username: "worker",
+      currentTD: 4000,
+      totalTDEarned: 4000,
+      inventory: {},
+      upgrades: [],
+      // Sends duplicates — deduplication should reduce to 2 unique IDs
+      completedTaskIds: ["ticket-a", "ticket-a", "ticket-b"],
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { total_td: number };
+    // Both tickets processed: bonus = (100+200)*10 = 3000
+    // Allowed total = round(1000*1.1) + 3000 = 4100
+    expect(json.total_td).toBe(4000);
+  });
+
+  it("uses db.batch() for transactional score update and task completion", async () => {
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db, batchedStatements } = makeDBWithTasks(
+      { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
+      { "ticket-abc": { technical_debt: 500 } },
+    );
+    await postScore(db, {
+      username: "worker",
+      currentTD: 5800,
+      totalTDEarned: 5800,
+      inventory: {},
+      upgrades: [],
+      completedTaskIds: ["ticket-abc"],
+    });
+    // batch() should have been called with 2 statements (score update + 1 task insert)
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(batchedStatements.length).toBe(2);
+  });
+
+  it("returns 500 when batch transaction fails (no partial writes)", async () => {
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db } = makeDBWithTasks(
+      { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
+      { "ticket-abc": { technical_debt: 500 } },
+      [],
+      true, // batch will fail
+    );
+    const res = await postScore(db, {
+      username: "worker",
+      currentTD: 5800,
+      totalTDEarned: 5800,
+      inventory: {},
+      upgrades: [],
+      completedTaskIds: ["ticket-abc"],
+    });
+    // When batch fails, the entire request should fail — no partial state
+    expect(res.status).toBe(500);
+  });
+
+  it("ignores invalid task IDs in completedTaskIds", async () => {
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
+    const { db } = makeDBWithTasks(
+      { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
+      {}, // no tickets in backlog
+    );
+    const res = await postScore(db, {
+      username: "faker",
+      currentTD: 5800,
+      totalTDEarned: 5800,
+      inventory: {},
+      upgrades: [],
+      completedTaskIds: ["nonexistent-ticket"],
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { total_td: number };
+    // No valid task bonus, normal cap applies
+    expect(json.total_td).toBeLessThanOrEqual(1100);
   });
 });

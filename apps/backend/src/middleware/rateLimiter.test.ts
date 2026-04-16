@@ -48,6 +48,26 @@ describe("rateLimiter middleware", () => {
     expect(limiter.limit).toHaveBeenCalledWith({ key: "1.2.3.4" });
   });
 
+  it("prioritizes cf-connecting-ip over x-forwarded-for", async () => {
+    const limiter = createMockLimiter(true);
+    await app.request(
+      "/api/chat",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "cf-connecting-ip": "9.9.9.9",
+          "x-forwarded-for": "1.2.3.4",
+          "x-real-ip": "5.6.7.8",
+        },
+        body: JSON.stringify({ message: "hello" }),
+      },
+      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
+    );
+
+    expect(limiter.limit).toHaveBeenCalledWith({ key: "9.9.9.9" });
+  });
+
   it("uses x-real-ip when x-forwarded-for is absent", async () => {
     const limiter = createMockLimiter(true);
     await app.request(

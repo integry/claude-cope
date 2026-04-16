@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS user_scores (
     current_td INTEGER NOT NULL DEFAULT 0,
     corporate_rank TEXT NOT NULL DEFAULT 'Junior Code Monkey',
     country TEXT NOT NULL DEFAULT 'Unknown',
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_sync_time TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_scores_total_td
@@ -62,6 +63,18 @@ CREATE TABLE IF NOT EXISTS usage_logs (
     hour TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Track completed tasks per user to validate one-off bonus earnings and prevent replay
+CREATE TABLE IF NOT EXISTS completed_tasks (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    username TEXT NOT NULL,
+    ticket_id TEXT NOT NULL,
+    bonus_td INTEGER NOT NULL,
+    completed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_completed_tasks_user_ticket
+    ON completed_tasks (username, ticket_id);
 
 -- Index on username and hour for per-user reporting queries
 CREATE INDEX IF NOT EXISTS idx_usage_logs_user_hour
