@@ -3,7 +3,7 @@ import type { Message } from "./Terminal";
 import type { BuddyState } from "../hooks/useGameState";
 import type { ModesState } from "../hooks/gameStateUtils";
 import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
-import { API_BASE } from "../config";
+import { API_BASE, BYOK_ENABLED } from "../config";
 import { supabase } from "../supabaseClient";
 import { buildAchievementBox } from "./achievementBox";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
@@ -270,7 +270,9 @@ export function submitChatMessage(opts: {
   signal?: AbortSignal;
 }) {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, onError, signal } = opts;
-  const isBYOK = Boolean(apiKey);
+  // Ignore any locally-stored apiKey when BYOK is disabled at the operator
+  // level — stale keys from prior sessions must not reach OpenRouter.
+  const isBYOK = BYOK_ENABLED && Boolean(apiKey);
 
   const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
   const model = copeModel ? copeModel.openRouterId : customModel || (isBYOK ? "openai/gpt-oss-20b:free" : "nvidia/nemotron-nano-9b-v2:free");
