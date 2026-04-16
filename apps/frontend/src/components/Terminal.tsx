@@ -34,6 +34,7 @@ import SprintProgressBar from "./SprintProgressBar";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
+import { usePingAcknowledged } from "../hooks/usePingAcknowledged";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 
 export type { Message };
@@ -114,7 +115,7 @@ function Terminal() {
   // Stop the incoming-ping screen flash once the target has noticed the ping
   // (any mouse move, tap, or keypress). The ping itself remains pending until
   // /accept or expiry — only the flashing attention-grab is dismissed.
-  const [pingAcknowledged, setPingAcknowledged] = useState(false);
+  const pingAcknowledged = usePingAcknowledged(pendingReviewPing);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -153,25 +154,6 @@ function Terminal() {
   }, []);
 
   useEffect(() => { if (!isProcessing && !isBooting) inputRef.current?.focus(); }, [isProcessing, isBooting]);
-
-  // When a new review ping arrives, reset the acknowledgement so the flash
-  // starts again; when it clears (accepted/expired), also reset so a future
-  // ping starts fresh. While a ping is pending but the user hasn't yet
-  // interacted, listen for any interaction and mark it acknowledged — that
-  // stops the flashing without resolving the ping itself.
-  useEffect(() => {
-    setPingAcknowledged(false);
-    if (!pendingReviewPing) return;
-    const acknowledge = () => setPingAcknowledged(true);
-    window.addEventListener("mousemove", acknowledge, { passive: true });
-    window.addEventListener("keydown", acknowledge);
-    window.addEventListener("touchstart", acknowledge, { passive: true });
-    return () => {
-      window.removeEventListener("mousemove", acknowledge);
-      window.removeEventListener("keydown", acknowledge);
-      window.removeEventListener("touchstart", acknowledge);
-    };
-  }, [pendingReviewPing]);
 
   useEffect(() => {
     if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
