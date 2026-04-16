@@ -4,26 +4,14 @@ import { Message } from '../components/Terminal';
 import type { ClientMessage, ServerMessage } from '@claude-cope/shared/multiplayer-types';
 
 interface UseMultiplayerOptions {
+  // The canonical user identity from game state (state.username). Used as the
+  // PartyKit presence name so `/who`, `/ping`, `/profile`, and the leaderboard
+  // all agree on who you are. Reconnects the socket when this changes.
+  username: string;
   setHistory: React.Dispatch<React.SetStateAction<Message[]>>;
   applyOutageReward: () => void;
   applyOutagePenalty: () => void;
   applyPvpDebuff: () => void;
-}
-
-// Generate a persistent random username for this browser session
-function getLocalUsername(): string {
-  const key = 'claude-cope-username';
-  let name = localStorage.getItem(key);
-  if (!name) {
-    const adjectives = ['Agile', 'Scrum', 'Legacy', 'Senior', 'Junior', 'Stealth', 'Rogue', 'Toxic', 'Based', 'Cracked'];
-    const nouns = ['Dev', 'Intern', 'Architect', 'SRE', 'Manager', 'Contractor', 'Gopher', 'Rustacean', 'Pythonista', 'Hacker'];
-    const adj = adjectives[Math.floor(Math.random() * adjectives.length)]!;
-    const noun = nouns[Math.floor(Math.random() * nouns.length)]!;
-    const num = Math.floor(Math.random() * 999);
-    name = `${adj}${noun}${num}`;
-    localStorage.setItem(key, name);
-  }
-  return name;
 }
 
 // Consider the user idle after 3 minutes with no mouse/keyboard activity.
@@ -33,14 +21,13 @@ function getLocalUsername(): string {
 const IDLE_THRESHOLD_MS = 3 * 60 * 1000;
 
 // We pass setHistory to allow the hook to write messages directly to the terminal when an attack occurs.
-export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff }: UseMultiplayerOptions) {
+export function useMultiplayer({ username, setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff }: UseMultiplayerOptions) {
   const [onlineCount, setOnlineCount] = useState(1);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [pendingPing, setPendingPing] = useState(false);
   // Track the current outage health to render the global health bar
   const [outageHp, setOutageHp] = useState<number | null>(null);
   const socketRef = useRef<PartySocket | null>(null);
-  const localUsername = useRef(getLocalUsername()).current;
   const lastActivityAt = useRef<number>(Date.now());
 
   // Track user activity so we can skip outage alerts when the tab is idle
@@ -55,7 +42,7 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
     const socket = new PartySocket({
       host: import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999',
       room: 'global-terminal',
-      query: { username: localUsername },
+      query: { username },
     });
     socketRef.current = socket;
 
@@ -115,7 +102,7 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
     });
 
     return () => socket.close();
-  }, [localUsername, setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff]);
+  }, [username, setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff]);
 
   const sendMessage = (msg: ClientMessage) => socketRef.current?.send(JSON.stringify(msg));
 
@@ -128,5 +115,5 @@ export function useMultiplayer({ setHistory, applyOutageReward, applyOutagePenal
   // Expose a method to allow players to attack the outage
   const sendDamage = () => sendMessage({ type: 'damage_outage' });
 
-  return { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage, localUsername };
+  return { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage };
 }
