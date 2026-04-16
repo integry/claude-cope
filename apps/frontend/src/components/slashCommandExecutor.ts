@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { GENERATORS, THEMES } from "../game/constants";
+import { GENERATORS, PING_COST, THEMES } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { API_BASE, BYOK_ENABLED } from "../config";
 
@@ -157,29 +157,89 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
   return true;
 }
 
-// Fixed price for a code-review request. Kept here (not server-side) because
-// the economy is client-authoritative; the server only validates the payload
-// shape and enforces transient lifecycle rules around it.
-const REVIEW_PING_COST = 50;
+// Variety pools for the synchronous, local-only messages emitted by /ping
+// and /accept. The multiplayer hook has its own pools for server-driven
+// events; these cover the immediate terminal feedback before any socket
+// traffic happens.
+const PING_NO_TICKET_MESSAGES = [
+  "[❌] You need an active ticket before you can request a review. Use `/backlog` to grab one.",
+  "[❌] No ticket in flight — nothing to review. Pick one up with `/backlog` first.",
+  "[❌] You can't ask for a review when you're not working on anything. Try `/backlog`.",
+  "[❌] Review requests require an active ticket. `/backlog` to claim one.",
+  "[❌] Can't ping a coworker without a ticket attached. Grab one from `/backlog`.",
+  "[❌] Refused: no active ticket. Coworkers don't review vibes. Use `/backlog`.",
+];
+
+const PING_BROKE_MESSAGES = [
+  (cost: number, have: number) => `[❌] Need **${cost} TD** to request a review (you have ${have}). Mine more debt first.`,
+  (cost: number, have: number) => `[❌] Insufficient funds: **${cost} TD** required, ${have} available. Coworkers don't work for free.`,
+  (cost: number, have: number) => `[❌] Your wallet says **${have} TD**. Reviews cost **${cost} TD**. Math is math.`,
+  (cost: number, have: number) => `[❌] Can't afford the review fee. **${cost} TD** required, ${have} on hand.`,
+  (cost: number, have: number) => `[❌] Review denied at the door — **${cost} TD** needed, you brought ${have}.`,
+  (cost: number, have: number) => `[❌] Your **${have} TD** won't cover the **${cost} TD** bounty. Earn more, then retry.`,
+];
+
+const PING_SENT_TARGETED_MESSAGES = [
+  (target: string, ticketId: string, cost: number) => `[📡] Asking **${target}** to review \`${ticketId}\` for **${cost} TD**...`,
+  (target: string, ticketId: string, cost: number) => `[📡] Reaching out to **${target}** — "got a sec to look at \`${ticketId}\`?" — with **${cost} TD** attached...`,
+  (target: string, ticketId: string, cost: number) => `[📡] Paying **${target}** **${cost} TD** to review \`${ticketId}\`. Awaiting their response...`,
+  (target: string, ticketId: string, cost: number) => `[📡] DM'ing **${target}** a review request for \`${ticketId}\`. Bounty: **${cost} TD**...`,
+  (target: string, ticketId: string, cost: number) => `[📡] Review bounty posted to **${target}**: **${cost} TD** for \`${ticketId}\`...`,
+  (target: string, ticketId: string, cost: number) => `[📡] Pinging **${target}** about \`${ticketId}\` with **${cost} TD** of motivation...`,
+];
+
+const PING_SENT_RANDOM_MESSAGES = [
+  (ticketId: string, cost: number) => `[📡] Asking a random coworker to review \`${ticketId}\` for **${cost} TD**...`,
+  (ticketId: string, cost: number) => `[📡] Posting a **${cost} TD** review bounty on \`${ticketId}\` to whoever is online...`,
+  (ticketId: string, cost: number) => `[📡] Spinning the wheel of coworkers for a review of \`${ticketId}\`. **${cost} TD** on the line...`,
+  (ticketId: string, cost: number) => `[📡] Broadcasting "anyone free for a review?" on \`${ticketId}\`. **${cost} TD** offered...`,
+  (ticketId: string, cost: number) => `[📡] Random reviewer incoming for \`${ticketId}\`. **${cost} TD** reserved...`,
+  (ticketId: string, cost: number) => `[📡] Tossing **${cost} TD** into the ether for a review of \`${ticketId}\`...`,
+];
+
+const ACCEPT_REVIEW_MESSAGES = [
+  (sender: string, amount: number) => `[👀] Reviewing **${sender}**'s code for **${amount} TD**...`,
+  (sender: string, amount: number) => `[👀] Opening **${sender}**'s diff. **${amount} TD** about to land.`,
+  (sender: string, amount: number) => `[👀] Accepted **${sender}**'s review request — time to pretend to read the code. **${amount} TD** pending.`,
+  (sender: string, amount: number) => `[👀] Rubber stamp warming up for **${sender}**. **${amount} TD** payout incoming.`,
+  (sender: string, amount: number) => `[👀] Saying yes to **${sender}**'s bounty of **${amount} TD**. LGTM locked and loaded.`,
+  (sender: string, amount: number) => `[👀] Claiming the **${amount} TD** bounty from **${sender}**. Review: acceptable.`,
+];
+
+const ACCEPT_NO_TICKET_MESSAGES = [
+  "[❌] No pending ticket to accept. Use `/backlog` to browse tickets.",
+  "[❌] Nothing to accept right now. `/backlog` has tickets if you're feeling brave.",
+  "[❌] Your inbox is empty. No review requests, no ticket offers. Try `/backlog`.",
+  "[❌] Nothing pending. `/backlog` will find you something to regret.",
+  "[❌] No offers on the table. Check `/backlog` for fresh suffering.",
+];
+
+const ACCEPT_ALREADY_ACTIVE_MESSAGES = [
+  (title: string) => `[❌] You already have an active ticket: **${title}**. Finish it first or \`/abandon\` it.`,
+  (title: string) => `[❌] Still working on **${title}**. Finish it or \`/abandon\` it before taking another.`,
+  (title: string) => `[❌] One ticket at a time, champ. You're on **${title}**.`,
+  (title: string) => `[❌] Can't accept — **${title}** is already in your tray. \`/abandon\` to drop it.`,
+  (title: string) => `[❌] Your plate is full with **${title}**. Finish or abandon before taking more.`,
+];
 
 function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   const target = command.slice(5).trim();
   const ticket = ctx.state.activeTicket;
   if (!ticket) {
-    reply({ role: "error", content: "[❌] You need an active ticket before you can request a review. Use `/backlog` to grab one." });
+    reply({ role: "error", content: pickRandom(PING_NO_TICKET_MESSAGES) });
     return true;
   }
-  if (ctx.state.economy.currentTD < REVIEW_PING_COST) {
-    reply({ role: "error", content: `[❌] Need **${REVIEW_PING_COST} TD** to request a review (you have ${ctx.state.economy.currentTD}).` });
+  if (ctx.state.economy.currentTD < PING_COST) {
+    reply({ role: "error", content: pickRandom(PING_BROKE_MESSAGES)(PING_COST, ctx.state.economy.currentTD) });
     return true;
   }
   const ticketPayload = { id: ticket.id, title: ticket.title, sprintGoal: ticket.sprintGoal, sprintProgress: ticket.sprintProgress };
   if (target) {
-    ctx.sendPing(ticketPayload, REVIEW_PING_COST, target);
-    reply({ role: "system", content: `[📡] Asking **${target}** to review \`${ticket.id}\` for **${REVIEW_PING_COST} TD**...` });
+    ctx.sendPing(ticketPayload, PING_COST, target);
+    reply({ role: "system", content: pickRandom(PING_SENT_TARGETED_MESSAGES)(target, ticket.id, PING_COST) });
   } else {
-    ctx.sendPing(ticketPayload, REVIEW_PING_COST);
-    reply({ role: "system", content: `[📡] Asking a random coworker to review \`${ticket.id}\` for **${REVIEW_PING_COST} TD**...` });
+    ctx.sendPing(ticketPayload, PING_COST);
+    reply({ role: "system", content: pickRandom(PING_SENT_RANDOM_MESSAGES)(ticket.id, PING_COST) });
   }
   return true;
 }
@@ -495,14 +555,14 @@ function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
   if (ctx.pendingReviewPing) {
     const { sender, amount } = ctx.pendingReviewPing;
     ctx.acceptReviewPing();
-    reply({ role: "system", content: `[👀] Reviewing **${sender}**'s code for **${amount} TD**...` });
+    reply({ role: "system", content: pickRandom(ACCEPT_REVIEW_MESSAGES)(sender, amount) });
     return;
   }
   const offer = getPendingOffer();
   if (!offer) {
-    reply({ role: "error", content: "[❌] No pending ticket to accept. Use `/backlog` to browse tickets." });
+    reply({ role: "error", content: pickRandom(ACCEPT_NO_TICKET_MESSAGES) });
   } else if (ctx.state.activeTicket) {
-    reply({ role: "error", content: `[❌] You already have an active ticket: **${ctx.state.activeTicket.title}**. Finish it first or \`/abandon\` it.` });
+    reply({ role: "error", content: pickRandom(ACCEPT_ALREADY_ACTIVE_MESSAGES)(ctx.state.activeTicket.title) });
   } else {
     clearPendingOffer();
     ctx.setState((prev) => ({
