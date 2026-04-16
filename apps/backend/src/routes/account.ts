@@ -1,12 +1,14 @@
 import { Hono } from "hono";
 import { validatePolarKey } from "../utils/polar";
-import { PRO_INITIAL_QUOTA } from "../utils/quota";
+import { getQuotaLimits } from "../utils/quota";
 
 type Env = {
   Bindings: {
     QUOTA_KV?: KVNamespace;
     USAGE_KV?: KVNamespace;
     POLAR_ACCESS_TOKEN?: string;
+    FREE_QUOTA_LIMIT?: string;
+    PRO_INITIAL_QUOTA?: string;
   };
   Variables: {
     sessionId: string;
@@ -49,7 +51,8 @@ account.post("/sync", async (c) => {
   const hash = await hashKey(body.licenseKey);
   const kvKey = `polar:${hash}`;
 
-  await kv.put(kvKey, String(PRO_INITIAL_QUOTA));
+  const limits = getQuotaLimits(c.env);
+  await kv.put(kvKey, String(limits.proInitialQuota));
 
   return c.json({ success: true, hash });
 });

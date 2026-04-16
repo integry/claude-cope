@@ -1,5 +1,10 @@
+import { BYOK_ENABLED } from "../config";
+
 // Added /ping and /reject to enable PvP sabotage interactions.
-export const SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/reject", "/help", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user", "/sync", "/shill", "/party", "/theme"];
+const ALL_SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/reject", "/help", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user", "/sync", "/shill", "/party", "/theme"];
+
+// BYOK-gated: `/key` only appears in autocomplete when BYOK is enabled.
+export const SLASH_COMMANDS = ALL_SLASH_COMMANDS.filter((cmd) => BYOK_ENABLED || cmd !== "/key");
 
 export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/backlog": "Stare into the abyss of unfulfilled promises",

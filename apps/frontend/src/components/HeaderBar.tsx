@@ -1,8 +1,6 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useAnimatedCounter } from "../hooks/useAnimatedCounter";
-
-const FREE_QUOTA_LIMIT = 20;
-const PRO_QUOTA_LIMIT = 100;
+import { FREE_QUOTA_LIMIT, PRO_QUOTA_LIMIT } from "../config";
 
 function getQuotaTextColor(percent: number): string {
   if (percent > 50) return "text-green-400";
@@ -22,13 +20,13 @@ function formatByokCost(cost: number): string {
   return cost.toFixed(2);
 }
 
-function DesktopQuotaBar({ quotaPercent, quotaTooltip }: { quotaPercent: number; quotaTooltip: string }) {
+function DesktopQuotaBar({ quotaPercent, remaining, totalQuota, quotaTooltip }: { quotaPercent: number; remaining: number; totalQuota: number; quotaTooltip: string }) {
   const totalBlocks = 20;
   const filledBlocks = Math.round((quotaPercent / 100) * totalBlocks);
   const emptyBlocks = totalBlocks - filledBlocks;
   return (
     <div title={quotaTooltip} className={`hidden sm:block flex-shrink-0 text-xs font-mono whitespace-nowrap px-2 cursor-default ${getQuotaTextColor(quotaPercent)}`}>
-      {`[API Quota: ${"█".repeat(filledBlocks)}${"░".repeat(emptyBlocks)} ${Math.round(quotaPercent)}%]`}
+      {`[API Quota: ${"█".repeat(filledBlocks)}${"░".repeat(emptyBlocks)} ${remaining}/${totalQuota}]`}
     </div>
   );
 }
@@ -113,7 +111,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           </div>
         )}
       </div>
-      {!isBYOK && <DesktopQuotaBar quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} />}
+      {!isBYOK && <DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} />}
       {!isBYOK && <MobileQuotaLine quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} />}
     </div>
   );
