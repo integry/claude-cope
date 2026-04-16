@@ -236,42 +236,6 @@ export function useGameState() {
     }));
   }, []);
 
-  const debuffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const applyPvpDebuff = useCallback(() => {
-    if (debuffTimerRef.current) {
-      clearTimeout(debuffTimerRef.current);
-    }
-
-    setState((prev) => ({
-      ...prev,
-      economy: {
-        ...prev.economy,
-        tdMultiplier: prev.economy.tdMultiplier * 0.5,
-      },
-    }));
-
-    debuffTimerRef.current = setTimeout(() => {
-      setState((prev) => ({
-        ...prev,
-        economy: {
-          ...prev.economy,
-          tdMultiplier: prev.economy.tdMultiplier * 2,
-        },
-      }));
-      debuffTimerRef.current = null;
-    }, 60000);
-  }, []);
-
-  // Clean up debuff timer on unmount
-  useEffect(() => {
-    return () => {
-      if (debuffTimerRef.current) {
-        clearTimeout(debuffTimerRef.current);
-      }
-    };
-  }, []);
-
   const buyUpgrade = useCallback((upgradeId: string): boolean => {
     const upgrade = UPGRADES.find((u) => u.id === upgradeId);
     if (!upgrade) return false;
@@ -398,5 +362,5 @@ export function useGameState() {
     });
   }, []);
 
-  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, unlockTheme, buyTheme, toggleSound, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
+  return { state, setState, buyGenerator, buyUpgrade, addActiveTD, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, unlockTheme, buyTheme, toggleSound, updateTicketProgress, offlineTDEarned, clearOfflineTDEarned: () => setOfflineTDEarned(0) };
 }

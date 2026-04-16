@@ -24,7 +24,7 @@ export const TIPS = [
   "Tip: /who shows online developers. Witness their suffering in real-time.",
   "Tip: /abandon a ticket to give up officially. We knew you would.",
   "Tip: Corporate ranks unlock as you accumulate Technical Debt. Climb that ladder!",
-  "Tip: /reject reality and substitute your own backlog.",
+  "Tip: /ping a coworker to pay them a small TD bribe for reviewing your ticket.",
   "Tip: /voice lets you scream your prompts. Therapeutic, but the neighbors complain.",
   "Tip: /shill tweets about us for free tokens. Your dignity was already in the backlog anyway.",
 ];

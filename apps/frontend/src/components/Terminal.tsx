@@ -58,10 +58,33 @@ const MessageList = memo(function MessageList({ history, messageKeys, initialHis
 
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, applyPvpDebuff, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
+  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
-  const { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage } = useMultiplayer({ username: state.username, setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff });
+  // Review-ping payouts and refunds are server-decided TD; pass `raw=true` so
+  // we don't double-apply the local generator multiplier on top of them.
+  const creditTD = useCallback((amount: number) => addActiveTD(amount, true), [addActiveTD]);
+  // Debit only `currentTD` (spendable balance). Do NOT touch `totalTDEarned`,
+  // which is a monotonic lifetime counter used for rank — paying for a review
+  // shouldn't lower your rank.
+  const debitTD = useCallback((amount: number) => {
+    setState((prev) => ({
+      ...prev,
+      economy: {
+        ...prev.economy,
+        currentTD: Math.max(0, prev.economy.currentTD - amount),
+      },
+    }));
+  }, [setState]);
+  // Sender's sprint-progress boost only applies if their *current* active
+  // ticket still matches the one that was reviewed — in case they've abandoned
+  // and taken a different ticket between sending and acceptance.
+  const activeTicketRef = useRef(state.activeTicket);
+  activeTicketRef.current = state.activeTicket;
+  const applyReviewSprintBoost = useCallback((ticketId: string, boost: number) => {
+    if (activeTicketRef.current?.id === ticketId) updateTicketProgress(boost);
+  }, [updateTicketProgress]);
+  const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage } = useMultiplayer({ username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost });
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
@@ -171,7 +194,7 @@ function Terminal() {
   });
 
   const runSlashCommand = (command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: setSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: setSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
   };
 
   const tryOutageDamage = (): boolean => {
@@ -354,7 +377,7 @@ function Terminal() {
 
   return (
     <div
-      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "h-[100dvh] overflow-hidden"} w-full font-mono text-sm leading-snug sm:leading-relaxed p-4 pb-0 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : ""} ${pendingPing ? "pvp-ping-flash" : ""} ${state.activeTheme && state.activeTheme !== "default" ? `theme-${state.activeTheme}` : ""}`}
+      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "h-[100dvh] overflow-hidden"} w-full font-mono text-sm leading-snug sm:leading-relaxed p-4 pb-0 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : ""} ${pendingReviewPing ? "pvp-ping-flash" : ""} ${state.activeTheme && state.activeTheme !== "default" ? `theme-${state.activeTheme}` : ""}`}
       style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : 'var(--color-bg)', color: 'var(--color-text)' }}
       onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
