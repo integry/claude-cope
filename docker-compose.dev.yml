@@ -1,0 +1,34 @@
+name: claude-cope-dev
+
+# Dev-only compose. Runs wrangler/vite/partykit inside node:20-bookworm
+# so workerd (glibc >= 2.32) works on Ubuntu 20.04 hosts.
+#
+# Uses network_mode: host so inter-service URLs like localhost:8787
+# keep working unchanged (matches apps/frontend/vite.config.ts proxy).
+
+x-node-common: &node-common
+  image: node:20-bookworm
+  user: "1000:1000"
+  network_mode: host
+  init: true
+  volumes:
+    - .:/app
+  environment:
+    HOME: /tmp
+    npm_config_cache: /tmp/.npm
+
+services:
+  backend:
+    <<: *node-common
+    working_dir: /app/apps/backend
+    command: npx wrangler dev
+
+  frontend:
+    <<: *node-common
+    working_dir: /app/apps/frontend
+    command: npx vite --port 5173
+
+  partykit:
+    <<: *node-common
+    working_dir: /app/apps/partykit
+    command: npx partykit dev
