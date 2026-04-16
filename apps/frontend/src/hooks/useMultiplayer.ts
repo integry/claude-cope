@@ -129,6 +129,151 @@ function cancelledCopy(sender: string, reason: 'expired' | 'sender_disconnected'
   return `[⌛] **${sender}**'s review request timed out. Nothing to \`/accept\` anymore.`;
 }
 
+// ── Pure message dispatcher ─────────────────────────────────────────────
+// Split out of the hook so the multiplayer follow-up logic (debit timing,
+// refund accounting, pending-ping cancellation, outage idle-guards) can be
+// unit-tested without spinning up React, PartyKit, or a real socket.
+// The hook's useEffect wraps this with live setters and `isUserIdle`.
+export interface ServerMessageHandlers {
+  setHistory: React.Dispatch<React.SetStateAction<Message[]>>;
+  setPendingReviewPing: React.Dispatch<React.SetStateAction<{ sender: string; amount: number } | null>>;
+  setOnlineCount: React.Dispatch<React.SetStateAction<number>>;
+  setOnlineUsers: React.Dispatch<React.SetStateAction<string[]>>;
+  setOutageHp: React.Dispatch<React.SetStateAction<number | null>>;
+  creditTD: (amount: number) => void;
+  debitTD: (amount: number) => void;
+  applyReviewSprintBoost: (ticketId: string, boost: number) => void;
+  applyOutageReward: () => void;
+  applyOutagePenalty: () => void;
+  isUserIdle: () => boolean;
+}
+
+function handleReviewMessage(data: ServerMessage, h: ServerMessageHandlers): boolean {
+  if (data.type === 'review_ping_sent') {
+    // Server has accepted the request and is holding it; debit the sender now
+    // so the displayed balance matches what's at risk. No TD is at risk before
+    // this ack, so client-side `/ping` validation failures never need a refund.
+    h.debitTD(data.amount);
+    const seconds = Math.round(data.expiresInMs / 1000);
+    const content = pickRandom(SENT_MESSAGES)({ target: data.target, amount: data.amount, seconds });
+    h.setHistory(prev => [...prev, { role: 'system', content }]);
+    return true;
+  }
+  if (data.type === 'ping_failed') {
+    // Generic failure channel — covers both `/ping` rejections and `/accept`
+    // rejections. No refund is ever needed here: we only debit on
+    // `review_ping_sent`, and later refunds arrive as `review_ping_refunded`
+    // with the specific amount attached. This is why we no longer maintain a
+    // local "pending amounts" queue — it was unsafe when `ping_failed` was
+    // used as a shared error channel.
+    const content = pickRandom(FAILED_MESSAGES)(data.reason);
+    h.setHistory(prev => [...prev, { role: 'error', content }]);
+    return true;
+  }
+  if (data.type === 'review_ping_received') {
+    // No penalty for ignoring this — the sender is paying us if we /accept.
+    h.setPendingReviewPing({ sender: data.sender, amount: data.amount });
+    const seconds = Math.round(data.expiresInMs / 1000);
+    const content = pickRandom(RECEIVED_MESSAGES)({
+      sender: data.sender,
+      amount: data.amount,
+      ticketId: data.ticket.id,
+      ticketTitle: data.ticket.title,
+      seconds,
+    });
+    h.setHistory(prev => [...prev, { role: 'warning', content }]);
+    return true;
+  }
+  if (data.type === 'review_ping_cancelled') {
+    // Sender bailed or the 60s window lapsed. Clear local pending state so
+    // /accept falls through correctly, and let the player know the bounty is gone.
+    h.setPendingReviewPing(null);
+    h.setHistory(prev => [...prev, { role: 'system', content: cancelledCopy(data.sender, data.reason) }]);
+    return true;
+  }
+  if (data.type === 'review_ping_accepted') {
+    // Sender side: their target accepted; apply the sprint boost on the ticket.
+    h.applyReviewSprintBoost(data.ticketId, data.sprintProgressBoost);
+    const content = pickRandom(ACCEPTED_MESSAGES)({
+      target: data.target,
+      amount: data.amount,
+      boost: data.sprintProgressBoost,
+    });
+    h.setHistory(prev => [...prev, { role: 'system', content }]);
+    return true;
+  }
+  if (data.type === 'review_ping_claimed') {
+    // Target side: payout confirmed.
+    h.setPendingReviewPing(null);
+    h.creditTD(data.amount);
+    const content = pickRandom(CLAIMED_MESSAGES)({
+      sender: data.sender,
+      amount: data.amount,
+      ticketId: data.ticketId,
+    });
+    h.setHistory(prev => [...prev, { role: 'system', content }]);
+    return true;
+  }
+  if (data.type === 'review_ping_refunded') {
+    // Sender side: target ignored or disconnected — refund using the amount
+    // the server echoed back. No local queue means cross-action `ping_failed`
+    // events cannot refund the wrong amount.
+    h.creditTD(data.amount);
+    const content = pickRandom(REFUNDED_MESSAGES)({
+      target: data.target,
+      amount: data.amount,
+      reason: data.reason,
+    });
+    h.setHistory(prev => [...prev, { role: 'system', content }]);
+    return true;
+  }
+  return false;
+}
+
+function handleOutageMessage(data: ServerMessage, h: ServerMessageHandlers): boolean {
+  if (data.type === 'outage_start') {
+    // Skip the alert and health bar entirely when the user is idle — they
+    // can't participate and we don't want to stack up alerts.
+    if (h.isUserIdle()) return true;
+    h.setOutageHp(data.hp);
+    h.setHistory(prev => [...prev, { role: 'error', content: '[CRITICAL ALERT: AWS us-east-1 IS DOWN]' }]);
+    return true;
+  }
+  if (data.type === 'outage_update') {
+    // Only sync the bar if the user is already engaged with this outage
+    if (h.isUserIdle()) return true;
+    h.setOutageHp(data.hp);
+    return true;
+  }
+  if (data.type === 'outage_cleared') {
+    // Always clear the bar state; only reward+announce if not idle
+    h.setOutageHp(null);
+    if (h.isUserIdle()) return true;
+    h.applyOutageReward();
+    h.setHistory(prev => [...prev, { role: 'system', content: '[SUCCESS] AWS us-east-1 is back online. All players receive a TD boost.' }]);
+    return true;
+  }
+  if (data.type === 'outage_failed') {
+    // Always clear the bar state; only penalize+announce if not idle
+    h.setOutageHp(null);
+    if (h.isUserIdle()) return true;
+    h.applyOutagePenalty();
+    h.setHistory(prev => [...prev, { role: 'error', content: '[FAILURE] AWS us-east-1 outage was not resolved in time. Your most expensive generator has been decommissioned.' }]);
+    return true;
+  }
+  return false;
+}
+
+export function applyServerMessage(data: ServerMessage, handlers: ServerMessageHandlers): void {
+  if (data.type === 'presence') {
+    handlers.setOnlineCount(data.count);
+    handlers.setOnlineUsers(data.users ?? []);
+    return;
+  }
+  if (handleReviewMessage(data, handlers)) return;
+  handleOutageMessage(data, handlers);
+}
+
 // We pass setHistory to allow the hook to write messages directly to the terminal when an attack occurs.
 export function useMultiplayer({ username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost }: UseMultiplayerOptions) {
   const [onlineCount, setOnlineCount] = useState(1);
@@ -166,94 +311,19 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
     socket.addEventListener('message', (event) => {
       try {
         const data: ServerMessage = JSON.parse(event.data);
-        if (data.type === 'presence') {
-          setOnlineCount(data.count);
-          setOnlineUsers(data.users ?? []);
-        } else if (data.type === 'review_ping_sent') {
-          // Server has accepted the request and is holding it; debit the
-          // sender now so the displayed balance matches what's at risk.
-          // No TD is at risk before this ack, so client-side `/ping`
-          // validation failures never need a refund.
-          debitTD(data.amount);
-          const seconds = Math.round(data.expiresInMs / 1000);
-          const content = pickRandom(SENT_MESSAGES)({ target: data.target, amount: data.amount, seconds });
-          setHistory(prev => [...prev, { role: 'system', content }]);
-        } else if (data.type === 'ping_failed') {
-          // Generic failure channel — covers both `/ping` rejections and
-          // `/accept` rejections. No refund is ever needed here: we only
-          // debit on `review_ping_sent`, and refunds after that arrive as
-          // `review_ping_refunded` with the specific amount attached.
-          const content = pickRandom(FAILED_MESSAGES)(data.reason);
-          setHistory(prev => [...prev, { role: 'error', content }]);
-        } else if (data.type === 'review_ping_received') {
-          // No penalty for ignoring this — the sender is paying us if we /accept.
-          setPendingReviewPing({ sender: data.sender, amount: data.amount });
-          const seconds = Math.round(data.expiresInMs / 1000);
-          const content = pickRandom(RECEIVED_MESSAGES)({
-            sender: data.sender,
-            amount: data.amount,
-            ticketId: data.ticket.id,
-            ticketTitle: data.ticket.title,
-            seconds,
-          });
-          setHistory(prev => [...prev, { role: 'warning', content }]);
-        } else if (data.type === 'review_ping_cancelled') {
-          // Sender bailed or the 60s window lapsed. Clear local pending
-          // state so /accept falls through correctly, and let the player
-          // know the bounty is gone.
-          setPendingReviewPing(null);
-          setHistory(prev => [...prev, { role: 'system', content: cancelledCopy(data.sender, data.reason) }]);
-        } else if (data.type === 'review_ping_accepted') {
-          // Sender side: their target accepted; apply the sprint boost on the ticket.
-          applyReviewSprintBoost(data.ticketId, data.sprintProgressBoost);
-          const content = pickRandom(ACCEPTED_MESSAGES)({
-            target: data.target,
-            amount: data.amount,
-            boost: data.sprintProgressBoost,
-          });
-          setHistory(prev => [...prev, { role: 'system', content }]);
-        } else if (data.type === 'review_ping_claimed') {
-          // Target side: payout confirmed.
-          setPendingReviewPing(null);
-          creditTD(data.amount);
-          const content = pickRandom(CLAIMED_MESSAGES)({
-            sender: data.sender,
-            amount: data.amount,
-            ticketId: data.ticketId,
-          });
-          setHistory(prev => [...prev, { role: 'system', content }]);
-        } else if (data.type === 'review_ping_refunded') {
-          // Sender side: target ignored or disconnected — refund.
-          creditTD(data.amount);
-          const content = pickRandom(REFUNDED_MESSAGES)({
-            target: data.target,
-            amount: data.amount,
-            reason: data.reason,
-          });
-          setHistory(prev => [...prev, { role: 'system', content }]);
-        } else if (data.type === 'outage_start') {
-          // Skip the alert and health bar entirely when the user is idle —
-          // they can't participate and we don't want to stack up alerts.
-          if (isUserIdle()) return;
-          setOutageHp(data.hp);
-          setHistory(prev => [...prev, { role: 'error', content: '[CRITICAL ALERT: AWS us-east-1 IS DOWN]' }]);
-        } else if (data.type === 'outage_update') {
-          // Only sync the bar if the user is already engaged with this outage
-          if (isUserIdle()) return;
-          setOutageHp(data.hp);
-        } else if (data.type === 'outage_cleared') {
-          // Always clear the bar state; only reward+announce if not idle
-          setOutageHp(null);
-          if (isUserIdle()) return;
-          applyOutageReward();
-          setHistory(prev => [...prev, { role: 'system', content: '[SUCCESS] AWS us-east-1 is back online. All players receive a TD boost.' }]);
-        } else if (data.type === 'outage_failed') {
-          // Always clear the bar state; only penalize+announce if not idle
-          setOutageHp(null);
-          if (isUserIdle()) return;
-          applyOutagePenalty();
-          setHistory(prev => [...prev, { role: 'error', content: '[FAILURE] AWS us-east-1 outage was not resolved in time. Your most expensive generator has been decommissioned.' }]);
-        }
+        applyServerMessage(data, {
+          setHistory,
+          setPendingReviewPing,
+          setOnlineCount,
+          setOnlineUsers,
+          setOutageHp,
+          creditTD,
+          debitTD,
+          applyReviewSprintBoost,
+          applyOutageReward,
+          applyOutagePenalty,
+          isUserIdle,
+        });
       } catch {
         console.error('Failed to parse multiplayer message');
       }
