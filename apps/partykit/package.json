@@ -8,8 +8,7 @@
     "dev": "partykit dev",
     "deploy": "partykit deploy",
     "lint": "eslint . --max-warnings 0",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@claude-cope/shared": "*",
@@ -20,7 +19,6 @@
     "eslint": "^9.0.0",
     "globals": "^15.0.0",
     "typescript": "^5.0.0",
-    "typescript-eslint": "^8.0.0",
-    "vitest": "^3.1.1"
+    "typescript-eslint": "^8.0.0"
   }
 }

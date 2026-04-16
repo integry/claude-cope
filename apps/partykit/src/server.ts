@@ -63,6 +63,19 @@ export default class ClaudeCopeServer implements Party.Server {
   // not the same pair of sockets.
   private lastPingToTarget = new Map<string, number>();
 
+  // Drop rate-limit / cooldown entries whose timestamp is older than their
+  // TTL. Called lazily from `handleReviewPing` so long-lived rooms don't
+  // accumulate stale username-keyed entries over time. Bounded to O(n) over
+  // the map sizes but runs at most once per ping.
+  private pruneExpiredCooldowns(now: number) {
+    for (const [name, ts] of this.lastPingAt) {
+      if (now - ts >= ClaudeCopeServer.PING_RATE_LIMIT_MS) this.lastPingAt.delete(name);
+    }
+    for (const [key, ts] of this.lastPingToTarget) {
+      if (now - ts >= ClaudeCopeServer.PING_TARGET_COOLDOWN_MS) this.lastPingToTarget.delete(key);
+    }
+  }
+
   // When a user connects, extract their username and broadcast updated presence.
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
     const url = new URL(ctx.request.url);
@@ -122,6 +135,10 @@ export default class ClaudeCopeServer implements Party.Server {
   // we treat them as opaque metadata that the target needs to make a decision.
   private handleReviewPing(sender: Party.Connection, data: Extract<ClientMessage, { type: "ping" }>) {
     const now = Date.now();
+
+    // Lazy GC: drop any cooldown / rate-limit entries that have already
+    // expired so the maps don't grow unbounded in long-lived rooms.
+    this.pruneExpiredCooldowns(now);
 
     const senderName = this.usernames.get(sender.id) || "A Coworker";
 

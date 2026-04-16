@@ -19,15 +19,15 @@ interface UseMultiplayerOptions {
   applyOutageReward: () => void;
   applyOutagePenalty: () => void;
   // Credit the local player's TD balance with `amount`. Used when the target
-  // claims a payout for accepting a review request, when the sender is
-  // refunded (target ignored / disconnected), and when the server rejects a
-  // ping that we already debited locally.
+  // claims a payout for accepting a review request and when the sender is
+  // refunded (target ignored / disconnected) after the server committed the
+  // request.
   creditTD: (amount: number) => void;
-  // Debit the local player's TD balance with `amount`. The sender commits the
-  // cost *immediately at command time* — before the websocket message even
-  // goes out — so the visible balance always matches what is at risk. If the
-  // server later rejects or times out the request, the hook refunds via
-  // `creditTD` using either `ping_failed` or `review_ping_refunded`.
+  // Debit the local player's TD balance with `amount`. The debit happens on
+  // the server's `review_ping_sent` ack — the amount is what the server
+  // echoed back, so there is no need to correlate client-side state. If the
+  // request is later refunded, the server will echo the amount again on
+  // `review_ping_refunded`.
   debitTD: (amount: number) => void;
   // Apply a server-decided sprint-progress boost to the active ticket when
   // a coworker accepts our review request.
@@ -141,12 +141,6 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
   const [outageHp, setOutageHp] = useState<number | null>(null);
   const socketRef = useRef<PartySocket | null>(null);
   const lastActivityAt = useRef<number>(Date.now());
-  // Queue of in-flight ping amounts we debited locally before sending. Each
-  // ping pushes an entry here; the next server verdict — `review_ping_sent`
-  // (commit) or `ping_failed` (refund) — consumes the oldest entry. This lets
-  // us distinguish a ping-rejection (needs refund) from an accept-rejection
-  // (no refund, because no TD was committed for the accept path).
-  const pendingSendAmounts = useRef<number[]>([]);
 
   // Track user activity so we can skip outage alerts when the tab is idle
   useEffect(() => {
@@ -176,19 +170,19 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
           setOnlineCount(data.count);
           setOnlineUsers(data.users ?? []);
         } else if (data.type === 'review_ping_sent') {
-          // Server has committed the request; the TD was already debited
-          // locally at /ping time, so consume the queued amount without
-          // touching the balance again.
-          pendingSendAmounts.current.shift();
+          // Server has accepted the request and is holding it; debit the
+          // sender now so the displayed balance matches what's at risk.
+          // No TD is at risk before this ack, so client-side `/ping`
+          // validation failures never need a refund.
+          debitTD(data.amount);
           const seconds = Math.round(data.expiresInMs / 1000);
           const content = pickRandom(SENT_MESSAGES)({ target: data.target, amount: data.amount, seconds });
           setHistory(prev => [...prev, { role: 'system', content }]);
         } else if (data.type === 'ping_failed') {
-          // The server rejected a client message. If the failure corresponds
-          // to a ping we pre-debited, refund it; otherwise it was an
-          // /accept failure (no TD was ever committed for accept).
-          const refundAmount = pendingSendAmounts.current.shift();
-          if (refundAmount !== undefined) creditTD(refundAmount);
+          // Generic failure channel — covers both `/ping` rejections and
+          // `/accept` rejections. No refund is ever needed here: we only
+          // debit on `review_ping_sent`, and refunds after that arrive as
+          // `review_ping_refunded` with the specific amount attached.
           const content = pickRandom(FAILED_MESSAGES)(data.reason);
           setHistory(prev => [...prev, { role: 'error', content }]);
         } else if (data.type === 'review_ping_received') {
@@ -270,17 +264,12 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
 
   const sendMessage = (msg: ClientMessage) => socketRef.current?.send(JSON.stringify(msg));
 
-  // Send a paid review-request. The sender's TD is debited *immediately*
-  // (client-authoritative, per the issue spec) so the UI never shows a
-  // balance higher than what is actually at risk. The in-flight amount is
-  // queued so we can refund deterministically on `ping_failed` and know
-  // that `review_ping_sent` should not double-debit. Later refunds from
-  // expiry / disconnect arrive as `review_ping_refunded`.
-  const sendPing = (ticket: ReviewPingTicket, amount: number, target?: string) => {
-    debitTD(amount);
-    pendingSendAmounts.current.push(amount);
+  // Send a paid review-request. The server emits `review_ping_sent` (at
+  // which point we debit) on success or `ping_failed` (no debit ever
+  // happened, so nothing to refund) on validation failure. Later refunds
+  // from expiry / disconnect arrive as `review_ping_refunded`.
+  const sendPing = (ticket: ReviewPingTicket, amount: number, target?: string) =>
     sendMessage({ type: 'ping', amount, ticket, ...(target ? { target } : {}) });
-  };
   // Accept the (only) pending review-request directed at this connection.
   const acceptReviewPing = () => {
     setPendingReviewPing(null);
