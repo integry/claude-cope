@@ -21,6 +21,14 @@ export interface CorporateRank {
 
 export const GROWTH_RATE = 1.15;
 
+/**
+ * Fixed TD cost a sender commits to when requesting a code review via `/ping`.
+ * Kept here (not server-side) because the economy is client-authoritative; the
+ * server only validates the payload shape and enforces transient lifecycle
+ * rules. The target is paid this same amount on acceptance.
+ */
+export const PING_COST = 50;
+
 export const GENERATORS: Generator[] = [
   {
     id: "stackoverflow-copy-paster",
