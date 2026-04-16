@@ -21,7 +21,7 @@ import { BuddyDisplay } from "./BuddyDisplay";
 import { parseGlitchStyle } from "./parseGlitchStyle";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
-import { API_BASE } from "../config";
+import { API_BASE, BYOK_ENABLED } from "../config";
 import { supabase } from "../supabaseClient";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
 import { handleKeyCommand } from "./keyCommandHandler";
@@ -199,17 +199,21 @@ function Terminal() {
     if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
     if (bragPending) { handleBragSubmit(); return; }
     if (buddyPendingConfirm) { handleBuddyConfirm(); return; }
-    if (await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
+    if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
     setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
+    // Effective BYOK status for request routing — a stale apiKey must be
+    // ignored when the operator has disabled BYOK.
+    const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
     // Block submission when quota is exhausted and user has no BYOK or pro key
-    if (!state.apiKey && !state.proKey && state.economy.quotaPercent <= 0) {
-      setHistory((prev) => [...prev, { role: "user", content: command }, { role: "error", content: "[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Pro or use `/key <your-openrouter-key>` to continue." }]);
+    if (!effectiveApiKey && !state.proKey && state.economy.quotaPercent <= 0) {
+      const byokHint = BYOK_ENABLED ? " or use `/key <your-openrouter-key>`" : "";
+      setHistory((prev) => [...prev, { role: "user", content: command }, { role: "error", content: `[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Pro${byokHint} to continue.` }]);
       playError();
       return;
     }
     // Handle instant ban scenario (user fires command right after upgrade)
-    if (!state.apiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); triggerInstantBan(); return; }
+    if (!effectiveApiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); triggerInstantBan(); return; }
     const buddyResult = computeBuddyInterjection(state.buddy);
     if (state.buddy.type) {
       const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
@@ -248,7 +252,7 @@ function Terminal() {
       setHistory,
       setIsProcessing,
       currentRank: rank,
-      apiKey: state.apiKey,
+      apiKey: effectiveApiKey,
       customModel: state.selectedModel,
       proKey: state.proKey,
       modes: state.modes,
@@ -357,7 +361,7 @@ function Terminal() {
       <div className="shrink-0">
         <Ticker onExpand={() => { closeAllOverlays(); setShowParty(true); }} />
         {outageHp !== null && <OutageBar outageHp={outageHp} />}
-        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} isBYOK={!!state.apiKey} isPro={!!state.proKey} byokTotalCost={state.byokTotalCost} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlays(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlays(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} />
+        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} isBYOK={BYOK_ENABLED && !!state.apiKey} isPro={!!state.proKey} byokTotalCost={state.byokTotalCost} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlays(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlays(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} />
       </div>
       <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}

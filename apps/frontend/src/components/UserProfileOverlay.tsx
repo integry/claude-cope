@@ -2,6 +2,7 @@ import { GENERATORS, CORPORATE_RANKS, UPGRADES } from "../game/constants";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
 import AsciiBox from "./AsciiBox";
 import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
+import { BYOK_ENABLED } from "../config";
 import type { GameState } from "../hooks/useGameState";
 
 type UserProfileOverlayProps = {
@@ -153,7 +154,7 @@ function UserProfileOverlay({ state, onClose }: UserProfileOverlayProps) {
         {/* Quota */}
         <div className="border border-gray-700 rounded px-3 py-2 text-xs">
           <div className="text-green-400 font-bold mb-1">[API QUOTA]</div>
-          {state.apiKey ? (
+          {BYOK_ENABLED && state.apiKey ? (
             <div className="text-yellow-400">BYOK — usage not tracked</div>
           ) : (
             <>

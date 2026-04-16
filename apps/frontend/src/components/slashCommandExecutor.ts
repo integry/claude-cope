@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { GENERATORS, THEMES } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
-import { API_BASE } from "../config";
+import { API_BASE, BYOK_ENABLED } from "../config";
 
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
@@ -425,7 +425,7 @@ function handleAliasCommand(command: string, ctx: SlashCommandContext, reply: Re
 
 function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
   const modelName = command.slice(6).trim();
-  const isBYOK = Boolean(ctx.state.apiKey);
+  const isBYOK = BYOK_ENABLED && Boolean(ctx.state.apiKey);
   const isPro = Boolean(ctx.state.proKey);
 
   if (!modelName) {
@@ -436,9 +436,12 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
       return `- \`${m.id}\` — **${m.name}** (${costLabel})${tierBadge}`;
     }).join("\n");
 
-    const customModelHelp = isBYOK
-      ? `\n\nYou can also set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\` (BYOK mode).`
-      : `\n\nWant to use custom OpenRouter models? Set your own API key with \`/key\` to enable BYOK mode.`;
+    let customModelHelp = "";
+    if (BYOK_ENABLED) {
+      customModelHelp = isBYOK
+        ? `\n\nYou can also set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\` (BYOK mode).`
+        : `\n\nWant to use custom OpenRouter models? Set your own API key with \`/key\` to enable BYOK mode.`;
+    }
 
     reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\n**Available Models:**\n${modelList}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.${customModelHelp}` });
     return;
@@ -457,12 +460,14 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
 
   // Non-BYOK mode: only allow predefined COPE_MODELS
   if (!copeModel && !isBYOK) {
-    reply({ role: "system", content: "[🚫] Custom models are only available in BYOK mode. Set your own API key with `/key` first.\n\nAvailable models: " + COPE_MODELS.map((m) => "`" + m.id + "`").join(", ") });
+    const byokHint = BYOK_ENABLED ? " Set your own API key with `/key` first." : "";
+    reply({ role: "system", content: `[🚫] Custom models are not available on this instance.${byokHint}\n\nAvailable models: ` + COPE_MODELS.map((m) => "`" + m.id + "`").join(", ") });
     return;
   }
 
   if (copeModel && copeModel.tier === "pro" && !isPro && !isBYOK) {
-    reply({ role: "system", content: `[🔒] **${copeModel.name}** is a Pro model (${copeModel.multiplier}x cost). You need a Pro license to use this.\n\nUpgrade at \`/subscribe\` to unlock premium models, or set your own API key with \`/key\` to bypass limits entirely.` });
+    const byokHint = BYOK_ENABLED ? ", or set your own API key with `/key` to bypass limits entirely" : "";
+    reply({ role: "system", content: `[🔒] **${copeModel.name}** is a Pro model (${copeModel.multiplier}x cost). You need a Pro license to use this.\n\nUpgrade at \`/subscribe\` to unlock premium models${byokHint}.` });
     return;
   }
 
@@ -540,6 +545,10 @@ async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Prom
 
 function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | false {
   if (command === "/key" || command.startsWith("/key ")) {
+    if (!BYOK_ENABLED) {
+      reply({ role: "error", content: `[❌ Error] Command not found: \`/key\`` });
+      return false;
+    }
     import("./keyCommandHandler").then(async ({ handleKeyCommand }) => {
       // Create a mock setHistory that routes messages through reply
       const mockSetHistory = (action: React.SetStateAction<Message[]>) => {
