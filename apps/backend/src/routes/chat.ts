@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { computeMultiplier } from "../gameConstants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
-import { consumeQuota, QuotaExhaustedError } from "../utils/quota";
+import { consumeQuota, getQuotaLimits, QuotaExhaustedError } from "../utils/quota";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 
 type Env = {
@@ -12,6 +12,8 @@ type Env = {
     USAGE_KV?: KVNamespace;
     POLAR_ACCESS_TOKEN?: string;
     QUOTA_KV?: KVNamespace;
+    FREE_QUOTA_LIMIT?: string;
+    PRO_INITIAL_QUOTA?: string;
   };
   Variables: {
     sessionId: string;
@@ -154,11 +156,13 @@ chat.post("/", async (c) => {
   if (quotaKv) {
     const sessionId = c.get("sessionId");
     const tier = body.proKeyHash ? "pro" : "free";
+    const limits = getQuotaLimits(c.env);
     try {
       const result = await consumeQuota(quotaKv, {
         tier,
         sessionId,
         licenseKeyHash: body.proKeyHash,
+        limits,
       });
       quotaPercent = result.quotaPercent;
     } catch (err) {
