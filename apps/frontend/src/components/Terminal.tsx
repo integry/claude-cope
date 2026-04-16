@@ -19,6 +19,7 @@ import { useGameState, Message } from "../hooks/useGameState";
 import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
 import { BuddyDisplay } from "./BuddyDisplay";
 import { parseGlitchStyle } from "./parseGlitchStyle";
+import { terminalContainerClassName } from "./terminalClassName";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { API_BASE, BYOK_ENABLED } from "../config";
@@ -382,7 +383,7 @@ function Terminal() {
 
   return (
     <div
-      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "h-[100dvh] overflow-hidden"} w-full font-mono text-sm leading-snug sm:leading-relaxed p-4 pb-0 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : ""} ${pendingReviewPing && !pingAcknowledged ? "pvp-ping-flash" : ""} ${state.activeTheme && state.activeTheme !== "default" ? `theme-${state.activeTheme}` : ""}`}
+      className={terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme: state.activeTheme })}
       style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : 'var(--color-bg)', color: 'var(--color-text)' }}
       onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
