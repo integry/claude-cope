@@ -111,6 +111,10 @@ function Terminal() {
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
   const [compactEffect, setCompactEffect] = useState(false);
+  // Stop the incoming-ping screen flash once the target has noticed the ping
+  // (any mouse move, tap, or keypress). The ping itself remains pending until
+  // /accept or expiry — only the flashing attention-grab is dismissed.
+  const [pingAcknowledged, setPingAcknowledged] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -149,6 +153,25 @@ function Terminal() {
   }, []);
 
   useEffect(() => { if (!isProcessing && !isBooting) inputRef.current?.focus(); }, [isProcessing, isBooting]);
+
+  // When a new review ping arrives, reset the acknowledgement so the flash
+  // starts again; when it clears (accepted/expired), also reset so a future
+  // ping starts fresh. While a ping is pending but the user hasn't yet
+  // interacted, listen for any interaction and mark it acknowledged — that
+  // stops the flashing without resolving the ping itself.
+  useEffect(() => {
+    setPingAcknowledged(false);
+    if (!pendingReviewPing) return;
+    const acknowledge = () => setPingAcknowledged(true);
+    window.addEventListener("mousemove", acknowledge, { passive: true });
+    window.addEventListener("keydown", acknowledge);
+    window.addEventListener("touchstart", acknowledge, { passive: true });
+    return () => {
+      window.removeEventListener("mousemove", acknowledge);
+      window.removeEventListener("keydown", acknowledge);
+      window.removeEventListener("touchstart", acknowledge);
+    };
+  }, [pendingReviewPing]);
 
   useEffect(() => {
     if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
@@ -377,7 +400,7 @@ function Terminal() {
 
   return (
     <div
-      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "h-[100dvh] overflow-hidden"} w-full font-mono text-sm leading-snug sm:leading-relaxed p-4 pb-0 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : ""} ${pendingReviewPing ? "pvp-ping-flash" : ""} ${state.activeTheme && state.activeTheme !== "default" ? `theme-${state.activeTheme}` : ""}`}
+      className={`${activeRegression === "broken_scrollback" ? "h-screen overflow-hidden" : "h-[100dvh] overflow-hidden"} w-full font-mono text-sm leading-snug sm:leading-relaxed p-4 pb-0 flex flex-col transition-all duration-300 ${outageHp !== null ? "bg-red-900" : ""} ${pendingReviewPing && !pingAcknowledged ? "pvp-ping-flash" : ""} ${state.activeTheme && state.activeTheme !== "default" ? `theme-${state.activeTheme}` : ""}`}
       style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : 'var(--color-bg)', color: 'var(--color-text)' }}
       onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
