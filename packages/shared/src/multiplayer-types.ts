@@ -5,8 +5,9 @@
  *
  * The sender is committing `amount` TD up front; the server holds that
  * commitment for 60 seconds and refunds the sender if the target ignores
- * the request, disconnects, or another error occurs. There is no debuff
- * for being away from the keyboard — this is an opt-in, AFK-safe interaction.
+ * the request, disconnects, or another error occurs. The interaction is
+ * fully opt-in and AFK-safe — the target never loses anything for not
+ * responding, so there is no `/reject` command and no penalty to apply.
  */
 export interface PingMessage {
   type: "ping";
