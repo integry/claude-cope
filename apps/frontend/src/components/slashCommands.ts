@@ -1,7 +1,9 @@
 import { BYOK_ENABLED } from "../config";
 
-// /ping is now a paid code-review request (see useMultiplayer); /accept handles
-// both ticket offers and incoming review-pings, so /reject was retired.
+// /ping is a paid code-review request (see useMultiplayer). /accept handles
+// both ticket offers and incoming review-pings — there is no separate defense
+// command, because the new protocol is opt-in and ignoring a ping just refunds
+// the sender.
 const ALL_SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/help", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user", "/sync", "/shill", "/party", "/theme"];
 
 // BYOK-gated: `/key` only appears in autocomplete when BYOK is enabled.
@@ -17,7 +19,7 @@ export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/synergize": "Multiply your errors by 10x",
   "/compact": "Sweep the garbage under the rug",
   "/who": "Find other suffering developers",
-  "/ping": "Pay a coworker TD to review your active ticket",
+  "/ping": "Pay a coworker 50 TD to review your active ticket",
   "/help": "There is no help. Only commands.",
   "/about": "Read the origin story nobody asked for",
   "/privacy": "Pretend we respect your data",

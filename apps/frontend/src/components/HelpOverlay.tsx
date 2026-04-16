@@ -41,9 +41,19 @@ const sections = [
       "Use /buddy to roll a companion. Agile Snail (70%), Sarcastic Clippy (25%), or the legendary 10x Dragon (5%). Shiny variants exist for the truly cursed. Buddies interject with unsolicited opinions.",
   },
   {
+    title: "CODE REVIEW PINGS",
+    content:
+      "/ping pays a coworker **50 TD** to review your active ticket — your TD is held in escrow until they respond. If they /accept within 60s you get a sprint-progress boost; if they ignore the request or disconnect, the server refunds every TD. You must have an active ticket and enough TD to send a ping. There's no defense, debuff, or penalty — this is purely an opt-in, paid interaction.",
+  },
+  {
+    title: "ACCEPTING WORK",
+    content:
+      "/accept resolves the highest-priority thing waiting on you. If a coworker has sent you a review-ping, /accept claims their **50 TD** bounty (you pocket the payout, they get the boost). Otherwise /accept picks up any ticket the PM is currently offering you. You can only hold one ticket at a time — /abandon first if you want to switch.",
+  },
+  {
     title: "SLASH COMMANDS",
     content:
-      "/store — Buy team members & upgrades\n/leaderboard — Hall of Blame\n/achievements — Achievement vault\n/backlog — Browse sprint tickets\n/take <#> — Claim a ticket\n/accept — Accept offered ticket\n/abandon — Abandon current ticket\n/synergize — Mandatory meeting\n/buddy [remove] — Roll or remove a companion\n/blame — Git blame yourself\n/who — See online players\n/ping <name> — Pay a coworker to review your ticket\n/fast — Toggle fast mode\n/voice — Toggle vibe coding\n/compact — Compress history\n/alias <name> — Change username",
+      "/store — Buy team members & upgrades\n/leaderboard — Hall of Blame\n/achievements — Achievement vault\n/backlog — Browse sprint tickets\n/take <#> — Claim a ticket\n/accept — Claim a paid review request, or accept an offered ticket\n/abandon — Abandon current ticket\n/synergize — Mandatory meeting\n/buddy [remove] — Roll or remove a companion\n/blame — Git blame yourself\n/who — See online players\n/ping [name] — Pay a coworker 50 TD to review your active ticket\n/fast — Toggle fast mode\n/voice — Toggle vibe coding\n/compact — Compress history\n/alias <name> — Change username",
   },
 ];
 

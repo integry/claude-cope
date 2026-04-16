@@ -14,7 +14,7 @@ import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
 
-interface SlashCommandContext {
+export interface SlashCommandContext {
   state: GameState;
   setState: SetState;
   setHistory: SetHistory;
@@ -222,7 +222,7 @@ const ACCEPT_ALREADY_ACTIVE_MESSAGES = [
   (title: string) => `[❌] Your plate is full with **${title}**. Finish or abandon before taking more.`,
 ];
 
-function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+export function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   const target = command.slice(5).trim();
   const ticket = ctx.state.activeTicket;
   if (!ticket) {
@@ -549,7 +549,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   }
 }
 
-function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
+export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
   // Pending review-pings take precedence: they're time-boxed (60s) and you
   // get paid for accepting them, so the user almost certainly meant the ping.
   if (ctx.pendingReviewPing) {

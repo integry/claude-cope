@@ -128,8 +128,8 @@ The game uses **both** PartyKit and Supabase to inject real-time chaos without s
 #### **PartyKit (Edge-Native Real-Time)**
 PartyKit is built on Cloudflare's infrastructure, making it a natural fit for this stack.
 
-* **Role:** Handles true interactive real-time features—PvP sabotage, co-op boss fights, and any mechanic requiring sub-second latency between players.
-* **Architecture:** Creates "Rooms" that group connected players. A global room broadcasts high-impact events; temporary rooms handle PvP interactions.
+* **Role:** Handles true interactive real-time features—paid code-review pings, co-op boss fights, and any mechanic requiring sub-second latency between players.
+* **Architecture:** Creates "Rooms" that group connected players. A global room broadcasts high-impact events; temporary rooms handle review-ping lifecycles.
 * **Cost:** Extremely generous free tier.
 
 #### **Supabase Realtime (Broadcast Channel)**
@@ -143,7 +143,7 @@ Supabase's "Broadcast" feature passes ephemeral JSON messages between clients wi
 | Feature | Provider | Why |
 |---|---|---|
 | Global Incident Ticker | Supabase Broadcast | Low-frequency, one-to-many, no latency requirement |
-| PvP Sabotage (`/ping`) | PartyKit | Requires sub-second delivery + 5s response window |
+| Paid review pings (`/ping`) | PartyKit | Requires sub-second delivery + 60s escrow/refund lifecycle |
 | Prod Outage Co-Op Events | PartyKit | Needs synchronized global state (health bar) + real-time input |
 
 ---
@@ -159,14 +159,14 @@ A small scrolling terminal ticker at the top or bottom of the screen showing liv
     > `[LIVE] @Sarah just earned the 'Base-8 Comedian' achievement.`
 * **Why it works:** Minimal bandwidth, but makes the terminal feel like a bustling corporate network.
 
-#### **Mechanic 2: Multiplayer Sabotage (PvP)**
-Real-time PvP on top of the existing URL sabotage mechanic.
+#### **Mechanic 2: Paid Code-Review Pings (Multiplayer)**
+An opt-in, AFK-safe economy where players pay coworkers to review their active ticket.
 
-* **Command:** `/ping [username]`
-* **Action:** If the target is currently online, **PartyKit** delivers a live payload. Their terminal flashes red:
-    > `[INCOMING PACKET] @Dave has assigned you 3 Jira tickets. Your Tech Debt generation is halved for 60 seconds.`
-* **Defense:** The victim has 5 seconds to type `/reject` to block the attack. If too slow, they suffer the penalty.
-* **Why PartyKit:** The 5-second response window demands sub-second message delivery.
+* **Command:** `/ping [username]` (target optional — the server picks a random online coworker otherwise).
+* **Preconditions:** The sender must have an active ticket and at least the flat review fee (**50 TD**). The server validates both before debiting any TD.
+* **Action:** On acceptance, **PartyKit** debits the sender, holds the payment in escrow, and delivers a `[📩 REVIEW REQUEST]` to the target. The target has **60 seconds** to respond with `/accept`.
+* **Resolution:** If the target `/accept`s in time, they claim the full **50 TD** bounty and the sender's ticket gets a sprint-progress boost. If they ignore the request or disconnect, the server auto-refunds the sender. There is no `/reject`, no debuff, and no penalty — the design is intentionally opt-in so idle players are never harmed.
+* **Why PartyKit:** The escrow lifecycle and 60-second timer need reliable per-connection state and sub-second delivery of both offer and resolution messages.
 
 #### **Mechanic 3: The "Prod Outage" (Global Co-Op Event)**
 Spontaneous global events that reward collective action.
