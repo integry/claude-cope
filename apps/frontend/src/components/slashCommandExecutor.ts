@@ -43,9 +43,9 @@ interface SlashCommandContext {
   addActiveTD: (n: number) => void;
   onlineCount: number;
   onlineUsers: string[];
-  sendPing: (target?: string) => void;
-  pendingPing: boolean;
-  rejectPing: () => void;
+  sendPing: (ticket: { id: string; title: string; sprintGoal: number; sprintProgress: number }, amount: number, target?: string) => void;
+  pendingReviewPing: { sender: string; amount: number } | null;
+  acceptReviewPing: () => void;
   brrrrrrIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
   triggerCompactEffect: () => void;
   playChime: () => void;
@@ -157,14 +157,29 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
   return true;
 }
 
+// Fixed price for a code-review request. Kept here (not server-side) because
+// the economy is client-authoritative; the server only validates the payload
+// shape and enforces transient lifecycle rules around it.
+const REVIEW_PING_COST = 50;
+
 function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   const target = command.slice(5).trim();
+  const ticket = ctx.state.activeTicket;
+  if (!ticket) {
+    reply({ role: "error", content: "[❌] You need an active ticket before you can request a review. Use `/backlog` to grab one." });
+    return true;
+  }
+  if (ctx.state.economy.currentTD < REVIEW_PING_COST) {
+    reply({ role: "error", content: `[❌] Need **${REVIEW_PING_COST} TD** to request a review (you have ${ctx.state.economy.currentTD}).` });
+    return true;
+  }
+  const ticketPayload = { id: ticket.id, title: ticket.title, sprintGoal: ticket.sprintGoal, sprintProgress: ticket.sprintProgress };
   if (target) {
-    ctx.sendPing(target);
-    reply({ role: "system", content: `[📡] Targeting **${target}** with unsolicited Jira tickets...` });
+    ctx.sendPing(ticketPayload, REVIEW_PING_COST, target);
+    reply({ role: "system", content: `[📡] Asking **${target}** to review \`${ticket.id}\` for **${REVIEW_PING_COST} TD**...` });
   } else {
-    ctx.sendPing();
-    reply({ role: "system", content: "[📡] Pinging a random coworker with unsolicited Jira tickets..." });
+    ctx.sendPing(ticketPayload, REVIEW_PING_COST);
+    reply({ role: "system", content: `[📡] Asking a random coworker to review \`${ticket.id}\` for **${REVIEW_PING_COST} TD**...` });
   }
   return true;
 }
@@ -278,14 +293,6 @@ function handleSimpleReplyCommand(command: string, ctx: SlashCommandContext, rep
       reply({ role: "system", content: `[📡] **${ctx.onlineCount}** developer(s) suffering in this instance: ${userList}` });
     } else {
       reply({ role: "system", content: `[📡] There are currently **${ctx.onlineCount}** developers suffering in this instance.` });
-    }
-    return true;
-  } else if (command === "/reject") {
-    if (ctx.pendingPing) {
-      ctx.rejectPing();
-      reply({ role: "system", content: "[🛡️] Jira tickets **rejected**! You dodged the corporate sabotage." });
-    } else {
-      reply({ role: "error", content: "[❌] No incoming ping to reject." });
     }
     return true;
   }
@@ -483,6 +490,14 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
 }
 
 function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
+  // Pending review-pings take precedence: they're time-boxed (60s) and you
+  // get paid for accepting them, so the user almost certainly meant the ping.
+  if (ctx.pendingReviewPing) {
+    const { sender, amount } = ctx.pendingReviewPing;
+    ctx.acceptReviewPing();
+    reply({ role: "system", content: `[👀] Reviewing **${sender}**'s code for **${amount} TD**...` });
+    return;
+  }
   const offer = getPendingOffer();
   if (!offer) {
     reply({ role: "error", content: "[❌] No pending ticket to accept. Use `/backlog` to browse tickets." });
