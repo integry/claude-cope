@@ -1,5 +1,13 @@
 // ── Client → Server messages ──────────────────────────────────────────
 
+/** Shape of a ticket payload attached to a review-request. */
+export interface ReviewTicket {
+  id: string;
+  title: string;
+  sprintGoal: number;
+  sprintProgress: number;
+}
+
 /**
  * Send a paid review-request "ping" to another player.
  *
@@ -8,20 +16,19 @@
  * the request, disconnects, or another error occurs. The interaction is
  * fully opt-in and AFK-safe — the target never loses anything for not
  * responding, so there is no `/reject` command and no penalty to apply.
+ *
+ * `amount` and `ticket` are required in the contract — the server will
+ * reject any ping missing either field — so making them required here
+ * surfaces those mistakes at compile time instead of at runtime.
  */
 export interface PingMessage {
   type: "ping";
   /** Optional username; if omitted the server picks a random online target. */
   target?: string;
   /** TD amount the sender is committing to pay on acceptance. */
-  amount?: number;
+  amount: number;
   /** Ticket the sender is asking the target to review. */
-  ticket?: {
-    id: string;
-    title: string;
-    sprintGoal: number;
-    sprintProgress: number;
-  };
+  ticket: ReviewTicket;
 }
 
 /** Target accepts the (single) pending review-request directed at them. */
@@ -64,12 +71,19 @@ export interface ReviewPingReceivedMessage {
   sender: string;
   amount: number;
   expiresInMs: number;
-  ticket: {
-    id: string;
-    title: string;
-    sprintGoal: number;
-    sprintProgress: number;
-  };
+  ticket: ReviewTicket;
+}
+
+/**
+ * The review-request aimed at this target is no longer pending — it either
+ * timed out or the sender disconnected before it was accepted. The target
+ * should clear any "pending" UI so a subsequent `/accept` can fall through
+ * to the next real offer (e.g. a backlog ticket) instead of failing.
+ */
+export interface ReviewPingCancelledMessage {
+  type: "review_ping_cancelled";
+  sender: string;
+  reason: "expired" | "sender_disconnected";
 }
 
 /** Target accepted: tell the sender they got a sprint-progress boost. */
@@ -122,6 +136,7 @@ export type ServerMessage =
   | ReviewPingSentMessage
   | PingFailedMessage
   | ReviewPingReceivedMessage
+  | ReviewPingCancelledMessage
   | ReviewPingAcceptedMessage
   | ReviewPingClaimedMessage
   | ReviewPingRefundedMessage

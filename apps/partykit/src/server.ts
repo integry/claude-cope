@@ -53,9 +53,14 @@ export default class ClaudeCopeServer implements Party.Server {
     };
     timeout: ReturnType<typeof setTimeout>;
   }>();
-  // Per-connection 10s rate limit (last outbound ping timestamp).
+  // Per-username 10s rate limit (last outbound ping timestamp). Keyed by
+  // username (not connection id) so a reconnect cannot trivially reset the
+  // spam cap against the room.
   private lastPingAt = new Map<string, number>();
-  // Per (sender, target) 1h cooldown timestamp, keyed by `${senderId}:${targetId}`.
+  // Per (sender, target) 1h cooldown keyed by `${senderName}:${targetName}`.
+  // Intentionally NOT keyed by connection id — connection ids change on every
+  // reconnect, and the anti-farming rule is about the same *pair of players*,
+  // not the same pair of sockets.
   private lastPingToTarget = new Map<string, number>();
 
   // When a user connects, extract their username and broadcast updated presence.
@@ -68,10 +73,11 @@ export default class ClaudeCopeServer implements Party.Server {
 
   // When a user disconnects, refund any pending review-request they were the
   // target of, drop their presence row, and broadcast the new presence.
+  // Note: we intentionally do NOT drop that username's rate-limit / cooldown
+  // entries here, because those are designed to survive reconnects.
   onClose(conn: Party.Connection) {
     this.clearPendingRequestsForConnection(conn.id);
     this.usernames.delete(conn.id);
-    this.lastPingAt.delete(conn.id);
     this.broadcastPresence();
   }
 
@@ -117,8 +123,11 @@ export default class ClaudeCopeServer implements Party.Server {
   private handleReviewPing(sender: Party.Connection, data: Extract<ClientMessage, { type: "ping" }>) {
     const now = Date.now();
 
-    // 10s per-connection rate limit (spam cap).
-    const lastPing = this.lastPingAt.get(sender.id) ?? 0;
+    const senderName = this.usernames.get(sender.id) || "A Coworker";
+
+    // 10s per-player rate limit (spam cap). Keyed by username so reconnecting
+    // does not reset the cooldown — same player, same cooldown.
+    const lastPing = this.lastPingAt.get(senderName) ?? 0;
     const remainingCooldown = ClaudeCopeServer.PING_RATE_LIMIT_MS - (now - lastPing);
     if (remainingCooldown > 0) {
       this.send(sender, {
@@ -136,7 +145,6 @@ export default class ClaudeCopeServer implements Party.Server {
       return;
     }
 
-    const senderName = this.usernames.get(sender.id) || "A Coworker";
     const targets = Array.from(this.room.getConnections()).filter((conn) => conn.id !== sender.id);
     const targetConn = data.target
       ? targets.find((conn) => this.usernames.get(conn.id) === data.target)
@@ -152,8 +160,11 @@ export default class ClaudeCopeServer implements Party.Server {
 
     const targetName = this.usernames.get(targetConn.id) || "someone";
 
-    // 1h per (sender, target) cooldown — limits alt-account farming.
-    const targetKey = `${sender.id}:${targetConn.id}`;
+    // 1h per (senderName, targetName) cooldown — keyed by stable player
+    // identity so alt-account farming via reconnect cycles is blocked. The
+    // old connection-id key let a reconnect grant both sides fresh ids and
+    // bypass the cap entirely.
+    const targetKey = `${senderName}:${targetName}`;
     const lastTargetPing = this.lastPingToTarget.get(targetKey) ?? 0;
     const remainingTargetCooldown = ClaudeCopeServer.PING_TARGET_COOLDOWN_MS - (now - lastTargetPing);
     if (remainingTargetCooldown > 0) {
@@ -173,7 +184,7 @@ export default class ClaudeCopeServer implements Party.Server {
       return;
     }
 
-    this.lastPingAt.set(sender.id, now);
+    this.lastPingAt.set(senderName, now);
     this.lastPingToTarget.set(targetKey, now);
 
     const requestId = crypto.randomUUID();
@@ -187,6 +198,17 @@ export default class ClaudeCopeServer implements Party.Server {
           type: "review_ping_refunded",
           target: pending.targetName,
           amount: pending.amount,
+          reason: "expired",
+        });
+      }
+      // Tell the target their pending ping window has closed so the client
+      // can drop its local `pendingReviewPing` state and let subsequent
+      // `/accept`s fall through to the next real offer.
+      const targetConn = this.getConnection(pending.targetConnId);
+      if (targetConn) {
+        this.send(targetConn, {
+          type: "review_ping_cancelled",
+          sender: pending.senderName,
           reason: "expired",
         });
       }
@@ -270,10 +292,11 @@ export default class ClaudeCopeServer implements Party.Server {
     return undefined;
   }
 
-  // When a connection closes, refund any pending request that involved it.
-  // We refund only when the *target* disappears; if the sender disappears, the
-  // held client-side TD is simply lost from their local state, which is fine
-  // because the server is not authoritative for balances.
+  // When a connection closes, tear down any pending request that involved it.
+  //  - Target disconnects: refund the sender; the target is gone, nothing to tell.
+  //  - Sender disconnects: cancel on the target's UI so their /accept doesn't
+  //    blow up against a stale bounty; the sender's client-side TD commitment
+  //    is simply lost (server is not authoritative for balances).
   private clearPendingRequestsForConnection(connId: string) {
     for (const [requestId, pending] of this.pendingReviewRequests.entries()) {
       if (pending.targetConnId !== connId && pending.senderConnId !== connId) continue;
@@ -288,6 +311,15 @@ export default class ClaudeCopeServer implements Party.Server {
             target: pending.targetName,
             amount: pending.amount,
             reason: "target_disconnected",
+          });
+        }
+      } else if (pending.senderConnId === connId) {
+        const targetConn = this.getConnection(pending.targetConnId);
+        if (targetConn) {
+          this.send(targetConn, {
+            type: "review_ping_cancelled",
+            sender: pending.senderName,
+            reason: "sender_disconnected",
           });
         }
       }
