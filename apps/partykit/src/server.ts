@@ -35,7 +35,7 @@ export default class ClaudeCopeServer implements Party.Server {
   // Track connected usernames by connection ID
   private usernames = new Map<string, string>();
 
-  // PartyKit owns the short-lived review-request workflow because timers,
+// PartyKit owns the short-lived review-request workflow because timers,
   // connection presence, and per-target exclusivity are all realtime concerns.
   // Keyed by a generated requestId so we can support multiple in-flight
   // requests across the room (but only one *per target* at any time).
