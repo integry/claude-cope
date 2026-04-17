@@ -25,7 +25,7 @@ function DesktopQuotaBar({ quotaPercent, remaining, totalQuota, quotaTooltip }: 
   const filledBlocks = Math.round((quotaPercent / 100) * totalBlocks);
   const emptyBlocks = totalBlocks - filledBlocks;
   return (
-    <div title={quotaTooltip} className={`hidden sm:block flex-shrink-0 text-xs font-mono whitespace-nowrap px-2 cursor-default ${getQuotaTextColor(quotaPercent)}`}>
+    <div title={quotaTooltip} className={`flex-shrink-0 text-xs font-mono whitespace-nowrap cursor-default ${getQuotaTextColor(quotaPercent)}`}>
       {`[API Quota: ${"█".repeat(filledBlocks)}${"░".repeat(emptyBlocks)} ${remaining}/${totalQuota}]`}
     </div>
   );
@@ -70,13 +70,18 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
       <div className="flex items-center gap-2 min-w-0 px-2 sm:px-0">
         <img src="/media/logo-400-transparent.png" alt="Logo" className="hidden sm:block max-h-12 w-auto flex-shrink-0 object-contain" />
         <button onClick={onProfileClick} className="text-cyan-400 hover:text-white hover:underline cursor-pointer truncate">{username}</button>
-        <span className="text-[11px] text-gray-500 leading-none sm:text-xs">{rank}</span>
+        <span className="text-[11px] text-gray-400 leading-none sm:text-xs">[{rank}]</span>
         {isBYOK && <span className="text-[10px] font-bold text-yellow-400 whitespace-nowrap">[BYOK{byokTotalCost != null && byokTotalCost > 0 ? ` $${formatByokCost(byokTotalCost)}` : ""}]</span>}
         {isPro && <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-400 border border-purple-500/40 rounded whitespace-nowrap">PRO</span>}
       </div>
-      {/* Right group: status */}
-      <div className="flex items-center gap-2 ml-auto flex-shrink-0 px-2 sm:px-0">
-        <span className="whitespace-nowrap flex items-center gap-1"><span className="text-gray-600 text-xs">TD:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()}</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
+      {/* Right group: status (desktop) */}
+      <div className="hidden sm:flex items-center gap-6 ml-auto flex-shrink-0 justify-end px-2 sm:px-0">
+        <span className="whitespace-nowrap flex items-center gap-1"><span className="text-gray-500 text-xs">TD:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()}</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
+        {!isBYOK && <><span className="text-gray-600">|</span><DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} /></>}
+      </div>
+      {/* Right group: status (mobile) */}
+      <div className="flex sm:hidden items-center gap-2 ml-auto flex-shrink-0 px-2">
+        <span className="whitespace-nowrap flex items-center gap-1"><span className="text-gray-500 text-xs">TD:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()}</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
       </div>
       {/* Hamburger menu — mobile only */}
       <div ref={menuRef} className="sm:hidden relative flex-shrink-0">
@@ -114,7 +119,6 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           </div>
         )}
       </div>
-      {!isBYOK && <DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} />}
       {!isBYOK && <MobileQuotaLine quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} />}
     </div>
   );
