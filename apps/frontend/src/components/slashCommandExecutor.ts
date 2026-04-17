@@ -485,6 +485,18 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     reply({ role: "system", content: `[👤] Your current alias is **${ctx.state.username}**. Usage: \`/alias <new-name>\` to change it.` });
     return;
   }
+  if (newName.length < 3) {
+    reply({ role: "error", content: `[❌] Alias must be at least 3 characters long.` });
+    return;
+  }
+  if (newName.length > 33) {
+    reply({ role: "error", content: `[❌] Alias must be at most 33 characters long.` });
+    return;
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(newName)) {
+    reply({ role: "error", content: `[❌] Alias can only contain letters, numbers, hyphens, and underscores.` });
+    return;
+  }
   try {
     const res = await fetch(`${API_BASE}/api/score/check-alias?username=${encodeURIComponent(newName)}`);
     if (!res.ok) throw new Error("Failed to check alias");
