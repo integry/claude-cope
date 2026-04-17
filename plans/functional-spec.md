@@ -166,14 +166,12 @@ The game uses PartyKit (for interactive features) and Supabase Broadcast (for pa
     * `[LIVE] @Sarah just earned the 'Base-8 Comedian' achievement.`
 4. **Fallback:** If WebSocket connections approach free-tier limits, the ticker degrades to 10-second SWR polling via `GET /api/recent-events` (edge-cached by Cloudflare).
 
-### 8.2 Multiplayer Sabotage (PvP)
-1. **Trigger:** A player types `/ping [username]`.
-2. **Validation:** PartyKit checks if the target player is currently online.
-3. **If online:** The target's terminal flashes red and prints:
-    * `[INCOMING PACKET] @Dave has assigned you 3 Jira tickets. Your Tech Debt generation is halved for 60 seconds.`
-4. **Defense Window:** The victim has **5 seconds** to type `/reject` to block the attack.
-5. **If too slow or no response:** The penalty applies—TD generation is halved for 60 seconds.
-6. **If offline:** The attacker receives: `[ERROR] @target is not connected to the corporate VPN.`
+### 8.2 Paid Code-Review Pings (Multiplayer)
+1. **Trigger:** A player with an active ticket types `/ping [username]` (or just `/ping` to pick a random online coworker).
+2. **Validation:** PartyKit requires an active ticket payload and enough TD to cover the flat fee. Without both, the server rejects the request and the sender sees an error — no TD is debited.
+3. **If accepted by the server:** The sender is debited the **50 TD** fee, which is held in escrow. The target's terminal prints a `[📩 REVIEW REQUEST]` offering the bounty for reviewing the sender's ticket. They have **60 seconds** to respond with `/accept`.
+4. **If the target `/accept`s in time:** They receive the full **50 TD** payout, the sender's ticket gets a sprint-progress boost, and both sides see a confirmation message.
+5. **If the target ignores the request or disconnects:** The server refunds the sender's **50 TD** automatically — there is no defense command and no penalty applied to either side.
 
 ### 8.3 The "Prod Outage" (Global Co-Op Event)
 1. **Trigger:** The server automatically broadcasts an `OUTAGE` event via PartyKit once every few hours.
@@ -190,8 +188,8 @@ These commands extend the existing slash command system (Section 3.1) with multi
 
 | Command | Action | Real-Time Provider |
 |---|---|---|
-| `/ping [user]` | Initiate PvP sabotage attack | PartyKit |
-| `/reject` | Block an incoming PvP attack (5s window) | PartyKit |
+| `/ping [user]` | Pay 50 TD to request a code review on your active ticket | PartyKit |
+| `/accept` | Claim a pending review-ping bounty, or accept an offered ticket | PartyKit |
 | `/who` | List currently online players | PartyKit |
 
 ---

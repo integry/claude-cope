@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { GENERATORS, THEMES } from "../game/constants";
+import { GENERATORS, PING_COST, THEMES } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { API_BASE, BYOK_ENABLED } from "../config";
 
@@ -14,7 +14,7 @@ import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
 
-interface SlashCommandContext {
+export interface SlashCommandContext {
   state: GameState;
   setState: SetState;
   setHistory: SetHistory;
@@ -43,9 +43,9 @@ interface SlashCommandContext {
   addActiveTD: (n: number) => void;
   onlineCount: number;
   onlineUsers: string[];
-  sendPing: (target?: string) => void;
-  pendingPing: boolean;
-  rejectPing: () => void;
+  sendPing: (ticket: { id: string; title: string; sprintGoal: number; sprintProgress: number }, amount: number, target?: string) => void;
+  pendingReviewPing: { sender: string; amount: number } | null;
+  acceptReviewPing: () => void;
   brrrrrrIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
   triggerCompactEffect: () => void;
   playChime: () => void;
@@ -157,14 +157,89 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
   return true;
 }
 
-function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+// Variety pools for the synchronous, local-only messages emitted by /ping
+// and /accept. The multiplayer hook has its own pools for server-driven
+// events; these cover the immediate terminal feedback before any socket
+// traffic happens.
+const PING_NO_TICKET_MESSAGES = [
+  "[❌] You need an active ticket before you can request a review. Use `/backlog` to grab one.",
+  "[❌] No ticket in flight — nothing to review. Pick one up with `/backlog` first.",
+  "[❌] You can't ask for a review when you're not working on anything. Try `/backlog`.",
+  "[❌] Review requests require an active ticket. `/backlog` to claim one.",
+  "[❌] Can't ping a coworker without a ticket attached. Grab one from `/backlog`.",
+  "[❌] Refused: no active ticket. Coworkers don't review vibes. Use `/backlog`.",
+];
+
+const PING_BROKE_MESSAGES = [
+  (cost: number, have: number) => `[❌] Need **${cost} TD** to request a review (you have ${have}). Mine more debt first.`,
+  (cost: number, have: number) => `[❌] Insufficient funds: **${cost} TD** required, ${have} available. Coworkers don't work for free.`,
+  (cost: number, have: number) => `[❌] Your wallet says **${have} TD**. Reviews cost **${cost} TD**. Math is math.`,
+  (cost: number, have: number) => `[❌] Can't afford the review fee. **${cost} TD** required, ${have} on hand.`,
+  (cost: number, have: number) => `[❌] Review denied at the door — **${cost} TD** needed, you brought ${have}.`,
+  (cost: number, have: number) => `[❌] Your **${have} TD** won't cover the **${cost} TD** bounty. Earn more, then retry.`,
+];
+
+const PING_SENT_TARGETED_MESSAGES = [
+  (target: string, ticketId: string, cost: number) => `[📡] Asking **${target}** to review \`${ticketId}\` for **${cost} TD**...`,
+  (target: string, ticketId: string, cost: number) => `[📡] Reaching out to **${target}** — "got a sec to look at \`${ticketId}\`?" — with **${cost} TD** attached...`,
+  (target: string, ticketId: string, cost: number) => `[📡] Paying **${target}** **${cost} TD** to review \`${ticketId}\`. Awaiting their response...`,
+  (target: string, ticketId: string, cost: number) => `[📡] DM'ing **${target}** a review request for \`${ticketId}\`. Bounty: **${cost} TD**...`,
+  (target: string, ticketId: string, cost: number) => `[📡] Review bounty posted to **${target}**: **${cost} TD** for \`${ticketId}\`...`,
+  (target: string, ticketId: string, cost: number) => `[📡] Pinging **${target}** about \`${ticketId}\` with **${cost} TD** of motivation...`,
+];
+
+const PING_SENT_RANDOM_MESSAGES = [
+  (ticketId: string, cost: number) => `[📡] Asking a random coworker to review \`${ticketId}\` for **${cost} TD**...`,
+  (ticketId: string, cost: number) => `[📡] Posting a **${cost} TD** review bounty on \`${ticketId}\` to whoever is online...`,
+  (ticketId: string, cost: number) => `[📡] Spinning the wheel of coworkers for a review of \`${ticketId}\`. **${cost} TD** on the line...`,
+  (ticketId: string, cost: number) => `[📡] Broadcasting "anyone free for a review?" on \`${ticketId}\`. **${cost} TD** offered...`,
+  (ticketId: string, cost: number) => `[📡] Random reviewer incoming for \`${ticketId}\`. **${cost} TD** reserved...`,
+  (ticketId: string, cost: number) => `[📡] Tossing **${cost} TD** into the ether for a review of \`${ticketId}\`...`,
+];
+
+const ACCEPT_REVIEW_MESSAGES = [
+  (sender: string, amount: number) => `[👀] Reviewing **${sender}**'s code for **${amount} TD**...`,
+  (sender: string, amount: number) => `[👀] Opening **${sender}**'s diff. **${amount} TD** about to land.`,
+  (sender: string, amount: number) => `[👀] Accepted **${sender}**'s review request — time to pretend to read the code. **${amount} TD** pending.`,
+  (sender: string, amount: number) => `[👀] Rubber stamp warming up for **${sender}**. **${amount} TD** payout incoming.`,
+  (sender: string, amount: number) => `[👀] Saying yes to **${sender}**'s bounty of **${amount} TD**. LGTM locked and loaded.`,
+  (sender: string, amount: number) => `[👀] Claiming the **${amount} TD** bounty from **${sender}**. Review: acceptable.`,
+];
+
+const ACCEPT_NO_TICKET_MESSAGES = [
+  "[❌] No pending ticket to accept. Use `/backlog` to browse tickets.",
+  "[❌] Nothing to accept right now. `/backlog` has tickets if you're feeling brave.",
+  "[❌] Your inbox is empty. No review requests, no ticket offers. Try `/backlog`.",
+  "[❌] Nothing pending. `/backlog` will find you something to regret.",
+  "[❌] No offers on the table. Check `/backlog` for fresh suffering.",
+];
+
+const ACCEPT_ALREADY_ACTIVE_MESSAGES = [
+  (title: string) => `[❌] You already have an active ticket: **${title}**. Finish it first or \`/abandon\` it.`,
+  (title: string) => `[❌] Still working on **${title}**. Finish it or \`/abandon\` it before taking another.`,
+  (title: string) => `[❌] One ticket at a time, champ. You're on **${title}**.`,
+  (title: string) => `[❌] Can't accept — **${title}** is already in your tray. \`/abandon\` to drop it.`,
+  (title: string) => `[❌] Your plate is full with **${title}**. Finish or abandon before taking more.`,
+];
+
+export function handlePingCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   const target = command.slice(5).trim();
+  const ticket = ctx.state.activeTicket;
+  if (!ticket) {
+    reply({ role: "error", content: pickRandom(PING_NO_TICKET_MESSAGES) });
+    return true;
+  }
+  if (ctx.state.economy.currentTD < PING_COST) {
+    reply({ role: "error", content: pickRandom(PING_BROKE_MESSAGES)(PING_COST, ctx.state.economy.currentTD) });
+    return true;
+  }
+  const ticketPayload = { id: ticket.id, title: ticket.title, sprintGoal: ticket.sprintGoal, sprintProgress: ticket.sprintProgress };
   if (target) {
-    ctx.sendPing(target);
-    reply({ role: "system", content: `[📡] Targeting **${target}** with unsolicited Jira tickets...` });
+    ctx.sendPing(ticketPayload, PING_COST, target);
+    reply({ role: "system", content: pickRandom(PING_SENT_TARGETED_MESSAGES)(target, ticket.id, PING_COST) });
   } else {
-    ctx.sendPing();
-    reply({ role: "system", content: "[📡] Pinging a random coworker with unsolicited Jira tickets..." });
+    ctx.sendPing(ticketPayload, PING_COST);
+    reply({ role: "system", content: pickRandom(PING_SENT_RANDOM_MESSAGES)(ticket.id, PING_COST) });
   }
   return true;
 }
@@ -278,14 +353,6 @@ function handleSimpleReplyCommand(command: string, ctx: SlashCommandContext, rep
       reply({ role: "system", content: `[📡] **${ctx.onlineCount}** developer(s) suffering in this instance: ${userList}` });
     } else {
       reply({ role: "system", content: `[📡] There are currently **${ctx.onlineCount}** developers suffering in this instance.` });
-    }
-    return true;
-  } else if (command === "/reject") {
-    if (ctx.pendingPing) {
-      ctx.rejectPing();
-      reply({ role: "system", content: "[🛡️] Jira tickets **rejected**! You dodged the corporate sabotage." });
-    } else {
-      reply({ role: "error", content: "[❌] No incoming ping to reject." });
     }
     return true;
   }
@@ -482,12 +549,20 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   }
 }
 
-function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
+export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
+  // Pending review-pings take precedence: they're time-boxed (60s) and you
+  // get paid for accepting them, so the user almost certainly meant the ping.
+  if (ctx.pendingReviewPing) {
+    const { sender, amount } = ctx.pendingReviewPing;
+    ctx.acceptReviewPing();
+    reply({ role: "system", content: pickRandom(ACCEPT_REVIEW_MESSAGES)(sender, amount) });
+    return;
+  }
   const offer = getPendingOffer();
   if (!offer) {
-    reply({ role: "error", content: "[❌] No pending ticket to accept. Use `/backlog` to browse tickets." });
+    reply({ role: "error", content: pickRandom(ACCEPT_NO_TICKET_MESSAGES) });
   } else if (ctx.state.activeTicket) {
-    reply({ role: "error", content: `[❌] You already have an active ticket: **${ctx.state.activeTicket.title}**. Finish it first or \`/abandon\` it.` });
+    reply({ role: "error", content: pickRandom(ACCEPT_ALREADY_ACTIVE_MESSAGES)(ctx.state.activeTicket.title) });
   } else {
     clearPendingOffer();
     ctx.setState((prev) => ({

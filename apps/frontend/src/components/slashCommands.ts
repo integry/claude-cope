@@ -1,7 +1,10 @@
 import { BYOK_ENABLED } from "../config";
 
-// Added /ping and /reject to enable PvP sabotage interactions.
-const ALL_SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/reject", "/help", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user", "/sync", "/shill", "/party", "/theme"];
+// /ping is a paid code-review request (see useMultiplayer). /accept handles
+// both ticket offers and incoming review-pings — there is no separate defense
+// command, because the new protocol is opt-in and ignoring a ping just refunds
+// the sender.
+const ALL_SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/help", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user", "/sync", "/shill", "/party", "/theme"];
 
 // BYOK-gated: `/key` only appears in autocomplete when BYOK is enabled.
 export const SLASH_COMMANDS = ALL_SLASH_COMMANDS.filter((cmd) => BYOK_ENABLED || cmd !== "/key");
@@ -16,8 +19,7 @@ export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/synergize": "Multiply your errors by 10x",
   "/compact": "Sweep the garbage under the rug",
   "/who": "Find other suffering developers",
-  "/ping": "Interrupt someone's flow state",
-  "/reject": "Decline to acknowledge reality",
+  "/ping": "Pay a coworker 50 TD to review your active ticket",
   "/help": "There is no help. Only commands.",
   "/about": "Read the origin story nobody asked for",
   "/privacy": "Pretend we respect your data",
@@ -36,7 +38,7 @@ export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/profile": "Review your miserable statistics",
   "/ticket": "Submit a plea to /dev/null",
   "/take": "Voluntarily accept more pain",
-  "/accept": "Obey when the PM auto-assigns you a ticket",
+  "/accept": "Accept a paid review request, or a ticket from the PM",
   "/abandon": "Give up. We knew you would.",
   "/alias": "Create shortcuts to your mistakes",
   "/model": "Swap out the hallucination engine",

@@ -1,12 +1,39 @@
 // ── Client → Server messages ──────────────────────────────────────────
 
-export interface PingMessage {
-  type: "ping";
-  target?: string;
+/** Shape of a ticket payload attached to a review-request. */
+export interface ReviewTicket {
+  id: string;
+  title: string;
+  sprintGoal: number;
+  sprintProgress: number;
 }
 
-export interface RejectPingMessage {
-  type: "reject_ping";
+/**
+ * Send a paid review-request "ping" to another player.
+ *
+ * The sender is committing `amount` TD up front; the server holds that
+ * commitment for 60 seconds and refunds the sender if the target ignores
+ * the request, disconnects, or another error occurs. The interaction is
+ * fully opt-in and AFK-safe — the target never loses anything for not
+ * responding, so there is no `/reject` command and no penalty to apply.
+ *
+ * `amount` and `ticket` are required in the contract — the server will
+ * reject any ping missing either field — so making them required here
+ * surfaces those mistakes at compile time instead of at runtime.
+ */
+export interface PingMessage {
+  type: "ping";
+  /** Optional username; if omitted the server picks a random online target. */
+  target?: string;
+  /** TD amount the sender is committing to pay on acceptance. */
+  amount: number;
+  /** Ticket the sender is asking the target to review. */
+  ticket: ReviewTicket;
+}
+
+/** Target accepts the (single) pending review-request directed at them. */
+export interface AcceptReviewPingMessage {
+  type: "accept_review_ping";
 }
 
 export interface DamageOutageMessage {
@@ -14,7 +41,7 @@ export interface DamageOutageMessage {
 }
 
 /** Discriminated union of every message a client can send to the server. */
-export type ClientMessage = PingMessage | RejectPingMessage | DamageOutageMessage;
+export type ClientMessage = PingMessage | AcceptReviewPingMessage | DamageOutageMessage;
 
 // ── Server → Client messages ─────────────────────────────────────────
 
@@ -24,30 +51,65 @@ export interface PresenceMessage {
   users: string[];
 }
 
-export interface PingSentMessage {
-  type: "ping_sent";
+/** Server acknowledged a review-request and is holding it for `expiresInMs`. */
+export interface ReviewPingSentMessage {
+  type: "review_ping_sent";
   target: string;
+  amount: number;
+  expiresInMs: number;
 }
 
+/** Generic failure — rate limit, no target online, missing payload, etc. */
 export interface PingFailedMessage {
   type: "ping_failed";
   reason: string;
 }
 
-export interface IncomingPingMessage {
-  type: "incoming_ping";
-  attacker: string;
+/** Target was just selected for a review-request. They have `expiresInMs` to /accept. */
+export interface ReviewPingReceivedMessage {
+  type: "review_ping_received";
+  sender: string;
+  amount: number;
+  expiresInMs: number;
+  ticket: ReviewTicket;
 }
 
-export interface PingAppliedMessage {
-  type: "ping_applied";
-  attacker: string;
-  victim: string;
+/**
+ * The review-request aimed at this target is no longer pending — it either
+ * timed out or the sender disconnected before it was accepted. The target
+ * should clear any "pending" UI so a subsequent `/accept` can fall through
+ * to the next real offer (e.g. a backlog ticket) instead of failing.
+ */
+export interface ReviewPingCancelledMessage {
+  type: "review_ping_cancelled";
+  sender: string;
+  reason: "expired" | "sender_disconnected";
 }
 
-export interface PingRejectedMessage {
-  type: "ping_rejected";
-  victim: string;
+/** Target accepted: tell the sender they got a sprint-progress boost. */
+export interface ReviewPingAcceptedMessage {
+  type: "review_ping_accepted";
+  sender: string;
+  target: string;
+  amount: number;
+  sprintProgressBoost: number;
+  ticketId: string;
+}
+
+/** Target accepted: tell the target they earned the TD payout. */
+export interface ReviewPingClaimedMessage {
+  type: "review_ping_claimed";
+  sender: string;
+  amount: number;
+  ticketId: string;
+}
+
+/** Target ignored / disconnected — refund the sender. */
+export interface ReviewPingRefundedMessage {
+  type: "review_ping_refunded";
+  target: string;
+  amount: number;
+  reason: "expired" | "target_disconnected";
 }
 
 export interface OutageStartMessage {
@@ -71,11 +133,13 @@ export interface OutageFailedMessage {
 /** Discriminated union of every message the server can send to a client. */
 export type ServerMessage =
   | PresenceMessage
-  | PingSentMessage
+  | ReviewPingSentMessage
   | PingFailedMessage
-  | IncomingPingMessage
-  | PingAppliedMessage
-  | PingRejectedMessage
+  | ReviewPingReceivedMessage
+  | ReviewPingCancelledMessage
+  | ReviewPingAcceptedMessage
+  | ReviewPingClaimedMessage
+  | ReviewPingRefundedMessage
   | OutageStartMessage
   | OutageUpdateMessage
   | OutageClearedMessage

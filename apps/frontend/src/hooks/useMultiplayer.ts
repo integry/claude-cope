@@ -3,6 +3,13 @@ import PartySocket from 'partysocket';
 import { Message } from '../components/Terminal';
 import type { ClientMessage, ServerMessage } from '@claude-cope/shared/multiplayer-types';
 
+interface ReviewPingTicket {
+  id: string;
+  title: string;
+  sprintGoal: number;
+  sprintProgress: number;
+}
+
 interface UseMultiplayerOptions {
   // The canonical user identity from game state (state.username). Used as the
   // PartyKit presence name so `/who`, `/ping`, `/profile`, and the leaderboard
@@ -11,7 +18,20 @@ interface UseMultiplayerOptions {
   setHistory: React.Dispatch<React.SetStateAction<Message[]>>;
   applyOutageReward: () => void;
   applyOutagePenalty: () => void;
-  applyPvpDebuff: () => void;
+  // Credit the local player's TD balance with `amount`. Used when the target
+  // claims a payout for accepting a review request and when the sender is
+  // refunded (target ignored / disconnected) after the server committed the
+  // request.
+  creditTD: (amount: number) => void;
+  // Debit the local player's TD balance with `amount`. The debit happens on
+  // the server's `review_ping_sent` ack — the amount is what the server
+  // echoed back, so there is no need to correlate client-side state. If the
+  // request is later refunded, the server will echo the amount again on
+  // `review_ping_refunded`.
+  debitTD: (amount: number) => void;
+  // Apply a server-decided sprint-progress boost to the active ticket when
+  // a coworker accepts our review request.
+  applyReviewSprintBoost: (ticketId: string, boost: number) => void;
 }
 
 // Consider the user idle after 3 minutes with no mouse/keyboard activity.
@@ -20,11 +40,248 @@ interface UseMultiplayerOptions {
 // is a bad UX.
 const IDLE_THRESHOLD_MS = 3 * 60 * 1000;
 
+function pickRandom<T>(arr: readonly T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]!;
+}
+
+// ── Pre-generated message pools ─────────────────────────────────────────
+// Every automated message that the multiplayer layer emits pulls from one
+// of these arrays so /ping, /accept, refunds, and failures never feel
+// repetitive. Each template receives a context object and returns a string.
+
+type SentCtx = { target: string; amount: number; seconds: number };
+const SENT_MESSAGES: Array<(c: SentCtx) => string> = [
+  ({ target, amount, seconds }) => `[📡] Review request fired off at **${target}** for **${amount} TD**. ${seconds}s until they /accept or this gets refunded.`,
+  ({ target, amount, seconds }) => `[📡] Slacked **${target}** — "quick review?" — for **${amount} TD**. They have ${seconds}s to pretend they didn't see it.`,
+  ({ target, amount, seconds }) => `[📡] Pinged **${target}** about your ticket. **${amount} TD** committed. Refund in ${seconds}s if they ghost you.`,
+  ({ target, amount, seconds }) => `[📡] Review request queued with **${target}**. Holding **${amount} TD** in escrow for ${seconds}s.`,
+  ({ target, amount, seconds }) => `[📡] **${target}** has been tagged in a review thread you opened. **${amount} TD** bounty. ${seconds}s timer running.`,
+  ({ target, amount, seconds }) => `[📡] DM sent to **${target}**: "pls review, paying **${amount} TD**." Window closes in ${seconds}s.`,
+  ({ target, amount, seconds }) => `[📡] **${target}**'s terminal just lit up. Offering **${amount} TD** for a review. ${seconds}s to respond.`,
+  ({ target, amount, seconds }) => `[📡] Paged **${target}** like it's 2003. **${amount} TD** on the line. They have ${seconds}s.`,
+];
+
+type ReceivedCtx = { sender: string; amount: number; ticketId: string; ticketTitle: string; seconds: number };
+const RECEIVED_MESSAGES: Array<(c: ReceivedCtx) => string> = [
+  ({ sender, amount, ticketId, ticketTitle, seconds }) => `[📩 REVIEW REQUEST] **${sender}** is offering **${amount} TD** for a review of \`${ticketId}\` — *${ticketTitle}*. Type \`/accept\` within ${seconds}s to cash in.`,
+  ({ sender, amount, ticketId, ticketTitle, seconds }) => `[📩 INCOMING] **${sender}** needs eyes on \`${ticketId}\` — *${ticketTitle}*. Worth **${amount} TD** if you \`/accept\` in ${seconds}s.`,
+  ({ sender, amount, ticketId, ticketTitle, seconds }) => `[📩] **${sender}** is waving **${amount} TD** in your face for a review of \`${ticketId}\` (*${ticketTitle}*). \`/accept\` within ${seconds}s or they retract the offer.`,
+  ({ sender, amount, ticketId, ticketTitle, seconds }) => `[📩 REVIEW PENDING] **${sender}** tagged you on \`${ticketId}\` — *${ticketTitle}*. **${amount} TD** bounty, ${seconds}s to \`/accept\`.`,
+  ({ sender, amount, ticketId, ticketTitle, seconds }) => `[📩] Slack notification: **${sender}** says "mind taking a look at \`${ticketId}\`?" and attached **${amount} TD**. *${ticketTitle}*. \`/accept\` in ${seconds}s.`,
+  ({ sender, amount, ticketId, ticketTitle, seconds }) => `[📩 BOUNTY] **${amount} TD** for reviewing **${sender}**'s ticket \`${ticketId}\` (*${ticketTitle}*). \`/accept\` within ${seconds}s or watch them give up.`,
+  ({ sender, amount, ticketId, ticketTitle, seconds }) => `[📩] **${sender}** just dropped **${amount} TD** asking for a code review on \`${ticketId}\` — *${ticketTitle}*. ${seconds}s countdown to \`/accept\`.`,
+  ({ sender, amount, ticketId, ticketTitle, seconds }) => `[📩 PING] **${sender}** wants a second opinion on \`${ticketId}\` — *${ticketTitle}* — and is paying **${amount} TD**. \`/accept\` within ${seconds}s.`,
+];
+
+type AcceptedCtx = { target: string; amount: number; boost: number };
+const ACCEPTED_MESSAGES: Array<(c: AcceptedCtx) => string> = [
+  ({ target, amount, boost }) => `[✅] **${target}** rubber-stamped your code. **+${boost} sprint progress** applied. Cost you ${amount} TD, bought you a coworker's goodwill.`,
+  ({ target, amount, boost }) => `[✅] **${target}** reviewed your ticket — left two nitpicks and an LGTM. **+${boost} sprint progress**. ${amount} TD transferred.`,
+  ({ target, amount, boost }) => `[✅] **${target}** said "ship it" after reading one line. **+${boost} sprint progress**. ${amount} TD well spent.`,
+  ({ target, amount, boost }) => `[✅] Review merged. **${target}** is **${amount} TD** richer and your ticket is **+${boost} sprint progress** closer to done.`,
+  ({ target, amount, boost }) => `[✅] **${target}** approved your PR. Unclear if they actually read it. **+${boost} sprint progress** applied. -${amount} TD.`,
+  ({ target, amount, boost }) => `[✅] **${target}** accepted the review, cashed your ${amount} TD, and bumped your ticket **+${boost} sprint progress**. Corporate synergy achieved.`,
+  ({ target, amount, boost }) => `[✅] **${target}** signed off on your ticket. **+${boost} sprint progress** — ${amount} TD fewer in your pocket.`,
+  ({ target, amount, boost }) => `[✅] Review stamped by **${target}**. **+${boost} sprint progress**. You paid ${amount} TD. They paid zero attention. Worth it.`,
+];
+
+type ClaimedCtx = { sender: string; amount: number; ticketId: string };
+const CLAIMED_MESSAGES: Array<(c: ClaimedCtx) => string> = [
+  ({ sender, amount, ticketId }) => `[💰] You pocketed **${amount} TD** for "reviewing" **${sender}**'s ticket \`${ticketId}\`. The diff barely loaded.`,
+  ({ sender, amount, ticketId }) => `[💰] **${amount} TD** deposited. You clicked "Approve" on **${sender}**'s \`${ticketId}\` — nobody has to know you didn't read it.`,
+  ({ sender, amount, ticketId }) => `[💰] Payout received: **${amount} TD** from **${sender}** for reviewing \`${ticketId}\`. Rubber-stamping is a legitimate business model.`,
+  ({ sender, amount, ticketId }) => `[💰] You just earned **${amount} TD** by saying "LGTM" to **${sender}** on \`${ticketId}\`. The economy is fine.`,
+  ({ sender, amount, ticketId }) => `[💰] **+${amount} TD** credited for reviewing **${sender}**'s \`${ticketId}\`. Your approval ratio is now suspicious.`,
+  ({ sender, amount, ticketId }) => `[💰] **${amount} TD** collected. **${sender}** thinks you reviewed \`${ticketId}\`. Let's keep it that way.`,
+  ({ sender, amount, ticketId }) => `[💰] Review fee claimed: **${amount} TD** from **${sender}** on \`${ticketId}\`. Frictionless. Ethics-free.`,
+  ({ sender, amount, ticketId }) => `[💰] **${sender}** paid you **${amount} TD** for eyeballing \`${ticketId}\`. You looked at it. Sort of.`,
+];
+
+type RefundedCtx = { target: string; amount: number; reason: 'expired' | 'target_disconnected' };
+const REFUNDED_MESSAGES: Array<(c: RefundedCtx) => string> = [
+  ({ target, amount, reason }) => `[↩️] **${target}** ${reason === 'expired' ? 'ignored your request' : 'went offline'}. **${amount} TD** refunded.`,
+  ({ target, amount, reason }) => `[↩️] **${amount} TD** back in your pocket. **${target}** ${reason === 'expired' ? "didn't even open the DM" : 'rage-quit the session'}.`,
+  ({ target, amount, reason }) => `[↩️] Refund processed: **${amount} TD**. **${target}** ${reason === 'expired' ? "let the timer run out" : 'dropped off the network'}.`,
+  ({ target, amount, reason }) => `[↩️] **${target}** ${reason === 'expired' ? 'left you on read' : 'got disconnected mid-review'}. **${amount} TD** restored.`,
+  ({ target, amount, reason }) => `[↩️] **${target}** ${reason === 'expired' ? 'did not respond in time' : "hasn't reconnected"}. Escrow released — **+${amount} TD**.`,
+  ({ target, amount, reason }) => `[↩️] No review from **${target}**. They ${reason === 'expired' ? 'timed out' : 'vanished'}. **${amount} TD** refunded.`,
+  ({ target, amount, reason }) => `[↩️] **${amount} TD** returned. **${target}** ${reason === 'expired' ? 'was too busy for you' : 'lost connection'}. Classic.`,
+  ({ target, amount, reason }) => `[↩️] Ghosted by **${target}** (${reason === 'expired' ? 'ignored request' : 'disconnected'}). **+${amount} TD** refunded.`,
+];
+
+const FAILED_MESSAGES: Array<(reason: string) => string> = [
+  (reason) => `[❌] Ping failed: ${reason}`,
+  (reason) => `[❌] Review request bounced: ${reason}`,
+  (reason) => `[❌] Slack ratelimit the old-fashioned way — your request was dropped: ${reason}`,
+  (reason) => `[❌] Server rejected the ping: ${reason}`,
+  (reason) => `[❌] Ping denied: ${reason}`,
+  (reason) => `[❌] Something went sideways with your ping: ${reason}`,
+  (reason) => `[❌] Request didn't go through: ${reason}`,
+  (reason) => `[❌] Review ping refused: ${reason}`,
+];
+
+// Target-side cancellation copy. Split out so the message handler stays
+// below the lint complexity ceiling — having the ternary inline tipped it over.
+function cancelledCopy(sender: string, reason: 'expired' | 'sender_disconnected'): string {
+  if (reason === 'sender_disconnected') {
+    return `[⌛] **${sender}** disconnected before you could review their ticket. Bounty withdrawn.`;
+  }
+  return `[⌛] **${sender}**'s review request timed out. Nothing to \`/accept\` anymore.`;
+}
+
+// ── Pure message dispatcher ─────────────────────────────────────────────
+// Split out of the hook so the multiplayer follow-up logic (debit timing,
+// refund accounting, pending-ping cancellation, outage idle-guards) can be
+// unit-tested without spinning up React, PartyKit, or a real socket.
+// The hook's useEffect wraps this with live setters and `isUserIdle`.
+export interface ServerMessageHandlers {
+  setHistory: React.Dispatch<React.SetStateAction<Message[]>>;
+  setPendingReviewPing: React.Dispatch<React.SetStateAction<{ sender: string; amount: number } | null>>;
+  setOnlineCount: React.Dispatch<React.SetStateAction<number>>;
+  setOnlineUsers: React.Dispatch<React.SetStateAction<string[]>>;
+  setOutageHp: React.Dispatch<React.SetStateAction<number | null>>;
+  creditTD: (amount: number) => void;
+  debitTD: (amount: number) => void;
+  applyReviewSprintBoost: (ticketId: string, boost: number) => void;
+  applyOutageReward: () => void;
+  applyOutagePenalty: () => void;
+  isUserIdle: () => boolean;
+}
+
+function handleReviewMessage(data: ServerMessage, h: ServerMessageHandlers): boolean {
+  if (data.type === 'review_ping_sent') {
+    // Server has accepted the request and is holding it; debit the sender now
+    // so the displayed balance matches what's at risk. No TD is at risk before
+    // this ack, so client-side `/ping` validation failures never need a refund.
+    h.debitTD(data.amount);
+    const seconds = Math.round(data.expiresInMs / 1000);
+    const content = pickRandom(SENT_MESSAGES)({ target: data.target, amount: data.amount, seconds });
+    h.setHistory(prev => [...prev, { role: 'system', content }]);
+    return true;
+  }
+  if (data.type === 'ping_failed') {
+    // Generic failure channel — covers both `/ping` rejections and `/accept`
+    // rejections. No refund is ever needed here: we only debit on
+    // `review_ping_sent`, and later refunds arrive as `review_ping_refunded`
+    // with the specific amount attached. This is why we no longer maintain a
+    // local "pending amounts" queue — it was unsafe when `ping_failed` was
+    // used as a shared error channel.
+    const content = pickRandom(FAILED_MESSAGES)(data.reason);
+    h.setHistory(prev => [...prev, { role: 'error', content }]);
+    return true;
+  }
+  if (data.type === 'review_ping_received') {
+    // No penalty for ignoring this — the sender is paying us if we /accept.
+    h.setPendingReviewPing({ sender: data.sender, amount: data.amount });
+    const seconds = Math.round(data.expiresInMs / 1000);
+    const content = pickRandom(RECEIVED_MESSAGES)({
+      sender: data.sender,
+      amount: data.amount,
+      ticketId: data.ticket.id,
+      ticketTitle: data.ticket.title,
+      seconds,
+    });
+    h.setHistory(prev => [...prev, { role: 'warning', content }]);
+    return true;
+  }
+  if (data.type === 'review_ping_cancelled') {
+    // Sender bailed or the 60s window lapsed. Clear local pending state so
+    // /accept falls through correctly, and let the player know the bounty is gone.
+    h.setPendingReviewPing(null);
+    h.setHistory(prev => [...prev, { role: 'system', content: cancelledCopy(data.sender, data.reason) }]);
+    return true;
+  }
+  if (data.type === 'review_ping_accepted') {
+    // Sender side: their target accepted; apply the sprint boost on the ticket.
+    h.applyReviewSprintBoost(data.ticketId, data.sprintProgressBoost);
+    const content = pickRandom(ACCEPTED_MESSAGES)({
+      target: data.target,
+      amount: data.amount,
+      boost: data.sprintProgressBoost,
+    });
+    h.setHistory(prev => [...prev, { role: 'system', content }]);
+    return true;
+  }
+  if (data.type === 'review_ping_claimed') {
+    // Target side: payout confirmed.
+    h.setPendingReviewPing(null);
+    h.creditTD(data.amount);
+    const content = pickRandom(CLAIMED_MESSAGES)({
+      sender: data.sender,
+      amount: data.amount,
+      ticketId: data.ticketId,
+    });
+    h.setHistory(prev => [...prev, { role: 'system', content }]);
+    return true;
+  }
+  if (data.type === 'review_ping_refunded') {
+    // Sender side: target ignored or disconnected — refund using the amount
+    // the server echoed back. No local queue means cross-action `ping_failed`
+    // events cannot refund the wrong amount.
+    h.creditTD(data.amount);
+    const content = pickRandom(REFUNDED_MESSAGES)({
+      target: data.target,
+      amount: data.amount,
+      reason: data.reason,
+    });
+    h.setHistory(prev => [...prev, { role: 'system', content }]);
+    return true;
+  }
+  return false;
+}
+
+function handleOutageMessage(data: ServerMessage, h: ServerMessageHandlers): boolean {
+  if (data.type === 'outage_start') {
+    // Skip the alert and health bar entirely when the user is idle — they
+    // can't participate and we don't want to stack up alerts.
+    if (h.isUserIdle()) return true;
+    h.setOutageHp(data.hp);
+    h.setHistory(prev => [...prev, { role: 'error', content: '[CRITICAL ALERT: AWS us-east-1 IS DOWN]' }]);
+    return true;
+  }
+  if (data.type === 'outage_update') {
+    // Only sync the bar if the user is already engaged with this outage
+    if (h.isUserIdle()) return true;
+    h.setOutageHp(data.hp);
+    return true;
+  }
+  if (data.type === 'outage_cleared') {
+    // Always clear the bar state; only reward+announce if not idle
+    h.setOutageHp(null);
+    if (h.isUserIdle()) return true;
+    h.applyOutageReward();
+    h.setHistory(prev => [...prev, { role: 'system', content: '[SUCCESS] AWS us-east-1 is back online. All players receive a TD boost.' }]);
+    return true;
+  }
+  if (data.type === 'outage_failed') {
+    // Always clear the bar state; only penalize+announce if not idle
+    h.setOutageHp(null);
+    if (h.isUserIdle()) return true;
+    h.applyOutagePenalty();
+    h.setHistory(prev => [...prev, { role: 'error', content: '[FAILURE] AWS us-east-1 outage was not resolved in time. Your most expensive generator has been decommissioned.' }]);
+    return true;
+  }
+  return false;
+}
+
+export function applyServerMessage(data: ServerMessage, handlers: ServerMessageHandlers): void {
+  if (data.type === 'presence') {
+    handlers.setOnlineCount(data.count);
+    handlers.setOnlineUsers(data.users ?? []);
+    return;
+  }
+  if (handleReviewMessage(data, handlers)) return;
+  handleOutageMessage(data, handlers);
+}
+
 // We pass setHistory to allow the hook to write messages directly to the terminal when an attack occurs.
-export function useMultiplayer({ username, setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff }: UseMultiplayerOptions) {
+export function useMultiplayer({ username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost }: UseMultiplayerOptions) {
   const [onlineCount, setOnlineCount] = useState(1);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
-  const [pendingPing, setPendingPing] = useState(false);
+  // The most recent unhandled review-request directed at this player. Cleared
+  // when the player runs `/accept`, when the server emits `review_ping_claimed`,
+  // or when it emits `review_ping_cancelled` because the sender bailed / timed out.
+  const [pendingReviewPing, setPendingReviewPing] = useState<{ sender: string; amount: number } | null>(null);
   // Track the current outage health to render the global health bar
   const [outageHp, setOutageHp] = useState<number | null>(null);
   const socketRef = useRef<PartySocket | null>(null);
@@ -54,66 +311,42 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
     socket.addEventListener('message', (event) => {
       try {
         const data: ServerMessage = JSON.parse(event.data);
-        if (data.type === 'presence') {
-          setOnlineCount(data.count);
-          setOnlineUsers(data.users ?? []);
-        } else if (data.type === 'ping_sent') {
-          setHistory(prev => [...prev, { role: 'system', content: `[📡] Ping delivered to ${data.target}. Jira tickets dispatched.` }]);
-        } else if (data.type === 'ping_failed') {
-          setHistory(prev => [...prev, { role: 'error', content: `[❌] Ping failed: ${data.reason}` }]);
-        } else if (data.type === 'incoming_ping') {
-          // Trigger the defense window state when attacked
-          setPendingPing(true);
-          setHistory(prev => [...prev, { role: 'warning', content: `[INCOMING PACKET] ${data.attacker} assigned you 3 Jira tickets. Type /reject in 5 seconds to block!` }]);
-        } else if (data.type === 'ping_applied') {
-          // Server confirmed the ping was not rejected in time — apply the debuff
-          setPendingPing(false);
-          setHistory(prev => [...prev, { role: 'error', content: '[DEBUFF] Jira tickets accepted. Tech Debt generation halved for 60s.' }]);
-          applyPvpDebuff();
-        } else if (data.type === 'ping_rejected') {
-          // Server confirmed the ping was successfully rejected
-          setPendingPing(false);
-        } else if (data.type === 'outage_start') {
-          // Skip the alert and health bar entirely when the user is idle —
-          // they can't participate and we don't want to stack up alerts.
-          if (isUserIdle()) return;
-          setOutageHp(data.hp);
-          setHistory(prev => [...prev, { role: 'error', content: '[CRITICAL ALERT: AWS us-east-1 IS DOWN]' }]);
-        } else if (data.type === 'outage_update') {
-          // Only sync the bar if the user is already engaged with this outage
-          if (isUserIdle()) return;
-          setOutageHp(data.hp);
-        } else if (data.type === 'outage_cleared') {
-          // Always clear the bar state; only reward+announce if not idle
-          setOutageHp(null);
-          if (isUserIdle()) return;
-          applyOutageReward();
-          setHistory(prev => [...prev, { role: 'system', content: '[SUCCESS] AWS us-east-1 is back online. All players receive a TD boost.' }]);
-        } else if (data.type === 'outage_failed') {
-          // Always clear the bar state; only penalize+announce if not idle
-          setOutageHp(null);
-          if (isUserIdle()) return;
-          applyOutagePenalty();
-          setHistory(prev => [...prev, { role: 'error', content: '[FAILURE] AWS us-east-1 outage was not resolved in time. Your most expensive generator has been decommissioned.' }]);
-        }
+        applyServerMessage(data, {
+          setHistory,
+          setPendingReviewPing,
+          setOnlineCount,
+          setOnlineUsers,
+          setOutageHp,
+          creditTD,
+          debitTD,
+          applyReviewSprintBoost,
+          applyOutageReward,
+          applyOutagePenalty,
+          isUserIdle,
+        });
       } catch {
         console.error('Failed to parse multiplayer message');
       }
     });
 
     return () => socket.close();
-  }, [username, setHistory, applyOutageReward, applyOutagePenalty, applyPvpDebuff]);
+  }, [username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost]);
 
   const sendMessage = (msg: ClientMessage) => socketRef.current?.send(JSON.stringify(msg));
 
-  // Expose methods to trigger attacks and defend against them
-  const sendPing = (target?: string) => sendMessage({ type: 'ping', ...(target ? { target } : {}) });
-  const rejectPing = () => {
-    setPendingPing(false);
-    sendMessage({ type: 'reject_ping' });
+  // Send a paid review-request. The server emits `review_ping_sent` (at
+  // which point we debit) on success or `ping_failed` (no debit ever
+  // happened, so nothing to refund) on validation failure. Later refunds
+  // from expiry / disconnect arrive as `review_ping_refunded`.
+  const sendPing = (ticket: ReviewPingTicket, amount: number, target?: string) =>
+    sendMessage({ type: 'ping', amount, ticket, ...(target ? { target } : {}) });
+  // Accept the (only) pending review-request directed at this connection.
+  const acceptReviewPing = () => {
+    setPendingReviewPing(null);
+    sendMessage({ type: 'accept_review_ping' });
   };
   // Expose a method to allow players to attack the outage
   const sendDamage = () => sendMessage({ type: 'damage_outage' });
 
-  return { onlineCount, onlineUsers, sendPing, pendingPing, rejectPing, outageHp, sendDamage };
+  return { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage };
 }

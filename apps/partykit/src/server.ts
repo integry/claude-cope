@@ -3,7 +3,24 @@ import type { ClientMessage, ServerMessage } from "@claude-cope/shared/multiplay
 
 // The core PartyKit server class. We manage real-time, low-latency events here
 // because Cloudflare Workers WebSockets are faster than standard database polling.
+//
+// Trust boundary: PartyKit is authoritative for the *transient* review-request
+// lifecycle (timers, per-connection cooldowns, per-target exclusivity, refunds
+// on disconnect/expiry). It is NOT authoritative for total game economy — TD
+// balances are still computed and stored client-side, and the server only
+// confirms that an in-flight review-request was accepted before its timeout.
 export default class ClaudeCopeServer implements Party.Server {
+  // 10s per-connection rate limit on outbound pings.
+  private static readonly PING_RATE_LIMIT_MS = 10_000;
+  // 1h cooldown between the same sender→target pair to prevent alt-account farming.
+  private static readonly PING_TARGET_COOLDOWN_MS = 60 * 60 * 1000;
+  // Pending review-requests live for 60s on the server before refunding.
+  private static readonly REVIEW_REQUEST_TTL_MS = 60_000;
+  // Sprint progress boost the sender receives on acceptance, expressed as a
+  // fraction of the remaining sprint goal (so reviews stay meaningful late in
+  // a ticket without fully completing it).
+  private static readonly REVIEW_PROGRESS_FRACTION = 0.25;
+
   constructor(readonly room: Party.Room) {
     // Schedule automated outage events every 2–3 hours (random jitter)
     this.scheduleNextOutage();
@@ -18,8 +35,46 @@ export default class ClaudeCopeServer implements Party.Server {
   // Track connected usernames by connection ID
   private usernames = new Map<string, string>();
 
-  // Track pending PvP ping attacks awaiting rejection (keyed by victim connection ID)
-  private pendingPings = new Map<string, ReturnType<typeof setTimeout>>();
+  // PartyKit owns the short-lived review-request workflow because timers,
+  // connection presence, and per-target exclusivity are all realtime concerns.
+  // Keyed by a generated requestId so we can support multiple in-flight
+  // requests across the room (but only one *per target* at any time).
+  private pendingReviewRequests = new Map<string, {
+    senderConnId: string;
+    targetConnId: string;
+    senderName: string;
+    targetName: string;
+    amount: number;
+    ticket: {
+      id: string;
+      title: string;
+      sprintGoal: number;
+      sprintProgress: number;
+    };
+    timeout: ReturnType<typeof setTimeout>;
+  }>();
+  // Per-username 10s rate limit (last outbound ping timestamp). Keyed by
+  // username (not connection id) so a reconnect cannot trivially reset the
+  // spam cap against the room.
+  private lastPingAt = new Map<string, number>();
+  // Per (sender, target) 1h cooldown keyed by `${senderName}:${targetName}`.
+  // Intentionally NOT keyed by connection id — connection ids change on every
+  // reconnect, and the anti-farming rule is about the same *pair of players*,
+  // not the same pair of sockets.
+  private lastPingToTarget = new Map<string, number>();
+
+  // Drop rate-limit / cooldown entries whose timestamp is older than their
+  // TTL. Called lazily from `handleReviewPing` so long-lived rooms don't
+  // accumulate stale username-keyed entries over time. Bounded to O(n) over
+  // the map sizes but runs at most once per ping.
+  private pruneExpiredCooldowns(now: number) {
+    for (const [name, ts] of this.lastPingAt) {
+      if (now - ts >= ClaudeCopeServer.PING_RATE_LIMIT_MS) this.lastPingAt.delete(name);
+    }
+    for (const [key, ts] of this.lastPingToTarget) {
+      if (now - ts >= ClaudeCopeServer.PING_TARGET_COOLDOWN_MS) this.lastPingToTarget.delete(key);
+    }
+  }
 
   // When a user connects, extract their username and broadcast updated presence.
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
@@ -29,13 +84,12 @@ export default class ClaudeCopeServer implements Party.Server {
     this.broadcastPresence();
   }
 
-  // When a user disconnects, remove their username, clean up pending pings, and update presence.
+  // When a user disconnects, refund any pending review-request they were the
+  // target of, drop their presence row, and broadcast the new presence.
+  // Note: we intentionally do NOT drop that username's rate-limit / cooldown
+  // entries here, because those are designed to survive reconnects.
   onClose(conn: Party.Connection) {
-    const pending = this.pendingPings.get(conn.id);
-    if (pending) {
-      clearTimeout(pending);
-      this.pendingPings.delete(conn.id);
-    }
+    this.clearPendingRequestsForConnection(conn.id);
     this.usernames.delete(conn.id);
     this.broadcastPresence();
   }
@@ -52,39 +106,9 @@ export default class ClaudeCopeServer implements Party.Server {
     try {
       const data: ClientMessage = JSON.parse(message);
       if (data.type === "ping") {
-        const attackerName = this.usernames.get(sender.id) || "A Coworker";
-        const conns = Array.from(this.room.getConnections());
-        const targets = conns.filter(c => c.id !== sender.id);
-
-        if (data.target) {
-          // Targeted ping: find a specific user by username
-          const targetConn = targets.find(c => this.usernames.get(c.id) === data.target);
-          if (targetConn) {
-            this.send(targetConn, { type: "incoming_ping", attacker: attackerName });
-            this.send(sender, { type: "ping_sent", target: data.target });
-            this.startPingTimer(targetConn.id, attackerName);
-          } else {
-            this.send(sender, { type: "ping_failed", reason: `User "${data.target}" is not online.` });
-          }
-        } else if (targets.length > 0) {
-          // Random ping: select a random target
-          const target = targets[Math.floor(Math.random() * targets.length)];
-          const targetName = this.usernames.get(target.id) || "someone";
-          this.send(target, { type: "incoming_ping", attacker: attackerName });
-          this.send(sender, { type: "ping_sent", target: targetName });
-          this.startPingTimer(target.id, attackerName);
-        } else {
-          this.send(sender, { type: "ping_failed", reason: "No one else is online." });
-        }
-      } else if (data.type === "reject_ping") {
-        // Victim is rejecting/blocking the incoming attack
-        const pending = this.pendingPings.get(sender.id);
-        if (pending) {
-          clearTimeout(pending);
-          this.pendingPings.delete(sender.id);
-          const victimName = this.usernames.get(sender.id) || "someone";
-          this.broadcast({ type: "ping_rejected", victim: victimName });
-        }
+        this.handleReviewPing(sender, data);
+      } else if (data.type === "accept_review_ping") {
+        this.handleAcceptReviewPing(sender);
       } else if (data.type === "damage_outage" && this.isOutageActive) {
         // Process damage from clients and broadcast the new health total to everyone
         this.outageHp = Math.max(0, this.outageHp - 10);
@@ -105,20 +129,218 @@ export default class ClaudeCopeServer implements Party.Server {
     }
   }
 
-  // Start a 5-second server-authoritative timer for a pending ping attack.
-  // If the victim doesn't reject in time, the debuff is applied automatically.
-  private startPingTimer(victimConnId: string, attackerName: string) {
-    // Clear any existing pending ping for this victim
-    const existing = this.pendingPings.get(victimConnId);
-    if (existing) clearTimeout(existing);
+  // Validate and register a new review-request from `sender`.
+  // The server is authoritative on cooldowns, target presence, and per-target
+  // exclusivity. The client is trusted only for the ticket payload and amount;
+  // we treat them as opaque metadata that the target needs to make a decision.
+  private handleReviewPing(sender: Party.Connection, data: Extract<ClientMessage, { type: "ping" }>) {
+    const now = Date.now();
 
-    const timer = setTimeout(() => {
-      this.pendingPings.delete(victimConnId);
-      const victimName = this.usernames.get(victimConnId) || "someone";
-      this.broadcast({ type: "ping_applied", attacker: attackerName, victim: victimName });
-    }, 5000);
+    // Lazy GC: drop any cooldown / rate-limit entries that have already
+    // expired so the maps don't grow unbounded in long-lived rooms.
+    this.pruneExpiredCooldowns(now);
 
-    this.pendingPings.set(victimConnId, timer);
+    const senderName = this.usernames.get(sender.id) || "A Coworker";
+
+    // 10s per-player rate limit (spam cap). Keyed by username so reconnecting
+    // does not reset the cooldown — same player, same cooldown.
+    const lastPing = this.lastPingAt.get(senderName) ?? 0;
+    const remainingCooldown = ClaudeCopeServer.PING_RATE_LIMIT_MS - (now - lastPing);
+    if (remainingCooldown > 0) {
+      this.send(sender, {
+        type: "ping_failed",
+        reason: `Slack rate-limit: wait ${Math.ceil(remainingCooldown / 1000)}s before pinging again.`,
+      });
+      return;
+    }
+
+    // Required payload: a ticket and a TD amount. The economy lives client-side,
+    // so we cannot validate that the sender actually owns/can afford `amount`,
+    // but we still require the field to be present so the target sees a price tag.
+    if (!data.ticket || typeof data.amount !== "number" || data.amount <= 0) {
+      this.send(sender, { type: "ping_failed", reason: "A live ticket and payment amount are required." });
+      return;
+    }
+
+    const targets = Array.from(this.room.getConnections()).filter((conn) => conn.id !== sender.id);
+    const targetConn = data.target
+      ? targets.find((conn) => this.usernames.get(conn.id) === data.target)
+      : targets[Math.floor(Math.random() * targets.length)];
+
+    if (!targetConn) {
+      this.send(sender, {
+        type: "ping_failed",
+        reason: data.target ? `User "${data.target}" is not online.` : "No one else is online.",
+      });
+      return;
+    }
+
+    const targetName = this.usernames.get(targetConn.id) || "someone";
+
+    // 1h per (senderName, targetName) cooldown — keyed by stable player
+    // identity so alt-account farming via reconnect cycles is blocked. The
+    // old connection-id key let a reconnect grant both sides fresh ids and
+    // bypass the cap entirely.
+    const targetKey = `${senderName}:${targetName}`;
+    const lastTargetPing = this.lastPingToTarget.get(targetKey) ?? 0;
+    const remainingTargetCooldown = ClaudeCopeServer.PING_TARGET_COOLDOWN_MS - (now - lastTargetPing);
+    if (remainingTargetCooldown > 0) {
+      this.send(sender, {
+        type: "ping_failed",
+        reason: `You cannot request another review from ${targetName} for ${Math.ceil(remainingTargetCooldown / 60000)} more minutes.`,
+      });
+      return;
+    }
+
+    // Only one in-flight request per target — keeps `/accept` unambiguous.
+    if (this.findPendingRequestByTarget(targetConn.id)) {
+      this.send(sender, {
+        type: "ping_failed",
+        reason: `${targetName} already has a pending review request.`,
+      });
+      return;
+    }
+
+    this.lastPingAt.set(senderName, now);
+    this.lastPingToTarget.set(targetKey, now);
+
+    const requestId = crypto.randomUUID();
+    const timeout = setTimeout(() => {
+      const pending = this.pendingReviewRequests.get(requestId);
+      if (!pending) return;
+      this.pendingReviewRequests.delete(requestId);
+      const senderConn = this.getConnection(pending.senderConnId);
+      if (senderConn) {
+        this.send(senderConn, {
+          type: "review_ping_refunded",
+          target: pending.targetName,
+          amount: pending.amount,
+          reason: "expired",
+        });
+      }
+      // Tell the target their pending ping window has closed so the client
+      // can drop its local `pendingReviewPing` state and let subsequent
+      // `/accept`s fall through to the next real offer.
+      const targetConn = this.getConnection(pending.targetConnId);
+      if (targetConn) {
+        this.send(targetConn, {
+          type: "review_ping_cancelled",
+          sender: pending.senderName,
+          reason: "expired",
+        });
+      }
+    }, ClaudeCopeServer.REVIEW_REQUEST_TTL_MS);
+
+    this.pendingReviewRequests.set(requestId, {
+      senderConnId: sender.id,
+      targetConnId: targetConn.id,
+      senderName,
+      targetName,
+      amount: data.amount,
+      ticket: data.ticket,
+      timeout,
+    });
+
+    this.send(targetConn, {
+      type: "review_ping_received",
+      sender: senderName,
+      amount: data.amount,
+      expiresInMs: ClaudeCopeServer.REVIEW_REQUEST_TTL_MS,
+      ticket: data.ticket,
+    });
+    this.send(sender, {
+      type: "review_ping_sent",
+      target: targetName,
+      amount: data.amount,
+      expiresInMs: ClaudeCopeServer.REVIEW_REQUEST_TTL_MS,
+    });
+  }
+
+  // The accepting connection resolves the (only) pending request directed at it.
+  private handleAcceptReviewPing(target: Party.Connection) {
+    const requestEntry = this.findPendingRequestByTarget(target.id);
+    if (!requestEntry) {
+      this.send(target, { type: "ping_failed", reason: "No pending review request to accept." });
+      return;
+    }
+
+    const [requestId, pending] = requestEntry;
+    clearTimeout(pending.timeout);
+    this.pendingReviewRequests.delete(requestId);
+
+    // Sprint boost = 25% of remaining work (rounded up, min 1) — gives the
+    // sender something tangible without trivializing the ticket completion.
+    const remaining = Math.max(0, pending.ticket.sprintGoal - pending.ticket.sprintProgress);
+    const sprintProgressBoost = Math.max(1, Math.ceil(remaining * ClaudeCopeServer.REVIEW_PROGRESS_FRACTION));
+
+    const senderConn = this.getConnection(pending.senderConnId);
+    if (senderConn) {
+      this.send(senderConn, {
+        type: "review_ping_accepted",
+        sender: pending.senderName,
+        target: pending.targetName,
+        amount: pending.amount,
+        sprintProgressBoost,
+        ticketId: pending.ticket.id,
+      });
+    }
+
+    this.send(target, {
+      type: "review_ping_claimed",
+      sender: pending.senderName,
+      amount: pending.amount,
+      ticketId: pending.ticket.id,
+    });
+  }
+
+  private findPendingRequestByTarget(targetConnId: string) {
+    for (const entry of this.pendingReviewRequests.entries()) {
+      if (entry[1].targetConnId === targetConnId) return entry;
+    }
+    return undefined;
+  }
+
+  // PartyKit's connection lookup helper — older types do not expose
+  // `getConnection`, so iterate to find by id and return undefined if gone.
+  private getConnection(connId: string): Party.Connection | undefined {
+    for (const conn of this.room.getConnections()) {
+      if (conn.id === connId) return conn;
+    }
+    return undefined;
+  }
+
+  // When a connection closes, tear down any pending request that involved it.
+  //  - Target disconnects: refund the sender; the target is gone, nothing to tell.
+  //  - Sender disconnects: cancel on the target's UI so their /accept doesn't
+  //    blow up against a stale bounty; the sender's client-side TD commitment
+  //    is simply lost (server is not authoritative for balances).
+  private clearPendingRequestsForConnection(connId: string) {
+    for (const [requestId, pending] of this.pendingReviewRequests.entries()) {
+      if (pending.targetConnId !== connId && pending.senderConnId !== connId) continue;
+      clearTimeout(pending.timeout);
+      this.pendingReviewRequests.delete(requestId);
+
+      if (pending.targetConnId === connId) {
+        const senderConn = this.getConnection(pending.senderConnId);
+        if (senderConn) {
+          this.send(senderConn, {
+            type: "review_ping_refunded",
+            target: pending.targetName,
+            amount: pending.amount,
+            reason: "target_disconnected",
+          });
+        }
+      } else if (pending.senderConnId === connId) {
+        const targetConn = this.getConnection(pending.targetConnId);
+        if (targetConn) {
+          this.send(targetConn, {
+            type: "review_ping_cancelled",
+            sender: pending.senderName,
+            reason: "sender_disconnected",
+          });
+        }
+      }
+    }
   }
 
   // Schedule the next automated outage after a random delay between 2 and 3 hours
