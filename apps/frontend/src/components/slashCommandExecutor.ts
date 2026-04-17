@@ -43,6 +43,7 @@ export interface SlashCommandContext {
   addActiveTD: (n: number) => void;
   onlineCount: number;
   onlineUsers: string[];
+  allUsers: string[];
   sendPing: (ticket: { id: string; title: string; sprintGoal: number; sprintProgress: number }, amount: number, target?: string) => void;
   pendingReviewPing: { sender: string; amount: number } | null;
   acceptReviewPing: () => void;
@@ -485,9 +486,9 @@ function handleAliasCommand(command: string, ctx: SlashCommandContext, reply: Re
     reply({ role: "system", content: `[👤] Your current alias is **${ctx.state.username}**. Usage: \`/alias <new-name>\` to change it.` });
     return;
   }
-  const taken = ctx.onlineUsers.some((u) => u.toLowerCase() === newName.toLowerCase());
+  const taken = ctx.allUsers.some((u) => u.toLowerCase() === newName.toLowerCase());
   if (taken) {
-    reply({ role: "error", content: `[❌] The alias **${newName}** is already in use by another online player. Pick something else.` });
+    reply({ role: "error", content: `[❌] The alias **${newName}** is already in use by another player. Pick something else.` });
     return;
   }
   const oldName = ctx.state.username;

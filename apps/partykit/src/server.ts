@@ -35,6 +35,9 @@ export default class ClaudeCopeServer implements Party.Server {
   // Track connected usernames by connection ID
   private usernames = new Map<string, string>();
 
+  // Track all usernames ever seen (survives disconnects within the server's lifetime)
+  private knownUsernames = new Set<string>();
+
   // PartyKit owns the short-lived review-request workflow because timers,
   // connection presence, and per-target exclusivity are all realtime concerns.
   // Keyed by a generated requestId so we can support multiple in-flight
@@ -81,6 +84,7 @@ export default class ClaudeCopeServer implements Party.Server {
     const url = new URL(ctx.request.url);
     const username = url.searchParams.get("username") || `anon-${conn.id.slice(0, 6)}`;
     this.usernames.set(conn.id, username);
+    this.knownUsernames.add(username);
     this.broadcastPresence();
   }
 
@@ -382,6 +386,7 @@ export default class ClaudeCopeServer implements Party.Server {
       type: "presence",
       count: connections.length,
       users,
+      allUsers: Array.from(this.knownUsernames),
     });
   }
 }

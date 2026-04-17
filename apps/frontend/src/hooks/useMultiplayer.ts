@@ -139,6 +139,7 @@ export interface ServerMessageHandlers {
   setPendingReviewPing: React.Dispatch<React.SetStateAction<{ sender: string; amount: number } | null>>;
   setOnlineCount: React.Dispatch<React.SetStateAction<number>>;
   setOnlineUsers: React.Dispatch<React.SetStateAction<string[]>>;
+  setAllUsers: React.Dispatch<React.SetStateAction<string[]>>;
   setOutageHp: React.Dispatch<React.SetStateAction<number | null>>;
   creditTD: (amount: number) => void;
   debitTD: (amount: number) => void;
@@ -268,6 +269,7 @@ export function applyServerMessage(data: ServerMessage, handlers: ServerMessageH
   if (data.type === 'presence') {
     handlers.setOnlineCount(data.count);
     handlers.setOnlineUsers(data.users ?? []);
+    handlers.setAllUsers(data.allUsers ?? []);
     return;
   }
   if (handleReviewMessage(data, handlers)) return;
@@ -278,6 +280,7 @@ export function applyServerMessage(data: ServerMessage, handlers: ServerMessageH
 export function useMultiplayer({ username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost }: UseMultiplayerOptions) {
   const [onlineCount, setOnlineCount] = useState(1);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [allUsers, setAllUsers] = useState<string[]>([]);
   // The most recent unhandled review-request directed at this player. Cleared
   // when the player runs `/accept`, when the server emits `review_ping_claimed`,
   // or when it emits `review_ping_cancelled` because the sender bailed / timed out.
@@ -316,6 +319,7 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
           setPendingReviewPing,
           setOnlineCount,
           setOnlineUsers,
+          setAllUsers,
           setOutageHp,
           creditTD,
           debitTD,
@@ -348,5 +352,5 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
   // Expose a method to allow players to attack the outage
   const sendDamage = () => sendMessage({ type: 'damage_outage' });
 
-  return { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage };
+  return { onlineCount, onlineUsers, allUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage };
 }
