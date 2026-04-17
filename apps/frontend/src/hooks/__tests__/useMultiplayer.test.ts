@@ -53,7 +53,6 @@ interface HarnessState {
   >;
   onlineCount: ReturnType<typeof createMockState<number>>;
   onlineUsers: ReturnType<typeof createMockState<string[]>>;
-  allUsers: ReturnType<typeof createMockState<string[]>>;
   outageHp: ReturnType<typeof createMockState<number | null>>;
 }
 
@@ -77,7 +76,6 @@ function makeHarness(): Harness {
     >(null),
     onlineCount: createMockState<number>(1),
     onlineUsers: createMockState<string[]>([]),
-    allUsers: createMockState<string[]>([]),
     outageHp: createMockState<number | null>(null),
   };
   const creditTD = vi.fn();
@@ -100,7 +98,6 @@ function makeHarness(): Harness {
       setPendingReviewPing: state.pendingReviewPing.setter,
       setOnlineCount: state.onlineCount.setter,
       setOnlineUsers: state.onlineUsers.setter,
-      setAllUsers: state.allUsers.setter,
       setOutageHp: state.outageHp.setter,
       creditTD,
       debitTD,
@@ -122,7 +119,7 @@ describe("applyServerMessage", () => {
   // ── presence ─────────────────────────────────────────────────────────
   it("presence: updates online count and users", () => {
     applyServerMessage(
-      { type: "presence", count: 3, users: ["Alice", "Bob", "Carol"], allUsers: ["Alice", "Bob", "Carol", "Dave"] },
+      { type: "presence", count: 3, users: ["Alice", "Bob", "Carol"] },
       h.handlers
     );
     expect(h.state.onlineCount.value).toBe(3);

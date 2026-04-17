@@ -49,7 +49,6 @@ export interface PresenceMessage {
   type: "presence";
   count: number;
   users: string[];
-  allUsers: string[];
 }
 
 /** Server acknowledged a review-request and is holding it for `expiresInMs`. */

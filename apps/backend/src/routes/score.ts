@@ -48,6 +48,22 @@ async function validateTaskBonuses(
   return { validatedTaskBonus, validatedClaims };
 }
 
+/** GET /api/score/check-alias?username=X — check if a username is already taken */
+score.get("/check-alias", async (c) => {
+  const username = c.req.query("username");
+  if (!username) return c.json({ error: "username required" }, 400);
+
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: "Database not configured" }, 500);
+
+  const row = await db
+    .prepare("SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?)")
+    .bind(username)
+    .first();
+
+  return c.json({ taken: !!row });
+});
+
 /** GET /api/score?username=X — fetch server-authoritative score for syncing */
 score.get("/", async (c) => {
   const username = c.req.query("username");

@@ -93,7 +93,6 @@ function makeCtx(overrides: Partial<SlashCommandContext> = {}): SlashCommandCont
     addActiveTD: vi.fn(),
     onlineCount: 1,
     onlineUsers: [],
-    allUsers: [],
     sendPing: vi.fn(),
     pendingReviewPing: null,
     acceptReviewPing: vi.fn(),
