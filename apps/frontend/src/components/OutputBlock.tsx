@@ -7,7 +7,8 @@ import type { Message } from "./Terminal";
 import { pickRandomSequence } from "./toolSequences";
 import { useTypewriter } from "../hooks/useTypewriter";
 import { ShareButton } from "./ShareButton";
-import { renderWithSlashLinks, linkifySlashCommands, type SlashCommandAction } from "./slashCommandLinks";
+import { renderWithSlashLinks, linkifySlashCommands } from "./slashCommandLinks";
+import type { SlashCommandAction } from "./slashCommandDetect";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
@@ -409,16 +410,18 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
 
 type OutputBlockProps = Parameters<typeof OutputBlock>[0];
 
+function messagesEqual(a: Message | undefined, b: Message | undefined): boolean {
+  return a?.role === b?.role && a?.content === b?.content;
+}
+
 function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps): boolean {
   if (prev.message.role !== next.message.role) return false;
   if (prev.message.content !== next.message.content) return false;
   if (prev.message.cost !== next.message.cost) return false;
   if (prev.isNew !== next.isNew) return false;
   if (prev.promptString !== next.promptString) return false;
-  if (prev.previousMessage?.content !== next.previousMessage?.content) return false;
-  if (prev.previousMessage?.role !== next.previousMessage?.role) return false;
-  if (prev.nextMessage?.content !== next.nextMessage?.content) return false;
-  if (prev.nextMessage?.role !== next.nextMessage?.role) return false;
+  if (!messagesEqual(prev.previousMessage, next.previousMessage)) return false;
+  if (!messagesEqual(prev.nextMessage, next.nextMessage)) return false;
   if (prev.username !== next.username) return false;
   if (prev.onSlashCommand !== next.onSlashCommand) return false;
   // Only compare activeTicketId for loading messages

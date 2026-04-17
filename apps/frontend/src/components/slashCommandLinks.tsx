@@ -1,9 +1,6 @@
 import React from "react";
 import { detectSlashCommands } from "./slashCommandDetect";
-
-// Re-export types and detection logic so existing consumers keep working
-export { detectSlashCommands, PREFILL_COMMANDS } from "./slashCommandDetect";
-export type { SlashCommandAction, DetectedCommand } from "./slashCommandDetect";
+import type { SlashCommandAction } from "./slashCommandDetect";
 
 /**
  * Recursively walk a React node tree, replacing slash commands in any
@@ -12,7 +9,7 @@ export type { SlashCommandAction, DetectedCommand } from "./slashCommandDetect";
  */
 export function linkifySlashCommands(
   node: React.ReactNode,
-  onCommand: (command: string, action: import("./slashCommandDetect").SlashCommandAction) => void,
+  onCommand: (command: string, action: SlashCommandAction) => void,
 ): React.ReactNode {
   if (typeof node === "string") {
     return renderWithSlashLinks(node, onCommand);
@@ -41,7 +38,7 @@ export function linkifySlashCommands(
  */
 export function renderWithSlashLinks(
   text: string,
-  onCommand: (command: string, action: import("./slashCommandDetect").SlashCommandAction) => void,
+  onCommand: (command: string, action: SlashCommandAction) => void,
 ): React.ReactNode {
   const detected = detectSlashCommands(text);
   if (detected.length === 0) return text;
