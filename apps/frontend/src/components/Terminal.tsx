@@ -37,7 +37,7 @@ import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
 import { usePingAcknowledged } from "../hooks/usePingAcknowledged";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
-import type { SlashCommandAction } from "./slashCommandLinks";
+import type { SlashCommandAction } from "./slashCommandDetect";
 
 export type { Message };
 

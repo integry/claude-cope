@@ -7,7 +7,7 @@ import type { Message } from "./Terminal";
 import { pickRandomSequence } from "./toolSequences";
 import { useTypewriter } from "../hooks/useTypewriter";
 import { ShareButton } from "./ShareButton";
-import { renderWithSlashLinks, type SlashCommandAction } from "./slashCommandLinks";
+import { renderWithSlashLinks, linkifySlashCommands, type SlashCommandAction } from "./slashCommandLinks";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
@@ -180,20 +180,23 @@ function buildMarkdownComponents(onSlashCommand?: (command: string, action: Slas
   const linkify = (text: string): React.ReactNode =>
     onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
 
+  const linkifyChildren = (children: React.ReactNode): React.ReactNode =>
+    onSlashCommand ? linkifySlashCommands(children, onSlashCommand) : children;
+
   return {
   p({ children }: { children?: React.ReactNode }) {
-    // Process [BRACKET TAG] markers in text children
+    // Process [BRACKET TAG] markers in text children, then recursively linkify
     const processed = React.Children.map(children, (child) => {
       if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
-      return child;
+      return onSlashCommand ? linkifySlashCommands(child, onSlashCommand) : child;
     });
     return <p className="mb-3 leading-relaxed">{processed}</p>;
   },
   strong({ children }: { children?: React.ReactNode }) {
-    return <strong className="text-white font-bold">{children}</strong>;
+    return <strong className="text-white font-bold">{linkifyChildren(children)}</strong>;
   },
   em({ children }: { children?: React.ReactNode }) {
-    return <em className="text-gray-300 italic">{children}</em>;
+    return <em className="text-gray-300 italic">{linkifyChildren(children)}</em>;
   },
   h1({ children }: { children?: React.ReactNode }) {
     return <h1 className="text-lg font-bold text-white mb-3 mt-4 border-b border-gray-700 pb-1">{children}</h1>;
@@ -207,7 +210,7 @@ function buildMarkdownComponents(onSlashCommand?: (command: string, action: Slas
   blockquote({ children }: { children?: React.ReactNode }) {
     const processed = React.Children.map(children, (child) => {
       if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
-      return child;
+      return onSlashCommand ? linkifySlashCommands(child, onSlashCommand) : child;
     });
     return <blockquote className="border-l-2 border-gray-600 pl-3 ml-1 my-2 text-gray-400 italic">{processed}</blockquote>;
   },
@@ -223,7 +226,7 @@ function buildMarkdownComponents(onSlashCommand?: (command: string, action: Slas
   li({ children }: { children?: React.ReactNode }) {
     const processed = React.Children.map(children, (child) => {
       if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
-      return child;
+      return onSlashCommand ? linkifySlashCommands(child, onSlashCommand) : child;
     });
     return <li className="leading-relaxed">{processed}</li>;
   },
@@ -404,19 +407,23 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
   );
 }
 
-// eslint-disable-next-line complexity
-export default React.memo(OutputBlock, (prev, next) =>
-  prev.message.role === next.message.role &&
-  prev.message.content === next.message.content &&
-  prev.message.cost === next.message.cost &&
-  prev.isNew === next.isNew &&
-  prev.promptString === next.promptString &&
-  prev.previousMessage?.content === next.previousMessage?.content &&
-  prev.previousMessage?.role === next.previousMessage?.role &&
-  prev.nextMessage?.content === next.nextMessage?.content &&
-  prev.nextMessage?.role === next.nextMessage?.role &&
-  prev.username === next.username &&
-  prev.onSlashCommand === next.onSlashCommand &&
+type OutputBlockProps = Parameters<typeof OutputBlock>[0];
+
+function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps): boolean {
+  if (prev.message.role !== next.message.role) return false;
+  if (prev.message.content !== next.message.content) return false;
+  if (prev.message.cost !== next.message.cost) return false;
+  if (prev.isNew !== next.isNew) return false;
+  if (prev.promptString !== next.promptString) return false;
+  if (prev.previousMessage?.content !== next.previousMessage?.content) return false;
+  if (prev.previousMessage?.role !== next.previousMessage?.role) return false;
+  if (prev.nextMessage?.content !== next.nextMessage?.content) return false;
+  if (prev.nextMessage?.role !== next.nextMessage?.role) return false;
+  if (prev.username !== next.username) return false;
+  if (prev.onSlashCommand !== next.onSlashCommand) return false;
   // Only compare activeTicketId for loading messages
-  (prev.message.role !== "loading" || prev.activeTicketId === next.activeTicketId)
-);
+  if (prev.message.role === "loading" && prev.activeTicketId !== next.activeTicketId) return false;
+  return true;
+}
+
+export default React.memo(OutputBlock, outputBlockPropsAreEqual);

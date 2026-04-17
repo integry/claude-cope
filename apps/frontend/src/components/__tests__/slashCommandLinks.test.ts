@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectSlashCommands, PREFILL_COMMANDS } from "../slashCommandLinks";
+import { detectSlashCommands, PREFILL_COMMANDS } from "../slashCommandDetect";
 
 describe("detectSlashCommands", () => {
   it("detects a single command in plain text", () => {

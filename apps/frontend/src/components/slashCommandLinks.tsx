@@ -1,57 +1,38 @@
-/* eslint-disable react-refresh/only-export-components */
 import React from "react";
+import { detectSlashCommands } from "./slashCommandDetect";
+
+// Re-export types and detection logic so existing consumers keep working
+export { detectSlashCommands, PREFILL_COMMANDS } from "./slashCommandDetect";
+export type { SlashCommandAction, DetectedCommand } from "./slashCommandDetect";
 
 /**
- * Commands that require user-provided arguments — clicking these should only
- * prefill the input, never auto-execute.
+ * Recursively walk a React node tree, replacing slash commands in any
+ * string leaves with clickable buttons. This ensures commands nested
+ * inside <em>, <strong>, <a>, etc. are also linkified.
  */
-export const PREFILL_COMMANDS = new Set([
-  "/take",
-  "/ticket",
-  "/alias",
-  "/model",
-  "/user",
-  "/sync",
-  "/theme",
-  "/key",
-]);
-
-/**
- * Match a known slash command at a word boundary in text.
- * The regex matches `/command` only when:
- *   - preceded by start-of-string or a whitespace/punctuation char
- *   - the command is followed by end-of-string, whitespace, or punctuation
- * This avoids false positives like `/api/chat`.
- */
-const SLASH_COMMAND_PATTERN =
-  /(?:^|(?<=[\s(`"'']))(\/(backlog|take|clear|support|preworkout|buddy|store|synergize|compact|who|ping|help|about|privacy|terms|contact|fast|voice|blame|brrrrrr|feedback|bug|key|upgrade|leaderboard|achievements|profile|ticket|accept|abandon|alias|model|user|sync|shill|party|theme))(?=$|[\s)`"''.,!?:;])/g;
-
-export type SlashCommandAction = "execute" | "prefill";
-
-export interface DetectedCommand {
-  command: string;
-  action: SlashCommandAction;
-  start: number;
-  end: number;
-}
-
-/**
- * Detect all slash commands in a string and return their positions and actions.
- */
-export function detectSlashCommands(text: string): DetectedCommand[] {
-  const results: DetectedCommand[] = [];
-  const regex = new RegExp(SLASH_COMMAND_PATTERN.source, SLASH_COMMAND_PATTERN.flags);
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    const command = match[1]!;
-    results.push({
-      command,
-      action: PREFILL_COMMANDS.has(command) ? "prefill" : "execute",
-      start: match.index,
-      end: match.index + command.length,
-    });
+export function linkifySlashCommands(
+  node: React.ReactNode,
+  onCommand: (command: string, action: import("./slashCommandDetect").SlashCommandAction) => void,
+): React.ReactNode {
+  if (typeof node === "string") {
+    return renderWithSlashLinks(node, onCommand);
   }
-  return results;
+
+  if (Array.isArray(node)) {
+    return node.map((child, i) => (
+      <React.Fragment key={i}>{linkifySlashCommands(child, onCommand)}</React.Fragment>
+    ));
+  }
+
+  if (React.isValidElement(node)) {
+    const element = node as React.ReactElement<{ children?: React.ReactNode }>;
+    const { children } = element.props;
+    if (children != null) {
+      return React.cloneElement(element, {}, linkifySlashCommands(children, onCommand));
+    }
+  }
+
+  return node;
 }
 
 /**
@@ -60,7 +41,7 @@ export function detectSlashCommands(text: string): DetectedCommand[] {
  */
 export function renderWithSlashLinks(
   text: string,
-  onCommand: (command: string, action: SlashCommandAction) => void,
+  onCommand: (command: string, action: import("./slashCommandDetect").SlashCommandAction) => void,
 ): React.ReactNode {
   const detected = detectSlashCommands(text);
   if (detected.length === 0) return text;
@@ -76,7 +57,7 @@ export function renderWithSlashLinks(
       <button
         key={d.start}
         type="button"
-        className="text-cyan-400 hover:text-cyan-300 underline decoration-dotted cursor-pointer bg-transparent border-none p-0 font-inherit text-inherit"
+        className="text-cyan-400 hover:text-cyan-300 underline decoration-dotted cursor-pointer bg-transparent border-none p-0 font-inherit"
         onClick={(e) => {
           e.stopPropagation();
           onCommand(d.command, d.action);
