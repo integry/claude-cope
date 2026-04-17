@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -7,6 +7,7 @@ import type { Message } from "./Terminal";
 import { pickRandomSequence } from "./toolSequences";
 import { useTypewriter } from "../hooks/useTypewriter";
 import { ShareButton } from "./ShareButton";
+import { renderWithSlashLinks, type SlashCommandAction } from "./slashCommandLinks";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
@@ -95,11 +96,14 @@ function cleanLLMOutput(content: string): string {
 }
 
 /** Render a line of text, replacing any `__TAG_...__:text` or `[TAG]` markers with styled spans. */
-function renderLineWithTags(line: string): React.ReactNode {
+function renderLineWithTags(line: string, onSlashCommand?: (command: string, action: SlashCommandAction) => void): React.ReactNode {
   // Match backtick-wrapped tag markers: `__TAG_ERROR__:some text`
   const TAG_INLINE = /`__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g;
   // Match raw [BRACKET] tags at line start
   const BRACKET_TAG = /^\[([^\]]+)\]/;
+
+  const linkify = (text: string): React.ReactNode =>
+    onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
 
   // First try backtick-wrapped markers
   const parts: React.ReactNode[] = [];
@@ -107,7 +111,7 @@ function renderLineWithTags(line: string): React.ReactNode {
   let inlineMatch;
   while ((inlineMatch = TAG_INLINE.exec(line)) !== null) {
     if (inlineMatch.index > lastIndex) {
-      parts.push(line.slice(lastIndex, inlineMatch.index));
+      parts.push(linkify(line.slice(lastIndex, inlineMatch.index)));
     }
     const category = inlineMatch[1] as TagCategory;
     const tagText = inlineMatch[2];
@@ -119,7 +123,7 @@ function renderLineWithTags(line: string): React.ReactNode {
     lastIndex = TAG_INLINE.lastIndex;
   }
   if (parts.length > 0) {
-    if (lastIndex < line.length) parts.push(line.slice(lastIndex));
+    if (lastIndex < line.length) parts.push(linkify(line.slice(lastIndex)));
     return <>{parts}</>;
   }
 
@@ -132,12 +136,12 @@ function renderLineWithTags(line: string): React.ReactNode {
         <span className={`${TAG_STYLES[category]} font-mono text-xs font-bold mr-2`}>
           {bracketMatch[1]}
         </span>
-        {line.slice(bracketMatch[0].length)}
+        {linkify(line.slice(bracketMatch[0].length))}
       </>
     );
   }
 
-  return line;
+  return linkify(line);
 }
 
 function Spinner() {
@@ -172,11 +176,15 @@ function TokenCounter({ tokensSent, tokensReceived }: { tokensSent?: number; tok
   );
 }
 
-const markdownComponents = {
+function buildMarkdownComponents(onSlashCommand?: (command: string, action: SlashCommandAction) => void) {
+  const linkify = (text: string): React.ReactNode =>
+    onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
+
+  return {
   p({ children }: { children?: React.ReactNode }) {
     // Process [BRACKET TAG] markers in text children
     const processed = React.Children.map(children, (child) => {
-      if (typeof child === "string") return renderLineWithTags(child);
+      if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
       return child;
     });
     return <p className="mb-3 leading-relaxed">{processed}</p>;
@@ -197,7 +205,11 @@ const markdownComponents = {
     return <h3 className="text-sm font-bold text-gray-200 mb-2 mt-2">{children}</h3>;
   },
   blockquote({ children }: { children?: React.ReactNode }) {
-    return <blockquote className="border-l-2 border-gray-600 pl-3 ml-1 my-2 text-gray-400 italic">{children}</blockquote>;
+    const processed = React.Children.map(children, (child) => {
+      if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
+      return child;
+    });
+    return <blockquote className="border-l-2 border-gray-600 pl-3 ml-1 my-2 text-gray-400 italic">{processed}</blockquote>;
   },
   hr() {
     return <hr className="border-gray-700 my-4" />;
@@ -209,7 +221,11 @@ const markdownComponents = {
     return <ol className="list-decimal pl-6 mb-3 space-y-1">{children}</ol>;
   },
   li({ children }: { children?: React.ReactNode }) {
-    return <li className="leading-relaxed">{children}</li>;
+    const processed = React.Children.map(children, (child) => {
+      if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
+      return child;
+    });
+    return <li className="leading-relaxed">{processed}</li>;
   },
   pre({ children }: { children?: React.ReactNode }) {
     return <pre className="my-3 rounded whitespace-pre-wrap break-words">{children}</pre>;
@@ -227,7 +243,7 @@ const markdownComponents = {
           <code className="block whitespace-pre text-gray-100">
             {lines.map((line, i) => (
               <React.Fragment key={i}>
-                {renderLineWithTags(line)}
+                {renderLineWithTags(line, onSlashCommand)}
                 {i < lines.length - 1 && "\n"}
               </React.Fragment>
             ))}
@@ -254,13 +270,19 @@ const markdownComponents = {
         </span>
       );
     }
+    // Linkify slash commands inside inline code
+    const processed = React.Children.map(children, (child) => {
+      if (typeof child === "string") return linkify(child);
+      return child;
+    });
     return (
       <code className={`text-cyan-300 px-1 rounded ${className || ""}`} {...props}>
-        {children}
+        {processed}
       </code>
     );
   },
 };
+}
 
 // Buddy interjections have a specific shape: ASCII art on the first lines,
 // then a `[Buddy Name] text` line. We need to render those as preformatted
@@ -288,7 +310,7 @@ function getContainerClass(message: Message, isNew: boolean): string {
   return `mb-5 ${colorClass} ${modifier}`;
 }
 
-function MessageContent({ message, isNew = false }: { message: Message; isNew?: boolean }) {
+function MessageContent({ message, isNew = false, onSlashCommand }: { message: Message; isNew?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
   const isBuddyInterjection = message.role === "warning" && isBuddyMessage(message.content);
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
@@ -300,6 +322,8 @@ function MessageContent({ message, isNew = false }: { message: Message; isNew?: 
   const shouldTypewrite = isNew && useMarkdown && message.role === "system";
   const { visibleContent, isTyping } = useTypewriter(message.content, shouldTypewrite);
 
+  const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand), [onSlashCommand]);
+
   if (message.role === "user") return null;
 
   if (useMarkdown) {
@@ -307,7 +331,7 @@ function MessageContent({ message, isNew = false }: { message: Message; isNew?: 
     const processedContent = cleanLLMOutput(rawContent);
     return (
       <div className="space-y-1">
-        <ReactMarkdown components={markdownComponents} rehypePlugins={[rehypeSanitize]}>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
           {processedContent}
         </ReactMarkdown>
         {isTyping && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
@@ -319,7 +343,7 @@ function MessageContent({ message, isNew = false }: { message: Message; isNew?: 
     const processedContent = cleanLLMOutput(message.content);
     return (
       <div className="space-y-1">
-        <ReactMarkdown components={markdownComponents} rehypePlugins={[rehypeSanitize]}>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
           {processedContent}
         </ReactMarkdown>
         <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />
@@ -327,7 +351,11 @@ function MessageContent({ message, isNew = false }: { message: Message; isNew?: 
     );
   }
   if (isAwaitingResponse) return <>{message.content}</>;
-  if (message.role !== "loading") return <>{message.content}</>;
+  if (message.role !== "loading") {
+    const linkify = (text: string): React.ReactNode =>
+      onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
+    return <>{linkify(message.content)}</>;
+  }
   return null;
 }
 
@@ -354,7 +382,7 @@ function getShareProps(message: Message, previousMessage?: Message, nextMessage?
   return { showShareButton, shareSystemMessage };
 }
 
-function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "" }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string }) {
+function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   const { showShareButton, shareSystemMessage } = getShareProps(message, previousMessage, nextMessage);
 
@@ -367,7 +395,7 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
         </div>
       )}
       {message.role === "loading" && !isAwaitingResponse && <Spinner />}
-      <MessageContent message={message} isNew={isNew} />
+      <MessageContent message={message} isNew={isNew} onSlashCommand={onSlashCommand} />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
       {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
@@ -376,6 +404,7 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
   );
 }
 
+// eslint-disable-next-line complexity
 export default React.memo(OutputBlock, (prev, next) =>
   prev.message.role === next.message.role &&
   prev.message.content === next.message.content &&
@@ -387,6 +416,7 @@ export default React.memo(OutputBlock, (prev, next) =>
   prev.nextMessage?.content === next.nextMessage?.content &&
   prev.nextMessage?.role === next.nextMessage?.role &&
   prev.username === next.username &&
+  prev.onSlashCommand === next.onSlashCommand &&
   // Only compare activeTicketId for loading messages
   (prev.message.role !== "loading" || prev.activeTicketId === next.activeTicketId)
 );

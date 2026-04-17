@@ -37,22 +37,24 @@ import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
 import { usePingAcknowledged } from "../hooks/usePingAcknowledged";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
+import type { SlashCommandAction } from "./slashCommandLinks";
 
 export type { Message };
 
 /** Memoized message list — only re-renders when history/keys/props actually change */
-const MessageList = memo(function MessageList({ history, messageKeys, initialHistoryLen, promptString, activeTicketId, username }: {
+const MessageList = memo(function MessageList({ history, messageKeys, initialHistoryLen, promptString, activeTicketId, username, onSlashCommand }: {
   history: Message[];
   messageKeys: number[];
   initialHistoryLen: number;
   promptString: string;
   activeTicketId?: string | null;
   username: string;
+  onSlashCommand?: (command: string, action: SlashCommandAction) => void;
 }) {
   return (
     <>
       {history.map((message, index) => (
-        <OutputBlock key={messageKeys[index]} message={message} previousMessage={history[index - 1]} nextMessage={history[index + 1]} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} username={username} />
+        <OutputBlock key={messageKeys[index]} message={message} previousMessage={history[index - 1]} nextMessage={history[index + 1]} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} username={username} onSlashCommand={onSlashCommand} />
       ))}
     </>
   );
@@ -202,6 +204,23 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: setSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
   };
+
+  const runSlashCommandRef = useRef(runSlashCommand);
+  runSlashCommandRef.current = runSlashCommand;
+
+  const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
+    if (action === "execute") {
+      runSlashCommandRef.current(command);
+    } else {
+      // Prefill: write command + trailing space into input, update slash state, focus
+      const prefill = command + " ";
+      setInputValue(prefill);
+      setSlashQuery("");
+      setSlashIndex(0);
+      setSuggestedReply(null);
+      inputRef.current?.focus();
+    }
+  }, []);
 
   const tryOutageDamage = (): boolean => {
     if (outageHp === null || !DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) return false;
@@ -394,7 +413,7 @@ function Terminal() {
       </div>
       <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
-        <MessageList history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} activeTicketId={state.activeTicket?.id} username={state.username} />
+        <MessageList history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} activeTicketId={state.activeTicket?.id} username={state.username} onSlashCommand={handleSlashCommandClick} />
         <div ref={bottomRef} />
       </div>
       <div className="shrink-0">
