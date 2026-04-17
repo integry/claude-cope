@@ -479,10 +479,34 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
   return false;
 }
 
-function handleAliasCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
+async function handleAliasCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<void> {
   const newName = command.slice(6).trim();
   if (!newName) {
     reply({ role: "system", content: `[👤] Your current alias is **${ctx.state.username}**. Usage: \`/alias <new-name>\` to change it.` });
+    return;
+  }
+  if (newName.length < 3) {
+    reply({ role: "error", content: `[❌] Alias must be at least 3 characters long.` });
+    return;
+  }
+  if (newName.length > 33) {
+    reply({ role: "error", content: `[❌] Alias must be at most 33 characters long.` });
+    return;
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(newName)) {
+    reply({ role: "error", content: `[❌] Alias can only contain letters, numbers, hyphens, and underscores.` });
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/score/check-alias?username=${encodeURIComponent(newName)}`);
+    if (!res.ok) throw new Error("Failed to check alias");
+    const { taken } = (await res.json()) as { taken: boolean };
+    if (taken) {
+      reply({ role: "error", content: `[❌] The alias **${newName}** is already in use by another player. Pick something else.` });
+      return;
+    }
+  } catch {
+    reply({ role: "error", content: `[❌] Could not verify alias availability. Try again later.` });
     return;
   }
   const oldName = ctx.state.username;
@@ -682,7 +706,8 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
         if (ctx.state.activeTicket) ctx.playError();
         handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
       } else if (command.startsWith("/alias")) {
-        handleAliasCommand(command, ctx, reply);
+        handleAliasCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
+        return "async";
       } else if (command.startsWith("/model")) {
         handleModelCommand(command, ctx, reply);
       } else if (handleNewCommand(command, ctx, reply)) {

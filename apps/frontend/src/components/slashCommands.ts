@@ -40,7 +40,7 @@ export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/take": "Voluntarily accept more pain",
   "/accept": "Accept a paid review request, or a ticket from the PM",
   "/abandon": "Give up. We knew you would.",
-  "/alias": "Create shortcuts to your mistakes",
+  "/alias": "Change your identity. Witness protection for devs.",
   "/model": "Swap out the hallucination engine",
   "/user": "Confirm you exist (debatable)",
   "/sync": "Link your Polar license key to unlock Pro",
