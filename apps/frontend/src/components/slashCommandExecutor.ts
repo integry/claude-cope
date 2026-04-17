@@ -485,6 +485,11 @@ function handleAliasCommand(command: string, ctx: SlashCommandContext, reply: Re
     reply({ role: "system", content: `[👤] Your current alias is **${ctx.state.username}**. Usage: \`/alias <new-name>\` to change it.` });
     return;
   }
+  const taken = ctx.onlineUsers.some((u) => u.toLowerCase() === newName.toLowerCase());
+  if (taken) {
+    reply({ role: "error", content: `[❌] The alias **${newName}** is already in use by another online player. Pick something else.` });
+    return;
+  }
   const oldName = ctx.state.username;
   ctx.setState((prev) => ({ ...prev, username: newName }));
   reply({ role: "system", content: `[✓] Alias updated from **${oldName}** to **${newName}**. The codebase will never know.` });
