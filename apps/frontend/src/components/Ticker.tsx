@@ -2,11 +2,12 @@ import { useLiveTicker } from "../hooks/useLiveTicker";
 
 interface TickerProps {
   onExpand?: () => void;
+  onlineCount: number;
 }
 
 // We isolate the Ticker component to prevent re-renders of the entire Terminal
 // when new events arrive. It fetches data independently via the SWR hook.
-export default function Ticker({ onExpand }: TickerProps) {
+export default function Ticker({ onExpand, onlineCount }: TickerProps) {
   // Switch to the hybrid hook to receive real-time updates via Supabase
   const liveEvents = useLiveTicker();
 
@@ -27,11 +28,17 @@ export default function Ticker({ onExpand }: TickerProps) {
       }}
     >
       <div className="flex items-center justify-between">
-        <span>
+        <span className="min-w-0 truncate">
           <strong className="text-yellow-400 bg-yellow-950/30 px-1 rounded">[LIVE]</strong>{" "}
           {latestEvent.message}
         </span>
-        <span className="text-gray-500 hover:text-gray-300 ml-4">[Click to expand /party]</span>
+        <span className="flex-shrink-0 flex items-center gap-0 ml-4 text-gray-500">
+          <span><span className="text-gray-600">Online:</span> <span className="text-green-400">{onlineCount}</span> <span className="text-gray-600">(/who)</span></span>
+          <span className="mx-2">|</span>
+          <span><span className="text-gray-600">Events:</span> <span className="text-green-400">{liveEvents.length}</span></span>
+          <span className="mx-2">|</span>
+          <span className="text-gray-400 hover:text-gray-300">[/party]</span>
+        </span>
       </div>
     </div>
   );
