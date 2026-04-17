@@ -76,12 +76,12 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
       </div>
       {/* Right group: status (desktop) */}
       <div className="hidden sm:flex items-center gap-6 ml-auto flex-shrink-0 justify-end px-2 sm:px-0">
-        <span className="whitespace-nowrap flex items-center gap-1"><span className="text-gray-500 text-xs">Technical Debt:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()}</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
+        <span className="whitespace-nowrap flex items-center gap-1"><span className="text-gray-500 text-xs">Technical Debt:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
         {!isBYOK && <><span className="text-gray-600">|</span><DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} /></>}
       </div>
       {/* Right group: status (mobile) */}
       <div className="flex sm:hidden items-center gap-2 ml-auto flex-shrink-0 px-2">
-        <span className="whitespace-nowrap flex items-center gap-1"><span className="text-gray-500 text-xs">TD:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()}</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
+        <span className="whitespace-nowrap flex items-center gap-1"><span className="text-gray-500 text-xs">TD:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
       </div>
       {/* Hamburger menu — mobile only */}
       <div ref={menuRef} className="sm:hidden relative flex-shrink-0">
