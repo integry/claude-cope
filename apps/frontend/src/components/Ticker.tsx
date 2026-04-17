@@ -33,11 +33,9 @@ export default function Ticker({ onExpand, onlineCount }: TickerProps) {
           {latestEvent.message}
         </span>
         <span className="flex-shrink-0 flex items-center gap-0 ml-4 text-gray-400">
-          <span><span className="text-gray-400">Online:</span> <span className="text-green-400">{onlineCount}</span> <span className="text-gray-400">(/who)</span></span>
+          <span><span className="text-gray-400">Online:</span> <span className="text-green-400">{onlineCount}</span> <span className="text-gray-300 hover:text-gray-200"> [/who]</span></span>
           <span className="mx-3 text-gray-500">|</span>
-          <span><span className="text-gray-400">Events:</span> <span className="text-green-400">{liveEvents.length}</span></span>
-          <span className="mx-3 text-gray-500">|</span>
-          <span className="text-gray-300 hover:text-gray-200">[/party]</span>
+          <span className="text-gray-300 hover:text-gray-200">Firehose [/party]</span>
         </span>
       </div>
     </div>
