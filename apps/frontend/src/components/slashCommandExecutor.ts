@@ -524,7 +524,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
     const current = ctx.state.selectedModel ?? "default";
     const modelList = COPE_MODELS.map((m) => {
       const costLabel = `${m.multiplier}x cost`;
-      const tierBadge = m.tier === "pro" ? " 🔒 Pro" : "";
+      const tierBadge = m.tier === "pro" ? " 🔒 Max" : "";
       return `- \`${m.id}\` — **${m.name}** (${costLabel})${tierBadge}`;
     }).join("\n");
 
@@ -559,7 +559,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
 
   if (copeModel && copeModel.tier === "pro" && !isPro && !isBYOK) {
     const byokHint = BYOK_ENABLED ? ", or set your own API key with `/key` to bypass limits entirely" : "";
-    reply({ role: "system", content: `[🔒] **${copeModel.name}** is a Pro model (${copeModel.multiplier}x cost). You need a Pro license to use this.\n\nUpgrade at \`/subscribe\` to unlock premium models${byokHint}.` });
+    reply({ role: "system", content: `[🔒] **${copeModel.name}** is a Max model (${copeModel.multiplier}x cost). You need a Max license to use this.\n\nUpgrade at \`/upgrade\` to unlock premium models${byokHint}.` });
     return;
   }
 
@@ -568,7 +568,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   if (isBYOK) {
     reply({ role: "system", content: `[✓] Model switched to **${modelName}**. BYOK mode active — your API key, your compute bill, your problem. We respect the hustle. 💸` });
   } else if (copeModel && copeModel.tier === "pro") {
-    reply({ role: "system", content: `[✓] Model switched to **${copeModel.name}** (${copeModel.multiplier}x cost). Pro tier activated. Your tokens now cost real money — spend wisely.` });
+    reply({ role: "system", content: `[✓] Model switched to **${copeModel.name}** (${copeModel.multiplier}x cost). Max tier activated. Your tokens now cost real money — spend wisely.` });
   } else {
     reply({ role: "system", content: `[✓] Model switched to **${modelName}**. May your tokens be plentiful and your latency low.` });
   }
@@ -603,7 +603,7 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
 async function handleSyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<void> {
   const licenseKey = command.slice(5).trim();
   if (!licenseKey) {
-    reply({ role: "system", content: "[🔑] Usage: `/sync <COPE-XXX>` — Link your Polar license key to unlock Pro tier." });
+    reply({ role: "system", content: "[🔑] Usage: `/sync <COPE-XXX>` — Link your Polar license key to unlock Max tier." });
     return;
   }
   try {
@@ -615,7 +615,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
     const data = await res.json() as { success?: boolean; hash?: string; error?: string };
     if (res.ok && data.success) {
       ctx.setState((prev) => ({ ...prev, proKey: licenseKey }));
-      reply({ role: "system", content: "[✓ **PRO ACTIVATED**] License key validated. Welcome to the premium suffering tier. You now have **100 pro credits**. Spend them wisely (you won't)." });
+      reply({ role: "system", content: "[✓ **MAX ACTIVATED**] License key validated. Welcome to the premium suffering tier. You now have **100 Max credits**. Spend them wisely (you won't)." });
     } else {
       reply({ role: "error", content: `[❌] License validation failed: ${data.error ?? "Unknown error"}. Double-check your key and try again.` });
     }
