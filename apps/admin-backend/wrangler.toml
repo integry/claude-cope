@@ -1,0 +1,19 @@
+name = "claude-cope-admin-backend"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[dev]
+port = 8788
+
+[[d1_databases]]
+binding = "DB"
+database_name = "claude-cope-db"
+database_id = "placeholder-database-id"
+
+[[kv_namespaces]]
+binding = "USAGE_KV"
+id = "placeholder-kv-id"
+
+[[kv_namespaces]]
+binding = "QUOTA_KV"
+id = "placeholder-quota-kv-id"
