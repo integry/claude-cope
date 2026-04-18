@@ -16,25 +16,44 @@ users.get("/", async (c) => {
   const freeLimit = parseInt(c.env?.FREE_QUOTA_LIMIT || "20", 10) || 20;
   const statusFilter = c.req.query("status"); // "free", "max", or undefined for all
 
-  let query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
-              u.pro_key_hash,
-              COALESCE(ul.msg_count, 0) AS credits_used
-       FROM user_scores u
-       LEFT JOIN (
-         SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
-       ) ul ON ul.username = u.username`;
+  // Try query with pro_key_hash column; fall back to without if column doesn't exist yet
+  let results: Record<string, unknown>[];
+  try {
+    let query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
+                u.pro_key_hash,
+                COALESCE(ul.msg_count, 0) AS credits_used
+         FROM user_scores u
+         LEFT JOIN (
+           SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
+         ) ul ON ul.username = u.username`;
 
-  if (statusFilter === "max") {
-    query += " WHERE u.pro_key_hash IS NOT NULL AND u.pro_key_hash != ''";
-  } else if (statusFilter === "free") {
-    query += " WHERE u.pro_key_hash IS NULL OR u.pro_key_hash = ''";
+    if (statusFilter === "max") {
+      query += " WHERE u.pro_key_hash IS NOT NULL AND u.pro_key_hash != ''";
+    } else if (statusFilter === "free") {
+      query += " WHERE u.pro_key_hash IS NULL OR u.pro_key_hash = ''";
+    }
+
+    query += " ORDER BY u.updated_at DESC LIMIT 200";
+
+    const resp = await db.prepare(query).all();
+    results = (resp.results ?? []) as Record<string, unknown>[];
+  } catch {
+    // pro_key_hash column may not exist yet; query without it
+    const resp = await db
+      .prepare(
+        `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
+                COALESCE(ul.msg_count, 0) AS credits_used
+         FROM user_scores u
+         LEFT JOIN (
+           SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
+         ) ul ON ul.username = u.username
+         ORDER BY u.updated_at DESC LIMIT 200`
+      )
+      .all();
+    results = (resp.results ?? []) as Record<string, unknown>[];
   }
 
-  query += " ORDER BY u.updated_at DESC LIMIT 200";
-
-  const { results } = await db.prepare(query).all();
-
-  const enriched = (results ?? []).map((row: Record<string, unknown>) => ({
+  const enriched = results.map((row: Record<string, unknown>) => ({
     ...row,
     credits_remaining: Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
     status: row.pro_key_hash ? "max" : "free",

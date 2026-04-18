@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS user_scores (
     corporate_rank TEXT NOT NULL DEFAULT 'Junior Code Monkey',
     country TEXT NOT NULL DEFAULT 'Unknown',
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    last_sync_time TEXT NOT NULL DEFAULT (datetime('now'))
+    last_sync_time TEXT NOT NULL DEFAULT (datetime('now')),
+    pro_key_hash TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_scores_total_td
@@ -86,9 +87,6 @@ CREATE TABLE IF NOT EXISTS licenses (
 
 CREATE INDEX IF NOT EXISTS idx_licenses_status
     ON licenses (status);
-
--- Add pro_key_hash to user_scores for tracking Max vs Free status
--- (applied via ALTER TABLE in migration; column is nullable for backwards compat)
 
 -- Index on username and hour for per-user reporting queries
 CREATE INDEX IF NOT EXISTS idx_usage_logs_user_hour
