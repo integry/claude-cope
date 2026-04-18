@@ -4,6 +4,7 @@ import { getQuotaLimits } from "../utils/quota";
 
 type Env = {
   Bindings: {
+    DB?: D1Database;
     QUOTA_KV?: KVNamespace;
     USAGE_KV?: KVNamespace;
     POLAR_ACCESS_TOKEN?: string;
@@ -53,6 +54,17 @@ account.post("/sync", async (c) => {
 
   const limits = getQuotaLimits(c.env);
   await kv.put(kvKey, String(limits.proInitialQuota));
+
+  // Record license activation in DB for admin purchase stats
+  const db = c.env?.DB;
+  if (db) {
+    await db
+      .prepare(
+        "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', activated_at = datetime('now')"
+      )
+      .bind(hash)
+      .run();
+  }
 
   return c.json({ success: true, hash });
 });

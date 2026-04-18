@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import stats from "./routes/stats";
 import users from "./routes/users";
 import backlog from "./routes/backlog";
+import licenses from "./routes/licenses";
 
 const app = new Hono();
 
@@ -23,5 +24,6 @@ app.get("/", (c) => c.json({ status: "ok", service: "admin-backend" }));
 app.route("/api/stats", stats);
 app.route("/api/users", users);
 app.route("/api/backlog", backlog);
+app.route("/api/licenses", licenses);
 
 export default app;
