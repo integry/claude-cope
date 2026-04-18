@@ -60,15 +60,19 @@ export default function Users() {
     setSaving(true);
     try {
       if (editingUser) {
-        const res = await fetch(`${API_BASE}/api/users/${encodeURIComponent(editingUser)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const updateBody: Record<string, string | number> = {
             corporate_rank: form.corporate_rank,
             country: form.country,
             total_td: form.total_td,
             current_td: form.current_td,
-          }),
+          };
+        if (form.username.trim() !== editingUser) {
+          updateBody.username = form.username.trim();
+        }
+        const res = await fetch(`${API_BASE}/api/users/${encodeURIComponent(editingUser)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updateBody),
         });
         if (!res.ok) throw new Error(`Update failed: ${res.statusText}`);
       } else {
@@ -153,8 +157,7 @@ export default function Users() {
                 type="text"
                 value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
-                disabled={!!editingUser}
-                className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-100"
+                className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               />
             </div>
             <div>

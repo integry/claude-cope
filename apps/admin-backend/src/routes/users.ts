@@ -51,6 +51,7 @@ users.put("/:username", async (c) => {
 
   const username = c.req.param("username");
   const body = await c.req.json<{
+    username?: string;
     corporate_rank?: number;
     country?: string;
     total_td?: number;
@@ -60,6 +61,13 @@ users.put("/:username", async (c) => {
   const fields: string[] = [];
   const values: (string | number)[] = [];
 
+  if (body.username !== undefined) {
+    if (!body.username.trim()) {
+      return c.json({ error: "username cannot be empty" }, 400);
+    }
+    fields.push("username = ?");
+    values.push(body.username.trim());
+  }
   if (body.corporate_rank !== undefined) {
     fields.push("corporate_rank = ?");
     values.push(body.corporate_rank);
@@ -89,7 +97,8 @@ users.put("/:username", async (c) => {
     .bind(...values)
     .run();
 
-  return c.json({ success: true, username });
+  const updatedUsername = body.username?.trim() || username;
+  return c.json({ success: true, username: updatedUsername });
 });
 
 users.post("/:username/reset", async (c) => {
