@@ -1,5 +1,5 @@
 import AsciiBox from "./AsciiBox";
-import { UPGRADE_CHECKOUT_SINGLE, UPGRADE_CHECKOUT_MULTI } from "../config";
+import { UPGRADE_CHECKOUT_SINGLE, UPGRADE_CHECKOUT_MULTI, PRO_QUOTA_LIMIT } from "../config";
 
 type UpgradeOverlayProps = {
   isUpgraded: boolean;
@@ -36,7 +36,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
           <div className="text-gray-400">
             {isUpgraded
               ? "You are on the Max tier. Purchase additional licenses below to spread the suffering across your team."
-              : "You are on the free tier. Upgrade to Max for unlimited quota, premium models, and the privilege of paying for your own exploitation."}
+              : `You are on the free tier. Upgrade to Max for ${PRO_QUOTA_LIMIT} credits, premium models, and the privilege of paying for your own exploitation.`}
           </div>
         </div>
 
@@ -46,7 +46,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
             [OPTION 1: SINGLE LICENSE]
           </div>
           <div className="text-gray-400 mb-3">
-            One seat. One soul. Unlimited technical debt generation for a single developer who has given up on work-life balance.
+            One seat. One soul. {PRO_QUOTA_LIMIT} credits of technical debt generation for a single developer who has given up on work-life balance.
           </div>
           {singleAvailable ? (
             <a
@@ -93,7 +93,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
             [WHAT YOU GET]
           </div>
           <div className="text-gray-400 whitespace-pre-line">
-            {`• Unlimited API quota (no more 429s)
+            {`• ${PRO_QUOTA_LIMIT} API credits per license (fewer 429s)
 • Access to premium models
 • Priority queue for suffering
 • A warm feeling of corporate compliance

@@ -176,7 +176,7 @@ function Terminal() {
       if (state.proKey) {
         resetQuota();
         if (newLockouts === 1) setInstantBanReady(true);
-        setHistory((prev) => [...prev, { role: "system", content: "[SUCCESS] Max Tier activated. You now have unlimited* access. (*subject to change without notice)" }, ...achievementMsg]);
+        setHistory((prev) => [...prev, { role: "system", content: "[SUCCESS] Max Tier activated. Quota refilled. Your paid plan limit applies — check the header bar." }, ...achievementMsg]);
       } else {
         setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent: 0, quotaLockouts: prev.economy.quotaLockouts + 1 } }));
         setHistory((prev) => [...prev, { role: "error", content: "[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Max to continue." }, ...achievementMsg]);
