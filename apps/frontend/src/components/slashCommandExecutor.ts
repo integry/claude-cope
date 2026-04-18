@@ -615,7 +615,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
     const res = await fetch(`${API_BASE}/api/account/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ licenseKey }),
+      body: JSON.stringify({ licenseKey, username: ctx.state.username }),
     });
     const data = await res.json() as { success?: boolean; hash?: string; error?: string };
     if (res.ok && data.success) {

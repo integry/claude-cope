@@ -22,11 +22,19 @@ stats.get("/", async (c) => {
     db
       .prepare("SELECT COUNT(*) AS count FROM licenses WHERE status = 'active'")
       .first<{ count: number }>()
-      .catch(() => ({ count: 0 })),
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes("no such table") && !msg.includes("no such column")) throw err;
+        return { count: 0 };
+      }),
     db
       .prepare("SELECT COUNT(*) AS count FROM user_scores WHERE pro_key_hash IS NOT NULL AND pro_key_hash != ''")
       .first<{ count: number }>()
-      .catch(() => ({ count: 0 })),
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes("no such table") && !msg.includes("no such column")) throw err;
+        return { count: 0 };
+      }),
   ]);
 
   const totalUsers = scoreAgg?.total_users ?? 0;

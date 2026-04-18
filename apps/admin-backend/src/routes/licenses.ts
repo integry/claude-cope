@@ -25,7 +25,11 @@ licenses.get("/", async (c) => {
       .all();
 
     return c.json(results ?? []);
-  } catch {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes("no such column") && !msg.includes("no such table")) {
+      throw err;
+    }
     // licenses table or pro_key_hash column may not exist yet
     return c.json([]);
   }

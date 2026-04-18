@@ -28,7 +28,7 @@ async function hashKey(licenseKey: string): Promise<string> {
 const account = new Hono<Env>();
 
 account.post("/sync", async (c) => {
-  const body = await c.req.json<{ licenseKey?: string }>();
+  const body = await c.req.json<{ licenseKey?: string; username?: string }>();
 
   if (!body.licenseKey) {
     return c.json({ error: "licenseKey is required" }, 400);
@@ -64,6 +64,17 @@ account.post("/sync", async (c) => {
       )
       .bind(hash)
       .run();
+
+    // Link the license to the user so they appear as Max in the admin users list
+    // immediately, rather than waiting for their first chat message
+    if (body.username) {
+      await db
+        .prepare(
+          "INSERT INTO user_scores (username, total_td, current_td, pro_key_hash) VALUES (?, 0, 0, ?) ON CONFLICT(username) DO UPDATE SET pro_key_hash = ?, updated_at = datetime('now')"
+        )
+        .bind(body.username, hash, hash)
+        .run();
+    }
   }
 
   return c.json({ success: true, hash });

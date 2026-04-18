@@ -18,6 +18,7 @@ users.get("/", async (c) => {
 
   // Try query with pro_key_hash column; fall back to without if column doesn't exist yet
   let results: Record<string, unknown>[];
+  let hasProKeyHashColumn = true;
   try {
     let query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
                 u.pro_key_hash,
@@ -37,26 +38,36 @@ users.get("/", async (c) => {
 
     const resp = await db.prepare(query).all();
     results = (resp.results ?? []) as Record<string, unknown>[];
-  } catch {
-    // pro_key_hash column may not exist yet; query without it
-    const resp = await db
-      .prepare(
-        `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
-                COALESCE(ul.msg_count, 0) AS credits_used
-         FROM user_scores u
-         LEFT JOIN (
-           SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
-         ) ul ON ul.username = u.username
-         ORDER BY u.updated_at DESC LIMIT 200`
-      )
-      .all();
-    results = (resp.results ?? []) as Record<string, unknown>[];
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes("no such column") && !msg.includes("no such table")) {
+      throw err;
+    }
+    hasProKeyHashColumn = false;
+    // pro_key_hash column doesn't exist yet — no user can be Max
+    if (statusFilter === "max") {
+      // No pro_key_hash column means no Max users exist; return empty
+      results = [];
+    } else {
+      const resp = await db
+        .prepare(
+          `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
+                  COALESCE(ul.msg_count, 0) AS credits_used
+           FROM user_scores u
+           LEFT JOIN (
+             SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
+           ) ul ON ul.username = u.username
+           ORDER BY u.updated_at DESC LIMIT 200`
+        )
+        .all();
+      results = (resp.results ?? []) as Record<string, unknown>[];
+    }
   }
 
   const enriched = results.map((row: Record<string, unknown>) => ({
     ...row,
     credits_remaining: Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
-    status: row.pro_key_hash ? "max" : "free",
+    status: hasProKeyHashColumn && row.pro_key_hash ? "max" : "free",
   }));
 
   return c.json(enriched);
