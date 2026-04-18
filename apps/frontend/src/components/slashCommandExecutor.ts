@@ -251,6 +251,11 @@ function openOverlay(ctx: SlashCommandContext, open: () => void) {
   open();
 }
 
+export function handleUpgradeCommand(ctx: SlashCommandContext): void {
+  openOverlay(ctx, () => ctx.setShowUpgrade(true));
+  window.history.pushState(null, "", "/upgrade");
+}
+
 function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   if (ctx.state.economy.totalTDEarned < 1000) {
     reply({ role: "error", content: "[❌ Error] Store access denied. Requires **1,000 Technical Debt**." });
@@ -694,8 +699,7 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
   } else if (command === "/feedback" || command === "/bug") {
     reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
   } else if (command === "/upgrade") {
-    openOverlay(ctx, () => ctx.setShowUpgrade(true));
-    window.history.pushState(null, "", "/upgrade");
+    handleUpgradeCommand(ctx);
   } else {
     const asyncResult = handleAsyncCommand(command, ctx, reply);
     if (asyncResult === "async") return "async";
