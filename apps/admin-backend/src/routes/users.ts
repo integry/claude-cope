@@ -3,6 +3,7 @@ import { Hono } from "hono";
 type Env = {
   Bindings: {
     DB: D1Database;
+    FREE_QUOTA_LIMIT?: string;
   };
 };
 
@@ -12,13 +13,27 @@ users.get("/", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
+  const freeLimit = parseInt(c.env?.FREE_QUOTA_LIMIT || "20", 10) || 20;
+
   const { results } = await db
     .prepare(
-      "SELECT username, total_td, current_td, corporate_rank, country, updated_at FROM user_scores ORDER BY updated_at DESC LIMIT 100"
+      `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
+              COALESCE(ul.msg_count, 0) AS credits_used
+       FROM user_scores u
+       LEFT JOIN (
+         SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
+       ) ul ON ul.username = u.username
+       ORDER BY u.updated_at DESC
+       LIMIT 100`
     )
     .all();
 
-  return c.json(results ?? []);
+  const enriched = (results ?? []).map((row: Record<string, unknown>) => ({
+    ...row,
+    credits_remaining: Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
+  }));
+
+  return c.json(enriched);
 });
 
 users.post("/", async (c) => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAdminApi } from "../hooks/useAdminApi";
 import { API_BASE } from "../config";
 
@@ -8,6 +8,8 @@ interface User {
   country: string;
   total_td: number;
   current_td: number;
+  credits_used: number;
+  credits_remaining: number;
 }
 
 interface UserForm {
@@ -18,6 +20,9 @@ interface UserForm {
   current_td: number;
 }
 
+type SortField = "total_td" | "credits_used" | null;
+type SortDir = "asc" | "desc";
+
 const emptyForm: UserForm = { username: "", corporate_rank: 0, country: "", total_td: 0, current_td: 0 };
 
 export default function Users() {
@@ -27,6 +32,27 @@ export default function Users() {
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [form, setForm] = useState<UserForm>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [sortField, setSortField] = useState<SortField>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function toggleSort(field: SortField) {
+    if (sortField === field) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSortField(field);
+      setSortDir("desc");
+    }
+  }
+
+  const sortedData = useMemo(() => {
+    if (!data) return [];
+    if (!sortField) return data;
+    return [...data].sort((a, b) => {
+      const av = a[sortField] ?? 0;
+      const bv = b[sortField] ?? 0;
+      return sortDir === "desc" ? bv - av : av - bv;
+    });
+  }, [data, sortField, sortDir]);
 
   function openCreate() {
     setEditingUser(null);
@@ -226,19 +252,33 @@ export default function Users() {
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Username</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Rank</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Country</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Total TD</th>
+              <th
+                className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none hover:text-gray-900"
+                onClick={() => toggleSort("total_td")}
+              >
+                Total TD {sortField === "total_td" ? (sortDir === "desc" ? "\u2193" : "\u2191") : ""}
+              </th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Current TD</th>
+              <th
+                className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none hover:text-gray-900"
+                onClick={() => toggleSort("credits_used")}
+              >
+                Credits Used {sortField === "credits_used" ? (sortDir === "desc" ? "\u2193" : "\u2191") : ""}
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Credits Left</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {data?.map((user) => (
+            {sortedData.map((user) => (
               <tr key={user.username}>
                 <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">{user.username}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.corporate_rank}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.country}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.total_td}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.current_td}</td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_used}</td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_remaining}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm">
                   <div className="flex gap-2">
                     <button
