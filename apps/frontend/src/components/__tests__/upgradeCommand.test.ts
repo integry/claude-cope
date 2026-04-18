@@ -153,6 +153,6 @@ describe("/upgrade command", () => {
 
     // setHistory is called with a filter function (clearLoading)
     expect(ctx.setHistory).toHaveBeenCalledOnce();
-    expect(typeof ctx.setHistory.mock.calls[0]![0]).toBe("function");
+    expect(typeof (ctx.setHistory as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toBe("function");
   });
 });

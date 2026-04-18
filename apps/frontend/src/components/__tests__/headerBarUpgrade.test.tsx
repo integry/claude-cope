@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { createElement } from "react";
+import React, { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
 
@@ -41,7 +41,7 @@ function renderHeaderBar(props: Record<string, unknown>) {
   document.body.appendChild(container);
   const root = createRoot(container);
   act(() => {
-    root.render(createElement(HeaderBar, props as any));
+    root.render(createElement(HeaderBar, props as unknown as React.ComponentProps<typeof HeaderBar>));
   });
   return container;
 }
