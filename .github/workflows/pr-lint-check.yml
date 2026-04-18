@@ -26,6 +26,8 @@ jobs:
             apps/frontend/package-lock.json
             apps/backend/package-lock.json
             apps/partykit/package-lock.json
+            apps/admin-backend/package-lock.json
+            apps/admin-frontend/package-lock.json
 
       - name: Install Dependencies
         id: install
@@ -51,6 +53,10 @@ jobs:
               - 'apps/backend/**'
             partykit:
               - 'apps/partykit/**'
+            admin-backend:
+              - 'apps/admin-backend/**'
+            admin-frontend:
+              - 'apps/admin-frontend/**'
 
       - name: Run Checks
         if: steps.install.outcome == 'success'
@@ -184,6 +190,88 @@ jobs:
               if [ $PK_FAILED -eq 0 ]; then
                 echo "✅ PartyKit Typecheck passed" >> build_log.txt
               fi
+            fi
+          fi
+
+          # --- ADMIN BACKEND (Hono) ---
+          if [ "${{ steps.filter.outputs.admin-backend }}" == 'true' ]; then
+            echo -e "\n--- Admin Backend: Lint, Typecheck & Build ---" >> build_log.txt
+            AB_FAILED=0
+
+            # Lint
+            LINT_OUTPUT=$(npm run lint -w @claude-cope/admin-backend 2>&1) || {
+              echo "❌ Admin Backend Lint FAILED" >> build_log.txt
+              echo "$LINT_OUTPUT" >> build_log.txt
+              AB_FAILED=1
+              EXIT_CODE=1
+            }
+            if [ $AB_FAILED -eq 0 ]; then
+              echo "✅ Admin Backend Lint passed" >> build_log.txt
+            fi
+
+            # Typecheck
+            if [ $AB_FAILED -eq 0 ]; then
+              TYPECHECK_OUTPUT=$(npm run typecheck -w @claude-cope/admin-backend 2>&1) || {
+                echo "❌ Admin Backend Typecheck FAILED" >> build_log.txt
+                echo "$TYPECHECK_OUTPUT" >> build_log.txt
+                AB_FAILED=1
+                EXIT_CODE=1
+              }
+              if [ $AB_FAILED -eq 0 ]; then
+                echo "✅ Admin Backend Typecheck passed" >> build_log.txt
+              fi
+            fi
+
+            # Build
+            BUILD_OUTPUT=$(npm run build -w @claude-cope/admin-backend 2>&1) || {
+              echo "❌ Admin Backend Build FAILED" >> build_log.txt
+              echo "$BUILD_OUTPUT" | tail -100 >> build_log.txt
+              AB_FAILED=1
+              EXIT_CODE=1
+            }
+            if [ $AB_FAILED -eq 0 ]; then
+              echo "✅ Admin Backend Build passed" >> build_log.txt
+            fi
+          fi
+
+          # --- ADMIN FRONTEND (React + Vite) ---
+          if [ "${{ steps.filter.outputs.admin-frontend }}" == 'true' ]; then
+            echo -e "\n--- Admin Frontend: Lint, Typecheck & Build ---" >> build_log.txt
+            AF_FAILED=0
+
+            # Lint
+            LINT_OUTPUT=$(npm run lint -w @claude-cope/admin-frontend 2>&1) || {
+              echo "❌ Admin Frontend Lint FAILED" >> build_log.txt
+              echo "$LINT_OUTPUT" >> build_log.txt
+              AF_FAILED=1
+              EXIT_CODE=1
+            }
+            if [ $AF_FAILED -eq 0 ]; then
+              echo "✅ Admin Frontend Lint passed" >> build_log.txt
+            fi
+
+            # Typecheck
+            if [ $AF_FAILED -eq 0 ]; then
+              TYPECHECK_OUTPUT=$(npm run typecheck -w @claude-cope/admin-frontend 2>&1) || {
+                echo "❌ Admin Frontend Typecheck FAILED" >> build_log.txt
+                echo "$TYPECHECK_OUTPUT" >> build_log.txt
+                AF_FAILED=1
+                EXIT_CODE=1
+              }
+              if [ $AF_FAILED -eq 0 ]; then
+                echo "✅ Admin Frontend Typecheck passed" >> build_log.txt
+              fi
+            fi
+
+            # Build
+            BUILD_OUTPUT=$(npm run build -w @claude-cope/admin-frontend 2>&1) || {
+              echo "❌ Admin Frontend Build FAILED" >> build_log.txt
+              echo "$BUILD_OUTPUT" | tail -100 >> build_log.txt
+              AF_FAILED=1
+              EXIT_CODE=1
+            }
+            if [ $AF_FAILED -eq 0 ]; then
+              echo "✅ Admin Frontend Build passed" >> build_log.txt
             fi
           fi
 
