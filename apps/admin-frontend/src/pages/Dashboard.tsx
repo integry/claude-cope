@@ -1,9 +1,9 @@
 import { useAdminApi } from "../hooks/useAdminApi";
 
 interface Stats {
-  totalUsers: number;
-  totalTechnicalDebt: number;
-  totalTickets: number;
+  total_users: number;
+  total_td: number;
+  recent_events: number;
 }
 
 export default function Dashboard() {
@@ -28,9 +28,9 @@ export default function Dashboard() {
   }
 
   const cards = [
-    { label: "Total Users", value: data?.totalUsers ?? 0 },
-    { label: "Total Technical Debt", value: data?.totalTechnicalDebt ?? 0 },
-    { label: "Total Tickets", value: data?.totalTickets ?? 0 },
+    { label: "Total Users", value: data?.total_users ?? 0 },
+    { label: "Total Technical Debt", value: data?.total_td ?? 0 },
+    { label: "Recent Events", value: data?.recent_events ?? 0 },
   ];
 
   return (

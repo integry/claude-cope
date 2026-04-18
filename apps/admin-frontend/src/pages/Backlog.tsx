@@ -197,6 +197,7 @@ export default function Backlog() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">ID</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Title</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Description</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">TD</th>
@@ -204,8 +205,9 @@ export default function Backlog() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {data?.map((item) => (
+            {data?.map((item, index) => (
               <tr key={item.id}>
+                <td className="whitespace-nowrap px-6 py-4 text-sm font-mono text-gray-500">COPE-{String(index + 1).padStart(3, "0")}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">{item.title}</td>
                 <td className="max-w-md truncate px-6 py-4 text-sm text-gray-700">{item.description}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{item.technical_debt}</td>
