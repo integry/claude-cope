@@ -49,3 +49,14 @@ export const BYOK_ENABLED = parseBoolEnv(
   import.meta.env.VITE_ENABLE_BYOK as string | undefined,
   true,
 );
+
+/**
+ * Checkout URLs for the upgrade overlay. Operators set these to point at their
+ * payment provider (e.g. Polar, Stripe). When a URL is empty/unset the
+ * corresponding button is disabled with a terminal-style error message.
+ */
+export const UPGRADE_CHECKOUT_SINGLE: string =
+  (import.meta.env.VITE_UPGRADE_CHECKOUT_SINGLE as string | undefined) ?? "";
+
+export const UPGRADE_CHECKOUT_MULTI: string =
+  (import.meta.env.VITE_UPGRADE_CHECKOUT_MULTI as string | undefined) ?? "";
