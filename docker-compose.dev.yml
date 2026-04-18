@@ -32,3 +32,13 @@ services:
     <<: *node-common
     working_dir: /app/apps/partykit
     command: npx partykit dev
+
+  admin-backend:
+    <<: *node-common
+    working_dir: /app/apps/admin-backend
+    command: npx wrangler dev --persist-to ../../apps/backend/.wrangler/state
+
+  admin-frontend:
+    <<: *node-common
+    working_dir: /app/apps/admin-frontend
+    command: npx vite --port 5174
