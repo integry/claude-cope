@@ -12,10 +12,14 @@ users.get("/", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
+  const limitParam = Number(c.req.query("limit")) || 100;
+  const limit = Math.min(Math.max(limitParam, 1), 500);
+
   const { results } = await db
     .prepare(
-      "SELECT username, total_td, current_td, corporate_rank, country, updated_at FROM user_scores ORDER BY updated_at DESC LIMIT 100"
+      "SELECT username, total_td, current_td, corporate_rank, country, updated_at FROM user_scores ORDER BY total_td DESC, updated_at DESC LIMIT ?"
     )
+    .bind(limit)
     .all();
 
   return c.json(results ?? []);
@@ -27,10 +31,14 @@ users.post("/:username/reset", async (c) => {
 
   const username = c.req.param("username");
 
-  await db
+  const result = await db
     .prepare("UPDATE user_scores SET total_td = 0, current_td = 0 WHERE username = ?")
     .bind(username)
     .run();
+
+  if (!result.meta.changes) {
+    return c.json({ error: "User not found", username }, 404);
+  }
 
   return c.json({ success: true, username });
 });
