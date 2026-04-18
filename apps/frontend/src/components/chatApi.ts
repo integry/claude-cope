@@ -198,7 +198,7 @@ async function handleErrorResponse(
     } else {
       setHistory((prev) => [
         ...prev.filter((msg) => msg.role !== "loading"),
-        { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Pro for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
+        { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Max for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
       ]);
     }
     return true;

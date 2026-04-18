@@ -125,15 +125,24 @@ function logChatDiagnostics(messages: { role: string; content: string }[], data:
 function recordUsage(
   db: D1Database | undefined,
   ctx: { waitUntil: (p: Promise<unknown>) => void },
-  params: { username: string; model: string; data: ChatResponseData; tdAwarded: number; rank: string; country: string; hour: string },
+  params: { username: string; model: string; data: ChatResponseData; tdAwarded: number; rank: string; country: string; hour: string; proKeyHash?: string },
 ) {
   if (!db) return;
   const tokensSent = params.data.usage?.prompt_tokens ?? 0;
   const tokensReceived = params.data.usage?.completion_tokens ?? 0;
-  ctx.waitUntil(Promise.all([
+  const queries: Promise<unknown>[] = [
     db.prepare("INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, ?, ?, ?)").bind(params.username, params.model, tokensSent, tokensReceived, params.hour).run(),
-    db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country) VALUES (?, ?, ?, ?, ?) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, updated_at = datetime('now')").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.tdAwarded, params.tdAwarded).run(),
-  ]));
+  ];
+  if (params.proKeyHash) {
+    queries.push(
+      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, pro_key_hash) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, pro_key_hash = ?, updated_at = datetime('now')").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.proKeyHash, params.tdAwarded, params.tdAwarded, params.proKeyHash).run(),
+    );
+  } else {
+    queries.push(
+      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country) VALUES (?, ?, ?, ?, ?) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, updated_at = datetime('now')").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.tdAwarded, params.tdAwarded).run(),
+    );
+  }
+  ctx.waitUntil(Promise.all(queries));
 }
 
 const chat = new Hono<Env>();
@@ -229,7 +238,7 @@ chat.post("/", async (c) => {
   const hour = new Date().toISOString().slice(0, 13);
 
   // Log usage and update score asynchronously
-  recordUsage(c.env?.DB, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour });
+  recordUsage(c.env?.DB, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour, proKeyHash: body.proKeyHash });
 
   (data as Record<string, unknown>).td_awarded = tdAwarded;
   (data as Record<string, unknown>).quotaPercent = quotaPercent;

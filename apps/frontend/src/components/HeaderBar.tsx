@@ -45,12 +45,12 @@ function MobileQuotaLine({ quotaPercent, quotaTooltip }: { quotaPercent: number;
   );
 }
 
-function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isPro, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onSlashMenuClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isPro: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onSlashMenuClick?: () => void }) {
+function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isMax, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onSlashMenuClick, onUpgradeClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isMax: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onSlashMenuClick?: () => void; onUpgradeClick?: () => void }) {
   const displayTD = useAnimatedCounter(currentTD, 2660);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const totalQuota = isPro ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT;
+  const totalQuota = isMax ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT;
   const remaining = Math.round((quotaPercent / 100) * totalQuota);
   const used = totalQuota - remaining;
   const quotaTooltip = `${used}/${totalQuota} requests used · ${remaining} remaining`;
@@ -72,12 +72,12 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
         <button onClick={onProfileClick} className="text-cyan-400 hover:text-white hover:underline cursor-pointer truncate">{username}</button>
         <span className="text-[11px] text-gray-400 leading-none sm:text-xs">[{rank}]</span>
         {isBYOK && <span className="text-[10px] font-bold text-yellow-400 whitespace-nowrap">[BYOK{byokTotalCost != null && byokTotalCost > 0 ? ` $${formatByokCost(byokTotalCost)}` : ""}]</span>}
-        {isPro && <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-400 border border-purple-500/40 rounded whitespace-nowrap">PRO</span>}
+        {isMax && <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-400 border border-purple-500/40 rounded whitespace-nowrap">Max</span>}
       </div>
       {/* Right group: status (desktop) */}
       <div className="hidden sm:flex items-center gap-6 ml-auto flex-shrink-0 justify-end px-2 sm:px-0">
         <span className="whitespace-nowrap flex items-center gap-1"><span className="text-gray-500 text-xs">Technical Debt:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
-        {!isBYOK && <><span className="text-gray-600">|</span><DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} /></>}
+        {!isBYOK && <><span className="text-gray-600">|</span><DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} />{!isMax && onUpgradeClick && <button onClick={onUpgradeClick} className="ml-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 rounded whitespace-nowrap hover:bg-yellow-500/30 cursor-pointer">Upgrade to Max 429X</button>}</>}
       </div>
       {/* Right group: status (mobile) */}
       <div className="flex sm:hidden items-center gap-2 ml-auto flex-shrink-0 px-2">

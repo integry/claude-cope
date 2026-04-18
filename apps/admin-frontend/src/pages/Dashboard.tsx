@@ -4,6 +4,9 @@ interface Stats {
   total_users: number;
   total_td: number;
   recent_events: number;
+  total_licenses: number;
+  max_users: number;
+  free_users: number;
 }
 
 export default function Dashboard() {
@@ -29,6 +32,9 @@ export default function Dashboard() {
 
   const cards = [
     { label: "Total Users", value: data?.total_users ?? 0 },
+    { label: "Free Users", value: data?.free_users ?? 0, color: "text-gray-600" },
+    { label: "Max Users", value: data?.max_users ?? 0, color: "text-green-600" },
+    { label: "Active Licenses", value: data?.total_licenses ?? 0, color: "text-blue-600" },
     { label: "Total Technical Debt", value: data?.total_td ?? 0 },
     { label: "Recent Events", value: data?.recent_events ?? 0 },
   ];
@@ -43,7 +49,7 @@ export default function Dashboard() {
             className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
           >
             <p className="text-sm font-medium text-gray-500">{card.label}</p>
-            <p className="mt-2 text-3xl font-semibold text-gray-900">
+            <p className={`mt-2 text-3xl font-semibold ${card.color ?? "text-gray-900"}`}>
               {card.value}
             </p>
           </div>
