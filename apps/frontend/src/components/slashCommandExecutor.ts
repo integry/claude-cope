@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { PING_COST, THEMES } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
-import { API_BASE, BYOK_ENABLED } from "../config";
+import { API_BASE, BYOK_ENABLED, PRO_QUOTA_LIMIT } from "../config";
 
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
@@ -620,7 +620,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
     const data = await res.json() as { success?: boolean; hash?: string; error?: string };
     if (res.ok && data.success) {
       ctx.setState((prev) => ({ ...prev, proKey: licenseKey }));
-      reply({ role: "system", content: "[✓ **MAX ACTIVATED**] License key validated. Welcome to the premium suffering tier. You now have **100 Max credits**. Spend them wisely (you won't)." });
+      reply({ role: "system", content: `[✓ **MAX ACTIVATED**] License key validated. Welcome to the premium suffering tier. You now have **${PRO_QUOTA_LIMIT} Max credits**. Spend them wisely (you won't).` });
     } else {
       reply({ role: "error", content: `[❌] License validation failed: ${data.error ?? "Unknown error"}. Double-check your key and try again.` });
     }
