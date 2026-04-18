@@ -169,12 +169,12 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, buyTheme, equipTheme, o
               &gt; cosmetic themes
             </span>
             <span className="text-xs px-1.5 py-0.5 bg-purple-900 text-purple-300 rounded font-bold">
-              PRO ONLY
+              MAX ONLY
             </span>
           </div>
           {!state.proKey && (
             <p className="text-xs text-gray-500 mt-1 italic">
-              Subscribe to Pro to unlock premium themes
+              Subscribe to Max to unlock premium themes
             </p>
           )}
         </div>
@@ -227,7 +227,7 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, buyTheme, equipTheme, o
                       : "bg-gray-800 text-gray-400 cursor-not-allowed"
                   }`}
                 >
-                  {!isPro ? "Pro Required" : canAfford ? "Buy Theme" : "Can't afford"}
+                  {!isPro ? "Max Required" : canAfford ? "Buy Theme" : "Can't afford"}
                 </button>
               )}
             </div>
