@@ -89,6 +89,17 @@ CREATE TABLE IF NOT EXISTS completed_tasks (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_completed_tasks_user_ticket
     ON completed_tasks (username, ticket_id);
 
+-- Track activated Polar license keys (hashed) for admin purchase stats
+CREATE TABLE IF NOT EXISTS licenses (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    key_hash TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'active',
+    activated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_licenses_status
+    ON licenses (status);
+
 -- Index on username and hour for per-user reporting queries
 CREATE INDEX IF NOT EXISTS idx_usage_logs_user_hour
     ON usage_logs (username, hour DESC);

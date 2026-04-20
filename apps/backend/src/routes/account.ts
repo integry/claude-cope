@@ -78,6 +78,14 @@ account.post("/sync", async (c) => {
     return c.json({ success: true, hash, restored: false });
   }
 
+  // Record license activation in DB for admin purchase stats
+  await db
+    .prepare(
+      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', activated_at = datetime('now')",
+    )
+    .bind(hash)
+    .run();
+
   // Case 1: Existing profile with this license_hash → restore
   const existingByHash = await getProfileByLicenseHash(db, hash);
   if (existingByHash) {
