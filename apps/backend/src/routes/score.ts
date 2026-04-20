@@ -82,6 +82,101 @@ score.get("/", async (c) => {
   return c.json(row);
 });
 
+type ScoreBody = {
+  username: string;
+  currentTD: number;
+  totalTDEarned: number;
+  inventory: Record<string, number>;
+  upgrades: string[];
+  country?: string;
+  completedTaskIds?: string[];
+  proKeyHash?: string;
+};
+
+function detectCountry(c: { req: { raw: unknown; header: (name: string) => string | undefined } }, body: ScoreBody): string {
+  const cfCountry = (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country;
+  return body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
+}
+
+async function syncProUser(db: D1Database, body: ScoreBody) {
+  const profile = await getProfile(db, body.username);
+  if (!profile) return null;
+
+  const { validatedTaskBonus, validatedClaims } = await validateTaskBonuses(db, body.username, body.completedTaskIds);
+
+  if (validatedTaskBonus > 0) {
+    const newTotal = profile.total_td + validatedTaskBonus;
+    const newCurrent = profile.current_td + validatedTaskBonus;
+    const newRank = resolveRankFromProfile(newTotal);
+
+    const batchStatements: D1PreparedStatement[] = [
+      db.prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, updated_at = datetime('now'), last_sync_time = datetime('now') WHERE username = ?")
+        .bind(newTotal, newCurrent, newRank, body.username),
+    ];
+    for (const claim of validatedClaims) {
+      batchStatements.push(
+        db.prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) VALUES (?, ?, ?)")
+          .bind(body.username, claim.ticketId, claim.bonus),
+      );
+    }
+    await db.batch(batchStatements);
+  }
+
+  return getProfile(db, body.username);
+}
+
+function computeTimeCap(existing: { last_sync_time: string } | null, serverTotal: number, claimedMultiplier: number, validatedTaskBonus: number): number {
+  if (!existing?.last_sync_time) return Infinity;
+  const lastSync = new Date(existing.last_sync_time + "Z");
+  const elapsedSeconds = Math.max(0, (Date.now() - lastSync.getTime()) / 1000);
+  const maxTDPerSecond = Math.max(1, ((claimedMultiplier - 1) * 100 + 20 * claimedMultiplier) * 1.5);
+  return serverTotal + maxTDPerSecond * elapsedSeconds + validatedTaskBonus;
+}
+
+function resolveRankAndFlags(validatedTotal: number, claimedTotal: number, serverTotal: number): string {
+  let rank = "Junior Code Monkey";
+  for (const r of CORPORATE_RANKS) {
+    if (validatedTotal >= r.threshold) rank = r.title;
+  }
+  if (claimedTotal > serverTotal * 2 && serverTotal > 1000) rank = "🤡 DevTools Hacker";
+  return rank;
+}
+
+function buildScoreBatch(db: D1Database, opts: {
+  existing: { total_td: number } | null;
+  serverTotal: number;
+  validatedTotal: number;
+  validatedCurrent: number;
+  rank: string;
+  country: string;
+  username: string;
+  validatedClaims: Array<{ ticketId: string; bonus: number }>;
+}): D1PreparedStatement[] {
+  const statements: D1PreparedStatement[] = [];
+
+  if (opts.existing) {
+    const updatedTotal = Math.max(opts.serverTotal, opts.validatedTotal);
+    statements.push(
+      db.prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now'), last_sync_time = datetime('now') WHERE username = ?")
+        .bind(updatedTotal, opts.validatedCurrent, opts.rank, opts.country, opts.username),
+    );
+  } else {
+    statements.push(
+      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, last_sync_time) VALUES (?, ?, ?, ?, ?, datetime('now'))")
+        .bind(opts.username, opts.validatedTotal, opts.validatedCurrent, opts.rank, opts.country),
+    );
+  }
+
+  for (const claim of opts.validatedClaims) {
+    statements.push(
+      db.prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) VALUES (?, ?, ?)")
+        .bind(opts.username, claim.ticketId, claim.bonus),
+    );
+  }
+
+  return statements;
+}
+
 /**
  * POST /api/score — debounced sync from client.
  * Validates the claimed score against server-side tracking.
@@ -91,121 +186,36 @@ score.post("/", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{
-    username: string;
-    currentTD: number;
-    totalTDEarned: number;
-    inventory: Record<string, number>;
-    upgrades: string[];
-    country?: string;
-    completedTaskIds?: string[];
-    proKeyHash?: string;
-  }>();
-
+  const body = await c.req.json<ScoreBody>();
   if (!body.username) return c.json({ error: "username required" }, 400);
 
-  // Country detection priority: body (frontend), CF object, header, fallback
-  const cfCountry = (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country;
-  const country = body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
+  const country = detectCountry(c, body);
 
-  // Pro users: task-only path — only process completedTaskIds, read/write TD from D1
+  // Pro users: task-only path
   if (body.proKeyHash) {
-    const profile = await getProfile(db, body.username);
-    if (profile) {
-      const { validatedTaskBonus, validatedClaims } = await validateTaskBonuses(db, body.username, body.completedTaskIds);
-
-      if (validatedTaskBonus > 0) {
-        const newTotal = profile.total_td + validatedTaskBonus;
-        const newCurrent = profile.current_td + validatedTaskBonus;
-        const newRank = resolveRankFromProfile(newTotal);
-
-        const batchStatements: D1PreparedStatement[] = [
-          db.prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, updated_at = datetime('now'), last_sync_time = datetime('now') WHERE username = ?")
-            .bind(newTotal, newCurrent, newRank, body.username),
-        ];
-        for (const claim of validatedClaims) {
-          batchStatements.push(
-            db.prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) VALUES (?, ?, ?)")
-              .bind(body.username, claim.ticketId, claim.bonus),
-          );
-        }
-        await db.batch(batchStatements);
-      }
-
-      const updated = await getProfile(db, body.username);
-      return c.json({ profile: updated });
-    }
+    const updated = await syncProUser(db, body);
+    if (updated) return c.json({ profile: updated });
   }
 
-  // Validate the multiplier from the claimed inventory
   const claimedMultiplier = computeMultiplier(body.inventory, body.upgrades);
 
-  // Fetch server-side score and last sync time
   const existing = await db
     .prepare("SELECT total_td, current_td, last_sync_time FROM user_scores WHERE username = ?")
     .bind(body.username)
     .first<{ total_td: number; current_td: number; last_sync_time: string }>();
 
   const serverTotal = existing?.total_td ?? 0;
-
-  // Validate completed task bonuses — these are the only source of large one-off earnings.
   const { validatedTaskBonus, validatedClaims } = await validateTaskBonuses(db, body.username, body.completedTaskIds);
 
-  // Time-based generation cap: calculate maximum possible TD since last sync
-  const now = new Date();
-  let maxTDGain = Infinity;
-  if (existing?.last_sync_time) {
-    const lastSync = new Date(existing.last_sync_time + "Z");
-    const elapsedSeconds = Math.max(0, (now.getTime() - lastSync.getTime()) / 1000);
-    // Max TD/sec = idle generation + generous click allowance
-    // Idle output = (multiplier - 1) * 100 TD/sec from generators
-    // Click output = ~20 clicks/sec * multiplier TD/click
-    // Total with 50% safety buffer to avoid false positives
-    const maxTDPerSecond = Math.max(1, ((claimedMultiplier - 1) * 100 + 20 * claimedMultiplier) * 1.5);
-    maxTDGain = maxTDPerSecond * elapsedSeconds;
-  }
-  const timeClampedTotal = serverTotal + maxTDGain + validatedTaskBonus;
-
-  // Client's totalTDEarned can't exceed server's tracked total (10% tolerance + task bonus)
-  // AND can't exceed the time-based generation cap (also includes task bonus)
+  const timeClampedTotal = computeTimeCap(existing, serverTotal, claimedMultiplier, validatedTaskBonus);
   const validatedTotal = Math.min(body.totalTDEarned, Math.round(serverTotal * 1.1) + validatedTaskBonus, Math.round(timeClampedTotal));
-  // currentTD can't exceed validatedTotal (can't have more than you earned)
   const validatedCurrent = Math.min(body.currentTD, validatedTotal);
 
-  // Resolve rank from validated total
-  let rank = "Junior Code Monkey";
-  for (const r of CORPORATE_RANKS) {
-    if (validatedTotal >= r.threshold) rank = r.title;
-  }
-
-  // Cheater flag
-  const isSuspicious = body.totalTDEarned > serverTotal * 2 && serverTotal > 1000;
-  if (isSuspicious) rank = "🤡 DevTools Hacker";
-
-  // Use db.batch() to execute score update + task completion inserts atomically.
-  // D1 batch runs all statements in a single transaction — if any statement fails,
-  // the entire batch is rolled back, preventing state divergence.
-  const batchStatements: D1PreparedStatement[] = [];
-
-  if (existing) {
-    const updatedTotal = Math.max(serverTotal, validatedTotal);
-    batchStatements.push(
-      db.prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now'), last_sync_time = datetime('now') WHERE username = ?")
-        .bind(updatedTotal, validatedCurrent, rank, country, body.username),
-    );
-  } else {
-    batchStatements.push(
-      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, last_sync_time) VALUES (?, ?, ?, ?, ?, datetime('now'))")
-        .bind(body.username, validatedTotal, validatedCurrent, rank, country),
-    );
-  }
-
-  for (const claim of validatedClaims) {
-    batchStatements.push(
-      db.prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) VALUES (?, ?, ?)")
-        .bind(body.username, claim.ticketId, claim.bonus),
-    );
-  }
+  const rank = resolveRankAndFlags(validatedTotal, body.totalTDEarned, serverTotal);
+  const batchStatements = buildScoreBatch(db, {
+    existing, serverTotal, validatedTotal, validatedCurrent,
+    rank, country, username: body.username, validatedClaims,
+  });
 
   try {
     await db.batch(batchStatements);

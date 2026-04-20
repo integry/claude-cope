@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits } from "../utils/quota";
-import { getProfile, getProfileByLicenseHash, getProfileRow, rowToProfile, resolveRank } from "../utils/profile";
+import { getProfile, getProfileByLicenseHash, getProfileRow, resolveRank } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
 
 
@@ -24,25 +24,102 @@ const account = new Hono<Env>();
 
 // ─── Cross-device restore / license linking ─────────────────────────
 
+type SyncBody = {
+  licenseKey?: string;
+  username?: string;
+  currentProfile?: {
+    total_td?: number;
+    current_td?: number;
+    corporate_rank?: string;
+    inventory?: Record<string, number>;
+    upgrades?: string[];
+    achievements?: string[];
+    buddy_type?: string | null;
+    buddy_is_shiny?: boolean;
+    unlocked_themes?: string[];
+    active_theme?: string;
+    active_ticket?: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null;
+    td_multiplier?: number;
+  };
+};
+
+async function linkExistingProfile(db: D1Database, hash: string, username: string) {
+  await db
+    .prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ?")
+    .bind(hash, username)
+    .run();
+  return getProfile(db, username);
+}
+
+function buildProfileScoring(cp: SyncBody["currentProfile"]) {
+  const totalTD = cp?.total_td ?? 0;
+  return {
+    totalTD,
+    currentTD: cp?.current_td ?? 0,
+    rank: cp?.corporate_rank ?? resolveRank(totalTD),
+    inventory: JSON.stringify(cp?.inventory ?? {}),
+    upgrades: JSON.stringify(cp?.upgrades ?? []),
+    achievements: JSON.stringify(cp?.achievements ?? []),
+  };
+}
+
+function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
+  return {
+    buddyType: cp?.buddy_type ?? null,
+    buddyIsShiny: cp?.buddy_is_shiny ? 1 : 0,
+    unlockedThemes: JSON.stringify(cp?.unlocked_themes ?? ["default"]),
+    activeTheme: cp?.active_theme ?? "default",
+    activeTicket: cp?.active_ticket ? JSON.stringify(cp.active_ticket) : null,
+    tdMultiplier: cp?.td_multiplier ?? 1.0,
+  };
+}
+
+async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody) {
+  const newUsername = body.username || "anonymous";
+  const s = buildProfileScoring(body.currentProfile);
+  const c = buildProfileCosmetics(body.currentProfile);
+
+  await db
+    .prepare(
+      `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(username) DO UPDATE SET license_hash = ?, updated_at = datetime('now')`,
+    )
+    .bind(
+      newUsername, s.totalTD, s.currentTD, s.rank, hash,
+      s.inventory, s.upgrades, s.achievements,
+      c.buddyType, c.buddyIsShiny, c.unlockedThemes,
+      c.activeTheme, c.activeTicket, c.tdMultiplier,
+      hash,
+    )
+    .run();
+
+  return getProfile(db, newUsername);
+}
+
+async function resolveProfile(db: D1Database, hash: string, body: SyncBody) {
+  // Case 1: Existing profile with this license_hash → restore
+  const existingByHash = await getProfileByLicenseHash(db, hash);
+  if (existingByHash) {
+    return { restored: true, profile: existingByHash };
+  }
+
+  // Case 2: User has a user_scores row by username → link license_hash
+  if (body.username) {
+    const existingByName = await getProfileRow(db, body.username);
+    if (existingByName) {
+      const profile = await linkExistingProfile(db, hash, body.username);
+      return { restored: false, profile };
+    }
+  }
+
+  // Case 3: No profile at all → create from client-provided currentProfile
+  const profile = await createProfileFromClient(db, hash, body);
+  return { restored: false, profile };
+}
+
 account.post("/sync", async (c) => {
-  const body = await c.req.json<{
-    licenseKey?: string;
-    username?: string;
-    currentProfile?: {
-      total_td?: number;
-      current_td?: number;
-      corporate_rank?: string;
-      inventory?: Record<string, number>;
-      upgrades?: string[];
-      achievements?: string[];
-      buddy_type?: string | null;
-      buddy_is_shiny?: boolean;
-      unlocked_themes?: string[];
-      active_theme?: string;
-      active_ticket?: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null;
-      td_multiplier?: number;
-    };
-  }>();
+  const body = await c.req.json<SyncBody>();
 
   if (!body.licenseKey) {
     return c.json({ error: "licenseKey is required" }, 400);
@@ -67,7 +144,6 @@ account.post("/sync", async (c) => {
   const kvKey = `polar:${hash}`;
 
   const limits = getQuotaLimits(c.env);
-  // Only set quota if no existing quota entry (don't reset on re-sync)
   const existingQuota = await kv.get(kvKey);
   if (existingQuota === null) {
     await kv.put(kvKey, String(limits.proInitialQuota));
@@ -86,63 +162,8 @@ account.post("/sync", async (c) => {
     .bind(hash)
     .run();
 
-  // Case 1: Existing profile with this license_hash → restore
-  const existingByHash = await getProfileByLicenseHash(db, hash);
-  if (existingByHash) {
-    return c.json({ success: true, hash, restored: true, profile: existingByHash });
-  }
-
-  // Case 2: User has a user_scores row by username → link license_hash
-  const username = body.username;
-  if (username) {
-    const existingByName = await getProfileRow(db, username);
-    if (existingByName) {
-      await db
-        .prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ?")
-        .bind(hash, username)
-        .run();
-      const profile = await getProfile(db, username);
-      return c.json({ success: true, hash, restored: false, profile });
-    }
-  }
-
-  // Case 3: No profile at all → create from client-provided currentProfile
-  const cp = body.currentProfile;
-  const newUsername = username || "anonymous";
-  const inventory = cp?.inventory ?? {};
-  const upgrades = cp?.upgrades ?? [];
-  const achievements = cp?.achievements ?? [];
-  const totalTD = cp?.total_td ?? 0;
-  const currentTD = cp?.current_td ?? 0;
-  const rank = cp?.corporate_rank ?? resolveRank(totalTD);
-
-  await db
-    .prepare(
-      `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(username) DO UPDATE SET license_hash = ?, updated_at = datetime('now')`,
-    )
-    .bind(
-      newUsername,
-      totalTD,
-      currentTD,
-      rank,
-      hash,
-      JSON.stringify(inventory),
-      JSON.stringify(upgrades),
-      JSON.stringify(achievements),
-      cp?.buddy_type ?? null,
-      cp?.buddy_is_shiny ? 1 : 0,
-      JSON.stringify(cp?.unlocked_themes ?? ["default"]),
-      cp?.active_theme ?? "default",
-      cp?.active_ticket ? JSON.stringify(cp.active_ticket) : null,
-      cp?.td_multiplier ?? 1.0,
-      hash,
-    )
-    .run();
-
-  const profile = await getProfile(db, newUsername);
-  return c.json({ success: true, hash, restored: false, profile });
+  const result = await resolveProfile(db, hash, body);
+  return c.json({ success: true, hash, ...result });
 });
 
 // ─── Purchase endpoints ─────────────────────────────────────────────
