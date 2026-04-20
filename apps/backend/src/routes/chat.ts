@@ -4,6 +4,7 @@ import { computeMultiplier } from "../gameConstants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { consumeQuota, getQuotaLimits, QuotaExhaustedError } from "../utils/quota";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
+import { getProfileByLicenseHash, resolveRank } from "../utils/profile";
 
 type Env = {
   Bindings: {
@@ -219,17 +220,49 @@ chat.post("/", async (c) => {
   // Debug logging for tag/voice diagnostics — useful when tuning system prompts
   logChatDiagnostics(messages, data);
 
-  // Server-authoritative TD award with validated multiplier
-  const baseTD = Math.floor(Math.random() * 40) + 10;
-  const serverMultiplier = computeMultiplier(inventory, upgrades);
-  const tdAwarded = Math.round(baseTD * serverMultiplier);
   // Country detection priority: body (frontend), CF object, header, fallback
   const cfCountry = (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country;
   const country = body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
   const hour = new Date().toISOString().slice(0, 13);
 
+  const isPro = Boolean(body.proKeyHash);
+  const db = c.env?.DB;
+
+  // For pro users, read server-stored profile for authoritative multiplier
+  if (isPro && db) {
+    const serverProfile = await getProfileByLicenseHash(db, body.proKeyHash!);
+    if (serverProfile) {
+      const baseTD = Math.floor(Math.random() * 40) + 10;
+      const tdAwarded = Math.round(baseTD * serverProfile.multiplier * serverProfile.td_multiplier);
+
+      // Relative increment — safe under concurrent writes
+      await db
+        .prepare(
+          "UPDATE user_scores SET total_td = total_td + ?, current_td = current_td + ?, corporate_rank = ?, updated_at = datetime('now') WHERE username = ?",
+        )
+        .bind(tdAwarded, tdAwarded, resolveRank(serverProfile.total_td + tdAwarded), serverProfile.username)
+        .run();
+
+      // Log usage
+      recordUsage(db, c.executionCtx, { username: serverProfile.username, model, data, tdAwarded, rank: serverProfile.corporate_rank, country, hour });
+
+      // Return updated profile
+      const updatedProfile = await getProfileByLicenseHash(db, body.proKeyHash!);
+
+      (data as Record<string, unknown>).td_awarded = tdAwarded;
+      (data as Record<string, unknown>).quotaPercent = quotaPercent;
+      (data as Record<string, unknown>).profile = updatedProfile;
+      return c.json(data);
+    }
+  }
+
+  // Free users or pro users without a profile — existing behavior
+  const serverMultiplier = computeMultiplier(inventory, upgrades);
+  const baseTD = Math.floor(Math.random() * 40) + 10;
+  const tdAwarded = Math.round(baseTD * serverMultiplier);
+
   // Log usage and update score asynchronously
-  recordUsage(c.env?.DB, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour });
+  recordUsage(db, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour });
 
   (data as Record<string, unknown>).td_awarded = tdAwarded;
   (data as Record<string, unknown>).quotaPercent = quotaPercent;

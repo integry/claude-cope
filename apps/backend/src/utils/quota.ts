@@ -50,7 +50,7 @@ export class QuotaExhaustedError extends Error {
 /**
  * Hash a Polar license key using SHA-256 so raw keys are never stored in KV.
  */
-async function hashKey(licenseKey: string): Promise<string> {
+export async function hashKey(licenseKey: string): Promise<string> {
   const encoded = new TextEncoder().encode(licenseKey);
   const digest = await crypto.subtle.digest("SHA-256", encoded);
   return Array.from(new Uint8Array(digest))

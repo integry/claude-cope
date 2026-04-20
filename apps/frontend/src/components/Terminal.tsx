@@ -26,6 +26,7 @@ import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { API_BASE, BYOK_ENABLED } from "../config";
 import { supabase } from "../supabaseClient";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
+import { applyServerProfile } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { buildAchievementBox } from "./achievementBox";
@@ -321,6 +322,7 @@ function Terminal() {
       }),
       onQuotaUpdate: (quotaPercent) => setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })),
       onQuotaExhausted: triggerQuotaLockout,
+      onProfileUpdate: (profile) => setState((prev) => applyServerProfile(prev, profile)),
       onError: playError,
       signal: controller.signal,
     });

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { CORPORATE_RANKS } from "./rankConstants";
 import { computeMultiplier } from "../gameConstants";
+import { getProfile, resolveRank as resolveRankFromProfile } from "../utils/profile";
 
 type Env = {
   Bindings: {
@@ -98,6 +99,7 @@ score.post("/", async (c) => {
     upgrades: string[];
     country?: string;
     completedTaskIds?: string[];
+    proKeyHash?: string;
   }>();
 
   if (!body.username) return c.json({ error: "username required" }, 400);
@@ -105,6 +107,35 @@ score.post("/", async (c) => {
   // Country detection priority: body (frontend), CF object, header, fallback
   const cfCountry = (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country;
   const country = body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
+
+  // Pro users: task-only path — only process completedTaskIds, read/write TD from D1
+  if (body.proKeyHash) {
+    const profile = await getProfile(db, body.username);
+    if (profile) {
+      const { validatedTaskBonus, validatedClaims } = await validateTaskBonuses(db, body.username, body.completedTaskIds);
+
+      if (validatedTaskBonus > 0) {
+        const newTotal = profile.total_td + validatedTaskBonus;
+        const newCurrent = profile.current_td + validatedTaskBonus;
+        const newRank = resolveRankFromProfile(newTotal);
+
+        const batchStatements: D1PreparedStatement[] = [
+          db.prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, updated_at = datetime('now'), last_sync_time = datetime('now') WHERE username = ?")
+            .bind(newTotal, newCurrent, newRank, body.username),
+        ];
+        for (const claim of validatedClaims) {
+          batchStatements.push(
+            db.prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) VALUES (?, ?, ?)")
+              .bind(body.username, claim.ticketId, claim.bonus),
+          );
+        }
+        await db.batch(batchStatements);
+      }
+
+      const updated = await getProfile(db, body.username);
+      return c.json({ profile: updated });
+    }
+  }
 
   // Validate the multiplier from the claimed inventory
   const claimedMultiplier = computeMultiplier(body.inventory, body.upgrades);

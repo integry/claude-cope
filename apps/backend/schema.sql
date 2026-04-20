@@ -47,11 +47,24 @@ CREATE TABLE IF NOT EXISTS user_scores (
     corporate_rank TEXT NOT NULL DEFAULT 'Junior Code Monkey',
     country TEXT NOT NULL DEFAULT 'Unknown',
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    last_sync_time TEXT NOT NULL DEFAULT (datetime('now'))
+    last_sync_time TEXT NOT NULL DEFAULT (datetime('now')),
+    license_hash TEXT,
+    inventory TEXT NOT NULL DEFAULT '{}',
+    upgrades TEXT NOT NULL DEFAULT '[]',
+    achievements TEXT NOT NULL DEFAULT '[]',
+    buddy_type TEXT,
+    buddy_is_shiny INTEGER NOT NULL DEFAULT 0,
+    unlocked_themes TEXT NOT NULL DEFAULT '["default"]',
+    active_theme TEXT NOT NULL DEFAULT 'default',
+    active_ticket TEXT,
+    td_multiplier REAL NOT NULL DEFAULT 1.0
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_scores_total_td
     ON user_scores (total_td DESC);
+
+CREATE INDEX IF NOT EXISTS idx_user_scores_license_hash
+    ON user_scores (license_hash);
 
 -- Usage logs for tracking token and model usage per user per hour
 CREATE TABLE IF NOT EXISTS usage_logs (

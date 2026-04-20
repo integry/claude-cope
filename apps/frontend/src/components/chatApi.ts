@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { Message } from "./Terminal";
 import type { BuddyState } from "../hooks/useGameState";
 import type { ModesState } from "../hooks/gameStateUtils";
+import type { ServerProfile } from "@claude-cope/shared/profile";
 import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
 import { API_BASE, BYOK_ENABLED } from "../config";
 import { supabase } from "../supabaseClient";
@@ -164,6 +165,7 @@ async function parseResponseBody(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
   addActiveTD?: (n: number, raw?: boolean) => void,
+  onProfileUpdate?: (profile: ServerProfile) => void,
 ): Promise<{ rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number; quotaPercent?: number }> {
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("text/event-stream")) {
@@ -172,7 +174,11 @@ async function parseResponseBody(
   }
   const data = await res.json();
   const fields = extractJsonResponseFields(data);
-  if (data?.td_awarded && addActiveTD) {
+  // Pro users: apply full profile from server (includes TD)
+  if (data?.profile && onProfileUpdate) {
+    onProfileUpdate(data.profile as ServerProfile);
+  } else if (data?.td_awarded && addActiveTD) {
+    // Free user fallback
     addActiveTD(data.td_awarded, true);
   }
   return fields;
@@ -266,6 +272,7 @@ export function submitChatMessage(opts: {
   onByokUsage?: (usage: { model: string; prompt_tokens?: number; completion_tokens?: number; cost?: number }) => void;
   onQuotaUpdate?: (quotaPercent: number) => void;
   onQuotaExhausted?: () => void;
+  onProfileUpdate?: (profile: ServerProfile) => void;
   onError?: () => void;
   signal?: AbortSignal;
 }) {
@@ -323,7 +330,7 @@ export function submitChatMessage(opts: {
     .then(async (res) => {
       if (await handleErrorResponse(res, setHistory, opts.onQuotaExhausted, onError)) return;
 
-      const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD);
+      const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD, opts.onProfileUpdate);
       let { rawReply } = parsed;
       const { tokensSent, tokensReceived, cost, quotaPercent } = parsed;
 

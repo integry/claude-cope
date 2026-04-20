@@ -1,7 +1,9 @@
 /* eslint-disable max-lines */
 import { PING_COST, THEMES } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
+import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE, BYOK_ENABLED, PRO_QUOTA_LIMIT } from "../config";
+import { applyServerProfile } from "../hooks/profileSync";
 
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
@@ -612,15 +614,43 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
     return;
   }
   try {
+    const current = ctx.state;
     const res = await fetch(`${API_BASE}/api/account/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ licenseKey }),
+      body: JSON.stringify({
+        licenseKey,
+        username: current.username,
+        currentProfile: {
+          total_td: Math.floor(current.economy.totalTDEarned),
+          current_td: Math.floor(current.economy.currentTD),
+          corporate_rank: current.economy.currentRank,
+          inventory: current.inventory,
+          upgrades: current.upgrades,
+          achievements: current.achievements,
+          buddy_type: current.buddy.type,
+          buddy_is_shiny: current.buddy.isShiny,
+          unlocked_themes: current.unlockedThemes,
+          active_theme: current.activeTheme,
+          active_ticket: current.activeTicket,
+          td_multiplier: current.economy.tdMultiplier,
+        },
+      }),
     });
-    const data = await res.json() as { success?: boolean; hash?: string; error?: string };
+    const data = await res.json() as { success?: boolean; hash?: string; restored?: boolean; profile?: ServerProfile; error?: string };
     if (res.ok && data.success) {
-      ctx.setState((prev) => ({ ...prev, proKey: licenseKey }));
-      reply({ role: "system", content: `[✓ **MAX ACTIVATED**] License key validated. Welcome to the premium suffering tier. You now have **${PRO_QUOTA_LIMIT} Max credits**. Spend them wisely (you won't).` });
+      ctx.setState((prev) => {
+        const withKey: GameState = { ...prev, proKey: licenseKey };
+        if (data.profile) {
+          return applyServerProfile(withKey, data.profile);
+        }
+        return withKey;
+      });
+      if (data.restored && data.profile) {
+        reply({ role: "system", content: `[✓ **PROFILE RESTORED**] Welcome back, **${data.profile.username}**! Your profile has been restored across devices.\n\n**TD:** ${data.profile.current_td.toLocaleString()} / ${data.profile.total_td.toLocaleString()} total\n**Rank:** ${data.profile.corporate_rank}\n**Generators:** ${Object.values(data.profile.inventory).reduce((a, b) => a + b, 0)} owned\n**Upgrades:** ${data.profile.upgrades.length} unlocked\n\nYou now have **${PRO_QUOTA_LIMIT} Max credits**. Your progress is synced across all devices.` });
+      } else {
+        reply({ role: "system", content: `[✓ **MAX ACTIVATED**] License key validated and profile linked. Welcome to the premium suffering tier. You now have **${PRO_QUOTA_LIMIT} Max credits**. Your progress will now sync across devices.` });
+      }
     } else {
       reply({ role: "error", content: `[❌] License validation failed: ${data.error ?? "Unknown error"}. Double-check your key and try again.` });
     }
