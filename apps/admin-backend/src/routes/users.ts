@@ -16,7 +16,7 @@ users.get("/", async (c) => {
   const freeLimit = parseInt(c.env?.FREE_QUOTA_LIMIT || "20", 10) || 20;
   const statusFilter = c.req.query("status"); // "free", "max", or undefined for all
 
-  // Try query with pro_key_hash column; fall back to without if column doesn't exist yet
+  // Try query with license_hash column; fall back to without if column doesn't exist yet
   let results: Record<string, unknown>[];
   let hasLicenseHashColumn = true;
   try {
@@ -46,7 +46,7 @@ users.get("/", async (c) => {
     hasLicenseHashColumn = false;
     // license_hash column doesn't exist yet — no user can be Max
     if (statusFilter === "max") {
-      // No pro_key_hash column means no Max users exist; return empty
+      // No license_hash column means no Max users exist; return empty
       results = [];
     } else {
       const resp = await db

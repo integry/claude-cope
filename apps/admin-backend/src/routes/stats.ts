@@ -27,8 +27,14 @@ stats.get("/", async (c) => {
         if (!msg.includes("no such table") && !msg.includes("no such column")) throw err;
         return { count: 0 };
       }),
+    // Count Max users by joining with active licenses, not just checking license_hash presence.
+    // This ensures revoked licenses are not counted as Max users.
     db
-      .prepare("SELECT COUNT(*) AS count FROM user_scores WHERE license_hash IS NOT NULL AND license_hash != ''")
+      .prepare(
+        `SELECT COUNT(*) AS count FROM user_scores u
+         INNER JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'
+         WHERE u.license_hash IS NOT NULL AND u.license_hash != ''`
+      )
       .first<{ count: number }>()
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);

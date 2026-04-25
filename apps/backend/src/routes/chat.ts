@@ -286,13 +286,15 @@ chat.post("/", async (c) => {
     if (proResponse) return proResponse;
   }
 
-  // Free users or pro users without a profile — existing behavior
+  // Free users or pro users without a valid server profile — free-user path.
+  // Never pass proKeyHash to recordUsage here: if handleProUserScoring couldn't
+  // find a licensed profile, we must not let the client self-assign a license hash.
   const serverMultiplier = computeMultiplier(inventory, upgrades);
   const baseTD = Math.floor(Math.random() * 40) + 10;
   const tdAwarded = Math.round(baseTD * serverMultiplier);
 
   // Log usage and update score asynchronously
-  recordUsage(db, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour, proKeyHash: body.proKeyHash });
+  recordUsage(db, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour });
 
   (data as Record<string, unknown>).td_awarded = tdAwarded;
   (data as Record<string, unknown>).quotaPercent = quotaPercent;

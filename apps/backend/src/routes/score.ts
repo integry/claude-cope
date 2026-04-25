@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { CORPORATE_RANKS } from "./rankConstants";
 import { computeMultiplier } from "../gameConstants";
-import { getProfile, resolveRank as resolveRankFromProfile } from "../utils/profile";
+import { getProfile, getProfileByLicenseHash, resolveRank as resolveRankFromProfile } from "../utils/profile";
 
 type Env = {
   Bindings: {
@@ -99,8 +99,14 @@ function detectCountry(c: { req: { raw: unknown; header: (name: string) => strin
 }
 
 async function syncProUser(db: D1Database, body: ScoreBody) {
-  const profile = await getProfile(db, body.username);
-  if (!profile) return null;
+  if (!body.proKeyHash) return null;
+
+  // Validate ownership: look up the profile by license hash, not by username,
+  // to prevent a caller from submitting any truthy proKeyHash with another user's username.
+  const profileByHash = await getProfileByLicenseHash(db, body.proKeyHash);
+  if (!profileByHash || profileByHash.username !== body.username) return null;
+
+  const profile = profileByHash;
 
   const { validatedTaskBonus, validatedClaims } = await validateTaskBonuses(db, body.username, body.completedTaskIds);
 

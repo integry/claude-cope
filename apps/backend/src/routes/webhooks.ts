@@ -52,12 +52,15 @@ webhooks.post("/polar", async (c) => {
     return c.json({ error: "KV storage is not configured" }, 500);
   }
 
-  // Idempotency check
+  // Idempotency check — write a "processing" marker first to close the race
+  // window where concurrent retries could both pass the check before either writes.
   const idempotencyKey = `webhook:${webhookId}`;
   const existing = await kv.get(idempotencyKey);
   if (existing !== null) {
     return c.json({ received: true }, 200);
   }
+  // Claim this webhook ID immediately with a short TTL; extended to 24h after processing
+  await kv.put(idempotencyKey, "processing", { expirationTtl: 300 });
 
   const event = JSON.parse(rawBody) as {
     type: string;
@@ -76,13 +79,14 @@ webhooks.post("/polar", async (c) => {
     const kvKey = `polar:${hash}`;
     await kv.delete(kvKey);
 
-    // Also update the licenses table so admin views reflect revocation
+    // Update the licenses table and clear the license_hash from user_scores
+    // so admin views correctly reflect revocation
     const db = c.env?.DB;
     if (db) {
-      await db
-        .prepare("UPDATE licenses SET status = 'revoked' WHERE key_hash = ?")
-        .bind(hash)
-        .run();
+      await db.batch([
+        db.prepare("UPDATE licenses SET status = 'revoked' WHERE key_hash = ?").bind(hash),
+        db.prepare("UPDATE user_scores SET license_hash = NULL WHERE license_hash = ?").bind(hash),
+      ]);
     }
   }
 
