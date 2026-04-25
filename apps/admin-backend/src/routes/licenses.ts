@@ -18,7 +18,7 @@ licenses.get("/", async (c) => {
         `SELECT l.id, l.key_hash, l.status, l.activated_at,
                 u.username
          FROM licenses l
-         LEFT JOIN user_scores u ON u.pro_key_hash = l.key_hash
+         LEFT JOIN user_scores u ON u.license_hash = l.key_hash
          ORDER BY l.activated_at DESC
          LIMIT 200`
       )
@@ -30,7 +30,7 @@ licenses.get("/", async (c) => {
     if (!msg.includes("no such column") && !msg.includes("no such table")) {
       throw err;
     }
-    // licenses table or pro_key_hash column may not exist yet
+    // licenses table or license_hash column may not exist yet
     return c.json([]);
   }
 });

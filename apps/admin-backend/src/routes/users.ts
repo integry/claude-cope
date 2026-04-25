@@ -18,10 +18,10 @@ users.get("/", async (c) => {
 
   // Try query with pro_key_hash column; fall back to without if column doesn't exist yet
   let results: Record<string, unknown>[];
-  let hasProKeyHashColumn = true;
+  let hasLicenseHashColumn = true;
   try {
     let query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
-                u.pro_key_hash,
+                u.license_hash,
                 COALESCE(ul.msg_count, 0) AS credits_used
          FROM user_scores u
          LEFT JOIN (
@@ -29,9 +29,9 @@ users.get("/", async (c) => {
          ) ul ON ul.username = u.username`;
 
     if (statusFilter === "max") {
-      query += " WHERE u.pro_key_hash IS NOT NULL AND u.pro_key_hash != ''";
+      query += " WHERE u.license_hash IS NOT NULL AND u.license_hash != ''";
     } else if (statusFilter === "free") {
-      query += " WHERE u.pro_key_hash IS NULL OR u.pro_key_hash = ''";
+      query += " WHERE u.license_hash IS NULL OR u.license_hash = ''";
     }
 
     query += " ORDER BY u.updated_at DESC LIMIT 200";
@@ -43,8 +43,8 @@ users.get("/", async (c) => {
     if (!msg.includes("no such column") && !msg.includes("no such table")) {
       throw err;
     }
-    hasProKeyHashColumn = false;
-    // pro_key_hash column doesn't exist yet — no user can be Max
+    hasLicenseHashColumn = false;
+    // license_hash column doesn't exist yet — no user can be Max
     if (statusFilter === "max") {
       // No pro_key_hash column means no Max users exist; return empty
       results = [];
@@ -67,7 +67,7 @@ users.get("/", async (c) => {
   const enriched = results.map((row: Record<string, unknown>) => ({
     ...row,
     credits_remaining: Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
-    status: hasProKeyHashColumn && row.pro_key_hash ? "max" : "free",
+    status: hasLicenseHashColumn && row.license_hash ? "max" : "free",
   }));
 
   return c.json(enriched);

@@ -83,8 +83,8 @@ describe("HeaderBar Max badge visibility", () => {
 
   it("does NOT show the Max badge for free users", () => {
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false });
-    // "Max" appears in the upgrade CTA text "Upgrade to Max 429X" but not as a standalone badge
-    const badges = container.querySelectorAll("[class*='purple']");
-    expect(badges.length).toBe(0);
+    // "Max" appears in the upgrade CTA text but the standalone badge should not render
+    const badge = container.querySelector("[data-testid='max-badge']");
+    expect(badge).toBeNull();
   });
 });

@@ -28,7 +28,7 @@ stats.get("/", async (c) => {
         return { count: 0 };
       }),
     db
-      .prepare("SELECT COUNT(*) AS count FROM user_scores WHERE pro_key_hash IS NOT NULL AND pro_key_hash != ''")
+      .prepare("SELECT COUNT(*) AS count FROM user_scores WHERE license_hash IS NOT NULL AND license_hash != ''")
       .first<{ count: number }>()
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);

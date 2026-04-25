@@ -5,6 +5,7 @@ import { getQuotaLimits } from "../utils/quota";
 
 type Env = {
   Bindings: {
+    DB?: D1Database;
     QUOTA_KV?: KVNamespace;
     USAGE_KV?: KVNamespace;
     POLAR_WEBHOOK_SECRET?: string;
@@ -74,6 +75,15 @@ webhooks.post("/polar", async (c) => {
     const hash = await hashKey(licenseKey);
     const kvKey = `polar:${hash}`;
     await kv.delete(kvKey);
+
+    // Also update the licenses table so admin views reflect revocation
+    const db = c.env?.DB;
+    if (db) {
+      await db
+        .prepare("UPDATE licenses SET status = 'revoked' WHERE key_hash = ?")
+        .bind(hash)
+        .run();
+    }
   }
 
   // Store idempotency key with 24h TTL

@@ -252,8 +252,12 @@ chat.post("/", async (c) => {
         .bind(tdAwarded, tdAwarded, resolveRank(serverProfile.total_td + tdAwarded), serverProfile.username)
         .run();
 
-      // Log usage
-      recordUsage(db, c.executionCtx, { username: serverProfile.username, model, data, tdAwarded, rank: serverProfile.corporate_rank, country, hour });
+      // Log usage only (user_scores already updated above — skip recordUsage to avoid double-increment)
+      const tokensSent = data.usage?.prompt_tokens ?? 0;
+      const tokensReceived = data.usage?.completion_tokens ?? 0;
+      c.executionCtx.waitUntil(
+        db.prepare("INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, ?, ?, ?)").bind(serverProfile.username, model, tokensSent, tokensReceived, hour).run(),
+      );
 
       // Return updated profile
       const updatedProfile = await getProfileByLicenseHash(db, body.proKeyHash!);
