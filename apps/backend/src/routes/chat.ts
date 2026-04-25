@@ -123,6 +123,65 @@ function logChatDiagnostics(messages: { role: string; content: string }[], data:
   );
 }
 
+async function handleQuotaCheck(
+  env: Env["Bindings"],
+  sessionId: string,
+  proKeyHash?: string,
+): Promise<{ quotaPercent: number; exhaustedMessage?: string }> {
+  const quotaKv = env.QUOTA_KV ?? env.USAGE_KV;
+  if (!quotaKv) return { quotaPercent: 100 };
+
+  const tier = proKeyHash ? "pro" : "free";
+  const limits = getQuotaLimits(env);
+  try {
+    const result = await consumeQuota(quotaKv, {
+      tier,
+      sessionId,
+      licenseKeyHash: proKeyHash,
+      limits,
+    });
+    return { quotaPercent: result.quotaPercent };
+  } catch (err) {
+    if (err instanceof QuotaExhaustedError) {
+      return { quotaPercent: 0, exhaustedMessage: err.message };
+    }
+    throw err;
+  }
+}
+
+async function handleProUserScoring(
+  db: D1Database,
+  ctx: { waitUntil: (p: Promise<unknown>) => void },
+  params: { proKeyHash: string; model: string; hour: string; data: ChatResponseData; quotaPercent: number },
+): Promise<Response | null> {
+  const { proKeyHash, model, hour, data, quotaPercent } = params;
+  const serverProfile = await getProfileByLicenseHash(db, proKeyHash);
+  if (!serverProfile) return null;
+
+  const baseTD = Math.floor(Math.random() * 40) + 10;
+  const tdAwarded = Math.round(baseTD * serverProfile.multiplier * serverProfile.td_multiplier);
+
+  await db
+    .prepare(
+      "UPDATE user_scores SET total_td = total_td + ?, current_td = current_td + ?, corporate_rank = ?, updated_at = datetime('now') WHERE username = ?",
+    )
+    .bind(tdAwarded, tdAwarded, resolveRank(serverProfile.total_td + tdAwarded), serverProfile.username)
+    .run();
+
+  const tokensSent = data.usage?.prompt_tokens ?? 0;
+  const tokensReceived = data.usage?.completion_tokens ?? 0;
+  ctx.waitUntil(
+    db.prepare("INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, ?, ?, ?)").bind(serverProfile.username, model, tokensSent, tokensReceived, hour).run(),
+  );
+
+  const updatedProfile = await getProfileByLicenseHash(db, proKeyHash);
+
+  (data as Record<string, unknown>).td_awarded = tdAwarded;
+  (data as Record<string, unknown>).quotaPercent = quotaPercent;
+  (data as Record<string, unknown>).profile = updatedProfile;
+  return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } });
+}
+
 function recordUsage(
   db: D1Database | undefined,
   ctx: { waitUntil: (p: Promise<unknown>) => void },
@@ -161,27 +220,11 @@ chat.post("/", async (c) => {
   }
 
   // Consume quota before making the OpenRouter request
-  const quotaKv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  let quotaPercent = 100;
-  if (quotaKv) {
-    const sessionId = c.get("sessionId");
-    const tier = body.proKeyHash ? "pro" : "free";
-    const limits = getQuotaLimits(c.env);
-    try {
-      const result = await consumeQuota(quotaKv, {
-        tier,
-        sessionId,
-        licenseKeyHash: body.proKeyHash,
-        limits,
-      });
-      quotaPercent = result.quotaPercent;
-    } catch (err) {
-      if (err instanceof QuotaExhaustedError) {
-        return c.json({ error: err.message }, 402);
-      }
-      throw err;
-    }
+  const quotaResult = await handleQuotaCheck(c.env, c.get("sessionId"), body.proKeyHash);
+  if (quotaResult.exhaustedMessage) {
+    return c.json({ error: quotaResult.exhaustedMessage }, 402);
   }
+  const quotaPercent = quotaResult.quotaPercent;
 
   const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
   const model = resolveModel(body.modelId);
@@ -239,34 +282,8 @@ chat.post("/", async (c) => {
 
   // For pro users, read server-stored profile for authoritative multiplier
   if (isPro && db) {
-    const serverProfile = await getProfileByLicenseHash(db, body.proKeyHash!);
-    if (serverProfile) {
-      const baseTD = Math.floor(Math.random() * 40) + 10;
-      const tdAwarded = Math.round(baseTD * serverProfile.multiplier * serverProfile.td_multiplier);
-
-      // Relative increment — safe under concurrent writes
-      await db
-        .prepare(
-          "UPDATE user_scores SET total_td = total_td + ?, current_td = current_td + ?, corporate_rank = ?, updated_at = datetime('now') WHERE username = ?",
-        )
-        .bind(tdAwarded, tdAwarded, resolveRank(serverProfile.total_td + tdAwarded), serverProfile.username)
-        .run();
-
-      // Log usage only (user_scores already updated above — skip recordUsage to avoid double-increment)
-      const tokensSent = data.usage?.prompt_tokens ?? 0;
-      const tokensReceived = data.usage?.completion_tokens ?? 0;
-      c.executionCtx.waitUntil(
-        db.prepare("INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, ?, ?, ?)").bind(serverProfile.username, model, tokensSent, tokensReceived, hour).run(),
-      );
-
-      // Return updated profile
-      const updatedProfile = await getProfileByLicenseHash(db, body.proKeyHash!);
-
-      (data as Record<string, unknown>).td_awarded = tdAwarded;
-      (data as Record<string, unknown>).quotaPercent = quotaPercent;
-      (data as Record<string, unknown>).profile = updatedProfile;
-      return c.json(data);
-    }
+    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: body.proKeyHash!, model, hour, data, quotaPercent });
+    if (proResponse) return proResponse;
   }
 
   // Free users or pro users without a profile — existing behavior
