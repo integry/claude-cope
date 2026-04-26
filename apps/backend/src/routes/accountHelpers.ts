@@ -38,7 +38,7 @@ type CreateProfileResult =
   | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined }
   | { profile: null; error: string };
 
-async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody): Promise<CreateProfileResult> {
+async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<CreateProfileResult> {
   const newUsername = body.username || "anonymous";
 
   // Check if username already exists.
@@ -55,6 +55,15 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
     }
     if (existing.license_hash === null) {
       // Free user upgrading to Max — attach the license to their existing profile.
+      // Verify the caller's session is bound to this username to prevent an
+      // attacker from seizing another free user's profile by sending /sync
+      // with their username.
+      if (sessionContext) {
+        const boundUsername = await sessionContext.kv.get(`session_user:${sessionContext.sessionId}`);
+        if (boundUsername !== newUsername) {
+          return { profile: null, error: "Cannot claim an existing free username — log in to that account first or pick a different username." };
+        }
+      }
       // Preserve the server-authoritative profile data (TD, inventory, etc.).
       await db
         .prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ? AND license_hash IS NULL")
@@ -95,7 +104,7 @@ type ResolveProfileResult =
   | { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined }
   | { restored: false; profile: null; error: string };
 
-export async function resolveProfile(db: D1Database, hash: string, body: SyncBody): Promise<ResolveProfileResult> {
+export async function resolveProfile(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<ResolveProfileResult> {
   // Case 1: Existing profile with this license_hash → restore (cross-device sync)
   const existingByHash = await getProfileByLicenseHash(db, hash);
   if (existingByHash) {
@@ -104,7 +113,7 @@ export async function resolveProfile(db: D1Database, hash: string, body: SyncBod
 
   // Case 2: No profile for this license → create a new one, or upgrade an
   // existing free (unlicensed) profile if the username matches.
-  const created = await createProfileFromClient(db, hash, body);
+  const created = await createProfileFromClient(db, hash, body, sessionContext);
   if ('error' in created && created.error) {
     return { restored: false, profile: null, error: created.error };
   }

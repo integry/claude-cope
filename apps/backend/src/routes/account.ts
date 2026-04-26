@@ -84,7 +84,8 @@ account.post("/sync", async (c) => {
     .bind(hash)
     .run();
 
-  const result = await resolveProfile(db, hash, body);
+  const sessionId = c.get("sessionId");
+  const result = await resolveProfile(db, hash, body, sessionId && kv ? { sessionId, kv } : undefined);
   if (result.error) {
     return c.json({ error: result.error }, 403);
   }
@@ -93,7 +94,6 @@ account.post("/sync", async (c) => {
 
   // Cache the session → username mapping so a user with cleared localStorage
   // but the same browser cookie can be restored via GET /me.
-  const sessionId = c.get("sessionId");
   if (sessionId && profile.username) {
     await kv.put(`session_user:${sessionId}`, profile.username, { expirationTtl: 60 * 60 * 24 * 365 });
   }

@@ -219,26 +219,37 @@ async function handleProUserScoring(
 function recordUsage(
   db: D1Database | undefined,
   ctx: { waitUntil: (p: Promise<unknown>) => void },
-  params: { username: string; model: string; data: ChatResponseData; tdAwarded: number; rank: string; country: string; hour: string; proKeyHash?: string },
+  params: { username: string; model: string; data: ChatResponseData; tdAwarded: number; rank: string; country: string; hour: string; proKeyHash?: string; profileLicenseHash?: string | null },
 ) {
   if (!db) return;
   const tokensSent = params.data.usage?.prompt_tokens ?? 0;
   const tokensReceived = params.data.usage?.completion_tokens ?? 0;
-  const queries: Promise<unknown>[] = [
-    db.prepare("INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, ?, ?, ?)").bind(params.username, params.model, tokensSent, tokensReceived, params.hour).run(),
-  ];
+  const queries: Promise<unknown>[] = [];
+
+  // Skip the usage_logs insert if the target username has a license_hash that
+  // doesn't match the caller's proKeyHash — prevents spoofed usage_logs rows
+  // under another user's name.
+  const isOwnershipSpoofed = !params.proKeyHash && params.profileLicenseHash;
+  if (!isOwnershipSpoofed) {
+    queries.push(
+      db.prepare("INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, ?, ?, ?)").bind(params.username, params.model, tokensSent, tokensReceived, params.hour).run(),
+    );
+  }
+
   if (params.proKeyHash) {
     queries.push(
       db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, license_hash) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, license_hash = ?, updated_at = datetime('now')").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.proKeyHash, params.tdAwarded, params.tdAwarded, params.proKeyHash).run(),
     );
-  } else {
+  } else if (!isOwnershipSpoofed) {
     // Guard: only update rows that have no license_hash (free users).
     // This prevents free callers from vandalizing a Pro user's TD/rank/country.
     queries.push(
       db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country) VALUES (?, ?, ?, ?, ?) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, updated_at = datetime('now') WHERE license_hash IS NULL").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.tdAwarded, params.tdAwarded).run(),
     );
   }
-  ctx.waitUntil(Promise.all(queries));
+  if (queries.length > 0) {
+    ctx.waitUntil(Promise.all(queries));
+  }
 }
 
 /**
@@ -272,12 +283,15 @@ function cacheSessionUsername(
 /**
  * Decide whether to cache the session→username mapping.
  * Prevents an attacker from claiming another user's username.
+ *
+ * Returns the profile's license_hash (or null) so callers can reuse the
+ * lookup without a second SELECT.
  */
 async function tryCacheSessionMapping(
   env: Env["Bindings"],
   ctx: { waitUntil: (p: Promise<unknown>) => void },
   opts: { db: D1Database; sessionId: string; username: string; effectiveProKeyHash: string | undefined },
-) {
+): Promise<{ profileLicenseHash: string | null; hasRow: boolean }> {
   const { db, sessionId, username, effectiveProKeyHash } = opts;
   const row = await getProfileRow(db, username);
   const profileHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
@@ -286,11 +300,14 @@ async function tryCacheSessionMapping(
     if (profileHash === effectiveProKeyHash) {
       cacheSessionUsername(env.QUOTA_KV ?? env.USAGE_KV, sessionId, username, ctx);
     }
-  } else if (!profileHash) {
-    // Free user claiming a free username: safe to cache
+  } else if (!row) {
+    // Brand-new username with no user_scores row: first-chat-wins binding.
+    // Once a row exists, only verified ownership (matching proKeyHash) can
+    // establish a mapping — this prevents impersonation of existing free users.
     cacheSessionUsername(env.QUOTA_KV ?? env.USAGE_KV, sessionId, username, ctx);
   }
-  // Otherwise: free user claiming a Pro user's username — skip caching
+  // Otherwise: username already exists and caller can't prove ownership — skip caching
+  return { profileLicenseHash: profileHash, hasRow: Boolean(row) };
 }
 
 function validateChatRequest(body: ChatBody, apiKey: string | undefined): { error: string; status: 400 | 500 } | null {
@@ -339,8 +356,10 @@ chat.post("/", async (c) => {
   // Cache the session → username mapping so a user who clears localStorage can
   // be restored via GET /api/account/me.  We verify ownership first to prevent
   // an attacker from claiming another user's username and leaking their profile.
+  let profileLicenseHash: string | null = null;
   if (db && username && username !== "anonymous") {
-    await tryCacheSessionMapping(c.env, c.executionCtx, { db, sessionId, username, effectiveProKeyHash });
+    const mappingResult = await tryCacheSessionMapping(c.env, c.executionCtx, { db, sessionId, username, effectiveProKeyHash });
+    profileLicenseHash = mappingResult.profileLicenseHash;
   }
 
   // Consume quota before making the OpenRouter request.
@@ -391,7 +410,7 @@ chat.post("/", async (c) => {
   const baseTD = Math.floor(Math.random() * 40) + 10;
   const tdAwarded = Math.round(baseTD * serverMultiplier);
 
-  recordUsage(db, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour });
+  recordUsage(db, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour, profileLicenseHash });
 
   (data as Record<string, unknown>).td_awarded = tdAwarded;
   (data as Record<string, unknown>).quotaPercent = quotaPercent;
