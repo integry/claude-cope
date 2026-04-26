@@ -17,26 +17,26 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
       {/* Dimmed backdrop */}
       <div className="absolute inset-0 bg-black opacity-70" />
 
-      {/* Modal box — DOS Blue with hard drop shadow */}
+      {/* Modal box — Red Alert: dark terminal bg with red ASCII borders */}
       <div
         className="relative z-10 w-full max-w-2xl mx-4"
         style={{
-          backgroundColor: '#0000a8',
-          border: '2px solid #aaaaaa',
+          backgroundColor: '#0d1117',
+          border: 'none',
           boxShadow: '12px 12px 0px rgba(0,0,0,1)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <pre
           className="text-xs leading-relaxed p-0 m-0 whitespace-pre font-bold"
-          style={{ color: '#ffffff', backgroundColor: '#0000a8' }}
+          style={{ color: '#ff5555', backgroundColor: '#0d1117' }}
         >
 {`+=================================================================+
-|                       [ SYSTEM OVERRIDE ]                       |
+|                       `}<span style={{ color: '#ff5555' }}>{"[ SYSTEM OVERRIDE ]"}</span>{`                       |
 +=================================================================+`}
         </pre>
 
-        <div className="px-6 py-6 space-y-4" style={{ borderLeft: '2px solid #aaaaaa', borderRight: '2px solid #aaaaaa' }}>
+        <div className="px-6 py-6 space-y-4">
           {/* Title */}
           <div className="text-center">
             <div className="font-bold text-sm mb-1" style={{ color: '#ffff55' }}>
@@ -82,11 +82,13 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
                   href={UPGRADE_CHECKOUT_SINGLE}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block px-4 py-2 text-xs font-bold transition-colors"
+                  className="inline-block text-xs font-bold transition-colors"
                   style={{
                     backgroundColor: '#ffffff',
                     color: '#000000',
                     border: '2px solid #ffffff',
+                    padding: '4px 12px',
+                    marginTop: '8px',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = '#4ade80';
@@ -123,11 +125,13 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
                   href={UPGRADE_CHECKOUT_MULTI}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block px-4 py-2 text-xs font-bold transition-colors"
+                  className="inline-block text-xs font-bold transition-colors"
                   style={{
                     backgroundColor: '#ffffff',
                     color: '#000000',
                     border: '2px solid #ffffff',
+                    padding: '4px 12px',
+                    marginTop: '8px',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = '#4ade80';
@@ -165,10 +169,10 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
 
         <pre
           className="text-xs leading-relaxed p-0 m-0 whitespace-pre font-bold"
-          style={{ color: '#ffffff', backgroundColor: '#0000a8' }}
+          style={{ color: '#ff5555', backgroundColor: '#0d1117' }}
         >
 {`+=================================================================+
-|            [Press ESC to return to mediocrity]                   |
+|            `}<span style={{ color: '#aaaaaa' }}>{"[Press ESC to return to mediocrity]"}</span>{`                   |
 +=================================================================+`}
         </pre>
       </div>
