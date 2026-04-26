@@ -85,3 +85,15 @@ export async function getProfileRow(db: D1Database, username: string): Promise<U
     .bind(username)
     .first<UserScoreRow & { license_hash: string | null }>();
 }
+
+/**
+ * Check whether a license key hash corresponds to an active (non-revoked) license.
+ * Returns false if the licenses table has no matching row or the status is not 'active'.
+ */
+export async function isLicenseActive(db: D1Database, keyHash: string): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT status FROM licenses WHERE key_hash = ?")
+    .bind(keyHash)
+    .first<{ status: string }>();
+  return row?.status === "active";
+}

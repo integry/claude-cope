@@ -44,18 +44,6 @@ type SyncBody = {
   };
 };
 
-function buildProfileScoring(cp: SyncBody["currentProfile"]) {
-  const totalTD = cp?.total_td ?? 0;
-  return {
-    totalTD,
-    currentTD: cp?.current_td ?? 0,
-    rank: resolveRank(totalTD),
-    inventory: JSON.stringify(cp?.inventory ?? {}),
-    upgrades: JSON.stringify(cp?.upgrades ?? []),
-    achievements: JSON.stringify(cp?.achievements ?? []),
-  };
-}
-
 function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
   return {
     buddyType: cp?.buddy_type ?? null,
@@ -73,8 +61,6 @@ type CreateProfileResult =
 
 async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody): Promise<CreateProfileResult> {
   const newUsername = body.username || "anonymous";
-  const s = buildProfileScoring(body.currentProfile);
-  const c = buildProfileCosmetics(body.currentProfile);
 
   // Check if username already exists.
   const existing = await db
@@ -89,7 +75,8 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
       return { profile };
     }
     if (existing.license_hash === null) {
-      // Free user upgrading to Max — attach the license to their existing profile
+      // Free user upgrading to Max — attach the license to their existing profile.
+      // Preserve the server-authoritative profile data (TD, inventory, etc.).
       await db
         .prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ? AND license_hash IS NULL")
         .bind(hash, newUsername)
@@ -102,16 +89,22 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
     return { profile: null, error: "This username is already taken. Please change your username and try again." };
   }
 
+  // New profile for a freshly activated license — use server-authoritative defaults.
+  // Only cosmetic preferences (theme, buddy) are accepted from the client; scoring
+  // fields (TD, inventory, upgrades, achievements) start at zero to prevent a
+  // forged first-sync payload from minting arbitrary progress.
+  const c = buildProfileCosmetics(body.currentProfile);
+  const defaultRank = resolveRank(0);
+
   await db
     .prepare(
       `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, 0, 0, ?, ?, '{}', '[]', '[]', ?, ?, ?, ?, ?, 1.0)`,
     )
     .bind(
-      newUsername, s.totalTD, s.currentTD, s.rank, hash,
-      s.inventory, s.upgrades, s.achievements,
+      newUsername, defaultRank, hash,
       c.buddyType, c.buddyIsShiny, c.unlockedThemes,
-      c.activeTheme, c.activeTicket, c.tdMultiplier,
+      c.activeTheme, c.activeTicket,
     )
     .run();
 
@@ -268,13 +261,22 @@ account.post("/buy-generator", async (c) => {
     return c.json({ error: "Insufficient TD", required: cost, available: profile.current_td }, 400);
   }
 
-  const newInventory = { ...profile.inventory, [body.generatorId]: owned + body.amount };
-  const newCurrentTD = profile.current_td - cost;
-
-  await db
-    .prepare("UPDATE user_scores SET current_td = ?, inventory = ?, updated_at = datetime('now') WHERE username = ?")
-    .bind(newCurrentTD, JSON.stringify(newInventory), body.username)
+  // Atomic update: use SQL-level TD guard and JSON functions to prevent
+  // concurrent requests from overwriting each other or producing negative balances.
+  const result = await db
+    .prepare(
+      `UPDATE user_scores SET
+        current_td = current_td - ?,
+        inventory = json_set(COALESCE(inventory, '{}'), '$.' || ?, COALESCE(json_extract(inventory, '$.' || ?), 0) + ?),
+        updated_at = datetime('now')
+      WHERE username = ? AND current_td >= ?`,
+    )
+    .bind(cost, body.generatorId, body.generatorId, body.amount, body.username, cost)
     .run();
+
+  if (!result.meta.changes) {
+    return c.json({ error: "Insufficient TD (concurrent update)", required: cost }, 409);
+  }
 
   const updated = await getProfile(db, body.username);
 
@@ -314,13 +316,21 @@ account.post("/buy-upgrade", async (c) => {
     return c.json({ error: "Insufficient TD", required: upgrade.cost, available: profile.current_td }, 400);
   }
 
-  const newUpgrades = [...profile.upgrades, body.upgradeId];
-  const newCurrentTD = profile.current_td - upgrade.cost;
-
-  await db
-    .prepare("UPDATE user_scores SET current_td = ?, upgrades = ?, updated_at = datetime('now') WHERE username = ?")
-    .bind(newCurrentTD, JSON.stringify(newUpgrades), body.username)
+  // Atomic update: SQL-level TD guard + JSON append to prevent race conditions.
+  const result = await db
+    .prepare(
+      `UPDATE user_scores SET
+        current_td = current_td - ?,
+        upgrades = json_insert(COALESCE(upgrades, '[]'), '$[#]', ?),
+        updated_at = datetime('now')
+      WHERE username = ? AND current_td >= ?`,
+    )
+    .bind(upgrade.cost, body.upgradeId, body.username, upgrade.cost)
     .run();
+
+  if (!result.meta.changes) {
+    return c.json({ error: "Insufficient TD (concurrent update)", required: upgrade.cost }, 409);
+  }
 
   const updated = await getProfile(db, body.username);
   return c.json({ success: true, profile: updated });
@@ -351,13 +361,21 @@ account.post("/buy-theme", async (c) => {
     return c.json({ error: "Insufficient TD", required: theme.cost, available: profile.current_td }, 400);
   }
 
-  const newThemes = [...profile.unlocked_themes, body.themeId];
-  const newCurrentTD = profile.current_td - theme.cost;
-
-  await db
-    .prepare("UPDATE user_scores SET current_td = ?, unlocked_themes = ?, updated_at = datetime('now') WHERE username = ?")
-    .bind(newCurrentTD, JSON.stringify(newThemes), body.username)
+  // Atomic update: SQL-level TD guard + JSON append to prevent race conditions.
+  const result = await db
+    .prepare(
+      `UPDATE user_scores SET
+        current_td = current_td - ?,
+        unlocked_themes = json_insert(COALESCE(unlocked_themes, '["default"]'), '$[#]', ?),
+        updated_at = datetime('now')
+      WHERE username = ? AND current_td >= ?`,
+    )
+    .bind(theme.cost, body.themeId, body.username, theme.cost)
     .run();
+
+  if (!result.meta.changes) {
+    return c.json({ error: "Insufficient TD (concurrent update)", required: theme.cost }, 409);
+  }
 
   const updated = await getProfile(db, body.username);
   return c.json({ success: true, profile: updated });

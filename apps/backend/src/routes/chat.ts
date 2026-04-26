@@ -4,7 +4,7 @@ import { computeMultiplier } from "../gameConstants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { consumeQuota, getQuotaLimits, QuotaExhaustedError } from "../utils/quota";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
-import { getProfileByLicenseHash, resolveRank } from "../utils/profile";
+import { getProfileByLicenseHash, isLicenseActive, resolveRank } from "../utils/profile";
 import { syncPolarUsage } from "../utils/polar";
 
 type Env = {
@@ -253,15 +253,26 @@ chat.post("/", async (c) => {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
   }
 
-  // Consume quota before making the OpenRouter request
-  const quotaResult = await handleQuotaCheck(c.env, c.get("sessionId"), body.proKeyHash);
+  // Verify the license is still active before granting pro-tier access.
+  // A revoked license should fall through to the free-user path even if
+  // the client still holds the old hash.
+  const db = c.env?.DB;
+  let effectiveProKeyHash = body.proKeyHash;
+  if (effectiveProKeyHash && db) {
+    const active = await isLicenseActive(db, effectiveProKeyHash);
+    if (!active) effectiveProKeyHash = undefined;
+  }
+
+  // Consume quota before making the OpenRouter request.
+  // Use the validated effectiveProKeyHash so revoked licenses fall to free-tier quota.
+  const quotaResult = await handleQuotaCheck(c.env, c.get("sessionId"), effectiveProKeyHash);
   if (quotaResult.exhaustedMessage) {
     return c.json({ error: quotaResult.exhaustedMessage }, 402);
   }
   const quotaPercent = quotaResult.quotaPercent;
 
-  if (body.proKeyHash && quotaResult.remaining != null) {
-    c.executionCtx.waitUntil(mirrorPolarUsage(c.env, body.proKeyHash, quotaResult.remaining));
+  if (effectiveProKeyHash && quotaResult.remaining != null) {
+    c.executionCtx.waitUntil(mirrorPolarUsage(c.env, effectiveProKeyHash, quotaResult.remaining));
   }
 
   const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
@@ -315,12 +326,11 @@ chat.post("/", async (c) => {
   const country = body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
   const hour = new Date().toISOString().slice(0, 13);
 
-  const isPro = Boolean(body.proKeyHash);
-  const db = c.env?.DB;
+  const isPro = Boolean(effectiveProKeyHash);
 
   // For pro users, read server-stored profile for authoritative multiplier
   if (isPro && db) {
-    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: body.proKeyHash!, model, hour, data, quotaPercent });
+    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: effectiveProKeyHash!, model, hour, data, quotaPercent });
     if (proResponse) return proResponse;
   }
 

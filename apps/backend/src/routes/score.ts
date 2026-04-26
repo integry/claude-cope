@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { CORPORATE_RANKS } from "./rankConstants";
 import { computeMultiplier } from "../gameConstants";
-import { getProfile, getProfileByLicenseHash, resolveRank as resolveRankFromProfile } from "../utils/profile";
+import { getProfile, getProfileByLicenseHash, isLicenseActive, resolveRank as resolveRankFromProfile } from "../utils/profile";
 
 type Env = {
   Bindings: {
@@ -100,6 +100,10 @@ function detectCountry(c: { req: { raw: unknown; header: (name: string) => strin
 
 async function syncProUser(db: D1Database, body: ScoreBody) {
   if (!body.proKeyHash) return null;
+
+  // Verify the license is still active — revoked licenses must not use the pro path.
+  const licenseActive = await isLicenseActive(db, body.proKeyHash);
+  if (!licenseActive) return null;
 
   // Validate ownership: look up the profile by license hash, not by username,
   // to prevent a caller from submitting any truthy proKeyHash with another user's username.
