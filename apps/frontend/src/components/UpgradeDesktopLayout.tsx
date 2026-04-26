@@ -8,7 +8,8 @@ import {
 
 const B = "#ff5555"; // border (red)
 const Y = "#ffff55"; // yellow headings
-const W = "#ffffff"; // white body text
+const W = "#c9d1d9"; // soft off-white body text
+const BW = "#ffffff"; // bright white (ANSI bold)
 const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
@@ -74,6 +75,19 @@ export default function DesktopLayout({
   };
 
   const emptyLine = boxLine("");
+
+  /** Like boxLine but accepts JSX content; caller must supply the exact char-length used. */
+  const boxLineRich = (content: JSX.Element, textLength: number) => {
+    const padLen = Math.max(0, INNER_W - textLength);
+    return (
+      <>
+        <span style={{ color: B }}>{"║"}</span>
+        {content}
+        <span>{" ".repeat(padLen)}</span>
+        <span style={{ color: B }}>{"║"}</span>
+      </>
+    );
+  };
 
   const centeredBoxLine = (text: string, color = W) => {
     const totalPad = INNER_W - text.length;
@@ -230,8 +244,28 @@ export default function DesktopLayout({
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
-        {boxLine(`  Unlocks: ${PRO_QUOTA_LIMIT} non-expiring credits, multi-device sync,`)}{"\n"}
-        {boxLine("  priority generation queue, and advanced Cope models.")}{"\n"}
+        {(() => {
+          const creditsStr = `${PRO_QUOTA_LIMIT} non-expiring credits`;
+          const line1 = `  Unlocks: ${creditsStr}, multi-device sync,`;
+          return boxLineRich(
+            <span style={{ color: W }}>
+              {"  Unlocks: "}
+              <span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>
+              {", "}
+              <span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>
+              {","}
+            </span>,
+            line1.length,
+          );
+        })()}{"\n"}
+        {boxLineRich(
+          <span style={{ color: W }}>
+            {"  priority generation queue, and "}
+            <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>
+            {"."}
+          </span>,
+          "  priority generation queue, and advanced Cope models.".length,
+        )}{"\n"}
         {buttonBlock(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}

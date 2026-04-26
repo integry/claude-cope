@@ -13,7 +13,8 @@ import type { LayoutProps } from "./UpgradeDesktopLayout";
 
 const B = "#ff5555"; // border (red)
 const Y = "#ffff55"; // yellow headings
-const W = "#ffffff"; // white body text
+const W = "#c9d1d9"; // soft off-white body text
+const BW = "#ffffff"; // bright white (ANSI bold)
 const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
@@ -239,9 +240,12 @@ function MobileLayout({
           <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: "4px" }}>
             One seat. Max 429X enabled (One-time extraction).
           </div>
-          <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "8px", color: G }}>
-            Unlocks: {PRO_QUOTA_LIMIT} non-expiring credits, multi-device sync,
-            priority generation queue, and advanced Cope models.
+          <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "8px", color: W }}>
+            Unlocks:{" "}
+            <span style={{ color: BW, fontWeight: "bold" }}>{PRO_QUOTA_LIMIT} non-expiring credits</span>,{" "}
+            <span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>,
+            priority generation queue, and{" "}
+            <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>.
           </div>
           {mobileButton(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable, true)}
         </div>
