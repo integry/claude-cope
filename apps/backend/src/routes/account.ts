@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
-import { getProfile, getProfileRow } from "../utils/profile";
+import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
 import { resolveProfile, verifyOwnership, broadcastPurchase } from "./accountHelpers";
 import type { SyncBody } from "./accountHelpers";
@@ -111,11 +111,16 @@ account.get("/me", async (c) => {
 
   const db = c.env?.DB;
   const row = db ? await getProfileRow(db, username) : null;
-  const licenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
+  const rawLicenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
+
+  // Verify the license is still active — a revoked license should be treated as free.
+  // This prevents the UI from showing isPro: true with quotaPercent: 0 for revoked users.
+  const licenseActive = rawLicenseHash && db ? await isLicenseActive(db, rawLicenseHash) : false;
+  const isPro = Boolean(rawLicenseHash && licenseActive);
 
   const limits = getQuotaLimits(c.env);
-  const quotaPercent = licenseHash
-    ? await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: licenseHash, limits })
+  const quotaPercent = isPro
+    ? await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: rawLicenseHash!, limits })
     : await getQuotaPercent(kv, { tier: "free", sessionId, limits });
 
   const profile = db ? await getProfile(db, username) : null;
@@ -128,7 +133,7 @@ account.get("/me", async (c) => {
     username,
     profile: profile ? { ...profile, quota_percent: quotaPercent } : null,
     quotaPercent,
-    isPro: Boolean(licenseHash),
+    isPro,
   });
 });
 

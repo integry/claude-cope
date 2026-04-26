@@ -165,9 +165,10 @@ function buildScoreBatch(db: D1Database, opts: {
   const statements: D1PreparedStatement[] = [];
 
   if (opts.existing) {
+    // Guard: only update rows without a license_hash (belt-and-suspenders with the 403 precheck).
     const updatedTotal = Math.max(opts.serverTotal, opts.validatedTotal);
     statements.push(
-      db.prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now'), last_sync_time = datetime('now') WHERE username = ?")
+      db.prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now'), last_sync_time = datetime('now') WHERE username = ? AND license_hash IS NULL")
         .bind(updatedTotal, opts.validatedCurrent, opts.rank, opts.country, opts.username),
     );
   } else {
@@ -207,12 +208,21 @@ score.post("/", async (c) => {
     if (updated) return c.json({ profile: updated });
   }
 
+  // Guard: if this username already has a license_hash, refuse unauthenticated writes.
+  // Legitimate Pro users go through syncProUser() above; reaching here means the caller
+  // has no valid proKeyHash for this account.
+  const existingRow = await db
+    .prepare("SELECT total_td, current_td, last_sync_time, license_hash FROM user_scores WHERE username = ?")
+    .bind(body.username)
+    .first<{ total_td: number; current_td: number; last_sync_time: string; license_hash: string | null }>();
+
+  if (existingRow?.license_hash) {
+    return c.json({ error: "This account is linked to a Pro license — authenticate with proKeyHash" }, 403);
+  }
+
   const claimedMultiplier = computeMultiplier(body.inventory, body.upgrades);
 
-  const existing = await db
-    .prepare("SELECT total_td, current_td, last_sync_time FROM user_scores WHERE username = ?")
-    .bind(body.username)
-    .first<{ total_td: number; current_td: number; last_sync_time: string }>();
+  const existing = existingRow as { total_td: number; current_td: number; last_sync_time: string } | null;
 
   const serverTotal = existing?.total_td ?? 0;
   const { validatedTaskBonus, validatedClaims } = await validateTaskBonuses(db, body.username, body.completedTaskIds);
