@@ -786,12 +786,17 @@ export function executeSlashCommand(
   ctx.setSlashIndex(0);
   ctx.setIsProcessing(true);
 
-  // Obfuscate API keys in terminal history for commands starting with /key
+  // Obfuscate API keys and license keys in terminal history
   let displayCommand = command;
   if (command.startsWith("/key ")) {
     const keyArg = command.slice(5).trim();
     if (keyArg.length > 10 && keyArg.toLowerCase() !== "clear") {
       displayCommand = `/key ${keyArg.slice(0, 6)}...`;
+    }
+  } else if (command.startsWith("/sync ")) {
+    const keyArg = command.slice(6).trim();
+    if (keyArg.length > 10) {
+      displayCommand = `/sync ${keyArg.slice(0, 9)}...${keyArg.slice(-4)}`;
     }
   }
 
