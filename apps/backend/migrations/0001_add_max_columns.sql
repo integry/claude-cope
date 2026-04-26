@@ -1,7 +1,8 @@
 -- Migration: Add columns required by Max (paid tier) features
--- This migration is safe to re-run: every statement uses IF NOT EXISTS or
--- conditionally checks for column existence via the ADD COLUMN IF NOT EXISTS
--- pattern supported by D1/SQLite ≥ 3.35.
+-- NOTE: This migration is NOT idempotent. ALTER TABLE ADD COLUMN will fail if
+-- the column already exists (SQLite does not support IF NOT EXISTS for ADD COLUMN
+-- prior to 3.35). D1's migration runner tracks applied migrations, so this file
+-- will only execute once per database. Do NOT run it manually a second time.
 
 -- ── user_scores: new columns for inventory, cosmetics, and license linking ──
 
