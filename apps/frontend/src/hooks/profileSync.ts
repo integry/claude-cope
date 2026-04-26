@@ -36,6 +36,6 @@ export function applyServerProfile(
     },
     unlockedThemes: profile.unlocked_themes,
     activeTheme: profile.active_theme,
-    ...(opts.includeActiveTicket ? { activeTicket: profile.active_ticket } : {}),
+    ...(opts.includeActiveTicket ? { activeTicket: profile.active_ticket && profile.active_ticket.sprintProgress < profile.active_ticket.sprintGoal ? profile.active_ticket : null } : {}),
   };
 }
