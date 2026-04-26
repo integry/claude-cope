@@ -176,18 +176,27 @@ function buildScoreBatch(db: D1Database, opts: {
       db.prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now'), last_sync_time = datetime('now') WHERE username = ? AND license_hash IS NULL")
         .bind(updatedTotal, opts.validatedCurrent, opts.rank, opts.country, opts.username),
     );
+    // Guard task claims the same way: only insert if the user row is still free.
+    // Uses a subquery so the INSERT no-ops when the UPDATE above would also no-op
+    // (e.g. if the row was concurrently upgraded and now has a license_hash).
+    for (const claim of opts.validatedClaims) {
+      statements.push(
+        db.prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM user_scores WHERE username = ? AND license_hash IS NULL)")
+          .bind(opts.username, claim.ticketId, claim.bonus, opts.username),
+      );
+    }
   } else {
     statements.push(
       db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, last_sync_time) VALUES (?, ?, ?, ?, ?, datetime('now'))")
         .bind(opts.username, opts.validatedTotal, opts.validatedCurrent, opts.rank, opts.country),
     );
-  }
-
-  for (const claim of opts.validatedClaims) {
-    statements.push(
-      db.prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) VALUES (?, ?, ?)")
-        .bind(opts.username, claim.ticketId, claim.bonus),
-    );
+    // New user insert — safe to add task claims unconditionally since we just created the row.
+    for (const claim of opts.validatedClaims) {
+      statements.push(
+        db.prepare("INSERT INTO completed_tasks (username, ticket_id, bonus_td) VALUES (?, ?, ?)")
+          .bind(opts.username, claim.ticketId, claim.bonus),
+      );
+    }
   }
 
   return statements;

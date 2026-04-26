@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { maskHash } from "../utils/maskHash";
 
 type Env = {
   Bindings: {
@@ -6,13 +7,6 @@ type Env = {
     FREE_QUOTA_LIMIT?: string;
   };
 };
-
-/** Mask a credential-equivalent hash for admin display (first 8 + last 4 chars). */
-function maskHash(hash: string | null | undefined): string | null {
-  if (!hash || typeof hash !== "string") return null;
-  if (hash.length <= 12) return hash.slice(0, 4) + "…";
-  return hash.slice(0, 8) + "…" + hash.slice(-4);
-}
 
 const users = new Hono<Env>();
 

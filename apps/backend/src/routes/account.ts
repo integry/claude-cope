@@ -69,7 +69,7 @@ account.post("/sync", async (c) => {
 
   const db = c.env?.DB;
   if (!db) {
-    return c.json({ success: true, hash, restored: false });
+    return c.json({ error: "Database not configured" }, 500);
   }
 
   // Resolve the profile FIRST — if this fails (e.g. username taken, ownership
