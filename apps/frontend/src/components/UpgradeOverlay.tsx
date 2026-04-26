@@ -200,7 +200,31 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         onClick={(e) => e.stopPropagation()}
       >
         {topBorder}{"\n"}
-        {centeredBoxLine("[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]", B)}{"\n"}
+        {(() => {
+          const title = "[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]";
+          const closeBtn = "[x]";
+          // title + gap + closeBtn, padded to INNER_W
+          const gap = Math.max(1, INNER_W - title.length - closeBtn.length - 2); // 2 for minimal side padding
+          const leftPad = Math.max(0, Math.floor((INNER_W - title.length - closeBtn.length - gap) / 2));
+          const line = " ".repeat(leftPad) + title + " ".repeat(gap) + closeBtn;
+          const rightPad = Math.max(0, INNER_W - line.length);
+          return (
+            <>
+              <span style={{ color: B }}>{"║"}</span>
+              <span style={{ color: B }}>{" ".repeat(leftPad) + title + " ".repeat(gap)}</span>
+              <span
+                style={{ color: DIM, cursor: "pointer" }}
+                onClick={(e) => { e.stopPropagation(); onClose(); }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = W; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = DIM; }}
+              >
+                {closeBtn}
+              </span>
+              <span style={{ color: B }}>{" ".repeat(rightPad)}</span>
+              <span style={{ color: B }}>{"║"}</span>
+            </>
+          );
+        })()}{"\n"}
         {midBorder}{"\n"}
         {emptyLine}{"\n"}
         {centeredBoxLine("INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]", Y)}{"\n"}
@@ -217,15 +241,15 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         {tableRow2}{"\n"}
         {tableBorderBot}{"\n"}
         {emptyLine}{"\n"}
-        {boxLine("  [OPTION 1: SINGLE LICENSE]", Y)}{"\n"}
+        {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled. ${PRO_QUOTA_LIMIT} non-expiring`)}{"\n"}
         {boxLine("  credits (one-time extraction).")}{"\n"}
         {buttonBlock(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
-        {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
         {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
         {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
         {buttonBlock(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
+        {boxLine("  (5 activation keys will be sent to your email)", DIM)}{"\n"}
         {midBorder}{"\n"}
         {(() => {
           const text = "[Press ESC to retain your net worth]";
@@ -233,22 +257,30 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
           const left = Math.max(0, Math.floor(totalPad / 2));
           const right = Math.max(0, totalPad - left);
           return (
-            <>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              style={{
+                display: "inline",
+                background: "none",
+                border: "none",
+                padding: 0,
+                margin: 0,
+                font: "inherit",
+                cursor: "pointer",
+                lineHeight: "inherit",
+              }}
+              className="upgrade-esc-btn"
+            >
               <span style={{ color: B }}>{"║"}</span>
               <span
-                style={{ color: DIM, cursor: "pointer" }}
-                onClick={onClose}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = W;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = DIM;
-                }}
+                data-esc=""
+                style={{ color: DIM }}
               >
                 {" ".repeat(left) + text + " ".repeat(right)}
               </span>
               <span style={{ color: B }}>{"║"}</span>
-            </>
+            </button>
           );
         })()}{"\n"}
         {botBorder}
