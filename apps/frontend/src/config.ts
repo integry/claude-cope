@@ -62,7 +62,7 @@ export const UPGRADE_CHECKOUT_MULTI: string =
   (import.meta.env.VITE_UPGRADE_CHECKOUT_MULTI as string | undefined) ?? "";
 
 export const UPGRADE_PRICE_SINGLE: string =
-  (import.meta.env.VITE_UPGRADE_PRICE_SINGLE as string | undefined) ?? "$9.99";
+  (import.meta.env.VITE_UPGRADE_PRICE_SINGLE as string | undefined) ?? "$4.99";
 
 export const UPGRADE_PRICE_MULTI: string =
-  (import.meta.env.VITE_UPGRADE_PRICE_MULTI as string | undefined) ?? "$39.99";
+  (import.meta.env.VITE_UPGRADE_PRICE_MULTI as string | undefined) ?? "$19.99";

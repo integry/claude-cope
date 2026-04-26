@@ -19,13 +19,7 @@ const W = "#ffffff"; // white body text
 const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
-const bc = (s: string) => <span style={{ color: B }}>{s}</span>;
-
-const BOX_W = 66; // inner width between ║ chars
-
-function pad(text: string, width = BOX_W): string {
-  return text + " ".repeat(Math.max(0, width - text.length));
-}
+const BOX_W = 66; // inner width of box
 
 /* ── component ───────────────────────────────────────────────── */
 
@@ -56,61 +50,34 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
 
   /* ── render helpers ── */
 
-  const topBorder = (
-    <span style={{ color: B }}>{"╔" + "═".repeat(BOX_W) + "╗"}</span>
-  );
-  const midBorder = (
-    <span style={{ color: B }}>{"╠" + "═".repeat(BOX_W) + "╣"}</span>
-  );
-  const botBorder = (
-    <span style={{ color: B }}>{"╚" + "═".repeat(BOX_W) + "╝"}</span>
-  );
-
-  const emptyLine = (
-    <>
-      {bc("║")}<span style={{ color: W }}>{pad("")}</span>{bc("║")}
-    </>
+  const hrBorder = (
+    <span style={{ color: B }}>{"═".repeat(BOX_W)}</span>
   );
 
   const textLine = (text: string, color = W) => (
-    <>
-      {bc("║")}<span style={{ color }}>{pad("  " + text)}</span>{bc("║")}
-    </>
+    <span style={{ color }}>{"  " + text}</span>
   );
 
   const centeredLine = (text: string, color = W) => {
     const totalPad = BOX_W - text.length;
     const left = Math.floor(totalPad / 2);
-    const right = totalPad - left;
     return (
-      <>
-        {bc("║")}
-        <span style={{ color }}>
-          {" ".repeat(left) + text + " ".repeat(right)}
-        </span>
-        {bc("║")}
-      </>
+      <span style={{ color }}>
+        {" ".repeat(left) + text}
+      </span>
     );
   };
 
   const headerLine = (
-    <>
-      {bc("║")}
-      <span style={{ color: B }}>
-        {pad("             [ S Y S T E M   O V E R R I D E ]")}
-      </span>
-      {bc("║")}
-    </>
+    <span style={{ color: B }}>
+      {"             [ S Y S T E M   O V E R R I D E ]"}
+    </span>
   );
 
   const footerLine = (
-    <>
-      {bc("║")}
-      <span style={{ color: DIM }}>
-        {pad("             [Press ESC to return to mediocrity]")}
-      </span>
-      {bc("║")}
-    </>
+    <span style={{ color: DIM }}>
+      {"             [Press ESC to return to mediocrity]"}
+    </span>
   );
 
   /* Button line: rendered as a clickable <a> inside the <pre> */
@@ -120,41 +87,33 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
     available: boolean,
   ) => {
     const inner = "    > " + label;
-    const padded = pad(inner);
     if (!available) {
-      const errText = pad("    [ERR] CHECKOUT_URL not configured. Contact your operator.");
       return (
-        <>
-          {bc("║")}<span style={{ color: B }}>{errText}</span>{bc("║")}
-        </>
+        <span style={{ color: B }}>{"    [ERR] CHECKOUT_URL not configured. Contact your operator."}</span>
       );
     }
     return (
-      <>
-        {bc("║")}
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            color: G,
-            textDecoration: "none",
-            cursor: "pointer",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = G;
-            e.currentTarget.style.color = "#000000";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.color = G;
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {padded}
-        </a>
-        {bc("║")}
-      </>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          color: G,
+          textDecoration: "none",
+          cursor: "pointer",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = G;
+          e.currentTarget.style.color = "#000000";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = "transparent";
+          e.currentTarget.style.color = G;
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {inner}
+      </a>
     );
   };
 
@@ -174,47 +133,48 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
           fontSize: "13px",
           lineHeight: "1.1",
           backgroundColor: "#1e232b",
+          border: `1px solid ${B}`,
           boxShadow: "12px 12px 0px rgba(0, 0, 0, 0.9)",
-          padding: 0,
+          padding: "0 8px",
           margin: 0,
           whiteSpace: "pre",
           overflow: "hidden",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {topBorder}{"\n"}
+        {hrBorder}{"\n"}
         {headerLine}{"\n"}
-        {midBorder}{"\n"}
-        {emptyLine}{"\n"}
+        {hrBorder}{"\n"}
+        {"\n"}
         {centeredLine(title, Y)}{"\n"}
         {centeredLine(subtitle, W)}{"\n"}
-        {emptyLine}{"\n"}
+        {"\n"}
         {textLine(statusHeading, Y)}{"\n"}
         {textLine(statusLine1, W)}{"\n"}
         {statusLine2 ? <>{textLine(statusLine2, W)}{"\n"}</> : null}
-        {emptyLine}{"\n"}
+        {"\n"}
         {textLine("[OPTION 1: SINGLE LICENSE]", Y)}{"\n"}
         {textLine(`One seat. One soul. ${PRO_QUOTA_LIMIT} credits of technical debt`, W)}{"\n"}
         {textLine("generation for a single developer who has given up.", W)}{"\n"}
-        {emptyLine}{"\n"}
+        {"\n"}
         {buttonLine(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
-        {emptyLine}{"\n"}
+        {"\n"}
         {textLine("[OPTION 2: MULTI-LICENSE PACK — 5 LICENSES]", Y)}{"\n"}
         {textLine("Five seats for the whole team. Because misery loves company,", W)}{"\n"}
         {textLine("and your manager wants everyone on the same page of suffering.", W)}{"\n"}
-        {emptyLine}{"\n"}
+        {"\n"}
         {buttonLine(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable)}{"\n"}
-        {emptyLine}{"\n"}
+        {"\n"}
         {textLine("[WHAT YOU GET]", Y)}{"\n"}
         {textLine(`• ${PRO_QUOTA_LIMIT} API credits per license (fewer 429s)`, W)}{"\n"}
         {textLine("• Access to premium models", W)}{"\n"}
         {textLine("• Priority queue for suffering", W)}{"\n"}
         {textLine("• A warm feeling of corporate compliance", W)}{"\n"}
         {textLine("• The mass right to mass-produce technical debt", W)}{"\n"}
-        {emptyLine}{"\n"}
-        {midBorder}{"\n"}
+        {"\n"}
+        {hrBorder}{"\n"}
         {footerLine}{"\n"}
-        {botBorder}
+        {hrBorder}
       </pre>
     </div>
   );
