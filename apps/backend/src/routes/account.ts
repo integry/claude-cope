@@ -22,6 +22,24 @@ type Env = {
 };
 const SHILL_CREDIT = 5;
 
+/** Ensure the KV quota entry exists for a license hash, restoring revoked quota if available. */
+async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: number): Promise<void> {
+  const kvKey = `polar:${hash}`;
+  const existingQuota = await kv.get(kvKey);
+  if (existingQuota !== null) return;
+
+  // If the license was previously revoked, restore the saved remaining
+  // quota instead of granting a fresh allocation.
+  const revokedKey = `polar_revoked:${hash}`;
+  const savedQuota = await kv.get(revokedKey);
+  if (savedQuota !== null) {
+    await kv.put(kvKey, savedQuota);
+    await kv.delete(revokedKey);
+  } else {
+    await kv.put(kvKey, String(proInitialQuota));
+  }
+}
+
 const account = new Hono<Env>();
 
 account.post("/sync", async (c) => {
@@ -48,22 +66,8 @@ account.post("/sync", async (c) => {
   }
 
   const hash = await hashKey(body.licenseKey);
-  const kvKey = `polar:${hash}`;
-
   const limits = getQuotaLimits(c.env);
-  const existingQuota = await kv.get(kvKey);
-  if (existingQuota === null) {
-    // If the license was previously revoked, restore the saved remaining
-    // quota instead of granting a fresh allocation.
-    const revokedKey = `polar_revoked:${hash}`;
-    const savedQuota = await kv.get(revokedKey);
-    if (savedQuota !== null) {
-      await kv.put(kvKey, savedQuota);
-      await kv.delete(revokedKey);
-    } else {
-      await kv.put(kvKey, String(limits.proInitialQuota));
-    }
-  }
+  await ensureQuota(kv, hash, limits.proInitialQuota);
 
   // Cache the Polar license_key UUID so chat.ts can mirror usage to Polar
   // without needing the raw license key.
