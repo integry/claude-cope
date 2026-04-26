@@ -231,9 +231,11 @@ function recordUsage(
   // under another user's name.
   const isOwnershipSpoofed = !params.proKeyHash && params.profileLicenseHash;
 
-  // For free users, also skip writes if the caller's session doesn't own this username.
-  // This prevents attackers from inflating TD/rank or consuming task bonuses for
-  // another free user just by knowing their username.
+  // For free users, silently skip DB writes if the caller's session doesn't own this
+  // username. The chat response is still returned (the AI reply is harmless), but no
+  // TD/rank/task mutation occurs. This is intentionally a silent skip rather than a 403
+  // (contrast with POST /api/score which returns 403) because the primary purpose of
+  // this endpoint is the AI response, not score mutation.
   if (!params.proKeyHash && !params.ownsUsername) return;
 
   if (!isOwnershipSpoofed) {
@@ -315,26 +317,11 @@ async function tryCacheSessionMapping(
     if (kv && username && username !== "anonymous") {
       ctx.waitUntil(kv.put(`username_session:${username}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 }));
     }
-  } else if (!profileHash) {
-    // Existing free user (row exists, no license_hash). Use a reverse index
-    // so the first session to chat as this username claims the mapping.
-    // This restores session-based /me restore for pre-existing free accounts
-    // without reopening the impersonation hole (attacker would need to win
-    // the one-time race for this username).
-    const kv = env.QUOTA_KV ?? env.USAGE_KV;
-    if (kv) {
-      const existingClaim = await kv.get(`username_session:${username}`);
-      if (existingClaim === null) {
-        // First-claim-wins: no one has claimed this username yet under the new code.
-        ctx.waitUntil(kv.put(`username_session:${username}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 }));
-        cacheSessionUsername(kv, sessionId, username, ctx);
-      } else if (existingClaim === sessionId) {
-        // This session already owns the mapping — ensure session_user is cached.
-        cacheSessionUsername(kv, sessionId, username, ctx);
-      }
-      // Otherwise: another session already claimed this username — skip caching.
-    }
   }
+  // Existing free user (row exists, no license_hash): no backfill.
+  // Pre-existing free users cannot restore via /me after a localStorage clear.
+  // This is a deliberate trade-off to fully close the impersonation hole where
+  // any new session could claim an existing free username.
   // Otherwise: username has a license_hash but caller has no matching proKeyHash — skip caching
   return { profileLicenseHash: profileHash, hasRow: Boolean(row) };
 }

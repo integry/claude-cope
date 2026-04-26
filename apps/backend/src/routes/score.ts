@@ -237,9 +237,16 @@ score.post("/", async (c) => {
   // Session-based ownership: prevent attackers from writing to another free user's profile
   // just by knowing their username. Either no row exists (new user, upsert allowed) or
   // the caller's session must own this username via the session_user mapping.
+  // NOTE: Unlike chat.ts which silently skips unauthorized free-user writes (the chat
+  // response is still returned, just without TD/score mutation), this route returns an
+  // explicit 403 because the sole purpose of POST /api/score is mutation.
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
   const sessionId = c.get("sessionId");
-  if (existingRow && kv) {
+  if (existingRow) {
+    if (!kv) {
+      // Fail-closed: cannot verify ownership without KV — deny write.
+      return c.json({ error: "Cannot verify session ownership — please retry" }, 503);
+    }
     const sessionUsername = await kv.get(`session_user:${sessionId}`);
     if (sessionUsername !== body.username) {
       return c.json({ error: "Session does not own this username" }, 403);
