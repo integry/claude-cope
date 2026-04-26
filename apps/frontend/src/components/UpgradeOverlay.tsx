@@ -116,14 +116,10 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
           target="_blank"
           rel="noopener noreferrer"
           style={{
-            display: "inline-block",
+            display: "inline",
             textDecoration: "none",
             cursor: "pointer",
             backgroundColor: "transparent",
-            paddingTop: "0.45em",
-            paddingBottom: "0.45em",
-            lineHeight: "1.1",
-            verticalAlign: "middle",
           }}
           onMouseEnter={(e) => {
             const btn = e.currentTarget.querySelector("[data-btn]") as HTMLElement;
@@ -153,7 +149,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
           <span
             data-cursor=""
             style={{
-              color: primary ? G : "transparent",
+              color: G,
               fontWeight: "bold",
             }}
           >
@@ -165,7 +161,6 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
               backgroundColor: primary ? G : "transparent",
               color: primary ? "#0d1117" : G,
               fontWeight: "bold",
-              padding: "2px 8px",
             }}
           >
             {btnContent}
@@ -229,11 +224,16 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled. ${PRO_QUOTA_LIMIT} non-expiring credits (one-time extraction).`)}{"\n"}
+        {emptyLine}{"\n"}
         {buttonBoxLine(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
+        {emptyLine}{"\n"}
+        {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
         {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
         {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
+        {emptyLine}{"\n"}
         {buttonBoxLine(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
+        {emptyLine}{"\n"}
         {midBorder}{"\n"}
         {(() => {
           const text = "[Press ESC to retain your net worth]";
