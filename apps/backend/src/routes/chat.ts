@@ -177,9 +177,15 @@ async function mirrorPolarUsage(
   const usage = Math.max(0, limits.proInitialQuota - remaining);
   try {
     await syncPolarUsage(licenseKeyId, env.POLAR_ACCESS_TOKEN, usage);
+    // Only write the debounce timestamp on real success — a thrown error
+    // (network failure, Polar 4xx/5xx) skips this so the next chat retries
+    // immediately instead of suppressing for 5 minutes.
     await kv.put(debounceKey, String(Date.now()), { expirationTtl: POLAR_SYNC_INTERVAL_MS / 1000 });
-  } catch {
-    // Polar dashboard drift is acceptable; KV is source of truth.
+  } catch (err) {
+    // Polar dashboard drift is acceptable; KV remains the source of truth.
+    // Surface failures in logs so consistent rejections (revoked token,
+    // misconfig) are visible via `wrangler tail`.
+    console.warn(`[polar-mirror] failed for ${proKeyHash.slice(0, 8)}:`, err instanceof Error ? err.message : err);
   }
 }
 
