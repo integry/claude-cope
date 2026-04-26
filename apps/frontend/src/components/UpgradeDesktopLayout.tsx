@@ -1,3 +1,4 @@
+import type React from "react";
 import {
   UPGRADE_CHECKOUT_SINGLE,
   UPGRADE_CHECKOUT_MULTI,
@@ -77,7 +78,7 @@ export default function DesktopLayout({
   const emptyLine = boxLine("");
 
   /** Like boxLine but accepts JSX content; caller must supply the exact char-length used. */
-  const boxLineRich = (content: JSX.Element, textLength: number) => {
+  const boxLineRich = (content: React.ReactNode, textLength: number) => {
     const padLen = Math.max(0, INNER_W - textLength);
     return (
       <>
