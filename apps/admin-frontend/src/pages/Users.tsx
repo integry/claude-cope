@@ -9,7 +9,7 @@ interface User {
   total_td: number;
   current_td: number;
   credits_used: number;
-  credits_remaining: number;
+  credits_remaining: number | null;
   status: "free" | "max";
   pro_key_hash?: string;
 }
@@ -306,7 +306,7 @@ export default function Users() {
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.total_td}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.current_td}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_used}</td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_remaining}</td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_remaining ?? "N/A"}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm">
                   <div className="flex gap-2">
                     <button

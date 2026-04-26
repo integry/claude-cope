@@ -52,7 +52,7 @@ export default function Licenses() {
             {licenses.map((license) => (
               <tr key={license.id}>
                 <td className="whitespace-nowrap px-6 py-4 text-sm font-mono text-gray-700">
-                  {license.key_hash.slice(0, 12)}...
+                  {license.key_hash}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm">
                   {license.status === "active" ? (

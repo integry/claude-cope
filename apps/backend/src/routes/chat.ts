@@ -302,11 +302,34 @@ async function tryCacheSessionMapping(
     }
   } else if (!row) {
     // Brand-new username with no user_scores row: first-chat-wins binding.
-    // Once a row exists, only verified ownership (matching proKeyHash) can
-    // establish a mapping — this prevents impersonation of existing free users.
-    cacheSessionUsername(env.QUOTA_KV ?? env.USAGE_KV, sessionId, username, ctx);
+    const kv = env.QUOTA_KV ?? env.USAGE_KV;
+    cacheSessionUsername(kv, sessionId, username, ctx);
+    // Also set the reverse index so future chats from the same username
+    // can be matched back to this session (first-claim-wins).
+    if (kv && username && username !== "anonymous") {
+      ctx.waitUntil(kv.put(`username_session:${username}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 }));
+    }
+  } else if (!profileHash) {
+    // Existing free user (row exists, no license_hash). Use a reverse index
+    // so the first session to chat as this username claims the mapping.
+    // This restores session-based /me restore for pre-existing free accounts
+    // without reopening the impersonation hole (attacker would need to win
+    // the one-time race for this username).
+    const kv = env.QUOTA_KV ?? env.USAGE_KV;
+    if (kv) {
+      const existingClaim = await kv.get(`username_session:${username}`);
+      if (existingClaim === null) {
+        // First-claim-wins: no one has claimed this username yet under the new code.
+        ctx.waitUntil(kv.put(`username_session:${username}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 }));
+        cacheSessionUsername(kv, sessionId, username, ctx);
+      } else if (existingClaim === sessionId) {
+        // This session already owns the mapping — ensure session_user is cached.
+        cacheSessionUsername(kv, sessionId, username, ctx);
+      }
+      // Otherwise: another session already claimed this username — skip caching.
+    }
   }
-  // Otherwise: username already exists and caller can't prove ownership — skip caching
+  // Otherwise: username has a license_hash but caller has no matching proKeyHash — skip caching
   return { profileLicenseHash: profileHash, hasRow: Boolean(row) };
 }
 
