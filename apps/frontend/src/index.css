@@ -155,3 +155,16 @@ body {
 .upgrade-esc-btn:hover [data-esc] {
   color: #ffffff !important;
 }
+
+/* Responsive upgrade overlay – shrink font so the fixed-width ASCII box
+   fits on small screens without horizontal clipping */
+@media (max-width: 540px) {
+  .upgrade-modal-box {
+    font-size: 10px !important;
+  }
+}
+@media (max-width: 380px) {
+  .upgrade-modal-box {
+    font-size: 8px !important;
+  }
+}

@@ -185,7 +185,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
 
       {/* Modal box */}
       <pre
-        className="relative z-10 mx-4"
+        className="relative z-10 mx-4 upgrade-modal-box"
         style={{
           fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
           fontSize: "13px",
@@ -195,7 +195,9 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
           padding: 0,
           margin: 0,
           whiteSpace: "pre",
-          overflow: "hidden",
+          overflowX: "auto",
+          overflowY: "hidden",
+          maxWidth: "calc(100vw - 2rem)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
