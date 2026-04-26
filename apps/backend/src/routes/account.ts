@@ -122,15 +122,12 @@ account.get("/me", async (c) => {
   const db = c.env?.DB;
   const row = db ? await getProfileRow(db, username) : null;
 
-  // If the session points to a username that no longer has a DB row, the
-  // mapping is stale (e.g. profile was deleted).  Clear the orphaned KV
-  // entry and report not-found so the frontend doesn't show a ghost account.
-  if (!row) {
-    await kv.delete(`session_user:${sessionId}`);
-    return c.json({ found: false });
-  }
-
-  const rawLicenseHash = (row as unknown as { license_hash: string | null }).license_hash;
+  // A session_user mapping with no backing row is the username-only restore
+  // case: the user's first chat 402'd before recordUsage could create a row,
+  // so we have a session-bound username but no progress yet. Return found:
+  // true with profile: null so the frontend can restore the username and
+  // show truthful quota instead of inventing a fresh identity.
+  const rawLicenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
 
   // Verify the license is still active — a revoked license should be treated as free.
   // This prevents the UI from showing isPro: true with quotaPercent: 0 for revoked users.
