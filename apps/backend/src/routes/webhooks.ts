@@ -16,6 +16,47 @@ type Env = {
 
 const webhooks = new Hono<Env>();
 
+async function handleBenefitGrantCreated(
+  licenseKey: string,
+  kv: KVNamespace,
+  env: Env["Bindings"],
+) {
+  const hash = await hashKey(licenseKey);
+  const kvKey = `polar:${hash}`;
+  const limits = getQuotaLimits(env);
+  await kv.put(kvKey, String(limits.proInitialQuota));
+  // Record the license in DB so admin views see all purchases, not just
+  // those that were activated via /sync.
+  const db = env?.DB;
+  if (db) {
+    await db
+      .prepare(
+        "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO NOTHING",
+      )
+      .bind(hash)
+      .run();
+  }
+}
+
+async function handleBenefitGrantRevoked(
+  licenseKey: string,
+  kv: KVNamespace,
+  env: Env["Bindings"],
+) {
+  const hash = await hashKey(licenseKey);
+  const kvKey = `polar:${hash}`;
+  await kv.delete(kvKey);
+  // Mark the license as revoked but keep user_scores.license_hash intact
+  // so a future reactivation can still find and restore the profile.
+  const db = env?.DB;
+  if (db) {
+    await db
+      .prepare("UPDATE licenses SET status = 'revoked' WHERE key_hash = ?")
+      .bind(hash)
+      .run();
+  }
+}
+
 webhooks.post("/polar", async (c) => {
   const secret = c.env?.POLAR_WEBHOOK_SECRET;
   if (!secret) {
@@ -73,35 +114,9 @@ webhooks.post("/polar", async (c) => {
   const licenseKey = event.data?.properties?.license_key;
 
   if (event.type === "benefit_grant.created" && licenseKey) {
-    const hash = await hashKey(licenseKey);
-    const kvKey = `polar:${hash}`;
-    const limits = getQuotaLimits(c.env);
-    await kv.put(kvKey, String(limits.proInitialQuota));
-    // Record the license in DB so admin views see all purchases, not just
-    // those that were activated via /sync.
-    const db = c.env?.DB;
-    if (db) {
-      await db
-        .prepare(
-          "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO NOTHING",
-        )
-        .bind(hash)
-        .run();
-    }
+    await handleBenefitGrantCreated(licenseKey, kv, c.env);
   } else if (event.type === "benefit_grant.revoked" && licenseKey) {
-    const hash = await hashKey(licenseKey);
-    const kvKey = `polar:${hash}`;
-    await kv.delete(kvKey);
-
-    // Mark the license as revoked but keep user_scores.license_hash intact
-    // so a future reactivation can still find and restore the profile.
-    const db = c.env?.DB;
-    if (db) {
-      await db
-        .prepare("UPDATE licenses SET status = 'revoked' WHERE key_hash = ?")
-        .bind(hash)
-        .run();
-    }
+    await handleBenefitGrantRevoked(licenseKey, kv, c.env);
   }
 
   // Store idempotency key with 24h TTL
