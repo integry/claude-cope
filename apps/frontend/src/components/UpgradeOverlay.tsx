@@ -84,7 +84,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
   };
 
   /** Clickable empty line: entire row between ║...║ is a link */
-  const clickableEmptyLine = (url: string, available: boolean, _primary = true) => {
+  const clickableEmptyLine = (url: string, available: boolean) => {
     if (!available) return emptyLine;
     return (
       <>
