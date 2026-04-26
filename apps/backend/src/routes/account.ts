@@ -211,6 +211,17 @@ async function verifyOwnership(db: D1Database, username: string, licenseKeyHash:
   if (!rowWithHash.license_hash || rowWithHash.license_hash !== licenseKeyHash) {
     return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
   }
+
+  // Verify the license is still active in the local licenses table.
+  // This catches revocations even if the client still holds the old hash.
+  const license = await db
+    .prepare("SELECT status FROM licenses WHERE key_hash = ?")
+    .bind(licenseKeyHash)
+    .first<{ status: string }>();
+  if (!license || license.status !== "active") {
+    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
+  }
+
   const profile = await getProfile(db, username);
   if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
   return { profile, status: "ok" };

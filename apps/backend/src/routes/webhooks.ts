@@ -77,19 +77,30 @@ webhooks.post("/polar", async (c) => {
     const kvKey = `polar:${hash}`;
     const limits = getQuotaLimits(c.env);
     await kv.put(kvKey, String(limits.proInitialQuota));
+    // Record the license in DB so admin views see all purchases, not just
+    // those that were activated via /sync.
+    const db = c.env?.DB;
+    if (db) {
+      await db
+        .prepare(
+          "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO NOTHING",
+        )
+        .bind(hash)
+        .run();
+    }
   } else if (event.type === "benefit_grant.revoked" && licenseKey) {
     const hash = await hashKey(licenseKey);
     const kvKey = `polar:${hash}`;
     await kv.delete(kvKey);
 
-    // Update the licenses table and clear the license_hash from user_scores
-    // so admin views correctly reflect revocation
+    // Mark the license as revoked but keep user_scores.license_hash intact
+    // so a future reactivation can still find and restore the profile.
     const db = c.env?.DB;
     if (db) {
-      await db.batch([
-        db.prepare("UPDATE licenses SET status = 'revoked' WHERE key_hash = ?").bind(hash),
-        db.prepare("UPDATE user_scores SET license_hash = NULL WHERE license_hash = ?").bind(hash),
-      ]);
+      await db
+        .prepare("UPDATE licenses SET status = 'revoked' WHERE key_hash = ?")
+        .bind(hash)
+        .run();
     }
   }
 
