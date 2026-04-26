@@ -239,6 +239,50 @@ function recordUsage(
   ctx.waitUntil(Promise.all(queries));
 }
 
+/**
+ * Verify the license is still active before granting pro-tier access.
+ * A revoked license falls through to the free-user path even if the
+ * client still holds the old hash.
+ */
+async function verifyProKeyHash(
+  db: D1Database | undefined,
+  proKeyHash: string | undefined,
+): Promise<string | undefined> {
+  if (!proKeyHash) return undefined;
+  if (!db) return undefined; // DB unavailable: fail closed
+  const active = await isLicenseActive(db, proKeyHash);
+  return active ? proKeyHash : undefined;
+}
+
+function cacheSessionUsername(
+  kv: KVNamespace | undefined,
+  sessionId: string,
+  username: string,
+  ctx: { waitUntil: (p: Promise<unknown>) => void },
+) {
+  if (kv && username && username !== "anonymous") {
+    ctx.waitUntil(
+      kv.put(`session_user:${sessionId}`, username, { expirationTtl: 60 * 60 * 24 * 365 }),
+    );
+  }
+}
+
+async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[]) {
+  return fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      max_tokens: 2000,
+      reasoning: { effort: "low" },
+    }),
+  });
+}
+
 const chat = new Hono<Env>();
 
 chat.post("/", async (c) => {
@@ -253,38 +297,18 @@ chat.post("/", async (c) => {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
   }
 
-  // Verify the license is still active before granting pro-tier access.
-  // A revoked license should fall through to the free-user path even if
-  // the client still holds the old hash.
   const db = c.env?.DB;
-  let effectiveProKeyHash = body.proKeyHash;
-  if (effectiveProKeyHash) {
-    if (db) {
-      const active = await isLicenseActive(db, effectiveProKeyHash);
-      if (!active) effectiveProKeyHash = undefined;
-    } else {
-      // DB unavailable: fail closed — do not grant pro-tier access based on
-      // an unverifiable client-supplied hash. The user falls to the free path.
-      effectiveProKeyHash = undefined;
-    }
-  }
+  const effectiveProKeyHash = await verifyProKeyHash(db, body.proKeyHash);
 
   const sessionId = c.get("sessionId");
   const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
 
   // Cache the session → username mapping BEFORE the quota check so a user who
   // hits the wall can still be restored via GET /api/account/me after clearing
-  // localStorage. Only persist non-anonymous usernames (anonymous is a default
-  // placeholder).
-  const kv = c.env.QUOTA_KV ?? c.env.USAGE_KV;
-  if (kv && sessionId && username && username !== "anonymous") {
-    c.executionCtx.waitUntil(
-      kv.put(`session_user:${sessionId}`, username, { expirationTtl: 60 * 60 * 24 * 365 }),
-    );
-  }
+  // localStorage.
+  cacheSessionUsername(c.env.QUOTA_KV ?? c.env.USAGE_KV, sessionId, username, c.executionCtx);
 
   // Consume quota before making the OpenRouter request.
-  // Use the validated effectiveProKeyHash so revoked licenses fall to free-tier quota.
   const quotaResult = await handleQuotaCheck(c.env, sessionId, effectiveProKeyHash);
   if (quotaResult.exhaustedMessage) {
     return c.json({ error: quotaResult.exhaustedMessage }, 402);
@@ -296,13 +320,8 @@ chat.post("/", async (c) => {
   }
   const model = resolveModel(body.modelId);
 
-  // Sanitize chat messages to prevent prompt injection (strip "system" role, etc.)
   const sanitizedMessages = sanitizeChatMessages(body.chatMessages);
-
-  // Enforce context trimming to prevent token exhaustion attacks
   const trimmedMessages = enforceContextTrimming(sanitizedMessages);
-
-  // Build the full messages array server-side (system prompt + history)
   const messages = buildChatMessages({
     rank,
     chatMessages: trimmedMessages,
@@ -311,21 +330,7 @@ chat.post("/", async (c) => {
     buddyType: body.buddyType,
   });
 
-  // Proxy to OpenRouter — messages built server-side for security
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-
-      max_tokens: 2000,
-      reasoning: { effort: "low" },
-    }),
-  });
+  const response = await callOpenRouter(apiKey, model, messages);
 
   if (!response.ok) {
     const data = await response.json();
@@ -333,33 +338,24 @@ chat.post("/", async (c) => {
     return c.json({ error: "OpenRouter request failed", details: data }, response.status as ContentfulStatusCode);
   }
 
-  // Parse response
   const data = await response.json() as ChatResponseData;
-
-  // Debug logging for tag/voice diagnostics — useful when tuning system prompts
   logChatDiagnostics(messages, data);
 
-  // Country detection priority: body (frontend), CF object, header, fallback
   const cfCountry = (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country;
   const country = body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
   const hour = new Date().toISOString().slice(0, 13);
 
-  const isPro = Boolean(effectiveProKeyHash);
-
   // For pro users, read server-stored profile for authoritative multiplier
-  if (isPro && db) {
-    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: effectiveProKeyHash!, model, hour, data, quotaPercent });
+  if (effectiveProKeyHash && db) {
+    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: effectiveProKeyHash, model, hour, data, quotaPercent });
     if (proResponse) return proResponse;
   }
 
-  // Free users or pro users without a valid server profile — free-user path.
-  // Never pass proKeyHash to recordUsage here: if handleProUserScoring couldn't
-  // find a licensed profile, we must not let the client self-assign a license hash.
+  // Free users or pro users without a valid server profile
   const serverMultiplier = computeMultiplier(inventory, upgrades);
   const baseTD = Math.floor(Math.random() * 40) + 10;
   const tdAwarded = Math.round(baseTD * serverMultiplier);
 
-  // Log usage and update score asynchronously
   recordUsage(db, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour });
 
   (data as Record<string, unknown>).td_awarded = tdAwarded;

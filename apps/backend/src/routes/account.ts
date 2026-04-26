@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
-import { getProfile, getProfileByLicenseHash, getProfileRow, resolveRank } from "../utils/profile";
+import { getProfile, getProfileRow } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-
+import { resolveProfile, verifyOwnership, broadcastPurchase } from "./accountHelpers";
+import type { SyncBody } from "./accountHelpers";
 
 type Env = {
   Bindings: {
@@ -22,122 +23,6 @@ type Env = {
 const SHILL_CREDIT = 5;
 
 const account = new Hono<Env>();
-
-// ─── Cross-device restore / license linking ─────────────────────────
-
-type SyncBody = {
-  licenseKey?: string;
-  username?: string;
-  currentProfile?: {
-    total_td?: number;
-    current_td?: number;
-    corporate_rank?: string;
-    inventory?: Record<string, number>;
-    upgrades?: string[];
-    achievements?: string[];
-    buddy_type?: string | null;
-    buddy_is_shiny?: boolean;
-    unlocked_themes?: string[];
-    active_theme?: string;
-    active_ticket?: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null;
-    td_multiplier?: number;
-  };
-};
-
-function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
-  // Only truly cosmetic preferences are accepted from the client.
-  // unlocked_themes, active_theme, and active_ticket are server-authoritative:
-  // themes are paid items that must not be mintable or activated via a forged
-  // first-sync payload, and ticket state must not be restored from stale
-  // client data.  active_theme is always "default" for new profiles because
-  // the server initializes unlocked_themes to ["default"] — accepting a
-  // client-supplied theme here would bypass the paid-theme gate.
-  return {
-    buddyType: cp?.buddy_type ?? null,
-    buddyIsShiny: cp?.buddy_is_shiny ? 1 : 0,
-    tdMultiplier: cp?.td_multiplier ?? 1.0,
-  };
-}
-
-type CreateProfileResult =
-  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined }
-  | { profile: null; error: string };
-
-async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody): Promise<CreateProfileResult> {
-  const newUsername = body.username || "anonymous";
-
-  // Check if username already exists.
-  const existing = await db
-    .prepare("SELECT license_hash FROM user_scores WHERE username = ?")
-    .bind(newUsername)
-    .first<{ license_hash: string | null }>();
-  if (existing) {
-    if (existing.license_hash === hash) {
-      // Already belongs to this license — just return the existing profile
-      const profile = await getProfile(db, newUsername);
-      if (!profile) return { profile: null, error: "Profile not found after lookup" };
-      return { profile };
-    }
-    if (existing.license_hash === null) {
-      // Free user upgrading to Max — attach the license to their existing profile.
-      // Preserve the server-authoritative profile data (TD, inventory, etc.).
-      await db
-        .prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ? AND license_hash IS NULL")
-        .bind(hash, newUsername)
-        .run();
-      const profile = await getProfile(db, newUsername);
-      if (!profile) return { profile: null, error: "Profile not found after upgrade" };
-      return { profile };
-    }
-    // Username is owned by a different license — refuse
-    return { profile: null, error: "This username is already taken. Please change your username and try again." };
-  }
-
-  // New profile for a freshly activated license — use server-authoritative defaults.
-  // Only cosmetic preferences (theme, buddy) are accepted from the client; scoring
-  // fields (TD, inventory, upgrades, achievements) start at zero to prevent a
-  // forged first-sync payload from minting arbitrary progress.
-  const c = buildProfileCosmetics(body.currentProfile);
-  const defaultRank = resolveRank(0);
-
-  await db
-    .prepare(
-      `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
-       VALUES (?, 0, 0, ?, ?, '{}', '[]', '[]', ?, ?, '["default"]', 'default', NULL, 1.0)`,
-    )
-    .bind(
-      newUsername, defaultRank, hash,
-      c.buddyType, c.buddyIsShiny,
-    )
-    .run();
-
-  const profile = await getProfile(db, newUsername);
-  if (!profile) return { profile: null, error: "Failed to create profile" };
-  return { profile };
-}
-
-type ResolveProfileResult =
-  | { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined }
-  | { restored: false; profile: null; error: string };
-
-async function resolveProfile(db: D1Database, hash: string, body: SyncBody): Promise<ResolveProfileResult> {
-  // Case 1: Existing profile with this license_hash → restore (cross-device sync)
-  // This is the only path that binds a license to a profile: the profile was
-  // originally created through this same license via Case 2 below.
-  const existingByHash = await getProfileByLicenseHash(db, hash);
-  if (existingByHash) {
-    return { restored: true, profile: existingByHash };
-  }
-
-  // Case 2: No profile for this license → create a new one, or upgrade an
-  // existing free (unlicensed) profile if the username matches.
-  const created = await createProfileFromClient(db, hash, body);
-  if ('error' in created && created.error) {
-    return { restored: false, profile: null, error: created.error };
-  }
-  // After error check, created.profile is guaranteed non-null by CreateProfileResult union
-  return { restored: false, profile: created.profile! };
-}
 
 account.post("/sync", async (c) => {
   const body = await c.req.json<SyncBody>();
@@ -209,31 +94,21 @@ account.post("/sync", async (c) => {
   // Cache the session → username mapping so a user with cleared localStorage
   // but the same browser cookie can be restored via GET /me.
   const sessionId = c.get("sessionId");
-  if (sessionId) {
+  if (sessionId && profile.username) {
     await kv.put(`session_user:${sessionId}`, profile.username, { expirationTtl: 60 * 60 * 24 * 365 });
   }
 
   return c.json({ success: true, hash, restored: result.restored, profile });
 });
 
-// ─── Session-based restore (cleared localStorage) ───────────────────
-
 account.get("/me", async (c) => {
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
   const sessionId = c.get("sessionId");
-  if (!kv || !sessionId) {
-    return c.json({ found: false });
-  }
+  if (!kv || !sessionId) return c.json({ found: false });
 
   const username = await kv.get(`session_user:${sessionId}`);
-  if (!username) {
-    return c.json({ found: false });
-  }
+  if (!username) return c.json({ found: false });
 
-  // Username is bound to this session — look up the server-side profile if one
-  // exists (created on first successful chat). It may not exist yet if the
-  // user only tried failing chats (402'd on quota), in which case we still
-  // restore the username + accurate quota so the UI matches reality.
   const db = c.env?.DB;
   const row = db ? await getProfileRow(db, username) : null;
   const licenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
@@ -253,46 +128,6 @@ account.get("/me", async (c) => {
     licenseHash: licenseHash ?? null,
   });
 });
-
-// ─── Ownership verification ─────────────────────────────────────────
-
-type OwnershipResult =
-  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; status: "ok" }
-  | { profile: null; status: "not_found"; error: string }
-  | { profile: null; status: "unauthorized"; error: string };
-
-async function verifyOwnership(db: D1Database, username: string, licenseKeyHash: string): Promise<OwnershipResult> {
-  const row = await getProfileRow(db, username);
-  if (!row) return { profile: null, status: "not_found", error: "Profile not found" };
-  const rowWithHash = row as unknown as { license_hash: string | null };
-  if (!rowWithHash.license_hash || rowWithHash.license_hash !== licenseKeyHash) {
-    return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
-  }
-
-  // Verify the license is still active in the local licenses table.
-  // This catches revocations even if the client still holds the old hash.
-  const license = await db
-    .prepare("SELECT status FROM licenses WHERE key_hash = ?")
-    .bind(licenseKeyHash)
-    .first<{ status: string }>();
-  if (!license || license.status !== "active") {
-    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
-  }
-
-  const profile = await getProfile(db, username);
-  if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
-  return { profile, status: "ok" };
-}
-
-// ─── Purchase endpoints ─────────────────────────────────────────────
-
-function broadcastPurchase(message: string, db: D1Database | undefined, ctx: { waitUntil: (p: Promise<unknown>) => void }) {
-  if (db) {
-    ctx.waitUntil(
-      db.prepare("INSERT INTO recent_events (message) VALUES (?)").bind(message).run(),
-    );
-  }
-}
 
 account.post("/buy-generator", async (c) => {
   const db = c.env?.DB;
@@ -445,8 +280,6 @@ account.post("/buy-theme", async (c) => {
   return c.json({ success: true, profile: updated });
 });
 
-// ─── Minor state update endpoints ───────────────────────────────────
-
 account.post("/unlock-achievement", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
@@ -537,13 +370,9 @@ account.post("/update-ticket", async (c) => {
   return c.json({ success: true, profile: updated });
 });
 
-// ─── Shill credits ──────────────────────────────────────────────────
-
 account.post("/shill", async (c) => {
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  if (!kv) {
-    return c.json({ error: "KV storage is not configured" }, 500);
-  }
+  if (!kv) return c.json({ error: "KV storage is not configured" }, 500);
 
   const sessionId = c.get("sessionId");
   const shillKey = `shill:${sessionId}`;
