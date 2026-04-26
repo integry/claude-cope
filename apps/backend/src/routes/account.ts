@@ -205,7 +205,53 @@ account.post("/sync", async (c) => {
   }
   const quotaPercent = await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
   const profile = { ...result.profile, quota_percent: quotaPercent };
+
+  // Cache the session → username mapping so a user with cleared localStorage
+  // but the same browser cookie can be restored via GET /me.
+  const sessionId = c.get("sessionId");
+  if (sessionId) {
+    await kv.put(`session_user:${sessionId}`, profile.username, { expirationTtl: 60 * 60 * 24 * 365 });
+  }
+
   return c.json({ success: true, hash, restored: result.restored, profile });
+});
+
+// ─── Session-based restore (cleared localStorage) ───────────────────
+
+account.get("/me", async (c) => {
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  const sessionId = c.get("sessionId");
+  if (!kv || !sessionId) {
+    return c.json({ found: false });
+  }
+
+  const username = await kv.get(`session_user:${sessionId}`);
+  if (!username) {
+    return c.json({ found: false });
+  }
+
+  // Username is bound to this session — look up the server-side profile if one
+  // exists (created on first successful chat). It may not exist yet if the
+  // user only tried failing chats (402'd on quota), in which case we still
+  // restore the username + accurate quota so the UI matches reality.
+  const db = c.env?.DB;
+  const row = db ? await getProfileRow(db, username) : null;
+  const licenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
+
+  const limits = getQuotaLimits(c.env);
+  const quotaPercent = licenseHash
+    ? await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: licenseHash, limits })
+    : await getQuotaPercent(kv, { tier: "free", sessionId, limits });
+
+  const profile = db ? await getProfile(db, username) : null;
+
+  return c.json({
+    found: true,
+    username,
+    profile: profile ? { ...profile, quota_percent: quotaPercent } : null,
+    quotaPercent,
+    licenseHash: licenseHash ?? null,
+  });
 });
 
 // ─── Ownership verification ─────────────────────────────────────────

@@ -122,7 +122,7 @@ export function handleTakeCommand(
     sprintGoal: ticket.technical_debt,
   };
   setState((prev) => ({ ...prev, activeTicket: newTicket }));
-  if (state.proKey && state.proKeyHash && state.username) {
+  if (state.proKeyHash && state.username) {
     void updateTicketServer(state.username, newTicket, state.proKeyHash);
   }
 
@@ -151,7 +151,7 @@ export function handleAbandonCommand(
   const penalty = Math.round(reward * 0.2);
 
   setState((prev) => ({ ...prev, activeTicket: null }));
-  if (state.proKey && state.proKeyHash && state.username) {
+  if (state.proKeyHash && state.username) {
     void updateTicketServer(state.username, null, state.proKeyHash);
   }
   addActiveTD(-penalty);

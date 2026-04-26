@@ -17,6 +17,7 @@ import {
   buyThemeServer,
   unlockAchievementServer,
   updateTicketServer,
+  fetchSessionProfile,
 } from "../api/profileApi";
 
 export type { Message };
@@ -36,6 +37,48 @@ export function useGameState() {
   // Update lastLogin on mount (no passive offline TD — active play only)
   useEffect(() => {
     setState((prev) => ({ ...prev, lastLogin: Date.now() }));
+  }, []);
+
+  // Session restore: if localStorage was cleared (state looks fresh), but the
+  // browser cookie maps to a previously-known user on the server, restore that
+  // user's profile instead of starting as a brand-new identity. Also pulls the
+  // license hash so a Pro user keeps Max access without re-running /sync.
+  useEffect(() => {
+    const initial = stateRef.current;
+    const isFreshState =
+      initial.economy.totalTDEarned === 0 &&
+      initial.chatHistory.length === 0 &&
+      !initial.proKey &&
+      !initial.proKeyHash;
+    if (!isFreshState) return;
+
+    let cancelled = false;
+    fetchSessionProfile().then((result) => {
+      if (cancelled || !result.found) return;
+      setState((prev) => {
+        // Full profile restore (server has user_scores row).
+        if (result.profile) {
+          const merged = applyServerProfile(prev, result.profile, { includeActiveTicket: true });
+          return result.licenseHash ? { ...merged, proKeyHash: result.licenseHash } : merged;
+        }
+        // Username-only restore: server knows the identity but has no
+        // profile row yet (e.g., the previous attempt 402'd on quota).
+        // Restore the username and accurate quota so the UI is honest.
+        if (result.username) {
+          return {
+            ...prev,
+            username: result.username,
+            economy: {
+              ...prev.economy,
+              ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}),
+            },
+            ...(result.licenseHash ? { proKeyHash: result.licenseHash } : {}),
+          };
+        }
+        return prev;
+      });
+    });
+    return () => { cancelled = true; };
   }, []);
 
   // Persist state to localStorage (filter transient "loading" messages from chat history)
@@ -58,7 +101,7 @@ export function useGameState() {
     const syncInterval = setInterval(() => {
       const current = stateRef.current;
       // Skip sync for pro users — server is authoritative
-      if (current.proKey) return;
+      if (current.proKeyHash) return;
       // Only sync if totalTDEarned has changed since last sync
       if (current.economy.totalTDEarned === lastSyncedTD.current) return;
       lastSyncedTD.current = current.economy.totalTDEarned;
@@ -135,10 +178,10 @@ export function useGameState() {
         if (newAchievements.length === prev.achievements.length) return prev;
 
         // For pro users, fire server calls for new achievements
-        if (prev.proKey) {
+        if (prev.proKeyHash) {
           const added = newAchievements.filter((a) => !prev.achievements.includes(a));
           for (const achievementId of added) {
-            if (prev.proKeyHash) unlockAchievementServer(prev.username, achievementId, prev.proKeyHash).catch(() => {});
+            unlockAchievementServer(prev.username, achievementId, prev.proKeyHash).catch(() => {});
           }
         }
 
@@ -182,7 +225,7 @@ export function useGameState() {
     });
 
     // Pro users: fire server call, apply authoritative response
-    if (current.proKey && current.proKeyHash) {
+    if (current.proKeyHash) {
       buyGeneratorServer(current.username, generatorId, amount, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           setState((prev) => applyServerProfile(prev, result.profile!));
@@ -262,7 +305,7 @@ export function useGameState() {
     });
     // Pro users: sync achievement to server
     const current = stateRef.current;
-    if (current.proKey && current.proKeyHash) {
+    if (current.proKeyHash) {
       unlockAchievementServer(current.username, achievement, current.proKeyHash).catch(() => {});
     }
     return true;
@@ -304,7 +347,7 @@ export function useGameState() {
     });
 
     // Pro users: fire server call
-    if (current.proKey && current.proKeyHash) {
+    if (current.proKeyHash) {
       buyUpgradeServer(current.username, upgradeId, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           setState((prev) => applyServerProfile(prev, result.profile!));
@@ -376,7 +419,7 @@ export function useGameState() {
 
     const current = stateRef.current;
     // Only paid users can purchase themes
-    if (!current.proKey) return false;
+    if (!current.proKeyHash) return false;
     // Already unlocked
     if (current.unlockedThemes.includes(themeId)) return false;
     // Can't afford
@@ -384,7 +427,7 @@ export function useGameState() {
 
     // Optimistic local update
     setState((prev) => {
-      if (!prev.proKey) return prev;
+      if (!prev.proKeyHash) return prev;
       if (prev.unlockedThemes.includes(themeId)) return prev;
       if (prev.economy.currentTD < theme.cost) return prev;
 
@@ -432,7 +475,7 @@ export function useGameState() {
       };
 
       // Pro users: sync ticket progress to server
-      if (prev.proKey && prev.proKeyHash) {
+      if (prev.proKeyHash) {
         updateTicketServer(prev.username, updatedTicket, prev.proKeyHash).catch(() => {});
       }
 

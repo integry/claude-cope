@@ -259,6 +259,7 @@ export function submitChatMessage(opts: {
   apiKey?: string;
   customModel?: string;
   proKey?: string;
+  proKeyHash?: string;
   modes?: ModesState;
   activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
   onSprintProgress?: (amount: number) => void;
@@ -306,7 +307,7 @@ export function submitChatMessage(opts: {
       })()
     : (async () => {
         // Proxy: Send raw components, let backend build the messages
-        const proKeyHash = opts.proKey ? await hashKey(opts.proKey) : undefined;
+        const proKeyHash = opts.proKeyHash ?? (opts.proKey ? await hashKey(opts.proKey) : undefined);
         return fetch(`${API_BASE}/api/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -600,7 +600,7 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
     clearPendingOffer();
     const newTicket = { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt };
     ctx.setState((prev) => ({ ...prev, activeTicket: newTicket }));
-    if (ctx.state.proKey && ctx.state.proKeyHash && ctx.state.username) {
+    if (ctx.state.proKeyHash && ctx.state.username) {
       void updateTicketServer(ctx.state.username, newTicket, ctx.state.proKeyHash);
     }
     ctx.playChime();

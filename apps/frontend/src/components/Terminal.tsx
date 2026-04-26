@@ -175,7 +175,7 @@ function Terminal() {
       const newLockouts = state.economy.quotaLockouts + 1;
       const isNew = newLockouts >= 3 && unlockAchievementWithSound("homer_at_the_buffet");
       const achievementMsg: Message[] = isNew ? [{ role: "warning", content: buildAchievementBox("homer_at_the_buffet") }] : [];
-      if (state.proKey) {
+      if (state.proKey || state.proKeyHash) {
         resetQuota();
         if (newLockouts === 1) setInstantBanReady(true);
         setHistory((prev) => [...prev, { role: "system", content: "[SUCCESS] Max Tier activated. Quota refilled. Your paid plan limit applies — check the header bar." }, ...achievementMsg]);
@@ -258,7 +258,7 @@ function Terminal() {
     // ignored when the operator has disabled BYOK.
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
     // Block submission when quota is exhausted and user has no BYOK or pro key
-    if (!effectiveApiKey && !state.proKey && state.economy.quotaPercent <= 0) {
+    if (!effectiveApiKey && !state.proKey && !state.proKeyHash && state.economy.quotaPercent <= 0) {
       const byokHint = BYOK_ENABLED ? " or use `/key <your-openrouter-key>`" : "";
       setHistory((prev) => [...prev, { role: "user", content: command }, { role: "error", content: `[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Max${byokHint} to continue.` }]);
       playError();
@@ -290,7 +290,7 @@ function Terminal() {
           activeTicket: null,
           pendingCompletedTaskIds: [...prev.pendingCompletedTaskIds, state.activeTicket!.id],
         }));
-        if (state.proKey && state.proKeyHash && state.username) {
+        if (state.proKeyHash && state.username) {
           void updateTicketServer(state.username, null, state.proKeyHash);
         }
         const completedMessage = `✅ ${state.username || "A player"} completed ticket "${state.activeTicket!.title}" and earned ${payout.toLocaleString()} TD!`;
@@ -310,6 +310,7 @@ function Terminal() {
       apiKey: effectiveApiKey,
       customModel: state.selectedModel,
       proKey: state.proKey,
+      proKeyHash: state.proKeyHash,
       modes: state.modes,
       activeTicket: state.activeTicket,
       onSprintProgress,
@@ -406,7 +407,7 @@ function Terminal() {
     {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
     {showParty && <PartyOverlay onClose={() => setShowParty(false)} />}
     {showSynergize && <SynergizeOverlay onClose={() => { setShowSynergize(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]); }} />}
-    {showUpgrade && <UpgradeOverlay isUpgraded={!!state.proKey} quotaPercent={state.economy.quotaPercent} onClose={() => { setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/"); }} />}
+    {showUpgrade && <UpgradeOverlay isUpgraded={!!state.proKey || !!state.proKeyHash} quotaPercent={state.economy.quotaPercent} onClose={() => { setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/"); }} />}
   </>);
 
   return (
@@ -418,7 +419,7 @@ function Terminal() {
       <div className="shrink-0">
         <Ticker onExpand={() => { closeAllOverlays(); setShowParty(true); }} onlineCount={onlineCount} />
         {outageHp !== null && <OutageBar outageHp={outageHp} />}
-        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} isBYOK={BYOK_ENABLED && !!state.apiKey} isMax={!!state.proKey} byokTotalCost={state.byokTotalCost} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlays(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlays(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} onUpgradeClick={() => { closeAllOverlays(); setShowUpgrade(true); window.history.pushState(null, "", "/upgrade"); }} />
+        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} isBYOK={BYOK_ENABLED && !!state.apiKey} isMax={!!state.proKey || !!state.proKeyHash} byokTotalCost={state.byokTotalCost} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlays(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlays(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} onUpgradeClick={() => { closeAllOverlays(); setShowUpgrade(true); window.history.pushState(null, "", "/upgrade"); }} />
       </div>
       <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}

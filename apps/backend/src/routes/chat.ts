@@ -269,9 +269,23 @@ chat.post("/", async (c) => {
     }
   }
 
+  const sessionId = c.get("sessionId");
+  const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
+
+  // Cache the session → username mapping BEFORE the quota check so a user who
+  // hits the wall can still be restored via GET /api/account/me after clearing
+  // localStorage. Only persist non-anonymous usernames (anonymous is a default
+  // placeholder).
+  const kv = c.env.QUOTA_KV ?? c.env.USAGE_KV;
+  if (kv && sessionId && username && username !== "anonymous") {
+    c.executionCtx.waitUntil(
+      kv.put(`session_user:${sessionId}`, username, { expirationTtl: 60 * 60 * 24 * 365 }),
+    );
+  }
+
   // Consume quota before making the OpenRouter request.
   // Use the validated effectiveProKeyHash so revoked licenses fall to free-tier quota.
-  const quotaResult = await handleQuotaCheck(c.env, c.get("sessionId"), effectiveProKeyHash);
+  const quotaResult = await handleQuotaCheck(c.env, sessionId, effectiveProKeyHash);
   if (quotaResult.exhaustedMessage) {
     return c.json({ error: quotaResult.exhaustedMessage }, 402);
   }
@@ -280,8 +294,6 @@ chat.post("/", async (c) => {
   if (effectiveProKeyHash && quotaResult.remaining != null) {
     c.executionCtx.waitUntil(mirrorPolarUsage(c.env, effectiveProKeyHash, quotaResult.remaining));
   }
-
-  const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
   const model = resolveModel(body.modelId);
 
   // Sanitize chat messages to prevent prompt injection (strip "system" role, etc.)

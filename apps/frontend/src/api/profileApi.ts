@@ -43,3 +43,22 @@ export function updateBuddyServer(username: string, buddyType: string | null, is
 export function updateTicketServer(username: string, activeTicket: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null, licenseKeyHash: string): Promise<ProfileResult> {
   return profilePost("update-ticket", { username, activeTicket, licenseKeyHash });
 }
+
+type SessionRestoreResult = {
+  found: boolean;
+  username?: string;
+  profile?: ServerProfile | null;
+  quotaPercent?: number;
+  licenseHash?: string | null;
+};
+
+/** Look up the previous user associated with this browser's session cookie. */
+export async function fetchSessionProfile(): Promise<SessionRestoreResult> {
+  try {
+    const res = await fetch(`${API_BASE}/api/account/me`);
+    if (!res.ok) return { found: false };
+    return (await res.json()) as SessionRestoreResult;
+  } catch {
+    return { found: false };
+  }
+}
