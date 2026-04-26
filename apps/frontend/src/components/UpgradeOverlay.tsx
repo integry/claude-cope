@@ -122,33 +122,12 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
+        className={primary ? "upgrade-btn-primary" : "upgrade-btn-secondary"}
         style={{
           display: "block",
           textDecoration: "none",
           cursor: "pointer",
           backgroundColor: "transparent",
-        }}
-        onMouseEnter={(e) => {
-          const btn = e.currentTarget.querySelector("[data-btn]") as HTMLElement;
-          if (btn) {
-            btn.style.backgroundColor = primary ? "#ffffff" : G;
-            btn.style.color = primary ? "#000000" : "#0d1117";
-          }
-          const cursor = e.currentTarget.querySelector("[data-cursor]") as HTMLElement;
-          if (cursor) {
-            cursor.style.color = G;
-          }
-        }}
-        onMouseLeave={(e) => {
-          const btn = e.currentTarget.querySelector("[data-btn]") as HTMLElement;
-          if (btn) {
-            btn.style.backgroundColor = primary ? G : "transparent";
-            btn.style.color = primary ? "#0d1117" : G;
-          }
-          const cursor = e.currentTarget.querySelector("[data-cursor]") as HTMLElement;
-          if (cursor) {
-            cursor.style.color = G;
-          }
         }}
         onClick={(e) => e.stopPropagation()}
       >
