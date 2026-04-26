@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   UPGRADE_CHECKOUT_SINGLE,
   UPGRADE_CHECKOUT_MULTI,
@@ -20,39 +21,294 @@ const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
 const INNER_W = 64; // inner content width (between ║ chars)
+const MOBILE_BREAKPOINT = 640; // px
 
 /* ── component ───────────────────────────────────────────────── */
 
 function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
+    setIsMobile(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
-  const singleLabel = isUpgraded
-    ? `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`
-    : `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`;
+  const singleLabel = `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`;
+  const multiLabel = `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`;
 
-  const multiLabel = isUpgraded
-    ? `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`
-    : `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`;
+  if (isMobile) {
+    return (
+      <MobileLayout
+        singleLabel={singleLabel}
+        multiLabel={multiLabel}
+        singleAvailable={singleAvailable}
+        multiAvailable={multiAvailable}
+        isUpgraded={isUpgraded}
+        onClose={onClose}
+      />
+    );
+  }
 
+  return (
+    <DesktopLayout
+      singleLabel={singleLabel}
+      multiLabel={multiLabel}
+      singleAvailable={singleAvailable}
+      multiAvailable={multiAvailable}
+      isUpgraded={isUpgraded}
+      onClose={onClose}
+    />
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MOBILE LAYOUT — div-based, CSS borders, text wraps naturally
+   ══════════════════════════════════════════════════════════════ */
+
+type LayoutProps = {
+  singleLabel: string;
+  multiLabel: string;
+  singleAvailable: boolean;
+  multiAvailable: boolean;
+  isUpgraded: boolean;
+  onClose: () => void;
+};
+
+const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
+
+function MobileLayout({
+  singleLabel,
+  multiLabel,
+  singleAvailable,
+  multiAvailable,
+  onClose,
+}: LayoutProps) {
+  const sectionStyle = { padding: "8px 12px" } as const;
+  const hrStyle = {
+    border: "none",
+    borderTop: `1px solid ${B}`,
+    margin: 0,
+  } as const;
+
+  const mobileButton = (
+    label: string,
+    url: string,
+    available: boolean,
+    primary: boolean,
+  ) => {
+    if (!available) {
+      return (
+        <div style={{ ...sectionStyle, color: B, fontSize: "12px" }}>
+          [ERR] CHECKOUT_URL not configured.
+        </div>
+      );
+    }
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={primary ? "upgrade-btn-primary" : "upgrade-btn-secondary"}
+        style={{
+          display: "block",
+          textDecoration: "none",
+          cursor: "pointer",
+          padding: "12px",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span
+          data-cursor=""
+          style={{ color: G, fontWeight: "bold" }}
+        >
+          {" > "}
+        </span>
+        <span
+          data-btn=""
+          style={{
+            backgroundColor: primary ? G : "transparent",
+            color: primary ? "#0d1117" : G,
+            fontWeight: "bold",
+            padding: "2px 6px",
+          }}
+        >
+          {" " + label + " "}
+        </span>
+      </a>
+    );
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black opacity-70" />
+
+      <div
+        className="relative z-10"
+        style={{
+          fontFamily: MONO_FONT,
+          fontSize: "13px",
+          lineHeight: "1.4",
+          backgroundColor: "#1e232b",
+          border: `2px solid ${B}`,
+          boxShadow: "8px 8px 0px rgba(0, 0, 0, 0.9)",
+          width: "calc(100vw - 2rem)",
+          maxWidth: "480px",
+          maxHeight: "calc(100vh - 2rem)",
+          overflowY: "auto",
+          color: W,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Title bar */}
+        <div
+          style={{
+            ...sectionStyle,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            borderBottom: `1px solid ${B}`,
+          }}
+        >
+          <span style={{ color: B, fontWeight: "bold", fontSize: "11px" }}>
+            WALLET EXTRACTION UTILITY
+          </span>
+          <span
+            style={{ color: DIM, cursor: "pointer", fontSize: "14px" }}
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+          >
+            [x]
+          </span>
+        </div>
+
+        {/* Subtitle */}
+        <div style={{ ...sectionStyle, textAlign: "center" }}>
+          <span style={{ color: Y, fontWeight: "bold", fontSize: "12px" }}>
+            INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]
+          </span>
+        </div>
+
+        <hr style={hrStyle} />
+
+        {/* Benchmarks */}
+        <div style={sectionStyle}>
+          <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
+            [ THROUGHPUT BENCHMARKS ]
+          </div>
+          <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
+            Industry standards artificially throttle assistant capacity
+            at 5x or 20x. Claude Cope is architected without safeguards
+            to guarantee absolute system saturation.
+          </div>
+        </div>
+
+        {/* Comparison table — stacked on mobile */}
+        <div style={{ ...sectionStyle, fontSize: "11px" }}>
+          <div style={{
+            border: `1px solid ${DIM}`,
+            marginBottom: "4px",
+            padding: "6px 8px",
+          }}>
+            <span style={{ color: DIM }}>Legacy AI</span>
+            {" · Max 20x · Manageable pull requests"}
+          </div>
+          <div style={{
+            border: `1px solid ${G}`,
+            padding: "6px 8px",
+          }}>
+            <span style={{ color: G, fontWeight: "bold" }}>Claude Cope</span>
+            {" · MAX 429X · Unmitigated request storms"}
+          </div>
+        </div>
+
+        <hr style={hrStyle} />
+
+        {/* Option 1 */}
+        <div style={sectionStyle}>
+          <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
+            [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]
+          </div>
+          <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: "8px" }}>
+            One seat. Max 429X enabled. {PRO_QUOTA_LIMIT} non-expiring
+            credits (one-time extraction).
+          </div>
+          {mobileButton(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable, true)}
+        </div>
+
+        {/* Option 2 */}
+        <div style={sectionStyle}>
+          <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
+            [OPTION 2: TEAM PACK - 5 LICENSES]
+          </div>
+          <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
+            Scale your bottlenecks. Let the entire engineering team
+            achieve HTTP 429 compliance simultaneously.
+          </div>
+          <div style={{ color: DIM, fontSize: "11px", marginBottom: "8px" }}>
+            (5 activation keys will be sent to your email)
+          </div>
+          {mobileButton(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}
+        </div>
+
+        <hr style={hrStyle} />
+
+        {/* ESC / close */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          style={{
+            display: "block",
+            width: "100%",
+            background: "none",
+            border: "none",
+            padding: "10px",
+            font: "inherit",
+            fontSize: "12px",
+            cursor: "pointer",
+            textAlign: "center",
+          }}
+          className="upgrade-esc-btn"
+        >
+          <span data-esc="" style={{ color: DIM }}>
+            [Tap to retain your net worth]
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DESKTOP LAYOUT — original ASCII <pre> box, unchanged
+   ══════════════════════════════════════════════════════════════ */
+
+function DesktopLayout({
+  singleLabel,
+  multiLabel,
+  singleAvailable,
+  multiAvailable,
+  onClose,
+}: LayoutProps) {
   /* ── render helpers ── */
 
-  /** Top border: ╔════...════╗ */
   const topBorder = (
     <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>
   );
-
-  /** Mid border: ╠════...════╣ */
   const midBorder = (
     <span style={{ color: B }}>{"╠" + "═".repeat(INNER_W) + "╣"}</span>
   );
-
-  /** Bottom border: ╚════...════╝ */
   const botBorder = (
     <span style={{ color: B }}>{"╚" + "═".repeat(INNER_W) + "╝"}</span>
   );
 
-  /** A content line padded to INNER_W between ║ ... ║ */
   const boxLine = (text: string, color = W) => {
     const padded = text.length < INNER_W
       ? text + " ".repeat(INNER_W - text.length)
@@ -66,10 +322,8 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
     );
   };
 
-  /** An empty line: ║ (spaces) ║ */
   const emptyLine = boxLine("");
 
-  /** A centered content line between ║ ... ║ */
   const centeredBoxLine = (text: string, color = W) => {
     const totalPad = INNER_W - text.length;
     const left = Math.max(0, Math.floor(totalPad / 2));
@@ -83,18 +337,14 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
     );
   };
 
-  /** Button block: a single <a> spanning 3 rows (empty + button + empty)
-   *  so the entire area is one clickable element with shared hover.
-   *  primary = solid green block (default selected)
-   *  secondary = green text only, turns solid green on hover */
   const buttonBlock = (
     label: string,
     url: string,
     available: boolean,
     primary = true,
   ) => {
-    const MARGIN = 2; // gap so green never touches red borders
-    const cursorPrefix = " > "; // shown outside the green block
+    const MARGIN = 2;
+    const cursorPrefix = " > ";
     const btnContent = " " + label + " ";
     const totalUsed = MARGIN + cursorPrefix.length + btnContent.length;
     const suffixLen = Math.max(0, INNER_W - totalUsed);
@@ -131,19 +381,14 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top padding row */}
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: "transparent" }}>{emptyInner}</span>
         <span style={{ color: B }}>{"║"}</span>{"\n"}
-        {/* Button row */}
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: "transparent" }}>{" ".repeat(MARGIN)}</span>
         <span
           data-cursor=""
-          style={{
-            color: G,
-            fontWeight: "bold",
-          }}
+          style={{ color: G, fontWeight: "bold" }}
         >
           {cursorPrefix}
         </span>
@@ -159,7 +404,6 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         </span>
         <span style={{ color: "transparent" }}>{" ".repeat(suffixLen)}</span>
         <span style={{ color: B }}>{"║"}</span>{"\n"}
-        {/* Bottom padding row */}
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: "transparent" }}>{emptyInner}</span>
         <span style={{ color: B }}>{"║"}</span>
@@ -167,7 +411,6 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
     );
   };
 
-  /* ── ASCII table lines ── */
   const tableBorderTop = boxLine("  +----------------+----------+------------------------------+");
   const tableHeader    = boxLine("  | ARCHITECTURE   | CAPACITY | GUARANTEED OUTCOME           |");
   const tableBorderMid = boxLine("  +----------------+----------+------------------------------+");
@@ -180,24 +423,21 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
       className="fixed inset-0 z-50 flex items-center justify-center"
       onClick={onClose}
     >
-      {/* Dimmed backdrop */}
       <div className="absolute inset-0 bg-black opacity-70" />
 
-      {/* Modal box */}
       <pre
-        className="relative z-10 mx-4 upgrade-modal-box"
+        className="relative z-10 mx-4"
         style={{
-          fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
-          fontSize: "clamp(7px, 2.4vw, 13px)",
+          fontFamily: MONO_FONT,
+          fontSize: "13px",
           lineHeight: "1.1",
           backgroundColor: "#1e232b",
           boxShadow: "12px 12px 0px rgba(0, 0, 0, 0.9)",
           padding: 0,
           margin: 0,
           whiteSpace: "pre",
-          overflowX: "auto",
+          overflowX: "hidden",
           overflowY: "hidden",
-          maxWidth: "calc(100vw - 2rem)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -205,11 +445,9 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         {(() => {
           const title = "[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]";
           const closeBtn = "[x]";
-          // title + gap + closeBtn, padded to INNER_W
-          const gap = Math.max(1, INNER_W - title.length - closeBtn.length - 2); // 2 for minimal side padding
+          const gap = Math.max(1, INNER_W - title.length - closeBtn.length - 2);
           const leftPad = Math.max(0, Math.floor((INNER_W - title.length - closeBtn.length - gap) / 2));
-          const line = " ".repeat(leftPad) + title + " ".repeat(gap) + closeBtn;
-          const rightPad = Math.max(0, INNER_W - line.length);
+          const rightPad = Math.max(0, INNER_W - (" ".repeat(leftPad) + title + " ".repeat(gap) + closeBtn).length);
           return (
             <>
               <span style={{ color: B }}>{"║"}</span>
