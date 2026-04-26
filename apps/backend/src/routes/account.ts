@@ -46,13 +46,15 @@ type SyncBody = {
 
 function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
   // Only truly cosmetic preferences are accepted from the client.
-  // unlocked_themes and active_ticket are server-authoritative: themes are
-  // paid items that must not be mintable via a forged first-sync payload,
-  // and ticket state must not be restored from stale client data.
+  // unlocked_themes, active_theme, and active_ticket are server-authoritative:
+  // themes are paid items that must not be mintable or activated via a forged
+  // first-sync payload, and ticket state must not be restored from stale
+  // client data.  active_theme is always "default" for new profiles because
+  // the server initializes unlocked_themes to ["default"] — accepting a
+  // client-supplied theme here would bypass the paid-theme gate.
   return {
     buddyType: cp?.buddy_type ?? null,
     buddyIsShiny: cp?.buddy_is_shiny ? 1 : 0,
-    activeTheme: cp?.active_theme ?? "default",
     tdMultiplier: cp?.td_multiplier ?? 1.0,
   };
 }
@@ -101,12 +103,11 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
   await db
     .prepare(
       `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
-       VALUES (?, 0, 0, ?, ?, '{}', '[]', '[]', ?, ?, '["default"]', ?, NULL, 1.0)`,
+       VALUES (?, 0, 0, ?, ?, '{}', '[]', '[]', ?, ?, '["default"]', 'default', NULL, 1.0)`,
     )
     .bind(
       newUsername, defaultRank, hash,
       c.buddyType, c.buddyIsShiny,
-      c.activeTheme,
     )
     .run();
 
@@ -167,7 +168,16 @@ account.post("/sync", async (c) => {
   const limits = getQuotaLimits(c.env);
   const existingQuota = await kv.get(kvKey);
   if (existingQuota === null) {
-    await kv.put(kvKey, String(limits.proInitialQuota));
+    // If the license was previously revoked, restore the saved remaining
+    // quota instead of granting a fresh allocation.
+    const revokedKey = `polar_revoked:${hash}`;
+    const savedQuota = await kv.get(revokedKey);
+    if (savedQuota !== null) {
+      await kv.put(kvKey, savedQuota);
+      await kv.delete(revokedKey);
+    } else {
+      await kv.put(kvKey, String(limits.proInitialQuota));
+    }
   }
 
   // Cache the Polar license_key UUID so chat.ts can mirror usage to Polar

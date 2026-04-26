@@ -26,11 +26,19 @@ async function handleBenefitGrantCreated(
 
   // Only initialize quota when the key is missing — a replay or re-grant must
   // not reset the user's remaining quota back to full. This mirrors the
-  // guard in /sync.
+  // guard in /sync.  If the license was previously revoked, restore the
+  // saved remaining quota instead of granting a fresh allocation.
   const existingQuota = await kv.get(kvKey);
   if (existingQuota === null) {
-    const limits = getQuotaLimits(env);
-    await kv.put(kvKey, String(limits.proInitialQuota));
+    const revokedKey = `polar_revoked:${hash}`;
+    const savedQuota = await kv.get(revokedKey);
+    if (savedQuota !== null) {
+      await kv.put(kvKey, savedQuota);
+      await kv.delete(revokedKey);
+    } else {
+      const limits = getQuotaLimits(env);
+      await kv.put(kvKey, String(limits.proInitialQuota));
+    }
   }
   // Record the license in DB so admin views see all purchases, not just
   // those that were activated via /sync.
@@ -52,6 +60,12 @@ async function handleBenefitGrantRevoked(
 ) {
   const hash = await hashKey(licenseKey);
   const kvKey = `polar:${hash}`;
+  // Preserve the remaining quota so a future reactivation restores it
+  // instead of granting a fresh PRO_INITIAL_QUOTA.
+  const remaining = await kv.get(kvKey);
+  if (remaining !== null) {
+    await kv.put(`polar_revoked:${hash}`, remaining);
+  }
   await kv.delete(kvKey);
   // Mark the license as revoked but keep user_scores.license_hash intact
   // so a future reactivation can still find and restore the profile.
