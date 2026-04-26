@@ -83,14 +83,19 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
     );
   };
 
-  /** Button line: clickable <a> padded between ║ ... ║ */
+  /** Button line: clickable <a> padded between ║ ... ║
+   *  primary = solid green block (default selected)
+   *  secondary = green text only, turns solid green on hover */
   const buttonBoxLine = (
     label: string,
     url: string,
     available: boolean,
+    primary = true,
   ) => {
-    const inner = "    > " + label;
-    const padLen = Math.max(0, INNER_W - inner.length);
+    const MARGIN = 2; // gap so green never touches red borders
+    const btnContent = " > " + label + " ";
+    const totalUsed = MARGIN + btnContent.length;
+    const suffixLen = Math.max(0, INNER_W - totalUsed);
     if (!available) {
       const errText = "    [ERR] CHECKOUT_URL not configured.";
       const errPad = Math.max(0, INNER_W - errText.length);
@@ -105,30 +110,32 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
     return (
       <>
         <span style={{ color: B }}>{"║"}</span>
+        <span>{" ".repeat(MARGIN)}</span>
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
           style={{
-            display: "inline-block",
-            backgroundColor: G,
-            color: "#0d1117",
+            display: "inline",
+            backgroundColor: primary ? G : "transparent",
+            color: primary ? "#0d1117" : G,
             textDecoration: "none",
             fontWeight: "bold",
             cursor: "pointer",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#ffffff";
-            e.currentTarget.style.color = "#000000";
+            e.currentTarget.style.backgroundColor = primary ? "#ffffff" : G;
+            e.currentTarget.style.color = primary ? "#000000" : "#0d1117";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = G;
-            e.currentTarget.style.color = "#0d1117";
+            e.currentTarget.style.backgroundColor = primary ? G : "transparent";
+            e.currentTarget.style.color = primary ? "#0d1117" : G;
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {inner + " ".repeat(padLen)}
+          {btnContent}
         </a>
+        <span>{" ".repeat(suffixLen)}</span>
         <span style={{ color: B }}>{"║"}</span>
       </>
     );
@@ -193,7 +200,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
         {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
         {emptyLine}{"\n"}
-        {buttonBoxLine(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable)}{"\n"}
+        {buttonBoxLine(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {emptyLine}{"\n"}
         {midBorder}{"\n"}
         {centeredBoxLine("[Press ESC to retain your net worth]", DIM)}{"\n"}
