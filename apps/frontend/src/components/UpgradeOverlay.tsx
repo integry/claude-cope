@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import {
   UPGRADE_CHECKOUT_SINGLE,
   UPGRADE_CHECKOUT_MULTI,
@@ -21,29 +20,28 @@ const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
 const INNER_W = 64; // inner content width (between ║ chars)
-const MOBILE_BREAKPOINT = 640; // px
 
 /* ── component ───────────────────────────────────────────────── */
 
 function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
-    setIsMobile(mql.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mql.addEventListener("change", handler);
-    return () => mql.removeEventListener("change", handler);
-  }, []);
-
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
   const singleLabel = `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`;
   const multiLabel = `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`;
 
-  if (isMobile) {
-    return (
+  return (
+    <>
+      {/* Desktop: visible ≥641px, hidden below via CSS */}
+      <DesktopLayout
+        singleLabel={singleLabel}
+        multiLabel={multiLabel}
+        singleAvailable={singleAvailable}
+        multiAvailable={multiAvailable}
+        isUpgraded={isUpgraded}
+        onClose={onClose}
+      />
+      {/* Mobile: visible ≤640px, hidden above via CSS */}
       <MobileLayout
         singleLabel={singleLabel}
         multiLabel={multiLabel}
@@ -52,18 +50,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         isUpgraded={isUpgraded}
         onClose={onClose}
       />
-    );
-  }
-
-  return (
-    <DesktopLayout
-      singleLabel={singleLabel}
-      multiLabel={multiLabel}
-      singleAvailable={singleAvailable}
-      multiAvailable={multiAvailable}
-      isUpgraded={isUpgraded}
-      onClose={onClose}
-    />
+    </>
   );
 }
 
@@ -146,7 +133,7 @@ function MobileLayout({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="upgrade-mobile fixed inset-0 z-50 flex items-center justify-center"
       onClick={onClose}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
@@ -418,9 +405,14 @@ function DesktopLayout({
   const tableRow2      = boxLine("  | Claude Cope    | MAX 429X | Unmitigated request storms   |");
   const tableBorderBot = boxLine("  +----------------+----------+------------------------------+");
 
+  const title = "[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]";
+  const closeBtn = "[x]";
+  const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
+  const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="upgrade-desktop fixed inset-0 z-50 flex items-center justify-center"
       onClick={onClose}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
@@ -436,35 +428,25 @@ function DesktopLayout({
           padding: 0,
           margin: 0,
           whiteSpace: "pre",
-          overflowX: "hidden",
+          overflowX: "auto",
           overflowY: "hidden",
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {topBorder}{"\n"}
-        {(() => {
-          const title = "[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]";
-          const closeBtn = "[x]";
-          const gap = Math.max(1, INNER_W - title.length - closeBtn.length - 2);
-          const leftPad = Math.max(0, Math.floor((INNER_W - title.length - closeBtn.length - gap) / 2));
-          const rightPad = Math.max(0, INNER_W - (" ".repeat(leftPad) + title + " ".repeat(gap) + closeBtn).length);
-          return (
-            <>
-              <span style={{ color: B }}>{"║"}</span>
-              <span style={{ color: B }}>{" ".repeat(leftPad) + title + " ".repeat(gap)}</span>
-              <span
-                style={{ color: DIM, cursor: "pointer" }}
-                onClick={(e) => { e.stopPropagation(); onClose(); }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = W; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = DIM; }}
-              >
-                {closeBtn}
-              </span>
-              <span style={{ color: B }}>{" ".repeat(rightPad)}</span>
-              <span style={{ color: B }}>{"║"}</span>
-            </>
-          );
-        })()}{"\n"}
+        <span style={{ color: B }}>{"║"}</span>
+        <span style={{ color: B }}>{" " + title + " ".repeat(titleGap - 1)}</span>
+        <span
+          style={{ color: DIM, cursor: "pointer" }}
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = W; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = DIM; }}
+        >
+          {closeBtn}
+        </span>
+        <span style={{ color: B }}>{" ".repeat(titlePadRight)}</span>
+        <span style={{ color: B }}>{"║"}</span>
+        {"\n"}
         {midBorder}{"\n"}
         {emptyLine}{"\n"}
         {centeredBoxLine("INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]", Y)}{"\n"}

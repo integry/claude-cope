@@ -156,3 +156,12 @@ body {
   color: #ffffff !important;
 }
 
+/* Responsive layout switching: CSS-first, no JS matchMedia needed */
+.upgrade-mobile { display: none; }
+.upgrade-desktop { display: flex; }
+
+@media (max-width: 640px) {
+  .upgrade-mobile { display: flex; }
+  .upgrade-desktop { display: none; }
+}
+
