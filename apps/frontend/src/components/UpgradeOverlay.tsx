@@ -124,7 +124,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         rel="noopener noreferrer"
         className={primary ? "upgrade-btn-primary" : "upgrade-btn-secondary"}
         style={{
-          display: "block",
+          display: "inline",
           textDecoration: "none",
           cursor: "pointer",
           backgroundColor: "transparent",
@@ -248,8 +248,8 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
         {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
         {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
-        {buttonBlock(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {boxLine("  (5 activation keys will be sent to your email)", DIM)}{"\n"}
+        {buttonBlock(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {midBorder}{"\n"}
         {(() => {
           const text = "[Press ESC to retain your net worth]";
