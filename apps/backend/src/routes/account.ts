@@ -44,31 +44,6 @@ type SyncBody = {
   };
 };
 
-async function linkExistingProfile(db: D1Database, hash: string, username: string, clientTotalTD: number) {
-  // Verify ownership: the caller must prove they own this profile by providing
-  // a total_td value that is at least 80% of the server's value. This prevents
-  // attackers from claiming arbitrary usernames since they won't know the exact
-  // game state of the victim.
-  const row = await db
-    .prepare("SELECT total_td FROM user_scores WHERE username = ?")
-    .bind(username)
-    .first<{ total_td: number }>();
-  if (row && row.total_td > 0) {
-    const serverTD = row.total_td;
-    // Client TD must be within a reasonable range of server TD.
-    // Allow client to be ahead (they may have earned more locally) or slightly behind
-    // (sync delay), but not wildly off (attacker guessing).
-    if (clientTotalTD < serverTD * 0.8) {
-      return null; // Ownership verification failed
-    }
-  }
-  await db
-    .prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ?")
-    .bind(hash, username)
-    .run();
-  return getProfile(db, username);
-}
-
 function buildProfileScoring(cp: SyncBody["currentProfile"]) {
   const totalTD = cp?.total_td ?? 0;
   return {
@@ -92,79 +67,74 @@ function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
   };
 }
 
-async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody): Promise<{ profile: Awaited<ReturnType<typeof getProfile>>; error?: string }> {
+type CreateProfileResult =
+  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined }
+  | { profile: null; error: string };
+
+async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody): Promise<CreateProfileResult> {
   const newUsername = body.username || "anonymous";
   const s = buildProfileScoring(body.currentProfile);
   const c = buildProfileCosmetics(body.currentProfile);
 
-  // Check if username already exists with a different license — refuse to overwrite
+  // Check if username already exists — refuse to overwrite any existing profile.
+  // This prevents an attacker with a valid license from claiming an existing
+  // username (whether licensed or unlicensed). Users must pick a unique username.
   const existing = await db
     .prepare("SELECT license_hash FROM user_scores WHERE username = ?")
     .bind(newUsername)
     .first<{ license_hash: string | null }>();
-  if (existing?.license_hash && existing.license_hash !== hash) {
-    return { profile: null, error: "This username is already linked to a different license" };
+  if (existing) {
+    if (existing.license_hash === hash) {
+      // Already belongs to this license — just return the existing profile
+      const profile = await getProfile(db, newUsername);
+      if (!profile) return { profile: null, error: "Profile not found after lookup" };
+      return { profile };
+    }
+    return { profile: null, error: "This username is already taken. Please change your username and try again." };
   }
 
   await db
     .prepare(
       `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(username) DO UPDATE SET license_hash = ?, updated_at = datetime('now')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       newUsername, s.totalTD, s.currentTD, s.rank, hash,
       s.inventory, s.upgrades, s.achievements,
       c.buddyType, c.buddyIsShiny, c.unlockedThemes,
       c.activeTheme, c.activeTicket, c.tdMultiplier,
-      hash,
     )
     .run();
 
   const profile = await getProfile(db, newUsername);
+  if (!profile) return { profile: null, error: "Failed to create profile" };
   return { profile };
 }
 
-async function resolveProfile(db: D1Database, hash: string, body: SyncBody): Promise<{ restored: boolean; profile: Awaited<ReturnType<typeof getProfile>> | null; error?: string }> {
-  // Case 1: Existing profile with this license_hash → restore
+type ResolveProfileResult =
+  | { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined }
+  | { restored: false; profile: null; error: string };
+
+async function resolveProfile(db: D1Database, hash: string, body: SyncBody): Promise<ResolveProfileResult> {
+  // Case 1: Existing profile with this license_hash → restore (cross-device sync)
+  // This is the only path that binds a license to a profile: the profile was
+  // originally created through this same license via Case 2 below.
   const existingByHash = await getProfileByLicenseHash(db, hash);
   if (existingByHash) {
     return { restored: true, profile: existingByHash };
   }
 
-  // Case 2: User has a user_scores row by username → link license_hash
-  // Security: verify caller owns the profile via two checks:
-  //   a) Profile must not already belong to a different license
-  //   b) Caller must prove ownership by providing game state that matches the server
-  if (body.username) {
-    const existingByName = await getProfileRow(db, body.username);
-    if (existingByName) {
-      const row = existingByName as unknown as { license_hash: string | null };
-      if (row.license_hash && row.license_hash !== hash) {
-        // Profile already belongs to a different license — refuse to rebind
-        return { restored: false, profile: null, error: "This username is already linked to a different license" };
-      }
-      if (row.license_hash === hash) {
-        // Already linked to this license — just return the profile
-        const profile = await getProfile(db, body.username);
-        return { restored: false, profile };
-      }
-      // Profile has no license — verify ownership via game state before linking
-      const clientTotalTD = body.currentProfile?.total_td ?? 0;
-      const profile = await linkExistingProfile(db, hash, body.username, clientTotalTD);
-      if (!profile) {
-        return { restored: false, profile: null, error: "Cannot link this username: ownership verification failed. Your local game state does not match the server profile." };
-      }
-      return { restored: false, profile };
-    }
-  }
-
-  // Case 3: No profile at all → create from client-provided currentProfile
+  // Case 2: No profile for this license → create a new one.
+  // We never bind a license to an existing unlicensed profile because there is
+  // no proof-of-ownership mechanism that cannot be satisfied by guessed gameplay
+  // state. An attacker with a valid license could otherwise claim any unlicensed
+  // username by supplying plausible game data.
   const created = await createProfileFromClient(db, hash, body);
-  if (created.error) {
+  if ('error' in created && created.error) {
     return { restored: false, profile: null, error: created.error };
   }
-  return { restored: false, profile: created.profile };
+  // After error check, created.profile is guaranteed non-null by CreateProfileResult union
+  return { restored: false, profile: created.profile! };
 }
 
 account.post("/sync", async (c) => {
@@ -223,10 +193,8 @@ account.post("/sync", async (c) => {
     return c.json({ error: result.error }, 403);
   }
   const quotaPercent = await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
-  if (result.profile) {
-    result.profile = { ...result.profile, quota_percent: quotaPercent };
-  }
-  return c.json({ success: true, hash, ...result });
+  const profile = { ...result.profile, quota_percent: quotaPercent };
+  return c.json({ success: true, hash, restored: result.restored, profile });
 });
 
 // ─── Ownership verification ─────────────────────────────────────────
