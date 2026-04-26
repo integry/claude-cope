@@ -83,38 +83,6 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
     );
   };
 
-  /** Clickable empty line: entire row between ║...║ is a link */
-  const clickableEmptyLine = (url: string, available: boolean) => {
-    if (!available) return emptyLine;
-    return (
-      <>
-        <span style={{ color: B }}>{"║"}</span>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline",
-            textDecoration: "none",
-            color: "transparent",
-            cursor: "pointer",
-            backgroundColor: "transparent",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "rgba(74, 222, 128, 0.15)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {" ".repeat(INNER_W)}
-        </a>
-        <span style={{ color: B }}>{"║"}</span>
-      </>
-    );
-  };
-
   /** Button line: clickable <a> padded between ║ ... ║
    *  primary = solid green block (default selected)
    *  secondary = green text only, turns solid green on hover */
@@ -147,10 +115,14 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
           target="_blank"
           rel="noopener noreferrer"
           style={{
-            display: "inline",
+            display: "inline-block",
             textDecoration: "none",
             cursor: "pointer",
             backgroundColor: "transparent",
+            paddingTop: "0.45em",
+            paddingBottom: "0.45em",
+            lineHeight: "1.1",
+            verticalAlign: "middle",
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = "rgba(74, 222, 128, 0.15)";
@@ -240,15 +212,11 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled. ${PRO_QUOTA_LIMIT} credits of pure throughput.`)}{"\n"}
-        {clickableEmptyLine(UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {buttonBoxLine(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
-        {clickableEmptyLine(UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
         {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
         {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
-        {clickableEmptyLine(UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {buttonBoxLine(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
-        {clickableEmptyLine(UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {midBorder}{"\n"}
         {(() => {
           const text = "[Press ESC to retain your net worth]";
