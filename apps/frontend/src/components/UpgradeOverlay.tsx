@@ -84,7 +84,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
   };
 
   /** Clickable empty line: entire row between ║...║ is a link */
-  const clickableEmptyLine = (url: string, available: boolean) => {
+  const clickableEmptyLine = (url: string, available: boolean, _primary = true) => {
     if (!available) return emptyLine;
     return (
       <>
@@ -98,6 +98,13 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
             textDecoration: "none",
             color: "transparent",
             cursor: "pointer",
+            backgroundColor: "transparent",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "rgba(74, 222, 128, 0.15)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -135,32 +142,47 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
     return (
       <>
         <span style={{ color: B }}>{"║"}</span>
-        <span>{" ".repeat(MARGIN)}</span>
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
           style={{
             display: "inline",
-            backgroundColor: primary ? G : "transparent",
-            color: primary ? "#0d1117" : G,
             textDecoration: "none",
-            fontWeight: "bold",
             cursor: "pointer",
+            backgroundColor: "transparent",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = primary ? "#ffffff" : G;
-            e.currentTarget.style.color = primary ? "#000000" : "#0d1117";
+            e.currentTarget.style.backgroundColor = "rgba(74, 222, 128, 0.15)";
+            const btn = e.currentTarget.querySelector("[data-btn]") as HTMLElement;
+            if (btn) {
+              btn.style.backgroundColor = primary ? "#ffffff" : G;
+              btn.style.color = primary ? "#000000" : "#0d1117";
+            }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = primary ? G : "transparent";
-            e.currentTarget.style.color = primary ? "#0d1117" : G;
+            e.currentTarget.style.backgroundColor = "transparent";
+            const btn = e.currentTarget.querySelector("[data-btn]") as HTMLElement;
+            if (btn) {
+              btn.style.backgroundColor = primary ? G : "transparent";
+              btn.style.color = primary ? "#0d1117" : G;
+            }
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {btnContent}
+          <span style={{ color: "transparent" }}>{" ".repeat(MARGIN)}</span>
+          <span
+            data-btn=""
+            style={{
+              backgroundColor: primary ? G : "transparent",
+              color: primary ? "#0d1117" : G,
+              fontWeight: "bold",
+            }}
+          >
+            {btnContent}
+          </span>
+          <span style={{ color: "transparent" }}>{" ".repeat(suffixLen)}</span>
         </a>
-        <span>{" ".repeat(suffixLen)}</span>
         <span style={{ color: B }}>{"║"}</span>
       </>
     );
@@ -224,11 +246,34 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
         {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
         {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
-        {clickableEmptyLine(UPGRADE_CHECKOUT_MULTI, multiAvailable)}{"\n"}
+        {clickableEmptyLine(UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {buttonBoxLine(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
-        {clickableEmptyLine(UPGRADE_CHECKOUT_MULTI, multiAvailable)}{"\n"}
+        {clickableEmptyLine(UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {midBorder}{"\n"}
-        {centeredBoxLine("[Press ESC to retain your net worth]", DIM)}{"\n"}
+        {(() => {
+          const text = "[Press ESC to retain your net worth]";
+          const totalPad = INNER_W - text.length;
+          const left = Math.max(0, Math.floor(totalPad / 2));
+          const right = Math.max(0, totalPad - left);
+          return (
+            <>
+              <span style={{ color: B }}>{"║"}</span>
+              <span
+                style={{ color: DIM, cursor: "pointer" }}
+                onClick={onClose}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = W;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = DIM;
+                }}
+              >
+                {" ".repeat(left) + text + " ".repeat(right)}
+              </span>
+              <span style={{ color: B }}>{"║"}</span>
+            </>
+          );
+        })()}{"\n"}
         {botBorder}
       </pre>
     </div>
