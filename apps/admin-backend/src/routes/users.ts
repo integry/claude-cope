@@ -66,11 +66,16 @@ users.get("/", async (c) => {
     }
   }
 
-  const enriched = results.map((row: Record<string, unknown>) => ({
-    ...row,
-    credits_remaining: Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
-    status: hasLicenseHashColumn && row.has_active_license ? "max" : "free",
-  }));
+  const enriched = results.map((row: Record<string, unknown>) => {
+    const isMax = hasLicenseHashColumn && row.has_active_license;
+    return {
+      ...row,
+      // Max users have quota stored in KV (not derivable from usage_logs).
+      // Show null so the admin UI can display "N/A" instead of a misleading number.
+      credits_remaining: isMax ? null : Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
+      status: isMax ? "max" : "free",
+    };
+  });
 
   return c.json(enriched);
 });

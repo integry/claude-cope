@@ -410,6 +410,9 @@ chat.post("/", async (c) => {
     }
     const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: effectiveProKeyHash, model, hour, data, quotaPercent });
     if (proResponse) return proResponse;
+    // resolveProUser passed but scoring failed — race condition or DB error.
+    // Hard-fail instead of falling through to free-user writes.
+    return c.json({ error: "Pro scoring failed — please retry" }, 500);
   }
 
   // Free users only — pro users are fully handled above

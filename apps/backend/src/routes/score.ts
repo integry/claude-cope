@@ -212,6 +212,9 @@ score.post("/", async (c) => {
     }
     const updated = await syncProUser(db, body);
     if (updated) return c.json({ profile: updated });
+    // resolveProUser passed but syncProUser failed — race condition or DB error.
+    // Hard-fail instead of falling through to the free write path.
+    return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }
 
   // Guard: if this username already has a license_hash, refuse unauthenticated writes.

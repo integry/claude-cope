@@ -124,9 +124,6 @@ webhooks.post("/polar", async (c) => {
   if (existing !== null) {
     return c.json({ received: true }, 200);
   }
-  // Claim this webhook ID with a short TTL; extended to 24h after processing
-  await kv.put(idempotencyKey, "processing", { expirationTtl: 300 });
-
   const event = JSON.parse(rawBody) as {
     type: string;
     data?: { properties?: { license_key?: string } };
@@ -134,13 +131,22 @@ webhooks.post("/polar", async (c) => {
 
   const licenseKey = event.data?.properties?.license_key;
 
-  if (event.type === "benefit_grant.created" && licenseKey) {
-    await handleBenefitGrantCreated(licenseKey, kv, c.env);
-  } else if (event.type === "benefit_grant.revoked" && licenseKey) {
-    await handleBenefitGrantRevoked(licenseKey, kv, c.env);
+  // Process the event BEFORE marking the webhook as handled. If the handler
+  // throws, retries from Polar will re-enter and retry processing instead of
+  // being short-circuited by a stale idempotency key.
+  try {
+    if (event.type === "benefit_grant.created" && licenseKey) {
+      await handleBenefitGrantCreated(licenseKey, kv, c.env);
+    } else if (event.type === "benefit_grant.revoked" && licenseKey) {
+      await handleBenefitGrantRevoked(licenseKey, kv, c.env);
+    }
+  } catch (err) {
+    // Do NOT write the idempotency key — allow Polar to retry this webhook.
+    console.error(`[WEBHOOK] Failed to handle ${event.type}:`, err);
+    return c.json({ error: "Processing failed" }, 500);
   }
 
-  // Store idempotency key with 24h TTL
+  // Mark as processed only after successful completion (24h TTL).
   await kv.put(idempotencyKey, "1", { expirationTtl: 86400 });
 
   return c.json({ received: true }, 200);

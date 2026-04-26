@@ -37,7 +37,10 @@ type CreateProfileResult =
   | { profile: null; error: string };
 
 async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<CreateProfileResult> {
-  const newUsername = body.username || "anonymous";
+  const newUsername = body.username?.trim();
+  if (!newUsername) {
+    return { profile: null, error: "Username is required — please set a username before activating." };
+  }
 
   // Check if username already exists.
   const existing = await db

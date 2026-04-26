@@ -152,8 +152,8 @@ account.post("/buy-generator", async (c) => {
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
   const body = await c.req.json<{ username: string; generatorId: string; amount: number; licenseKeyHash: string }>();
-  if (!body.username || !body.generatorId || !body.amount || body.amount < 1 || !body.licenseKeyHash) {
-    return c.json({ error: "username, generatorId, amount, and licenseKeyHash are required" }, 400);
+  if (!body.username || !body.generatorId || !body.amount || body.amount < 1 || !Number.isInteger(body.amount) || !body.licenseKeyHash) {
+    return c.json({ error: "username, generatorId, amount (positive integer), and licenseKeyHash are required" }, 400);
   }
 
   const generator = GENERATORS.find((g) => g.id === body.generatorId);
