@@ -69,6 +69,32 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
   /** An empty line: ║ (spaces) ║ */
   const emptyLine = boxLine("");
 
+  /** A clickable empty line that acts as extended hit area for a button */
+  const clickableEmptyLine = (url: string, available: boolean) => {
+    if (!available) return emptyLine;
+    return (
+      <>
+        <span style={{ color: B }}>{"║"}</span>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline",
+            textDecoration: "none",
+            cursor: "pointer",
+            backgroundColor: "transparent",
+            color: "transparent",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {" ".repeat(INNER_W)}
+        </a>
+        <span style={{ color: B }}>{"║"}</span>
+      </>
+    );
+  };
+
   /** A centered content line between ║ ... ║ */
   const centeredBoxLine = (text: string, color = W) => {
     const totalPad = INNER_W - text.length;
@@ -225,16 +251,16 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         {boxLine("  [OPTION 1: SINGLE LICENSE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled. ${PRO_QUOTA_LIMIT} non-expiring`)}{"\n"}
         {boxLine("  credits (one-time extraction).")}{"\n"}
-        {emptyLine}{"\n"}
+        {clickableEmptyLine(UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {buttonBoxLine(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
-        {emptyLine}{"\n"}
+        {clickableEmptyLine(UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
         {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
         {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
-        {emptyLine}{"\n"}
+        {clickableEmptyLine(UPGRADE_CHECKOUT_MULTI, multiAvailable)}{"\n"}
         {buttonBoxLine(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
-        {emptyLine}{"\n"}
+        {clickableEmptyLine(UPGRADE_CHECKOUT_MULTI, multiAvailable)}{"\n"}
         {midBorder}{"\n"}
         {(() => {
           const text = "[Press ESC to retain your net worth]";
