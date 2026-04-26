@@ -267,6 +267,42 @@ function cacheSessionUsername(
   }
 }
 
+/**
+ * Decide whether to cache the session→username mapping.
+ * Prevents an attacker from claiming another user's username.
+ */
+async function tryCacheSessionMapping(
+  env: Env["Bindings"],
+  ctx: { waitUntil: (p: Promise<unknown>) => void },
+  db: D1Database,
+  sessionId: string,
+  username: string,
+  effectiveProKeyHash: string | undefined,
+) {
+  const row = await getProfileRow(db, username);
+  const profileHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
+  if (effectiveProKeyHash) {
+    // Pro user: only cache if the verified key hash matches this profile
+    if (profileHash === effectiveProKeyHash) {
+      cacheSessionUsername(env.QUOTA_KV ?? env.USAGE_KV, sessionId, username, ctx);
+    }
+  } else if (!profileHash) {
+    // Free user claiming a free username: safe to cache
+    cacheSessionUsername(env.QUOTA_KV ?? env.USAGE_KV, sessionId, username, ctx);
+  }
+  // Otherwise: free user claiming a Pro user's username — skip caching
+}
+
+function validateChatRequest(body: ChatBody, apiKey: string | undefined): { error: string; status: 400 | 500 } | null {
+  if (!body.chatMessages || !Array.isArray(body.chatMessages)) {
+    return { error: "chatMessages array is required", status: 400 };
+  }
+  if (!apiKey) {
+    return { error: "OPENROUTER_API_KEY is not configured", status: 500 };
+  }
+  return null;
+}
+
 async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[]) {
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -288,13 +324,10 @@ const chat = new Hono<Env>();
 chat.post("/", async (c) => {
   const body = await c.req.json<ChatBody>();
 
-  if (!body.chatMessages || !Array.isArray(body.chatMessages)) {
-    return c.json({ error: "chatMessages array is required" }, 400);
-  }
-
   const apiKey = (c.env as Record<string, string | undefined>).OPENROUTER_API_KEY;
-  if (!apiKey) {
-    return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
+  const validation = validateChatRequest(body, apiKey);
+  if (validation) {
+    return c.json({ error: validation.error }, validation.status);
   }
 
   const db = c.env?.DB;
@@ -307,18 +340,7 @@ chat.post("/", async (c) => {
   // be restored via GET /api/account/me.  We verify ownership first to prevent
   // an attacker from claiming another user's username and leaking their profile.
   if (db && username && username !== "anonymous") {
-    const row = await getProfileRow(db, username);
-    const profileHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
-    if (effectiveProKeyHash) {
-      // Pro user: only cache if the verified key hash matches this profile
-      if (profileHash === effectiveProKeyHash) {
-        cacheSessionUsername(c.env.QUOTA_KV ?? c.env.USAGE_KV, sessionId, username, c.executionCtx);
-      }
-    } else if (!profileHash) {
-      // Free user claiming a free username: safe to cache
-      cacheSessionUsername(c.env.QUOTA_KV ?? c.env.USAGE_KV, sessionId, username, c.executionCtx);
-    }
-    // Otherwise: free user claiming a Pro user's username — skip caching
+    await tryCacheSessionMapping(c.env, c.executionCtx, db, sessionId, username, effectiveProKeyHash);
   }
 
   // Consume quota before making the OpenRouter request.
