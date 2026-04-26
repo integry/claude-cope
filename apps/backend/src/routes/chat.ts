@@ -274,11 +274,9 @@ function cacheSessionUsername(
 async function tryCacheSessionMapping(
   env: Env["Bindings"],
   ctx: { waitUntil: (p: Promise<unknown>) => void },
-  db: D1Database,
-  sessionId: string,
-  username: string,
-  effectiveProKeyHash: string | undefined,
+  opts: { db: D1Database; sessionId: string; username: string; effectiveProKeyHash: string | undefined },
 ) {
+  const { db, sessionId, username, effectiveProKeyHash } = opts;
   const row = await getProfileRow(db, username);
   const profileHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
   if (effectiveProKeyHash) {
@@ -340,7 +338,7 @@ chat.post("/", async (c) => {
   // be restored via GET /api/account/me.  We verify ownership first to prevent
   // an attacker from claiming another user's username and leaking their profile.
   if (db && username && username !== "anonymous") {
-    await tryCacheSessionMapping(c.env, c.executionCtx, db, sessionId, username, effectiveProKeyHash);
+    await tryCacheSessionMapping(c.env, c.executionCtx, { db, sessionId, username, effectiveProKeyHash });
   }
 
   // Consume quota before making the OpenRouter request.
@@ -365,7 +363,7 @@ chat.post("/", async (c) => {
     buddyType: body.buddyType,
   });
 
-  const response = await callOpenRouter(apiKey, model, messages);
+  const response = await callOpenRouter(apiKey!, model, messages);
 
   if (!response.ok) {
     const data = await response.json();
