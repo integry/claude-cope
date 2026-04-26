@@ -76,9 +76,7 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
   const s = buildProfileScoring(body.currentProfile);
   const c = buildProfileCosmetics(body.currentProfile);
 
-  // Check if username already exists — refuse to overwrite any existing profile.
-  // This prevents an attacker with a valid license from claiming an existing
-  // username (whether licensed or unlicensed). Users must pick a unique username.
+  // Check if username already exists.
   const existing = await db
     .prepare("SELECT license_hash FROM user_scores WHERE username = ?")
     .bind(newUsername)
@@ -90,6 +88,17 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
       if (!profile) return { profile: null, error: "Profile not found after lookup" };
       return { profile };
     }
+    if (existing.license_hash === null) {
+      // Free user upgrading to Max — attach the license to their existing profile
+      await db
+        .prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ? AND license_hash IS NULL")
+        .bind(hash, newUsername)
+        .run();
+      const profile = await getProfile(db, newUsername);
+      if (!profile) return { profile: null, error: "Profile not found after upgrade" };
+      return { profile };
+    }
+    // Username is owned by a different license — refuse
     return { profile: null, error: "This username is already taken. Please change your username and try again." };
   }
 
@@ -124,11 +133,8 @@ async function resolveProfile(db: D1Database, hash: string, body: SyncBody): Pro
     return { restored: true, profile: existingByHash };
   }
 
-  // Case 2: No profile for this license → create a new one.
-  // We never bind a license to an existing unlicensed profile because there is
-  // no proof-of-ownership mechanism that cannot be satisfied by guessed gameplay
-  // state. An attacker with a valid license could otherwise claim any unlicensed
-  // username by supplying plausible game data.
+  // Case 2: No profile for this license → create a new one, or upgrade an
+  // existing free (unlicensed) profile if the username matches.
   const created = await createProfileFromClient(db, hash, body);
   if ('error' in created && created.error) {
     return { restored: false, profile: null, error: created.error };

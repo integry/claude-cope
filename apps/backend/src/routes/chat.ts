@@ -150,9 +150,13 @@ async function handleQuotaCheck(
   }
 }
 
+/** Minimum interval (ms) between Polar usage syncs per license key. */
+const POLAR_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Mirror the user's Pro-tier usage to Polar's license-key dashboard.
  * Fire-and-forget via waitUntil — no user latency, no fail mode for chat.
+ * Debounced: at most one outbound PATCH per license key per POLAR_SYNC_INTERVAL_MS.
  */
 async function mirrorPolarUsage(
   env: Env["Bindings"],
@@ -161,12 +165,19 @@ async function mirrorPolarUsage(
 ): Promise<void> {
   const kv = env.QUOTA_KV ?? env.USAGE_KV;
   if (!kv || !env.POLAR_ACCESS_TOKEN) return;
+
+  // Coarse debounce: skip if we synced recently for this license key
+  const debounceKey = `polar_sync_ts:${proKeyHash}`;
+  const lastSync = await kv.get(debounceKey);
+  if (lastSync && Date.now() - Number(lastSync) < POLAR_SYNC_INTERVAL_MS) return;
+
   const licenseKeyId = await kv.get(`polar_id:${proKeyHash}`);
   if (!licenseKeyId) return;
   const limits = getQuotaLimits(env);
   const usage = Math.max(0, limits.proInitialQuota - remaining);
   try {
     await syncPolarUsage(licenseKeyId, env.POLAR_ACCESS_TOKEN, usage);
+    await kv.put(debounceKey, String(Date.now()), { expirationTtl: POLAR_SYNC_INTERVAL_MS / 1000 });
   } catch {
     // Polar dashboard drift is acceptable; KV is source of truth.
   }
