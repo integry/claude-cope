@@ -45,12 +45,14 @@ type SyncBody = {
 };
 
 function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
+  // Only truly cosmetic preferences are accepted from the client.
+  // unlocked_themes and active_ticket are server-authoritative: themes are
+  // paid items that must not be mintable via a forged first-sync payload,
+  // and ticket state must not be restored from stale client data.
   return {
     buddyType: cp?.buddy_type ?? null,
     buddyIsShiny: cp?.buddy_is_shiny ? 1 : 0,
-    unlockedThemes: JSON.stringify(cp?.unlocked_themes ?? ["default"]),
     activeTheme: cp?.active_theme ?? "default",
-    activeTicket: cp?.active_ticket ? JSON.stringify(cp.active_ticket) : null,
     tdMultiplier: cp?.td_multiplier ?? 1.0,
   };
 }
@@ -99,12 +101,12 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
   await db
     .prepare(
       `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
-       VALUES (?, 0, 0, ?, ?, '{}', '[]', '[]', ?, ?, ?, ?, ?, 1.0)`,
+       VALUES (?, 0, 0, ?, ?, '{}', '[]', '[]', ?, ?, '["default"]', ?, NULL, 1.0)`,
     )
     .bind(
       newUsername, defaultRank, hash,
-      c.buddyType, c.buddyIsShiny, c.unlockedThemes,
-      c.activeTheme, c.activeTicket,
+      c.buddyType, c.buddyIsShiny,
+      c.activeTheme,
     )
     .run();
 
@@ -316,20 +318,23 @@ account.post("/buy-upgrade", async (c) => {
     return c.json({ error: "Insufficient TD", required: upgrade.cost, available: profile.current_td }, 400);
   }
 
-  // Atomic update: SQL-level TD guard + JSON append to prevent race conditions.
+  // Atomic update: SQL-level TD guard + JSON append + dedupe guard.
+  // The NOT IN subquery prevents concurrent requests that both pass the
+  // JS-level "already owned" check from both appending the same upgrade.
   const result = await db
     .prepare(
       `UPDATE user_scores SET
         current_td = current_td - ?,
         upgrades = json_insert(COALESCE(upgrades, '[]'), '$[#]', ?),
         updated_at = datetime('now')
-      WHERE username = ? AND current_td >= ?`,
+      WHERE username = ? AND current_td >= ?
+        AND ? NOT IN (SELECT value FROM json_each(COALESCE(upgrades, '[]')))`,
     )
-    .bind(upgrade.cost, body.upgradeId, body.username, upgrade.cost)
+    .bind(upgrade.cost, body.upgradeId, body.username, upgrade.cost, body.upgradeId)
     .run();
 
   if (!result.meta.changes) {
-    return c.json({ error: "Insufficient TD (concurrent update)", required: upgrade.cost }, 409);
+    return c.json({ error: "Insufficient TD or upgrade already owned (concurrent update)", required: upgrade.cost }, 409);
   }
 
   const updated = await getProfile(db, body.username);
@@ -361,20 +366,23 @@ account.post("/buy-theme", async (c) => {
     return c.json({ error: "Insufficient TD", required: theme.cost, available: profile.current_td }, 400);
   }
 
-  // Atomic update: SQL-level TD guard + JSON append to prevent race conditions.
+  // Atomic update: SQL-level TD guard + JSON append + dedupe guard.
+  // The NOT IN subquery prevents concurrent requests that both pass the
+  // JS-level "already unlocked" check from both appending the same theme.
   const result = await db
     .prepare(
       `UPDATE user_scores SET
         current_td = current_td - ?,
         unlocked_themes = json_insert(COALESCE(unlocked_themes, '["default"]'), '$[#]', ?),
         updated_at = datetime('now')
-      WHERE username = ? AND current_td >= ?`,
+      WHERE username = ? AND current_td >= ?
+        AND ? NOT IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))`,
     )
-    .bind(theme.cost, body.themeId, body.username, theme.cost)
+    .bind(theme.cost, body.themeId, body.username, theme.cost, body.themeId)
     .run();
 
   if (!result.meta.changes) {
-    return c.json({ error: "Insufficient TD (concurrent update)", required: theme.cost }, 409);
+    return c.json({ error: "Insufficient TD or theme already unlocked (concurrent update)", required: theme.cost }, 409);
   }
 
   const updated = await getProfile(db, body.username);
@@ -402,10 +410,17 @@ account.post("/unlock-achievement", async (c) => {
     return c.json({ success: true, profile });
   }
 
-  const newAchievements = [...profile.achievements, body.achievementId];
+  // Atomic update: SQL-level JSON append + dedupe guard prevents concurrent
+  // requests from overwriting each other's achievements.
   await db
-    .prepare("UPDATE user_scores SET achievements = ?, updated_at = datetime('now') WHERE username = ?")
-    .bind(JSON.stringify(newAchievements), body.username)
+    .prepare(
+      `UPDATE user_scores SET
+        achievements = json_insert(COALESCE(achievements, '[]'), '$[#]', ?),
+        updated_at = datetime('now')
+      WHERE username = ?
+        AND ? NOT IN (SELECT value FROM json_each(COALESCE(achievements, '[]')))`,
+    )
+    .bind(body.achievementId, body.username, body.achievementId)
     .run();
 
   const updated = await getProfile(db, body.username);
@@ -426,9 +441,11 @@ account.post("/update-buddy", async (c) => {
     return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
   }
 
+  // Atomic: include license_hash in WHERE to prevent TOCTOU between
+  // verifyOwnership and the actual update.
   await db
-    .prepare("UPDATE user_scores SET buddy_type = ?, buddy_is_shiny = ?, updated_at = datetime('now') WHERE username = ?")
-    .bind(body.buddyType ?? null, body.isShiny ? 1 : 0, body.username)
+    .prepare("UPDATE user_scores SET buddy_type = ?, buddy_is_shiny = ?, updated_at = datetime('now') WHERE username = ? AND license_hash = ?")
+    .bind(body.buddyType ?? null, body.isShiny ? 1 : 0, body.username, body.licenseKeyHash)
     .run();
 
   const updated = await getProfile(db, body.username);
@@ -453,9 +470,11 @@ account.post("/update-ticket", async (c) => {
     return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
   }
 
+  // Atomic: include license_hash in WHERE to prevent TOCTOU between
+  // verifyOwnership and the actual update.
   await db
-    .prepare("UPDATE user_scores SET active_ticket = ?, updated_at = datetime('now') WHERE username = ?")
-    .bind(body.activeTicket ? JSON.stringify(body.activeTicket) : null, body.username)
+    .prepare("UPDATE user_scores SET active_ticket = ?, updated_at = datetime('now') WHERE username = ? AND license_hash = ?")
+    .bind(body.activeTicket ? JSON.stringify(body.activeTicket) : null, body.username, body.licenseKeyHash)
     .run();
 
   const updated = await getProfile(db, body.username);

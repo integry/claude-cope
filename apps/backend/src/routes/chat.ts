@@ -258,9 +258,15 @@ chat.post("/", async (c) => {
   // the client still holds the old hash.
   const db = c.env?.DB;
   let effectiveProKeyHash = body.proKeyHash;
-  if (effectiveProKeyHash && db) {
-    const active = await isLicenseActive(db, effectiveProKeyHash);
-    if (!active) effectiveProKeyHash = undefined;
+  if (effectiveProKeyHash) {
+    if (db) {
+      const active = await isLicenseActive(db, effectiveProKeyHash);
+      if (!active) effectiveProKeyHash = undefined;
+    } else {
+      // DB unavailable: fail closed — do not grant pro-tier access based on
+      // an unverifiable client-supplied hash. The user falls to the free path.
+      effectiveProKeyHash = undefined;
+    }
   }
 
   // Consume quota before making the OpenRouter request.
