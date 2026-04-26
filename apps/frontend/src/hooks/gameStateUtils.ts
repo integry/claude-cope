@@ -162,11 +162,71 @@ function createDefaultState(): GameState {
   };
 }
 
+function applyDefensiveDefaults(state: GameState): void {
+  if (!Array.isArray(state.upgrades)) {
+    state.upgrades = [];
+  }
+  if (!Array.isArray(state.achievements)) {
+    state.achievements = [];
+  }
+  if (!state.buddy) {
+    state.buddy = {
+      type: null,
+      isShiny: false,
+      promptsSinceLastInterjection: 0,
+    };
+  }
+  if (!Array.isArray(state.chatHistory)) {
+    state.chatHistory = [];
+  }
+  if (!state.commandUsage || typeof state.commandUsage !== "object") {
+    state.commandUsage = {};
+  }
+  if (!state.modes || typeof state.modes !== "object") {
+    state.modes = { fast: false, voice: false };
+  }
+  if (state.activeTicket === undefined) {
+    state.activeTicket = null;
+  }
+  if (state.hasSeenTicketPrompt === undefined) {
+    state.hasSeenTicketPrompt = false;
+  }
+  if (!state.activeTheme) {
+    state.activeTheme = "default";
+  }
+  if (!Array.isArray(state.unlockedThemes)) {
+    state.unlockedThemes = ["default"];
+  }
+  if (state.soundEnabled === undefined) {
+    state.soundEnabled = true;
+  }
+  if (!Array.isArray(state.pendingCompletedTaskIds)) {
+    state.pendingCompletedTaskIds = [];
+  }
+}
+
 export function loadState(): GameState {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const state = JSON.parse(stored) as GameState;
+
+      // Ensure required fields exist (defensive against partial/corrupt storage)
+      applyDefensiveDefaults(state);
+      if (!state.username) {
+        state.username = generateUsername();
+      }
+      if (!state.economy) {
+        return createDefaultState();
+      }
+
+      if (state.economy.quotaPercent == null) {
+        state.economy.quotaPercent = 100;
+      }
+      if (!state.economy.tdMultiplier) {
+        state.economy.tdMultiplier = 1;
+      }
+
       state.version = STATE_VERSION;
       return state;
     }
