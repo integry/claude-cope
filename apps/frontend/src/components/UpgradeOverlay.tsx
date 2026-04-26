@@ -19,7 +19,7 @@ const W = "#ffffff"; // white body text
 const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
-const BOX_W = 66; // inner width of box
+const INNER_W = 64; // inner content width (between ║ chars)
 
 /* ── component ───────────────────────────────────────────────── */
 
@@ -28,94 +28,116 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
   const singleLabel = isUpgraded
-    ? `[ BUY ANOTHER SEAT - ${UPGRADE_PRICE_SINGLE} ]`
-    : `[ PURCHASE SINGLE - ${UPGRADE_PRICE_SINGLE} ]`;
+    ? `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`
+    : `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`;
 
   const multiLabel = isUpgraded
-    ? `[ BUY MORE SEATS - ${UPGRADE_PRICE_MULTI} ]`
-    : `[ PURCHASE TEAM PACK - ${UPGRADE_PRICE_MULTI} ]`;
-
-  const title = isUpgraded ? "MANAGE YOUR LICENSES" : "UPGRADE TO MAX";
-  const subtitle = isUpgraded
-    ? "Purchase additional licenses to spread the suffering across your team."
-    : "Unlock Premium Suffering.";
-
-  const statusHeading = isUpgraded ? "[CURRENT STATUS]" : "[FREE TIER]";
-  const statusLine1 = isUpgraded
-    ? "You are on the Max tier. Your suffering is premium-grade."
-    : `You are on the free tier. Upgrade to Max for ${PRO_QUOTA_LIMIT} credits,`;
-  const statusLine2 = isUpgraded
-    ? null
-    : "premium models, and the privilege of paying for your own exploitation.";
+    ? `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`
+    : `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`;
 
   /* ── render helpers ── */
 
-  const hrBorder = (
-    <span style={{ color: B }}>{"═".repeat(BOX_W)}</span>
+  /** Top border: ╔════...════╗ */
+  const topBorder = (
+    <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>
   );
 
-  const textLine = (text: string, color = W) => (
-    <span style={{ color }}>{"  " + text}</span>
+  /** Mid border: ╠════...════╣ */
+  const midBorder = (
+    <span style={{ color: B }}>{"╠" + "═".repeat(INNER_W) + "╣"}</span>
   );
 
-  const centeredLine = (text: string, color = W) => {
-    const totalPad = BOX_W - text.length;
-    const left = Math.floor(totalPad / 2);
+  /** Bottom border: ╚════...════╝ */
+  const botBorder = (
+    <span style={{ color: B }}>{"╚" + "═".repeat(INNER_W) + "╝"}</span>
+  );
+
+  /** A content line padded to INNER_W between ║ ... ║ */
+  const boxLine = (text: string, color = W) => {
+    const padded = text.length < INNER_W
+      ? text + " ".repeat(INNER_W - text.length)
+      : text.slice(0, INNER_W);
     return (
-      <span style={{ color }}>
-        {" ".repeat(left) + text}
-      </span>
+      <>
+        <span style={{ color: B }}>{"║"}</span>
+        <span style={{ color }}>{padded}</span>
+        <span style={{ color: B }}>{"║"}</span>
+      </>
     );
   };
 
-  const headerLine = (
-    <span style={{ color: B }}>
-      {"             [ S Y S T E M   O V E R R I D E ]"}
-    </span>
-  );
+  /** An empty line: ║ (spaces) ║ */
+  const emptyLine = boxLine("");
 
-  const footerLine = (
-    <span style={{ color: DIM }}>
-      {"             [Press ESC to return to mediocrity]"}
-    </span>
-  );
+  /** A centered content line between ║ ... ║ */
+  const centeredBoxLine = (text: string, color = W) => {
+    const totalPad = INNER_W - text.length;
+    const left = Math.max(0, Math.floor(totalPad / 2));
+    const right = Math.max(0, totalPad - left);
+    return (
+      <>
+        <span style={{ color: B }}>{"║"}</span>
+        <span style={{ color }}>{" ".repeat(left) + text + " ".repeat(right)}</span>
+        <span style={{ color: B }}>{"║"}</span>
+      </>
+    );
+  };
 
-  /* Button line: rendered as a clickable <a> inside the <pre> */
-  const buttonLine = (
+  /** Button line: clickable <a> padded between ║ ... ║ */
+  const buttonBoxLine = (
     label: string,
     url: string,
     available: boolean,
   ) => {
     const inner = "    > " + label;
+    const padLen = Math.max(0, INNER_W - inner.length);
     if (!available) {
+      const errText = "    [ERR] CHECKOUT_URL not configured.";
+      const errPad = Math.max(0, INNER_W - errText.length);
       return (
-        <span style={{ color: B }}>{"    [ERR] CHECKOUT_URL not configured. Contact your operator."}</span>
+        <>
+          <span style={{ color: B }}>{"║"}</span>
+          <span style={{ color: B }}>{errText + " ".repeat(errPad)}</span>
+          <span style={{ color: B }}>{"║"}</span>
+        </>
       );
     }
     return (
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          color: G,
-          textDecoration: "none",
-          cursor: "pointer",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = G;
-          e.currentTarget.style.color = "#000000";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = "transparent";
-          e.currentTarget.style.color = G;
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {inner}
-      </a>
+      <>
+        <span style={{ color: B }}>{"║"}</span>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: G,
+            textDecoration: "none",
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = G;
+            e.currentTarget.style.color = "#000000";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
+            e.currentTarget.style.color = G;
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {inner + " ".repeat(padLen)}
+        </a>
+        <span style={{ color: B }}>{"║"}</span>
+      </>
     );
   };
+
+  /* ── ASCII table lines ── */
+  const tableBorderTop = boxLine("  +----------------+----------+------------------------------+");
+  const tableHeader    = boxLine("  | ARCHITECTURE   | CAPACITY | GUARANTEED OUTCOME           |");
+  const tableBorderMid = boxLine("  +----------------+----------+------------------------------+");
+  const tableRow1      = boxLine("  | Legacy AI      | Max 20x  | Manageable pull requests     |");
+  const tableRow2      = boxLine("  | Claude Cope    | MAX 429X | Unmitigated request storms   |");
+  const tableBorderBot = boxLine("  +----------------+----------+------------------------------+");
 
   return (
     <div
@@ -133,48 +155,46 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
           fontSize: "13px",
           lineHeight: "1.1",
           backgroundColor: "#1e232b",
-          border: `1px solid ${B}`,
           boxShadow: "12px 12px 0px rgba(0, 0, 0, 0.9)",
-          padding: "0 8px",
+          padding: 0,
           margin: 0,
           whiteSpace: "pre",
           overflow: "hidden",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {hrBorder}{"\n"}
-        {headerLine}{"\n"}
-        {hrBorder}{"\n"}
-        {"\n"}
-        {centeredLine(title, Y)}{"\n"}
-        {centeredLine(subtitle, W)}{"\n"}
-        {"\n"}
-        {textLine(statusHeading, Y)}{"\n"}
-        {textLine(statusLine1, W)}{"\n"}
-        {statusLine2 ? <>{textLine(statusLine2, W)}{"\n"}</> : null}
-        {"\n"}
-        {textLine("[OPTION 1: SINGLE LICENSE]", Y)}{"\n"}
-        {textLine(`One seat. One soul. ${PRO_QUOTA_LIMIT} credits of technical debt`, W)}{"\n"}
-        {textLine("generation for a single developer who has given up.", W)}{"\n"}
-        {"\n"}
-        {buttonLine(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
-        {"\n"}
-        {textLine("[OPTION 2: MULTI-LICENSE PACK — 5 LICENSES]", Y)}{"\n"}
-        {textLine("Five seats for the whole team. Because misery loves company,", W)}{"\n"}
-        {textLine("and your manager wants everyone on the same page of suffering.", W)}{"\n"}
-        {"\n"}
-        {buttonLine(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable)}{"\n"}
-        {"\n"}
-        {textLine("[WHAT YOU GET]", Y)}{"\n"}
-        {textLine(`• ${PRO_QUOTA_LIMIT} API credits per license (fewer 429s)`, W)}{"\n"}
-        {textLine("• Access to premium models", W)}{"\n"}
-        {textLine("• Priority queue for suffering", W)}{"\n"}
-        {textLine("• A warm feeling of corporate compliance", W)}{"\n"}
-        {textLine("• The mass right to mass-produce technical debt", W)}{"\n"}
-        {"\n"}
-        {hrBorder}{"\n"}
-        {footerLine}{"\n"}
-        {hrBorder}
+        {topBorder}{"\n"}
+        {centeredBoxLine("[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]", B)}{"\n"}
+        {midBorder}{"\n"}
+        {emptyLine}{"\n"}
+        {centeredBoxLine("INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]", Y)}{"\n"}
+        {emptyLine}{"\n"}
+        {boxLine("  [ THROUGHPUT BENCHMARKS ]", Y)}{"\n"}
+        {boxLine("  Industry standards artificially throttle assistant capacity")}{"\n"}
+        {boxLine("  at 5x or 20x. Claude Cope is architected without safeguards")}{"\n"}
+        {boxLine("  to guarantee absolute system saturation.")}{"\n"}
+        {emptyLine}{"\n"}
+        {tableBorderTop}{"\n"}
+        {tableHeader}{"\n"}
+        {tableBorderMid}{"\n"}
+        {tableRow1}{"\n"}
+        {tableRow2}{"\n"}
+        {tableBorderBot}{"\n"}
+        {emptyLine}{"\n"}
+        {boxLine("  [OPTION 1: SINGLE LICENSE]", Y)}{"\n"}
+        {boxLine(`  One seat. Max 429X enabled. ${PRO_QUOTA_LIMIT} credits of pure throughput.`)}{"\n"}
+        {emptyLine}{"\n"}
+        {buttonBoxLine(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
+        {emptyLine}{"\n"}
+        {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
+        {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
+        {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
+        {emptyLine}{"\n"}
+        {buttonBoxLine(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable)}{"\n"}
+        {emptyLine}{"\n"}
+        {midBorder}{"\n"}
+        {centeredBoxLine("[Press ESC to retain your net worth]", DIM)}{"\n"}
+        {botBorder}
       </pre>
     </div>
   );
