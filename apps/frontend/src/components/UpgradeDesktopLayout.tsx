@@ -15,6 +15,17 @@ const DIM = "#aaaaaa"; // dim footer
 const INNER_W = 64; // inner content width (between ║ chars)
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
 
+/** Returns a humorous status adjective scaled to the user's current credits. */
+function getQuotaStatus(credits: number): string {
+  if (credits <= 0) return "Depleted";
+  if (credits <= 5) return "Pathetic";
+  if (credits <= 15) return "Embarrassing";
+  if (credits <= 50) return "Insufficient";
+  if (credits <= 200) return "Mediocre";
+  if (credits <= 500) return "Tolerable";
+  return "Adequate";
+}
+
 /* ── types ──────────────────────────────────────────────────── */
 
 export type LayoutProps = {
@@ -23,6 +34,7 @@ export type LayoutProps = {
   singleAvailable: boolean;
   multiAvailable: boolean;
   isUpgraded: boolean;
+  currentCredits: number;
   onClose: () => void;
 };
 
@@ -35,6 +47,7 @@ export default function DesktopLayout({
   multiLabel,
   singleAvailable,
   multiAvailable,
+  currentCredits,
   onClose,
 }: LayoutProps) {
   const topBorder = (
@@ -201,7 +214,7 @@ export default function DesktopLayout({
         {midBorder}{"\n"}
         {emptyLine}{"\n"}
         {centeredBoxLine("INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]", Y)}{"\n"}
-        {boxLine("  > CURRENT QUOTA: 13 Credits. Status: Pathetic.", DIM)}{"\n"}
+        {boxLine(`  > CURRENT QUOTA: ${currentCredits} Credits. Status: ${getQuotaStatus(currentCredits)}.`, DIM)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [ THROUGHPUT BENCHMARKS ]", Y)}{"\n"}
         {boxLine("  Industry standards artificially throttle assistant capacity")}{"\n"}
@@ -217,14 +230,14 @@ export default function DesktopLayout({
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
-        {boxLine(`  Unlocks: [${PRO_QUOTA_LIMIT} Non-expiring Credits]`)}{"\n"}
-        {boxLine("  [Multi-device Sync] [Priority Generation Queue]")}{"\n"}
-        {boxLine("  [Advanced Cope Models].")}{"\n"}
+        {boxLine(`  Unlocks: ${PRO_QUOTA_LIMIT} non-expiring credits, multi-device sync,`)}{"\n"}
+        {boxLine("  priority generation queue, and advanced Cope models.")}{"\n"}
         {buttonBlock(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
+        {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
         {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
         {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
-        {boxLine("  (5 activation keys will be sent to your email)", DIM)}{"\n"}
+        {boxLine("  (5 activation keys will be sent to your email)", "#8892b0")}{"\n"}
         {buttonBlock(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {midBorder}{"\n"}
         {(() => {

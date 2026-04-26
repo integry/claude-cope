@@ -2,6 +2,7 @@ import {
   UPGRADE_CHECKOUT_SINGLE,
   UPGRADE_CHECKOUT_MULTI,
   PRO_QUOTA_LIMIT,
+  FREE_QUOTA_LIMIT,
   UPGRADE_PRICE_SINGLE,
   UPGRADE_PRICE_MULTI,
 } from "../config";
@@ -18,19 +19,34 @@ const DIM = "#aaaaaa"; // dim footer
 
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
 
+/** Returns a humorous status adjective scaled to the user's current credits. */
+function getQuotaStatus(credits: number): string {
+  if (credits <= 0) return "Depleted";
+  if (credits <= 5) return "Pathetic";
+  if (credits <= 15) return "Embarrassing";
+  if (credits <= 50) return "Insufficient";
+  if (credits <= 200) return "Mediocre";
+  if (credits <= 500) return "Tolerable";
+  return "Adequate";
+}
+
 /* ── component ───────────────────────────────────────────────── */
 
 type UpgradeOverlayProps = {
   isUpgraded: boolean;
+  quotaPercent: number;
   onClose: () => void;
 };
 
-function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
+function UpgradeOverlay({ isUpgraded, quotaPercent, onClose }: UpgradeOverlayProps) {
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
   const singleLabel = `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`;
   const multiLabel = `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`;
+
+  const totalQuota = isUpgraded ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT;
+  const currentCredits = Math.round((quotaPercent / 100) * totalQuota);
 
   return (
     <>
@@ -41,6 +57,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
         isUpgraded={isUpgraded}
+        currentCredits={currentCredits}
         onClose={onClose}
       />
       {/* Mobile: visible ≤640px, hidden above via CSS */}
@@ -50,6 +67,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
         isUpgraded={isUpgraded}
+        currentCredits={currentCredits}
         onClose={onClose}
       />
     </>
@@ -65,6 +83,7 @@ function MobileLayout({
   multiLabel,
   singleAvailable,
   multiAvailable,
+  currentCredits,
   onClose,
 }: LayoutProps) {
   const sectionStyle = { padding: "8px 12px" } as const;
@@ -173,7 +192,7 @@ function MobileLayout({
             INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]
           </span>
           <div style={{ color: DIM, fontSize: "11px", marginTop: "4px" }}>
-            {">"} CURRENT QUOTA: 13 Credits. Status: Pathetic.
+            {">"} CURRENT QUOTA: {currentCredits} Credits. Status: {getQuotaStatus(currentCredits)}.
           </div>
         </div>
 
@@ -221,11 +240,13 @@ function MobileLayout({
             One seat. Max 429X enabled (One-time extraction).
           </div>
           <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "8px", color: G }}>
-            Unlocks: [{PRO_QUOTA_LIMIT} Non-expiring Credits] [Multi-device Sync]
-            [Priority Generation Queue] [Advanced Cope Models]
+            Unlocks: {PRO_QUOTA_LIMIT} non-expiring credits, multi-device sync,
+            priority generation queue, and advanced Cope models.
           </div>
           {mobileButton(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable, true)}
         </div>
+
+        <div style={{ height: "1px" }} />
 
         {/* Option 2 */}
         <div style={sectionStyle}>
@@ -236,7 +257,7 @@ function MobileLayout({
             Scale your bottlenecks. Let the entire engineering team
             achieve HTTP 429 compliance simultaneously.
           </div>
-          <div style={{ color: DIM, fontSize: "11px", marginBottom: "8px" }}>
+          <div style={{ color: "#8892b0", fontSize: "11px", marginBottom: "8px" }}>
             (5 activation keys will be sent to your email)
           </div>
           {mobileButton(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}

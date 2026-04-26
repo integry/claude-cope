@@ -406,7 +406,7 @@ function Terminal() {
     {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
     {showParty && <PartyOverlay onClose={() => setShowParty(false)} />}
     {showSynergize && <SynergizeOverlay onClose={() => { setShowSynergize(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]); }} />}
-    {showUpgrade && <UpgradeOverlay isUpgraded={!!state.proKey} onClose={() => { setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/"); }} />}
+    {showUpgrade && <UpgradeOverlay isUpgraded={!!state.proKey} quotaPercent={state.economy.quotaPercent} onClose={() => { setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/"); }} />}
   </>);
 
   return (
