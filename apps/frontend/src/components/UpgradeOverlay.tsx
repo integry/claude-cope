@@ -110,17 +110,20 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
           target="_blank"
           rel="noopener noreferrer"
           style={{
-            color: G,
+            display: "inline-block",
+            backgroundColor: G,
+            color: "#0d1117",
             textDecoration: "none",
+            fontWeight: "bold",
             cursor: "pointer",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = G;
+            e.currentTarget.style.backgroundColor = "#ffffff";
             e.currentTarget.style.color = "#000000";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.color = G;
+            e.currentTarget.style.backgroundColor = G;
+            e.currentTarget.style.color = "#0d1117";
           }}
           onClick={(e) => e.stopPropagation()}
         >
