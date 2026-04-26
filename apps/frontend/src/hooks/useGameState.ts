@@ -38,24 +38,6 @@ export function useGameState() {
     setState((prev) => ({ ...prev, lastLogin: Date.now() }));
   }, []);
 
-  // Migrate existing Max users: compute proKeyHash from proKey if missing.
-  // Before this migration, proKeyHash was only set during /sync. Existing users
-  // who upgraded before this change have proKey in localStorage but no proKeyHash,
-  // which silently prevents mutation endpoints from working.
-  useEffect(() => {
-    const current = stateRef.current;
-    if (current.proKey && !current.proKeyHash) {
-      const encoded = new TextEncoder().encode(current.proKey);
-      crypto.subtle.digest("SHA-256", encoded).then((hashBuffer) => {
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-        setState((prev) => (prev.proKey && !prev.proKeyHash ? { ...prev, proKeyHash: hash } : prev));
-      }).catch(() => {
-        // crypto.subtle unavailable (insecure context) — ignore
-      });
-    }
-  }, []);
-
   // Persist state to localStorage (filter transient "loading" messages from chat history)
   useEffect(() => {
     try {

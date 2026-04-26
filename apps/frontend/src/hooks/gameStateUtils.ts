@@ -105,16 +105,6 @@ export interface GameState {
   byokUsage?: Record<string, ByokUsage>;
 }
 
-/** Legacy flat state shape used before the economy refactor. */
-interface LegacyGameState {
-  technicalDebt: number;
-  totalTechnicalDebt: number;
-  rankIndex: number;
-  inventory: Record<string, number>;
-  achievements: string[];
-  buddy?: BuddyState;
-}
-
 function rankTitleFromIndex(index: number): string {
   return CORPORATE_RANKS[index]?.title ?? CORPORATE_RANKS[0]!.title;
 }
@@ -172,122 +162,12 @@ function createDefaultState(): GameState {
   };
 }
 
-function isLegacyState(obj: Record<string, unknown>): boolean {
-  return "technicalDebt" in obj && !("economy" in obj);
-}
-
-function migrateLegacyState(legacy: LegacyGameState): GameState {
-  const buddy: BuddyState = legacy.buddy ?? {
-    type: null,
-    isShiny: false,
-    promptsSinceLastInterjection: 0,
-  };
-
-  return {
-    version: STATE_VERSION,
-    username: generateUsername(),
-    lastLogin: Date.now(),
-    economy: {
-      currentTD: legacy.technicalDebt,
-      totalTDEarned: legacy.totalTechnicalDebt,
-      currentRank: rankTitleFromIndex(legacy.rankIndex),
-      quotaPercent: 100,
-      quotaLockouts: 0,
-      tdMultiplier: 1,
-    },
-    inventory: legacy.inventory,
-    upgrades: [],
-    achievements: Array.isArray(legacy.achievements) ? legacy.achievements : [],
-    buddy,
-    chatHistory: [],
-    commandUsage: {},
-    modes: { fast: false, voice: false },
-    activeTicket: null,
-    hasSeenTicketPrompt: false,
-    activeTheme: "default",
-    unlockedThemes: ["default"],
-    soundEnabled: true,
-    pendingCompletedTaskIds: [],
-  };
-}
-
-function applyDefensiveDefaults(state: GameState): void {
-  if (!Array.isArray(state.upgrades)) {
-    state.upgrades = [];
-  }
-  if (!Array.isArray(state.achievements)) {
-    state.achievements = [];
-  }
-  if (!state.buddy) {
-    state.buddy = {
-      type: null,
-      isShiny: false,
-      promptsSinceLastInterjection: 0,
-    };
-  }
-  if (!Array.isArray(state.chatHistory)) {
-    state.chatHistory = [];
-  }
-  if (!state.commandUsage || typeof state.commandUsage !== "object") {
-    state.commandUsage = {};
-  }
-  if (!state.modes || typeof state.modes !== "object") {
-    state.modes = { fast: false, voice: false };
-  }
-  if (state.activeTicket === undefined) {
-    state.activeTicket = null;
-  }
-  if (state.hasSeenTicketPrompt === undefined) {
-    state.hasSeenTicketPrompt = false;
-  }
-  if (!state.activeTheme) {
-    state.activeTheme = "default";
-  }
-  if (!Array.isArray(state.unlockedThemes)) {
-    state.unlockedThemes = ["default"];
-  }
-  if (state.soundEnabled === undefined) {
-    state.soundEnabled = true;
-  }
-  if (!Array.isArray(state.pendingCompletedTaskIds)) {
-    state.pendingCompletedTaskIds = [];
-  }
-}
-
 export function loadState(): GameState {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      const parsed = JSON.parse(stored) as Record<string, unknown>;
-
-      // Migrate legacy flat state to new nested structure
-      if (isLegacyState(parsed)) {
-        return migrateLegacyState(parsed as unknown as LegacyGameState);
-      }
-
-      const state = parsed as unknown as GameState;
-
-      // Ensure required fields exist (defensive)
-      applyDefensiveDefaults(state);
-      if (!state.username) {
-        state.username = generateUsername();
-      }
-      if (!state.economy) {
-        return createDefaultState();
-      }
-
-      // Ensure quotaPercent is initialized for existing saves (use == null to preserve 0)
-      if (state.economy.quotaPercent == null) {
-        state.economy.quotaPercent = 100;
-      }
-      // Ensure tdMultiplier is initialized for existing saves
-      if (!state.economy.tdMultiplier) {
-        state.economy.tdMultiplier = 1;
-      }
-
-      // Preserve lastLogin from storage so we can compute offline TD on mount
+      const state = JSON.parse(stored) as GameState;
       state.version = STATE_VERSION;
-
       return state;
     }
   } catch {
@@ -333,8 +213,5 @@ export function calculateActiveMultiplier(inventory: Record<string, number>, own
   }
   return 1 + bonusPercent / 100;
 }
-
-/** @deprecated Use calculateActiveMultiplier instead */
-export const calculateTDpS = calculateActiveMultiplier;
 
 export { STORAGE_KEY };
