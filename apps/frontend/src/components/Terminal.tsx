@@ -27,6 +27,7 @@ import { API_BASE, BYOK_ENABLED } from "../config";
 import { supabase } from "../supabaseClient";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
 import { applyServerProfile } from "../hooks/profileSync";
+import { updateTicketServer } from "../api/profileApi";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { buildAchievementBox } from "./achievementBox";
@@ -289,6 +290,9 @@ function Terminal() {
           activeTicket: null,
           pendingCompletedTaskIds: [...prev.pendingCompletedTaskIds, state.activeTicket!.id],
         }));
+        if (state.proKey && state.username) {
+          void updateTicketServer(state.username, null);
+        }
         const completedMessage = `✅ ${state.username || "A player"} completed ticket "${state.activeTicket!.title}" and earned ${payout.toLocaleString()} TD!`;
         fetch(`${API_BASE}/api/recent-events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: completedMessage }) }).catch(() => {});
         supabase?.channel('global_incidents').send({ type: 'broadcast', event: 'new_incident', payload: { message: completedMessage } }).catch(() => {});

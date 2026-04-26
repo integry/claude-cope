@@ -4,6 +4,7 @@ import { COPE_MODELS } from "@claude-cope/shared/models";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE, BYOK_ENABLED, PRO_QUOTA_LIMIT } from "../config";
 import { applyServerProfile } from "../hooks/profileSync";
+import { updateTicketServer } from "../api/profileApi";
 
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
@@ -597,10 +598,11 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
     reply({ role: "error", content: pickRandom(ACCEPT_ALREADY_ACTIVE_MESSAGES)(ctx.state.activeTicket.title) });
   } else {
     clearPendingOffer();
-    ctx.setState((prev) => ({
-      ...prev,
-      activeTicket: { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt },
-    }));
+    const newTicket = { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt };
+    ctx.setState((prev) => ({ ...prev, activeTicket: newTicket }));
+    if (ctx.state.proKey && ctx.state.username) {
+      void updateTicketServer(ctx.state.username, newTicket);
+    }
     ctx.playChime();
     reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nReward: **${(offer.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.` });
     ctx.onSuggestedReply(offer.kickoff_prompt);
@@ -642,14 +644,14 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
       ctx.setState((prev) => {
         const withKey: GameState = { ...prev, proKey: licenseKey };
         if (data.profile) {
-          return applyServerProfile(withKey, data.profile);
+          return applyServerProfile(withKey, data.profile, { includeActiveTicket: true });
         }
         return withKey;
       });
       if (data.restored && data.profile) {
-        reply({ role: "system", content: `[✓ **PROFILE RESTORED**] Welcome back, **${data.profile.username}**! Your profile has been restored across devices.\n\n**TD:** ${data.profile.current_td.toLocaleString()} / ${data.profile.total_td.toLocaleString()} total\n**Rank:** ${data.profile.corporate_rank}\n**Generators:** ${Object.values(data.profile.inventory).reduce((a, b) => a + b, 0)} owned\n**Upgrades:** ${data.profile.upgrades.length} unlocked\n\nYou now have **${PRO_QUOTA_LIMIT} Max credits**. Your progress is synced across all devices.` });
+        reply({ role: "system", content: `[✓ **PROFILE RESTORED**] Welcome back, **${data.profile.username}**! Your profile has been restored across devices.\n\n**TD:** ${data.profile.current_td.toLocaleString()} / ${data.profile.total_td.toLocaleString()} total\n**Rank:** ${data.profile.corporate_rank}\n**Generators:** ${Object.values(data.profile.inventory).reduce((a, b) => a + b, 0)} owned\n**Upgrades:** ${data.profile.upgrades.length} unlocked\n\nYou now have **${PRO_QUOTA_LIMIT} Max credits**. Your progress is synced across all devices.\n\n[🔐 *FYI*] Your license key doubles as the password to this account. Anyone with it can \`/sync\` in and live their best life on your dime.` });
       } else {
-        reply({ role: "system", content: `[✓ **MAX ACTIVATED**] License key validated and profile linked. Welcome to the premium suffering tier. You now have **${PRO_QUOTA_LIMIT} Max credits**. Your progress will now sync across devices.` });
+        reply({ role: "system", content: `[✓ **MAX ACTIVATED**] License key validated and profile linked. Welcome to the premium suffering tier. You now have **${PRO_QUOTA_LIMIT} Max credits**. Your progress will now sync across devices.\n\n[🔐 *FYI*] Your license key doubles as the password to this account. Anyone with it can \`/sync\` in and live their best life on your dime.` });
       }
     } else {
       reply({ role: "error", content: `[❌] License validation failed: ${data.error ?? "Unknown error"}. Double-check your key and try again.` });

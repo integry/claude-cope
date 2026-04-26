@@ -5,6 +5,7 @@ import { COPE_MODELS } from "@claude-cope/shared/models";
 import { consumeQuota, getQuotaLimits, QuotaExhaustedError } from "../utils/quota";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { getProfileByLicenseHash, resolveRank } from "../utils/profile";
+import { syncPolarUsage } from "../utils/polar";
 
 type Env = {
   Bindings: {
@@ -127,7 +128,7 @@ async function handleQuotaCheck(
   env: Env["Bindings"],
   sessionId: string,
   proKeyHash?: string,
-): Promise<{ quotaPercent: number; exhaustedMessage?: string }> {
+): Promise<{ quotaPercent: number; remaining?: number; exhaustedMessage?: string }> {
   const quotaKv = env.QUOTA_KV ?? env.USAGE_KV;
   if (!quotaKv) return { quotaPercent: 100 };
 
@@ -140,12 +141,34 @@ async function handleQuotaCheck(
       licenseKeyHash: proKeyHash,
       limits,
     });
-    return { quotaPercent: result.quotaPercent };
+    return { quotaPercent: result.quotaPercent, remaining: result.remaining };
   } catch (err) {
     if (err instanceof QuotaExhaustedError) {
       return { quotaPercent: 0, exhaustedMessage: err.message };
     }
     throw err;
+  }
+}
+
+/**
+ * Mirror the user's Pro-tier usage to Polar's license-key dashboard.
+ * Fire-and-forget via waitUntil — no user latency, no fail mode for chat.
+ */
+async function mirrorPolarUsage(
+  env: Env["Bindings"],
+  proKeyHash: string,
+  remaining: number,
+): Promise<void> {
+  const kv = env.QUOTA_KV ?? env.USAGE_KV;
+  if (!kv || !env.POLAR_ACCESS_TOKEN) return;
+  const licenseKeyId = await kv.get(`polar_id:${proKeyHash}`);
+  if (!licenseKeyId) return;
+  const limits = getQuotaLimits(env);
+  const usage = Math.max(0, limits.proInitialQuota - remaining);
+  try {
+    await syncPolarUsage(licenseKeyId, env.POLAR_ACCESS_TOKEN, usage);
+  } catch {
+    // Polar dashboard drift is acceptable; KV is source of truth.
   }
 }
 
@@ -225,6 +248,10 @@ chat.post("/", async (c) => {
     return c.json({ error: quotaResult.exhaustedMessage }, 402);
   }
   const quotaPercent = quotaResult.quotaPercent;
+
+  if (body.proKeyHash && quotaResult.remaining != null) {
+    c.executionCtx.waitUntil(mirrorPolarUsage(c.env, body.proKeyHash, quotaResult.remaining));
+  }
 
   const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
   const model = resolveModel(body.modelId);

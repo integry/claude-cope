@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { validatePolarKey } from "../utils/polar";
-import { hashKey, getQuotaLimits } from "../utils/quota";
+import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileByLicenseHash, getProfileRow, resolveRank } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
 
@@ -11,6 +11,7 @@ type Env = {
     QUOTA_KV?: KVNamespace;
     USAGE_KV?: KVNamespace;
     POLAR_ACCESS_TOKEN?: string;
+    POLAR_ORGANIZATION_ID?: string;
     FREE_QUOTA_LIMIT?: string;
     PRO_INITIAL_QUOTA?: string;
   };
@@ -126,11 +127,12 @@ account.post("/sync", async (c) => {
   }
 
   const accessToken = c.env?.POLAR_ACCESS_TOKEN;
-  if (!accessToken) {
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
+  if (!accessToken || !organizationId) {
     return c.json({ error: "Polar integration is not configured" }, 500);
   }
 
-  const validation = await validatePolarKey(body.licenseKey, accessToken);
+  const validation = await validatePolarKey(body.licenseKey, accessToken, organizationId);
   if (!validation.valid) {
     return c.json({ error: "Invalid or inactive license key", status: validation.status }, 403);
   }
@@ -149,6 +151,12 @@ account.post("/sync", async (c) => {
     await kv.put(kvKey, String(limits.proInitialQuota));
   }
 
+  // Cache the Polar license_key UUID so chat.ts can mirror usage to Polar
+  // without needing the raw license key.
+  if (validation.id) {
+    await kv.put(`polar_id:${hash}`, validation.id);
+  }
+
   const db = c.env?.DB;
   if (!db) {
     return c.json({ success: true, hash, restored: false });
@@ -163,6 +171,10 @@ account.post("/sync", async (c) => {
     .run();
 
   const result = await resolveProfile(db, hash, body);
+  const quotaPercent = await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
+  if (result.profile) {
+    result.profile = { ...result.profile, quota_percent: quotaPercent };
+  }
   return c.json({ success: true, hash, ...result });
 });
 

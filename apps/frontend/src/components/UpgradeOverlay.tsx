@@ -67,10 +67,10 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         {/* Multi license pack option */}
         <div className="border border-gray-700 rounded px-3 py-2 text-xs">
           <div className="font-bold text-yellow-300 mb-2">
-            [OPTION 2: MULTI-LICENSE PACK]
+            [OPTION 2: MULTI-LICENSE PACK — 5 LICENSES]
           </div>
           <div className="text-gray-400 mb-3">
-            Bulk seats for the whole team. Because misery loves company, and your manager wants everyone on the same page of suffering.
+            Five seats for the whole team. Because misery loves company, and your manager wants everyone on the same page of suffering.
           </div>
           {multiAvailable ? (
             <a
