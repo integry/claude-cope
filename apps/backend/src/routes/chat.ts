@@ -4,7 +4,7 @@ import { computeMultiplier } from "../gameConstants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { consumeQuota, getQuotaLimits, QuotaExhaustedError } from "../utils/quota";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
-import { getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank } from "../utils/profile";
+import { getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank, resolveProUser } from "../utils/profile";
 import { syncPolarUsage } from "../utils/polar";
 
 type Env = {
@@ -399,13 +399,20 @@ chat.post("/", async (c) => {
   const country = body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
   const hour = new Date().toISOString().slice(0, 13);
 
-  // For pro users, read server-stored profile for authoritative multiplier
+  // For pro users, read server-stored profile for authoritative multiplier.
+  // If a proKeyHash was presented but can't resolve to a profile, hard-fail
+  // instead of silently degrading to free writes (which would let a Pro license
+  // holder spoof a free user's score).
   if (effectiveProKeyHash && db) {
+    const resolution = await resolveProUser(db, effectiveProKeyHash, username);
+    if (resolution.error) {
+      return c.json({ error: resolution.error }, resolution.code === "revoked" ? 403 : 409);
+    }
     const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: effectiveProKeyHash, model, hour, data, quotaPercent });
     if (proResponse) return proResponse;
   }
 
-  // Free users or pro users without a valid server profile
+  // Free users only — pro users are fully handled above
   const serverMultiplier = computeMultiplier(inventory, upgrades);
   const baseTD = Math.floor(Math.random() * 40) + 10;
   const tdAwarded = Math.round(baseTD * serverMultiplier);

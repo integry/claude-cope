@@ -15,7 +15,6 @@ export type SyncBody = {
     unlocked_themes?: string[];
     active_theme?: string;
     active_ticket?: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null;
-    td_multiplier?: number;
   };
 };
 
@@ -30,7 +29,6 @@ function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
   return {
     buddyType: cp?.buddy_type ?? null,
     buddyIsShiny: cp?.buddy_is_shiny ? 1 : 0,
-    tdMultiplier: cp?.td_multiplier ?? 1.0,
   };
 }
 

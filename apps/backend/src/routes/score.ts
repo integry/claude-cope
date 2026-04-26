@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { CORPORATE_RANKS } from "./rankConstants";
 import { computeMultiplier } from "../gameConstants";
-import { getProfile, getProfileByLicenseHash, isLicenseActive, resolveRank as resolveRankFromProfile } from "../utils/profile";
+import { getProfile, getProfileByLicenseHash, isLicenseActive, resolveRank as resolveRankFromProfile, resolveProUser } from "../utils/profile";
 
 type Env = {
   Bindings: {
@@ -202,8 +202,14 @@ score.post("/", async (c) => {
 
   const country = detectCountry(c, body);
 
-  // Pro users: task-only path
+  // Pro users: task-only path.
+  // If a proKeyHash is presented but can't resolve to a profile, hard-fail
+  // instead of falling through to the legacy username-keyed free path.
   if (body.proKeyHash) {
+    const resolution = await resolveProUser(db, body.proKeyHash, body.username);
+    if (resolution.error) {
+      return c.json({ error: resolution.error }, resolution.code === "revoked" ? 403 : 409);
+    }
     const updated = await syncProUser(db, body);
     if (updated) return c.json({ profile: updated });
   }

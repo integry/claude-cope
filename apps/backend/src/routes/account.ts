@@ -66,6 +66,30 @@ account.post("/sync", async (c) => {
   }
 
   const hash = await hashKey(body.licenseKey);
+
+  const db = c.env?.DB;
+  if (!db) {
+    return c.json({ success: true, hash, restored: false });
+  }
+
+  // Resolve the profile FIRST — if this fails (e.g. username taken, ownership
+  // check rejects) we don't want orphaned KV quota or license rows with no
+  // associated profile.
+  const sessionId = c.get("sessionId");
+  const result = await resolveProfile(db, hash, body, sessionId && kv ? { sessionId, kv } : undefined);
+  if (result.error) {
+    return c.json({ error: result.error }, 403);
+  }
+
+  // Profile resolved successfully — now commit the side-effect state writes.
+  // Record license activation in DB for admin purchase stats.
+  await db
+    .prepare(
+      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active'",
+    )
+    .bind(hash)
+    .run();
+
   const limits = getQuotaLimits(c.env);
   await ensureQuota(kv, hash, limits.proInitialQuota);
 
@@ -75,24 +99,6 @@ account.post("/sync", async (c) => {
     await kv.put(`polar_id:${hash}`, validation.id);
   }
 
-  const db = c.env?.DB;
-  if (!db) {
-    return c.json({ success: true, hash, restored: false });
-  }
-
-  // Record license activation in DB for admin purchase stats
-  await db
-    .prepare(
-      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active'",
-    )
-    .bind(hash)
-    .run();
-
-  const sessionId = c.get("sessionId");
-  const result = await resolveProfile(db, hash, body, sessionId && kv ? { sessionId, kv } : undefined);
-  if (result.error) {
-    return c.json({ error: result.error }, 403);
-  }
   const quotaPercent = await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
   const profile = { ...result.profile, quota_percent: quotaPercent };
 

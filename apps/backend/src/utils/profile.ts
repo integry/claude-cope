@@ -100,3 +100,37 @@ export async function isLicenseActive(db: D1Database, keyHash: string): Promise<
   if (!row) return false; // Unknown hash — fail closed
   return row.status === "active";
 }
+
+/**
+ * Shared helper that resolves a client-supplied proKeyHash to a server profile.
+ * Both /api/chat and /api/score must call this and handle the error case explicitly
+ * instead of silently degrading to the free-user write path.
+ *
+ * Returns either { profile } on success, or { error, code } describing why
+ * resolution failed (revoked license, not yet synced, username mismatch).
+ */
+export type ResolveProUserResult =
+  | { profile: ServerProfile; error?: undefined; code?: undefined }
+  | { profile: null; error: string; code: "revoked" | "not_synced" | "username_mismatch" };
+
+export async function resolveProUser(
+  db: D1Database,
+  proKeyHash: string,
+  username: string,
+): Promise<ResolveProUserResult> {
+  const active = await isLicenseActive(db, proKeyHash);
+  if (!active) {
+    return { profile: null, error: "License has been revoked or is not active", code: "revoked" };
+  }
+
+  const profile = await getProfileByLicenseHash(db, proKeyHash);
+  if (!profile) {
+    return { profile: null, error: "License is not linked to a profile — please /sync first", code: "not_synced" };
+  }
+
+  if (profile.username !== username) {
+    return { profile: null, error: "Username does not match the license owner", code: "username_mismatch" };
+  }
+
+  return { profile };
+}
