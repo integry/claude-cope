@@ -88,16 +88,15 @@ export async function getProfileRow(db: D1Database, username: string): Promise<U
 
 /**
  * Check whether a license key hash corresponds to an active (non-revoked) license.
- * A missing row means the license hasn't been recorded in the DB yet (e.g., the
- * webhook hasn't fired or the /sync path hasn't inserted it); this is treated as
- * active to avoid rejecting legitimately linked users. Only an explicit non-active
- * status (e.g., 'revoked') causes this to return false.
+ * A missing row means the hash is unknown — return false (fail closed).  Legitimate
+ * users always have a row created by /sync or the Polar webhook before they can use
+ * Pro features, so an unknown hash is either a timing bug or an attacker probing.
  */
 export async function isLicenseActive(db: D1Database, keyHash: string): Promise<boolean> {
   const row = await db
     .prepare("SELECT status FROM licenses WHERE key_hash = ?")
     .bind(keyHash)
     .first<{ status: string }>();
-  if (!row) return true; // Not yet recorded — assume active
+  if (!row) return false; // Unknown hash — fail closed
   return row.status === "active";
 }

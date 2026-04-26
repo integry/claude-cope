@@ -4,7 +4,7 @@ import { computeMultiplier } from "../gameConstants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { consumeQuota, getQuotaLimits, QuotaExhaustedError } from "../utils/quota";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
-import { getProfileByLicenseHash, isLicenseActive, resolveRank } from "../utils/profile";
+import { getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank } from "../utils/profile";
 import { syncPolarUsage } from "../utils/polar";
 
 type Env = {
@@ -303,10 +303,23 @@ chat.post("/", async (c) => {
   const sessionId = c.get("sessionId");
   const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
 
-  // Cache the session → username mapping BEFORE the quota check so a user who
-  // hits the wall can still be restored via GET /api/account/me after clearing
-  // localStorage.
-  cacheSessionUsername(c.env.QUOTA_KV ?? c.env.USAGE_KV, sessionId, username, c.executionCtx);
+  // Cache the session → username mapping so a user who clears localStorage can
+  // be restored via GET /api/account/me.  We verify ownership first to prevent
+  // an attacker from claiming another user's username and leaking their profile.
+  if (db && username && username !== "anonymous") {
+    const row = await getProfileRow(db, username);
+    const profileHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
+    if (effectiveProKeyHash) {
+      // Pro user: only cache if the verified key hash matches this profile
+      if (profileHash === effectiveProKeyHash) {
+        cacheSessionUsername(c.env.QUOTA_KV ?? c.env.USAGE_KV, sessionId, username, c.executionCtx);
+      }
+    } else if (!profileHash) {
+      // Free user claiming a free username: safe to cache
+      cacheSessionUsername(c.env.QUOTA_KV ?? c.env.USAGE_KV, sessionId, username, c.executionCtx);
+    }
+    // Otherwise: free user claiming a Pro user's username — skip caching
+  }
 
   // Consume quota before making the OpenRouter request.
   const quotaResult = await handleQuotaCheck(c.env, sessionId, effectiveProKeyHash);

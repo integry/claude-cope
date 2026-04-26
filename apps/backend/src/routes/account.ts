@@ -120,12 +120,15 @@ account.get("/me", async (c) => {
 
   const profile = db ? await getProfile(db, username) : null;
 
+  // Never expose the raw license hash — it's a credential that grants write
+  // access to the account.  Return a boolean flag instead so the frontend
+  // knows this is a Pro user and can prompt them to re-sync.
   return c.json({
     found: true,
     username,
     profile: profile ? { ...profile, quota_percent: quotaPercent } : null,
     quotaPercent,
-    licenseHash: licenseHash ?? null,
+    isPro: Boolean(licenseHash),
   });
 });
 

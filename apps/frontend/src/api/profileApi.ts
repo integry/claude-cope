@@ -49,7 +49,7 @@ type SessionRestoreResult = {
   username?: string;
   profile?: ServerProfile | null;
   quotaPercent?: number;
-  licenseHash?: string | null;
+  isPro?: boolean;
 };
 
 /** Look up the previous user associated with this browser's session cookie. */

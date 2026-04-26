@@ -41,8 +41,9 @@ export function useGameState() {
 
   // Session restore: if localStorage was cleared (state looks fresh), but the
   // browser cookie maps to a previously-known user on the server, restore that
-  // user's profile instead of starting as a brand-new identity. Also pulls the
-  // license hash so a Pro user keeps Max access without re-running /sync.
+  // user's profile instead of starting as a brand-new identity.  The server
+  // never returns the license hash (it's a credential); Pro users must re-run
+  // /sync to regain Max access after clearing localStorage.
   useEffect(() => {
     const initial = stateRef.current;
     const isFreshState =
@@ -58,8 +59,7 @@ export function useGameState() {
       setState((prev) => {
         // Full profile restore (server has user_scores row).
         if (result.profile) {
-          const merged = applyServerProfile(prev, result.profile, { includeActiveTicket: true });
-          return result.licenseHash ? { ...merged, proKeyHash: result.licenseHash } : merged;
+          return applyServerProfile(prev, result.profile, { includeActiveTicket: true });
         }
         // Username-only restore: server knows the identity but has no
         // profile row yet (e.g., the previous attempt 402'd on quota).
@@ -72,7 +72,6 @@ export function useGameState() {
               ...prev.economy,
               ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}),
             },
-            ...(result.licenseHash ? { proKeyHash: result.licenseHash } : {}),
           };
         }
         return prev;
