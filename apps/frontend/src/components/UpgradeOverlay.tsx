@@ -140,7 +140,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
             }
             const cursor = e.currentTarget.querySelector("[data-cursor]") as HTMLElement;
             if (cursor) {
-              cursor.style.color = primary ? G : "transparent";
+              cursor.style.color = G;
             }
           }}
           onClick={(e) => e.stopPropagation()}
@@ -223,7 +223,8 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         {tableBorderBot}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE]", Y)}{"\n"}
-        {boxLine(`  One seat. Max 429X enabled. ${PRO_QUOTA_LIMIT} non-expiring credits (one-time extraction).`)}{"\n"}
+        {boxLine(`  One seat. Max 429X enabled. ${PRO_QUOTA_LIMIT} non-expiring`)}{"\n"}
+        {boxLine("  credits (one-time extraction).")}{"\n"}
         {emptyLine}{"\n"}
         {buttonBoxLine(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
