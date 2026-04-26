@@ -47,7 +47,9 @@ users.get("/", async (c) => {
       throw err;
     }
     hasLicenseHashColumn = false;
-    // license_hash column doesn't exist yet — no user can be Max
+    // license_hash column doesn't exist yet — no user can be Max.
+    // Log so a broken migration doesn't masquerade as "no Max users yet".
+    console.warn(`[admin/users] schema fallback (license_hash column missing): ${msg.slice(0, 200)}`);
     if (statusFilter === "max") {
       // No license_hash column means no Max users exist; return empty
       results = [];

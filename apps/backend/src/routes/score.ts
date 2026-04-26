@@ -157,6 +157,14 @@ function resolveRankAndFlags(validatedTotal: number, claimedTotal: number, serve
   return rank;
 }
 
+// INVARIANT: opts.validatedTotal includes opts.validatedClaims' bonus_td (computed
+// upstream in score.post). The UPDATE below and the INSERTs into completed_tasks
+// share the SAME `license_hash IS NULL` predicate. Within a single db.batch()
+// transaction, both observe the same snapshot of user_scores — either both apply
+// or both no-op. If you split these across batches, weaken the predicate, or
+// remove the WHERE EXISTS guard from the inserts, you must re-derive total_td
+// from the actually-inserted claims; otherwise the bonus TD can be applied
+// without the corresponding claim rows existing (or vice versa).
 function buildScoreBatch(db: D1Database, opts: {
   existing: { total_td: number } | null;
   serverTotal: number;

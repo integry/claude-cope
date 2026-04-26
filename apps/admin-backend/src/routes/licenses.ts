@@ -36,7 +36,9 @@ licenses.get("/", async (c) => {
     if (!msg.includes("no such column") && !msg.includes("no such table")) {
       throw err;
     }
-    // licenses table or license_hash column may not exist yet
+    // licenses table or license_hash column may not exist yet.
+    // Log so a broken migration doesn't masquerade as "no licenses yet".
+    console.warn(`[admin/licenses] schema fallback (returning []): ${msg.slice(0, 200)}`);
     return c.json([]);
   }
 });

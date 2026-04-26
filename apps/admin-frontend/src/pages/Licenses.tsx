@@ -35,7 +35,7 @@ export default function Licenses() {
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Licenses</h1>
-        <p className="text-sm text-gray-500">{licenses.length} license{licenses.length !== 1 ? "s" : ""} total</p>
+        <p className="text-sm text-gray-500">Showing {licenses.length} most recent license{licenses.length !== 1 ? "s" : ""} (capped at 200)</p>
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">

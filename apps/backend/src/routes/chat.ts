@@ -432,7 +432,14 @@ function handleFreeUserResponse(
 ): Response {
   const serverMultiplier = computeMultiplier(params.inventory, params.upgrades);
   const baseTD = Math.floor(Math.random() * 40) + 10;
-  const tdAwarded = Math.round(baseTD * serverMultiplier);
+
+  // Mirror recordUsage's skip condition: when the write is silently dropped
+  // (caller doesn't own the username, or username is owned by a different
+  // license_hash), report tdAwarded=0 so the client doesn't accumulate phantom
+  // TD that the server never persisted. Keep these conditions in sync with
+  // the early-return in recordUsage().
+  const writeAllowed = !params.profileLicenseHash && params.ownsUsername;
+  const tdAwarded = writeAllowed ? Math.round(baseTD * serverMultiplier) : 0;
 
   recordUsage(db, ctx, {
     username: params.username, model: params.model, data: params.data,
