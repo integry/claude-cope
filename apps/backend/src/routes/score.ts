@@ -6,6 +6,11 @@ import { getProfile, getProfileByLicenseHash, isLicenseActive, resolveRank as re
 type Env = {
   Bindings: {
     DB: D1Database;
+    USAGE_KV?: KVNamespace;
+    QUOTA_KV?: KVNamespace;
+  };
+  Variables: {
+    sessionId: string;
   };
 };
 
@@ -227,6 +232,18 @@ score.post("/", async (c) => {
 
   if (existingRow?.license_hash) {
     return c.json({ error: "This account is linked to a Pro license — authenticate with proKeyHash" }, 403);
+  }
+
+  // Session-based ownership: prevent attackers from writing to another free user's profile
+  // just by knowing their username. Either no row exists (new user, upsert allowed) or
+  // the caller's session must own this username via the session_user mapping.
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  const sessionId = c.get("sessionId");
+  if (existingRow && kv) {
+    const sessionUsername = await kv.get(`session_user:${sessionId}`);
+    if (sessionUsername !== body.username) {
+      return c.json({ error: "Session does not own this username" }, 403);
+    }
   }
 
   const claimedMultiplier = computeMultiplier(body.inventory, body.upgrades);

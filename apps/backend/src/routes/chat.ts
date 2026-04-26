@@ -219,7 +219,7 @@ async function handleProUserScoring(
 function recordUsage(
   db: D1Database | undefined,
   ctx: { waitUntil: (p: Promise<unknown>) => void },
-  params: { username: string; model: string; data: ChatResponseData; tdAwarded: number; rank: string; country: string; hour: string; proKeyHash?: string; profileLicenseHash?: string | null },
+  params: { username: string; model: string; data: ChatResponseData; tdAwarded: number; rank: string; country: string; hour: string; proKeyHash?: string; profileLicenseHash?: string | null; ownsUsername: boolean },
 ) {
   if (!db) return;
   const tokensSent = params.data.usage?.prompt_tokens ?? 0;
@@ -230,6 +230,12 @@ function recordUsage(
   // doesn't match the caller's proKeyHash — prevents spoofed usage_logs rows
   // under another user's name.
   const isOwnershipSpoofed = !params.proKeyHash && params.profileLicenseHash;
+
+  // For free users, also skip writes if the caller's session doesn't own this username.
+  // This prevents attackers from inflating TD/rank or consuming task bonuses for
+  // another free user just by knowing their username.
+  if (!params.proKeyHash && !params.ownsUsername) return;
+
   if (!isOwnershipSpoofed) {
     queries.push(
       db.prepare("INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, ?, ?, ?)").bind(params.username, params.model, tokensSent, tokensReceived, params.hour).run(),
@@ -366,6 +372,7 @@ type PreChatResult = {
   profileLicenseHash: string | null;
   quotaPercent: number;
   remaining?: number;
+  ownsUsername: boolean;
 };
 
 /**
@@ -384,28 +391,46 @@ async function preChatChecks(
   if (effectiveProKeyHash && db) {
     const resolution = await resolveProUser(db, effectiveProKeyHash, username);
     if (resolution.error) {
-      return { error: resolution.error, status: resolution.code === "revoked" ? 403 : 409, effectiveProKeyHash, profileLicenseHash: null, quotaPercent: 0 };
+      return { error: resolution.error, status: resolution.code === "revoked" ? 403 : 409, effectiveProKeyHash, profileLicenseHash: null, quotaPercent: 0, ownsUsername: false };
     }
   }
 
   // Cache session → username mapping (verified ownership prevents impersonation).
   let profileLicenseHash: string | null = null;
+  let hasRow = false;
   if (db && username && username !== "anonymous") {
     const mappingResult = await tryCacheSessionMapping(env, ctx, { db, sessionId, username, effectiveProKeyHash });
     profileLicenseHash = mappingResult.profileLicenseHash;
+    hasRow = mappingResult.hasRow;
+  }
+
+  // For free users, verify the caller's session owns this username before allowing writes.
+  // Ownership: either the username has no row yet (first-chat-wins) or the caller's
+  // session_user mapping matches the target username (cookie = identity).
+  let ownsUsername = true; // Pro users always pass (validated above)
+  if (!effectiveProKeyHash) {
+    const kv = env.QUOTA_KV ?? env.USAGE_KV;
+    if (!hasRow) {
+      ownsUsername = true; // new username — free upsert allowed
+    } else if (kv) {
+      const sessionUsername = await kv.get(`session_user:${sessionId}`);
+      ownsUsername = sessionUsername === username;
+    } else {
+      ownsUsername = false; // no KV to verify — fail closed
+    }
   }
 
   // Consume quota after ownership has been validated.
   const quotaResult = await handleQuotaCheck(env, sessionId, effectiveProKeyHash);
   if (quotaResult.exhaustedMessage) {
-    return { error: quotaResult.exhaustedMessage, status: 402, effectiveProKeyHash, profileLicenseHash, quotaPercent: 0 };
+    return { error: quotaResult.exhaustedMessage, status: 402, effectiveProKeyHash, profileLicenseHash, quotaPercent: 0, ownsUsername };
   }
 
   if (effectiveProKeyHash && quotaResult.remaining != null) {
     ctx.waitUntil(mirrorPolarUsage(env, effectiveProKeyHash, quotaResult.remaining));
   }
 
-  return { effectiveProKeyHash, profileLicenseHash, quotaPercent: quotaResult.quotaPercent, remaining: quotaResult.remaining };
+  return { effectiveProKeyHash, profileLicenseHash, quotaPercent: quotaResult.quotaPercent, remaining: quotaResult.remaining, ownsUsername };
 }
 
 function handleFreeUserResponse(
@@ -415,6 +440,7 @@ function handleFreeUserResponse(
     username: string; rank: string; inventory: Record<string, number>;
     upgrades: string[]; model: string; country: string; hour: string;
     data: ChatResponseData; quotaPercent: number; profileLicenseHash: string | null;
+    ownsUsername: boolean;
   },
 ): Response {
   const serverMultiplier = computeMultiplier(params.inventory, params.upgrades);
@@ -425,6 +451,7 @@ function handleFreeUserResponse(
     username: params.username, model: params.model, data: params.data,
     tdAwarded, rank: params.rank, country: params.country, hour: params.hour,
     profileLicenseHash: params.profileLicenseHash,
+    ownsUsername: params.ownsUsername,
   });
 
   (params.data as Record<string, unknown>).td_awarded = tdAwarded;
@@ -491,6 +518,7 @@ chat.post("/", async (c) => {
   return handleFreeUserResponse(db, c.executionCtx, {
     username, rank, inventory, upgrades, model, country, hour,
     data, quotaPercent: preCheck.quotaPercent, profileLicenseHash: preCheck.profileLicenseHash,
+    ownsUsername: preCheck.ownsUsername,
   });
 });
 

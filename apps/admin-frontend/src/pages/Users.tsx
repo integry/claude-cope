@@ -11,7 +11,7 @@ interface User {
   credits_used: number;
   credits_remaining: number | null;
   status: "free" | "max";
-  pro_key_hash?: string;
+  license_hash?: string | null;
 }
 
 interface UserForm {
