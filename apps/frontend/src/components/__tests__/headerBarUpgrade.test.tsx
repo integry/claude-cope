@@ -78,7 +78,7 @@ describe("HeaderBar upgrade CTA visibility", () => {
 describe("HeaderBar Max badge visibility", () => {
   it("shows the Max badge for upgraded users", () => {
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: true });
-    expect(container.textContent).toContain("Max");
+    expect(container.textContent).toContain("MAX 429X");
   });
 
   it("does NOT show the Max badge for free users", () => {
