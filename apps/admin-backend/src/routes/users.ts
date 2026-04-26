@@ -22,16 +22,18 @@ users.get("/", async (c) => {
   try {
     let query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
                 u.license_hash,
-                COALESCE(ul.msg_count, 0) AS credits_used
+                COALESCE(ul.msg_count, 0) AS credits_used,
+                CASE WHEN l.key_hash IS NOT NULL THEN 1 ELSE 0 END AS has_active_license
          FROM user_scores u
          LEFT JOIN (
            SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
-         ) ul ON ul.username = u.username`;
+         ) ul ON ul.username = u.username
+         LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'`;
 
     if (statusFilter === "max") {
-      query += " WHERE u.license_hash IS NOT NULL AND u.license_hash != ''";
+      query += " WHERE l.key_hash IS NOT NULL";
     } else if (statusFilter === "free") {
-      query += " WHERE u.license_hash IS NULL OR u.license_hash = ''";
+      query += " WHERE l.key_hash IS NULL";
     }
 
     query += " ORDER BY u.updated_at DESC LIMIT 200";
@@ -67,7 +69,7 @@ users.get("/", async (c) => {
   const enriched = results.map((row: Record<string, unknown>) => ({
     ...row,
     credits_remaining: Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
-    status: hasLicenseHashColumn && row.license_hash ? "max" : "free",
+    status: hasLicenseHashColumn && row.has_active_license ? "max" : "free",
   }));
 
   return c.json(enriched);

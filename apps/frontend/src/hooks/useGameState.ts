@@ -138,7 +138,7 @@ export function useGameState() {
         if (prev.proKey) {
           const added = newAchievements.filter((a) => !prev.achievements.includes(a));
           for (const achievementId of added) {
-            unlockAchievementServer(prev.username, achievementId).catch(() => {});
+            if (prev.proKeyHash) unlockAchievementServer(prev.username, achievementId, prev.proKeyHash).catch(() => {});
           }
         }
 
@@ -182,8 +182,8 @@ export function useGameState() {
     });
 
     // Pro users: fire server call, apply authoritative response
-    if (current.proKey) {
-      buyGeneratorServer(current.username, generatorId, amount).then((result) => {
+    if (current.proKey && current.proKeyHash) {
+      buyGeneratorServer(current.username, generatorId, amount, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           setState((prev) => applyServerProfile(prev, result.profile!));
         } else if (!result.success) {
@@ -262,8 +262,8 @@ export function useGameState() {
     });
     // Pro users: sync achievement to server
     const current = stateRef.current;
-    if (current.proKey) {
-      unlockAchievementServer(current.username, achievement).catch(() => {});
+    if (current.proKey && current.proKeyHash) {
+      unlockAchievementServer(current.username, achievement, current.proKeyHash).catch(() => {});
     }
     return true;
   }, []);
@@ -304,8 +304,8 @@ export function useGameState() {
     });
 
     // Pro users: fire server call
-    if (current.proKey) {
-      buyUpgradeServer(current.username, upgradeId).then((result) => {
+    if (current.proKey && current.proKeyHash) {
+      buyUpgradeServer(current.username, upgradeId, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           setState((prev) => applyServerProfile(prev, result.profile!));
         } else if (!result.success) {
@@ -399,7 +399,7 @@ export function useGameState() {
     });
 
     // Pro users: fire server call
-    buyThemeServer(current.username, themeId).then((result) => {
+    if (current.proKeyHash) buyThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
       if (result.success && result.profile) {
         setState((prev) => applyServerProfile(prev, result.profile!));
       } else if (!result.success) {
@@ -432,8 +432,8 @@ export function useGameState() {
       };
 
       // Pro users: sync ticket progress to server
-      if (prev.proKey) {
-        updateTicketServer(prev.username, updatedTicket).catch(() => {});
+      if (prev.proKey && prev.proKeyHash) {
+        updateTicketServer(prev.username, updatedTicket, prev.proKeyHash).catch(() => {});
       }
 
       return {

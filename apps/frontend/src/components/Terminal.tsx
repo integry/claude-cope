@@ -290,8 +290,8 @@ function Terminal() {
           activeTicket: null,
           pendingCompletedTaskIds: [...prev.pendingCompletedTaskIds, state.activeTicket!.id],
         }));
-        if (state.proKey && state.username) {
-          void updateTicketServer(state.username, null);
+        if (state.proKey && state.proKeyHash && state.username) {
+          void updateTicketServer(state.username, null, state.proKeyHash);
         }
         const completedMessage = `✅ ${state.username || "A player"} completed ticket "${state.activeTicket!.title}" and earned ${payout.toLocaleString()} TD!`;
         fetch(`${API_BASE}/api/recent-events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: completedMessage }) }).catch(() => {});

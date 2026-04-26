@@ -20,26 +20,26 @@ async function profilePost(path: string, body: Record<string, unknown>): Promise
   }
 }
 
-export function buyGeneratorServer(username: string, generatorId: string, amount: number): Promise<ProfileResult> {
-  return profilePost("buy-generator", { username, generatorId, amount });
+export function buyGeneratorServer(username: string, generatorId: string, amount: number, licenseKeyHash: string): Promise<ProfileResult> {
+  return profilePost("buy-generator", { username, generatorId, amount, licenseKeyHash });
 }
 
-export function buyUpgradeServer(username: string, upgradeId: string): Promise<ProfileResult> {
-  return profilePost("buy-upgrade", { username, upgradeId });
+export function buyUpgradeServer(username: string, upgradeId: string, licenseKeyHash: string): Promise<ProfileResult> {
+  return profilePost("buy-upgrade", { username, upgradeId, licenseKeyHash });
 }
 
-export function buyThemeServer(username: string, themeId: string): Promise<ProfileResult> {
-  return profilePost("buy-theme", { username, themeId });
+export function buyThemeServer(username: string, themeId: string, licenseKeyHash: string): Promise<ProfileResult> {
+  return profilePost("buy-theme", { username, themeId, licenseKeyHash });
 }
 
-export function unlockAchievementServer(username: string, achievementId: string): Promise<ProfileResult> {
-  return profilePost("unlock-achievement", { username, achievementId });
+export function unlockAchievementServer(username: string, achievementId: string, licenseKeyHash: string): Promise<ProfileResult> {
+  return profilePost("unlock-achievement", { username, achievementId, licenseKeyHash });
 }
 
-export function updateBuddyServer(username: string, buddyType: string | null, isShiny: boolean): Promise<ProfileResult> {
-  return profilePost("update-buddy", { username, buddyType, isShiny });
+export function updateBuddyServer(username: string, buddyType: string | null, isShiny: boolean, licenseKeyHash: string): Promise<ProfileResult> {
+  return profilePost("update-buddy", { username, buddyType, isShiny, licenseKeyHash });
 }
 
-export function updateTicketServer(username: string, activeTicket: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null): Promise<ProfileResult> {
-  return profilePost("update-ticket", { username, activeTicket });
+export function updateTicketServer(username: string, activeTicket: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null, licenseKeyHash: string): Promise<ProfileResult> {
+  return profilePost("update-ticket", { username, activeTicket, licenseKeyHash });
 }

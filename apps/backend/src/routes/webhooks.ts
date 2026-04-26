@@ -52,14 +52,17 @@ webhooks.post("/polar", async (c) => {
     return c.json({ error: "KV storage is not configured" }, 500);
   }
 
-  // Idempotency check — write a "processing" marker first to close the race
-  // window where concurrent retries could both pass the check before either writes.
+  // Best-effort idempotency check. The get-then-put is NOT atomic, so two
+  // concurrent retries can both pass the read before either write lands.
+  // For grant/revoke events this is acceptable: quota writes and DB upserts
+  // are themselves idempotent. If stronger guarantees are needed, use a
+  // DB-backed unique constraint on webhook_id instead.
   const idempotencyKey = `webhook:${webhookId}`;
   const existing = await kv.get(idempotencyKey);
   if (existing !== null) {
     return c.json({ received: true }, 200);
   }
-  // Claim this webhook ID immediately with a short TTL; extended to 24h after processing
+  // Claim this webhook ID with a short TTL; extended to 24h after processing
   await kv.put(idempotencyKey, "processing", { expirationTtl: 300 });
 
   const event = JSON.parse(rawBody) as {

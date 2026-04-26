@@ -600,8 +600,8 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
     clearPendingOffer();
     const newTicket = { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt };
     ctx.setState((prev) => ({ ...prev, activeTicket: newTicket }));
-    if (ctx.state.proKey && ctx.state.username) {
-      void updateTicketServer(ctx.state.username, newTicket);
+    if (ctx.state.proKey && ctx.state.proKeyHash && ctx.state.username) {
+      void updateTicketServer(ctx.state.username, newTicket, ctx.state.proKeyHash);
     }
     ctx.playChime();
     reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nReward: **${(offer.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.` });
@@ -642,7 +642,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
     const data = await res.json() as { success?: boolean; hash?: string; restored?: boolean; profile?: ServerProfile; error?: string };
     if (res.ok && data.success) {
       ctx.setState((prev) => {
-        const withKey: GameState = { ...prev, proKey: licenseKey };
+        const withKey: GameState = { ...prev, proKey: licenseKey, proKeyHash: data.hash };
         if (data.profile) {
           return applyServerProfile(withKey, data.profile, { includeActiveTicket: true });
         }

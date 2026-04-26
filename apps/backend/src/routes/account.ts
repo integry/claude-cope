@@ -57,7 +57,7 @@ function buildProfileScoring(cp: SyncBody["currentProfile"]) {
   return {
     totalTD,
     currentTD: cp?.current_td ?? 0,
-    rank: cp?.corporate_rank ?? resolveRank(totalTD),
+    rank: resolveRank(totalTD),
     inventory: JSON.stringify(cp?.inventory ?? {}),
     upgrades: JSON.stringify(cp?.upgrades ?? []),
     achievements: JSON.stringify(cp?.achievements ?? []),
@@ -98,7 +98,7 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
   return getProfile(db, newUsername);
 }
 
-async function resolveProfile(db: D1Database, hash: string, body: SyncBody) {
+async function resolveProfile(db: D1Database, hash: string, body: SyncBody): Promise<{ restored: boolean; profile: Awaited<ReturnType<typeof getProfile>> | null; error?: string }> {
   // Case 1: Existing profile with this license_hash → restore
   const existingByHash = await getProfileByLicenseHash(db, hash);
   if (existingByHash) {
@@ -106,9 +106,15 @@ async function resolveProfile(db: D1Database, hash: string, body: SyncBody) {
   }
 
   // Case 2: User has a user_scores row by username → link license_hash
+  // Only allow linking if the profile has no existing license (prevents hijack)
   if (body.username) {
     const existingByName = await getProfileRow(db, body.username);
     if (existingByName) {
+      const row = existingByName as unknown as { license_hash: string | null };
+      if (row.license_hash && row.license_hash !== hash) {
+        // Profile already belongs to a different license — refuse to rebind
+        return { restored: false, profile: null, error: "This username is already linked to a different license" };
+      }
       const profile = await linkExistingProfile(db, hash, body.username);
       return { restored: false, profile };
     }
@@ -171,12 +177,28 @@ account.post("/sync", async (c) => {
     .run();
 
   const result = await resolveProfile(db, hash, body);
+  if (result.error) {
+    return c.json({ error: result.error }, 403);
+  }
   const quotaPercent = await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
   if (result.profile) {
     result.profile = { ...result.profile, quota_percent: quotaPercent };
   }
   return c.json({ success: true, hash, ...result });
 });
+
+// ─── Ownership verification ─────────────────────────────────────────
+
+async function verifyOwnership(db: D1Database, username: string, licenseKeyHash: string): Promise<{ profile: Awaited<ReturnType<typeof getProfile>>; error?: string }> {
+  const row = await getProfileRow(db, username);
+  if (!row) return { profile: null, error: "Profile not found" };
+  const rowWithHash = row as unknown as { license_hash: string | null };
+  if (!rowWithHash.license_hash || rowWithHash.license_hash !== licenseKeyHash) {
+    return { profile: null, error: "Unauthorized: license key does not match this profile" };
+  }
+  const profile = await getProfile(db, username);
+  return { profile };
+}
 
 // ─── Purchase endpoints ─────────────────────────────────────────────
 
@@ -192,15 +214,16 @@ account.post("/buy-generator", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{ username: string; generatorId: string; amount: number }>();
-  if (!body.username || !body.generatorId || !body.amount || body.amount < 1) {
-    return c.json({ error: "username, generatorId, and amount are required" }, 400);
+  const body = await c.req.json<{ username: string; generatorId: string; amount: number; licenseKeyHash: string }>();
+  if (!body.username || !body.generatorId || !body.amount || body.amount < 1 || !body.licenseKeyHash) {
+    return c.json({ error: "username, generatorId, amount, and licenseKeyHash are required" }, 400);
   }
 
   const generator = GENERATORS.find((g) => g.id === body.generatorId);
   if (!generator) return c.json({ error: "Unknown generator" }, 400);
 
-  const profile = await getProfile(db, body.username);
+  const { profile, error } = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  if (error) return c.json({ error }, profile === null ? 403 : 404);
   if (!profile) return c.json({ error: "Profile not found" }, 404);
 
   const owned = profile.inventory[body.generatorId] ?? 0;
@@ -232,15 +255,16 @@ account.post("/buy-upgrade", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{ username: string; upgradeId: string }>();
-  if (!body.username || !body.upgradeId) {
-    return c.json({ error: "username and upgradeId are required" }, 400);
+  const body = await c.req.json<{ username: string; upgradeId: string; licenseKeyHash: string }>();
+  if (!body.username || !body.upgradeId || !body.licenseKeyHash) {
+    return c.json({ error: "username, upgradeId, and licenseKeyHash are required" }, 400);
   }
 
   const upgrade = UPGRADES.find((u) => u.id === body.upgradeId);
   if (!upgrade) return c.json({ error: "Unknown upgrade" }, 400);
 
-  const profile = await getProfile(db, body.username);
+  const { profile, error } = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  if (error) return c.json({ error }, profile === null ? 403 : 404);
   if (!profile) return c.json({ error: "Profile not found" }, 404);
 
   if (profile.upgrades.includes(body.upgradeId)) {
@@ -269,15 +293,16 @@ account.post("/buy-theme", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{ username: string; themeId: string }>();
-  if (!body.username || !body.themeId) {
-    return c.json({ error: "username and themeId are required" }, 400);
+  const body = await c.req.json<{ username: string; themeId: string; licenseKeyHash: string }>();
+  if (!body.username || !body.themeId || !body.licenseKeyHash) {
+    return c.json({ error: "username, themeId, and licenseKeyHash are required" }, 400);
   }
 
   const theme = THEMES.find((t) => t.id === body.themeId);
   if (!theme) return c.json({ error: "Unknown theme" }, 400);
 
-  const profile = await getProfile(db, body.username);
+  const { profile, error } = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  if (error) return c.json({ error }, profile === null ? 403 : 404);
   if (!profile) return c.json({ error: "Profile not found" }, 404);
 
   if (profile.unlocked_themes.includes(body.themeId)) {
@@ -305,12 +330,13 @@ account.post("/unlock-achievement", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{ username: string; achievementId: string }>();
-  if (!body.username || !body.achievementId) {
-    return c.json({ error: "username and achievementId are required" }, 400);
+  const body = await c.req.json<{ username: string; achievementId: string; licenseKeyHash: string }>();
+  if (!body.username || !body.achievementId || !body.licenseKeyHash) {
+    return c.json({ error: "username, achievementId, and licenseKeyHash are required" }, 400);
   }
 
-  const profile = await getProfile(db, body.username);
+  const { profile, error } = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  if (error) return c.json({ error }, profile === null ? 403 : 404);
   if (!profile) return c.json({ error: "Profile not found" }, 404);
 
   if (profile.achievements.includes(body.achievementId)) {
@@ -331,10 +357,13 @@ account.post("/update-buddy", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{ username: string; buddyType: string | null; isShiny: boolean }>();
-  if (!body.username) {
-    return c.json({ error: "username is required" }, 400);
+  const body = await c.req.json<{ username: string; buddyType: string | null; isShiny: boolean; licenseKeyHash: string }>();
+  if (!body.username || !body.licenseKeyHash) {
+    return c.json({ error: "username and licenseKeyHash are required" }, 400);
   }
+
+  const { error } = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  if (error) return c.json({ error }, 403);
 
   await db
     .prepare("UPDATE user_scores SET buddy_type = ?, buddy_is_shiny = ?, updated_at = datetime('now') WHERE username = ?")
@@ -352,10 +381,14 @@ account.post("/update-ticket", async (c) => {
   const body = await c.req.json<{
     username: string;
     activeTicket: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null;
+    licenseKeyHash: string;
   }>();
-  if (!body.username) {
-    return c.json({ error: "username is required" }, 400);
+  if (!body.username || !body.licenseKeyHash) {
+    return c.json({ error: "username and licenseKeyHash are required" }, 400);
   }
+
+  const { error } = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  if (error) return c.json({ error }, 403);
 
   await db
     .prepare("UPDATE user_scores SET active_ticket = ?, updated_at = datetime('now') WHERE username = ?")

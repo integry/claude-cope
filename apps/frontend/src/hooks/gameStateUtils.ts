@@ -100,6 +100,7 @@ export interface GameState {
   apiKey?: string;
   selectedModel?: string;
   proKey?: string;
+  proKeyHash?: string;
   byokTotalCost?: number;
   byokUsage?: Record<string, ByokUsage>;
 }
