@@ -100,6 +100,14 @@ CREATE TABLE IF NOT EXISTS licenses (
 CREATE INDEX IF NOT EXISTS idx_licenses_status
     ON licenses (status);
 
+-- Idempotency table for webhook processing — prevents concurrent retries
+-- from both executing side effects via a UNIQUE constraint on webhook_id.
+CREATE TABLE IF NOT EXISTS processed_webhooks (
+    webhook_id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Index on username and hour for per-user reporting queries
 CREATE INDEX IF NOT EXISTS idx_usage_logs_user_hour
     ON usage_logs (username, hour DESC);

@@ -6,6 +6,13 @@ type Env = {
   };
 };
 
+/** Mask a credential-equivalent hash for admin display (first 8 + last 4 chars). */
+function maskHash(hash: string | null | undefined): string | null {
+  if (!hash || typeof hash !== "string") return null;
+  if (hash.length <= 12) return hash.slice(0, 4) + "…";
+  return hash.slice(0, 8) + "…" + hash.slice(-4);
+}
+
 const licenses = new Hono<Env>();
 
 licenses.get("/", async (c) => {
@@ -24,7 +31,12 @@ licenses.get("/", async (c) => {
       )
       .all();
 
-    return c.json(results ?? []);
+    // Mask credential-equivalent hashes before sending to the browser.
+    const masked = (results ?? []).map((row: Record<string, unknown>) => ({
+      ...row,
+      key_hash: maskHash(row.key_hash as string | null),
+    }));
+    return c.json(masked);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (!msg.includes("no such column") && !msg.includes("no such table")) {

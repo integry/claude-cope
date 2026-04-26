@@ -121,7 +121,16 @@ account.get("/me", async (c) => {
 
   const db = c.env?.DB;
   const row = db ? await getProfileRow(db, username) : null;
-  const rawLicenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
+
+  // If the session points to a username that no longer has a DB row, the
+  // mapping is stale (e.g. profile was deleted).  Clear the orphaned KV
+  // entry and report not-found so the frontend doesn't show a ghost account.
+  if (!row) {
+    await kv.delete(`session_user:${sessionId}`);
+    return c.json({ found: false });
+  }
+
+  const rawLicenseHash = (row as unknown as { license_hash: string | null }).license_hash;
 
   // Verify the license is still active — a revoked license should be treated as free.
   // This prevents the UI from showing isPro: true with quotaPercent: 0 for revoked users.

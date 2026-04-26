@@ -78,13 +78,61 @@ async function handleBenefitGrantRevoked(
   }
 }
 
+type WebhookEvent = {
+  type: string;
+  data?: { properties?: { license_key?: string } };
+};
+
+/**
+ * DB-backed idempotency: the unique constraint on webhook_id prevents two
+ * concurrent deliveries from both executing side effects.
+ * Returns "duplicate" if already processed, "inserted" if claimed, or
+ * "no_db" if the table/db is unavailable.
+ */
+async function claimWebhookIdempotency(
+  db: D1Database | undefined,
+  webhookId: string,
+  eventType: string,
+): Promise<"duplicate" | "inserted" | "no_db"> {
+  if (!db) return "no_db";
+  try {
+    await db
+      .prepare(
+        "INSERT INTO processed_webhooks (webhook_id, event_type, processed_at) VALUES (?, ?, datetime('now'))",
+      )
+      .bind(webhookId, eventType)
+      .run();
+    return "inserted";
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE constraint failed") || msg.includes("already exists")) {
+      return "duplicate";
+    }
+    if (msg.includes("no such table")) return "no_db";
+    throw err;
+  }
+}
+
+async function dispatchWebhookEvent(
+  event: WebhookEvent,
+  kv: KVNamespace,
+  env: Env["Bindings"],
+): Promise<void> {
+  const licenseKey = event.data?.properties?.license_key;
+  if (!licenseKey) return;
+  if (event.type === "benefit_grant.created") {
+    await handleBenefitGrantCreated(licenseKey, kv, env);
+  } else if (event.type === "benefit_grant.revoked") {
+    await handleBenefitGrantRevoked(licenseKey, kv, env);
+  }
+}
+
 webhooks.post("/polar", async (c) => {
   const secret = c.env?.POLAR_WEBHOOK_SECRET;
   if (!secret) {
     return c.json({ error: "Webhook secret is not configured" }, 500);
   }
 
-  // Read raw body for signature verification
   const rawBody = await c.req.text();
 
   const webhookId = c.req.header("webhook-id");
@@ -114,39 +162,37 @@ webhooks.post("/polar", async (c) => {
     return c.json({ error: "KV storage is not configured" }, 500);
   }
 
-  // Best-effort idempotency check. The get-then-put is NOT atomic, so two
-  // concurrent retries can both pass the read before either write lands.
-  // For grant/revoke events this is acceptable: quota writes and DB upserts
-  // are themselves idempotent. If stronger guarantees are needed, use a
-  // DB-backed unique constraint on webhook_id instead.
-  const idempotencyKey = `webhook:${webhookId}`;
-  const existing = await kv.get(idempotencyKey);
-  if (existing !== null) {
+  const event = JSON.parse(rawBody) as WebhookEvent;
+  const db = c.env?.DB;
+
+  const idempotencyResult = await claimWebhookIdempotency(db, webhookId, event.type);
+  if (idempotencyResult === "duplicate") {
     return c.json({ received: true }, 200);
   }
-  const event = JSON.parse(rawBody) as {
-    type: string;
-    data?: { properties?: { license_key?: string } };
-  };
 
-  const licenseKey = event.data?.properties?.license_key;
-
-  // Process the event BEFORE marking the webhook as handled. If the handler
-  // throws, retries from Polar will re-enter and retry processing instead of
-  // being short-circuited by a stale idempotency key.
-  try {
-    if (event.type === "benefit_grant.created" && licenseKey) {
-      await handleBenefitGrantCreated(licenseKey, kv, c.env);
-    } else if (event.type === "benefit_grant.revoked" && licenseKey) {
-      await handleBenefitGrantRevoked(licenseKey, kv, c.env);
+  // Fallback KV-based idempotency for environments without the DB table.
+  const idempotencyKey = `webhook:${webhookId}`;
+  if (idempotencyResult === "no_db") {
+    const existing = await kv.get(idempotencyKey);
+    if (existing !== null) {
+      return c.json({ received: true }, 200);
     }
+  }
+
+  try {
+    await dispatchWebhookEvent(event, kv, c.env);
   } catch (err) {
-    // Do NOT write the idempotency key — allow Polar to retry this webhook.
+    // Allow Polar to retry: remove the DB row so retries aren't blocked.
+    if (db) {
+      try {
+        await db.prepare("DELETE FROM processed_webhooks WHERE webhook_id = ?").bind(webhookId).run();
+      } catch { /* best-effort cleanup */ }
+    }
     console.error(`[WEBHOOK] Failed to handle ${event.type}:`, err);
     return c.json({ error: "Processing failed" }, 500);
   }
 
-  // Mark as processed only after successful completion (24h TTL).
+  // Mark as processed in KV as well (24h TTL) for fast duplicate rejection.
   await kv.put(idempotencyKey, "1", { expirationTtl: 86400 });
 
   return c.json({ received: true }, 200);

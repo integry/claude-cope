@@ -7,6 +7,13 @@ type Env = {
   };
 };
 
+/** Mask a credential-equivalent hash for admin display (first 8 + last 4 chars). */
+function maskHash(hash: string | null | undefined): string | null {
+  if (!hash || typeof hash !== "string") return null;
+  if (hash.length <= 12) return hash.slice(0, 4) + "…";
+  return hash.slice(0, 8) + "…" + hash.slice(-4);
+}
+
 const users = new Hono<Env>();
 
 users.get("/", async (c) => {
@@ -70,6 +77,8 @@ users.get("/", async (c) => {
     const isMax = hasLicenseHashColumn && row.has_active_license;
     return {
       ...row,
+      // Never expose the full credential-equivalent hash to the browser.
+      license_hash: maskHash(row.license_hash as string | null),
       // Max users have quota stored in KV (not derivable from usage_logs).
       // Show null so the admin UI can display "N/A" instead of a misleading number.
       credits_remaining: isMax ? null : Math.max(0, freeLimit - (Number(row.credits_used) || 0)),

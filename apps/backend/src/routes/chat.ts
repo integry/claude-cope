@@ -336,6 +336,79 @@ async function callOpenRouter(apiKey: string, model: string, messages: { role: s
   });
 }
 
+type PreChatResult = {
+  error?: string;
+  status?: number;
+  effectiveProKeyHash: string | undefined;
+  profileLicenseHash: string | null;
+  quotaPercent: number;
+  remaining?: number;
+};
+
+/**
+ * Pre-flight checks: validate pro ownership, cache session mapping, and
+ * consume quota.  Runs before the OpenRouter call so we never burn paid
+ * quota or upstream cost for requests that will be rejected.
+ */
+async function preChatChecks(
+  env: Env["Bindings"],
+  ctx: { waitUntil: (p: Promise<unknown>) => void },
+  opts: { db: D1Database | undefined; sessionId: string; username: string; effectiveProKeyHash: string | undefined },
+): Promise<PreChatResult> {
+  const { db, sessionId, username, effectiveProKeyHash } = opts;
+
+  // Pro ownership validation — must happen before quota consumption.
+  if (effectiveProKeyHash && db) {
+    const resolution = await resolveProUser(db, effectiveProKeyHash, username);
+    if (resolution.error) {
+      return { error: resolution.error, status: resolution.code === "revoked" ? 403 : 409, effectiveProKeyHash, profileLicenseHash: null, quotaPercent: 0 };
+    }
+  }
+
+  // Cache session → username mapping (verified ownership prevents impersonation).
+  let profileLicenseHash: string | null = null;
+  if (db && username && username !== "anonymous") {
+    const mappingResult = await tryCacheSessionMapping(env, ctx, { db, sessionId, username, effectiveProKeyHash });
+    profileLicenseHash = mappingResult.profileLicenseHash;
+  }
+
+  // Consume quota after ownership has been validated.
+  const quotaResult = await handleQuotaCheck(env, sessionId, effectiveProKeyHash);
+  if (quotaResult.exhaustedMessage) {
+    return { error: quotaResult.exhaustedMessage, status: 402, effectiveProKeyHash, profileLicenseHash, quotaPercent: 0 };
+  }
+
+  if (effectiveProKeyHash && quotaResult.remaining != null) {
+    ctx.waitUntil(mirrorPolarUsage(env, effectiveProKeyHash, quotaResult.remaining));
+  }
+
+  return { effectiveProKeyHash, profileLicenseHash, quotaPercent: quotaResult.quotaPercent, remaining: quotaResult.remaining };
+}
+
+function handleFreeUserResponse(
+  db: D1Database | undefined,
+  ctx: { waitUntil: (p: Promise<unknown>) => void },
+  params: {
+    username: string; rank: string; inventory: Record<string, number>;
+    upgrades: string[]; model: string; country: string; hour: string;
+    data: ChatResponseData; quotaPercent: number; profileLicenseHash: string | null;
+  },
+): Response {
+  const serverMultiplier = computeMultiplier(params.inventory, params.upgrades);
+  const baseTD = Math.floor(Math.random() * 40) + 10;
+  const tdAwarded = Math.round(baseTD * serverMultiplier);
+
+  recordUsage(db, ctx, {
+    username: params.username, model: params.model, data: params.data,
+    tdAwarded, rank: params.rank, country: params.country, hour: params.hour,
+    profileLicenseHash: params.profileLicenseHash,
+  });
+
+  (params.data as Record<string, unknown>).td_awarded = tdAwarded;
+  (params.data as Record<string, unknown>).quotaPercent = params.quotaPercent;
+  return new Response(JSON.stringify(params.data), { headers: { "Content-Type": "application/json" } });
+}
+
 const chat = new Hono<Env>();
 
 chat.post("/", async (c) => {
@@ -353,25 +426,11 @@ chat.post("/", async (c) => {
   const sessionId = c.get("sessionId");
   const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
 
-  // Cache the session → username mapping so a user who clears localStorage can
-  // be restored via GET /api/account/me.  We verify ownership first to prevent
-  // an attacker from claiming another user's username and leaking their profile.
-  let profileLicenseHash: string | null = null;
-  if (db && username && username !== "anonymous") {
-    const mappingResult = await tryCacheSessionMapping(c.env, c.executionCtx, { db, sessionId, username, effectiveProKeyHash });
-    profileLicenseHash = mappingResult.profileLicenseHash;
+  const preCheck = await preChatChecks(c.env, c.executionCtx, { db, sessionId, username, effectiveProKeyHash });
+  if (preCheck.error) {
+    return c.json({ error: preCheck.error }, (preCheck.status ?? 500) as ContentfulStatusCode);
   }
 
-  // Consume quota before making the OpenRouter request.
-  const quotaResult = await handleQuotaCheck(c.env, sessionId, effectiveProKeyHash);
-  if (quotaResult.exhaustedMessage) {
-    return c.json({ error: quotaResult.exhaustedMessage }, 402);
-  }
-  const quotaPercent = quotaResult.quotaPercent;
-
-  if (effectiveProKeyHash && quotaResult.remaining != null) {
-    c.executionCtx.waitUntil(mirrorPolarUsage(c.env, effectiveProKeyHash, quotaResult.remaining));
-  }
   const model = resolveModel(body.modelId);
 
   const sanitizedMessages = sanitizeChatMessages(body.chatMessages);
@@ -384,47 +443,32 @@ chat.post("/", async (c) => {
     buddyType: body.buddyType,
   });
 
-  const response = await callOpenRouter(apiKey!, model, messages);
+  const orResponse = await callOpenRouter(apiKey!, model, messages);
 
-  if (!response.ok) {
-    const data = await response.json();
-    console.log(`[CHAT ERROR] status=${response.status} body=${JSON.stringify(data).slice(0, 500)}`);
-    return c.json({ error: "OpenRouter request failed", details: data }, response.status as ContentfulStatusCode);
+  if (!orResponse.ok) {
+    const errData = await orResponse.json();
+    console.log(`[CHAT ERROR] status=${orResponse.status} body=${JSON.stringify(errData).slice(0, 500)}`);
+    return c.json({ error: "OpenRouter request failed", details: errData }, orResponse.status as ContentfulStatusCode);
   }
 
-  const data = await response.json() as ChatResponseData;
+  const data = await orResponse.json() as ChatResponseData;
   logChatDiagnostics(messages, data);
 
-  const cfCountry = (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country;
-  const country = body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
+  const country = body.country || (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country || c.req.header("cf-ipcountry") || "Unknown";
   const hour = new Date().toISOString().slice(0, 13);
 
-  // For pro users, read server-stored profile for authoritative multiplier.
-  // If a proKeyHash was presented but can't resolve to a profile, hard-fail
-  // instead of silently degrading to free writes (which would let a Pro license
-  // holder spoof a free user's score).
-  if (effectiveProKeyHash && db) {
-    const resolution = await resolveProUser(db, effectiveProKeyHash, username);
-    if (resolution.error) {
-      return c.json({ error: resolution.error }, resolution.code === "revoked" ? 403 : 409);
-    }
-    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: effectiveProKeyHash, model, hour, data, quotaPercent });
+  // Pro user scoring — ownership was already validated in preChatChecks.
+  if (preCheck.effectiveProKeyHash && db) {
+    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: preCheck.effectiveProKeyHash, model, hour, data, quotaPercent: preCheck.quotaPercent });
     if (proResponse) return proResponse;
-    // resolveProUser passed but scoring failed — race condition or DB error.
-    // Hard-fail instead of falling through to free-user writes.
     return c.json({ error: "Pro scoring failed — please retry" }, 500);
   }
 
   // Free users only — pro users are fully handled above
-  const serverMultiplier = computeMultiplier(inventory, upgrades);
-  const baseTD = Math.floor(Math.random() * 40) + 10;
-  const tdAwarded = Math.round(baseTD * serverMultiplier);
-
-  recordUsage(db, c.executionCtx, { username, model, data, tdAwarded, rank, country, hour, profileLicenseHash });
-
-  (data as Record<string, unknown>).td_awarded = tdAwarded;
-  (data as Record<string, unknown>).quotaPercent = quotaPercent;
-  return c.json(data);
+  return handleFreeUserResponse(db, c.executionCtx, {
+    username, rank, inventory, upgrades, model, country, hour,
+    data, quotaPercent: preCheck.quotaPercent, profileLicenseHash: preCheck.profileLicenseHash,
+  });
 });
 
 export default chat;
