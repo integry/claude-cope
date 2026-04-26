@@ -9,7 +9,9 @@ interface User {
   total_td: number;
   current_td: number;
   credits_used: number;
-  credits_remaining: number;
+  credits_remaining: number | null;
+  status: "free" | "max";
+  license_hash?: string | null;
 }
 
 interface UserForm {
@@ -22,11 +24,14 @@ interface UserForm {
 
 type SortField = "total_td" | "credits_used" | null;
 type SortDir = "asc" | "desc";
+type StatusFilter = "all" | "free" | "max";
 
 const emptyForm: UserForm = { username: "", corporate_rank: 0, country: "", total_td: 0, current_td: 0 };
 
 export default function Users() {
-  const { data, isLoading, isError, mutate } = useAdminApi<User[]>("/api/users");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const queryParam = statusFilter === "all" ? "" : `?status=${statusFilter}`;
+  const { data, isLoading, isError, mutate } = useAdminApi<User[]>(`/api/users${queryParam}`);
   const [resettingUser, setResettingUser] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<string | null>(null);
@@ -165,12 +170,23 @@ export default function Users() {
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Users</h1>
-        <button
-          onClick={openCreate}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Add User
-        </button>
+        <div className="flex items-center gap-3">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+          >
+            <option value="all">All Users</option>
+            <option value="free">Free Only</option>
+            <option value="max">Max Only</option>
+          </select>
+          <button
+            onClick={openCreate}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Add User
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -250,6 +266,7 @@ export default function Users() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Username</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Rank</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Country</th>
               <th
@@ -273,12 +290,23 @@ export default function Users() {
             {sortedData.map((user) => (
               <tr key={user.username}>
                 <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">{user.username}</td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm">
+                  {user.status === "max" ? (
+                    <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                      Max
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
+                      Free
+                    </span>
+                  )}
+                </td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.corporate_rank}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.country}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.total_td}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.current_td}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_used}</td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_remaining}</td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_remaining ?? "N/A"}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm">
                   <div className="flex gap-2">
                     <button

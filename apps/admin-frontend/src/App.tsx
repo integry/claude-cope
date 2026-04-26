@@ -1,11 +1,13 @@
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
+import Licenses from "./pages/Licenses";
 import Backlog from "./pages/Backlog";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
   { to: "/users", label: "Users" },
+  { to: "/licenses", label: "Licenses" },
   { to: "/backlog", label: "Backlog" },
 ];
 
@@ -48,6 +50,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/licenses" element={<Licenses />} />
           <Route path="/backlog" element={<Backlog />} />
         </Routes>
       </Layout>

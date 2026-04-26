@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { maskHash } from "../utils/maskHash";
 
 type Env = {
   Bindings: {
@@ -14,24 +15,72 @@ users.get("/", async (c) => {
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
   const freeLimit = parseInt(c.env?.FREE_QUOTA_LIMIT || "20", 10) || 20;
+  const statusFilter = c.req.query("status"); // "free", "max", or undefined for all
 
-  const { results } = await db
-    .prepare(
-      `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
-              COALESCE(ul.msg_count, 0) AS credits_used
-       FROM user_scores u
-       LEFT JOIN (
-         SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
-       ) ul ON ul.username = u.username
-       ORDER BY u.updated_at DESC
-       LIMIT 100`
-    )
-    .all();
+  // Try query with license_hash column; fall back to without if column doesn't exist yet
+  let results: Record<string, unknown>[];
+  let hasLicenseHashColumn = true;
+  try {
+    let query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
+                u.license_hash,
+                COALESCE(ul.msg_count, 0) AS credits_used,
+                CASE WHEN l.key_hash IS NOT NULL THEN 1 ELSE 0 END AS has_active_license
+         FROM user_scores u
+         LEFT JOIN (
+           SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
+         ) ul ON ul.username = u.username
+         LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'`;
 
-  const enriched = (results ?? []).map((row: Record<string, unknown>) => ({
-    ...row,
-    credits_remaining: Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
-  }));
+    if (statusFilter === "max") {
+      query += " WHERE l.key_hash IS NOT NULL";
+    } else if (statusFilter === "free") {
+      query += " WHERE l.key_hash IS NULL";
+    }
+
+    query += " ORDER BY u.updated_at DESC LIMIT 200";
+
+    const resp = await db.prepare(query).all();
+    results = (resp.results ?? []) as Record<string, unknown>[];
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes("no such column") && !msg.includes("no such table")) {
+      throw err;
+    }
+    hasLicenseHashColumn = false;
+    // license_hash column doesn't exist yet — no user can be Max.
+    // Log so a broken migration doesn't masquerade as "no Max users yet".
+    console.warn(`[admin/users] schema fallback (license_hash column missing): ${msg.slice(0, 200)}`);
+    if (statusFilter === "max") {
+      // No license_hash column means no Max users exist; return empty
+      results = [];
+    } else {
+      const resp = await db
+        .prepare(
+          `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
+                  COALESCE(ul.msg_count, 0) AS credits_used
+           FROM user_scores u
+           LEFT JOIN (
+             SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
+           ) ul ON ul.username = u.username
+           ORDER BY u.updated_at DESC LIMIT 200`
+        )
+        .all();
+      results = (resp.results ?? []) as Record<string, unknown>[];
+    }
+  }
+
+  const enriched = results.map((row: Record<string, unknown>) => {
+    const isMax = hasLicenseHashColumn && row.has_active_license;
+    return {
+      ...row,
+      // Never expose the full credential-equivalent hash to the browser.
+      license_hash: maskHash(row.license_hash as string | null),
+      // Max users have quota stored in KV (not derivable from usage_logs).
+      // Show null so the admin UI can display "N/A" instead of a misleading number.
+      credits_remaining: isMax ? null : Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
+      status: isMax ? "max" : "free",
+    };
+  });
 
   return c.json(enriched);
 });
