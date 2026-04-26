@@ -17,24 +17,22 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
       {/* Dimmed backdrop */}
       <div className="absolute inset-0 bg-black opacity-70" />
 
-      {/* Modal box — Red Alert: dark terminal bg with red ASCII borders */}
+      {/* Modal box — Red Alert: dark terminal bg with hard border & blocky shadow */}
       <div
         className="relative z-10 w-full max-w-2xl mx-4"
         style={{
-          backgroundColor: '#0d1117',
-          border: 'none',
-          boxShadow: '12px 12px 0px rgba(0,0,0,1)',
+          backgroundColor: '#1e232b',
+          border: '1px solid #ff5555',
+          boxShadow: '12px 12px 0px rgba(0, 0, 0, 0.9)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <pre
-          className="text-xs leading-relaxed p-0 m-0 whitespace-pre font-bold"
-          style={{ color: '#ff5555', backgroundColor: '#0d1117' }}
+        <div
+          className="text-center py-3 font-bold text-sm tracking-[0.3em]"
+          style={{ color: '#ff5555', borderBottom: '1px solid #ff5555' }}
         >
-{`+=================================================================+
-|                       `}<span style={{ color: '#ff5555' }}>{"[ SYSTEM OVERRIDE ]"}</span>{`                       |
-+=================================================================+`}
-        </pre>
+          [ S Y S T E M &nbsp;&nbsp; O V E R R I D E ]
+        </div>
 
         <div className="px-6 py-6 space-y-4">
           {/* Title */}
@@ -84,22 +82,22 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
                   rel="noopener noreferrer"
                   className="inline-block text-xs font-bold transition-colors"
                   style={{
-                    backgroundColor: '#ffffff',
-                    color: '#000000',
-                    border: '2px solid #ffffff',
+                    backgroundColor: 'transparent',
+                    color: '#4ade80',
+                    border: '1px solid #4ade80',
                     padding: '4px 12px',
                     marginTop: '8px',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = '#4ade80';
-                    e.currentTarget.style.borderColor = '#4ade80';
+                    e.currentTarget.style.color = '#000000';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#ffffff';
-                    e.currentTarget.style.borderColor = '#ffffff';
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = '#4ade80';
                   }}
                 >
-                  {"  > "}{isUpgraded ? "[ BUY ANOTHER SEAT ]" : "[ PURCHASE SINGLE ]"}
+                  {isUpgraded ? "[ BUY ANOTHER SEAT ]" : "[ PURCHASE SINGLE ]"}
                 </a>
               ) : (
                 <div className="text-xs" style={{ color: '#ff5555' }}>
@@ -127,22 +125,22 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
                   rel="noopener noreferrer"
                   className="inline-block text-xs font-bold transition-colors"
                   style={{
-                    backgroundColor: '#ffffff',
-                    color: '#000000',
-                    border: '2px solid #ffffff',
+                    backgroundColor: 'transparent',
+                    color: '#4ade80',
+                    border: '1px solid #4ade80',
                     padding: '4px 12px',
                     marginTop: '8px',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = '#4ade80';
-                    e.currentTarget.style.borderColor = '#4ade80';
+                    e.currentTarget.style.color = '#000000';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#ffffff';
-                    e.currentTarget.style.borderColor = '#ffffff';
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = '#4ade80';
                   }}
                 >
-                  {"  > "}{isUpgraded ? "[ BUY MORE SEATS ]" : "[ PURCHASE TEAM PACK ]"}
+                  {isUpgraded ? "[ BUY MORE SEATS ]" : "[ PURCHASE TEAM PACK ]"}
                 </a>
               ) : (
                 <div className="text-xs" style={{ color: '#ff5555' }}>
@@ -167,14 +165,12 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
           </div>
         </div>
 
-        <pre
-          className="text-xs leading-relaxed p-0 m-0 whitespace-pre font-bold"
-          style={{ color: '#ff5555', backgroundColor: '#0d1117' }}
+        <div
+          className="text-center py-3 text-xs font-bold"
+          style={{ color: '#aaaaaa', borderTop: '1px solid #ff5555' }}
         >
-{`+=================================================================+
-|            `}<span style={{ color: '#aaaaaa' }}>{"[Press ESC to return to mediocrity]"}</span>{`                   |
-+=================================================================+`}
-        </pre>
+          [Press ESC to return to mediocrity]
+        </div>
       </div>
     </div>
   );
