@@ -1,13 +1,162 @@
-import { UPGRADE_CHECKOUT_SINGLE, UPGRADE_CHECKOUT_MULTI, PRO_QUOTA_LIMIT } from "../config";
+import {
+  UPGRADE_CHECKOUT_SINGLE,
+  UPGRADE_CHECKOUT_MULTI,
+  PRO_QUOTA_LIMIT,
+  UPGRADE_PRICE_SINGLE,
+  UPGRADE_PRICE_MULTI,
+} from "../config";
 
 type UpgradeOverlayProps = {
   isUpgraded: boolean;
   onClose: () => void;
 };
 
+/* ── helpers ─────────────────────────────────────────────────── */
+
+const B = "#ff5555"; // border (red)
+const Y = "#ffff55"; // yellow headings
+const W = "#ffffff"; // white body text
+const G = "#4ade80"; // green buttons
+const DIM = "#aaaaaa"; // dim footer
+
+const bc = (s: string) => <span style={{ color: B }}>{s}</span>;
+
+const BOX_W = 66; // inner width between ║ chars
+
+function pad(text: string, width = BOX_W): string {
+  return text + " ".repeat(Math.max(0, width - text.length));
+}
+
+/* ── component ───────────────────────────────────────────────── */
+
 function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
+
+  const singleLabel = isUpgraded
+    ? `[ BUY ANOTHER SEAT - ${UPGRADE_PRICE_SINGLE} ]`
+    : `[ PURCHASE SINGLE - ${UPGRADE_PRICE_SINGLE} ]`;
+
+  const multiLabel = isUpgraded
+    ? `[ BUY MORE SEATS - ${UPGRADE_PRICE_MULTI} ]`
+    : `[ PURCHASE TEAM PACK - ${UPGRADE_PRICE_MULTI} ]`;
+
+  const title = isUpgraded ? "MANAGE YOUR LICENSES" : "UPGRADE TO MAX";
+  const subtitle = isUpgraded
+    ? "Purchase additional licenses to spread the suffering across your team."
+    : "Unlock Premium Suffering.";
+
+  const statusHeading = isUpgraded ? "[CURRENT STATUS]" : "[FREE TIER]";
+  const statusLine1 = isUpgraded
+    ? "You are on the Max tier. Your suffering is premium-grade."
+    : `You are on the free tier. Upgrade to Max for ${PRO_QUOTA_LIMIT} credits,`;
+  const statusLine2 = isUpgraded
+    ? null
+    : "premium models, and the privilege of paying for your own exploitation.";
+
+  /* ── render helpers ── */
+
+  const topBorder = (
+    <span style={{ color: B }}>{"╔" + "═".repeat(BOX_W) + "╗"}</span>
+  );
+  const midBorder = (
+    <span style={{ color: B }}>{"╠" + "═".repeat(BOX_W) + "╣"}</span>
+  );
+  const botBorder = (
+    <span style={{ color: B }}>{"╚" + "═".repeat(BOX_W) + "╝"}</span>
+  );
+
+  const emptyLine = (
+    <>
+      {bc("║")}<span style={{ color: W }}>{pad("")}</span>{bc("║")}
+    </>
+  );
+
+  const textLine = (text: string, color = W) => (
+    <>
+      {bc("║")}<span style={{ color }}>{pad("  " + text)}</span>{bc("║")}
+    </>
+  );
+
+  const centeredLine = (text: string, color = W) => {
+    const totalPad = BOX_W - text.length;
+    const left = Math.floor(totalPad / 2);
+    const right = totalPad - left;
+    return (
+      <>
+        {bc("║")}
+        <span style={{ color }}>
+          {" ".repeat(left) + text + " ".repeat(right)}
+        </span>
+        {bc("║")}
+      </>
+    );
+  };
+
+  const headerLine = (
+    <>
+      {bc("║")}
+      <span style={{ color: B }}>
+        {pad("             [ S Y S T E M   O V E R R I D E ]")}
+      </span>
+      {bc("║")}
+    </>
+  );
+
+  const footerLine = (
+    <>
+      {bc("║")}
+      <span style={{ color: DIM }}>
+        {pad("             [Press ESC to return to mediocrity]")}
+      </span>
+      {bc("║")}
+    </>
+  );
+
+  /* Button line: rendered as a clickable <a> inside the <pre> */
+  const buttonLine = (
+    label: string,
+    url: string,
+    available: boolean,
+  ) => {
+    const inner = "    > " + label;
+    const padded = pad(inner);
+    if (!available) {
+      const errText = pad("    [ERR] CHECKOUT_URL not configured. Contact your operator.");
+      return (
+        <>
+          {bc("║")}<span style={{ color: B }}>{errText}</span>{bc("║")}
+        </>
+      );
+    }
+    return (
+      <>
+        {bc("║")}
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: G,
+            textDecoration: "none",
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = G;
+            e.currentTarget.style.color = "#000000";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
+            e.currentTarget.style.color = G;
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {padded}
+        </a>
+        {bc("║")}
+      </>
+    );
+  };
 
   return (
     <div
@@ -17,161 +166,56 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
       {/* Dimmed backdrop */}
       <div className="absolute inset-0 bg-black opacity-70" />
 
-      {/* Modal box — Red Alert: dark terminal bg with hard border & blocky shadow */}
-      <div
-        className="relative z-10 w-full max-w-2xl mx-4"
+      {/* Modal box */}
+      <pre
+        className="relative z-10 mx-4"
         style={{
-          backgroundColor: '#1e232b',
-          border: '1px solid #ff5555',
-          boxShadow: '12px 12px 0px rgba(0, 0, 0, 0.9)',
+          fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
+          fontSize: "13px",
+          lineHeight: "1.1",
+          backgroundColor: "#1e232b",
+          boxShadow: "12px 12px 0px rgba(0, 0, 0, 0.9)",
+          padding: 0,
+          margin: 0,
+          whiteSpace: "pre",
+          overflow: "hidden",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="text-center py-3 font-bold text-sm tracking-[0.3em]"
-          style={{ color: '#ff5555', borderBottom: '1px solid #ff5555' }}
-        >
-          [ S Y S T E M &nbsp;&nbsp; O V E R R I D E ]
-        </div>
-
-        <div className="px-6 py-6 space-y-4">
-          {/* Title */}
-          <div className="text-center">
-            <div className="font-bold text-sm mb-1" style={{ color: '#ffff55' }}>
-              {isUpgraded ? "MANAGE YOUR LICENSES" : "UPGRADE TO MAX"}
-            </div>
-            <div className="text-xs" style={{ color: '#ffffff' }}>
-              {isUpgraded
-                ? "Purchase additional licenses to spread the suffering across your team."
-                : "Unlock Premium Suffering."}
-            </div>
-          </div>
-
-          {/* Current status */}
-          <div className="text-xs">
-            <div className="font-bold mb-1" style={{ color: '#ffff55' }}>
-              {isUpgraded ? "  [CURRENT STATUS]" : "  [FREE TIER]"}
-            </div>
-            <div className="pl-2" style={{ color: '#ffffff' }}>
-              {isUpgraded
-                ? "  You are on the Max tier. Your suffering is premium-grade."
-                : `  You are on the free tier. Upgrade to Max for ${PRO_QUOTA_LIMIT} credits,`}
-            </div>
-            {!isUpgraded && (
-              <div className="pl-2" style={{ color: '#ffffff' }}>
-                {"  premium models, and the privilege of paying for your own exploitation."}
-              </div>
-            )}
-          </div>
-
-          {/* Option 1: Single license */}
-          <div className="text-xs">
-            <div className="font-bold mb-1" style={{ color: '#ffff55' }}>
-              {"  [OPTION 1: SINGLE LICENSE]"}
-            </div>
-            <div className="pl-2 mb-2" style={{ color: '#ffffff' }}>
-              {"  One seat. One soul. "}{PRO_QUOTA_LIMIT}{" credits of technical debt"}
-              <br />
-              {"  generation for a single developer who has given up."}
-            </div>
-            <div className="pl-2">
-              {singleAvailable ? (
-                <a
-                  href={UPGRADE_CHECKOUT_SINGLE}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block text-xs font-bold transition-colors"
-                  style={{
-                    backgroundColor: 'transparent',
-                    color: '#4ade80',
-                    border: '1px solid #4ade80',
-                    padding: '4px 12px',
-                    marginTop: '8px',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#4ade80';
-                    e.currentTarget.style.color = '#000000';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = '#4ade80';
-                  }}
-                >
-                  {isUpgraded ? "[ BUY ANOTHER SEAT ]" : "[ PURCHASE SINGLE ]"}
-                </a>
-              ) : (
-                <div className="text-xs" style={{ color: '#ff5555' }}>
-                  {"  [ERR] CHECKOUT_URL_SINGLE not configured. Contact your operator."}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Option 2: Multi license pack */}
-          <div className="text-xs">
-            <div className="font-bold mb-1" style={{ color: '#ffff55' }}>
-              {"  [OPTION 2: MULTI-LICENSE PACK — 5 LICENSES]"}
-            </div>
-            <div className="pl-2 mb-2" style={{ color: '#ffffff' }}>
-              {"  Five seats for the whole team. Because misery loves company,"}
-              <br />
-              {"  and your manager wants everyone on the same page of suffering."}
-            </div>
-            <div className="pl-2">
-              {multiAvailable ? (
-                <a
-                  href={UPGRADE_CHECKOUT_MULTI}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block text-xs font-bold transition-colors"
-                  style={{
-                    backgroundColor: 'transparent',
-                    color: '#4ade80',
-                    border: '1px solid #4ade80',
-                    padding: '4px 12px',
-                    marginTop: '8px',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#4ade80';
-                    e.currentTarget.style.color = '#000000';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = '#4ade80';
-                  }}
-                >
-                  {isUpgraded ? "[ BUY MORE SEATS ]" : "[ PURCHASE TEAM PACK ]"}
-                </a>
-              ) : (
-                <div className="text-xs" style={{ color: '#ff5555' }}>
-                  {"  [ERR] CHECKOUT_URL_MULTI not configured. Contact your operator."}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* What you get */}
-          <div className="text-xs">
-            <div className="font-bold mb-1" style={{ color: '#ffff55' }}>
-              {"  [WHAT YOU GET]"}
-            </div>
-            <div className="pl-2 whitespace-pre-line" style={{ color: '#ffffff' }}>
-{`  • ${PRO_QUOTA_LIMIT} API credits per license (fewer 429s)
-  • Access to premium models
-  • Priority queue for suffering
-  • A warm feeling of corporate compliance
-  • The mass right to mass-produce technical debt`}
-            </div>
-          </div>
-        </div>
-
-        <div
-          className="text-center py-3 text-xs font-bold"
-          style={{ color: '#aaaaaa', borderTop: '1px solid #ff5555' }}
-        >
-          [Press ESC to return to mediocrity]
-        </div>
-      </div>
+        {topBorder}{"\n"}
+        {headerLine}{"\n"}
+        {midBorder}{"\n"}
+        {emptyLine}{"\n"}
+        {centeredLine(title, Y)}{"\n"}
+        {centeredLine(subtitle, W)}{"\n"}
+        {emptyLine}{"\n"}
+        {textLine(statusHeading, Y)}{"\n"}
+        {textLine(statusLine1, W)}{"\n"}
+        {statusLine2 ? <>{textLine(statusLine2, W)}{"\n"}</> : null}
+        {emptyLine}{"\n"}
+        {textLine("[OPTION 1: SINGLE LICENSE]", Y)}{"\n"}
+        {textLine(`One seat. One soul. ${PRO_QUOTA_LIMIT} credits of technical debt`, W)}{"\n"}
+        {textLine("generation for a single developer who has given up.", W)}{"\n"}
+        {emptyLine}{"\n"}
+        {buttonLine(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
+        {emptyLine}{"\n"}
+        {textLine("[OPTION 2: MULTI-LICENSE PACK — 5 LICENSES]", Y)}{"\n"}
+        {textLine("Five seats for the whole team. Because misery loves company,", W)}{"\n"}
+        {textLine("and your manager wants everyone on the same page of suffering.", W)}{"\n"}
+        {emptyLine}{"\n"}
+        {buttonLine(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable)}{"\n"}
+        {emptyLine}{"\n"}
+        {textLine("[WHAT YOU GET]", Y)}{"\n"}
+        {textLine(`• ${PRO_QUOTA_LIMIT} API credits per license (fewer 429s)`, W)}{"\n"}
+        {textLine("• Access to premium models", W)}{"\n"}
+        {textLine("• Priority queue for suffering", W)}{"\n"}
+        {textLine("• A warm feeling of corporate compliance", W)}{"\n"}
+        {textLine("• The mass right to mass-produce technical debt", W)}{"\n"}
+        {emptyLine}{"\n"}
+        {midBorder}{"\n"}
+        {footerLine}{"\n"}
+        {botBorder}
+      </pre>
     </div>
   );
 }
