@@ -93,8 +93,9 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
     primary = true,
   ) => {
     const MARGIN = 2; // gap so green never touches red borders
-    const btnContent = " > " + label + " ";
-    const totalUsed = MARGIN + btnContent.length;
+    const cursorPrefix = " > "; // shown outside the green block
+    const btnContent = " " + label + " ";
+    const totalUsed = MARGIN + cursorPrefix.length + btnContent.length;
     const suffixLen = Math.max(0, INNER_W - totalUsed);
     if (!available) {
       const errText = "    [ERR] CHECKOUT_URL not configured.";
@@ -125,30 +126,46 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
             verticalAlign: "middle",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "rgba(74, 222, 128, 0.15)";
             const btn = e.currentTarget.querySelector("[data-btn]") as HTMLElement;
             if (btn) {
               btn.style.backgroundColor = primary ? "#ffffff" : G;
               btn.style.color = primary ? "#000000" : "#0d1117";
             }
+            const cursor = e.currentTarget.querySelector("[data-cursor]") as HTMLElement;
+            if (cursor) {
+              cursor.style.color = G;
+            }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
             const btn = e.currentTarget.querySelector("[data-btn]") as HTMLElement;
             if (btn) {
               btn.style.backgroundColor = primary ? G : "transparent";
               btn.style.color = primary ? "#0d1117" : G;
+            }
+            const cursor = e.currentTarget.querySelector("[data-cursor]") as HTMLElement;
+            if (cursor) {
+              cursor.style.color = primary ? G : "transparent";
             }
           }}
           onClick={(e) => e.stopPropagation()}
         >
           <span style={{ color: "transparent" }}>{" ".repeat(MARGIN)}</span>
           <span
+            data-cursor=""
+            style={{
+              color: primary ? G : "transparent",
+              fontWeight: "bold",
+            }}
+          >
+            {cursorPrefix}
+          </span>
+          <span
             data-btn=""
             style={{
               backgroundColor: primary ? G : "transparent",
               color: primary ? "#0d1117" : G,
               fontWeight: "bold",
+              padding: "2px 8px",
             }}
           >
             {btnContent}
@@ -211,7 +228,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         {tableBorderBot}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE]", Y)}{"\n"}
-        {boxLine(`  One seat. Max 429X enabled. ${PRO_QUOTA_LIMIT} credits of pure throughput.`)}{"\n"}
+        {boxLine(`  One seat. Max 429X enabled. ${PRO_QUOTA_LIMIT} non-expiring credits (one-time extraction).`)}{"\n"}
         {buttonBoxLine(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
         {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
