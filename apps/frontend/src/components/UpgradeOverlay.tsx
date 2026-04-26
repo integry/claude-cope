@@ -69,32 +69,6 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
   /** An empty line: ║ (spaces) ║ */
   const emptyLine = boxLine("");
 
-  /** A clickable empty line that acts as extended hit area for a button */
-  const clickableEmptyLine = (url: string, available: boolean) => {
-    if (!available) return emptyLine;
-    return (
-      <>
-        <span style={{ color: B }}>{"║"}</span>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline",
-            textDecoration: "none",
-            cursor: "pointer",
-            backgroundColor: "transparent",
-            color: "transparent",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {" ".repeat(INNER_W)}
-        </a>
-        <span style={{ color: B }}>{"║"}</span>
-      </>
-    );
-  };
-
   /** A centered content line between ║ ... ║ */
   const centeredBoxLine = (text: string, color = W) => {
     const totalPad = INNER_W - text.length;
@@ -109,10 +83,11 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
     );
   };
 
-  /** Button line: clickable <a> padded between ║ ... ║
+  /** Button block: a single <a> spanning 3 rows (empty + button + empty)
+   *  so the entire area is one clickable element with shared hover.
    *  primary = solid green block (default selected)
    *  secondary = green text only, turns solid green on hover */
-  const buttonBoxLine = (
+  const buttonBlock = (
     label: string,
     url: string,
     available: boolean,
@@ -123,78 +98,93 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
     const btnContent = " " + label + " ";
     const totalUsed = MARGIN + cursorPrefix.length + btnContent.length;
     const suffixLen = Math.max(0, INNER_W - totalUsed);
+    const emptyInner = " ".repeat(INNER_W);
+
     if (!available) {
       const errText = "    [ERR] CHECKOUT_URL not configured.";
       const errPad = Math.max(0, INNER_W - errText.length);
       return (
         <>
           <span style={{ color: B }}>{"║"}</span>
+          <span style={{ color: W }}>{emptyInner}</span>
+          <span style={{ color: B }}>{"║"}</span>{"\n"}
+          <span style={{ color: B }}>{"║"}</span>
           <span style={{ color: B }}>{errText + " ".repeat(errPad)}</span>
+          <span style={{ color: B }}>{"║"}</span>{"\n"}
+          <span style={{ color: B }}>{"║"}</span>
+          <span style={{ color: W }}>{emptyInner}</span>
           <span style={{ color: B }}>{"║"}</span>
         </>
       );
     }
     return (
-      <>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: "block",
+          textDecoration: "none",
+          cursor: "pointer",
+          backgroundColor: "transparent",
+        }}
+        onMouseEnter={(e) => {
+          const btn = e.currentTarget.querySelector("[data-btn]") as HTMLElement;
+          if (btn) {
+            btn.style.backgroundColor = primary ? "#ffffff" : G;
+            btn.style.color = primary ? "#000000" : "#0d1117";
+          }
+          const cursor = e.currentTarget.querySelector("[data-cursor]") as HTMLElement;
+          if (cursor) {
+            cursor.style.color = G;
+          }
+        }}
+        onMouseLeave={(e) => {
+          const btn = e.currentTarget.querySelector("[data-btn]") as HTMLElement;
+          if (btn) {
+            btn.style.backgroundColor = primary ? G : "transparent";
+            btn.style.color = primary ? "#0d1117" : G;
+          }
+          const cursor = e.currentTarget.querySelector("[data-cursor]") as HTMLElement;
+          if (cursor) {
+            cursor.style.color = G;
+          }
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Top padding row */}
         <span style={{ color: B }}>{"║"}</span>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
+        <span style={{ color: "transparent" }}>{emptyInner}</span>
+        <span style={{ color: B }}>{"║"}</span>{"\n"}
+        {/* Button row */}
+        <span style={{ color: B }}>{"║"}</span>
+        <span style={{ color: "transparent" }}>{" ".repeat(MARGIN)}</span>
+        <span
+          data-cursor=""
           style={{
-            display: "inline",
-            textDecoration: "none",
-            cursor: "pointer",
-            backgroundColor: "transparent",
+            color: G,
+            fontWeight: "bold",
           }}
-          onMouseEnter={(e) => {
-            const btn = e.currentTarget.querySelector("[data-btn]") as HTMLElement;
-            if (btn) {
-              btn.style.backgroundColor = primary ? "#ffffff" : G;
-              btn.style.color = primary ? "#000000" : "#0d1117";
-            }
-            const cursor = e.currentTarget.querySelector("[data-cursor]") as HTMLElement;
-            if (cursor) {
-              cursor.style.color = G;
-            }
-          }}
-          onMouseLeave={(e) => {
-            const btn = e.currentTarget.querySelector("[data-btn]") as HTMLElement;
-            if (btn) {
-              btn.style.backgroundColor = primary ? G : "transparent";
-              btn.style.color = primary ? "#0d1117" : G;
-            }
-            const cursor = e.currentTarget.querySelector("[data-cursor]") as HTMLElement;
-            if (cursor) {
-              cursor.style.color = G;
-            }
-          }}
-          onClick={(e) => e.stopPropagation()}
         >
-          <span style={{ color: "transparent" }}>{" ".repeat(MARGIN)}</span>
-          <span
-            data-cursor=""
-            style={{
-              color: G,
-              fontWeight: "bold",
-            }}
-          >
-            {cursorPrefix}
-          </span>
-          <span
-            data-btn=""
-            style={{
-              backgroundColor: primary ? G : "transparent",
-              color: primary ? "#0d1117" : G,
-              fontWeight: "bold",
-            }}
-          >
-            {btnContent}
-          </span>
-          <span style={{ color: "transparent" }}>{" ".repeat(suffixLen)}</span>
-        </a>
+          {cursorPrefix}
+        </span>
+        <span
+          data-btn=""
+          style={{
+            backgroundColor: primary ? G : "transparent",
+            color: primary ? "#0d1117" : G,
+            fontWeight: "bold",
+          }}
+        >
+          {btnContent}
+        </span>
+        <span style={{ color: "transparent" }}>{" ".repeat(suffixLen)}</span>
+        <span style={{ color: B }}>{"║"}</span>{"\n"}
+        {/* Bottom padding row */}
         <span style={{ color: B }}>{"║"}</span>
-      </>
+        <span style={{ color: "transparent" }}>{emptyInner}</span>
+        <span style={{ color: B }}>{"║"}</span>
+      </a>
     );
   };
 
@@ -251,16 +241,12 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         {boxLine("  [OPTION 1: SINGLE LICENSE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled. ${PRO_QUOTA_LIMIT} non-expiring`)}{"\n"}
         {boxLine("  credits (one-time extraction).")}{"\n"}
-        {clickableEmptyLine(UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
-        {buttonBoxLine(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
-        {clickableEmptyLine(UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
+        {buttonBlock(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
         {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
         {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
-        {clickableEmptyLine(UPGRADE_CHECKOUT_MULTI, multiAvailable)}{"\n"}
-        {buttonBoxLine(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
-        {clickableEmptyLine(UPGRADE_CHECKOUT_MULTI, multiAvailable)}{"\n"}
+        {buttonBlock(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {midBorder}{"\n"}
         {(() => {
           const text = "[Press ESC to retain your net worth]";
