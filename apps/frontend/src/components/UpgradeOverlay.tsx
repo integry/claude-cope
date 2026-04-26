@@ -188,7 +188,7 @@ function UpgradeOverlay({ isUpgraded, onClose }: UpgradeOverlayProps) {
         className="relative z-10 mx-4 upgrade-modal-box"
         style={{
           fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
-          fontSize: "13px",
+          fontSize: "clamp(7px, 2.4vw, 13px)",
           lineHeight: "1.1",
           backgroundColor: "#1e232b",
           boxShadow: "12px 12px 0px rgba(0, 0, 0, 0.9)",
