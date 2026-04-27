@@ -4,8 +4,17 @@ interface License {
   id: string;
   key_hash: string;
   status: string;
-  activated_at: string;
+  created_at: string;
+  last_activated_at: string;
   username: string | null;
+}
+
+function formatTimestamp(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  const d = new Date(raw + "Z"); // SQLite datetime is UTC
+  if (isNaN(d.getTime())) return raw;
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+    + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
 export default function Licenses() {
@@ -45,7 +54,8 @@ export default function Licenses() {
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Key Hash</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">User</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Activated</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Created</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Last Activated</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -69,13 +79,16 @@ export default function Licenses() {
                   {license.username ?? <span className="text-gray-400">Unlinked</span>}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">
-                  {license.activated_at}
+                  {formatTimestamp(license.created_at)}
+                </td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">
+                  {formatTimestamp(license.last_activated_at)}
                 </td>
               </tr>
             ))}
             {licenses.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">
                   No licenses activated yet.
                 </td>
               </tr>

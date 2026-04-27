@@ -43,9 +43,24 @@ stats.get("/", async (c) => {
       }),
   ]);
 
+  // Count users with a license_hash that does NOT have an active license (revoked).
+  const revokedUsers = await db
+    .prepare(
+      `SELECT COUNT(*) AS count FROM user_scores u
+       LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'
+       WHERE u.license_hash IS NOT NULL AND u.license_hash != '' AND l.key_hash IS NULL`
+    )
+    .first<{ count: number }>()
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes("no such table") && !msg.includes("no such column")) throw err;
+      return { count: 0 };
+    });
+
   const totalUsers = scoreAgg?.total_users ?? 0;
   const maxUserCount = maxUsers?.count ?? 0;
-  const freeUserCount = totalUsers - maxUserCount;
+  const revokedUserCount = revokedUsers?.count ?? 0;
+  const freeUserCount = totalUsers - maxUserCount - revokedUserCount;
 
   return c.json({
     total_users: totalUsers,
@@ -53,6 +68,7 @@ stats.get("/", async (c) => {
     recent_events: eventCount?.count ?? 0,
     total_licenses: licenseCount?.count ?? 0,
     max_users: maxUserCount,
+    revoked_users: revokedUserCount,
     free_users: freeUserCount,
   });
 });

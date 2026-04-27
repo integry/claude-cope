@@ -97,7 +97,8 @@ CREATE TABLE IF NOT EXISTS licenses (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     key_hash TEXT NOT NULL UNIQUE,
     status TEXT NOT NULL DEFAULT 'active',
-    activated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_activated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_licenses_status

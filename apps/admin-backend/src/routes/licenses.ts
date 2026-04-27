@@ -16,11 +16,11 @@ licenses.get("/", async (c) => {
   try {
     const { results } = await db
       .prepare(
-        `SELECT l.id, l.key_hash, l.status, l.activated_at,
+        `SELECT l.id, l.key_hash, l.status, l.created_at, l.last_activated_at,
                 u.username
          FROM licenses l
          LEFT JOIN user_scores u ON u.license_hash = l.key_hash
-         ORDER BY l.activated_at DESC
+         ORDER BY l.created_at DESC
          LIMIT 200`
       )
       .all();

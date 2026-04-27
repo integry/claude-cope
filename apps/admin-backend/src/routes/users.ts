@@ -26,14 +26,18 @@ users.get("/", async (c) => {
     let query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
                 u.license_hash,
                 u.credits_used,
-                CASE WHEN l.key_hash IS NOT NULL THEN 1 ELSE 0 END AS has_active_license
+                CASE WHEN l.key_hash IS NOT NULL THEN 'max'
+                     WHEN u.license_hash IS NOT NULL AND u.license_hash != '' THEN 'revoked'
+                     ELSE 'free' END AS user_status
          FROM user_scores u
          LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'`;
 
     if (statusFilter === "max") {
       query += " WHERE l.key_hash IS NOT NULL";
     } else if (statusFilter === "free") {
-      query += " WHERE l.key_hash IS NULL";
+      query += " WHERE (u.license_hash IS NULL OR u.license_hash = '')";
+    } else if (statusFilter === "revoked") {
+      query += " WHERE l.key_hash IS NULL AND u.license_hash IS NOT NULL AND u.license_hash != ''";
     }
 
     query += " ORDER BY u.updated_at DESC LIMIT 200";
@@ -70,15 +74,15 @@ users.get("/", async (c) => {
   }
 
   const enriched = results.map((row: Record<string, unknown>) => {
-    const isMax = hasLicenseHashColumn && row.has_active_license;
+    const status = hasLicenseHashColumn ? (row.user_status as string) || "free" : "free";
     return {
       ...row,
       // Never expose the full credential-equivalent hash to the browser.
       license_hash: maskHash(row.license_hash as string | null),
       // Max users have quota stored in KV (not derivable from usage_logs).
       // Show null so the admin UI can display "N/A" instead of a misleading number.
-      credits_remaining: isMax ? null : Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
-      status: isMax ? "max" : "free",
+      credits_remaining: status === "max" ? null : Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
+      status,
     };
   });
 

@@ -46,7 +46,7 @@ async function handleBenefitGrantCreated(
   if (db) {
     await db
       .prepare(
-        "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', activated_at = datetime('now')",
+        "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
       )
       .bind(hash)
       .run();
