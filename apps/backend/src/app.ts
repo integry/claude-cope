@@ -51,9 +51,10 @@ app.use("/api/*", (c, next) => {
 app.use("*", sessionMiddleware);
 
 // Run schema migrations on the first request that hits the DB.
-// After the initial run this becomes a single cheap SELECT per request.
+// Applied globally so that /webhooks/* routes (e.g. Polar) also
+// bootstrap the schema on a fresh deploy before any /api/* request.
 let migrated = false;
-app.use("/api/*", async (c, next) => {
+app.use("*", async (c, next) => {
   if (!migrated) {
     const db = (c.env as Record<string, unknown>).DB as D1Database | undefined;
     if (db) {

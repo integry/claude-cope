@@ -21,14 +21,16 @@ async function runFallbackQuery(
   db: D1Database,
   statusFilter: string | undefined,
   hasLicenseHashColumn: boolean,
-): Promise<Record<string, unknown>[]> {
-  if ((statusFilter === "max" || statusFilter === "revoked") && !hasLicenseHashColumn) {
-    return [];
-  }
-
-  if (statusFilter && statusFilter !== "free" && hasLicenseHashColumn) {
-    console.warn(`[admin/users] fallback query cannot filter by status="${statusFilter}" — returning empty list`);
-    return [];
+): Promise<Record<string, unknown>[] | Response> {
+  // When the schema is degraded we cannot distinguish free/max/revoked users.
+  // Return an explicit error instead of silently returning misleading data.
+  if (statusFilter) {
+    return new Response(
+      JSON.stringify({
+        error: `Status filter "${statusFilter}" is unavailable — schema is in a degraded state. Run migrations first.`,
+      }),
+      { status: 503, headers: { "Content-Type": "application/json" } },
+    );
   }
 
   const resp = await db
@@ -37,17 +39,12 @@ async function runFallbackQuery(
               COALESCE(ul.msg_count, 0) AS credits_used
        FROM user_scores u
        LEFT JOIN (
-         SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username ORDER BY msg_count DESC LIMIT 200
+         SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
        ) ul ON ul.username = u.username
        ORDER BY u.updated_at DESC LIMIT 200`
     )
     .all();
-  const results = (resp.results ?? []) as Record<string, unknown>[];
-
-  if (statusFilter && statusFilter !== "free") {
-    return [];
-  }
-  return results;
+  return (resp.results ?? []) as Record<string, unknown>[];
 }
 
 function enrichRows(
@@ -107,7 +104,9 @@ users.get("/", async (c) => {
     if (msg.includes("license_hash") || msg.includes("credits_used") || msg.includes("licenses")) {
       hasLicenseHashColumn = false;
     }
-    results = await runFallbackQuery(db, statusFilter, hasLicenseHashColumn);
+    const fallback = await runFallbackQuery(db, statusFilter, hasLicenseHashColumn);
+    if (fallback instanceof Response) return fallback;
+    results = fallback;
   }
 
   return c.json(enrichRows(results, hasLicenseHashColumn, freeLimit));
