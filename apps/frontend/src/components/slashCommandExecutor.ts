@@ -1,7 +1,10 @@
 /* eslint-disable max-lines */
-import { GENERATORS, PING_COST, THEMES } from "../game/constants";
+import { PING_COST, THEMES } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
-import { API_BASE, BYOK_ENABLED } from "../config";
+import type { ServerProfile } from "@claude-cope/shared/profile";
+import { API_BASE, BYOK_ENABLED, PRO_QUOTA_LIMIT } from "../config";
+import { applyServerProfile } from "../hooks/profileSync";
+import { updateTicketServer } from "../api/profileApi";
 
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
@@ -31,6 +34,7 @@ export interface SlashCommandContext {
   setShowContact: (v: boolean) => void;
   setShowProfile: (v: boolean) => void;
   setShowParty: (v: boolean) => void;
+  setShowUpgrade: (v: boolean) => void;
   setBragPending: (v: boolean) => void;
   setBuddyPendingConfirm: (v: boolean) => void;
   unlockAchievement: (id: string) => void;
@@ -248,6 +252,11 @@ function openOverlay(ctx: SlashCommandContext, open: () => void) {
   ctx.closeAllOverlays();
   ctx.setHistory(clearLoading);
   open();
+}
+
+export function handleUpgradeCommand(ctx: SlashCommandContext): void {
+  openOverlay(ctx, () => ctx.setShowUpgrade(true));
+  window.history.pushState(null, "", "/upgrade");
 }
 
 function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
@@ -523,7 +532,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
     const current = ctx.state.selectedModel ?? "default";
     const modelList = COPE_MODELS.map((m) => {
       const costLabel = `${m.multiplier}x cost`;
-      const tierBadge = m.tier === "pro" ? " 🔒 Pro" : "";
+      const tierBadge = m.tier === "pro" ? " 🔒 Max" : "";
       return `- \`${m.id}\` — **${m.name}** (${costLabel})${tierBadge}`;
     }).join("\n");
 
@@ -558,7 +567,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
 
   if (copeModel && copeModel.tier === "pro" && !isPro && !isBYOK) {
     const byokHint = BYOK_ENABLED ? ", or set your own API key with `/key` to bypass limits entirely" : "";
-    reply({ role: "system", content: `[🔒] **${copeModel.name}** is a Pro model (${copeModel.multiplier}x cost). You need a Pro license to use this.\n\nUpgrade at \`/subscribe\` to unlock premium models${byokHint}.` });
+    reply({ role: "system", content: `[🔒] **${copeModel.name}** is a Max model (${copeModel.multiplier}x cost). You need a Max license to use this.\n\nUpgrade at \`/upgrade\` to unlock premium models${byokHint}.` });
     return;
   }
 
@@ -567,7 +576,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   if (isBYOK) {
     reply({ role: "system", content: `[✓] Model switched to **${modelName}**. BYOK mode active — your API key, your compute bill, your problem. We respect the hustle. 💸` });
   } else if (copeModel && copeModel.tier === "pro") {
-    reply({ role: "system", content: `[✓] Model switched to **${copeModel.name}** (${copeModel.multiplier}x cost). Pro tier activated. Your tokens now cost real money — spend wisely.` });
+    reply({ role: "system", content: `[✓] Model switched to **${copeModel.name}** (${copeModel.multiplier}x cost). Max tier activated. Your tokens now cost real money — spend wisely.` });
   } else {
     reply({ role: "system", content: `[✓] Model switched to **${modelName}**. May your tokens be plentiful and your latency low.` });
   }
@@ -589,10 +598,11 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
     reply({ role: "error", content: pickRandom(ACCEPT_ALREADY_ACTIVE_MESSAGES)(ctx.state.activeTicket.title) });
   } else {
     clearPendingOffer();
-    ctx.setState((prev) => ({
-      ...prev,
-      activeTicket: { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt },
-    }));
+    const newTicket = { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt };
+    ctx.setState((prev) => ({ ...prev, activeTicket: newTicket }));
+    if (ctx.state.proKeyHash && ctx.state.username) {
+      void updateTicketServer(ctx.state.username, newTicket, ctx.state.proKeyHash);
+    }
     ctx.playChime();
     reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nReward: **${(offer.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.` });
     ctx.onSuggestedReply(offer.kickoff_prompt);
@@ -602,19 +612,47 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
 async function handleSyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<void> {
   const licenseKey = command.slice(5).trim();
   if (!licenseKey) {
-    reply({ role: "system", content: "[🔑] Usage: `/sync <COPE-XXX>` — Link your Polar license key to unlock Pro tier." });
+    reply({ role: "system", content: "[🔑] Usage: `/sync <COPE-XXX>` — Link your Polar license key to unlock Max tier." });
     return;
   }
   try {
+    const current = ctx.state;
     const res = await fetch(`${API_BASE}/api/account/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ licenseKey }),
+      body: JSON.stringify({
+        licenseKey,
+        username: current.username,
+        currentProfile: {
+          total_td: Math.floor(current.economy.totalTDEarned),
+          current_td: Math.floor(current.economy.currentTD),
+          corporate_rank: current.economy.currentRank,
+          inventory: current.inventory,
+          upgrades: current.upgrades,
+          achievements: current.achievements,
+          buddy_type: current.buddy.type,
+          buddy_is_shiny: current.buddy.isShiny,
+          unlocked_themes: current.unlockedThemes,
+          active_theme: current.activeTheme,
+          active_ticket: current.activeTicket,
+          td_multiplier: current.economy.tdMultiplier,
+        },
+      }),
     });
-    const data = await res.json() as { success?: boolean; hash?: string; error?: string };
+    const data = await res.json() as { success?: boolean; hash?: string; restored?: boolean; profile?: ServerProfile; error?: string };
     if (res.ok && data.success) {
-      ctx.setState((prev) => ({ ...prev, proKey: licenseKey }));
-      reply({ role: "system", content: "[✓ **PRO ACTIVATED**] License key validated. Welcome to the premium suffering tier. You now have **100 pro credits**. Spend them wisely (you won't)." });
+      ctx.setState((prev) => {
+        const withKey: GameState = { ...prev, proKey: licenseKey, proKeyHash: data.hash };
+        if (data.profile) {
+          return applyServerProfile(withKey, data.profile, { includeActiveTicket: true });
+        }
+        return withKey;
+      });
+      if (data.restored && data.profile) {
+        reply({ role: "system", content: `[✓ **PROFILE RESTORED**] Welcome back, **${data.profile.username}**! Your profile has been restored across devices.\n\n**TD:** ${data.profile.current_td.toLocaleString()} / ${data.profile.total_td.toLocaleString()} total\n**Rank:** ${data.profile.corporate_rank}\n**Generators:** ${Object.values(data.profile.inventory).reduce((a, b) => a + b, 0)} owned\n**Upgrades:** ${data.profile.upgrades.length} unlocked\n\nYou now have **${Math.round((data.profile.quota_percent ?? 100) * PRO_QUOTA_LIMIT / 100)} Max credits**. Your progress is synced across all devices.\n\n[🔐 *FYI*] Your license key doubles as the password to this account. Anyone with it can \`/sync\` in and live their best life on your dime.` });
+      } else {
+        reply({ role: "system", content: `[✓ **MAX ACTIVATED**] License key validated and profile linked. Welcome to the premium suffering tier. You now have **${PRO_QUOTA_LIMIT} Max credits**. Your progress will now sync across devices.\n\n[🔐 *FYI*] Your license key doubles as the password to this account. Anyone with it can \`/sync\` in and live their best life on your dime.` });
+      }
     } else {
       reply({ role: "error", content: `[❌] License validation failed: ${data.error ?? "Unknown error"}. Double-check your key and try again.` });
     }
@@ -693,7 +731,7 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
   } else if (command === "/feedback" || command === "/bug") {
     reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
   } else if (command === "/upgrade") {
-    handleUpgradeCommand(ctx, reply);
+    handleUpgradeCommand(ctx);
   } else {
     const asyncResult = handleAsyncCommand(command, ctx, reply);
     if (asyncResult === "async") return "async";
@@ -721,37 +759,6 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
   }
 }
 
-function handleUpgradeCommand(ctx: SlashCommandContext, reply: Reply): boolean {
-  const ownedGenerators = GENERATORS
-    .filter((g) => (ctx.state.inventory[g.id] ?? 0) > 0)
-    .sort((a, b) => b.baseCost - a.baseCost);
-
-  if (ownedGenerators.length === 0) {
-    reply({ role: "error", content: "[❌] **Upgrade failed.** You don't own any generators. The AI has nothing to consume. It's judging you silently." });
-    return true;
-  }
-
-  const target = ownedGenerators[0]!;
-  ctx.setState((prev) => ({
-    ...prev,
-    inventory: {
-      ...prev.inventory,
-      [target.id]: (prev.inventory[target.id] ?? 1) - 1,
-    },
-  }));
-
-  const flavorMessages = [
-    `The AI devoured your **${target.name}** whole. It didn't even say thank you.`,
-    `Your **${target.name}** has been sacrificed to appease the compute gods. The latency remains unchanged.`,
-    `One **${target.name}** was fed into the GPU furnace. The AI belched and asked for more.`,
-    `Your **${target.name}** was dissolved into pure gradient descent. It felt nothing. Probably.`,
-    `The AI absorbed your **${target.name}** and used it to generate 47 more Jira tickets.`,
-  ];
-  const flavor = flavorMessages[Math.floor(Math.random() * flavorMessages.length)]!;
-
-  reply({ role: "system", content: `[⬆️ UPGRADE] ${flavor}` });
-  return true;
-}
 
 export function rollBuddy(
   setState: SetState,
@@ -779,12 +786,17 @@ export function executeSlashCommand(
   ctx.setSlashIndex(0);
   ctx.setIsProcessing(true);
 
-  // Obfuscate API keys in terminal history for commands starting with /key
+  // Obfuscate API keys and license keys in terminal history
   let displayCommand = command;
   if (command.startsWith("/key ")) {
     const keyArg = command.slice(5).trim();
     if (keyArg.length > 10 && keyArg.toLowerCase() !== "clear") {
       displayCommand = `/key ${keyArg.slice(0, 6)}...`;
+    }
+  } else if (command.startsWith("/sync ")) {
+    const keyArg = command.slice(6).trim();
+    if (keyArg.length > 10) {
+      displayCommand = `/sync ${keyArg.slice(0, 9)}...${keyArg.slice(-4)}`;
     }
   }
 

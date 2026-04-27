@@ -7,17 +7,21 @@ function createGetMockDB(results: unknown[] = []) {
   return {
     db: {
       prepare: vi.fn((sql: string) => {
-        capturedSQL = sql;
+        // Ignore migration bookkeeping SQL so getSQL() reflects the route's query.
+        if (!sql.includes("schema_migrations")) capturedSQL = sql;
+        const isMigrationSelect = sql.includes("SELECT name FROM schema_migrations");
         return {
           bind: vi.fn((...args: unknown[]) => {
-            capturedBindings.push(...args);
+            if (!sql.includes("schema_migrations")) capturedBindings.push(...args);
             return {
-              all: vi.fn().mockResolvedValue({ results }),
+              all: vi.fn().mockResolvedValue({ results: isMigrationSelect ? [] : results }),
+              run: vi.fn().mockResolvedValue({ success: true }),
             };
           }),
-          all: vi.fn().mockResolvedValue({ results }),
+          all: vi.fn().mockResolvedValue({ results: isMigrationSelect ? [] : results }),
         };
       }),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
     },
     getSQL: () => capturedSQL,
     getBindings: () => capturedBindings,

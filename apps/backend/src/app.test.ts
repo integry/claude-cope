@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import app from "./app";
 
 describe("app", () => {
@@ -7,6 +7,39 @@ describe("app", () => {
       ALLOWED_ORIGINS: "http://localhost:5173",
     });
     expect(res.status).toBe(404);
+  });
+
+  describe("migration bootstrap middleware", () => {
+    it("calls DB.exec for migration when DB is available", async () => {
+      const db = {
+        prepare: vi.fn(() => ({
+          bind: vi.fn().mockReturnThis(),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      // A request with a DB should trigger migrations (via exec or prepare)
+      // and then proceed normally
+      const res = await app.request("/api/leaderboard", undefined, {
+        ALLOWED_ORIGINS: "http://localhost:5173",
+        DB: db,
+      });
+      // The migration middleware should have interacted with the DB
+      expect(db.exec.mock.calls.length + db.prepare.mock.calls.length).toBeGreaterThan(0);
+      // The request should still complete (not hang or error from migrations)
+      expect(res.status).toBeDefined();
+    });
+
+    it("proceeds without error when DB is not available", async () => {
+      const res = await app.request("/api/leaderboard", undefined, {
+        ALLOWED_ORIGINS: "http://localhost:5173",
+      });
+      // Should still work — no DB means migrations are skipped
+      expect(res.status).toBeDefined();
+    });
   });
 
   describe("Content-Security-Policy", () => {

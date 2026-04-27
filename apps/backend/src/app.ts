@@ -4,6 +4,7 @@ import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
 import { rateLimiter } from "./middleware/rateLimiter";
 import { sessionMiddleware } from "./middleware/session";
+import { applyMigrations } from "./utils/migrations";
 import chat from "./routes/chat";
 import leaderboard from "./routes/leaderboard";
 import events from "./routes/events";
@@ -11,6 +12,7 @@ import tickets from "./routes/tickets";
 import toolSequences from "./routes/toolSequences";
 import score from "./routes/score";
 import account from "./routes/account";
+import webhooks from "./routes/webhooks";
 
 const app = new Hono();
 
@@ -47,6 +49,27 @@ app.use("/api/*", (c, next) => {
 });
 
 app.use("*", sessionMiddleware);
+
+// Run schema migrations on the first request that hits the DB.
+// Applied globally so that /webhooks/* routes (e.g. Polar) also
+// bootstrap the schema on a fresh deploy before any /api/* request.
+let migrationPromise: Promise<void> | null = null;
+app.use("*", async (c, next) => {
+  if (!migrationPromise) {
+    const db = (c.env as Record<string, unknown>).DB as D1Database | undefined;
+    if (db) {
+      migrationPromise = applyMigrations(db).catch((err) => {
+        // Reset so the next request retries instead of permanently awaiting
+        // a rejected promise for the lifetime of the isolate.
+        migrationPromise = null;
+        throw err;
+      });
+    }
+  }
+  if (migrationPromise) await migrationPromise;
+  return next();
+});
+
 app.use("/api/chat", rateLimiter);
 
 app.route("/api/chat", chat);
@@ -57,5 +80,7 @@ app.route("/api/tickets", tickets);
 app.route("/api/tool-sequences", toolSequences);
 app.route("/api/score", score);
 app.route("/api/account", account);
+
+app.route("/webhooks", webhooks);
 
 export default app;

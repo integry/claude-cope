@@ -4,17 +4,26 @@ import { API_BASE } from "../config";
 
 interface User {
   username: string;
-  corporate_rank: number;
+  corporate_rank: string;
   country: string;
   total_td: number;
   current_td: number;
   credits_used: number;
-  credits_remaining: number;
+  credits_remaining: number | null;
+  status: "free" | "max" | "revoked";
+  license_hash?: string | null;
+}
+
+interface PaginatedUsers {
+  items: User[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 interface UserForm {
   username: string;
-  corporate_rank: number;
+  corporate_rank: string;
   country: string;
   total_td: number;
   current_td: number;
@@ -22,11 +31,20 @@ interface UserForm {
 
 type SortField = "total_td" | "credits_used" | null;
 type SortDir = "asc" | "desc";
+type StatusFilter = "all" | "free" | "max" | "revoked";
 
-const emptyForm: UserForm = { username: "", corporate_rank: 0, country: "", total_td: 0, current_td: 0 };
+const PAGE_SIZE = 50;
+const emptyForm: UserForm = { username: "", corporate_rank: "Junior Code Monkey", country: "", total_td: 0, current_td: 0 };
 
 export default function Users() {
-  const { data, isLoading, isError, mutate } = useAdminApi<User[]>("/api/users");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [page, setPage] = useState(0);
+  const offset = page * PAGE_SIZE;
+  const queryParams = new URLSearchParams();
+  if (statusFilter !== "all") queryParams.set("status", statusFilter);
+  queryParams.set("limit", String(PAGE_SIZE));
+  queryParams.set("offset", String(offset));
+  const { data, isLoading, isError, mutate } = useAdminApi<PaginatedUsers>(`/api/users?${queryParams}`);
   const [resettingUser, setResettingUser] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<string | null>(null);
@@ -34,6 +52,14 @@ export default function Users() {
   const [saving, setSaving] = useState(false);
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // Clamp page when total shrinks (e.g. after a reset, filter change, or mutation)
+  // so the UI never sits on an empty out-of-range page.
+  const clampedPage = Math.min(page, totalPages - 1);
+  if (clampedPage !== page) setPage(clampedPage);
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
@@ -45,9 +71,10 @@ export default function Users() {
   }
 
   const sortedData = useMemo(() => {
-    if (!data) return [];
-    if (!sortField) return data;
-    return [...data].sort((a, b) => {
+    const users = data?.items ?? [];
+    if (!users.length) return [];
+    if (!sortField) return users;
+    return [...users].sort((a, b) => {
       const av = a[sortField] ?? 0;
       const bv = b[sortField] ?? 0;
       return sortDir === "desc" ? bv - av : av - bv;
@@ -64,7 +91,7 @@ export default function Users() {
     setEditingUser(user.username);
     setForm({
       username: user.username,
-      corporate_rank: user.corporate_rank ?? 0,
+      corporate_rank: user.corporate_rank ?? "Junior Code Monkey",
       country: user.country ?? "",
       total_td: user.total_td ?? 0,
       current_td: user.current_td ?? 0,
@@ -143,6 +170,12 @@ export default function Users() {
     }
   }
 
+  // Reset to first page when filter changes
+  function handleFilterChange(value: StatusFilter) {
+    setStatusFilter(value);
+    setPage(0);
+  }
+
   if (isLoading) {
     return (
       <div>
@@ -165,12 +198,27 @@ export default function Users() {
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Users</h1>
-        <button
-          onClick={openCreate}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Add User
-        </button>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500">
+            Showing {total === 0 ? 0 : offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
+          </span>
+          <select
+            value={statusFilter}
+            onChange={(e) => handleFilterChange(e.target.value as StatusFilter)}
+            className="rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+          >
+            <option value="all">All Users</option>
+            <option value="free">Free Only</option>
+            <option value="max">Max Only</option>
+            <option value="revoked">Revoked Only</option>
+          </select>
+          <button
+            onClick={openCreate}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Add User
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -189,9 +237,9 @@ export default function Users() {
             <div>
               <label className="block text-sm font-medium text-gray-700">Rank</label>
               <input
-                type="number"
+                type="text"
                 value={form.corporate_rank}
-                onChange={(e) => setForm({ ...form, corporate_rank: Number(e.target.value) })}
+                onChange={(e) => setForm({ ...form, corporate_rank: e.target.value })}
                 className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               />
             </div>
@@ -250,22 +298,23 @@ export default function Users() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Username</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Rank</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Country</th>
               <th
                 className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none hover:text-gray-900"
                 onClick={() => toggleSort("total_td")}
               >
-                Total TD {sortField === "total_td" ? (sortDir === "desc" ? "\u2193" : "\u2191") : ""}
+                Total TD (page) {sortField === "total_td" ? (sortDir === "desc" ? "\u2193" : "\u2191") : ""}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Current TD</th>
               <th
                 className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none hover:text-gray-900"
                 onClick={() => toggleSort("credits_used")}
               >
-                Credits Used {sortField === "credits_used" ? (sortDir === "desc" ? "\u2193" : "\u2191") : ""}
+                Credits Used (page) {sortField === "credits_used" ? (sortDir === "desc" ? "\u2193" : "\u2191") : ""}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Credits Left</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500" title="Free-user estimate based on D1 credits_used — actual enforcement is session-based KV">Credits Left ~</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
             </tr>
           </thead>
@@ -273,12 +322,27 @@ export default function Users() {
             {sortedData.map((user) => (
               <tr key={user.username}>
                 <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">{user.username}</td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm">
+                  {user.status === "max" ? (
+                    <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                      Max
+                    </span>
+                  ) : user.status === "revoked" ? (
+                    <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                      Revoked
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
+                      Free
+                    </span>
+                  )}
+                </td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.corporate_rank}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.country}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.total_td}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.current_td}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_used}</td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_remaining}</td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_remaining != null ? `~${user.credits_remaining}` : "N/A"}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm">
                   <div className="flex gap-2">
                     <button
@@ -301,6 +365,28 @@ export default function Users() {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between">
+          <button
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-600">
+            Page {page + 1} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

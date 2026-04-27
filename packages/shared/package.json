@@ -5,6 +5,11 @@
   "exports": {
     "./multiplayer-types": "./src/multiplayer-types.ts",
     "./models": "./src/models.ts",
-    "./systemPrompt": "./src/systemPrompt.ts"
+    "./systemPrompt": "./src/systemPrompt.ts",
+    "./profile": "./src/profile.ts",
+    "./gameData": "./src/gameData.ts",
+    "./achievements": "./src/achievements.ts",
+    "./buddies": "./src/buddies.ts",
+    "./migrations": "./src/migrations.ts"
   }
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { detectSlashCommands, PREFILL_COMMANDS } from "../slashCommandDetect";
+import { SLASH_COMMANDS } from "../slashCommands";
 
 describe("detectSlashCommands", () => {
   it("detects a single command in plain text", () => {
@@ -33,6 +34,9 @@ describe("detectSlashCommands", () => {
 
   it("returns prefill action for argument-requiring commands", () => {
     for (const cmd of PREFILL_COMMANDS) {
+      // BYOK-gated commands (e.g. /key) are stripped from SLASH_COMMANDS when
+      // the operator disables them, so the detector regex won't match them.
+      if (!SLASH_COMMANDS.includes(cmd)) continue;
       const results = detectSlashCommands(`Use ${cmd} to do things.`);
       expect(results).toHaveLength(1);
       expect(results[0]).toMatchObject({

@@ -10,6 +10,15 @@ import {
   resolveRank,
   STORAGE_KEY,
 } from "./gameStateUtils";
+import { applyServerProfile } from "./profileSync";
+import {
+  buyGeneratorServer,
+  buyUpgradeServer,
+  buyThemeServer,
+  unlockAchievementServer,
+  updateTicketServer,
+  fetchSessionProfile,
+} from "../api/profileApi";
 
 export type { Message };
 export type { GameState, BuddyState, EconomyState, ActiveTicket, ByokUsage } from "./gameStateUtils";
@@ -30,6 +39,47 @@ export function useGameState() {
     setState((prev) => ({ ...prev, lastLogin: Date.now() }));
   }, []);
 
+  // Session restore: if localStorage was cleared (state looks fresh), but the
+  // browser cookie maps to a previously-known user on the server, restore that
+  // user's profile instead of starting as a brand-new identity.  The server
+  // never returns the license hash (it's a credential); Pro users must re-run
+  // /sync to regain Max access after clearing localStorage.
+  useEffect(() => {
+    const initial = stateRef.current;
+    const isFreshState =
+      initial.economy.totalTDEarned === 0 &&
+      initial.chatHistory.length === 0 &&
+      !initial.proKey &&
+      !initial.proKeyHash;
+    if (!isFreshState) return;
+
+    let cancelled = false;
+    fetchSessionProfile().then((result) => {
+      if (cancelled || !result.found) return;
+      setState((prev) => {
+        // Full profile restore (server has user_scores row).
+        if (result.profile) {
+          return applyServerProfile(prev, result.profile, { includeActiveTicket: true });
+        }
+        // Username-only restore: server knows the identity but has no
+        // profile row yet (e.g., the previous attempt 402'd on quota).
+        // Restore the username and accurate quota so the UI is honest.
+        if (result.username) {
+          return {
+            ...prev,
+            username: result.username,
+            economy: {
+              ...prev.economy,
+              ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}),
+            },
+          };
+        }
+        return prev;
+      });
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   // Persist state to localStorage (filter transient "loading" messages from chat history)
   useEffect(() => {
     try {
@@ -44,10 +94,13 @@ export function useGameState() {
   }, [state]);
 
   // Background server score sync — fires every 5 minutes if TD has changed
+  // Skip for pro users (server is authoritative)
   const lastSyncedTD = useRef(state.economy.totalTDEarned);
   useEffect(() => {
     const syncInterval = setInterval(() => {
       const current = stateRef.current;
+      // Skip sync for pro users — server is authoritative
+      if (current.proKeyHash) return;
       // Only sync if totalTDEarned has changed since last sync
       if (current.economy.totalTDEarned === lastSyncedTD.current) return;
       lastSyncedTD.current = current.economy.totalTDEarned;
@@ -123,6 +176,14 @@ export function useGameState() {
 
         if (newAchievements.length === prev.achievements.length) return prev;
 
+        // For pro users, fire server calls for new achievements
+        if (prev.proKeyHash) {
+          const added = newAchievements.filter((a) => !prev.achievements.includes(a));
+          for (const achievementId of added) {
+            unlockAchievementServer(prev.username, achievementId, prev.proKeyHash).catch(() => {});
+          }
+        }
+
         return {
           ...prev,
           achievements: newAchievements,
@@ -143,6 +204,7 @@ export function useGameState() {
 
     if (current.economy.currentTD < cost) return false;
 
+    // Optimistic local update
     setState((prev) => {
       const ownedNow = prev.inventory[generatorId] ?? 0;
       const dynamicCost = calcBulkCost(generator.baseCost, ownedNow, amount);
@@ -161,19 +223,36 @@ export function useGameState() {
       };
     });
 
-    if (cost > 1_000_000) {
-      const playerName = stateRef.current.username || "A player";
-      const purchaseMessage = `💰 ${playerName} bought ${amount}x ${generator.name} for ${cost.toLocaleString()} TD!`;
-      fetch("/api/recent-events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: purchaseMessage }),
+    // Pro users: fire server call, apply authoritative response
+    if (current.proKeyHash) {
+      buyGeneratorServer(current.username, generatorId, amount, current.proKeyHash).then((result) => {
+        if (result.success && result.profile) {
+          setState((prev) => applyServerProfile(prev, result.profile!));
+        } else if (!result.success) {
+          // Rollback on failure
+          setState((prev) => ({
+            ...prev,
+            economy: { ...prev.economy, currentTD: prev.economy.currentTD + cost },
+            inventory: { ...prev.inventory, [generatorId]: (prev.inventory[generatorId] ?? 0) - amount },
+          }));
+        }
       }).catch(() => {});
-      supabase?.channel('global_incidents').send({
-        type: 'broadcast',
-        event: 'new_incident',
-        payload: { message: purchaseMessage },
-      }).catch(() => {});
+    } else {
+      // Free users: broadcast big purchases
+      if (cost > 1_000_000) {
+        const playerName = stateRef.current.username || "A player";
+        const purchaseMessage = `💰 ${playerName} bought ${amount}x ${generator.name} for ${cost.toLocaleString()} TD!`;
+        fetch("/api/recent-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: purchaseMessage }),
+        }).catch(() => {});
+        supabase?.channel('global_incidents').send({
+          type: 'broadcast',
+          event: 'new_incident',
+          payload: { message: purchaseMessage },
+        }).catch(() => {});
+      }
     }
 
     return true;
@@ -223,6 +302,11 @@ export function useGameState() {
         achievements: [...prev.achievements, achievement],
       };
     });
+    // Pro users: sync achievement to server
+    const current = stateRef.current;
+    if (current.proKeyHash) {
+      unlockAchievementServer(current.username, achievement, current.proKeyHash).catch(() => {});
+    }
     return true;
   }, []);
 
@@ -245,6 +329,7 @@ export function useGameState() {
     if ((current.inventory[upgrade.requiredGeneratorId] ?? 0) < 1) return false;
     if (current.economy.currentTD < upgrade.cost) return false;
 
+    // Optimistic local update
     setState((prev) => {
       if (prev.upgrades.includes(upgradeId)) return prev;
       if ((prev.inventory[upgrade.requiredGeneratorId] ?? 0) < 1) return prev;
@@ -259,6 +344,22 @@ export function useGameState() {
         upgrades: [...prev.upgrades, upgradeId],
       };
     });
+
+    // Pro users: fire server call
+    if (current.proKeyHash) {
+      buyUpgradeServer(current.username, upgradeId, current.proKeyHash).then((result) => {
+        if (result.success && result.profile) {
+          setState((prev) => applyServerProfile(prev, result.profile!));
+        } else if (!result.success) {
+          // Rollback
+          setState((prev) => ({
+            ...prev,
+            economy: { ...prev.economy, currentTD: prev.economy.currentTD + upgrade.cost },
+            upgrades: prev.upgrades.filter((id) => id !== upgradeId),
+          }));
+        }
+      }).catch(() => {});
+    }
 
     return true;
   }, []);
@@ -317,14 +418,15 @@ export function useGameState() {
 
     const current = stateRef.current;
     // Only paid users can purchase themes
-    if (!current.proKey) return false;
+    if (!current.proKeyHash) return false;
     // Already unlocked
     if (current.unlockedThemes.includes(themeId)) return false;
     // Can't afford
     if (current.economy.currentTD < theme.cost) return false;
 
+    // Optimistic local update
     setState((prev) => {
-      if (!prev.proKey) return prev;
+      if (!prev.proKeyHash) return prev;
       if (prev.unlockedThemes.includes(themeId)) return prev;
       if (prev.economy.currentTD < theme.cost) return prev;
 
@@ -337,6 +439,20 @@ export function useGameState() {
         unlockedThemes: [...prev.unlockedThemes, themeId],
       };
     });
+
+    // Pro users: fire server call
+    if (current.proKeyHash) buyThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
+      if (result.success && result.profile) {
+        setState((prev) => applyServerProfile(prev, result.profile!));
+      } else if (!result.success) {
+        // Rollback
+        setState((prev) => ({
+          ...prev,
+          economy: { ...prev.economy, currentTD: prev.economy.currentTD + theme.cost },
+          unlockedThemes: prev.unlockedThemes.filter((id) => id !== themeId),
+        }));
+      }
+    }).catch(() => {});
 
     return true;
   }, []);
@@ -352,12 +468,19 @@ export function useGameState() {
         prev.activeTicket.sprintProgress + amount,
         prev.activeTicket.sprintGoal,
       );
+      const updatedTicket = {
+        ...prev.activeTicket,
+        sprintProgress: newProgress,
+      };
+
+      // Pro users: sync ticket progress to server
+      if (prev.proKeyHash) {
+        updateTicketServer(prev.username, updatedTicket, prev.proKeyHash).catch(() => {});
+      }
+
       return {
         ...prev,
-        activeTicket: {
-          ...prev.activeTicket,
-          sprintProgress: newProgress,
-        },
+        activeTicket: updatedTicket,
       };
     });
   }, []);

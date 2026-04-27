@@ -385,11 +385,17 @@ describe("submitChatMessage - achievement parsing", () => {
   });
 
   it("sends apiKey in request body when provided", async () => {
+    // BYOK direct-to-OpenRouter path requires VITE_ENABLE_BYOK=true.
+    // .env.local pins it to false in dev, so reload the module under a stub.
+    vi.resetModules();
+    vi.stubEnv("VITE_ENABLE_BYOK", "true");
+    const { submitChatMessage: submitWithByok } = await import("../chatApi");
+
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       createMockStreamResponse(["reply"])
     );
 
-    submitChatMessage({
+    submitWithByok({
       chatMessages: [{ role: "user", content: "hi" }],
       buddyResult: null,
       unlockAchievement: vi.fn(),
@@ -407,5 +413,8 @@ describe("submitChatMessage - achievement parsing", () => {
     const headers = reqInit.headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer sk-test-key");
     expect(callArgs[0]).toBe("https://openrouter.ai/api/v1/chat/completions");
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
   });
 });

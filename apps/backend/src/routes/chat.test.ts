@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { sanitizeChatMessages, enforceContextTrimming } from "./chat";
+import { sanitizeChatMessages, enforceContextTrimming, resolveFreeChatLicenseState } from "./chat";
+import { buildFreeChatProfileSnapshot } from "./chatHelpers";
 
 describe("sanitizeChatMessages", () => {
   it("filters out system role messages to prevent prompt injection", () => {
@@ -220,5 +221,88 @@ describe("enforceContextTrimming", () => {
     expect(result[1].content).toHaveLength(500); // non-last assistant truncated to 500
     expect(result[2].content).toHaveLength(400); // user under limit
     expect(result[3].content).toHaveLength(2000); // last assistant truncated to 2000
+  });
+});
+
+describe("resolveFreeChatLicenseState", () => {
+  it("keeps active licensed profiles locked to pro auth", () => {
+    expect(resolveFreeChatLicenseState("active-hash", true)).toEqual({
+      activeProfileLicenseHash: "active-hash",
+      revokedProfileLicenseHash: null,
+    });
+  });
+
+  it("treats revoked licensed profiles as free-tier chat users", () => {
+    expect(resolveFreeChatLicenseState("revoked-hash", false)).toEqual({
+      activeProfileLicenseHash: null,
+      revokedProfileLicenseHash: "revoked-hash",
+    });
+  });
+});
+
+describe("buildFreeChatProfileSnapshot", () => {
+  it("returns a stable profile shape for first-time free users", () => {
+    expect(buildFreeChatProfileSnapshot({
+      username: "alice",
+      serverProfile: null,
+      tdAwarded: 17,
+      quotaPercent: 75,
+    })).toEqual({
+      username: "alice",
+      total_td: 17,
+      current_td: 17,
+      corporate_rank: "Junior Code Monkey",
+      inventory: {},
+      upgrades: [],
+      achievements: [],
+      buddy_type: null,
+      buddy_is_shiny: false,
+      unlocked_themes: ["default"],
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+      multiplier: 1,
+      quota_percent: 75,
+    });
+  });
+
+  it("applies free chat gains to an existing profile snapshot", () => {
+    expect(buildFreeChatProfileSnapshot({
+      username: "alice",
+      serverProfile: {
+        username: "alice",
+        total_td: 120,
+        current_td: 55,
+        corporate_rank: "Junior Code Monkey",
+        inventory: { autoClicker: 1 },
+        upgrades: ["coffee"],
+        achievements: ["hello-world"],
+        buddy_type: "bot",
+        buddy_is_shiny: false,
+        unlocked_themes: ["default"],
+        active_theme: "default",
+        active_ticket: null,
+        td_multiplier: 1.2,
+        multiplier: 1.5,
+      },
+      tdAwarded: 30,
+      quotaPercent: 40,
+    })).toEqual({
+      username: "alice",
+      total_td: 150,
+      current_td: 85,
+      corporate_rank: "Junior Code Monkey",
+      inventory: { autoClicker: 1 },
+      upgrades: ["coffee"],
+      achievements: ["hello-world"],
+      buddy_type: "bot",
+      buddy_is_shiny: false,
+      unlocked_themes: ["default"],
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1.2,
+      multiplier: 1.5,
+      quota_percent: 40,
+    });
   });
 });

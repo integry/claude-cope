@@ -2,6 +2,7 @@ import { API_BASE } from "../config";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { prefetchSequences } from "./toolSequences";
+import { updateTicketServer } from "../api/profileApi";
 
 type Reply = (msg: Message) => void;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
@@ -114,15 +115,16 @@ export function handleTakeCommand(
   // Pre-fetch task-specific tool sequences so they're cached before the user prompts
   prefetchSequences(ticket.id);
 
-  setState((prev) => ({
-    ...prev,
-    activeTicket: {
-      id: ticket.id,
-      title: ticket.title,
-      sprintProgress: 0,
-      sprintGoal: ticket.technical_debt,
-    },
-  }));
+  const newTicket = {
+    id: ticket.id,
+    title: ticket.title,
+    sprintProgress: 0,
+    sprintGoal: ticket.technical_debt,
+  };
+  setState((prev) => ({ ...prev, activeTicket: newTicket }));
+  if (state.proKeyHash && state.username) {
+    void updateTicketServer(state.username, newTicket, state.proKeyHash);
+  }
 
   onAccept?.();
   reply({
@@ -149,6 +151,9 @@ export function handleAbandonCommand(
   const penalty = Math.round(reward * 0.2);
 
   setState((prev) => ({ ...prev, activeTicket: null }));
+  if (state.proKeyHash && state.username) {
+    void updateTicketServer(state.username, null, state.proKeyHash);
+  }
   addActiveTD(-penalty);
 
   reply({
