@@ -20,7 +20,7 @@ stats.get("/", async (c) => {
       .prepare("SELECT COUNT(*) AS count FROM recent_events")
       .first<{ count: number }>(),
     db
-      .prepare("SELECT COUNT(DISTINCT key_hash) AS count FROM licenses WHERE status = 'active'")
+      .prepare("SELECT COUNT(*) AS count FROM licenses WHERE status = 'active'")
       .first<{ count: number }>(),
     // Count Max users by joining with active licenses, not just checking license_hash presence.
     // This ensures revoked licenses are not counted as Max users.

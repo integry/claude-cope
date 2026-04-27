@@ -74,10 +74,12 @@ async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?
   return { body, validation, kv, db, hash } as const;
 }
 
-/** Commit side-effect writes after a successful profile resolution. */
+/** Provision the licenses row and KV quota for a license hash.
+ *  Called BEFORE resolveProfile so the supporting rows exist before the
+ *  profile gets the license_hash attached. */
 async function commitSyncSideEffects(
   deps: { db: D1Database; kv: KVNamespace; hash: string },
-  opts: { validationId?: string; limits: ReturnType<typeof getQuotaLimits>; sessionId?: string; username?: string },
+  opts: { validationId?: string; limits: ReturnType<typeof getQuotaLimits>; sessionId?: string },
 ) {
   const { db, kv, hash } = deps;
   await db
@@ -92,10 +94,6 @@ async function commitSyncSideEffects(
   if (opts.validationId) {
     await kv.put(`polar_id:${hash}`, opts.validationId);
   }
-
-  if (opts.sessionId && opts.username) {
-    await kv.put(`session_user:${opts.sessionId}`, opts.username, { expirationTtl: 60 * 60 * 24 * 365 });
-  }
 }
 
 const account = new Hono<Env>();
@@ -106,6 +104,18 @@ account.post("/sync", async (c) => {
   const { body, validation, kv, db, hash } = validated;
 
   const sessionId = c.get("sessionId");
+
+  // Provision the licenses row and KV quota BEFORE attaching the license_hash
+  // to user_scores.  This ordering ensures that if resolveProfile succeeds
+  // (writing license_hash) the supporting licenses row and KV quota already
+  // exist.  The reverse order could leave a profile with a license_hash but no
+  // active licenses row on partial failure, bricking the account.
+  const limits = getQuotaLimits(c.env);
+  await commitSyncSideEffects(
+    { db, kv, hash },
+    { validationId: validation.id, limits, sessionId },
+  );
+
   const result = await resolveProfile(db, hash, body, sessionId && kv ? { sessionId, kv } : undefined);
   if (result.error) {
     const isConflict =
@@ -115,11 +125,10 @@ account.post("/sync", async (c) => {
     return c.json({ error: result.error }, isConflict ? 409 : 403);
   }
 
-  const limits = getQuotaLimits(c.env);
-  await commitSyncSideEffects(
-    { db, kv, hash },
-    { validationId: validation.id, limits, sessionId, username: result.profile?.username },
-  );
+  // Bind the session to the resolved username so /me can look it up.
+  if (sessionId && result.profile?.username) {
+    await kv.put(`session_user:${sessionId}`, result.profile.username, { expirationTtl: 60 * 60 * 24 * 365 });
+  }
 
   const quotaPercent = await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
   const profile = { ...result.profile, quota_percent: quotaPercent };
@@ -208,10 +217,10 @@ account.post("/buy-generator", async (c) => {
     .prepare(
       `UPDATE user_scores SET
         current_td = current_td - ?,
-        inventory = json_set(COALESCE(inventory, '{}'), '$.' || ?, COALESCE(json_extract(inventory, '$.' || ?), 0) + ?),
+        inventory = json_set(COALESCE(inventory, '{}'), '$."' || ? || '"', COALESCE(json_extract(inventory, '$."' || ? || '"'), 0) + ?),
         updated_at = datetime('now')
       WHERE username = ? AND current_td >= ? AND license_hash = ?
-        AND COALESCE(json_extract(inventory, '$.' || ?), 0) = ?
+        AND COALESCE(json_extract(inventory, '$."' || ? || '"'), 0) = ?
         AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
     )
     .bind(cost, body.generatorId, body.generatorId, body.amount, body.username, cost, body.licenseKeyHash, body.generatorId, owned)
@@ -375,7 +384,7 @@ account.post("/unlock-achievement", async (c) => {
 
   // Atomic update: SQL-level JSON append + dedupe guard prevents concurrent
   // requests from overwriting each other's achievements.
-  await db
+  const result = await db
     .prepare(
       `UPDATE user_scores SET
         achievements = json_insert(COALESCE(achievements, '[]'), '$[#]', ?),
@@ -386,6 +395,10 @@ account.post("/unlock-achievement", async (c) => {
     )
     .bind(body.achievementId, body.username, body.licenseKeyHash, body.achievementId)
     .run();
+
+  if (!result.meta.changes) {
+    return c.json({ error: "Update failed — profile not found, license mismatch, or license revoked" }, 409);
+  }
 
   const updated = await getProfile(db, body.username);
   return c.json({ success: true, profile: updated });
