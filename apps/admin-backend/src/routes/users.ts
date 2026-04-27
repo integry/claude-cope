@@ -22,7 +22,6 @@ users.get("/", async (c) => {
   // Fall back gracefully if the column doesn't exist yet (pre-migration state).
   let results: Record<string, unknown>[];
   let hasLicenseHashColumn = true;
-  let hasCreditsUsedColumn = true;
   try {
     let query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
                 u.license_hash,
@@ -50,7 +49,6 @@ users.get("/", async (c) => {
     // legacy aggregated query against usage_logs. Log so a broken migration
     // doesn't masquerade as "no users yet".
     console.warn(`[admin/users] schema fallback: ${msg.slice(0, 200)}`);
-    if (msg.includes("credits_used")) hasCreditsUsedColumn = false;
     if (msg.includes("license_hash")) hasLicenseHashColumn = false;
     if (statusFilter === "max" && !hasLicenseHashColumn) {
       // No license_hash column means no Max users exist; return empty
