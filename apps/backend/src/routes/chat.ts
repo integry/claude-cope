@@ -42,11 +42,7 @@ type ChatBody = {
 /** Allowed roles in chatMessages (excludes "system" to prevent prompt injection) */
 const ALLOWED_CHAT_ROLES = new Set(["user", "assistant"]);
 
-/**
- * Sanitize incoming chat messages to prevent prompt injection attacks.
- * Filters out any messages with disallowed roles (e.g., "system") and
- * ensures each message has valid structure.
- */
+/** Sanitize chat messages: filter out disallowed roles (e.g. "system") and malformed entries. */
 export function sanitizeChatMessages(messages: { role: string; content: string }[]): { role: string; content: string }[] {
   return messages.filter((msg) => {
     if (!msg || typeof msg !== "object") return false;
@@ -55,30 +51,17 @@ export function sanitizeChatMessages(messages: { role: string; content: string }
   });
 }
 
-/** Maximum number of recent messages to keep */
 const MAX_MESSAGES = 6;
-/** Maximum content length for user messages */
 const MAX_USER_CONTENT_LENGTH = 500;
-/** Maximum content length for non-last assistant messages */
 const MAX_ASSISTANT_CONTENT_LENGTH = 500;
-/** Maximum content length for any individual message */
 const MAX_CONTENT_LENGTH = 2000;
 
-/**
- * Enforce context trimming to prevent token exhaustion attacks.
- * - Restricts messages to MAX_MESSAGES most recent elements
- * - Truncates user messages to MAX_USER_CONTENT_LENGTH characters
- * - Truncates assistant messages (except last) to MAX_ASSISTANT_CONTENT_LENGTH characters
- * - Enforces MAX_CONTENT_LENGTH as hard limit for any message
- */
+/** Enforce context trimming: cap message count and truncate content lengths. */
 export function enforceContextTrimming(messages: { role: string; content: string }[]): { role: string; content: string }[] {
-  // Take only the most recent messages
   const recentMessages = messages.slice(-MAX_MESSAGES);
-
   return recentMessages.map((msg, index) => {
     const isLastMessage = index === recentMessages.length - 1;
     let maxLength: number;
-
     if (msg.role === "user") {
       maxLength = MAX_USER_CONTENT_LENGTH;
     } else if (msg.role === "assistant" && !isLastMessage) {
@@ -124,39 +107,22 @@ function logChatDiagnostics(messages: { role: string; content: string }[], data:
 }
 
 async function handleQuotaCheck(
-  env: Env["Bindings"],
-  sessionId: string,
-  proKeyHash?: string,
+  env: Env["Bindings"], sessionId: string, proKeyHash?: string,
 ): Promise<{ quotaPercent: number; remaining?: number; exhaustedMessage?: string }> {
   const quotaKv = env.QUOTA_KV ?? env.USAGE_KV;
   if (!quotaKv) return { quotaPercent: 100 };
-
-  const tier = proKeyHash ? "pro" : "free";
-  const limits = getQuotaLimits(env);
   try {
-    const result = await consumeQuota(quotaKv, {
-      tier,
-      sessionId,
-      licenseKeyHash: proKeyHash,
-      limits,
-    });
+    const result = await consumeQuota(quotaKv, { tier: proKeyHash ? "pro" : "free", sessionId, licenseKeyHash: proKeyHash, limits: getQuotaLimits(env) });
     return { quotaPercent: result.quotaPercent, remaining: result.remaining };
   } catch (err) {
-    if (err instanceof QuotaExhaustedError) {
-      return { quotaPercent: 0, exhaustedMessage: err.message };
-    }
+    if (err instanceof QuotaExhaustedError) return { quotaPercent: 0, exhaustedMessage: err.message };
     throw err;
   }
 }
 
-/** Minimum interval (ms) between Polar usage syncs per license key. */
-const POLAR_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const POLAR_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 min debounce for Polar usage sync
 
-/**
- * Mirror the user's Pro-tier usage to Polar's license-key dashboard.
- * Fire-and-forget via waitUntil — no user latency, no fail mode for chat.
- * Debounced: at most one outbound PATCH per license key per POLAR_SYNC_INTERVAL_MS.
- */
+/** Mirror Pro-tier usage to Polar (fire-and-forget, debounced per license key). */
 async function mirrorPolarUsage(
   env: Env["Bindings"],
   proKeyHash: string,
@@ -165,7 +131,6 @@ async function mirrorPolarUsage(
   const kv = env.QUOTA_KV ?? env.USAGE_KV;
   if (!kv || !env.POLAR_ACCESS_TOKEN) return;
 
-  // Coarse debounce: skip if we synced recently for this license key
   const debounceKey = `polar_sync_ts:${proKeyHash}`;
   const lastSync = await kv.get(debounceKey);
   if (lastSync && Date.now() - Number(lastSync) < POLAR_SYNC_INTERVAL_MS) return;
@@ -176,14 +141,8 @@ async function mirrorPolarUsage(
   const usage = Math.max(0, limits.proInitialQuota - remaining);
   try {
     await syncPolarUsage(licenseKeyId, env.POLAR_ACCESS_TOKEN, usage);
-    // Only write the debounce timestamp on real success — a thrown error
-    // (network failure, Polar 4xx/5xx) skips this so the next chat retries
-    // immediately instead of suppressing for 5 minutes.
     await kv.put(debounceKey, String(Date.now()), { expirationTtl: POLAR_SYNC_INTERVAL_MS / 1000 });
   } catch (err) {
-    // Polar dashboard drift is acceptable; KV remains the source of truth.
-    // Surface failures in logs so consistent rejections (revoked token,
-    // misconfig) are visible via `wrangler tail`.
     console.warn(`[polar-mirror] failed for ${proKeyHash.slice(0, 8)}:`, err instanceof Error ? err.message : err);
   }
 }
@@ -200,9 +159,7 @@ async function handleProUserScoring(
   const baseTD = Math.floor(Math.random() * 40) + 10;
   const tdAwarded = Math.round(baseTD * serverProfile.multiplier * serverProfile.td_multiplier);
 
-  // Atomically increment TD and read back the post-update total in one statement
-  // via RETURNING. This prevents concurrent chats from computing rank against
-  // stale pre-update totals.
+  // Atomically increment TD and read back post-update total via RETURNING.
   const postUpdate = await db
     .prepare(
       "UPDATE user_scores SET total_td = total_td + ?, current_td = current_td + ?, credits_used = credits_used + 1, updated_at = datetime('now') WHERE username = ? RETURNING total_td",
@@ -210,7 +167,6 @@ async function handleProUserScoring(
     .bind(tdAwarded, tdAwarded, serverProfile.username)
     .first<{ total_td: number }>();
 
-  // Derive rank from the actual post-increment total and write it atomically.
   const actualRank = resolveRank(postUpdate?.total_td ?? serverProfile.total_td + tdAwarded);
   await db.prepare("UPDATE user_scores SET corporate_rank = ? WHERE username = ?").bind(actualRank, serverProfile.username).run();
 
@@ -231,87 +187,61 @@ async function handleProUserScoring(
 function recordUsage(
   db: D1Database | undefined,
   ctx: { waitUntil: (p: Promise<unknown>) => void },
-  params: { username: string; model: string; data: ChatResponseData; tdAwarded: number; rank?: string; country: string; hour: string; proKeyHash?: string; profileLicenseHash?: string | null; ownsUsername: boolean },
+  params: { username: string; model: string; data: ChatResponseData; tdAwarded: number; rank?: string; country: string; hour: string; proKeyHash?: string; profileLicenseHash?: string | null; ownsUsername: boolean; deferredKvWrites?: (() => void) | null },
 ) {
   if (!db) return;
   const tokensSent = params.data.usage?.prompt_tokens ?? 0;
   const tokensReceived = params.data.usage?.completion_tokens ?? 0;
   const queries: Promise<unknown>[] = [];
 
-  // Skip the usage_logs insert if the target username has a license_hash that
-  // doesn't match the caller's proKeyHash — prevents spoofed usage_logs rows
-  // under another user's name.
+  // Skip writes if free caller targets a licensed username (spoofed ownership).
   const isOwnershipSpoofed = !params.proKeyHash && params.profileLicenseHash;
-
-  // Free users without username ownership are blocked in preChatChecks before
-  // reaching this point — no AI call or DB write occurs for them.
-
   if (!isOwnershipSpoofed) {
     queries.push(
       db.prepare("INSERT INTO usage_logs (username, model, tokens_sent, tokens_received, hour) VALUES (?, ?, ?, ?, ?)").bind(params.username, params.model, tokensSent, tokensReceived, params.hour).run(),
     );
   }
 
-  // Each upsert also increments credits_used so admin views can read the
-  // counter directly instead of running an aggregate query against usage_logs.
   if (params.proKeyHash) {
     queries.push(
       db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, license_hash, credits_used) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, license_hash = ?, credits_used = credits_used + 1, updated_at = datetime('now')").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.proKeyHash, params.tdAwarded, params.tdAwarded, params.proKeyHash).run(),
     );
   } else if (!isOwnershipSpoofed) {
-    // Guard: only update rows that have no license_hash (free users).
-    // This prevents free callers from vandalizing a Pro user's TD/rank/country.
-    // Use server-derived rank for new rows — never trust client-claimed rank.
+    // Only update rows without license_hash (free users); server-derived rank.
     const serverDerivedRank = params.rank ?? resolveRank(params.tdAwarded);
     queries.push(
       db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, credits_used) VALUES (?, ?, ?, ?, ?, 1) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, credits_used = credits_used + 1, updated_at = datetime('now') WHERE license_hash IS NULL").bind(params.username, params.tdAwarded, params.tdAwarded, serverDerivedRank, params.country, params.tdAwarded, params.tdAwarded).run(),
     );
   }
   if (queries.length > 0) {
-    ctx.waitUntil(Promise.all(queries));
+    // Deferred KV writes execute only after DB writes succeed (no orphaned entries).
+    const dbThenKv = Promise.all(queries).then(() => {
+      if (params.deferredKvWrites) params.deferredKvWrites();
+    });
+    ctx.waitUntil(dbThenKv);
+  } else if (params.deferredKvWrites) {
+    params.deferredKvWrites();
   }
 }
 
-/**
- * Verify the license is still active before granting pro-tier access.
- * A revoked license falls through to the free-user path even if the
- * client still holds the old hash.
- */
-async function verifyProKeyHash(
-  db: D1Database | undefined,
-  proKeyHash: string | undefined,
-): Promise<string | undefined> {
-  if (!proKeyHash) return undefined;
-  if (!db) return undefined; // DB unavailable: fail closed
-  const active = await isLicenseActive(db, proKeyHash);
-  return active ? proKeyHash : undefined;
+/** Verify license is active; revoked keys return undefined (fail closed). */
+async function verifyProKeyHash(db: D1Database | undefined, proKeyHash: string | undefined): Promise<string | undefined> {
+  if (!proKeyHash || !db) return undefined;
+  return (await isLicenseActive(db, proKeyHash)) ? proKeyHash : undefined;
 }
 
-function cacheSessionUsername(
-  kv: KVNamespace | undefined,
-  sessionId: string,
-  username: string,
-  ctx: { waitUntil: (p: Promise<unknown>) => void },
-) {
+function cacheSessionUsername(kv: KVNamespace | undefined, sessionId: string, username: string, ctx: { waitUntil: (p: Promise<unknown>) => void }) {
   if (kv && username && username !== "anonymous") {
-    ctx.waitUntil(
-      kv.put(`session_user:${sessionId}`, username, { expirationTtl: 60 * 60 * 24 * 365 }),
-    );
+    ctx.waitUntil(kv.put(`session_user:${sessionId}`, username, { expirationTtl: 60 * 60 * 24 * 365 }));
   }
 }
 
-/**
- * Decide whether to cache the session→username mapping.
- * Prevents an attacker from claiming another user's username.
- *
- * Returns the profile's license_hash (or null) so callers can reuse the
- * lookup without a second SELECT.
- */
+/** Session→username cache with deferred KV writes for new usernames (prevents orphaned entries). */
 async function tryCacheSessionMapping(
   env: Env["Bindings"],
   ctx: { waitUntil: (p: Promise<unknown>) => void },
   opts: { db: D1Database; sessionId: string; username: string; effectiveProKeyHash: string | undefined },
-): Promise<{ profileLicenseHash: string | null; hasRow: boolean }> {
+): Promise<{ profileLicenseHash: string | null; hasRow: boolean; deferredKvWrites: (() => void) | null }> {
   const { db, sessionId, username, effectiveProKeyHash } = opts;
   const row = await getProfileRow(db, username);
   const profileHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
@@ -321,21 +251,26 @@ async function tryCacheSessionMapping(
       cacheSessionUsername(env.QUOTA_KV ?? env.USAGE_KV, sessionId, username, ctx);
     }
   } else if (!row) {
-    // Brand-new username with no user_scores row: first-chat-wins binding.
-    const kv = env.QUOTA_KV ?? env.USAGE_KV;
-    cacheSessionUsername(kv, sessionId, username, ctx);
-    // Also set the reverse index so future chats from the same username
-    // can be matched back to this session (first-claim-wins).
-    if (kv && username && username !== "anonymous") {
-      ctx.waitUntil(kv.put(`username_session:${username}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 }));
-    }
+    // Brand-new username with no user_scores row: defer KV writes until
+    // the DB upsert in recordUsage succeeds.
+    return {
+      profileLicenseHash: profileHash,
+      hasRow: false,
+      deferredKvWrites: () => {
+        const kv = env.QUOTA_KV ?? env.USAGE_KV;
+        cacheSessionUsername(kv, sessionId, username, ctx);
+        if (kv && username && username !== "anonymous") {
+          ctx.waitUntil(kv.put(`username_session:${username}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 }));
+        }
+      },
+    };
   }
   // Existing free user (row exists, no license_hash): no backfill.
   // Pre-existing free users cannot restore via /me after a localStorage clear.
   // This is a deliberate trade-off to fully close the impersonation hole where
   // any new session could claim an existing free username.
   // Otherwise: username has a license_hash but caller has no matching proKeyHash — skip caching
-  return { profileLicenseHash: profileHash, hasRow: Boolean(row) };
+  return { profileLicenseHash: profileHash, hasRow: Boolean(row), deferredKvWrites: null };
 }
 
 function validateChatRequest(body: ChatBody, apiKey: string | undefined): { error: string; status: 400 | 500 } | null {
@@ -364,6 +299,20 @@ async function callOpenRouter(apiKey: string, model: string, messages: { role: s
   });
 }
 
+/** Check free-user ownership of the target username via session→KV mapping. */
+async function checkFreeOwnership(
+  env: Env["Bindings"],
+  sessionId: string,
+  username: string,
+  hasRow: boolean,
+): Promise<boolean> {
+  const kv = env.QUOTA_KV ?? env.USAGE_KV;
+  if (!hasRow) return true; // new username — free upsert allowed
+  if (!kv) return false; // no KV to verify — fail closed
+  const sessionUsername = await kv.get(`session_user:${sessionId}`);
+  return sessionUsername === username;
+}
+
 type PreChatResult = {
   error?: string;
   status?: number;
@@ -372,7 +321,12 @@ type PreChatResult = {
   quotaPercent: number;
   remaining?: number;
   ownsUsername: boolean;
+  deferredKvWrites: (() => void) | null;
 };
+
+function rejectPreChat(msg: string, status: number, base: Partial<PreChatResult>): PreChatResult {
+  return { error: msg, status, effectiveProKeyHash: undefined, profileLicenseHash: null, quotaPercent: 0, ownsUsername: false, deferredKvWrites: null, ...base };
+}
 
 /**
  * Pre-flight checks: validate pro ownership, cache session mapping, and
@@ -386,61 +340,50 @@ async function preChatChecks(
 ): Promise<PreChatResult> {
   const { db, sessionId, username, effectiveProKeyHash } = opts;
 
-  // Reject anonymous users immediately — no AI calls without a proven username.
   if (!username || username === "anonymous") {
-    return { error: "A proven username is required to use chat", status: 403, effectiveProKeyHash, profileLicenseHash: null, quotaPercent: 0, ownsUsername: false };
+    return rejectPreChat("A proven username is required to use chat", 403, { effectiveProKeyHash });
   }
 
   // Pro ownership validation — must happen before quota consumption.
   if (effectiveProKeyHash && db) {
     const resolution = await resolveProUser(db, effectiveProKeyHash, username);
     if (resolution.error) {
-      return { error: resolution.error, status: resolution.code === "revoked" ? 403 : 409, effectiveProKeyHash, profileLicenseHash: null, quotaPercent: 0, ownsUsername: false };
+      return rejectPreChat(resolution.error, resolution.code === "revoked" ? 403 : 409, { effectiveProKeyHash });
     }
   }
 
   // Cache session → username mapping (verified ownership prevents impersonation).
   let profileLicenseHash: string | null = null;
   let hasRow = false;
-  if (db && username && username !== "anonymous") {
-    const mappingResult = await tryCacheSessionMapping(env, ctx, { db, sessionId, username, effectiveProKeyHash });
-    profileLicenseHash = mappingResult.profileLicenseHash;
-    hasRow = mappingResult.hasRow;
+  let deferredKvWrites: (() => void) | null = null;
+  if (db && username !== "anonymous") {
+    const m = await tryCacheSessionMapping(env, ctx, { db, sessionId, username, effectiveProKeyHash });
+    profileLicenseHash = m.profileLicenseHash;
+    hasRow = m.hasRow;
+    deferredKvWrites = m.deferredKvWrites;
   }
 
-  // For free users, verify the caller's session owns this username before allowing writes.
-  // Ownership: either the username has no row yet (first-chat-wins) or the caller's
-  // session_user mapping matches the target username (cookie = identity).
-  let ownsUsername = true; // Pro users always pass (validated above)
-  if (!effectiveProKeyHash) {
-    const kv = env.QUOTA_KV ?? env.USAGE_KV;
-    if (!hasRow) {
-      ownsUsername = true; // new username — free upsert allowed
-    } else if (kv) {
-      const sessionUsername = await kv.get(`session_user:${sessionId}`);
-      ownsUsername = sessionUsername === username;
-    } else {
-      ownsUsername = false; // no KV to verify — fail closed
-    }
-  }
+  // For free users, verify the caller's session owns this username.
+  const ownsUsername = effectiveProKeyHash ? true : await checkFreeOwnership(env, sessionId, username, hasRow);
 
-  // Block free users who don't own the username BEFORE consuming quota or
-  // making any AI calls.  No backwards-compat concern — system is in dev.
+  // Block free users who don't own the username — no backwards-compat concern.
   if (!effectiveProKeyHash && !ownsUsername) {
-    return { error: "Session does not own this username", status: 403, effectiveProKeyHash, profileLicenseHash, quotaPercent: 0, ownsUsername };
+    return rejectPreChat("Session does not own this username", 403, { effectiveProKeyHash, profileLicenseHash });
+  }
+  // Block free sessions targeting a licensed username — the caller must present
+  // a valid proKeyHash; without this check the AI call still fires (real cost).
+  if (!effectiveProKeyHash && profileLicenseHash) {
+    return rejectPreChat("This account is linked to a Pro license — authenticate with proKeyHash", 403, { effectiveProKeyHash, profileLicenseHash });
   }
 
-  // Consume quota after ownership has been validated.
   const quotaResult = await handleQuotaCheck(env, sessionId, effectiveProKeyHash);
   if (quotaResult.exhaustedMessage) {
-    return { error: quotaResult.exhaustedMessage, status: 402, effectiveProKeyHash, profileLicenseHash, quotaPercent: 0, ownsUsername };
+    return rejectPreChat(quotaResult.exhaustedMessage, 402, { effectiveProKeyHash, profileLicenseHash });
   }
-
   if (effectiveProKeyHash && quotaResult.remaining != null) {
     ctx.waitUntil(mirrorPolarUsage(env, effectiveProKeyHash, quotaResult.remaining));
   }
-
-  return { effectiveProKeyHash, profileLicenseHash, quotaPercent: quotaResult.quotaPercent, remaining: quotaResult.remaining, ownsUsername };
+  return { effectiveProKeyHash, profileLicenseHash, quotaPercent: quotaResult.quotaPercent, remaining: quotaResult.remaining, ownsUsername, deferredKvWrites };
 }
 
 async function handleFreeUserResponse(
@@ -449,7 +392,7 @@ async function handleFreeUserResponse(
   params: {
     username: string; model: string; country: string; hour: string;
     data: ChatResponseData; quotaPercent: number; profileLicenseHash: string | null;
-    ownsUsername: boolean;
+    ownsUsername: boolean; deferredKvWrites: (() => void) | null;
   },
 ): Promise<Response> {
   // Never trust client-provided inventory/upgrades for scoring — read from DB.
@@ -477,6 +420,7 @@ async function handleFreeUserResponse(
     tdAwarded, rank: serverRank, country: params.country, hour: params.hour,
     profileLicenseHash: params.profileLicenseHash,
     ownsUsername: params.ownsUsername,
+    deferredKvWrites: params.deferredKvWrites,
   });
 
   (params.data as Record<string, unknown>).td_awarded = tdAwarded;
@@ -543,7 +487,7 @@ chat.post("/", async (c) => {
   return handleFreeUserResponse(db, c.executionCtx, {
     username, model, country, hour,
     data, quotaPercent: preCheck.quotaPercent, profileLicenseHash: preCheck.profileLicenseHash,
-    ownsUsername: preCheck.ownsUsername,
+    ownsUsername: preCheck.ownsUsername, deferredKvWrites: preCheck.deferredKvWrites,
   });
 });
 

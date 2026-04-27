@@ -47,6 +47,15 @@ users.get("/", async (c) => {
   const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "50", 10) || 50, 1), 200);
   const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
 
+  const whereClause = buildStatusFilter(statusFilter);
+
+  const countQuery = `SELECT COUNT(*) as total
+         FROM user_scores u
+         LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'`
+      + whereClause;
+  const countRow = await db.prepare(countQuery).first<{ total: number }>();
+  const total = countRow?.total ?? 0;
+
   const query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
                 u.license_hash,
                 u.credits_used,
@@ -55,13 +64,13 @@ users.get("/", async (c) => {
                      ELSE 'free' END AS user_status
          FROM user_scores u
          LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'`
-      + buildStatusFilter(statusFilter)
+      + whereClause
       + " ORDER BY u.updated_at DESC LIMIT ? OFFSET ?";
 
   const resp = await db.prepare(query).bind(limit, offset).all();
   const results = (resp.results ?? []) as Record<string, unknown>[];
 
-  return c.json(enrichRows(results, freeLimit));
+  return c.json({ items: enrichRows(results, freeLimit), total, limit, offset });
 });
 
 users.post("/", async (c) => {

@@ -14,6 +14,13 @@ interface User {
   license_hash?: string | null;
 }
 
+interface PaginatedUsers {
+  items: User[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 interface UserForm {
   username: string;
   corporate_rank: number;
@@ -26,12 +33,18 @@ type SortField = "total_td" | "credits_used" | null;
 type SortDir = "asc" | "desc";
 type StatusFilter = "all" | "free" | "max" | "revoked";
 
+const PAGE_SIZE = 50;
 const emptyForm: UserForm = { username: "", corporate_rank: 0, country: "", total_td: 0, current_td: 0 };
 
 export default function Users() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const queryParam = statusFilter === "all" ? "" : `?status=${statusFilter}`;
-  const { data, isLoading, isError, mutate } = useAdminApi<User[]>(`/api/users${queryParam}`);
+  const [page, setPage] = useState(0);
+  const offset = page * PAGE_SIZE;
+  const queryParams = new URLSearchParams();
+  if (statusFilter !== "all") queryParams.set("status", statusFilter);
+  queryParams.set("limit", String(PAGE_SIZE));
+  queryParams.set("offset", String(offset));
+  const { data, isLoading, isError, mutate } = useAdminApi<PaginatedUsers>(`/api/users?${queryParams}`);
   const [resettingUser, setResettingUser] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<string | null>(null);
@@ -39,6 +52,10 @@ export default function Users() {
   const [saving, setSaving] = useState(false);
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const users = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
@@ -50,14 +67,14 @@ export default function Users() {
   }
 
   const sortedData = useMemo(() => {
-    if (!data) return [];
-    if (!sortField) return data;
-    return [...data].sort((a, b) => {
+    if (!users.length) return [];
+    if (!sortField) return users;
+    return [...users].sort((a, b) => {
       const av = a[sortField] ?? 0;
       const bv = b[sortField] ?? 0;
       return sortDir === "desc" ? bv - av : av - bv;
     });
-  }, [data, sortField, sortDir]);
+  }, [users, sortField, sortDir]);
 
   function openCreate() {
     setEditingUser(null);
@@ -148,6 +165,12 @@ export default function Users() {
     }
   }
 
+  // Reset to first page when filter changes
+  function handleFilterChange(value: StatusFilter) {
+    setStatusFilter(value);
+    setPage(0);
+  }
+
   if (isLoading) {
     return (
       <div>
@@ -171,9 +194,12 @@ export default function Users() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Users</h1>
         <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500">
+            Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
+          </span>
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            onChange={(e) => handleFilterChange(e.target.value as StatusFilter)}
             className="rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
           >
             <option value="all">All Users</option>
@@ -334,6 +360,28 @@ export default function Users() {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between">
+          <button
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-600">
+            Page {page + 1} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

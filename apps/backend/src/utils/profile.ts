@@ -86,19 +86,46 @@ export async function getProfileRow(db: D1Database, username: string): Promise<U
     .first<UserScoreRow & { license_hash: string | null }>();
 }
 
+/** Maximum age (ms) before a license is considered stale and hard-rejected.
+ *  If Polar webhooks are misconfigured or delayed, this prevents revoked
+ *  licenses from being authorized indefinitely. */
+const LICENSE_STALE_HARD_LIMIT_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+/** Age (ms) after which a warning is logged so ops can investigate webhook health. */
+const LICENSE_STALE_WARN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 /**
  * Check whether a license key hash corresponds to an active (non-revoked) license.
  * A missing row means the hash is unknown — return false (fail closed).  Legitimate
  * users always have a row created by /sync or the Polar webhook before they can use
  * Pro features, so an unknown hash is either a timing bug or an attacker probing.
+ *
+ * Also enforces a staleness guardrail: if the license hasn't been refreshed by a
+ * Polar webhook within LICENSE_STALE_HARD_LIMIT_MS, it is rejected even if the
+ * local status is still "active".  This prevents indefinite authorization when
+ * webhooks are misconfigured, delayed, or missed.
  */
 export async function isLicenseActive(db: D1Database, keyHash: string): Promise<boolean> {
   const row = await db
-    .prepare("SELECT status FROM licenses WHERE key_hash = ?")
+    .prepare("SELECT status, last_activated_at FROM licenses WHERE key_hash = ?")
     .bind(keyHash)
-    .first<{ status: string }>();
+    .first<{ status: string; last_activated_at: string }>();
   if (!row) return false; // Unknown hash — fail closed
-  return row.status === "active";
+  if (row.status !== "active") return false;
+
+  // Staleness check: last_activated_at is updated on /sync and by Polar webhooks.
+  if (row.last_activated_at) {
+    const lastActivated = new Date(row.last_activated_at + (row.last_activated_at.endsWith("Z") ? "" : "Z"));
+    const ageMs = Date.now() - lastActivated.getTime();
+    if (ageMs > LICENSE_STALE_HARD_LIMIT_MS) {
+      console.warn(`[license-stale] HARD REJECT key_hash=${keyHash.slice(0, 8)}… age=${Math.round(ageMs / 86400000)}d — webhook may be misconfigured`);
+      return false;
+    }
+    if (ageMs > LICENSE_STALE_WARN_MS) {
+      console.warn(`[license-stale] WARNING key_hash=${keyHash.slice(0, 8)}… age=${Math.round(ageMs / 86400000)}d — check Polar webhook health`);
+    }
+  }
+
+  return true;
 }
 
 /**

@@ -210,28 +210,39 @@ function buildScoreBatch(db: D1Database, opts: {
   return statements;
 }
 
+type OwnershipCheckResult =
+  | { error: string; deferredKvWrites?: undefined }
+  | { error: null; deferredKvWrites: (() => Promise<void>) | null };
+
 /**
  * Verify session ownership for free-user score writes.
  * For existing users, checks session_user mapping.
- * For new users, enforces first-claim-wins and establishes session binding.
+ * For new users, enforces first-claim-wins but DEFERS KV writes so they
+ * only execute after the DB batch succeeds — preventing orphaned KV
+ * entries when the DB write fails.
  */
 async function verifyFreeSessionOwnership(
   kv: KVNamespace,
   sessionId: string,
   username: string,
   existingRow: boolean,
-): Promise<string | null> {
+): Promise<OwnershipCheckResult> {
   if (existingRow) {
     const sessionUsername = await kv.get(`session_user:${sessionId}`);
-    if (sessionUsername !== username) return "Session does not own this username";
+    if (sessionUsername !== username) return { error: "Session does not own this username" };
+    return { error: null, deferredKvWrites: null };
   } else {
     const existingOwner = await kv.get(`username_session:${username}`);
-    if (existingOwner && existingOwner !== sessionId) return "Session does not own this username";
-    // Bind session → username and username → session for first-claim-wins.
-    await kv.put(`session_user:${sessionId}`, username, { expirationTtl: 60 * 60 * 24 * 365 });
-    await kv.put(`username_session:${username}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 });
+    if (existingOwner && existingOwner !== sessionId) return { error: "Session does not own this username" };
+    // Defer KV writes until after DB persistence succeeds.
+    return {
+      error: null,
+      deferredKvWrites: async () => {
+        await kv.put(`session_user:${sessionId}`, username, { expirationTtl: 60 * 60 * 24 * 365 });
+        await kv.put(`username_session:${username}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 });
+      },
+    };
   }
-  return null;
 }
 
 /**
@@ -277,9 +288,9 @@ score.post("/", async (c) => {
   if (!kv) {
     return c.json({ error: "Cannot verify session ownership — please retry" }, 503);
   }
-  const ownershipError = await verifyFreeSessionOwnership(kv, sessionId, body.username, Boolean(existingRow));
-  if (ownershipError) {
-    return c.json({ error: ownershipError }, 403);
+  const ownershipResult = await verifyFreeSessionOwnership(kv, sessionId, body.username, Boolean(existingRow));
+  if (ownershipResult.error) {
+    return c.json({ error: ownershipResult.error }, 403);
   }
 
   const claimedMultiplier = computeMultiplier(body.inventory, body.upgrades);
@@ -303,6 +314,12 @@ score.post("/", async (c) => {
     await db.batch(batchStatements);
   } catch {
     return c.json({ error: "Score sync failed — please retry" }, 500);
+  }
+
+  // KV ownership writes are deferred until after DB persistence succeeds.
+  // If db.batch() threw, these never execute — no orphaned KV entries.
+  if (ownershipResult.deferredKvWrites) {
+    await ownershipResult.deferredKvWrites();
   }
 
   const finalTotal = existing ? Math.max(serverTotal, validatedTotal) : validatedTotal;

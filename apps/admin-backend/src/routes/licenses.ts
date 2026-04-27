@@ -16,6 +16,11 @@ licenses.get("/", async (c) => {
   const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "50", 10) || 50, 1), 200);
   const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
 
+  const countRow = await db
+    .prepare("SELECT COUNT(*) as total FROM licenses")
+    .first<{ total: number }>();
+  const total = countRow?.total ?? 0;
+
   const { results } = await db
     .prepare(
       `SELECT l.id, l.key_hash, l.status, l.created_at, l.last_activated_at,
@@ -33,7 +38,7 @@ licenses.get("/", async (c) => {
     ...row,
     key_hash: maskHash(row.key_hash as string | null),
   }));
-  return c.json(masked);
+  return c.json({ items: masked, total, limit, offset });
 });
 
 export default licenses;

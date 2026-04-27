@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useAdminApi } from "../hooks/useAdminApi";
 
 interface License {
@@ -9,8 +10,15 @@ interface License {
   username: string | null;
 }
 
+interface PaginatedLicenses {
+  items: License[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 function formatTimestamp(raw: string | null | undefined): string {
-  if (!raw) return "—";
+  if (!raw) return "\u2014";
   // Append "Z" only when the string lacks a timezone indicator (Z, +HH:MM, etc.)
   const hasTimezone = /[Zz]$|[+-]\d{2}:\d{2}$/.test(raw);
   const d = new Date(hasTimezone ? raw : raw + "Z");
@@ -19,8 +27,16 @@ function formatTimestamp(raw: string | null | undefined): string {
     + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
+const PAGE_SIZE = 50;
+
 export default function Licenses() {
-  const { data, isLoading, isError } = useAdminApi<License[]>("/api/licenses");
+  const [page, setPage] = useState(0);
+  const offset = page * PAGE_SIZE;
+  const { data, isLoading, isError } = useAdminApi<PaginatedLicenses>(`/api/licenses?limit=${PAGE_SIZE}&offset=${offset}`);
+
+  const licenses = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (isLoading) {
     return (
@@ -40,13 +56,13 @@ export default function Licenses() {
     );
   }
 
-  const licenses = data ?? [];
-
   return (
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Licenses</h1>
-        <p className="text-sm text-gray-500">Showing {licenses.length} most recent license{licenses.length !== 1 ? "s" : ""} (capped at 200)</p>
+        <p className="text-sm text-gray-500">
+          Showing {total === 0 ? 0 : offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total} license{total !== 1 ? "s" : ""}
+        </p>
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -98,6 +114,28 @@ export default function Licenses() {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between">
+          <button
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-600">
+            Page {page + 1} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }
