@@ -20,7 +20,6 @@ function buildStatusFilter(statusFilter: string | undefined): string {
 async function runFallbackQuery(
   db: D1Database,
   statusFilter: string | undefined,
-  hasLicenseHashColumn: boolean,
 ): Promise<Record<string, unknown>[] | Response> {
   // When the schema is degraded we cannot distinguish free/max/revoked users.
   // Return an explicit error instead of silently returning misleading data.
@@ -104,7 +103,7 @@ users.get("/", async (c) => {
     if (msg.includes("license_hash") || msg.includes("credits_used") || msg.includes("licenses")) {
       hasLicenseHashColumn = false;
     }
-    const fallback = await runFallbackQuery(db, statusFilter, hasLicenseHashColumn);
+    const fallback = await runFallbackQuery(db, statusFilter);
     if (fallback instanceof Response) return fallback;
     results = fallback;
   }
