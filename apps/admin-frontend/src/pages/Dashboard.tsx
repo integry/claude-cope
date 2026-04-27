@@ -6,6 +6,7 @@ interface Stats {
   recent_events: number;
   total_licenses: number;
   max_users: number;
+  revoked_users: number;
   free_users: number;
 }
 
@@ -34,6 +35,7 @@ export default function Dashboard() {
     { label: "Total Users", value: data?.total_users ?? 0 },
     { label: "Free Users", value: data?.free_users ?? 0, color: "text-gray-600" },
     { label: "Max Users", value: data?.max_users ?? 0, color: "text-green-600" },
+    { label: "Revoked Users", value: data?.revoked_users ?? 0, color: "text-red-600" },
     { label: "Active Licenses", value: data?.total_licenses ?? 0, color: "text-blue-600" },
     { label: "Total Technical Debt", value: data?.total_td ?? 0 },
     { label: "Recent Events", value: data?.recent_events ?? 0 },

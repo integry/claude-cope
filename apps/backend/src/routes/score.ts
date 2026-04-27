@@ -211,6 +211,30 @@ function buildScoreBatch(db: D1Database, opts: {
 }
 
 /**
+ * Verify session ownership for free-user score writes.
+ * For existing users, checks session_user mapping.
+ * For new users, enforces first-claim-wins and establishes session binding.
+ */
+async function verifyFreeSessionOwnership(
+  kv: KVNamespace,
+  sessionId: string,
+  username: string,
+  existingRow: boolean,
+): Promise<string | null> {
+  if (existingRow) {
+    const sessionUsername = await kv.get(`session_user:${sessionId}`);
+    if (sessionUsername !== username) return "Session does not own this username";
+  } else {
+    const existingOwner = await kv.get(`username_session:${username}`);
+    if (existingOwner && existingOwner !== sessionId) return "Session does not own this username";
+    // Bind session → username and username → session for first-claim-wins.
+    await kv.put(`session_user:${sessionId}`, username, { expirationTtl: 60 * 60 * 24 * 365 });
+    await kv.put(`username_session:${username}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 });
+  }
+  return null;
+}
+
+/**
  * POST /api/score — debounced sync from client.
  * Validates the claimed score against server-side tracking.
  * The server's total_td is the floor — client can't claim more than what the server has awarded.
@@ -234,14 +258,10 @@ score.post("/", async (c) => {
     }
     const updated = await syncProUser(db, body);
     if (updated) return c.json({ profile: updated });
-    // resolveProUser passed but syncProUser failed — race condition or DB error.
-    // Hard-fail instead of falling through to the free write path.
     return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }
 
   // Guard: if this username already has a license_hash, refuse unauthenticated writes.
-  // Legitimate Pro users go through syncProUser() above; reaching here means the caller
-  // has no valid proKeyHash for this account.
   const existingRow = await db
     .prepare("SELECT total_td, current_td, last_sync_time, license_hash FROM user_scores WHERE username = ?")
     .bind(body.username)
@@ -251,23 +271,15 @@ score.post("/", async (c) => {
     return c.json({ error: "This account is linked to a Pro license — authenticate with proKeyHash" }, 403);
   }
 
-  // Session-based ownership: prevent attackers from writing to another free user's profile
-  // just by knowing their username. Either no row exists (new user, upsert allowed) or
-  // the caller's session must own this username via the session_user mapping.
-  // NOTE: Unlike chat.ts which silently skips unauthorized free-user writes (the chat
-  // response is still returned, just without TD/score mutation), this route returns an
-  // explicit 403 because the sole purpose of POST /api/score is mutation.
+  // Session-based ownership: both new and existing free users require session verification.
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
   const sessionId = c.get("sessionId");
-  if (existingRow) {
-    if (!kv) {
-      // Fail-closed: cannot verify ownership without KV — deny write.
-      return c.json({ error: "Cannot verify session ownership — please retry" }, 503);
-    }
-    const sessionUsername = await kv.get(`session_user:${sessionId}`);
-    if (sessionUsername !== body.username) {
-      return c.json({ error: "Session does not own this username" }, 403);
-    }
+  if (!kv) {
+    return c.json({ error: "Cannot verify session ownership — please retry" }, 503);
+  }
+  const ownershipError = await verifyFreeSessionOwnership(kv, sessionId, body.username, Boolean(existingRow));
+  if (ownershipError) {
+    return c.json({ error: ownershipError }, 403);
   }
 
   const claimedMultiplier = computeMultiplier(body.inventory, body.upgrades);

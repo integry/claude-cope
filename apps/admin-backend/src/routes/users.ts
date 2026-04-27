@@ -27,7 +27,8 @@ async function runFallbackQuery(
   }
 
   if (statusFilter && statusFilter !== "free" && hasLicenseHashColumn) {
-    console.warn(`[admin/users] fallback query cannot filter by status="${statusFilter}" — returning all users`);
+    console.warn(`[admin/users] fallback query cannot filter by status="${statusFilter}" — returning empty list`);
+    return [];
   }
 
   const resp = await db
@@ -36,7 +37,7 @@ async function runFallbackQuery(
               COALESCE(ul.msg_count, 0) AS credits_used
        FROM user_scores u
        LEFT JOIN (
-         SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
+         SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username LIMIT 200
        ) ul ON ul.username = u.username
        ORDER BY u.updated_at DESC LIMIT 200`
     )

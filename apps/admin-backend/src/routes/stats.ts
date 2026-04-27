@@ -20,7 +20,7 @@ stats.get("/", async (c) => {
       .prepare("SELECT COUNT(*) AS count FROM recent_events")
       .first<{ count: number }>(),
     db
-      .prepare("SELECT COUNT(*) AS count FROM licenses WHERE status = 'active'")
+      .prepare("SELECT COUNT(DISTINCT key_hash) AS count FROM licenses WHERE status = 'active'")
       .first<{ count: number }>()
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
@@ -31,7 +31,7 @@ stats.get("/", async (c) => {
     // This ensures revoked licenses are not counted as Max users.
     db
       .prepare(
-        `SELECT COUNT(*) AS count FROM user_scores u
+        `SELECT COUNT(DISTINCT u.username) AS count FROM user_scores u
          INNER JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'
          WHERE u.license_hash IS NOT NULL AND u.license_hash != ''`
       )
@@ -46,7 +46,7 @@ stats.get("/", async (c) => {
   // Count users with a license_hash that does NOT have an active license (revoked).
   const revokedUsers = await db
     .prepare(
-      `SELECT COUNT(*) AS count FROM user_scores u
+      `SELECT COUNT(DISTINCT u.username) AS count FROM user_scores u
        LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'
        WHERE u.license_hash IS NOT NULL AND u.license_hash != '' AND l.key_hash IS NULL`
     )
