@@ -65,7 +65,7 @@ users.get("/", async (c) => {
          FROM user_scores u
          LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'`
       + whereClause
-      + " ORDER BY u.updated_at DESC LIMIT ? OFFSET ?";
+      + " ORDER BY u.updated_at DESC, u.username ASC LIMIT ? OFFSET ?";
 
   const resp = await db.prepare(query).bind(limit, offset).all();
   const results = (resp.results ?? []) as Record<string, unknown>[];

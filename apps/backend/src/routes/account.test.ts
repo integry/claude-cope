@@ -5,14 +5,27 @@ import app from "../app";
 // Mock DB helpers
 // ---------------------------------------------------------------------------
 
-/** Minimal D1-like mock that tracks queries and returns preconfigured results. */
+/**
+ * Minimal D1-like mock that tracks queries and returns preconfigured results.
+ * Supports SQL-aware routing: pass `firstBySQL` to return different results
+ * depending on the SQL pattern (e.g. "SELECT status" vs "SELECT username").
+ */
 function createMockDB(opts: {
   firstResults?: Record<string, unknown>;
+  firstBySQL?: Record<string, Record<string, unknown> | null>;
   runChanges?: number;
 } = {}) {
   const calls: { sql: string; bindings: unknown[] }[] = [];
-  const stmt = () => ({
-    first: vi.fn().mockResolvedValue(opts.firstResults ?? null),
+  const resolveFirst = (sql: string) => {
+    if (opts.firstBySQL) {
+      for (const [pattern, result] of Object.entries(opts.firstBySQL)) {
+        if (sql.includes(pattern)) return result;
+      }
+    }
+    return opts.firstResults ?? null;
+  };
+  const stmt = (sql: string) => ({
+    first: vi.fn().mockResolvedValue(resolveFirst(sql)),
     run: vi.fn().mockResolvedValue({ meta: { changes: opts.runChanges ?? 0 } }),
     all: vi.fn().mockResolvedValue({ results: [] }),
   });
@@ -21,9 +34,9 @@ function createMockDB(opts: {
       prepare: vi.fn((sql: string) => ({
         bind: vi.fn((...args: unknown[]) => {
           calls.push({ sql, bindings: args });
-          return stmt();
+          return stmt(sql);
         }),
-        ...stmt(),
+        ...stmt(sql),
       })),
       exec: vi.fn().mockResolvedValue({ results: [] }),
       batch: vi.fn().mockResolvedValue([]),
@@ -117,6 +130,68 @@ describe("POST /api/account/buy-generator", () => {
       username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "wrong-hash",
     }, { DB: db });
     expect(res.status).toBe(403);
+  });
+
+  it("returns 403 when license is revoked", async () => {
+    // getProfileRow returns matching hash, but license lookup returns revoked
+    const { db } = createMockDB({
+      firstBySQL: {
+        "SELECT username": { username: "alice", license_hash: "hash", total_td: 1000, current_td: 1000, corporate_rank: "CTO", inventory: "{}", upgrades: "[]", achievements: "[]", buddy_type: null, buddy_is_shiny: 0, unlocked_themes: '["default"]', active_theme: "default", active_ticket: null, td_multiplier: 1 },
+        "SELECT status": { status: "revoked" },
+      },
+    });
+    const res = await postJSON("/api/account/buy-generator", {
+      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(403);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("revoked");
+  });
+
+  it("succeeds with valid ownership and sufficient TD", async () => {
+    const profileRow = {
+      username: "alice", license_hash: "hash",
+      total_td: 1000, current_td: 1000, corporate_rank: "CTO",
+      inventory: "{}", upgrades: "[]", achievements: "[]",
+      buddy_type: null, buddy_is_shiny: 0,
+      unlocked_themes: '["default"]', active_theme: "default",
+      active_ticket: null, td_multiplier: 1,
+    };
+    const { db } = createMockDB({
+      firstBySQL: {
+        "SELECT username": profileRow,
+        "SELECT status": { status: "active" },
+      },
+      runChanges: 1,
+    });
+    const res = await postJSON("/api/account/buy-generator", {
+      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(200);
+    const data = await res.json() as { success: boolean };
+    expect(data.success).toBe(true);
+  });
+
+  it("returns 409 when concurrent update causes zero changes", async () => {
+    const profileRow = {
+      username: "alice", license_hash: "hash",
+      total_td: 1000, current_td: 1000, corporate_rank: "CTO",
+      inventory: "{}", upgrades: "[]", achievements: "[]",
+      buddy_type: null, buddy_is_shiny: 0,
+      unlocked_themes: '["default"]', active_theme: "default",
+      active_ticket: null, td_multiplier: 1,
+    };
+    const { db } = createMockDB({
+      firstBySQL: {
+        "SELECT username": profileRow,
+        "SELECT status": { status: "active" },
+      },
+      runChanges: 0,
+    });
+    const res = await postJSON("/api/account/buy-generator", {
+      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(409);
   });
 });
 
@@ -236,6 +311,52 @@ describe("POST /api/account/update-buddy", () => {
     }, { DB: db });
     expect(res.status).toBe(404);
   });
+
+  it("succeeds when ownership is valid and update matches", async () => {
+    const profileRow = {
+      username: "alice", license_hash: "hash",
+      total_td: 100, current_td: 100, corporate_rank: "CTO",
+      inventory: "{}", upgrades: "[]", achievements: "[]",
+      buddy_type: null, buddy_is_shiny: 0,
+      unlocked_themes: '["default"]', active_theme: "default",
+      active_ticket: null, td_multiplier: 1,
+    };
+    const { db } = createMockDB({
+      firstBySQL: {
+        "SELECT username": profileRow,
+        "SELECT status": { status: "active" },
+      },
+      runChanges: 1,
+    });
+    const res = await postJSON("/api/account/update-buddy", {
+      username: "alice", buddyType: "Agile Snail", isShiny: false, licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(200);
+    const data = await res.json() as { success: boolean };
+    expect(data.success).toBe(true);
+  });
+
+  it("returns 409 when update matches zero rows (revoked between check and write)", async () => {
+    const profileRow = {
+      username: "alice", license_hash: "hash",
+      total_td: 100, current_td: 100, corporate_rank: "CTO",
+      inventory: "{}", upgrades: "[]", achievements: "[]",
+      buddy_type: null, buddy_is_shiny: 0,
+      unlocked_themes: '["default"]', active_theme: "default",
+      active_ticket: null, td_multiplier: 1,
+    };
+    const { db } = createMockDB({
+      firstBySQL: {
+        "SELECT username": profileRow,
+        "SELECT status": { status: "active" },
+      },
+      runChanges: 0,
+    });
+    const res = await postJSON("/api/account/update-buddy", {
+      username: "alice", buddyType: null, isShiny: false, licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(409);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -288,6 +409,56 @@ describe("POST /api/account/update-ticket", () => {
       licenseKeyHash: "hash",
     }, { DB: db });
     expect(res.status).toBe(404);
+  });
+
+  it("succeeds when ownership is valid and update matches", async () => {
+    const profileRow = {
+      username: "alice", license_hash: "hash",
+      total_td: 100, current_td: 100, corporate_rank: "CTO",
+      inventory: "{}", upgrades: "[]", achievements: "[]",
+      buddy_type: null, buddy_is_shiny: 0,
+      unlocked_themes: '["default"]', active_theme: "default",
+      active_ticket: null, td_multiplier: 1,
+    };
+    const { db } = createMockDB({
+      firstBySQL: {
+        "SELECT username": profileRow,
+        "SELECT status": { status: "active" },
+      },
+      runChanges: 1,
+    });
+    const res = await postJSON("/api/account/update-ticket", {
+      username: "alice",
+      activeTicket: { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 },
+      licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(200);
+    const data = await res.json() as { success: boolean };
+    expect(data.success).toBe(true);
+  });
+
+  it("returns 409 when update matches zero rows (revoked between check and write)", async () => {
+    const profileRow = {
+      username: "alice", license_hash: "hash",
+      total_td: 100, current_td: 100, corporate_rank: "CTO",
+      inventory: "{}", upgrades: "[]", achievements: "[]",
+      buddy_type: null, buddy_is_shiny: 0,
+      unlocked_themes: '["default"]', active_theme: "default",
+      active_ticket: null, td_multiplier: 1,
+    };
+    const { db } = createMockDB({
+      firstBySQL: {
+        "SELECT username": profileRow,
+        "SELECT status": { status: "active" },
+      },
+      runChanges: 0,
+    });
+    const res = await postJSON("/api/account/update-ticket", {
+      username: "alice",
+      activeTicket: { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 },
+      licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(409);
   });
 });
 

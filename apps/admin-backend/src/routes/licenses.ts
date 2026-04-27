@@ -27,7 +27,7 @@ licenses.get("/", async (c) => {
               u.username
        FROM licenses l
        LEFT JOIN user_scores u ON u.license_hash = l.key_hash
-       ORDER BY COALESCE(l.last_activated_at, l.created_at) DESC
+       ORDER BY COALESCE(l.last_activated_at, l.created_at) DESC, l.id ASC
        LIMIT ? OFFSET ?`
     )
     .bind(limit, offset)

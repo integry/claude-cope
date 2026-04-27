@@ -211,7 +211,8 @@ account.post("/buy-generator", async (c) => {
         inventory = json_set(COALESCE(inventory, '{}'), '$.' || ?, COALESCE(json_extract(inventory, '$.' || ?), 0) + ?),
         updated_at = datetime('now')
       WHERE username = ? AND current_td >= ? AND license_hash = ?
-        AND COALESCE(json_extract(inventory, '$.' || ?), 0) = ?`,
+        AND COALESCE(json_extract(inventory, '$.' || ?), 0) = ?
+        AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
     )
     .bind(cost, body.generatorId, body.generatorId, body.amount, body.username, cost, body.licenseKeyHash, body.generatorId, owned)
     .run();
@@ -268,7 +269,8 @@ account.post("/buy-upgrade", async (c) => {
         upgrades = json_insert(COALESCE(upgrades, '[]'), '$[#]', ?),
         updated_at = datetime('now')
       WHERE username = ? AND current_td >= ? AND license_hash = ?
-        AND ? NOT IN (SELECT value FROM json_each(COALESCE(upgrades, '[]')))`,
+        AND ? NOT IN (SELECT value FROM json_each(COALESCE(upgrades, '[]')))
+        AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
     )
     .bind(upgrade.cost, body.upgradeId, body.username, upgrade.cost, body.licenseKeyHash, body.upgradeId)
     .run();
@@ -316,7 +318,8 @@ account.post("/buy-theme", async (c) => {
         unlocked_themes = json_insert(COALESCE(unlocked_themes, '["default"]'), '$[#]', ?),
         updated_at = datetime('now')
       WHERE username = ? AND current_td >= ? AND license_hash = ?
-        AND ? NOT IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))`,
+        AND ? NOT IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
+        AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
     )
     .bind(theme.cost, body.themeId, body.username, theme.cost, body.licenseKeyHash, body.themeId)
     .run();
@@ -378,7 +381,8 @@ account.post("/unlock-achievement", async (c) => {
         achievements = json_insert(COALESCE(achievements, '[]'), '$[#]', ?),
         updated_at = datetime('now')
       WHERE username = ? AND license_hash = ?
-        AND ? NOT IN (SELECT value FROM json_each(COALESCE(achievements, '[]')))`,
+        AND ? NOT IN (SELECT value FROM json_each(COALESCE(achievements, '[]')))
+        AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
     )
     .bind(body.achievementId, body.username, body.licenseKeyHash, body.achievementId)
     .run();
@@ -407,12 +411,20 @@ account.post("/update-buddy", async (c) => {
     return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
   }
 
-  // Atomic: include license_hash in WHERE to prevent TOCTOU between
-  // verifyOwnership and the actual update.
-  await db
-    .prepare("UPDATE user_scores SET buddy_type = ?, buddy_is_shiny = ?, updated_at = datetime('now') WHERE username = ? AND license_hash = ?")
+  // Atomic: include license_hash + active-license subquery in WHERE to
+  // prevent TOCTOU between verifyOwnership and the actual update.
+  const result = await db
+    .prepare(
+      `UPDATE user_scores SET buddy_type = ?, buddy_is_shiny = ?, updated_at = datetime('now')
+       WHERE username = ? AND license_hash = ?
+         AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
+    )
     .bind(body.buddyType ?? null, body.isShiny ? 1 : 0, body.username, body.licenseKeyHash)
     .run();
+
+  if (!result.meta.changes) {
+    return c.json({ error: "Update failed — profile not found, license mismatch, or license revoked" }, 409);
+  }
 
   const updated = await getProfile(db, body.username);
   return c.json({ success: true, profile: updated });
@@ -440,12 +452,20 @@ account.post("/update-ticket", async (c) => {
     return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
   }
 
-  // Atomic: include license_hash in WHERE to prevent TOCTOU between
-  // verifyOwnership and the actual update.
-  await db
-    .prepare("UPDATE user_scores SET active_ticket = ?, updated_at = datetime('now') WHERE username = ? AND license_hash = ?")
+  // Atomic: include license_hash + active-license subquery in WHERE to
+  // prevent TOCTOU between verifyOwnership and the actual update.
+  const result = await db
+    .prepare(
+      `UPDATE user_scores SET active_ticket = ?, updated_at = datetime('now')
+       WHERE username = ? AND license_hash = ?
+         AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
+    )
     .bind(body.activeTicket ? JSON.stringify(body.activeTicket) : null, body.username, body.licenseKeyHash)
     .run();
+
+  if (!result.meta.changes) {
+    return c.json({ error: "Update failed — profile not found, license mismatch, or license revoked" }, 409);
+  }
 
   const updated = await getProfile(db, body.username);
   return c.json({ success: true, profile: updated });
