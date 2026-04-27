@@ -53,7 +53,6 @@ export default function Users() {
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const users = data?.items ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -67,6 +66,7 @@ export default function Users() {
   }
 
   const sortedData = useMemo(() => {
+    const users = data?.items ?? [];
     if (!users.length) return [];
     if (!sortField) return users;
     return [...users].sort((a, b) => {
@@ -74,7 +74,7 @@ export default function Users() {
       const bv = b[sortField] ?? 0;
       return sortDir === "desc" ? bv - av : av - bv;
     });
-  }, [users, sortField, sortDir]);
+  }, [data, sortField, sortDir]);
 
   function openCreate() {
     setEditingUser(null);
