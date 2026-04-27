@@ -201,12 +201,20 @@ async function handleProUserScoring(
   const baseTD = Math.floor(Math.random() * 40) + 10;
   const tdAwarded = Math.round(baseTD * serverProfile.multiplier * serverProfile.td_multiplier);
 
+  // Atomically increment TD first, then read back the actual total and
+  // update the rank in a second step. This prevents two concurrent chats
+  // from both computing rank against stale pre-update totals.
   await db
     .prepare(
-      "UPDATE user_scores SET total_td = total_td + ?, current_td = current_td + ?, corporate_rank = ?, credits_used = credits_used + 1, updated_at = datetime('now') WHERE username = ?",
+      "UPDATE user_scores SET total_td = total_td + ?, current_td = current_td + ?, credits_used = credits_used + 1, updated_at = datetime('now') WHERE username = ?",
     )
-    .bind(tdAwarded, tdAwarded, resolveRank(serverProfile.total_td + tdAwarded), serverProfile.username)
+    .bind(tdAwarded, tdAwarded, serverProfile.username)
     .run();
+
+  // Read back the actual post-increment total_td and derive rank from it.
+  const postUpdateRow = await db.prepare("SELECT total_td FROM user_scores WHERE username = ?").bind(serverProfile.username).first<{ total_td: number }>();
+  const actualRank = resolveRank(postUpdateRow?.total_td ?? serverProfile.total_td + tdAwarded);
+  await db.prepare("UPDATE user_scores SET corporate_rank = ? WHERE username = ?").bind(actualRank, serverProfile.username).run();
 
   const tokensSent = data.usage?.prompt_tokens ?? 0;
   const tokensReceived = data.usage?.completion_tokens ?? 0;

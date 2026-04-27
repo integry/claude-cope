@@ -94,7 +94,13 @@ users.get("/", async (c) => {
       throw err;
     }
     console.warn(`[admin/users] schema fallback: ${msg.slice(0, 200)}`);
-    if (msg.includes("license_hash")) hasLicenseHashColumn = false;
+    // Any schema error that involves license_hash, credits_used, or the
+    // licenses table means the main query's user_status CASE expression
+    // is unavailable. Mark the column as missing so enrichRows() doesn't
+    // default every row to "free" based on a null user_status field.
+    if (msg.includes("license_hash") || msg.includes("credits_used") || msg.includes("licenses")) {
+      hasLicenseHashColumn = false;
+    }
     results = await runFallbackQuery(db, statusFilter, hasLicenseHashColumn);
   }
 

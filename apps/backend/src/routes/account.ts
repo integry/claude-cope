@@ -182,15 +182,19 @@ account.post("/buy-generator", async (c) => {
 
   // Atomic update: use SQL-level TD guard and JSON functions to prevent
   // concurrent requests from overwriting each other or producing negative balances.
+  // The COALESCE(..., 0) = ? guard ensures the inventory count hasn't changed
+  // since we computed the price — two concurrent requests pricing against the
+  // same ownership level will cause one to fail with a 409.
   const result = await db
     .prepare(
       `UPDATE user_scores SET
         current_td = current_td - ?,
         inventory = json_set(COALESCE(inventory, '{}'), '$.' || ?, COALESCE(json_extract(inventory, '$.' || ?), 0) + ?),
         updated_at = datetime('now')
-      WHERE username = ? AND current_td >= ? AND license_hash = ?`,
+      WHERE username = ? AND current_td >= ? AND license_hash = ?
+        AND COALESCE(json_extract(inventory, '$.' || ?), 0) = ?`,
     )
-    .bind(cost, body.generatorId, body.generatorId, body.amount, body.username, cost, body.licenseKeyHash)
+    .bind(cost, body.generatorId, body.generatorId, body.amount, body.username, cost, body.licenseKeyHash, body.generatorId, owned)
     .run();
 
   if (!result.meta.changes) {
