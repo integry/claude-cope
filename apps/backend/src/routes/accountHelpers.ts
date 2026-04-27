@@ -58,12 +58,15 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
       // Free user upgrading to Max — attach the license to their existing profile.
       // Verify the caller's session is bound to this username to prevent an
       // attacker from seizing another free user's profile by sending /sync
-      // with their username.
-      if (sessionContext) {
-        const boundUsername = await sessionContext.kv.get(`session_user:${sessionContext.sessionId}`);
-        if (boundUsername !== newUsername) {
-          return { profile: null, error: "Cannot claim an existing free username — log in to that account first or pick a different username." };
-        }
+      // with their username. Fail closed if no sessionContext: without it we
+      // have no way to verify ownership of an existing free row, so refuse
+      // the upgrade rather than allowing it unconditionally.
+      if (!sessionContext) {
+        return { profile: null, error: "Session required to upgrade an existing username." };
+      }
+      const boundUsername = await sessionContext.kv.get(`session_user:${sessionContext.sessionId}`);
+      if (boundUsername !== newUsername) {
+        return { profile: null, error: "Cannot claim an existing free username — log in to that account first or pick a different username." };
       }
       // Preserve the server-authoritative profile data (TD, inventory, etc.).
       await db

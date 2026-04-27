@@ -57,7 +57,10 @@ CREATE TABLE IF NOT EXISTS user_scores (
     unlocked_themes TEXT NOT NULL DEFAULT '["default"]',
     active_theme TEXT NOT NULL DEFAULT 'default',
     active_ticket TEXT,
-    td_multiplier REAL NOT NULL DEFAULT 1.0
+    td_multiplier REAL NOT NULL DEFAULT 1.0,
+    -- Pre-aggregated count of usage_logs rows for this user. Incremented inline
+    -- when usage_logs is written so admin views can avoid a full table scan.
+    credits_used INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_scores_total_td

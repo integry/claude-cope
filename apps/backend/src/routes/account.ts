@@ -5,6 +5,8 @@ import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
 import { resolveProfile, verifyOwnership, broadcastPurchase } from "./accountHelpers";
 import type { SyncBody } from "./accountHelpers";
+import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
+import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 
 type Env = {
   Bindings: {
@@ -304,24 +306,9 @@ account.post("/buy-theme", async (c) => {
   return c.json({ success: true, profile: updated });
 });
 
-// Allowlists for client-supplied IDs in mutation routes. Must mirror the
-// frontend's source of truth (apps/frontend/src/game/achievements.ts and
-// apps/frontend/src/components/buddyConstants.ts respectively). Validation
-// is shape-level — license ownership already prevents writing to other
-// users' profiles, but this stops a valid client from persisting unknown
-// IDs that would break the rendering layer.
-const VALID_ACHIEVEMENT_IDS = new Set<string>([
-  "the_leaker", "polyglot_traitor", "trapped_soul", "the_nuclear_option",
-  "history_eraser", "schrodingers_code", "maslows_hammer", "dependency_hell",
-  "zalgo_parser", "base_8_comedian", "home_sweet_home", "heat_death",
-  "the_apologist", "trust_issues", "the_java_enterprise", "illusion_of_speed",
-  "cpp_supporter", "flashbang", "ten_x_developer", "little_bobby_tables",
-  "the_final_escape", "the_blame_game", "homer_at_the_buffet",
-]);
-
-const VALID_BUDDY_TYPES = new Set<string>([
-  "Agile Snail", "Sarcastic Clippy", "10x Dragon", "Grumpy Senior", "Panic Intern",
-]);
+// Allowlists for client-supplied IDs in mutation routes are imported from
+// @claude-cope/shared so frontend and backend share one source of truth —
+// no manual sync required when the achievement/buddy lists evolve.
 
 const MAX_TICKET_TITLE_LEN = 200;
 const MAX_TICKET_ID_LEN = 100;
@@ -346,7 +333,7 @@ account.post("/unlock-achievement", async (c) => {
   if (!body.username || !body.achievementId || !body.licenseKeyHash) {
     return c.json({ error: "username, achievementId, and licenseKeyHash are required" }, 400);
   }
-  if (!VALID_ACHIEVEMENT_IDS.has(body.achievementId)) {
+  if (!ACHIEVEMENT_IDS.has(body.achievementId)) {
     return c.json({ error: "Unknown achievementId" }, 400);
   }
 
@@ -385,7 +372,7 @@ account.post("/update-buddy", async (c) => {
   if (!body.username || !body.licenseKeyHash) {
     return c.json({ error: "username and licenseKeyHash are required" }, 400);
   }
-  if (body.buddyType !== null && body.buddyType !== undefined && !VALID_BUDDY_TYPES.has(body.buddyType)) {
+  if (body.buddyType !== null && body.buddyType !== undefined && !BUDDY_TYPE_SET.has(body.buddyType)) {
     return c.json({ error: "Unknown buddyType" }, 400);
   }
 

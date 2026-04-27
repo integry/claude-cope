@@ -17,18 +17,18 @@ users.get("/", async (c) => {
   const freeLimit = parseInt(c.env?.FREE_QUOTA_LIMIT || "20", 10) || 20;
   const statusFilter = c.req.query("status"); // "free", "max", or undefined for all
 
-  // Try query with license_hash column; fall back to without if column doesn't exist yet
+  // Read credits_used directly from user_scores (maintained inline by chat.ts)
+  // instead of running a full GROUP BY scan over usage_logs on every page load.
+  // Fall back gracefully if the column doesn't exist yet (pre-migration state).
   let results: Record<string, unknown>[];
   let hasLicenseHashColumn = true;
+  let hasCreditsUsedColumn = true;
   try {
     let query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
                 u.license_hash,
-                COALESCE(ul.msg_count, 0) AS credits_used,
+                u.credits_used,
                 CASE WHEN l.key_hash IS NOT NULL THEN 1 ELSE 0 END AS has_active_license
          FROM user_scores u
-         LEFT JOIN (
-           SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
-         ) ul ON ul.username = u.username
          LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'`;
 
     if (statusFilter === "max") {
@@ -46,11 +46,13 @@ users.get("/", async (c) => {
     if (!msg.includes("no such column") && !msg.includes("no such table")) {
       throw err;
     }
-    hasLicenseHashColumn = false;
-    // license_hash column doesn't exist yet — no user can be Max.
-    // Log so a broken migration doesn't masquerade as "no Max users yet".
-    console.warn(`[admin/users] schema fallback (license_hash column missing): ${msg.slice(0, 200)}`);
-    if (statusFilter === "max") {
+    // Either license_hash or credits_used column missing — fall back to the
+    // legacy aggregated query against usage_logs. Log so a broken migration
+    // doesn't masquerade as "no users yet".
+    console.warn(`[admin/users] schema fallback: ${msg.slice(0, 200)}`);
+    if (msg.includes("credits_used")) hasCreditsUsedColumn = false;
+    if (msg.includes("license_hash")) hasLicenseHashColumn = false;
+    if (statusFilter === "max" && !hasLicenseHashColumn) {
       // No license_hash column means no Max users exist; return empty
       results = [];
     } else {

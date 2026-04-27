@@ -203,7 +203,7 @@ async function handleProUserScoring(
 
   await db
     .prepare(
-      "UPDATE user_scores SET total_td = total_td + ?, current_td = current_td + ?, corporate_rank = ?, updated_at = datetime('now') WHERE username = ?",
+      "UPDATE user_scores SET total_td = total_td + ?, current_td = current_td + ?, corporate_rank = ?, credits_used = credits_used + 1, updated_at = datetime('now') WHERE username = ?",
     )
     .bind(tdAwarded, tdAwarded, resolveRank(serverProfile.total_td + tdAwarded), serverProfile.username)
     .run();
@@ -250,15 +250,17 @@ function recordUsage(
     );
   }
 
+  // Each upsert also increments credits_used so admin views can read the
+  // counter directly instead of running an aggregate query against usage_logs.
   if (params.proKeyHash) {
     queries.push(
-      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, license_hash) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, license_hash = ?, updated_at = datetime('now')").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.proKeyHash, params.tdAwarded, params.tdAwarded, params.proKeyHash).run(),
+      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, license_hash, credits_used) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, license_hash = ?, credits_used = credits_used + 1, updated_at = datetime('now')").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.proKeyHash, params.tdAwarded, params.tdAwarded, params.proKeyHash).run(),
     );
   } else if (!isOwnershipSpoofed) {
     // Guard: only update rows that have no license_hash (free users).
     // This prevents free callers from vandalizing a Pro user's TD/rank/country.
     queries.push(
-      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country) VALUES (?, ?, ?, ?, ?) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, updated_at = datetime('now') WHERE license_hash IS NULL").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.tdAwarded, params.tdAwarded).run(),
+      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, credits_used) VALUES (?, ?, ?, ?, ?, 1) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, credits_used = credits_used + 1, updated_at = datetime('now') WHERE license_hash IS NULL").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.tdAwarded, params.tdAwarded).run(),
     );
   }
   if (queries.length > 0) {
