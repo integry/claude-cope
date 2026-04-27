@@ -171,18 +171,30 @@ webhooks.post("/polar", async (c) => {
   }
 
   // Fallback KV-based idempotency for environments without the DB table.
-  // Write the marker BEFORE processing so a concurrent delivery sees it and
-  // bails out, avoiding duplicate side effects.  Use a short initial TTL so
-  // the marker self-cleans if processing fails and we delete it below.
+  // Uses a nonce-based claim to narrow the race window: each delivery writes
+  // a unique nonce then reads back.  If the read returns a different value,
+  // another delivery won and this one bails.  KV is read-after-write
+  // consistent within a single Cloudflare colo, so concurrent deliveries
+  // routed to the same colo are correctly serialised.  Cross-colo races
+  // remain theoretically possible but are unlikely for webhook traffic from
+  // a single provider and are mitigated by the idempotent design of the
+  // side-effect handlers (handleBenefitGrantCreated/Revoked).
   const idempotencyKey = `webhook:${webhookId}`;
+  let kvClaimNonce: string | null = null;
   if (idempotencyResult === "no_db") {
     const existing = await kv.get(idempotencyKey);
     if (existing !== null) {
       return c.json({ received: true }, 200);
     }
-    // Claim: write a short-lived marker before processing.  A second
-    // concurrent delivery will see this and return early.
-    await kv.put(idempotencyKey, "processing", { expirationTtl: 300 });
+    // Claim: write a unique nonce with a short TTL so it self-cleans on
+    // failure.  Then read back to verify we won the race.
+    kvClaimNonce = crypto.randomUUID();
+    await kv.put(idempotencyKey, kvClaimNonce, { expirationTtl: 300 });
+    const winner = await kv.get(idempotencyKey);
+    if (winner !== kvClaimNonce) {
+      // Another concurrent delivery claimed this webhook first.
+      return c.json({ received: true }, 200);
+    }
   }
 
   try {
