@@ -101,7 +101,6 @@ describe("POST /api/account/sync", () => {
     mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
     // getProfileByLicenseHash (WHERE license_hash = ?) returns null
     // username lookup (WHERE username = ?) finds it owned by another license
-    let callCount = 0;
     const { db } = createMockDB();
     // Override prepare to track SQL-aware routing
     db.prepare = vi.fn((sql: string) => {
@@ -109,7 +108,6 @@ describe("POST /api/account/sync", () => {
       const isUsernameCheck = sql.includes("WHERE username = ?");
       return {
         bind: vi.fn(() => {
-          callCount++;
           return {
             first: vi.fn().mockResolvedValue(
               isProfileByHash ? null :
