@@ -58,7 +58,12 @@ app.use("*", async (c, next) => {
   if (!migrationPromise) {
     const db = (c.env as Record<string, unknown>).DB as D1Database | undefined;
     if (db) {
-      migrationPromise = applyMigrations(db);
+      migrationPromise = applyMigrations(db).catch((err) => {
+        // Reset so the next request retries instead of permanently awaiting
+        // a rejected promise for the lifetime of the isolate.
+        migrationPromise = null;
+        throw err;
+      });
     }
   }
   if (migrationPromise) await migrationPromise;

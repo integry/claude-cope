@@ -44,6 +44,9 @@ users.get("/", async (c) => {
     return c.json({ error: `Invalid status filter: "${statusFilter}". Use "free", "max", or "revoked".` }, 400);
   }
 
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "50", 10) || 50, 1), 200);
+  const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
+
   const query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
                 u.license_hash,
                 u.credits_used,
@@ -53,9 +56,9 @@ users.get("/", async (c) => {
          FROM user_scores u
          LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'`
       + buildStatusFilter(statusFilter)
-      + " ORDER BY u.updated_at DESC LIMIT 200";
+      + " ORDER BY u.updated_at DESC LIMIT ? OFFSET ?";
 
-  const resp = await db.prepare(query).all();
+  const resp = await db.prepare(query).bind(limit, offset).all();
   const results = (resp.results ?? []) as Record<string, unknown>[];
 
   return c.json(enrichRows(results, freeLimit));

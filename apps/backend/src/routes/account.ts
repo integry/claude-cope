@@ -80,7 +80,13 @@ account.post("/sync", async (c) => {
   const sessionId = c.get("sessionId");
   const result = await resolveProfile(db, hash, body, sessionId && kv ? { sessionId, kv } : undefined);
   if (result.error) {
-    return c.json({ error: result.error }, 403);
+    // Username-taken and concurrent-claim errors are conflicts (409), not
+    // authorization failures.  Only session-ownership rejections are 403.
+    const isConflict =
+      result.error.includes("already taken") ||
+      result.error.includes("just claimed") ||
+      result.error.includes("being activated");
+    return c.json({ error: result.error }, isConflict ? 409 : 403);
   }
 
   // Profile resolved successfully — now commit the side-effect state writes.
