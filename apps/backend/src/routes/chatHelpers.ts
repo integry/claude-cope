@@ -1,4 +1,5 @@
 import { consumeQuota, getQuotaLimits, getQuotaPercent, QuotaExhaustedError } from "../utils/quota";
+import type { ServerProfile } from "@claude-cope/shared/profile";
 import { getProfile, getProfileByLicenseHash, resolveRank } from "../utils/profile";
 import { syncPolarUsage } from "../utils/polar";
 
@@ -17,6 +18,48 @@ export type ChatResponseData = {
   choices?: Array<{ message?: { content?: string } }>;
   [key: string]: unknown;
 };
+
+type FreeProfileSnapshotParams = {
+  username: string;
+  serverProfile: ServerProfile | null;
+  tdAwarded: number;
+  quotaPercent: number;
+};
+
+export function buildFreeChatProfileSnapshot(params: FreeProfileSnapshotParams): ServerProfile | null {
+  const { username, serverProfile, tdAwarded, quotaPercent } = params;
+  if (!serverProfile && tdAwarded <= 0) return null;
+
+  if (!serverProfile) {
+    const rank = resolveRank(tdAwarded);
+    return {
+      username,
+      total_td: tdAwarded,
+      current_td: tdAwarded,
+      corporate_rank: rank,
+      inventory: {},
+      upgrades: [],
+      achievements: [],
+      buddy_type: null,
+      buddy_is_shiny: false,
+      unlocked_themes: ["default"],
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+      multiplier: 1,
+      quota_percent: quotaPercent,
+    };
+  }
+
+  const totalTD = serverProfile.total_td + tdAwarded;
+  return {
+    ...serverProfile,
+    total_td: totalTD,
+    current_td: serverProfile.current_td + tdAwarded,
+    corporate_rank: resolveRank(totalTD),
+    quota_percent: quotaPercent,
+  };
+}
 
 /** Pre-flight quota availability check — does NOT consume credits. */
 export async function checkQuotaAvailable(
@@ -115,7 +158,20 @@ export async function handleProUserScoring(
 export function recordUsage(
   db: D1Database | undefined,
   ctx: { waitUntil: (p: Promise<unknown>) => void },
-  params: { username: string; model: string; data: ChatResponseData; tdAwarded: number; rank?: string; country: string; hour: string; proKeyHash?: string; profileLicenseHash?: string | null; ownsUsername: boolean; deferredKvWrites?: (() => void) | null },
+  params: {
+    username: string;
+    model: string;
+    data: ChatResponseData;
+    tdAwarded: number;
+    rank?: string;
+    country: string;
+    hour: string;
+    proKeyHash?: string;
+    profileLicenseHash?: string | null;
+    revokedProfileLicenseHash?: string | null;
+    ownsUsername: boolean;
+    deferredKvWrites?: (() => void) | null;
+  },
 ) {
   if (!db) return;
   const tokensSent = params.data.usage?.prompt_tokens ?? 0;
@@ -137,7 +193,25 @@ export function recordUsage(
   } else if (!isOwnershipSpoofed) {
     const serverDerivedRank = params.rank ?? resolveRank(params.tdAwarded);
     queries.push(
-      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, credits_used) VALUES (?, ?, ?, ?, ?, 1) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, credits_used = credits_used + 1, updated_at = datetime('now') WHERE license_hash IS NULL").bind(params.username, params.tdAwarded, params.tdAwarded, serverDerivedRank, params.country, params.tdAwarded, params.tdAwarded).run(),
+      db.prepare(
+        `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, credits_used)
+         VALUES (?, ?, ?, ?, ?, 1)
+         ON CONFLICT(username) DO UPDATE SET
+           total_td = total_td + ?,
+           current_td = current_td + ?,
+           credits_used = credits_used + 1,
+           updated_at = datetime('now')
+         WHERE license_hash IS NULL OR license_hash = ?`,
+      ).bind(
+        params.username,
+        params.tdAwarded,
+        params.tdAwarded,
+        serverDerivedRank,
+        params.country,
+        params.tdAwarded,
+        params.tdAwarded,
+        params.revokedProfileLicenseHash ?? "",
+      ).run(),
     );
   }
   if (queries.length > 0) {
@@ -156,13 +230,15 @@ export async function handleFreeUserResponse(
   params: {
     username: string; model: string; country: string; hour: string;
     data: ChatResponseData; quotaPercent: number; profileLicenseHash: string | null;
+    revokedProfileLicenseHash: string | null;
     ownsUsername: boolean; deferredKvWrites: (() => void) | null;
   },
 ): Promise<Response> {
+  let serverProfile: ServerProfile | null = null;
   let serverMultiplier = 1;
   let serverRank = "Junior Code Monkey";
   if (db) {
-    const serverProfile = await getProfile(db, params.username);
+    serverProfile = await getProfile(db, params.username);
     if (serverProfile) {
       serverMultiplier = serverProfile.multiplier;
       serverRank = serverProfile.corporate_rank;
@@ -177,11 +253,18 @@ export async function handleFreeUserResponse(
     username: params.username, model: params.model, data: params.data,
     tdAwarded, rank: serverRank, country: params.country, hour: params.hour,
     profileLicenseHash: params.profileLicenseHash,
+    revokedProfileLicenseHash: params.revokedProfileLicenseHash,
     ownsUsername: params.ownsUsername,
     deferredKvWrites: params.deferredKvWrites,
   });
 
   (params.data as Record<string, unknown>).td_awarded = tdAwarded;
   (params.data as Record<string, unknown>).quotaPercent = params.quotaPercent;
+  (params.data as Record<string, unknown>).profile = buildFreeChatProfileSnapshot({
+    username: params.username,
+    serverProfile,
+    tdAwarded,
+    quotaPercent: params.quotaPercent,
+  });
   return new Response(JSON.stringify(params.data), { headers: { "Content-Type": "application/json" } });
 }

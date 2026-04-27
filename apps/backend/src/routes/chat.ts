@@ -193,13 +193,37 @@ type PreChatResult = {
   status?: number;
   effectiveProKeyHash: string | undefined;
   profileLicenseHash: string | null;
+  revokedProfileLicenseHash: string | null;
   quotaPercent: number;
   ownsUsername: boolean;
   deferredKvWrites: (() => void) | null;
 };
 
 function rejectPreChat(msg: string, status: number, base: Partial<PreChatResult>): PreChatResult {
-  return { error: msg, status, effectiveProKeyHash: undefined, profileLicenseHash: null, quotaPercent: 0, ownsUsername: false, deferredKvWrites: null, ...base };
+  return {
+    error: msg,
+    status,
+    effectiveProKeyHash: undefined,
+    profileLicenseHash: null,
+    revokedProfileLicenseHash: null,
+    quotaPercent: 0,
+    ownsUsername: false,
+    deferredKvWrites: null,
+    ...base,
+  };
+}
+
+export function resolveFreeChatLicenseState(profileLicenseHash: string | null, licenseActive: boolean): {
+  activeProfileLicenseHash: string | null;
+  revokedProfileLicenseHash: string | null;
+} {
+  if (!profileLicenseHash) {
+    return { activeProfileLicenseHash: null, revokedProfileLicenseHash: null };
+  }
+  if (licenseActive) {
+    return { activeProfileLicenseHash: profileLicenseHash, revokedProfileLicenseHash: null };
+  }
+  return { activeProfileLicenseHash: null, revokedProfileLicenseHash: profileLicenseHash };
 }
 
 async function preChatChecks(
@@ -221,6 +245,7 @@ async function preChatChecks(
   }
 
   let profileLicenseHash: string | null = null;
+  let revokedProfileLicenseHash: string | null = null;
   let hasRow = false;
   let deferredKvWrites: (() => void) | null = null;
   if (db && username !== "anonymous") {
@@ -235,6 +260,11 @@ async function preChatChecks(
   if (!effectiveProKeyHash && !ownsUsername) {
     return rejectPreChat("Session does not own this username", 403, { effectiveProKeyHash, profileLicenseHash });
   }
+  if (!effectiveProKeyHash && profileLicenseHash && db) {
+    const licenseState = resolveFreeChatLicenseState(profileLicenseHash, await isLicenseActive(db, profileLicenseHash));
+    profileLicenseHash = licenseState.activeProfileLicenseHash;
+    revokedProfileLicenseHash = licenseState.revokedProfileLicenseHash;
+  }
   if (!effectiveProKeyHash && profileLicenseHash) {
     return rejectPreChat("This account is linked to a Pro license — authenticate with proKeyHash", 403, { effectiveProKeyHash, profileLicenseHash });
   }
@@ -243,7 +273,7 @@ async function preChatChecks(
   if (quotaCheck.exhaustedMessage) {
     return rejectPreChat(quotaCheck.exhaustedMessage, 402, { effectiveProKeyHash, profileLicenseHash });
   }
-  return { effectiveProKeyHash, profileLicenseHash, quotaPercent: 100, ownsUsername, deferredKvWrites };
+  return { effectiveProKeyHash, profileLicenseHash, revokedProfileLicenseHash, quotaPercent: 100, ownsUsername, deferredKvWrites };
 }
 
 const chat = new Hono<Env>();
@@ -309,6 +339,7 @@ chat.post("/", async (c) => {
   return handleFreeUserResponse(db, c.executionCtx, {
     username, model, country, hour,
     data, quotaPercent, profileLicenseHash: preCheck.profileLicenseHash,
+    revokedProfileLicenseHash: preCheck.revokedProfileLicenseHash,
     ownsUsername: preCheck.ownsUsername, deferredKvWrites: preCheck.deferredKvWrites,
   });
 });
