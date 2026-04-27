@@ -41,7 +41,7 @@ async function runFallbackQuery(
        LEFT JOIN (
          SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
        ) ul ON ul.username = u.username
-       ORDER BY u.updated_at DESC LIMIT 200`
+       ORDER BY u.updated_at DESC`
     )
     .all();
   return (resp.results ?? []) as Record<string, unknown>[];
