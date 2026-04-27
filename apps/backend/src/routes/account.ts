@@ -188,9 +188,9 @@ account.post("/buy-generator", async (c) => {
         current_td = current_td - ?,
         inventory = json_set(COALESCE(inventory, '{}'), '$.' || ?, COALESCE(json_extract(inventory, '$.' || ?), 0) + ?),
         updated_at = datetime('now')
-      WHERE username = ? AND current_td >= ?`,
+      WHERE username = ? AND current_td >= ? AND license_hash = ?`,
     )
-    .bind(cost, body.generatorId, body.generatorId, body.amount, body.username, cost)
+    .bind(cost, body.generatorId, body.generatorId, body.amount, body.username, cost, body.licenseKeyHash)
     .run();
 
   if (!result.meta.changes) {
@@ -244,10 +244,10 @@ account.post("/buy-upgrade", async (c) => {
         current_td = current_td - ?,
         upgrades = json_insert(COALESCE(upgrades, '[]'), '$[#]', ?),
         updated_at = datetime('now')
-      WHERE username = ? AND current_td >= ?
+      WHERE username = ? AND current_td >= ? AND license_hash = ?
         AND ? NOT IN (SELECT value FROM json_each(COALESCE(upgrades, '[]')))`,
     )
-    .bind(upgrade.cost, body.upgradeId, body.username, upgrade.cost, body.upgradeId)
+    .bind(upgrade.cost, body.upgradeId, body.username, upgrade.cost, body.licenseKeyHash, body.upgradeId)
     .run();
 
   if (!result.meta.changes) {
@@ -292,10 +292,10 @@ account.post("/buy-theme", async (c) => {
         current_td = current_td - ?,
         unlocked_themes = json_insert(COALESCE(unlocked_themes, '["default"]'), '$[#]', ?),
         updated_at = datetime('now')
-      WHERE username = ? AND current_td >= ?
+      WHERE username = ? AND current_td >= ? AND license_hash = ?
         AND ? NOT IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))`,
     )
-    .bind(theme.cost, body.themeId, body.username, theme.cost, body.themeId)
+    .bind(theme.cost, body.themeId, body.username, theme.cost, body.licenseKeyHash, body.themeId)
     .run();
 
   if (!result.meta.changes) {
@@ -354,10 +354,10 @@ account.post("/unlock-achievement", async (c) => {
       `UPDATE user_scores SET
         achievements = json_insert(COALESCE(achievements, '[]'), '$[#]', ?),
         updated_at = datetime('now')
-      WHERE username = ?
+      WHERE username = ? AND license_hash = ?
         AND ? NOT IN (SELECT value FROM json_each(COALESCE(achievements, '[]')))`,
     )
-    .bind(body.achievementId, body.username, body.achievementId)
+    .bind(body.achievementId, body.username, body.licenseKeyHash, body.achievementId)
     .run();
 
   const updated = await getProfile(db, body.username);

@@ -54,8 +54,8 @@ users.get("/", async (c) => {
     // doesn't masquerade as "no users yet".
     console.warn(`[admin/users] schema fallback: ${msg.slice(0, 200)}`);
     if (msg.includes("license_hash")) hasLicenseHashColumn = false;
-    if (statusFilter === "max" && !hasLicenseHashColumn) {
-      // No license_hash column means no Max users exist; return empty
+    if ((statusFilter === "max" || statusFilter === "revoked") && !hasLicenseHashColumn) {
+      // No license_hash column means no Max/revoked users exist; return empty
       results = [];
     } else {
       const resp = await db

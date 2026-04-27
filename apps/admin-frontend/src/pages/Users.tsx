@@ -10,7 +10,7 @@ interface User {
   current_td: number;
   credits_used: number;
   credits_remaining: number | null;
-  status: "free" | "max";
+  status: "free" | "max" | "revoked";
   license_hash?: string | null;
 }
 
@@ -24,7 +24,7 @@ interface UserForm {
 
 type SortField = "total_td" | "credits_used" | null;
 type SortDir = "asc" | "desc";
-type StatusFilter = "all" | "free" | "max";
+type StatusFilter = "all" | "free" | "max" | "revoked";
 
 const emptyForm: UserForm = { username: "", corporate_rank: 0, country: "", total_td: 0, current_td: 0 };
 
@@ -179,6 +179,7 @@ export default function Users() {
             <option value="all">All Users</option>
             <option value="free">Free Only</option>
             <option value="max">Max Only</option>
+            <option value="revoked">Revoked Only</option>
           </select>
           <button
             onClick={openCreate}
@@ -294,6 +295,10 @@ export default function Users() {
                   {user.status === "max" ? (
                     <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
                       Max
+                    </span>
+                  ) : user.status === "revoked" ? (
+                    <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                      Revoked
                     </span>
                   ) : (
                     <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
