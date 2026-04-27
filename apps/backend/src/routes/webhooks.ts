@@ -127,6 +127,45 @@ async function dispatchWebhookEvent(
   }
 }
 
+async function verifyPolarHeaders(
+  rawBody: string,
+  headers: { id?: string; timestamp?: string; signature?: string },
+  secret: string,
+): Promise<string | null> {
+  const { id, timestamp, signature } = headers;
+  if (!id || !timestamp || !signature) return "Missing webhook headers";
+  try {
+    await verifyWebhookSignature(
+      rawBody,
+      {
+        "webhook-id": id,
+        "webhook-timestamp": timestamp,
+        "webhook-signature": signature,
+      },
+      secret,
+    );
+    return null;
+  } catch {
+    return "Invalid signature";
+  }
+}
+
+async function rollbackIdempotency(
+  db: D1Database | undefined,
+  kv: KVNamespace,
+  webhookId: string,
+  idempotencyResult: "inserted" | "no_db",
+): Promise<void> {
+  if (db && idempotencyResult === "inserted") {
+    try {
+      await db.prepare("DELETE FROM processed_webhooks WHERE webhook_id = ?").bind(webhookId).run();
+    } catch { /* best-effort cleanup */ }
+  }
+  if (idempotencyResult === "no_db") {
+    try { await kv.delete(`webhook:${webhookId}`); } catch { /* best-effort cleanup */ }
+  }
+}
+
 webhooks.post("/polar", async (c) => {
   const secret = c.env?.POLAR_WEBHOOK_SECRET;
   if (!secret) {
@@ -135,26 +174,17 @@ webhooks.post("/polar", async (c) => {
 
   const rawBody = await c.req.text();
 
-  const webhookId = c.req.header("webhook-id");
-  const webhookTimestamp = c.req.header("webhook-timestamp");
-  const webhookSignature = c.req.header("webhook-signature");
-
-  if (!webhookId || !webhookTimestamp || !webhookSignature) {
-    return c.json({ error: "Missing webhook headers" }, 401);
-  }
-
-  try {
-    await verifyWebhookSignature(
-      rawBody,
-      {
-        "webhook-id": webhookId,
-        "webhook-timestamp": webhookTimestamp,
-        "webhook-signature": webhookSignature,
-      },
-      secret,
-    );
-  } catch {
-    return c.json({ error: "Invalid signature" }, 401);
+  const verifyError = await verifyPolarHeaders(
+    rawBody,
+    {
+      id: c.req.header("webhook-id"),
+      timestamp: c.req.header("webhook-timestamp"),
+      signature: c.req.header("webhook-signature"),
+    },
+    secret,
+  );
+  if (verifyError) {
+    return c.json({ error: verifyError }, 401);
   }
 
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
@@ -164,6 +194,7 @@ webhooks.post("/polar", async (c) => {
 
   const event = JSON.parse(rawBody) as WebhookEvent;
   const db = c.env?.DB;
+  const webhookId = c.req.header("webhook-id")!;
 
   const idempotencyResult = await claimWebhookIdempotency(db, webhookId, event.type);
   if (idempotencyResult === "duplicate") {
@@ -171,16 +202,6 @@ webhooks.post("/polar", async (c) => {
   }
 
   // Fallback KV-based dedup for environments without the DB table.
-  // KV does NOT provide atomic compare-and-set, so this is best-effort:
-  // it catches replays (second delivery finds the key already set) but
-  // cannot prevent two truly concurrent deliveries from both passing
-  // the check.  That is acceptable because the side-effect handlers
-  // (handleBenefitGrantCreated/Revoked) are designed to be idempotent:
-  //   - Grant: guards on existingQuota === null; DB uses ON CONFLICT
-  //   - Revoke: saves remaining (last-write-wins is fine), DB uses UPDATE
-  // The DB-backed path (claimWebhookIdempotency) is the authoritative
-  // guard; this KV check is only a performance optimisation to avoid
-  // redundant work when the processed_webhooks table is unavailable.
   const idempotencyKey = `webhook:${webhookId}`;
   if (idempotencyResult === "no_db") {
     const existing = await kv.get(idempotencyKey);
@@ -192,15 +213,7 @@ webhooks.post("/polar", async (c) => {
   try {
     await dispatchWebhookEvent(event, kv, c.env);
   } catch (err) {
-    // Allow Polar to retry: remove the DB row and KV claim so retries aren't blocked.
-    if (db) {
-      try {
-        await db.prepare("DELETE FROM processed_webhooks WHERE webhook_id = ?").bind(webhookId).run();
-      } catch { /* best-effort cleanup */ }
-    }
-    if (idempotencyResult === "no_db") {
-      try { await kv.delete(idempotencyKey); } catch { /* best-effort cleanup */ }
-    }
+    await rollbackIdempotency(db, kv, webhookId, idempotencyResult);
     console.error(`[WEBHOOK] Failed to handle ${event.type}:`, err);
     return c.json({ error: "Processing failed" }, 500);
   }
