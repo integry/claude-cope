@@ -42,55 +42,44 @@ async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: numbe
   }
 }
 
-const account = new Hono<Env>();
-
-account.post("/sync", async (c) => {
+/** Validate preconditions for /sync and return the validated resources, or an error response. */
+async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response }) {
   const body = await c.req.json<SyncBody>();
-
   if (!body.licenseKey) {
-    return c.json({ error: "licenseKey is required" }, 400);
+    return { error: c.json({ error: "licenseKey is required" }, 400) } as const;
   }
 
   const accessToken = c.env?.POLAR_ACCESS_TOKEN;
   const organizationId = c.env?.POLAR_ORGANIZATION_ID;
   if (!accessToken || !organizationId) {
-    return c.json({ error: "Polar integration is not configured" }, 500);
+    return { error: c.json({ error: "Polar integration is not configured" }, 500) } as const;
   }
 
   const validation = await validatePolarKey(body.licenseKey, accessToken, organizationId);
   if (!validation.valid) {
-    return c.json({ error: "Invalid or inactive license key", status: validation.status }, 403);
+    return { error: c.json({ error: "Invalid or inactive license key", status: validation.status }, 403) } as const;
   }
 
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
   if (!kv) {
-    return c.json({ error: "KV storage is not configured" }, 500);
+    return { error: c.json({ error: "KV storage is not configured" }, 500) } as const;
   }
-
-  const hash = await hashKey(body.licenseKey);
 
   const db = c.env?.DB;
   if (!db) {
-    return c.json({ error: "Database not configured" }, 500);
+    return { error: c.json({ error: "Database not configured" }, 500) } as const;
   }
 
-  // Resolve the profile FIRST — if this fails (e.g. username taken, ownership
-  // check rejects) we don't want orphaned KV quota or license rows with no
-  // associated profile.
-  const sessionId = c.get("sessionId");
-  const result = await resolveProfile(db, hash, body, sessionId && kv ? { sessionId, kv } : undefined);
-  if (result.error) {
-    // Username-taken and concurrent-claim errors are conflicts (409), not
-    // authorization failures.  Only session-ownership rejections are 403.
-    const isConflict =
-      result.error.includes("already taken") ||
-      result.error.includes("just claimed") ||
-      result.error.includes("being activated");
-    return c.json({ error: result.error }, isConflict ? 409 : 403);
-  }
+  const hash = await hashKey(body.licenseKey);
+  return { body, validation, kv, db, hash } as const;
+}
 
-  // Profile resolved successfully — now commit the side-effect state writes.
-  // Record license activation in DB for admin purchase stats.
+/** Commit side-effect writes after a successful profile resolution. */
+async function commitSyncSideEffects(
+  deps: { db: D1Database; kv: KVNamespace; hash: string },
+  opts: { validationId?: string; limits: ReturnType<typeof getQuotaLimits>; sessionId?: string; username?: string },
+) {
+  const { db, kv, hash } = deps;
   await db
     .prepare(
       "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
@@ -98,23 +87,42 @@ account.post("/sync", async (c) => {
     .bind(hash)
     .run();
 
-  const limits = getQuotaLimits(c.env);
-  await ensureQuota(kv, hash, limits.proInitialQuota);
+  await ensureQuota(kv, hash, opts.limits.proInitialQuota);
 
-  // Cache the Polar license_key UUID so chat.ts can mirror usage to Polar
-  // without needing the raw license key.
-  if (validation.id) {
-    await kv.put(`polar_id:${hash}`, validation.id);
+  if (opts.validationId) {
+    await kv.put(`polar_id:${hash}`, opts.validationId);
   }
+
+  if (opts.sessionId && opts.username) {
+    await kv.put(`session_user:${opts.sessionId}`, opts.username, { expirationTtl: 60 * 60 * 24 * 365 });
+  }
+}
+
+const account = new Hono<Env>();
+
+account.post("/sync", async (c) => {
+  const validated = await validateSyncRequest(c);
+  if ("error" in validated) return validated.error;
+  const { body, validation, kv, db, hash } = validated;
+
+  const sessionId = c.get("sessionId");
+  const result = await resolveProfile(db, hash, body, sessionId && kv ? { sessionId, kv } : undefined);
+  if (result.error) {
+    const isConflict =
+      result.error.includes("already taken") ||
+      result.error.includes("just claimed") ||
+      result.error.includes("being activated");
+    return c.json({ error: result.error }, isConflict ? 409 : 403);
+  }
+
+  const limits = getQuotaLimits(c.env);
+  await commitSyncSideEffects(
+    { db, kv, hash },
+    { validationId: validation.id, limits, sessionId, username: result.profile?.username },
+  );
 
   const quotaPercent = await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
   const profile = { ...result.profile, quota_percent: quotaPercent };
-
-  // Cache the session → username mapping so a user with cleared localStorage
-  // but the same browser cookie can be restored via GET /me.
-  if (sessionId && profile.username) {
-    await kv.put(`session_user:${sessionId}`, profile.username, { expirationTtl: 60 * 60 * 24 * 365 });
-  }
 
   return c.json({ success: true, hash, restored: result.restored, profile });
 });
