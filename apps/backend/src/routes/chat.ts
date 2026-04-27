@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { COPE_MODELS } from "@claude-cope/shared/models";
-import { consumeQuota, getQuotaLimits, QuotaExhaustedError } from "../utils/quota";
+import { consumeQuota, getQuotaLimits, getQuotaPercent, QuotaExhaustedError } from "../utils/quota";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { getProfile, getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank, resolveProUser } from "../utils/profile";
 import { syncPolarUsage } from "../utils/polar";
@@ -106,7 +106,24 @@ function logChatDiagnostics(messages: { role: string; content: string }[], data:
   );
 }
 
-async function handleQuotaCheck(
+/** Pre-flight quota availability check — does NOT consume credits. */
+async function checkQuotaAvailable(
+  env: Env["Bindings"], sessionId: string, proKeyHash?: string,
+): Promise<{ exhaustedMessage?: string }> {
+  const quotaKv = env.QUOTA_KV ?? env.USAGE_KV;
+  if (!quotaKv) return {};
+  const percent = await getQuotaPercent(quotaKv, { tier: proKeyHash ? "pro" : "free", sessionId, licenseKeyHash: proKeyHash, limits: getQuotaLimits(env) });
+  if (percent <= 0) {
+    const msg = proKeyHash
+      ? "Pro tier quota exhausted. Please renew your license."
+      : "Free tier quota exhausted. Upgrade to Pro for more usage.";
+    return { exhaustedMessage: msg };
+  }
+  return {};
+}
+
+/** Consume quota AFTER a successful generation. Returns quota info or an error message. */
+async function consumeQuotaPostSuccess(
   env: Env["Bindings"], sessionId: string, proKeyHash?: string,
 ): Promise<{ quotaPercent: number; remaining?: number; exhaustedMessage?: string }> {
   const quotaKv = env.QUOTA_KV ?? env.USAGE_KV;
@@ -319,7 +336,6 @@ type PreChatResult = {
   effectiveProKeyHash: string | undefined;
   profileLicenseHash: string | null;
   quotaPercent: number;
-  remaining?: number;
   ownsUsername: boolean;
   deferredKvWrites: (() => void) | null;
 };
@@ -376,14 +392,14 @@ async function preChatChecks(
     return rejectPreChat("This account is linked to a Pro license — authenticate with proKeyHash", 403, { effectiveProKeyHash, profileLicenseHash });
   }
 
-  const quotaResult = await handleQuotaCheck(env, sessionId, effectiveProKeyHash);
-  if (quotaResult.exhaustedMessage) {
-    return rejectPreChat(quotaResult.exhaustedMessage, 402, { effectiveProKeyHash, profileLicenseHash });
+  // Pre-flight: only check quota availability — do NOT consume yet.
+  // Quota is consumed after a successful OpenRouter response to avoid
+  // burning credits on upstream failures.
+  const quotaCheck = await checkQuotaAvailable(env, sessionId, effectiveProKeyHash);
+  if (quotaCheck.exhaustedMessage) {
+    return rejectPreChat(quotaCheck.exhaustedMessage, 402, { effectiveProKeyHash, profileLicenseHash });
   }
-  if (effectiveProKeyHash && quotaResult.remaining != null) {
-    ctx.waitUntil(mirrorPolarUsage(env, effectiveProKeyHash, quotaResult.remaining));
-  }
-  return { effectiveProKeyHash, profileLicenseHash, quotaPercent: quotaResult.quotaPercent, remaining: quotaResult.remaining, ownsUsername, deferredKvWrites };
+  return { effectiveProKeyHash, profileLicenseHash, quotaPercent: 100, ownsUsername, deferredKvWrites };
 }
 
 async function handleFreeUserResponse(
@@ -473,12 +489,19 @@ chat.post("/", async (c) => {
   const data = await orResponse.json() as ChatResponseData;
   logChatDiagnostics(messages, data);
 
+  // OpenRouter succeeded — NOW consume quota and mirror to Polar.
+  const quotaResult = await consumeQuotaPostSuccess(c.env, sessionId, preCheck.effectiveProKeyHash);
+  const quotaPercent = quotaResult.quotaPercent;
+  if (preCheck.effectiveProKeyHash && quotaResult.remaining != null) {
+    c.executionCtx.waitUntil(mirrorPolarUsage(c.env, preCheck.effectiveProKeyHash, quotaResult.remaining));
+  }
+
   const country = body.country || (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country || c.req.header("cf-ipcountry") || "Unknown";
   const hour = new Date().toISOString().slice(0, 13);
 
   // Pro user scoring — ownership was already validated in preChatChecks.
   if (preCheck.effectiveProKeyHash && db) {
-    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: preCheck.effectiveProKeyHash, model, hour, data, quotaPercent: preCheck.quotaPercent });
+    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: preCheck.effectiveProKeyHash, model, hour, data, quotaPercent });
     if (proResponse) return proResponse;
     return c.json({ error: "Pro scoring failed — please retry" }, 500);
   }
@@ -486,7 +509,7 @@ chat.post("/", async (c) => {
   // Free users only — pro users are fully handled above
   return handleFreeUserResponse(db, c.executionCtx, {
     username, model, country, hour,
-    data, quotaPercent: preCheck.quotaPercent, profileLicenseHash: preCheck.profileLicenseHash,
+    data, quotaPercent, profileLicenseHash: preCheck.profileLicenseHash,
     ownsUsername: preCheck.ownsUsername, deferredKvWrites: preCheck.deferredKvWrites,
   });
 });

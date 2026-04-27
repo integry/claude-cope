@@ -12,7 +12,7 @@ stats.get("/", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const [scoreAgg, eventCount, licenseCount, maxUsers] = await Promise.all([
+  const [scoreAgg, eventCount, licenseCount, maxUsers, revokedUsers] = await Promise.all([
     db
       .prepare("SELECT COUNT(*) AS total_users, COALESCE(SUM(total_td), 0) AS total_td FROM user_scores")
       .first<{ total_users: number; total_td: number }>(),
@@ -31,16 +31,15 @@ stats.get("/", async (c) => {
          WHERE u.license_hash IS NOT NULL`
       )
       .first<{ count: number }>(),
+    // Count users with a license_hash that does NOT have an active license (revoked).
+    db
+      .prepare(
+        `SELECT COUNT(DISTINCT u.username) AS count FROM user_scores u
+         LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'
+         WHERE u.license_hash IS NOT NULL AND l.key_hash IS NULL`
+      )
+      .first<{ count: number }>(),
   ]);
-
-  // Count users with a license_hash that does NOT have an active license (revoked).
-  const revokedUsers = await db
-    .prepare(
-      `SELECT COUNT(DISTINCT u.username) AS count FROM user_scores u
-       LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'
-       WHERE u.license_hash IS NOT NULL AND l.key_hash IS NULL`
-    )
-    .first<{ count: number }>();
 
   const totalUsers = scoreAgg?.total_users ?? 0;
   const maxUserCount = maxUsers?.count ?? 0;

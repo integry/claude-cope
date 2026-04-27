@@ -195,7 +195,7 @@ export default function Users() {
         <h1 className="text-2xl font-bold">Users</h1>
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-500">
-            Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
+            Showing {total === 0 ? 0 : offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
           </span>
           <select
             value={statusFilter}
@@ -300,16 +300,16 @@ export default function Users() {
                 className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none hover:text-gray-900"
                 onClick={() => toggleSort("total_td")}
               >
-                Total TD {sortField === "total_td" ? (sortDir === "desc" ? "\u2193" : "\u2191") : ""}
+                Total TD (page) {sortField === "total_td" ? (sortDir === "desc" ? "\u2193" : "\u2191") : ""}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Current TD</th>
               <th
                 className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none hover:text-gray-900"
                 onClick={() => toggleSort("credits_used")}
               >
-                Credits Used {sortField === "credits_used" ? (sortDir === "desc" ? "\u2193" : "\u2191") : ""}
+                Credits Used (page) {sortField === "credits_used" ? (sortDir === "desc" ? "\u2193" : "\u2191") : ""}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Credits Left</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500" title="Free-user estimate based on D1 credits_used — actual enforcement is session-based KV">Credits Left ~</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
             </tr>
           </thead>
@@ -337,7 +337,7 @@ export default function Users() {
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.total_td}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.current_td}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_used}</td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_remaining ?? "N/A"}</td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{user.credits_remaining != null ? `~${user.credits_remaining}` : "N/A"}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm">
                   <div className="flex gap-2">
                     <button
