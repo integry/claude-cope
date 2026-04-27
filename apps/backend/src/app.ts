@@ -4,6 +4,7 @@ import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
 import { rateLimiter } from "./middleware/rateLimiter";
 import { sessionMiddleware } from "./middleware/session";
+import { applyMigrations } from "./utils/migrations";
 import chat from "./routes/chat";
 import leaderboard from "./routes/leaderboard";
 import events from "./routes/events";
@@ -48,6 +49,21 @@ app.use("/api/*", (c, next) => {
 });
 
 app.use("*", sessionMiddleware);
+
+// Run schema migrations on the first request that hits the DB.
+// After the initial run this becomes a single cheap SELECT per request.
+let migrated = false;
+app.use("/api/*", async (c, next) => {
+  if (!migrated) {
+    const db = (c.env as Record<string, unknown>).DB as D1Database | undefined;
+    if (db) {
+      await applyMigrations(db);
+      migrated = true;
+    }
+  }
+  return next();
+});
+
 app.use("/api/chat", rateLimiter);
 
 app.route("/api/chat", chat);

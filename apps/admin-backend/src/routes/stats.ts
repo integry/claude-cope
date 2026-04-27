@@ -33,7 +33,7 @@ stats.get("/", async (c) => {
       .prepare(
         `SELECT COUNT(DISTINCT u.username) AS count FROM user_scores u
          INNER JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'
-         WHERE u.license_hash IS NOT NULL AND u.license_hash != ''`
+         WHERE u.license_hash IS NOT NULL`
       )
       .first<{ count: number }>()
       .catch((err: unknown) => {
@@ -48,7 +48,7 @@ stats.get("/", async (c) => {
     .prepare(
       `SELECT COUNT(DISTINCT u.username) AS count FROM user_scores u
        LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'
-       WHERE u.license_hash IS NOT NULL AND u.license_hash != '' AND l.key_hash IS NULL`
+       WHERE u.license_hash IS NOT NULL AND l.key_hash IS NULL`
     )
     .first<{ count: number }>()
     .catch((err: unknown) => {

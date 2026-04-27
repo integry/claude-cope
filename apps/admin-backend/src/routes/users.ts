@@ -12,8 +12,8 @@ const users = new Hono<Env>();
 
 function buildStatusFilter(statusFilter: string | undefined): string {
   if (statusFilter === "max") return " WHERE l.key_hash IS NOT NULL";
-  if (statusFilter === "free") return " WHERE (u.license_hash IS NULL OR u.license_hash = '')";
-  if (statusFilter === "revoked") return " WHERE l.key_hash IS NULL AND u.license_hash IS NOT NULL AND u.license_hash != ''";
+  if (statusFilter === "free") return " WHERE u.license_hash IS NULL";
+  if (statusFilter === "revoked") return " WHERE l.key_hash IS NULL AND u.license_hash IS NOT NULL";
   return "";
 }
 
@@ -85,7 +85,7 @@ users.get("/", async (c) => {
                 u.license_hash,
                 u.credits_used,
                 CASE WHEN l.key_hash IS NOT NULL THEN 'max'
-                     WHEN u.license_hash IS NOT NULL AND u.license_hash != '' THEN 'revoked'
+                     WHEN u.license_hash IS NOT NULL THEN 'revoked'
                      ELSE 'free' END AS user_status
          FROM user_scores u
          LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'`

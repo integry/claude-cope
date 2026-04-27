@@ -4,8 +4,22 @@ import stats from "./routes/stats";
 import users from "./routes/users";
 import backlog from "./routes/backlog";
 import licenses from "./routes/licenses";
+import { applyMigrations } from "./utils/migrations";
 
 const app = new Hono();
+
+// Run schema migrations on the first request that hits the DB.
+let migrated = false;
+app.use("/api/*", async (c, next) => {
+  if (!migrated) {
+    const db = (c.env as Record<string, unknown>).DB as D1Database | undefined;
+    if (db) {
+      await applyMigrations(db);
+      migrated = true;
+    }
+  }
+  return next();
+});
 
 app.use("*", (c, next) => {
   const env = c.env as Record<string, string | undefined>;
