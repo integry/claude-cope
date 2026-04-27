@@ -84,10 +84,12 @@ type WebhookEvent = {
 };
 
 /**
- * DB-backed idempotency: the unique constraint on webhook_id prevents two
- * concurrent deliveries from both executing side effects.
- * Returns "duplicate" if already processed, "inserted" if claimed, or
- * "no_db" if the table/db is unavailable.
+ * DB-backed idempotency: the UNIQUE constraint on webhook_id is the only
+ * atomic primitive we have — it prevents two concurrent deliveries from
+ * both executing side effects.  Returns "duplicate" if already processed,
+ * "inserted" if the claim succeeded, or "no_db" if the table/db is
+ * unavailable.  Callers MUST fail closed on "no_db" (return 500) so the
+ * webhook provider retries once the database is reachable again.
  */
 async function claimWebhookIdempotency(
   db: D1Database | undefined,
@@ -151,19 +153,12 @@ async function verifyPolarHeaders(
 }
 
 async function rollbackIdempotency(
-  db: D1Database | undefined,
-  kv: KVNamespace,
+  db: D1Database,
   webhookId: string,
-  idempotencyResult: "inserted" | "no_db",
 ): Promise<void> {
-  if (db && idempotencyResult === "inserted") {
-    try {
-      await db.prepare("DELETE FROM processed_webhooks WHERE webhook_id = ?").bind(webhookId).run();
-    } catch { /* best-effort cleanup */ }
-  }
-  if (idempotencyResult === "no_db") {
-    try { await kv.delete(`webhook:${webhookId}`); } catch { /* best-effort cleanup */ }
-  }
+  try {
+    await db.prepare("DELETE FROM processed_webhooks WHERE webhook_id = ?").bind(webhookId).run();
+  } catch { /* best-effort cleanup */ }
 }
 
 webhooks.post("/polar", async (c) => {
@@ -201,24 +196,25 @@ webhooks.post("/polar", async (c) => {
     return c.json({ received: true }, 200);
   }
 
-  // Fallback KV-based dedup for environments without the DB table.
-  const idempotencyKey = `webhook:${webhookId}`;
+  // Fail closed: without DB-backed idempotency we cannot guarantee
+  // exactly-once processing. Return 500 so the webhook provider retries
+  // once the database becomes available.
   if (idempotencyResult === "no_db") {
-    const existing = await kv.get(idempotencyKey);
-    if (existing !== null) {
-      return c.json({ received: true }, 200);
-    }
+    console.error("[WEBHOOK] DB unavailable — rejecting to prevent non-atomic duplicate processing");
+    return c.json({ error: "Idempotency store unavailable" }, 500);
   }
 
   try {
     await dispatchWebhookEvent(event, kv, c.env);
   } catch (err) {
-    await rollbackIdempotency(db, kv, webhookId, idempotencyResult);
+    await rollbackIdempotency(db!, webhookId);
     console.error(`[WEBHOOK] Failed to handle ${event.type}:`, err);
     return c.json({ error: "Processing failed" }, 500);
   }
 
-  // Mark as processed in KV as well (24h TTL) for fast duplicate rejection.
+  // Mark as processed in KV as well (24h TTL) for fast duplicate rejection
+  // before the DB is even consulted on replays.
+  const idempotencyKey = `webhook:${webhookId}`;
   await kv.put(idempotencyKey, "1", { expirationTtl: 86400 });
 
   return c.json({ received: true }, 200);
