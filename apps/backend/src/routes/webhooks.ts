@@ -170,29 +170,21 @@ webhooks.post("/polar", async (c) => {
     return c.json({ received: true }, 200);
   }
 
-  // Fallback KV-based idempotency for environments without the DB table.
-  // Uses a nonce-based claim to narrow the race window: each delivery writes
-  // a unique nonce then reads back.  If the read returns a different value,
-  // another delivery won and this one bails.  KV is read-after-write
-  // consistent within a single Cloudflare colo, so concurrent deliveries
-  // routed to the same colo are correctly serialised.  Cross-colo races
-  // remain theoretically possible but are unlikely for webhook traffic from
-  // a single provider and are mitigated by the idempotent design of the
-  // side-effect handlers (handleBenefitGrantCreated/Revoked).
+  // Fallback KV-based dedup for environments without the DB table.
+  // KV does NOT provide atomic compare-and-set, so this is best-effort:
+  // it catches replays (second delivery finds the key already set) but
+  // cannot prevent two truly concurrent deliveries from both passing
+  // the check.  That is acceptable because the side-effect handlers
+  // (handleBenefitGrantCreated/Revoked) are designed to be idempotent:
+  //   - Grant: guards on existingQuota === null; DB uses ON CONFLICT
+  //   - Revoke: saves remaining (last-write-wins is fine), DB uses UPDATE
+  // The DB-backed path (claimWebhookIdempotency) is the authoritative
+  // guard; this KV check is only a performance optimisation to avoid
+  // redundant work when the processed_webhooks table is unavailable.
   const idempotencyKey = `webhook:${webhookId}`;
-  let kvClaimNonce: string | null = null;
   if (idempotencyResult === "no_db") {
     const existing = await kv.get(idempotencyKey);
     if (existing !== null) {
-      return c.json({ received: true }, 200);
-    }
-    // Claim: write a unique nonce with a short TTL so it self-cleans on
-    // failure.  Then read back to verify we won the race.
-    kvClaimNonce = crypto.randomUUID();
-    await kv.put(idempotencyKey, kvClaimNonce, { expirationTtl: 300 });
-    const winner = await kv.get(idempotencyKey);
-    if (winner !== kvClaimNonce) {
-      // Another concurrent delivery claimed this webhook first.
       return c.json({ received: true }, 200);
     }
   }
