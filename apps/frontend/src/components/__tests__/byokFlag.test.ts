@@ -7,23 +7,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
  * stale `apiKey` exists in saved state.
  */
 
+// `enableByok === undefined` means "flag unset" — stub to empty so
+// parseBoolEnv falls back to its default. We can't rely on
+// `vi.unstubAllEnvs()` here because `.env.local` may pin the value.
 async function loadSlashCommands(enableByok: boolean | undefined) {
   vi.resetModules();
-  if (enableByok === undefined) {
-    vi.unstubAllEnvs();
-  } else {
-    vi.stubEnv("VITE_ENABLE_BYOK", enableByok ? "true" : "false");
-  }
+  vi.stubEnv("VITE_ENABLE_BYOK", enableByok === undefined ? "" : enableByok ? "true" : "false");
   return await import("../slashCommands");
 }
 
 async function loadChatApi(enableByok: boolean | undefined) {
   vi.resetModules();
-  if (enableByok === undefined) {
-    vi.unstubAllEnvs();
-  } else {
-    vi.stubEnv("VITE_ENABLE_BYOK", enableByok ? "true" : "false");
-  }
+  vi.stubEnv("VITE_ENABLE_BYOK", enableByok === undefined ? "" : enableByok ? "true" : "false");
   return await import("../chatApi");
 }
 
