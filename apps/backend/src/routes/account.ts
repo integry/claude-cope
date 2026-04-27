@@ -87,7 +87,7 @@ account.post("/sync", async (c) => {
   // Record license activation in DB for admin purchase stats.
   await db
     .prepare(
-      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active'",
+      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', activated_at = datetime('now')",
     )
     .bind(hash)
     .run();

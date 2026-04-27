@@ -46,7 +46,7 @@ async function handleBenefitGrantCreated(
   if (db) {
     await db
       .prepare(
-        "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active'",
+        "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', activated_at = datetime('now')",
       )
       .bind(hash)
       .run();
@@ -171,22 +171,31 @@ webhooks.post("/polar", async (c) => {
   }
 
   // Fallback KV-based idempotency for environments without the DB table.
+  // Write the marker BEFORE processing so a concurrent delivery sees it and
+  // bails out, avoiding duplicate side effects.  Use a short initial TTL so
+  // the marker self-cleans if processing fails and we delete it below.
   const idempotencyKey = `webhook:${webhookId}`;
   if (idempotencyResult === "no_db") {
     const existing = await kv.get(idempotencyKey);
     if (existing !== null) {
       return c.json({ received: true }, 200);
     }
+    // Claim: write a short-lived marker before processing.  A second
+    // concurrent delivery will see this and return early.
+    await kv.put(idempotencyKey, "processing", { expirationTtl: 300 });
   }
 
   try {
     await dispatchWebhookEvent(event, kv, c.env);
   } catch (err) {
-    // Allow Polar to retry: remove the DB row so retries aren't blocked.
+    // Allow Polar to retry: remove the DB row and KV claim so retries aren't blocked.
     if (db) {
       try {
         await db.prepare("DELETE FROM processed_webhooks WHERE webhook_id = ?").bind(webhookId).run();
       } catch { /* best-effort cleanup */ }
+    }
+    if (idempotencyResult === "no_db") {
+      try { await kv.delete(idempotencyKey); } catch { /* best-effort cleanup */ }
     }
     console.error(`[WEBHOOK] Failed to handle ${event.type}:`, err);
     return c.json({ error: "Processing failed" }, 500);
