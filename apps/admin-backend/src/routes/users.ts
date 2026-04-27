@@ -10,6 +10,61 @@ type Env = {
 
 const users = new Hono<Env>();
 
+function buildStatusFilter(statusFilter: string | undefined): string {
+  if (statusFilter === "max") return " WHERE l.key_hash IS NOT NULL";
+  if (statusFilter === "free") return " WHERE (u.license_hash IS NULL OR u.license_hash = '')";
+  if (statusFilter === "revoked") return " WHERE l.key_hash IS NULL AND u.license_hash IS NOT NULL AND u.license_hash != ''";
+  return "";
+}
+
+async function runFallbackQuery(
+  db: D1Database,
+  statusFilter: string | undefined,
+  hasLicenseHashColumn: boolean,
+): Promise<Record<string, unknown>[]> {
+  if ((statusFilter === "max" || statusFilter === "revoked") && !hasLicenseHashColumn) {
+    return [];
+  }
+
+  if (statusFilter && statusFilter !== "free" && hasLicenseHashColumn) {
+    console.warn(`[admin/users] fallback query cannot filter by status="${statusFilter}" — returning all users`);
+  }
+
+  const resp = await db
+    .prepare(
+      `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
+              COALESCE(ul.msg_count, 0) AS credits_used
+       FROM user_scores u
+       LEFT JOIN (
+         SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
+       ) ul ON ul.username = u.username
+       ORDER BY u.updated_at DESC LIMIT 200`
+    )
+    .all();
+  const results = (resp.results ?? []) as Record<string, unknown>[];
+
+  if (statusFilter && statusFilter !== "free") {
+    return [];
+  }
+  return results;
+}
+
+function enrichRows(
+  results: Record<string, unknown>[],
+  hasLicenseHashColumn: boolean,
+  freeLimit: number,
+): Record<string, unknown>[] {
+  return results.map((row: Record<string, unknown>) => {
+    const status = hasLicenseHashColumn ? (row.user_status as string) || "free" : "free";
+    return {
+      ...row,
+      license_hash: maskHash(row.license_hash as string | null),
+      credits_remaining: status === "max" ? null : Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
+      status,
+    };
+  });
+}
+
 users.get("/", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
@@ -17,30 +72,19 @@ users.get("/", async (c) => {
   const freeLimit = parseInt(c.env?.FREE_QUOTA_LIMIT || "20", 10) || 20;
   const statusFilter = c.req.query("status"); // "free", "max", or undefined for all
 
-  // Read credits_used directly from user_scores (maintained inline by chat.ts)
-  // instead of running a full GROUP BY scan over usage_logs on every page load.
-  // Fall back gracefully if the column doesn't exist yet (pre-migration state).
   let results: Record<string, unknown>[];
   let hasLicenseHashColumn = true;
   try {
-    let query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
+    const query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
                 u.license_hash,
                 u.credits_used,
                 CASE WHEN l.key_hash IS NOT NULL THEN 'max'
                      WHEN u.license_hash IS NOT NULL AND u.license_hash != '' THEN 'revoked'
                      ELSE 'free' END AS user_status
          FROM user_scores u
-         LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'`;
-
-    if (statusFilter === "max") {
-      query += " WHERE l.key_hash IS NOT NULL";
-    } else if (statusFilter === "free") {
-      query += " WHERE (u.license_hash IS NULL OR u.license_hash = '')";
-    } else if (statusFilter === "revoked") {
-      query += " WHERE l.key_hash IS NULL AND u.license_hash IS NOT NULL AND u.license_hash != ''";
-    }
-
-    query += " ORDER BY u.updated_at DESC LIMIT 200";
+         LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'`
+      + buildStatusFilter(statusFilter)
+      + " ORDER BY u.updated_at DESC LIMIT 200";
 
     const resp = await db.prepare(query).all();
     results = (resp.results ?? []) as Record<string, unknown>[];
@@ -49,58 +93,12 @@ users.get("/", async (c) => {
     if (!msg.includes("no such column") && !msg.includes("no such table")) {
       throw err;
     }
-    // Either license_hash or credits_used column missing — fall back to the
-    // legacy aggregated query against usage_logs. Log so a broken migration
-    // doesn't masquerade as "no users yet".
     console.warn(`[admin/users] schema fallback: ${msg.slice(0, 200)}`);
     if (msg.includes("license_hash")) hasLicenseHashColumn = false;
-    if ((statusFilter === "max" || statusFilter === "revoked") && !hasLicenseHashColumn) {
-      // No license_hash column means no Max/revoked users exist; return empty
-      results = [];
-    } else {
-      // The fallback query has no license info, so we can only filter for "free"
-      // (all users are free when there's no license_hash column). For any other
-      // statusFilter we still return all users with a warning logged.
-      if (statusFilter && statusFilter !== "free" && hasLicenseHashColumn) {
-        console.warn(`[admin/users] fallback query cannot filter by status="${statusFilter}" — returning all users`);
-      }
-      const resp = await db
-        .prepare(
-          `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
-                  COALESCE(ul.msg_count, 0) AS credits_used
-           FROM user_scores u
-           LEFT JOIN (
-             SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
-           ) ul ON ul.username = u.username
-           ORDER BY u.updated_at DESC LIMIT 200`
-        )
-        .all();
-      results = (resp.results ?? []) as Record<string, unknown>[];
-      // If the license_hash column exists but credits_used doesn't, we can
-      // still honour the status filter by post-filtering on user_status.
-      // However, in this fallback path we have no license join data at all,
-      // so every row is effectively "free". When filtering for "free" that's
-      // correct; for other filters return empty to avoid misleading results.
-      if (statusFilter && statusFilter !== "free") {
-        results = [];
-      }
-    }
+    results = await runFallbackQuery(db, statusFilter, hasLicenseHashColumn);
   }
 
-  const enriched = results.map((row: Record<string, unknown>) => {
-    const status = hasLicenseHashColumn ? (row.user_status as string) || "free" : "free";
-    return {
-      ...row,
-      // Never expose the full credential-equivalent hash to the browser.
-      license_hash: maskHash(row.license_hash as string | null),
-      // Max users have quota stored in KV (not derivable from usage_logs).
-      // Show null so the admin UI can display "N/A" instead of a misleading number.
-      credits_remaining: status === "max" ? null : Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
-      status,
-    };
-  });
-
-  return c.json(enriched);
+  return c.json(enrichRows(results, hasLicenseHashColumn, freeLimit));
 });
 
 users.post("/", async (c) => {
