@@ -58,6 +58,12 @@ users.get("/", async (c) => {
       // No license_hash column means no Max/revoked users exist; return empty
       results = [];
     } else {
+      // The fallback query has no license info, so we can only filter for "free"
+      // (all users are free when there's no license_hash column). For any other
+      // statusFilter we still return all users with a warning logged.
+      if (statusFilter && statusFilter !== "free" && hasLicenseHashColumn) {
+        console.warn(`[admin/users] fallback query cannot filter by status="${statusFilter}" — returning all users`);
+      }
       const resp = await db
         .prepare(
           `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
@@ -70,6 +76,14 @@ users.get("/", async (c) => {
         )
         .all();
       results = (resp.results ?? []) as Record<string, unknown>[];
+      // If the license_hash column exists but credits_used doesn't, we can
+      // still honour the status filter by post-filtering on user_status.
+      // However, in this fallback path we have no license join data at all,
+      // so every row is effectively "free". When filtering for "free" that's
+      // correct; for other filters return empty to avoid misleading results.
+      if (statusFilter && statusFilter !== "free") {
+        results = [];
+      }
     }
   }
 

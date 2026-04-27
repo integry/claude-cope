@@ -60,7 +60,7 @@ stats.get("/", async (c) => {
   const totalUsers = scoreAgg?.total_users ?? 0;
   const maxUserCount = maxUsers?.count ?? 0;
   const revokedUserCount = revokedUsers?.count ?? 0;
-  const freeUserCount = totalUsers - maxUserCount - revokedUserCount;
+  const freeUserCount = Math.max(0, totalUsers - maxUserCount - revokedUserCount);
 
   return c.json({
     total_users: totalUsers,

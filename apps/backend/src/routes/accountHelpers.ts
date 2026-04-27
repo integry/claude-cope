@@ -69,10 +69,17 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
         return { profile: null, error: "Cannot claim an existing free username — log in to that account first or pick a different username." };
       }
       // Preserve the server-authoritative profile data (TD, inventory, etc.).
-      await db
+      // The WHERE clause includes `license_hash IS NULL` so that under a
+      // concurrent /sync race only one request can claim the row. Check
+      // result.meta.changes to detect if another request won the race.
+      const upgradeResult = await db
         .prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ? AND license_hash IS NULL")
         .bind(hash, newUsername)
         .run();
+      if (!upgradeResult.meta.changes) {
+        // Another concurrent request already attached a license to this row.
+        return { profile: null, error: "This username was just claimed by another request. Please try again." };
+      }
       const profile = await getProfile(db, newUsername);
       if (!profile) return { profile: null, error: "Profile not found after upgrade" };
       return { profile };
