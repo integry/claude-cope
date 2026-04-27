@@ -179,8 +179,8 @@ account.post("/buy-generator", async (c) => {
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
   const body = await c.req.json<{ username: string; generatorId: string; amount: number; licenseKeyHash: string }>();
-  if (!body.username || !body.generatorId || !body.amount || body.amount < 1 || !Number.isInteger(body.amount) || !body.licenseKeyHash) {
-    return c.json({ error: "username, generatorId, amount (positive integer), and licenseKeyHash are required" }, 400);
+  if (!body.username || !body.generatorId || !body.amount || body.amount < 1 || !Number.isInteger(body.amount) || body.amount > 1000 || !body.licenseKeyHash) {
+    return c.json({ error: "username, generatorId, amount (positive integer, max 1000), and licenseKeyHash are required" }, 400);
   }
 
   const generator = GENERATORS.find((g) => g.id === body.generatorId);
@@ -394,6 +394,9 @@ account.post("/update-buddy", async (c) => {
   const body = await c.req.json<{ username: string; buddyType: string | null; isShiny: boolean; licenseKeyHash: string }>();
   if (!body.username || !body.licenseKeyHash) {
     return c.json({ error: "username and licenseKeyHash are required" }, 400);
+  }
+  if (typeof body.isShiny !== "boolean") {
+    return c.json({ error: "isShiny must be a boolean" }, 400);
   }
   if (body.buddyType !== null && body.buddyType !== undefined && !BUDDY_TYPE_SET.has(body.buddyType)) {
     return c.json({ error: "Unknown buddyType" }, 400);

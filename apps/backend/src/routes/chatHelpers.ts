@@ -131,15 +131,27 @@ export async function handleProUserScoring(
   const baseTD = Math.floor(Math.random() * 40) + 10;
   const tdAwarded = Math.round(baseTD * serverProfile.multiplier * serverProfile.td_multiplier);
 
+  // Compute expected rank from the anticipated new total_td so we can set it
+  // atomically in a single UPDATE, eliminating the partial-failure window
+  // that existed when rank was updated in a separate statement.
+  const expectedTotalTd = serverProfile.total_td + tdAwarded;
+  const expectedRank = resolveRank(expectedTotalTd);
+
   const postUpdate = await db
     .prepare(
-      "UPDATE user_scores SET total_td = total_td + ?, current_td = current_td + ?, credits_used = credits_used + 1, updated_at = datetime('now') WHERE username = ? RETURNING total_td",
+      "UPDATE user_scores SET total_td = total_td + ?, current_td = current_td + ?, credits_used = credits_used + 1, corporate_rank = ?, updated_at = datetime('now') WHERE username = ? RETURNING total_td",
     )
-    .bind(tdAwarded, tdAwarded, serverProfile.username)
+    .bind(tdAwarded, tdAwarded, expectedRank, serverProfile.username)
     .first<{ total_td: number }>();
 
-  const actualRank = resolveRank(postUpdate?.total_td ?? serverProfile.total_td + tdAwarded);
-  await db.prepare("UPDATE user_scores SET corporate_rank = ? WHERE username = ?").bind(actualRank, serverProfile.username).run();
+  // If a concurrent update changed total_td, correct the rank.
+  const actualTotalTd = postUpdate?.total_td ?? expectedTotalTd;
+  if (actualTotalTd !== expectedTotalTd) {
+    const correctedRank = resolveRank(actualTotalTd);
+    if (correctedRank !== expectedRank) {
+      await db.prepare("UPDATE user_scores SET corporate_rank = ? WHERE username = ?").bind(correctedRank, serverProfile.username).run();
+    }
+  }
 
   const tokensSent = data.usage?.prompt_tokens ?? 0;
   const tokensReceived = data.usage?.completion_tokens ?? 0;

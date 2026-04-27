@@ -180,12 +180,12 @@ async function checkFreeOwnership(
   sessionId: string,
   username: string,
   hasRow: boolean,
-): Promise<boolean> {
+): Promise<{ owns: boolean; kvUnavailable?: boolean }> {
   const kv = env.QUOTA_KV ?? env.USAGE_KV;
-  if (!hasRow) return true;
-  if (!kv) return false;
+  if (!hasRow) return { owns: true };
+  if (!kv) return { owns: false, kvUnavailable: true };
   const sessionUsername = await kv.get(`session_user:${sessionId}`);
-  return sessionUsername === username;
+  return { owns: sessionUsername === username };
 }
 
 type PreChatResult = {
@@ -255,9 +255,13 @@ async function preChatChecks(
     deferredKvWrites = m.deferredKvWrites;
   }
 
-  const ownsUsername = effectiveProKeyHash ? true : await checkFreeOwnership(env, sessionId, username, hasRow);
+  const ownershipCheck = effectiveProKeyHash ? { owns: true } : await checkFreeOwnership(env, sessionId, username, hasRow);
+  const ownsUsername = ownershipCheck.owns;
 
   if (!effectiveProKeyHash && !ownsUsername) {
+    if ('kvUnavailable' in ownershipCheck && ownershipCheck.kvUnavailable) {
+      return rejectPreChat("Ownership verification unavailable: KV storage is not configured", 500, { effectiveProKeyHash, profileLicenseHash });
+    }
     return rejectPreChat("Session does not own this username", 403, { effectiveProKeyHash, profileLicenseHash });
   }
   if (!effectiveProKeyHash && profileLicenseHash && db) {
