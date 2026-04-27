@@ -191,6 +191,13 @@ webhooks.post("/polar", async (c) => {
   const db = c.env?.DB;
   const webhookId = c.req.header("webhook-id")!;
 
+  // Fast duplicate rejection via KV before hitting the DB.
+  const idempotencyKey = `webhook:${webhookId}`;
+  const alreadyProcessed = await kv.get(idempotencyKey);
+  if (alreadyProcessed) {
+    return c.json({ received: true }, 200);
+  }
+
   const idempotencyResult = await claimWebhookIdempotency(db, webhookId, event.type);
   if (idempotencyResult === "duplicate") {
     return c.json({ received: true }, 200);
@@ -212,9 +219,8 @@ webhooks.post("/polar", async (c) => {
     return c.json({ error: "Processing failed" }, 500);
   }
 
-  // Mark as processed in KV as well (24h TTL) for fast duplicate rejection
-  // before the DB is even consulted on replays.
-  const idempotencyKey = `webhook:${webhookId}`;
+  // Mark as processed in KV (24h TTL) so the fast-path check above can
+  // reject replays before the DB is even consulted.
   await kv.put(idempotencyKey, "1", { expirationTtl: 86400 });
 
   return c.json({ received: true }, 200);
