@@ -4,7 +4,7 @@ import { computeMultiplier } from "../gameConstants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { consumeQuota, getQuotaLimits, QuotaExhaustedError } from "../utils/quota";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
-import { getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank, resolveProUser } from "../utils/profile";
+import { getProfile, getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank, resolveProUser } from "../utils/profile";
 import { syncPolarUsage } from "../utils/polar";
 
 type Env = {
@@ -201,19 +201,18 @@ async function handleProUserScoring(
   const baseTD = Math.floor(Math.random() * 40) + 10;
   const tdAwarded = Math.round(baseTD * serverProfile.multiplier * serverProfile.td_multiplier);
 
-  // Atomically increment TD first, then read back the actual total and
-  // update the rank in a second step. This prevents two concurrent chats
-  // from both computing rank against stale pre-update totals.
-  await db
+  // Atomically increment TD and read back the post-update total in one statement
+  // via RETURNING. This prevents concurrent chats from computing rank against
+  // stale pre-update totals.
+  const postUpdate = await db
     .prepare(
-      "UPDATE user_scores SET total_td = total_td + ?, current_td = current_td + ?, credits_used = credits_used + 1, updated_at = datetime('now') WHERE username = ?",
+      "UPDATE user_scores SET total_td = total_td + ?, current_td = current_td + ?, credits_used = credits_used + 1, updated_at = datetime('now') WHERE username = ? RETURNING total_td",
     )
     .bind(tdAwarded, tdAwarded, serverProfile.username)
-    .run();
+    .first<{ total_td: number }>();
 
-  // Read back the actual post-increment total_td and derive rank from it.
-  const postUpdateRow = await db.prepare("SELECT total_td FROM user_scores WHERE username = ?").bind(serverProfile.username).first<{ total_td: number }>();
-  const actualRank = resolveRank(postUpdateRow?.total_td ?? serverProfile.total_td + tdAwarded);
+  // Derive rank from the actual post-increment total and write it atomically.
+  const actualRank = resolveRank(postUpdate?.total_td ?? serverProfile.total_td + tdAwarded);
   await db.prepare("UPDATE user_scores SET corporate_rank = ? WHERE username = ?").bind(actualRank, serverProfile.username).run();
 
   const tokensSent = data.usage?.prompt_tokens ?? 0;
@@ -233,7 +232,7 @@ async function handleProUserScoring(
 function recordUsage(
   db: D1Database | undefined,
   ctx: { waitUntil: (p: Promise<unknown>) => void },
-  params: { username: string; model: string; data: ChatResponseData; tdAwarded: number; rank: string; country: string; hour: string; proKeyHash?: string; profileLicenseHash?: string | null; ownsUsername: boolean },
+  params: { username: string; model: string; data: ChatResponseData; tdAwarded: number; rank?: string; country: string; hour: string; proKeyHash?: string; profileLicenseHash?: string | null; ownsUsername: boolean },
 ) {
   if (!db) return;
   const tokensSent = params.data.usage?.prompt_tokens ?? 0;
@@ -263,8 +262,10 @@ function recordUsage(
   } else if (!isOwnershipSpoofed) {
     // Guard: only update rows that have no license_hash (free users).
     // This prevents free callers from vandalizing a Pro user's TD/rank/country.
+    // Use server-derived rank for new rows — never trust client-claimed rank.
+    const serverDerivedRank = params.rank ?? resolveRank(params.tdAwarded);
     queries.push(
-      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, credits_used) VALUES (?, ?, ?, ?, ?, 1) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, credits_used = credits_used + 1, updated_at = datetime('now') WHERE license_hash IS NULL").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.tdAwarded, params.tdAwarded).run(),
+      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, credits_used) VALUES (?, ?, ?, ?, ?, 1) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, credits_used = credits_used + 1, updated_at = datetime('now') WHERE license_hash IS NULL").bind(params.username, params.tdAwarded, params.tdAwarded, serverDerivedRank, params.country, params.tdAwarded, params.tdAwarded).run(),
     );
   }
   if (queries.length > 0) {
@@ -443,17 +444,28 @@ async function preChatChecks(
   return { effectiveProKeyHash, profileLicenseHash, quotaPercent: quotaResult.quotaPercent, remaining: quotaResult.remaining, ownsUsername };
 }
 
-function handleFreeUserResponse(
+async function handleFreeUserResponse(
   db: D1Database | undefined,
   ctx: { waitUntil: (p: Promise<unknown>) => void },
   params: {
-    username: string; rank: string; inventory: Record<string, number>;
-    upgrades: string[]; model: string; country: string; hour: string;
+    username: string; model: string; country: string; hour: string;
     data: ChatResponseData; quotaPercent: number; profileLicenseHash: string | null;
     ownsUsername: boolean;
   },
-): Response {
-  const serverMultiplier = computeMultiplier(params.inventory, params.upgrades);
+): Promise<Response> {
+  // Never trust client-provided inventory/upgrades for scoring — read from DB.
+  // Free users can only have inventory if the server wrote it, so forged values
+  // are impossible to sneak through.
+  let serverMultiplier = 1;
+  let serverRank = "Junior Code Monkey";
+  if (db) {
+    const serverProfile = await getProfile(db, params.username);
+    if (serverProfile) {
+      serverMultiplier = serverProfile.multiplier;
+      serverRank = serverProfile.corporate_rank;
+    }
+  }
+
   const baseTD = Math.floor(Math.random() * 40) + 10;
 
   // Free users with profileLicenseHash set are targeting a licensed row — skip writes.
@@ -463,7 +475,7 @@ function handleFreeUserResponse(
 
   recordUsage(db, ctx, {
     username: params.username, model: params.model, data: params.data,
-    tdAwarded, rank: params.rank, country: params.country, hour: params.hour,
+    tdAwarded, rank: serverRank, country: params.country, hour: params.hour,
     profileLicenseHash: params.profileLicenseHash,
     ownsUsername: params.ownsUsername,
   });
@@ -488,7 +500,7 @@ chat.post("/", async (c) => {
   const effectiveProKeyHash = await verifyProKeyHash(db, body.proKeyHash);
 
   const sessionId = c.get("sessionId");
-  const { username, rank, inventory, upgrades } = extractBodyDefaults(body);
+  const { username, rank } = extractBodyDefaults(body);
 
   const preCheck = await preChatChecks(c.env, c.executionCtx, { db, sessionId, username, effectiveProKeyHash });
   if (preCheck.error) {
@@ -530,7 +542,7 @@ chat.post("/", async (c) => {
 
   // Free users only — pro users are fully handled above
   return handleFreeUserResponse(db, c.executionCtx, {
-    username, rank, inventory, upgrades, model, country, hour,
+    username, model, country, hour,
     data, quotaPercent: preCheck.quotaPercent, profileLicenseHash: preCheck.profileLicenseHash,
     ownsUsername: preCheck.ownsUsername,
   });

@@ -160,12 +160,17 @@ account.get("/me", async (c) => {
   // Never expose the raw license hash — it's a credential that grants write
   // access to the account.  Return a boolean flag instead so the frontend
   // knows this is a Pro user and can prompt them to re-sync.
+  // A revoked user has a license_hash but is no longer active — surface this
+  // so the frontend can show "license revoked" instead of treating them as
+  // a vanilla free user.
+  const revoked = Boolean(rawLicenseHash && !licenseActive);
   return c.json({
     found: true,
     username,
     profile: profile ? { ...profile, quota_percent: quotaPercent } : null,
     quotaPercent,
     isPro,
+    ...(revoked ? { revoked: true } : {}),
   });
 });
 
