@@ -37,7 +37,7 @@ async function runFallbackQuery(
               COALESCE(ul.msg_count, 0) AS credits_used
        FROM user_scores u
        LEFT JOIN (
-         SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username LIMIT 200
+         SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username ORDER BY msg_count DESC LIMIT 200
        ) ul ON ul.username = u.username
        ORDER BY u.updated_at DESC LIMIT 200`
     )
@@ -71,7 +71,12 @@ users.get("/", async (c) => {
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
   const freeLimit = parseInt(c.env?.FREE_QUOTA_LIMIT || "20", 10) || 20;
-  const statusFilter = c.req.query("status"); // "free", "max", or undefined for all
+  const statusFilter = c.req.query("status"); // "free", "max", "revoked", or undefined for all
+
+  const VALID_STATUSES = new Set(["free", "max", "revoked"]);
+  if (statusFilter && !VALID_STATUSES.has(statusFilter)) {
+    return c.json({ error: `Invalid status filter: "${statusFilter}". Use "free", "max", or "revoked".` }, 400);
+  }
 
   let results: Record<string, unknown>[];
   let hasLicenseHashColumn = true;

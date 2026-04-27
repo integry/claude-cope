@@ -245,12 +245,8 @@ function recordUsage(
   // under another user's name.
   const isOwnershipSpoofed = !params.proKeyHash && params.profileLicenseHash;
 
-  // For free users, silently skip DB writes if the caller's session doesn't own this
-  // username. The chat response is still returned (the AI reply is harmless), but no
-  // TD/rank/task mutation occurs. This is intentionally a silent skip rather than a 403
-  // (contrast with POST /api/score which returns 403) because the primary purpose of
-  // this endpoint is the AI response, not score mutation.
-  if (!params.proKeyHash && !params.ownsUsername) return;
+  // Free users without username ownership are blocked in preChatChecks before
+  // reaching this point — no AI call or DB write occurs for them.
 
   if (!isOwnershipSpoofed) {
     queries.push(
@@ -423,6 +419,12 @@ async function preChatChecks(
     }
   }
 
+  // Block free users who don't own the username BEFORE consuming quota or
+  // making any AI calls.  No backwards-compat concern — system is in dev.
+  if (!effectiveProKeyHash && !ownsUsername) {
+    return { error: "Session does not own this username", status: 403, effectiveProKeyHash, profileLicenseHash, quotaPercent: 0, ownsUsername };
+  }
+
   // Consume quota after ownership has been validated.
   const quotaResult = await handleQuotaCheck(env, sessionId, effectiveProKeyHash);
   if (quotaResult.exhaustedMessage) {
@@ -449,12 +451,9 @@ function handleFreeUserResponse(
   const serverMultiplier = computeMultiplier(params.inventory, params.upgrades);
   const baseTD = Math.floor(Math.random() * 40) + 10;
 
-  // Mirror recordUsage's skip condition: when the write is silently dropped
-  // (caller doesn't own the username, or username is owned by a different
-  // license_hash), report tdAwarded=0 so the client doesn't accumulate phantom
-  // TD that the server never persisted. Keep these conditions in sync with
-  // the early-return in recordUsage().
-  const writeAllowed = !params.profileLicenseHash && params.ownsUsername;
+  // Free users with profileLicenseHash set are targeting a licensed row — skip writes.
+  // ownsUsername is guaranteed true here (enforced in preChatChecks).
+  const writeAllowed = !params.profileLicenseHash;
   const tdAwarded = writeAllowed ? Math.round(baseTD * serverMultiplier) : 0;
 
   recordUsage(db, ctx, {

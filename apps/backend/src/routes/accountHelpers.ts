@@ -95,16 +95,26 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
   const c = buildProfileCosmetics(body.currentProfile);
   const defaultRank = resolveRank(0);
 
-  await db
-    .prepare(
-      `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
-       VALUES (?, 0, 0, ?, ?, '{}', '[]', '[]', ?, ?, '["default"]', 'default', NULL, 1.0)`,
-    )
-    .bind(
-      newUsername, defaultRank, hash,
-      c.buddyType, c.buddyIsShiny,
-    )
-    .run();
+  try {
+    await db
+      .prepare(
+        `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
+         VALUES (?, 0, 0, ?, ?, '{}', '[]', '[]', ?, ?, '["default"]', 'default', NULL, 1.0)`,
+      )
+      .bind(
+        newUsername, defaultRank, hash,
+        c.buddyType, c.buddyIsShiny,
+      )
+      .run();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Catch UNIQUE constraint violations from concurrent /sync requests racing
+    // on the same username or license_hash.
+    if (msg.includes("UNIQUE") || msg.includes("unique") || msg.includes("constraint")) {
+      return { profile: null, error: "This username or license is being activated by another request. Please try again." };
+    }
+    throw err;
+  }
 
   const profile = await getProfile(db, newUsername);
   if (!profile) return { profile: null, error: "Failed to create profile" };
