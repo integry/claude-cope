@@ -1,15 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import app from "../app";
 
-// ---------------------------------------------------------------------------
-// Mock DB helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Minimal D1-like mock that tracks queries and returns preconfigured results.
- * Supports SQL-aware routing: pass `firstBySQL` to return different results
- * depending on the SQL pattern (e.g. "SELECT status" vs "SELECT username").
- */
+// Minimal D1-like mock with SQL-aware routing via `firstBySQL`.
 function createMockDB(opts: {
   firstResults?: Record<string, unknown>;
   firstBySQL?: Record<string, Record<string, unknown> | null>;
@@ -61,9 +53,28 @@ function postJSON(path: string, body: unknown, env: Record<string, unknown>) {
   }, { ALLOWED_ORIGINS: "http://localhost:5173", ...env });
 }
 
-// ---------------------------------------------------------------------------
-// /api/account/buy-generator
-// ---------------------------------------------------------------------------
+const BASE_PROFILE = {
+  username: "alice", license_hash: "hash",
+  total_td: 1000, current_td: 1000, corporate_rank: "CTO",
+  inventory: "{}", upgrades: "[]", achievements: "[]",
+  buddy_type: null, buddy_is_shiny: 0,
+  unlocked_themes: '["default"]', active_theme: "default",
+  active_ticket: null, td_multiplier: 1,
+};
+
+function profileWithHash(hash: string) {
+  return { ...BASE_PROFILE, license_hash: hash };
+}
+
+function ownedMockDB(opts: { runChanges?: number } = {}) {
+  return createMockDB({
+    firstBySQL: {
+      "SELECT username": BASE_PROFILE,
+      "SELECT status": { status: "active" },
+    },
+    runChanges: opts.runChanges ?? 1,
+  });
+}
 
 describe("POST /api/account/buy-generator", () => {
   it("returns 500 when DB is not configured", async () => {
@@ -72,13 +83,11 @@ describe("POST /api/account/buy-generator", () => {
     }, {});
     expect(res.status).toBe(500);
   });
-
   it("returns 400 when required fields are missing", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/buy-generator", { username: "alice" }, { DB: db });
     expect(res.status).toBe(400);
   });
-
   it("returns 400 when amount is not a positive integer", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/buy-generator", {
@@ -86,7 +95,6 @@ describe("POST /api/account/buy-generator", () => {
     }, { DB: db });
     expect(res.status).toBe(400);
   });
-
   it("returns 400 when amount exceeds 1000", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/buy-generator", {
@@ -96,7 +104,6 @@ describe("POST /api/account/buy-generator", () => {
     const data = await res.json() as { error: string };
     expect(data.error).toContain("max 1000");
   });
-
   it("returns 400 for unknown generatorId", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/buy-generator", {
@@ -105,7 +112,6 @@ describe("POST /api/account/buy-generator", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("Unknown generator");
   });
-
   it("returns 404 when profile is not found", async () => {
     const { db } = createMockDB({ firstResults: undefined });
     const res = await postJSON("/api/account/buy-generator", {
@@ -113,30 +119,17 @@ describe("POST /api/account/buy-generator", () => {
     }, { DB: db });
     expect(res.status).toBe(404);
   });
-
   it("returns 403 when license hash does not match", async () => {
-    // First call returns the profile row (getProfileRow) with a different hash
-    const { db } = createMockDB({
-      firstResults: {
-        username: "alice", license_hash: "other-hash",
-        total_td: 1000, current_td: 1000, corporate_rank: "CTO",
-        inventory: "{}", upgrades: "[]", achievements: "[]",
-        buddy_type: null, buddy_is_shiny: 0,
-        unlocked_themes: '["default"]', active_theme: "default",
-        active_ticket: null, td_multiplier: 1,
-      },
-    });
+    const { db } = createMockDB({ firstResults: profileWithHash("other-hash") });
     const res = await postJSON("/api/account/buy-generator", {
       username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "wrong-hash",
     }, { DB: db });
     expect(res.status).toBe(403);
   });
-
   it("returns 403 when license is revoked", async () => {
-    // getProfileRow returns matching hash, but license lookup returns revoked
     const { db } = createMockDB({
       firstBySQL: {
-        "SELECT username": { username: "alice", license_hash: "hash", total_td: 1000, current_td: 1000, corporate_rank: "CTO", inventory: "{}", upgrades: "[]", achievements: "[]", buddy_type: null, buddy_is_shiny: 0, unlocked_themes: '["default"]', active_theme: "default", active_ticket: null, td_multiplier: 1 },
+        "SELECT username": BASE_PROFILE,
         "SELECT status": { status: "revoked" },
       },
     });
@@ -147,23 +140,8 @@ describe("POST /api/account/buy-generator", () => {
     const data = await res.json() as { error: string };
     expect(data.error).toContain("revoked");
   });
-
   it("succeeds with valid ownership and sufficient TD", async () => {
-    const profileRow = {
-      username: "alice", license_hash: "hash",
-      total_td: 1000, current_td: 1000, corporate_rank: "CTO",
-      inventory: "{}", upgrades: "[]", achievements: "[]",
-      buddy_type: null, buddy_is_shiny: 0,
-      unlocked_themes: '["default"]', active_theme: "default",
-      active_ticket: null, td_multiplier: 1,
-    };
-    const { db } = createMockDB({
-      firstBySQL: {
-        "SELECT username": profileRow,
-        "SELECT status": { status: "active" },
-      },
-      runChanges: 1,
-    });
+    const { db } = ownedMockDB();
     const res = await postJSON("/api/account/buy-generator", {
       username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
     }, { DB: db });
@@ -171,23 +149,8 @@ describe("POST /api/account/buy-generator", () => {
     const data = await res.json() as { success: boolean };
     expect(data.success).toBe(true);
   });
-
   it("returns 409 when concurrent update causes zero changes", async () => {
-    const profileRow = {
-      username: "alice", license_hash: "hash",
-      total_td: 1000, current_td: 1000, corporate_rank: "CTO",
-      inventory: "{}", upgrades: "[]", achievements: "[]",
-      buddy_type: null, buddy_is_shiny: 0,
-      unlocked_themes: '["default"]', active_theme: "default",
-      active_ticket: null, td_multiplier: 1,
-    };
-    const { db } = createMockDB({
-      firstBySQL: {
-        "SELECT username": profileRow,
-        "SELECT status": { status: "active" },
-      },
-      runChanges: 0,
-    });
+    const { db } = ownedMockDB({ runChanges: 0 });
     const res = await postJSON("/api/account/buy-generator", {
       username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
     }, { DB: db });
@@ -195,17 +158,12 @@ describe("POST /api/account/buy-generator", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// /api/account/buy-upgrade
-// ---------------------------------------------------------------------------
-
 describe("POST /api/account/buy-upgrade", () => {
   it("returns 400 when required fields are missing", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/buy-upgrade", { username: "alice" }, { DB: db });
     expect(res.status).toBe(400);
   });
-
   it("returns 400 for unknown upgradeId", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/buy-upgrade", {
@@ -216,17 +174,12 @@ describe("POST /api/account/buy-upgrade", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// /api/account/buy-theme
-// ---------------------------------------------------------------------------
-
 describe("POST /api/account/buy-theme", () => {
   it("returns 400 when required fields are missing", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/buy-theme", { username: "alice" }, { DB: db });
     expect(res.status).toBe(400);
   });
-
   it("returns 400 for unknown themeId", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/buy-theme", {
@@ -237,17 +190,12 @@ describe("POST /api/account/buy-theme", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// /api/account/unlock-achievement
-// ---------------------------------------------------------------------------
-
 describe("POST /api/account/unlock-achievement", () => {
   it("returns 400 when required fields are missing", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/unlock-achievement", { username: "alice" }, { DB: db });
     expect(res.status).toBe(400);
   });
-
   it("returns 400 for unknown achievementId", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/unlock-achievement", {
@@ -256,7 +204,6 @@ describe("POST /api/account/unlock-achievement", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("Unknown achievementId");
   });
-
   it("returns 404 when profile does not exist", async () => {
     const { db } = createMockDB({ firstResults: undefined });
     const res = await postJSON("/api/account/unlock-achievement", {
@@ -266,17 +213,12 @@ describe("POST /api/account/unlock-achievement", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// /api/account/update-buddy
-// ---------------------------------------------------------------------------
-
 describe("POST /api/account/update-buddy", () => {
   it("returns 400 when required fields are missing", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-buddy", { buddyType: null, isShiny: false }, { DB: db });
     expect(res.status).toBe(400);
   });
-
   it("returns 400 when isShiny is not a boolean", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-buddy", {
@@ -285,7 +227,6 @@ describe("POST /api/account/update-buddy", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("isShiny must be a boolean");
   });
-
   it("returns 400 when isShiny is a string", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-buddy", {
@@ -294,7 +235,6 @@ describe("POST /api/account/update-buddy", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("isShiny must be a boolean");
   });
-
   it("returns 400 for unknown buddyType", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-buddy", {
@@ -303,7 +243,6 @@ describe("POST /api/account/update-buddy", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("Unknown buddyType");
   });
-
   it("returns 404 when profile does not exist", async () => {
     const { db } = createMockDB({ firstResults: undefined });
     const res = await postJSON("/api/account/update-buddy", {
@@ -311,23 +250,8 @@ describe("POST /api/account/update-buddy", () => {
     }, { DB: db });
     expect(res.status).toBe(404);
   });
-
   it("succeeds when ownership is valid and update matches", async () => {
-    const profileRow = {
-      username: "alice", license_hash: "hash",
-      total_td: 100, current_td: 100, corporate_rank: "CTO",
-      inventory: "{}", upgrades: "[]", achievements: "[]",
-      buddy_type: null, buddy_is_shiny: 0,
-      unlocked_themes: '["default"]', active_theme: "default",
-      active_ticket: null, td_multiplier: 1,
-    };
-    const { db } = createMockDB({
-      firstBySQL: {
-        "SELECT username": profileRow,
-        "SELECT status": { status: "active" },
-      },
-      runChanges: 1,
-    });
+    const { db } = ownedMockDB();
     const res = await postJSON("/api/account/update-buddy", {
       username: "alice", buddyType: "Agile Snail", isShiny: false, licenseKeyHash: "hash",
     }, { DB: db });
@@ -335,23 +259,8 @@ describe("POST /api/account/update-buddy", () => {
     const data = await res.json() as { success: boolean };
     expect(data.success).toBe(true);
   });
-
   it("returns 409 when update matches zero rows (revoked between check and write)", async () => {
-    const profileRow = {
-      username: "alice", license_hash: "hash",
-      total_td: 100, current_td: 100, corporate_rank: "CTO",
-      inventory: "{}", upgrades: "[]", achievements: "[]",
-      buddy_type: null, buddy_is_shiny: 0,
-      unlocked_themes: '["default"]', active_theme: "default",
-      active_ticket: null, td_multiplier: 1,
-    };
-    const { db } = createMockDB({
-      firstBySQL: {
-        "SELECT username": profileRow,
-        "SELECT status": { status: "active" },
-      },
-      runChanges: 0,
-    });
+    const { db } = ownedMockDB({ runChanges: 0 });
     const res = await postJSON("/api/account/update-buddy", {
       username: "alice", buddyType: null, isShiny: false, licenseKeyHash: "hash",
     }, { DB: db });
@@ -359,17 +268,12 @@ describe("POST /api/account/update-buddy", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// /api/account/update-ticket
-// ---------------------------------------------------------------------------
-
 describe("POST /api/account/update-ticket", () => {
   it("returns 400 when required fields are missing", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-ticket", { activeTicket: null }, { DB: db });
     expect(res.status).toBe(400);
   });
-
   it("returns 400 for malformed activeTicket (non-object)", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-ticket", {
@@ -378,7 +282,6 @@ describe("POST /api/account/update-ticket", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("activeTicket must be an object");
   });
-
   it("returns 400 for activeTicket with invalid sprintProgress", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-ticket", {
@@ -389,7 +292,6 @@ describe("POST /api/account/update-ticket", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("sprintProgress");
   });
-
   it("returns 400 when sprintProgress exceeds sprintGoal", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-ticket", {
@@ -400,7 +302,6 @@ describe("POST /api/account/update-ticket", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("sprintProgress cannot exceed");
   });
-
   it("returns 404 when profile does not exist", async () => {
     const { db } = createMockDB({ firstResults: undefined });
     const res = await postJSON("/api/account/update-ticket", {
@@ -410,23 +311,8 @@ describe("POST /api/account/update-ticket", () => {
     }, { DB: db });
     expect(res.status).toBe(404);
   });
-
   it("succeeds when ownership is valid and update matches", async () => {
-    const profileRow = {
-      username: "alice", license_hash: "hash",
-      total_td: 100, current_td: 100, corporate_rank: "CTO",
-      inventory: "{}", upgrades: "[]", achievements: "[]",
-      buddy_type: null, buddy_is_shiny: 0,
-      unlocked_themes: '["default"]', active_theme: "default",
-      active_ticket: null, td_multiplier: 1,
-    };
-    const { db } = createMockDB({
-      firstBySQL: {
-        "SELECT username": profileRow,
-        "SELECT status": { status: "active" },
-      },
-      runChanges: 1,
-    });
+    const { db } = ownedMockDB();
     const res = await postJSON("/api/account/update-ticket", {
       username: "alice",
       activeTicket: { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 },
@@ -436,23 +322,8 @@ describe("POST /api/account/update-ticket", () => {
     const data = await res.json() as { success: boolean };
     expect(data.success).toBe(true);
   });
-
   it("returns 409 when update matches zero rows (revoked between check and write)", async () => {
-    const profileRow = {
-      username: "alice", license_hash: "hash",
-      total_td: 100, current_td: 100, corporate_rank: "CTO",
-      inventory: "{}", upgrades: "[]", achievements: "[]",
-      buddy_type: null, buddy_is_shiny: 0,
-      unlocked_themes: '["default"]', active_theme: "default",
-      active_ticket: null, td_multiplier: 1,
-    };
-    const { db } = createMockDB({
-      firstBySQL: {
-        "SELECT username": profileRow,
-        "SELECT status": { status: "active" },
-      },
-      runChanges: 0,
-    });
+    const { db } = ownedMockDB({ runChanges: 0 });
     const res = await postJSON("/api/account/update-ticket", {
       username: "alice",
       activeTicket: { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 },
@@ -462,40 +333,25 @@ describe("POST /api/account/update-ticket", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// /api/account/shill
-// ---------------------------------------------------------------------------
-
 describe("POST /api/account/shill", () => {
   it("returns 500 when KV is not configured", async () => {
     const res = await postJSON("/api/account/shill", {}, {});
     expect(res.status).toBe(500);
   });
-
   it("returns 409 when shill credit was already claimed", async () => {
-    // The session middleware sets sessionId from cookie; without a cookie
-    // a random UUID is generated. We need a KV that returns "1" for
-    // any shill:* key.
     const kv = mockKV({ "shill:test-session": "1" });
     const res = await app.request("/api/account/shill", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Cookie: "cope_session_id=test-session",
-      },
+      headers: { "Content-Type": "application/json", Cookie: "cope_session_id=test-session" },
       body: "{}",
     }, { ALLOWED_ORIGINS: "http://localhost:5173", QUOTA_KV: kv });
     expect(res.status).toBe(409);
   });
-
   it("grants shill credit on first claim", async () => {
     const kv = mockKV({});
     const res = await app.request("/api/account/shill", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Cookie: "cope_session_id=test-session",
-      },
+      headers: { "Content-Type": "application/json", Cookie: "cope_session_id=test-session" },
       body: "{}",
     }, { ALLOWED_ORIGINS: "http://localhost:5173", QUOTA_KV: kv });
     expect(res.status).toBe(200);
@@ -505,10 +361,6 @@ describe("POST /api/account/shill", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// /api/account/me
-// ---------------------------------------------------------------------------
-
 describe("GET /api/account/me", () => {
   it("returns found: false when KV is not configured", async () => {
     const res = await app.request("/api/account/me", {
@@ -517,7 +369,6 @@ describe("GET /api/account/me", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ found: false });
   });
-
   it("returns found: false when session has no mapped username", async () => {
     const kv = mockKV({});
     const res = await app.request("/api/account/me", {
