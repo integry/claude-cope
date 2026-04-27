@@ -386,6 +386,11 @@ async function preChatChecks(
 ): Promise<PreChatResult> {
   const { db, sessionId, username, effectiveProKeyHash } = opts;
 
+  // Reject anonymous users immediately — no AI calls without a proven username.
+  if (!username || username === "anonymous") {
+    return { error: "A proven username is required to use chat", status: 403, effectiveProKeyHash, profileLicenseHash: null, quotaPercent: 0, ownsUsername: false };
+  }
+
   // Pro ownership validation — must happen before quota consumption.
   if (effectiveProKeyHash && db) {
     const resolution = await resolveProUser(db, effectiveProKeyHash, username);

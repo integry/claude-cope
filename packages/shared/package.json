@@ -9,6 +9,7 @@
     "./profile": "./src/profile.ts",
     "./gameData": "./src/gameData.ts",
     "./achievements": "./src/achievements.ts",
-    "./buddies": "./src/buddies.ts"
+    "./buddies": "./src/buddies.ts",
+    "./migrations": "./src/migrations.ts"
   }
 }

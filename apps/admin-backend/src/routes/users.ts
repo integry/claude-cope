@@ -26,7 +26,7 @@ function enrichRows(
     return {
       ...row,
       license_hash: maskHash(row.license_hash as string | null),
-      credits_remaining: status === "max" ? null : Math.max(0, freeLimit - (Number(row.credits_used) || 0)),
+      credits_remaining: status === "free" ? Math.max(0, freeLimit - (Number(row.credits_used) || 0)) : null,
       status,
     };
   });

@@ -53,15 +53,15 @@ app.use("*", sessionMiddleware);
 // Run schema migrations on the first request that hits the DB.
 // Applied globally so that /webhooks/* routes (e.g. Polar) also
 // bootstrap the schema on a fresh deploy before any /api/* request.
-let migrated = false;
+let migrationPromise: Promise<void> | null = null;
 app.use("*", async (c, next) => {
-  if (!migrated) {
+  if (!migrationPromise) {
     const db = (c.env as Record<string, unknown>).DB as D1Database | undefined;
     if (db) {
-      await applyMigrations(db);
-      migrated = true;
+      migrationPromise = applyMigrations(db);
     }
   }
+  if (migrationPromise) await migrationPromise;
   return next();
 });
 

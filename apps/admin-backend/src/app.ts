@@ -9,15 +9,15 @@ import { applyMigrations } from "./utils/migrations";
 const app = new Hono();
 
 // Run schema migrations on the first request that hits the DB.
-let migrated = false;
+let migrationPromise: Promise<void> | null = null;
 app.use("/api/*", async (c, next) => {
-  if (!migrated) {
+  if (!migrationPromise) {
     const db = (c.env as Record<string, unknown>).DB as D1Database | undefined;
     if (db) {
-      await applyMigrations(db);
-      migrated = true;
+      migrationPromise = applyMigrations(db);
     }
   }
+  if (migrationPromise) await migrationPromise;
   return next();
 });
 

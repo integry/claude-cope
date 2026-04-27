@@ -11,7 +11,9 @@ interface License {
 
 function formatTimestamp(raw: string | null | undefined): string {
   if (!raw) return "—";
-  const d = new Date(raw + "Z"); // SQLite datetime is UTC
+  // Append "Z" only when the string lacks a timezone indicator (Z, +HH:MM, etc.)
+  const hasTimezone = /[Zz]$|[+-]\d{2}:\d{2}$/.test(raw);
+  const d = new Date(hasTimezone ? raw : raw + "Z");
   if (isNaN(d.getTime())) return raw;
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
     + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
