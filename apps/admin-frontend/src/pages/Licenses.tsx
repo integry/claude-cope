@@ -38,6 +38,11 @@ export default function Licenses() {
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // Clamp page when total shrinks (e.g. after a revoke or filter change)
+  // so the UI never sits on an empty out-of-range page.
+  const clampedPage = Math.min(page, totalPages - 1);
+  if (clampedPage !== page) setPage(clampedPage);
+
   if (isLoading) {
     return (
       <div>
