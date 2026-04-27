@@ -50,7 +50,7 @@ stats.get("/", async (c) => {
     total_users: totalUsers,
     total_td: scoreAgg?.total_td ?? 0,
     recent_events: eventCount?.count ?? 0,
-    total_licenses: licenseCount?.count ?? 0,
+    active_licenses: licenseCount?.count ?? 0,
     max_users: maxUserCount,
     revoked_users: revokedUserCount,
     free_users: freeUserCount,

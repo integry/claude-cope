@@ -4,7 +4,7 @@ import { API_BASE } from "../config";
 
 interface User {
   username: string;
-  corporate_rank: number;
+  corporate_rank: string;
   country: string;
   total_td: number;
   current_td: number;
@@ -23,7 +23,7 @@ interface PaginatedUsers {
 
 interface UserForm {
   username: string;
-  corporate_rank: number;
+  corporate_rank: string;
   country: string;
   total_td: number;
   current_td: number;
@@ -34,7 +34,7 @@ type SortDir = "asc" | "desc";
 type StatusFilter = "all" | "free" | "max" | "revoked";
 
 const PAGE_SIZE = 50;
-const emptyForm: UserForm = { username: "", corporate_rank: 0, country: "", total_td: 0, current_td: 0 };
+const emptyForm: UserForm = { username: "", corporate_rank: "Junior Code Monkey", country: "", total_td: 0, current_td: 0 };
 
 export default function Users() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -55,6 +55,11 @@ export default function Users() {
 
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // Clamp page when total shrinks (e.g. after a reset, filter change, or mutation)
+  // so the UI never sits on an empty out-of-range page.
+  const clampedPage = Math.min(page, totalPages - 1);
+  if (clampedPage !== page) setPage(clampedPage);
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
@@ -86,7 +91,7 @@ export default function Users() {
     setEditingUser(user.username);
     setForm({
       username: user.username,
-      corporate_rank: user.corporate_rank ?? 0,
+      corporate_rank: user.corporate_rank ?? "Junior Code Monkey",
       country: user.country ?? "",
       total_td: user.total_td ?? 0,
       current_td: user.current_td ?? 0,
@@ -232,9 +237,9 @@ export default function Users() {
             <div>
               <label className="block text-sm font-medium text-gray-700">Rank</label>
               <input
-                type="number"
+                type="text"
                 value={form.corporate_rank}
-                onChange={(e) => setForm({ ...form, corporate_rank: Number(e.target.value) })}
+                onChange={(e) => setForm({ ...form, corporate_rank: e.target.value })}
                 className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               />
             </div>

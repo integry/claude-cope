@@ -75,8 +75,9 @@ async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?
 }
 
 /** Provision the licenses row and KV quota for a license hash.
- *  Called BEFORE resolveProfile so the supporting rows exist before the
- *  profile gets the license_hash attached. */
+ *  Called AFTER resolveProfile succeeds so that a failed profile claim
+ *  (username taken, concurrent race, etc.) never leaves behind orphaned
+ *  active licenses or KV quota entries. */
 async function commitSyncSideEffects(
   deps: { db: D1Database; kv: KVNamespace; hash: string },
   opts: { validationId?: string; limits: ReturnType<typeof getQuotaLimits>; sessionId?: string },
@@ -104,18 +105,11 @@ account.post("/sync", async (c) => {
   const { body, validation, kv, db, hash } = validated;
 
   const sessionId = c.get("sessionId");
-
-  // Provision the licenses row and KV quota BEFORE attaching the license_hash
-  // to user_scores.  This ordering ensures that if resolveProfile succeeds
-  // (writing license_hash) the supporting licenses row and KV quota already
-  // exist.  The reverse order could leave a profile with a license_hash but no
-  // active licenses row on partial failure, bricking the account.
   const limits = getQuotaLimits(c.env);
-  await commitSyncSideEffects(
-    { db, kv, hash },
-    { validationId: validation.id, limits, sessionId },
-  );
 
+  // Resolve the profile FIRST — if this fails (username taken, concurrent
+  // claim, etc.) we must NOT leave behind an activated license row or KV
+  // quota for a sync that never completed.
   const result = await resolveProfile(db, hash, body, sessionId && kv ? { sessionId, kv } : undefined);
   if (result.error) {
     const isConflict =
@@ -124,6 +118,14 @@ account.post("/sync", async (c) => {
       result.error.includes("being activated");
     return c.json({ error: result.error }, isConflict ? 409 : 403);
   }
+
+  // Profile claim succeeded — now provision the licenses row and KV quota.
+  // This ordering ensures that failed syncs never produce orphaned active
+  // licenses or quota entries.
+  await commitSyncSideEffects(
+    { db, kv, hash },
+    { validationId: validation.id, limits, sessionId },
+  );
 
   // Bind the session to the resolved username so /me can look it up.
   if (sessionId && result.profile?.username) {

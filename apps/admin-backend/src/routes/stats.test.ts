@@ -46,7 +46,7 @@ describe("GET /api/stats", () => {
     expect(data.total_users).toBe(10);
     expect(data.total_td).toBe(50000);
     expect(data.recent_events).toBe(3);
-    expect(data.total_licenses).toBe(5);
+    expect(data.active_licenses).toBe(5);
     expect(data.max_users).toBe(4);
     expect(data.revoked_users).toBe(1);
     expect(data.free_users).toBe(5); // 10 - 4 - 1

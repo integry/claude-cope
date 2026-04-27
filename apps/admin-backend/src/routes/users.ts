@@ -79,7 +79,7 @@ users.post("/", async (c) => {
 
   const body = await c.req.json<{
     username: string;
-    corporate_rank?: number;
+    corporate_rank?: string;
     country?: string;
   }>();
 
@@ -91,7 +91,7 @@ users.post("/", async (c) => {
     .prepare(
       "INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, updated_at) VALUES (?, 0, 0, ?, ?, datetime('now'))"
     )
-    .bind(body.username, body.corporate_rank ?? 0, body.country ?? "")
+    .bind(body.username, body.corporate_rank ?? "Junior Code Monkey", body.country ?? "")
     .run();
 
   return c.json({ success: true, username: body.username });
@@ -104,7 +104,7 @@ users.put("/:username", async (c) => {
   const username = c.req.param("username");
   const body = await c.req.json<{
     username?: string;
-    corporate_rank?: number;
+    corporate_rank?: string;
     country?: string;
     total_td?: number;
     current_td?: number;
