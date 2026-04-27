@@ -17,42 +17,12 @@ function buildStatusFilter(statusFilter: string | undefined): string {
   return "";
 }
 
-async function runFallbackQuery(
-  db: D1Database,
-  statusFilter: string | undefined,
-): Promise<Record<string, unknown>[] | Response> {
-  // When the schema is degraded we cannot distinguish free/max/revoked users.
-  // Return an explicit error instead of silently returning misleading data.
-  if (statusFilter) {
-    return new Response(
-      JSON.stringify({
-        error: `Status filter "${statusFilter}" is unavailable — schema is in a degraded state. Run migrations first.`,
-      }),
-      { status: 503, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
-  const resp = await db
-    .prepare(
-      `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
-              COALESCE(ul.msg_count, 0) AS credits_used
-       FROM user_scores u
-       LEFT JOIN (
-         SELECT username, COUNT(*) AS msg_count FROM usage_logs GROUP BY username
-       ) ul ON ul.username = u.username
-       ORDER BY u.updated_at DESC`
-    )
-    .all();
-  return (resp.results ?? []) as Record<string, unknown>[];
-}
-
 function enrichRows(
   results: Record<string, unknown>[],
-  hasLicenseHashColumn: boolean,
   freeLimit: number,
 ): Record<string, unknown>[] {
   return results.map((row: Record<string, unknown>) => {
-    const status = hasLicenseHashColumn ? (row.user_status as string) || "free" : "free";
+    const status = (row.user_status as string) || "free";
     return {
       ...row,
       license_hash: maskHash(row.license_hash as string | null),
@@ -74,10 +44,7 @@ users.get("/", async (c) => {
     return c.json({ error: `Invalid status filter: "${statusFilter}". Use "free", "max", or "revoked".` }, 400);
   }
 
-  let results: Record<string, unknown>[];
-  let hasLicenseHashColumn = true;
-  try {
-    const query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
+  const query = `SELECT u.username, u.total_td, u.current_td, u.corporate_rank, u.country, u.updated_at,
                 u.license_hash,
                 u.credits_used,
                 CASE WHEN l.key_hash IS NOT NULL THEN 'max'
@@ -88,27 +55,10 @@ users.get("/", async (c) => {
       + buildStatusFilter(statusFilter)
       + " ORDER BY u.updated_at DESC LIMIT 200";
 
-    const resp = await db.prepare(query).all();
-    results = (resp.results ?? []) as Record<string, unknown>[];
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes("no such column") && !msg.includes("no such table")) {
-      throw err;
-    }
-    console.warn(`[admin/users] schema fallback: ${msg.slice(0, 200)}`);
-    // Any schema error that involves license_hash, credits_used, or the
-    // licenses table means the main query's user_status CASE expression
-    // is unavailable. Mark the column as missing so enrichRows() doesn't
-    // default every row to "free" based on a null user_status field.
-    if (msg.includes("license_hash") || msg.includes("credits_used") || msg.includes("licenses")) {
-      hasLicenseHashColumn = false;
-    }
-    const fallback = await runFallbackQuery(db, statusFilter);
-    if (fallback instanceof Response) return fallback;
-    results = fallback;
-  }
+  const resp = await db.prepare(query).all();
+  const results = (resp.results ?? []) as Record<string, unknown>[];
 
-  return c.json(enrichRows(results, hasLicenseHashColumn, freeLimit));
+  return c.json(enrichRows(results, freeLimit));
 });
 
 users.post("/", async (c) => {

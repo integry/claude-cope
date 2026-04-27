@@ -21,12 +21,7 @@ stats.get("/", async (c) => {
       .first<{ count: number }>(),
     db
       .prepare("SELECT COUNT(DISTINCT key_hash) AS count FROM licenses WHERE status = 'active'")
-      .first<{ count: number }>()
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (!msg.includes("no such table") && !msg.includes("no such column")) throw err;
-        return { count: 0 };
-      }),
+      .first<{ count: number }>(),
     // Count Max users by joining with active licenses, not just checking license_hash presence.
     // This ensures revoked licenses are not counted as Max users.
     db
@@ -35,12 +30,7 @@ stats.get("/", async (c) => {
          INNER JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'
          WHERE u.license_hash IS NOT NULL`
       )
-      .first<{ count: number }>()
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (!msg.includes("no such table") && !msg.includes("no such column")) throw err;
-        return { count: 0 };
-      }),
+      .first<{ count: number }>(),
   ]);
 
   // Count users with a license_hash that does NOT have an active license (revoked).
@@ -50,12 +40,7 @@ stats.get("/", async (c) => {
        LEFT JOIN licenses l ON u.license_hash = l.key_hash AND l.status = 'active'
        WHERE u.license_hash IS NOT NULL AND l.key_hash IS NULL`
     )
-    .first<{ count: number }>()
-    .catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (!msg.includes("no such table") && !msg.includes("no such column")) throw err;
-      return { count: 0 };
-    });
+    .first<{ count: number }>();
 
   const totalUsers = scoreAgg?.total_users ?? 0;
   const maxUserCount = maxUsers?.count ?? 0;
