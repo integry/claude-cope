@@ -132,6 +132,9 @@ function Terminal() {
   }
   const lastEscapeRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null }>({ cancelled: false, timeoutId: null });
+  const historyRef = useRef(history);
+  historyRef.current = history;
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
 
   // Free tier: no pro key, no BYOK key
@@ -272,25 +275,42 @@ function Terminal() {
     if (isFreeTier) {
       const newCount = freeCommandCount + 1;
       setFreeCommandCount(newCount);
+      setIsProcessing(true);
+
+      // Track delay state so Escape can cancel
+      const delayState = { cancelled: false, timeoutId: null as ReturnType<typeof setTimeout> | null };
+      freeTierDelayRef.current = delayState;
+
+      const cancellableDelay = (ms: number) => new Promise<void>((resolve) => {
+        if (delayState.cancelled) { resolve(); return; }
+        delayState.timeoutId = setTimeout(() => { delayState.timeoutId = null; resolve(); }, ms);
+      });
+
+      // Use a unique marker so cleanup targets only this specific queue message
+      const queueMsgId = `__queue_${Date.now()}_${Math.random()}`;
 
       // Every 4th command: show a terminal ad before processing
       if (newCount % 4 === 0) {
         const ad = getRandomAd();
         setHistory((prev) => [...prev, userMessage, { role: "warning", content: ad }]);
-        // Wait for the ad to be "read" before proceeding
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await cancellableDelay(2000);
+        if (delayState.cancelled) return;
       }
 
       // Simulated queueing: show bureaucratic message and wait 3 seconds
-      setHistory((prev) => [...prev, ...(newCount % 4 === 0 ? [] : [userMessage]), { role: "warning", content: "[INFO] Free tier detected. Yielding compute to paying customers. Please hold..." }]);
-      setIsProcessing(true);
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      setHistory((prev) => [...prev.filter((m) => m.content !== "[INFO] Free tier detected. Yielding compute to paying customers. Please hold..."), { role: "loading", content: getRandomLoadingPhrase() }]);
+      const queueContent = "[INFO] Free tier detected. Yielding compute to paying customers. Please hold...";
+      setHistory((prev) => [...prev, ...(newCount % 4 === 0 ? [] : [userMessage]), { role: "warning", content: queueContent, _queueId: queueMsgId } as Message & { _queueId: string }]);
+      await cancellableDelay(3000);
+      if (delayState.cancelled) return;
+      freeTierDelayRef.current = { cancelled: false, timeoutId: null };
+      setHistory((prev) => [...prev.filter((m) => (m as Message & { _queueId?: string })._queueId !== queueMsgId), { role: "loading", content: getRandomLoadingPhrase() }]);
     } else {
       setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
       setIsProcessing(true);
     }
-    const contextMessages = filterChatHistory(history);
+    // Use fresh history (not the stale closure value) so messages arriving
+    // during artificial free-tier delays are included in the context.
+    const contextMessages = filterChatHistory(historyRef.current);
     const chatMessages = [...contextMessages, { role: "user", content: userMessage.content }];
     let sprintCompleteMessage: Message | null = null;
     const onSprintProgress = (rawAmount: number) => {
@@ -354,6 +374,17 @@ function Terminal() {
   const handleEscapeKey = () => {
     const anyOverlayOpen = showStore || showLeaderboard || showAchievements || showSynergize || showHelp || showAbout || showPrivacy || showTerms || showContact || showProfile || showParty || showUpgrade;
     if (anyOverlayOpen) { closeAllOverlays(); return; }
+    // Cancel free-tier artificial delay if one is in progress
+    if (isProcessing && freeTierDelayRef.current.timeoutId !== null) {
+      const ds = freeTierDelayRef.current;
+      ds.cancelled = true;
+      if (ds.timeoutId) clearTimeout(ds.timeoutId);
+      freeTierDelayRef.current = { cancelled: false, timeoutId: null };
+      setIsProcessing(false);
+      setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading"), { role: "warning", content: "[⚠️ ABORTED] Queue cancelled. Patience is a virtue you clearly lack." }]);
+      if (commandHistory.length > 0) { const lastCmd = commandHistory[commandHistory.length - 1]!; setInputValue(lastCmd); setCursorToEnd(lastCmd); }
+      return;
+    }
     if (isProcessing && abortControllerRef.current) {
       abortControllerRef.current.abort(); abortControllerRef.current = null; setIsProcessing(false);
       setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading"), { role: "warning", content: "[⚠️ ABORTED] Generation cancelled. Your mass-produced cope has been recalled." }]);

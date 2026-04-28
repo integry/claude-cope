@@ -323,7 +323,7 @@ function MessageContent({ message, isNew = false, isFreeTier = false, onSlashCom
   const isStreaming = message.role === "loading" && !isAwaitingResponse;
 
   // Typewriter effect for new system/warning/error messages (not loading or streaming)
-  const shouldTypewrite = isNew && useMarkdown && message.role === "system";
+  const shouldTypewrite = isNew && useMarkdown && (message.role === "system" || message.role === "warning" || message.role === "error");
   const { visibleContent, isTyping } = useTypewriter(message.content, shouldTypewrite, isFreeTier);
 
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand), [onSlashCommand]);
