@@ -84,49 +84,58 @@ export function useTerminalKeyboard({
     }, 0);
   }, [inputRef]);
 
+  const anyOverlayOpen =
+    showStore || showLeaderboard || showAchievements || showSynergize || showHelp || showAbout || showPrivacy || showTerms || showContact || showProfile || showParty || showUpgrade;
+
+  const restoreLastCommand = useCallback(() => {
+    if (commandHistory.length > 0) {
+      const lastCmd = commandHistory[commandHistory.length - 1]!;
+      setInputValue(lastCmd);
+      setCursorToEnd(lastCmd);
+    }
+  }, [commandHistory, setInputValue, setCursorToEnd]);
+
+  const cancelFreeTierDelay = useCallback(() => {
+    const ds = freeTierDelayRef.current;
+    const cancelBatchId = ds.batchId;
+    ds.cancelled = true;
+    if (ds.timeoutId) clearTimeout(ds.timeoutId);
+    (freeTierDelayRef as { current: { cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null } }).current = { cancelled: false, timeoutId: null };
+    setIsProcessing(false);
+    // Only remove scaffold messages from the current in-flight batch, not prior ads
+    setHistory((prev) => [...prev.filter((msg) => {
+      if (msg.role === "loading") return false;
+      if (cancelBatchId && (msg as Message & { _freeTierBatchId?: string })._freeTierBatchId === cancelBatchId) return false;
+      return true;
+    }), { role: "warning", content: "[⚠️ ABORTED] Queue cancelled. Patience is a virtue you clearly lack." }]);
+    restoreLastCommand();
+  }, [freeTierDelayRef, setIsProcessing, setHistory, restoreLastCommand]);
+
+  const cancelAbortController = useCallback(() => {
+    abortControllerRef.current!.abort();
+    abortControllerRef.current = null;
+    setIsProcessing(false);
+    setHistory((prev) =>
+      [
+        ...prev.filter((msg) => msg.role !== "loading"),
+        { role: "warning", content: "[⚠️ ABORTED] Generation cancelled. Your mass-produced cope has been recalled." },
+      ]
+    );
+    restoreLastCommand();
+  }, [abortControllerRef, setIsProcessing, setHistory, restoreLastCommand]);
+
   const handleEscapeKey = useCallback(() => {
-    const anyOverlayOpen =
-      showStore || showLeaderboard || showAchievements || showSynergize || showHelp || showAbout || showPrivacy || showTerms || showContact || showProfile || showParty || showUpgrade;
     if (anyOverlayOpen) {
       closeAllOverlays();
       return;
     }
     // Cancel free-tier artificial delay if one is in progress
     if (isProcessing && freeTierDelayRef.current.timeoutId !== null) {
-      const ds = freeTierDelayRef.current;
-      const cancelBatchId = ds.batchId;
-      ds.cancelled = true;
-      if (ds.timeoutId) clearTimeout(ds.timeoutId);
-      (freeTierDelayRef as { current: { cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null } }).current = { cancelled: false, timeoutId: null };
-      setIsProcessing(false);
-      // Only remove scaffold messages from the current in-flight batch, not prior ads
-      setHistory((prev) => [...prev.filter((msg) => {
-        if (msg.role === "loading") return false;
-        if (cancelBatchId && (msg as Message & { _freeTierBatchId?: string })._freeTierBatchId === cancelBatchId) return false;
-        return true;
-      }), { role: "warning", content: "[⚠️ ABORTED] Queue cancelled. Patience is a virtue you clearly lack." }]);
-      if (commandHistory.length > 0) {
-        const lastCmd = commandHistory[commandHistory.length - 1]!;
-        setInputValue(lastCmd);
-        setCursorToEnd(lastCmd);
-      }
+      cancelFreeTierDelay();
       return;
     }
     if (isProcessing && abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-      setIsProcessing(false);
-      setHistory((prev) =>
-        [
-          ...prev.filter((msg) => msg.role !== "loading"),
-          { role: "warning", content: "[⚠️ ABORTED] Generation cancelled. Your mass-produced cope has been recalled." },
-        ]
-      );
-      if (commandHistory.length > 0) {
-        const lastCmd = commandHistory[commandHistory.length - 1]!;
-        setInputValue(lastCmd);
-        setCursorToEnd(lastCmd);
-      }
+      cancelAbortController();
       return;
     }
     const now = Date.now();
@@ -142,7 +151,7 @@ export function useTerminalKeyboard({
     } else {
       lastEscapeRef.current = now;
     }
-  }, [showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, isProcessing, abortControllerRef, freeTierDelayRef, commandHistory, inputValue, closeAllOverlays, setIsProcessing, setHistory, setInputValue, setSlashQuery, setSlashIndex, setCursorToEnd]);
+  }, [anyOverlayOpen, isProcessing, abortControllerRef, freeTierDelayRef, inputValue, closeAllOverlays, setIsProcessing, setHistory, setInputValue, setSlashQuery, setSlashIndex, cancelFreeTierDelay, cancelAbortController]);
 
   const handleArrowUp = (slashMenuOpen: boolean, filtered: string[]) => {
     if (slashMenuOpen) {
