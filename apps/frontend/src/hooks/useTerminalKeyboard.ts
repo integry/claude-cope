@@ -119,7 +119,31 @@ export function useTerminalKeyboard({
     } else {
       lastEscapeRef.current = now;
     }
-  }, [showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, isProcessing, abortControllerRef, commandHistory, inputValue, closeAllOverlays, setIsProcessing, setHistory, setInputValue, setSlashQuery, setSlashIndex, setCursorToEnd]);
+  }, [
+    showStore,
+    showLeaderboard,
+    showAchievements,
+    showSynergize,
+    showHelp,
+    showAbout,
+    showPrivacy,
+    showTerms,
+    showContact,
+    showProfile,
+    showParty,
+    showUpgrade,
+    isProcessing,
+    abortControllerRef,
+    commandHistory,
+    inputValue,
+    closeAllOverlays,
+    setIsProcessing,
+    setHistory,
+    setInputValue,
+    setSlashQuery,
+    setSlashIndex,
+    setCursorToEnd,
+  ]);
 
   const handleArrowUp = (slashMenuOpen: boolean, filtered: string[]) => {
     if (slashMenuOpen) {

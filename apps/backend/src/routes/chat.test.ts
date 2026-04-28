@@ -308,8 +308,7 @@ describe("buildFreeChatProfileSnapshot", () => {
 });
 
 describe("Provider configuration in OpenRouter requests", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let fetchSpy: any;
+  let fetchSpy: ReturnType<typeof vi.spyOn<typeof globalThis, "fetch">>;
   let capturedRequestBody: unknown;
 
   beforeEach(() => {
