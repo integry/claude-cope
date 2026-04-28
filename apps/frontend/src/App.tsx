@@ -14,22 +14,28 @@ const PUBLIC_APP_ROUTES = new Set([
   "/upgrade",
 ]);
 
+type VerificationPhase = "boot" | "idle" | "required";
+
 function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [isHumanVerified, setIsHumanVerified] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [verificationNonce, setVerificationNonce] = useState(0);
+  const [verificationPhase, setVerificationPhase] = useState<VerificationPhase>("boot");
   const handleSplashComplete = useCallback(() => setShowSplash(false), []);
   const handleHumanVerified = useCallback(() => {
     setVerificationError(null);
     setIsHumanVerified(true);
+    setVerificationPhase("idle");
   }, []);
   const handleVerificationError = useCallback((message: string) => {
     setIsHumanVerified(false);
     setVerificationError(message);
+    setVerificationPhase((currentPhase) => (currentPhase === "required" ? currentPhase : "idle"));
   }, []);
   const retryVerification = useCallback(() => {
     setVerificationError(null);
+    setVerificationPhase("required");
     setVerificationNonce((n) => n + 1);
   }, []);
 
@@ -37,6 +43,7 @@ function App() {
     const onVerificationRequired = () => {
       setIsHumanVerified(false);
       setVerificationError(null);
+      setVerificationPhase("required");
       setVerificationNonce((n) => n + 1);
     };
     window.addEventListener("turnstile:required", onVerificationRequired);
@@ -47,8 +54,8 @@ function App() {
   if (path === "/legal/terms") return <LegalTermsPage />;
   if (path === "/legal/privacy") return <LegalPrivacyPage />;
   const isPublicAppRoute = PUBLIC_APP_ROUTES.has(path) || path.startsWith("/user/");
-  const showBlockingSplash = showSplash || (!isHumanVerified && !isPublicAppRoute);
-  const showVerificationError = !showSplash && !isHumanVerified && !isPublicAppRoute && verificationError;
+  const showBlockingSplash = showSplash || (!isHumanVerified && verificationPhase !== "idle" && !isPublicAppRoute);
+  const showVerificationError = !showSplash && verificationPhase === "required" && !isHumanVerified && !isPublicAppRoute && verificationError;
 
   return (
     <>

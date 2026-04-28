@@ -22,6 +22,9 @@ declare global {
   }
 }
 
+const TURNSTILE_SCRIPT_SELECTOR = 'script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]';
+const TURNSTILE_SCRIPT_STATE = "data-turnstile-state";
+
 type VerifyTokenResult = {
   verified: boolean;
   retryable: boolean;
@@ -87,26 +90,86 @@ async function getBackendVerificationStatus(): Promise<"enabled" | "disabled" | 
   return "unavailable";
 }
 
-function ensureTurnstileScript(): Promise<void> {
+function waitForTurnstileApi(timeoutMs: number): Promise<void> {
   if (window.turnstile) return Promise.resolve();
-  const existing = document.querySelector<HTMLScriptElement>(
-    'script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]',
-  );
-  if (existing) {
-    return new Promise((resolve, reject) => {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("turnstile script failed to load")), { once: true });
-    });
-  }
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    const poll = () => {
+      if (window.turnstile) {
+        resolve();
+        return;
+      }
+      if (Date.now() >= deadline) {
+        reject(new Error("turnstile api unavailable"));
+        return;
+      }
+      window.setTimeout(poll, 50);
+    };
+    poll();
+  });
+}
+
+function createTurnstileScript(): HTMLScriptElement {
   const script = document.createElement("script");
   script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
   script.async = true;
   script.defer = true;
+  script.setAttribute(TURNSTILE_SCRIPT_STATE, "loading");
+  return script;
+}
+
+function waitForScriptLoad(script: HTMLScriptElement): Promise<void> {
+  const state = script.getAttribute(TURNSTILE_SCRIPT_STATE);
+  if (state === "loaded") return Promise.resolve();
+  if (state === "error") return Promise.reject(new Error("turnstile script failed to load"));
+
   return new Promise((resolve, reject) => {
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("turnstile script failed to load"));
-    document.head.appendChild(script);
+    const onLoad = () => {
+      script.setAttribute(TURNSTILE_SCRIPT_STATE, "loaded");
+      resolve();
+    };
+    const onError = () => {
+      script.setAttribute(TURNSTILE_SCRIPT_STATE, "error");
+      reject(new Error("turnstile script failed to load"));
+    };
+    script.addEventListener("load", onLoad, { once: true });
+    script.addEventListener("error", onError, { once: true });
   });
+}
+
+async function ensureTurnstileScript(): Promise<void> {
+  if (window.turnstile) return;
+
+  const existing = document.querySelector<HTMLScriptElement>(TURNSTILE_SCRIPT_SELECTOR);
+  if (existing) {
+    const state = existing.getAttribute(TURNSTILE_SCRIPT_STATE);
+    if (state === "loaded") {
+      try {
+        await waitForTurnstileApi(500);
+        return;
+      } catch {
+        existing.remove();
+      }
+    }
+    if (state !== "error" && existing.isConnected) {
+      try {
+        await Promise.race([
+          waitForScriptLoad(existing),
+          waitForTurnstileApi(1_500),
+        ]);
+      } catch {
+        // Fall through to re-inject the script if the existing tag is stuck.
+      }
+      if (window.turnstile) return;
+    }
+    existing.remove();
+  }
+
+  const script = createTurnstileScript();
+  const loadPromise = waitForScriptLoad(script);
+  document.head.appendChild(script);
+  await loadPromise;
+  await waitForTurnstileApi(1_000);
 }
 
 export default function TurnstileWidget({

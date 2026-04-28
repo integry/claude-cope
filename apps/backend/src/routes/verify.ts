@@ -28,12 +28,37 @@ type VerifyContext = Context<Env>;
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 type VerifyFailureStatus = 502 | 503;
+const HOSTNAME_PATTERN = /^(?:localhost|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*)(?::\d{1,5})?$/i;
+
+const normalizeHostname = (value: string | undefined): string | undefined => {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.includes(",") || trimmed.includes("/") || /\s/.test(trimmed)) {
+    return undefined;
+  }
+  if (!HOSTNAME_PATTERN.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed.replace(/:\d{1,5}$/, "").toLowerCase();
+};
+
+const getExpectedHostnameConfig = (c: VerifyContext): { hostname?: string; invalid: boolean } => {
+  const raw = c.env?.TURNSTILE_EXPECTED_HOSTNAME?.trim();
+  if (!raw) return { invalid: false };
+
+  const hostname = normalizeHostname(raw);
+  if (!hostname) {
+    return { invalid: true };
+  }
+  return { hostname, invalid: false };
+};
 
 verify.get("/", async (c) => {
   const secret = c.env?.TURNSTILE_SECRET_KEY;
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
-  const enabled = Boolean(secret && sessionId && kv);
+  const expectedHostname = getExpectedHostnameConfig(c);
+  const enabled = Boolean(secret && sessionId && kv && !expectedHostname.invalid);
   const bypassed = !secret;
   const misconfigured = Boolean(secret) && !enabled;
   return c.json({ enabled, bypassed, misconfigured });
@@ -79,20 +104,11 @@ const verifyWithTurnstile = async (
   return { ok: true as const, data };
 };
 
-const normalizeHostname = (value: string | undefined): string | undefined => {
-  if (!value) return undefined;
-  const first = value.split(",")[0]?.trim();
-  if (!first) return undefined;
-  return first.replace(/:\d+$/, "").toLowerCase();
-};
-
-const expectedHostnameFromConfig = (c: VerifyContext): string | undefined =>
-  normalizeHostname(c.env?.TURNSTILE_EXPECTED_HOSTNAME);
-
 verify.post("/", async (c) => {
   const secret = c.env?.TURNSTILE_SECRET_KEY;
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
+  const expectedHostname = getExpectedHostnameConfig(c);
 
   if (!secret) {
     return c.json({ verified: true, bypassed: true });
@@ -100,6 +116,10 @@ verify.post("/", async (c) => {
 
   if (!kv || !sessionId) {
     return c.json({ verified: false, error: "Verification storage unavailable" }, 503);
+  }
+
+  if (expectedHostname.invalid) {
+    return c.json({ verified: false, error: "Verification hostname misconfigured" }, 503);
   }
 
   const body = await parseVerifyBody(c);
@@ -123,12 +143,11 @@ verify.post("/", async (c) => {
     return c.json({ verified: false }, 403);
   }
 
-  const expectedHostname = expectedHostnameFromConfig(c);
   const actualHostname = normalizeHostname(data.hostname);
-  if (expectedHostname) {
-    if (!actualHostname || actualHostname !== expectedHostname) {
+  if (expectedHostname.hostname) {
+    if (!actualHostname || actualHostname !== expectedHostname.hostname) {
       console.warn("Turnstile hostname mismatch", {
-        expectedHostname,
+        expectedHostname: expectedHostname.hostname,
         actualHostname,
       });
       return c.json({ verified: false, error: "Unexpected verification hostname" }, 403);

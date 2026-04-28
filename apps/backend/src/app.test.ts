@@ -105,6 +105,25 @@ describe("app", () => {
       await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: false, misconfigured: true });
     });
 
+    it("reports verification misconfigured when TURNSTILE_EXPECTED_HOSTNAME is invalid", async () => {
+      const usageKv = {
+        get: vi.fn(),
+        put: vi.fn(),
+      };
+      const res = await app.request(
+        "/api/verify",
+        { method: "GET", headers: { Origin: "http://localhost:5173" } },
+        {
+          ALLOWED_ORIGINS: "http://localhost:5173",
+          TURNSTILE_SECRET_KEY: "secret",
+          TURNSTILE_EXPECTED_HOSTNAME: "claudecope.com,evil.example.com",
+          USAGE_KV: usageKv,
+        },
+      );
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: false, misconfigured: true });
+    });
+
     it("bypasses /api/verify when TURNSTILE_SECRET_KEY is not set", async () => {
       const res = await app.request(
         "/api/verify",
@@ -127,6 +146,32 @@ describe("app", () => {
       );
       expect(res.status).toBe(400);
       expect(usageKv.put).not.toHaveBeenCalled();
+    });
+
+    it("returns 503 when TURNSTILE_EXPECTED_HOSTNAME is invalid", async () => {
+      const usageKv = {
+        get: vi.fn(),
+        put: vi.fn(),
+      };
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+      try {
+        const res = await app.request(
+          "/api/verify",
+          { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ token: "token-123" }) },
+          {
+            ALLOWED_ORIGINS: "http://localhost:5173",
+            TURNSTILE_SECRET_KEY: "secret",
+            TURNSTILE_EXPECTED_HOSTNAME: "claudecope.com,evil.example.com",
+            USAGE_KV: usageKv,
+          },
+        );
+        expect(res.status).toBe(503);
+        await expect(res.json()).resolves.toEqual({ verified: false, error: "Verification hostname misconfigured" });
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
     });
 
     it("rejects /api/chat with 403 when human flag is absent", async () => {
