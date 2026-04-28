@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, SetStateAction } from "react";
+import posthog from "posthog-js";
 import { GENERATORS, UPGRADES, CORPORATE_RANKS, THEMES } from "../game/constants";
 import { supabase } from "../supabaseClient";
 import {
@@ -223,6 +224,8 @@ export function useGameState() {
       };
     });
 
+    try { posthog.capture("generator_purchased", { generator_id: generatorId, amount, cost }); } catch { /* analytics should never block gameplay */ }
+
     // Pro users: fire server call, apply authoritative response
     if (current.proKeyHash) {
       buyGeneratorServer(current.username, generatorId, amount, current.proKeyHash).then((result) => {
@@ -344,6 +347,8 @@ export function useGameState() {
         upgrades: [...prev.upgrades, upgradeId],
       };
     });
+
+    try { posthog.capture("upgrade_purchased", { upgrade_id: upgradeId, cost: upgrade.cost }); } catch { /* analytics should never block gameplay */ }
 
     // Pro users: fire server call
     if (current.proKeyHash) {

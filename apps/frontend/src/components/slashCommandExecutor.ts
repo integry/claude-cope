@@ -1,4 +1,5 @@
 /* eslint-disable max-lines */
+import posthog from "posthog-js";
 import { PING_COST, THEMES } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import type { ServerProfile } from "@claude-cope/shared/profile";
@@ -648,6 +649,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
         }
         return withKey;
       });
+      try { posthog.capture("account_upgraded", { restored: Boolean(data.restored) }); } catch { /* analytics should never block gameplay */ }
       if (data.restored && data.profile) {
         reply({ role: "system", content: `[✓ **PROFILE RESTORED**] Welcome back, **${data.profile.username}**! Your profile has been restored across devices.\n\n**TD:** ${data.profile.current_td.toLocaleString()} / ${data.profile.total_td.toLocaleString()} total\n**Rank:** ${data.profile.corporate_rank}\n**Generators:** ${Object.values(data.profile.inventory).reduce((a, b) => a + b, 0)} owned\n**Upgrades:** ${data.profile.upgrades.length} unlocked\n\nYou now have **${Math.round((data.profile.quota_percent ?? 100) * PRO_QUOTA_LIMIT / 100)} Max credits**. Your progress is synced across all devices.\n\n[🔐 *FYI*] Your license key doubles as the password to this account. Anyone with it can \`/sync\` in and live their best life on your dime.` });
       } else {
@@ -819,6 +821,8 @@ export function executeSlashCommand(
       [baseCommand]: (prev.commandUsage[baseCommand] ?? 0) + 1,
     },
   }));
+
+  try { posthog.capture("slash_command_executed", { command: baseCommand }); } catch { /* analytics should never block gameplay */ }
 
   // /clear fires instantly — no fake processing delay
   if (command === "/clear") {
