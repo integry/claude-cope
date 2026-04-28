@@ -58,10 +58,12 @@ export function useOverlays(): OverlayState & OverlayActions {
     setShowProfile(false);
     setShowParty(false);
     setShowUpgrade(false);
-    // Normalize the URL when closing route-backed overlays
+    // Normalize the URL when closing route-backed overlays.
+    // Use replaceState (not pushState) so switching between overlays doesn't
+    // leave intermediate "/" entries that break the Back button.
     const path = window.location.pathname;
     if (["/help", "/about", "/privacy", "/terms", "/contact", "/upgrade"].includes(path) || path.startsWith("/user/")) {
-      window.history.pushState(null, "", "/");
+      window.history.replaceState(null, "", "/");
     }
   }, []);
 

@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { shareChatImage, openShareIntent, getChatCardBlob } from "./shareChatUtils";
 import type { ShareResult } from "./shareChatUtils";
 
-const SPINNER_FRAMES = ["/", "-", "\\", "|"];
+const SPINNER_CHAR = "/";
 
 export function ShareButton({ userMessage, systemMessage, username }: { userMessage: string; systemMessage: string; username: string }) {
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "done" | "error">("idle");
@@ -40,6 +40,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     addTimeout(() => {
       setStatus("idle");
       setFeedback(null);
+      triggerRef.current?.focus();
     }, ms);
   }, [clearTimeouts, addTimeout]);
 
@@ -101,7 +102,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       if (result.success && result.method === "image") {
         setStatus("copied");
         setFeedback("Image copied to clipboard!");
-        setTimeout(() => {
+        addTimeout(() => {
           openShareIntent(p!);
           setStatus("done");
           if (p === "linkedin") {
@@ -113,7 +114,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       } else if (result.success && result.method === "text") {
         setStatus("copied");
         setFeedback("Text copied to clipboard (image copy not supported).");
-        setTimeout(() => {
+        addTimeout(() => {
           openShareIntent(p!);
           setStatus("done");
           if (p === "linkedin") {
@@ -131,7 +132,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         setFeedback(result.message);
       }
     });
-  }, [executeShare]);
+  }, [executeShare, addTimeout]);
 
   const handleCopyImage = useCallback(async () => {
     await executeShare({}, (result) => {
@@ -197,7 +198,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   if (status !== "idle" && !previewUrl) {
     return (
       <div className="flex items-center gap-2 mt-1 text-[11px] font-mono">
-        {status === "generating" && <span className="text-yellow-400 animate-pulse">{SPINNER_FRAMES[0]} {feedback}</span>}
+        {status === "generating" && <span className="text-yellow-400 animate-pulse">{SPINNER_CHAR} {feedback}</span>}
         {status === "copied" && <span className="text-green-400">{feedback}</span>}
         {status === "done" && <span className="text-green-400">{feedback}</span>}
         {status === "error" && <span className="text-red-400">{feedback}</span>}

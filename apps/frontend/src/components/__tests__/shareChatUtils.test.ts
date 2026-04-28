@@ -246,6 +246,37 @@ describe("shareChatImage", () => {
     expect(shareText).not.toContain("Test response");
   });
 
+  it("reuses previewBlob without rendering a new canvas", async () => {
+    mockClipboard.write.mockResolvedValueOnce(undefined);
+    const existingBlob = new Blob(["preview"], { type: "image/png" });
+    const createElementSpy = vi.spyOn(document, "createElement");
+
+    const result = await shareChatImage({
+      userMessage: "Hello",
+      systemMessage: "World",
+      previewBlob: existingBlob,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.method).toBe("image");
+    // Should NOT have created a new canvas since previewBlob was provided
+    expect(createElementSpy).not.toHaveBeenCalled();
+  });
+
+  it("falls back to rendering when previewBlob is not provided", async () => {
+    mockClipboard.write.mockResolvedValueOnce(undefined);
+
+    const result = await shareChatImage({
+      userMessage: "Hello",
+      systemMessage: "World",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.method).toBe("image");
+    // Should have created a canvas element for rendering
+    expect(document.createElement).toHaveBeenCalledWith("canvas");
+  });
+
   it("returns proper ShareResult type", async () => {
     mockClipboard.write.mockResolvedValueOnce(undefined);
 
