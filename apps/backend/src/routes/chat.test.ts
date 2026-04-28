@@ -309,129 +309,74 @@ describe("buildFreeChatProfileSnapshot", () => {
 
 describe("Provider configuration in OpenRouter requests", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let capturedRequestBody: unknown;
 
   beforeEach(() => {
-    fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ choices: [{ message: { content: "test response" } }], usage: {} }), {
+    capturedRequestBody = undefined;
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      if (url === "https://openrouter.ai/api/v1/chat/completions") {
+        capturedRequestBody = JSON.parse(init?.body as string);
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: "test response" } }], usage: {} }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
-      })
-    );
+      });
+    });
   });
 
   afterEach(() => {
     fetchSpy.mockRestore();
   });
 
-  it("includes provider.order in request body when OPENROUTER_PROVIDERS is configured", async () => {
-    const { default: chat } = await import("./chat");
+  it("includes provider.order in fetch request body when OPENROUTER_PROVIDERS is configured", async () => {
+    const { callOpenRouter } = await import("./chat");
     const { parseProviderList } = await import("@claude-cope/shared/openrouter");
 
-    // Mock environment with provider configuration
-    const mockEnv = {
-      OPENROUTER_API_KEY: "test-key",
-      OPENROUTER_PROVIDERS: "Together,Fireworks",
-      DB: undefined,
-      USAGE_KV: undefined,
-      QUOTA_KV: undefined,
-    };
+    const providerList = parseProviderList("Together,Fireworks");
+    expect(providerList).toEqual(["Together", "Fireworks"]);
 
-    const mockContext = {
-      req: {
-        json: async () => ({
-          chatMessages: [{ role: "user", content: "test" }],
-          username: "testuser",
-          rank: "Junior Code Monkey",
-        }),
-        raw: {},
-        header: () => undefined,
-      },
-      env: mockEnv,
-      get: () => "test-session-id",
-      json: (data: unknown) => new Response(JSON.stringify(data)),
-      executionCtx: {
-        waitUntil: () => {},
-      },
-    };
+    await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
 
-    // Note: This is a simplified test - in a real implementation, you would need to
-    // properly mock the D1 database, KV stores, and other dependencies
-
-    const providers = parseProviderList(mockEnv.OPENROUTER_PROVIDERS);
-    expect(providers).toEqual(["Together", "Fireworks"]);
-
-    // Verify that when parseProviderList returns a non-empty array,
-    // the request body should include provider.order
-    const requestBody = {
-      model: "test-model",
-      messages: [],
+    expect(capturedRequestBody).toBeDefined();
+    expect(capturedRequestBody).toHaveProperty("provider");
+    expect(capturedRequestBody).toMatchObject({
+      model: "openai/gpt-oss-20b",
+      messages: [{ role: "user", content: "test" }],
       max_tokens: 2000,
       reasoning: { effort: "low" },
-    };
-
-    if (providers.length > 0) {
-      Object.assign(requestBody, { provider: { order: providers } });
-    }
-
-    expect(requestBody).toHaveProperty("provider");
-    expect(requestBody.provider).toEqual({ order: ["Together", "Fireworks"] });
+      provider: { order: ["Together", "Fireworks"] },
+    });
   });
 
-  it("omits provider field when OPENROUTER_PROVIDERS is not configured", async () => {
+  it("omits provider field in fetch request when OPENROUTER_PROVIDERS is not configured", async () => {
+    const { callOpenRouter } = await import("./chat");
     const { parseProviderList } = await import("@claude-cope/shared/openrouter");
 
-    type OpenRouterRequestBody = {
-      model: string;
-      messages: { role: string; content: string }[];
-      max_tokens: number;
-      reasoning: { effort: string };
-      provider?: { order: string[] };
-    };
+    const providerList = parseProviderList(undefined);
+    expect(providerList).toEqual([]);
 
-    const providers = parseProviderList(undefined);
-    expect(providers).toEqual([]);
+    await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
 
-    // Verify that when parseProviderList returns an empty array,
-    // the request body should not include provider field
-    const requestBody: OpenRouterRequestBody = {
-      model: "test-model",
-      messages: [],
+    expect(capturedRequestBody).toBeDefined();
+    expect(capturedRequestBody).not.toHaveProperty("provider");
+    expect(capturedRequestBody).toMatchObject({
+      model: "openai/gpt-oss-20b",
+      messages: [{ role: "user", content: "test" }],
       max_tokens: 2000,
       reasoning: { effort: "low" },
-    };
-
-    if (providers.length > 0) {
-      requestBody.provider = { order: providers };
-    }
-
-    expect(requestBody).not.toHaveProperty("provider");
+    });
   });
 
   it("omits provider field when OPENROUTER_PROVIDERS is empty string", async () => {
+    const { callOpenRouter } = await import("./chat");
     const { parseProviderList } = await import("@claude-cope/shared/openrouter");
 
-    type OpenRouterRequestBody = {
-      model: string;
-      messages: { role: string; content: string }[];
-      max_tokens: number;
-      reasoning: { effort: string };
-      provider?: { order: string[] };
-    };
+    const providerList = parseProviderList("");
+    expect(providerList).toEqual([]);
 
-    const providers = parseProviderList("");
-    expect(providers).toEqual([]);
+    await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
 
-    const requestBody: OpenRouterRequestBody = {
-      model: "test-model",
-      messages: [],
-      max_tokens: 2000,
-      reasoning: { effort: "low" },
-    };
-
-    if (providers.length > 0) {
-      requestBody.provider = { order: providers };
-    }
-
-    expect(requestBody).not.toHaveProperty("provider");
+    expect(capturedRequestBody).toBeDefined();
+    expect(capturedRequestBody).not.toHaveProperty("provider");
   });
 });

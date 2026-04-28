@@ -10,6 +10,7 @@
     "./gameData": "./src/gameData.ts",
     "./achievements": "./src/achievements.ts",
     "./buddies": "./src/buddies.ts",
-    "./migrations": "./src/migrations.ts"
+    "./migrations": "./src/migrations.ts",
+    "./openrouter": "./src/openrouter.ts"
   }
 }

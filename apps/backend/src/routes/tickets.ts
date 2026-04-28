@@ -11,6 +11,28 @@ type Env = {
   };
 };
 
+type OpenRouterRequestBody = {
+  model: string;
+  messages: { role: string; content: string }[];
+  provider?: { order: string[] };
+};
+
+export function buildTicketRefineRequest(
+  messages: { role: string; content: string }[],
+  providers?: string[]
+): OpenRouterRequestBody {
+  const requestBody: OpenRouterRequestBody = {
+    model: "nvidia/nemotron-nano-9b-v2:free",
+    messages,
+  };
+
+  if (providers && providers.length > 0) {
+    requestBody.provider = { order: providers };
+  }
+
+  return requestBody;
+}
+
 const tickets = new Hono<Env>();
 
 tickets.get("/community", async (c) => {
@@ -59,21 +81,8 @@ tickets.post("/refine", async (c) => {
     },
   ];
 
-  type OpenRouterRequestBody = {
-    model: string;
-    messages: { role: string; content: string }[];
-    provider?: { order: string[] };
-  };
-
-  const requestBody: OpenRouterRequestBody = {
-    model: "nvidia/nemotron-nano-9b-v2:free",
-    messages,
-  };
-
   const providerList = parseProviderList(c.env.OPENROUTER_PROVIDERS);
-  if (providerList.length > 0) {
-    requestBody.provider = { order: providerList };
-  }
+  const requestBody = buildTicketRefineRequest(messages, providerList);
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",

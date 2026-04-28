@@ -168,7 +168,7 @@ type OpenRouterRequestBody = {
   provider?: { order: string[] };
 };
 
-async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[], providers?: string[]) {
+export async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[], providers?: string[]) {
   const requestBody: OpenRouterRequestBody = {
     model,
     messages,
