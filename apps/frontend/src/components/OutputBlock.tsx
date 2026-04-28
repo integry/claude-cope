@@ -314,8 +314,7 @@ function getContainerClass(message: Message, isNew: boolean): string {
   return `mb-5 ${colorClass} ${modifier}`;
 }
 
-function MessageContent({ message, isNew = false, isFreeTier = false, onSlashCommand }: { message: Message; isNew?: boolean; isFreeTier?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
-  const { role, content } = message;
+function getMessageFlags(role: string, content: string) {
   const isWarning = role === "warning";
   const isAchievement = isWarning && content.includes("ACHIEVEMENT UNLOCKED");
   const isBuddyInterjection = isWarning && isBuddyMessage(content);
@@ -323,8 +322,13 @@ function MessageContent({ message, isNew = false, isFreeTier = false, onSlashCom
   const useMarkdown = isMarkdownRole && !isAchievement && !isBuddyInterjection;
   const isAwaitingResponse = role === "loading" && content.startsWith("[⚙️]");
   const isStreaming = role === "loading" && !isAwaitingResponse;
+  return { useMarkdown, isAwaitingResponse, isStreaming };
+}
 
-  // Typewriter: new system messages for all users; warnings/errors only for free-tier
+function MessageContent({ message, isNew = false, isFreeTier = false, onSlashCommand }: { message: Message; isNew?: boolean; isFreeTier?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
+  const { role, content } = message;
+  const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(role, content);
+
   const shouldTypewrite = isNew && useMarkdown && (role === "system" || isFreeTier);
   const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite, isFreeTier);
 

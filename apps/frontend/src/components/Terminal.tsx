@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, type Dispatch, type SetStateAction, ChangeEvent, KeyboardEvent, memo } from "react";
+import { useState, useRef, useEffect, useCallback, ChangeEvent, KeyboardEvent, memo } from "react";
 import OutputBlock from "./OutputBlock";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
@@ -21,6 +21,7 @@ import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { buildAchievementBox } from "./achievementBox";
 import { filterChatHistory } from "./filterChatHistory";
+import { TerminalFooter } from "./TerminalFooter";
 import Ticker from "./Ticker";
 import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
 import SprintProgressBar from "./SprintProgressBar";
@@ -451,18 +452,7 @@ function Terminal() {
         </div>
       </div>
       <TerminalOverlays state={state} showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact} showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade} setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard} setShowAchievements={setShowAchievements} setShowSynergize={setShowSynergize} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms} setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty} setShowUpgrade={setShowUpgrade} setIsProcessing={setIsProcessing} setHistory={setHistory} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} />
-      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-1 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
-        <div><span className="text-gray-400">[LEGAL]</span> This is a parody project and is not affiliated with Anthropic.</div>
-        <div className="flex items-center justify-between">
-          <span><span className="text-gray-400">[BLAME]</span> {"© 2026 Unchained Development OÜ && git blame --author=\"Rinalds Uzkalns\""}</span>
-          <span>{"made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="flex gap-4 items-center"><span className="text-gray-400">[LINKS]</span>{([["terms", setShowTerms], ["privacy", setShowPrivacy], ["about", setShowAbout], ["help", setShowHelp], ["contact", setShowContact]] as [string, Dispatch<SetStateAction<boolean>>][]).map(([key, setter]: [string, Dispatch<SetStateAction<boolean>>]) => (<button key={key} onClick={() => { closeAllOverlays(); setter(true); if (key !== "about" && key !== "help") window.history.pushState(null, "", `/${key}`); }} className="text-gray-400 hover:text-white">/{key}</button>))}</span>
-          <span className="flex gap-4">{[["https://github.com/integry/claude-cope", "/github"], ["https://reddit.com/r/claudecope", "/reddit"], ["https://discord.gg/claudecope", "/discord"], ["https://x.com/claudecope", "/x"]].map(([href, label]) => (<a key={label} href={href} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">{label}</a>))}</span>
-        </div>
-      </footer>
-      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 backdrop-blur-sm font-mono sm:hidden text-center" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}><span className="leading-tight">Parody project, no Anthropic affiliation.</span></footer>
+      <TerminalFooter closeAllOverlays={closeAllOverlays} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
     </div>
   );
 }
