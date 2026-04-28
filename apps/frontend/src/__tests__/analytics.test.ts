@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { parseBaseCommand } from "../parseBaseCommand";
 
-/** Flush all pending microtasks / resolved promises. */
-const flushPromises = () => new Promise<void>((r) => setTimeout(r, 0));
+/** Flush all pending microtasks / resolved promises (multiple ticks for CI reliability). */
+const flushPromises = async () => {
+  for (let i = 0; i < 3; i++) {
+    await new Promise<void>((r) => setTimeout(r, 0));
+  }
+};
 
 describe("analytics — disabled path (no POSTHOG_KEY)", () => {
   beforeEach(() => {
@@ -141,9 +145,31 @@ describe("analytics — enabled path (with POSTHOG_KEY)", () => {
 });
 
 describe("analytics — init failure recovery", () => {
+  let initShouldFail: boolean;
+  const mockCapture = vi.fn();
+  const mockIdentify = vi.fn();
+  const mockInit = vi.fn();
+
   beforeEach(() => {
     vi.resetModules();
+    initShouldFail = false;
+    mockCapture.mockClear();
+    mockIdentify.mockClear();
+    mockInit.mockClear();
+
     vi.stubEnv("VITE_POSTHOG_KEY", "phc_test_key_123");
+
+    // Use a single mock where init() conditionally throws, avoiding vitest
+    // module-cache issues that arise when re-mocking posthog-js via vi.doMock.
+    vi.doMock("posthog-js", () => ({
+      default: {
+        init: mockInit.mockImplementation(() => {
+          if (initShouldFail) throw new Error("init failed");
+        }),
+        capture: mockCapture,
+        identify: mockIdentify,
+      },
+    }));
 
     vi.stubGlobal("localStorage", {
       getItem: vi.fn(() => null),
@@ -160,36 +186,21 @@ describe("analytics — init failure recovery", () => {
   });
 
   it("allows retry after initialization failure", async () => {
-    // First attempt: posthog-js fails to load
-    vi.doMock("posthog-js", () => {
-      throw new Error("chunk load failed");
-    });
+    initShouldFail = true;
 
     const { initPostHog } = await import("../analytics");
     initPostHog();
     await flushPromises();
 
-    // Reset mock to succeed on retry
-    vi.doMock("posthog-js", () => ({
-      default: {
-        init: vi.fn(),
-        capture: vi.fn(),
-        identify: vi.fn(),
-      },
-    }));
+    // init() threw inside .then(), catch handler reset the initialized flag
+    initShouldFail = false;
 
     // Second attempt should not be blocked by initialized flag
     expect(() => initPostHog()).not.toThrow();
   });
 
   it("preserves pending events across init failure for retry flush", async () => {
-    const mockCapture = vi.fn();
-    const mockIdentify = vi.fn();
-
-    // First attempt: posthog-js fails to load
-    vi.doMock("posthog-js", () => {
-      throw new Error("chunk load failed");
-    });
+    initShouldFail = true;
 
     const { initPostHog, track, identify } = await import("../analytics");
     initPostHog();
@@ -201,16 +212,8 @@ describe("analytics — init failure recovery", () => {
     await flushPromises();
     // First attempt failed — pending events should be preserved
 
-    // Reset mock to succeed on retry
-    vi.doMock("posthog-js", () => ({
-      default: {
-        init: vi.fn(),
-        capture: mockCapture,
-        identify: mockIdentify,
-      },
-    }));
-
-    // Retry
+    // Switch to success and retry
+    initShouldFail = false;
     initPostHog();
     track("retry_event", { retry: true });
 
