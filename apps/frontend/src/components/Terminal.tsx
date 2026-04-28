@@ -127,7 +127,7 @@ function Terminal() {
     const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
   }, [unlockAchievement, playChime]);
 
-  const closeAllOverlays = useCallback(() => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowPrivacy(false); setShowTerms(false); setShowContact(false); setShowProfile(false); setShowParty(false); setShowUpgrade(false); }, []);
+  const closeAllOverlays = useCallback(() => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowPrivacy(false); setShowTerms(false); setShowContact(false); setShowProfile(false); setShowParty(false); setShowUpgrade(false); pendingNagCommandRef.current = null; }, []);
   const handleProfileClick = useCallback(() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlays, state.username]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [history]);
   useEffect(() => {
@@ -145,10 +145,15 @@ function Terminal() {
   }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
 
   const handleQuotaLockout = useCallback(() => {
-    triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState });
-    // WinRAR nag: show upgrade overlay for free tier when quota is exhausted
+    const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
+    // BYOK users should never be gated by platform quota
+    if (effectiveApiKey) return;
     if (!state.proKey && !state.proKeyHash) {
+      // WinRAR nag: show upgrade overlay instead of the old lockout messages
       setShowUpgrade(true);
+    } else {
+      // Pro users: run the normal lockout flow (quota refill, etc.)
+      triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState });
     }
   }, [playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState]);
 
@@ -206,6 +211,7 @@ function Terminal() {
     }
   }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
 
+  const processCommandRef = useRef<(command: string) => void>(() => {});
   const processCommand = async (command: string) => {
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
     if (!effectiveApiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); handleInstantBan(); return; }
@@ -250,6 +256,7 @@ function Terminal() {
       onError: playError, signal: controller.signal,
     });
   };
+  processCommandRef.current = processCommand;
 
   const handleEnterSubmit = async () => {
     if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
@@ -264,15 +271,20 @@ function Terminal() {
     processCommand(command);
   };
 
-  // WinRAR nag: when the UpgradeOverlay is dismissed while a command is pending, process it
-  useEffect(() => {
-    if (!showUpgrade && pendingNagCommandRef.current !== null) {
+  // WinRAR nag: replay the pending command only when the user explicitly dismisses
+  // the UpgradeOverlay (ESC, [x] click, or backdrop click). This is intentionally a
+  // callback rather than an effect on `showUpgrade` so that programmatic closes
+  // (e.g. closeAllOverlays opening another overlay, or route changes) don't accidentally
+  // replay the command. Uses processCommandRef to always call the latest version.
+  const handleUpgradeNagClose = useCallback(() => {
+    setShowUpgrade(false);
+    if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
+    if (pendingNagCommandRef.current !== null) {
       const command = pendingNagCommandRef.current;
       pendingNagCommandRef.current = null;
-      processCommand(command);
+      processCommandRef.current(command);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showUpgrade]);
+  }, []);
 
   const { handleKeyDown } = useTerminalKeyboard({
     slashQuery,
@@ -365,9 +377,9 @@ function Terminal() {
         setShowProfile={setShowProfile}
         setShowParty={setShowParty}
         setShowSynergize={setShowSynergize}
-        setShowUpgrade={setShowUpgrade}
         setIsProcessing={setIsProcessing}
         setHistory={setHistory}
+        onUpgradeNagClose={handleUpgradeNagClose}
       />
       <TerminalFooter closeAllOverlays={closeAllOverlays} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
     </div>
