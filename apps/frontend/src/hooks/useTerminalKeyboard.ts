@@ -151,7 +151,7 @@ export function useTerminalKeyboard({
     } else {
       lastEscapeRef.current = now;
     }
-  }, [anyOverlayOpen, isProcessing, abortControllerRef, freeTierDelayRef, inputValue, closeAllOverlays, setIsProcessing, setHistory, setInputValue, setSlashQuery, setSlashIndex, cancelFreeTierDelay, cancelAbortController]);
+  }, [anyOverlayOpen, isProcessing, abortControllerRef, freeTierDelayRef, inputValue, closeAllOverlays, setHistory, setInputValue, setSlashQuery, setSlashIndex, cancelFreeTierDelay, cancelAbortController]);
 
   const handleArrowUp = (slashMenuOpen: boolean, filtered: string[]) => {
     if (slashMenuOpen) {
