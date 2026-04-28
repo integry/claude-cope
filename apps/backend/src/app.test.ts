@@ -83,4 +83,74 @@ describe("app", () => {
       expect(res.status).not.toBe(403);
     });
   });
+
+  describe("Turnstile verification and protection", () => {
+    it("bypasses /api/verify when TURNSTILE_SECRET_KEY is not set", async () => {
+      const res = await app.request(
+        "/api/verify",
+        { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({}) },
+        { ALLOWED_ORIGINS: "http://localhost:5173" },
+      );
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ verified: true, bypassed: true });
+    });
+
+    it("returns 400 when verify token is missing while secret is configured", async () => {
+      const usageKv = {
+        get: vi.fn(),
+        put: vi.fn(),
+      };
+      const res = await app.request(
+        "/api/verify",
+        { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({}) },
+        { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv },
+      );
+      expect(res.status).toBe(400);
+      expect(usageKv.put).not.toHaveBeenCalled();
+    });
+
+    it("rejects /api/chat with 403 when human flag is absent", async () => {
+      const usageKv = {
+        get: vi.fn().mockResolvedValue(null),
+      };
+      const res = await app.request(
+        "/api/chat",
+        { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ chatMessages: [] }) },
+        { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv },
+      );
+      expect(res.status).toBe(403);
+      await expect(res.json()).resolves.toEqual({ error: "Human verification required" });
+      expect(usageKv.get).toHaveBeenCalled();
+    });
+
+    it("stores human flag in USAGE_KV on successful verification", async () => {
+      const usageKv = {
+        get: vi.fn(),
+        put: vi.fn().mockResolvedValue(undefined),
+      };
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+      try {
+        const res = await app.request(
+          "/api/verify",
+          { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ token: "token-123" }) },
+          { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv },
+        );
+        expect(res.status).toBe(200);
+        await expect(res.json()).resolves.toEqual({ verified: true });
+        expect(usageKv.put).toHaveBeenCalledWith(
+          expect.stringMatching(/^human:/),
+          "1",
+          { expirationTtl: 60 * 60 * 24 },
+        );
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+  });
 });

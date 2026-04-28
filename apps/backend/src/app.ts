@@ -75,6 +75,7 @@ app.use("*", async (c, next) => {
 
 app.use("/api/chat", rateLimiter);
 app.use("/api/chat", botProtection);
+app.use("/api/verify", rateLimiter);
 
 app.route("/api/chat", chat);
 app.route("/api/verify", verify);

@@ -7,8 +7,8 @@ export const botProtection: MiddlewareHandler = async (c, next) => {
     return;
   }
 
-  const kv = (c.env as { QUOTA_KV?: KVNamespace; USAGE_KV?: KVNamespace } | undefined);
-  const usageKv = kv?.QUOTA_KV ?? kv?.USAGE_KV;
+  const kv = (c.env as { USAGE_KV?: KVNamespace } | undefined);
+  const usageKv = kv?.USAGE_KV;
   const sessionId = c.get("sessionId") as string | undefined;
 
   if (!usageKv || !sessionId) {

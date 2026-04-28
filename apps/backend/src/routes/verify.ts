@@ -4,7 +4,6 @@ type Env = {
   Bindings: {
     TURNSTILE_SECRET_KEY?: string;
     USAGE_KV?: KVNamespace;
-    QUOTA_KV?: KVNamespace;
   };
   Variables: {
     sessionId: string;
@@ -25,7 +24,7 @@ const verify = new Hono<Env>();
 verify.post("/", async (c) => {
   const secret = c.env?.TURNSTILE_SECRET_KEY;
   const sessionId = c.get("sessionId");
-  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  const kv = c.env?.USAGE_KV;
 
   if (!secret) {
     return c.json({ verified: true, bypassed: true });

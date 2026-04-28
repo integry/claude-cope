@@ -197,6 +197,17 @@ async function handleErrorResponse(
   onQuotaExhausted?: () => void,
   onError?: () => void,
 ): Promise<boolean> {
+  if (res.status === 403) {
+    const errorData = await res.json().catch(() => null);
+    if (errorData?.error === "Human verification required") {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("turnstile:required"));
+      }
+      setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
+      return true;
+    }
+  }
+
   if (res.status === 402) {
     if (onQuotaExhausted) {
       setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
