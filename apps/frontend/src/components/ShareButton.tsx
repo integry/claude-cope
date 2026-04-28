@@ -4,11 +4,23 @@ import type { ShareResult } from "./shareChatUtils";
 
 const SPINNER_CHAR = "/";
 
+/** Detect Mac so the paste hint can show CMD+V instead of CTRL+V.
+ *  navigator.platform is deprecated but still ships everywhere; the modern
+ *  userAgentData isn't on Safari/Firefox yet. Fall back to CTRL on the
+ *  rare case both are unavailable (SSR, locked-down browsers). */
+function isMacPlatform(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const uaData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
+  if (uaData?.platform) return uaData.platform.toLowerCase().includes("mac");
+  return /mac/i.test(navigator.platform || "");
+}
+
 export function ShareButton({ userMessage, systemMessage, username }: { userMessage: string; systemMessage: string; username: string }) {
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "done" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [pasteHint, setPasteHint] = useState<{ platform: "twitter" | "linkedin" } | null>(null);
   const timeoutIds = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const modalRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -48,6 +60,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewBlob(null);
     setPreviewUrl(null);
+    setPasteHint(null);
   }, [previewUrl]);
 
   const generatingRef = useRef(false);
@@ -106,45 +119,44 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   }, [userMessage, systemMessage, username, previewBlob, closePreview, clearTimeouts, resetAfterDelay]);
 
   const handleShare = useCallback(async (platform: "twitter" | "linkedin") => {
-    await executeShare({ platform, skipReset: true }, (result, p) => {
-      if (result.success && result.method === "image") {
-        setStatus("copied");
-        setFeedback("Image copied to clipboard!");
-        addTimeout(() => {
-          openShareIntent(p!);
-          setStatus("done");
-          if (p === "linkedin") {
-            setFeedback("LinkedIn share opened! Note: LinkedIn's share dialog shares a link — your image is still on your clipboard if you'd like to post it separately.");
-          } else {
-            setFeedback("Share dialog opened! Paste the image in your post.");
-          }
-          resetAfterDelay(4000);
-        }, 1200);
-      } else if (result.success && result.method === "text") {
-        setStatus("copied");
-        setFeedback("Text copied to clipboard (image copy not supported).");
-        addTimeout(() => {
-          openShareIntent(p!);
-          setStatus("done");
-          if (p === "linkedin") {
-            setFeedback("LinkedIn share opened! The link has been shared. Your copied text is on your clipboard.");
-          } else {
-            setFeedback("Share dialog opened! Paste the text in your post.");
-          }
-          resetAfterDelay(4000);
-        }, 1200);
-      } else if (result.success) {
-        openShareIntent(p!);
-        setStatus("done");
-        setFeedback("Share dialog opened!");
-        resetAfterDelay(4000);
-      } else {
+    if (!previewBlob) return;
+    // Swap the modal footer to the paste-hint state immediately. The image
+    // copy happens in the background; the user clicks the OPEN-tab action
+    // themselves when they're ready, which keeps the new tab inside a user
+    // gesture (so the popup blocker is happy) and lets them read the paste
+    // instructions first instead of being whisked away mid-read.
+    setPasteHint({ platform });
+    addTimeout(() => setPasteHint(null), 30000);
+
+    try {
+      const result: ShareResult = await shareChatImage({
+        userMessage,
+        systemMessage,
+        openShareUrl: false,
+        username,
+        previewBlob,
+      });
+      if (!result.success) {
+        setPasteHint(null);
         setStatus("error");
         setFeedback(result.message);
+        closePreview();
         resetAfterDelay(4000);
       }
-    });
-  }, [executeShare, addTimeout, resetAfterDelay]);
+    } catch {
+      setPasteHint(null);
+      setStatus("error");
+      setFeedback("Something went wrong. Please try again.");
+      closePreview();
+      resetAfterDelay(4000);
+    }
+  }, [previewBlob, userMessage, systemMessage, username, addTimeout, closePreview, resetAfterDelay]);
+
+  const handleOpenShareTarget = useCallback((platform: "twitter" | "linkedin") => {
+    openShareIntent(platform);
+    closePreview();
+    triggerRef.current?.focus();
+  }, [closePreview]);
 
   const handleCopyImage = useCallback(async () => {
     await executeShare({}, (result) => {
@@ -229,48 +241,84 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       </button>
       {previewUrl && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-50 flex items-center justify-center"
           onClick={() => { closePreview(); triggerRef.current?.focus(); }}
           role="dialog"
           aria-modal="true"
           aria-label="Share preview"
         >
+          <div className="absolute inset-0 bg-black opacity-70" />
           <div
             ref={modalRef}
-            className="relative bg-gray-900 border border-gray-700 rounded-lg shadow-2xl p-4 max-w-[780px] w-full mx-4 max-h-[90vh] overflow-y-auto"
+            className="relative z-10"
+            style={{
+              fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
+              fontSize: "13px",
+              lineHeight: "1.4",
+              backgroundColor: "#1e232b",
+              border: "2px solid #ff5555",
+              boxShadow: "8px 8px 0px rgba(0, 0, 0, 0.9)",
+              maxWidth: "calc(100vw - 2rem)",
+              maxHeight: "calc(100vh - 2rem)",
+              overflow: "auto",
+              color: "#c9d1d9",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              onClick={() => { closePreview(); triggerRef.current?.focus(); }}
-              className="absolute top-2 right-3 text-gray-500 hover:text-gray-300 text-lg font-mono"
-              aria-label="Close"
-            >
-              x
-            </button>
-            <img
-              src={previewUrl}
-              alt="Share preview"
-              className="w-full rounded border border-gray-700"
-            />
-            <div className="flex gap-2 mt-3 justify-center">
+            <div style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #ff5555" }}>
+              <span style={{ color: "#ff5555", fontWeight: "bold", fontSize: "11px" }}>SHARE PREVIEW</span>
               <button
-                onClick={handleCopyImage}
-                className="px-3 py-1.5 text-[11px] font-mono text-gray-300 bg-gray-800 hover:bg-gray-700 hover:text-white rounded border border-gray-600 transition-colors"
+                onClick={() => { closePreview(); triggerRef.current?.focus(); }}
+                style={{ color: "#aaaaaa", cursor: "pointer", fontSize: "14px", background: "none", border: "none", padding: 0 }}
+                aria-label="Close"
               >
-                Copy image
+                [x]
               </button>
-              <button
-                onClick={() => handleShare("twitter")}
-                className="px-3 py-1.5 text-[11px] font-mono text-gray-300 bg-gray-800 hover:bg-gray-700 hover:text-white rounded border border-gray-600 transition-colors"
-              >
-                Share on X
-              </button>
-              <button
-                onClick={() => handleShare("linkedin")}
-                className="px-3 py-1.5 text-[11px] font-mono text-gray-300 bg-gray-800 hover:bg-gray-700 hover:text-white rounded border border-gray-600 transition-colors"
-              >
-                Share on LinkedIn
-              </button>
+            </div>
+            <div style={{ padding: "12px" }}>
+              <img
+                src={previewUrl}
+                alt="Share preview"
+                style={{ display: "block", maxWidth: "100%", maxHeight: "calc(100vh - 14rem)" }}
+              />
+            </div>
+            <div style={{ borderTop: "1px solid #ff5555", padding: "10px 12px" }}>
+              {pasteHint ? (
+                <div style={{ fontSize: "12px", lineHeight: "1.6", textAlign: "left" }}>
+                  <div style={{ color: "#ff5555", fontWeight: "bold" }}>
+                    <div>{"> [SYSTEM] IMAGE COPIED TO CLIPBOARD."}</div>
+                    <div>
+                      {"> MANDATORY ACTION: GO TO THE NEW TAB AND PRESS "}
+                      <span style={{ color: "#ffff55" }}>{`[ ${isMacPlatform() ? "CMD" : "CTRL"} + V ]`}</span>
+                      {" TO PASTE."}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleOpenShareTarget(pasteHint.platform)}
+                    style={{ background: "none", border: "none", padding: "8px 0 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", display: "block" }}
+                  >
+                    <span style={{ color: "#4ade80", fontWeight: "bold" }}>{">"}</span>
+                    <span style={{ color: "#4ade80", fontWeight: "bold" }}>{` [ OPEN ${pasteHint.platform === "twitter" ? "X" : "LINKEDIN"} TAB ]`}</span>
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" }}>
+                  {[
+                    { label: "COPY IMAGE", onClick: handleCopyImage },
+                    { label: "SHARE ON X", onClick: () => handleShare("twitter") },
+                    { label: "SHARE ON LINKEDIN", onClick: () => handleShare("linkedin") },
+                  ].map(({ label, onClick }) => (
+                    <button
+                      key={label}
+                      onClick={onClick}
+                      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: "12px" }}
+                    >
+                      <span style={{ color: "#4ade80", fontWeight: "bold" }}>{">"}</span>
+                      <span style={{ color: "#4ade80", fontWeight: "bold" }}>{` [ ${label} ]`}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

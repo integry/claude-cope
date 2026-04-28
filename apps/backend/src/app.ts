@@ -23,7 +23,7 @@ app.use(
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
       connectSrc: ["'self'", "https://openrouter.ai", "wss:", "ws:"],
-      imgSrc: ["'self'", "data:"],
+      imgSrc: ["'self'", "data:", "blob:"],
       styleSrc: ["'self'", "'unsafe-inline'"],
     },
   })

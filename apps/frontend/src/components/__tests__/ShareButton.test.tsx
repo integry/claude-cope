@@ -107,62 +107,63 @@ describe("ShareButton modal share flow", () => {
     expect(img).not.toBeNull();
   });
 
-  it("Share on X flow: preview → click Share on X → modal closes → share intent opens", async () => {
+  it("Share on X flow: footer swaps to paste hint, [OPEN X TAB] triggers share intent", async () => {
     renderComponent();
     await openPreview();
 
-    // Click "Share on X" button
     const buttons = container.querySelectorAll("button");
-    const shareXBtn = Array.from(buttons).find((b) => b.textContent === "Share on X");
+    const shareXBtn = Array.from(buttons).find((b) => b.textContent?.includes("SHARE ON X"));
     expect(shareXBtn).not.toBeNull();
 
-    // Click share — this triggers executeShare which has an 800ms delay
     await act(async () => {
       shareXBtn!.click();
     });
-
-    // Modal should close immediately
-    const dialogAfterClick = container.querySelector("[role='dialog']");
-    expect(dialogAfterClick).toBeNull();
-
-    // Advance past the 800ms delay in executeShare
     await act(async () => {
-      vi.advanceTimersByTime(800);
+      await Promise.resolve();
     });
 
-    // After shareChatImage resolves, status should be "copied"
-    expect(container.textContent).toContain("Image copied to clipboard!");
+    // Modal stays open — the footer swaps in place to a paste hint.
+    expect(container.querySelector("[role='dialog']")).not.toBeNull();
+    expect(container.textContent).toContain("IMAGE COPIED TO CLIPBOARD");
+    expect(container.textContent).toMatch(/\[ (CTRL|CMD) \+ V \]/);
+    // Share intent does NOT fire until the user clicks the OPEN-tab action.
+    expect(mockOpenShareIntent).not.toHaveBeenCalled();
 
-    // Advance past the 1200ms share intent delay
+    const buttonsAfter = container.querySelectorAll("button");
+    const openTabBtn = Array.from(buttonsAfter).find((b) => b.textContent?.includes("OPEN X TAB"));
+    expect(openTabBtn).not.toBeUndefined();
     await act(async () => {
-      vi.advanceTimersByTime(1200);
+      openTabBtn!.click();
     });
-
-    // openShareIntent should have been called with "twitter"
     expect(mockOpenShareIntent).toHaveBeenCalledWith("twitter");
-    expect(container.textContent).toContain("Share dialog opened!");
+    // Modal closes when the user opens the share tab.
+    expect(container.querySelector("[role='dialog']")).toBeNull();
   });
 
-  it("Share on LinkedIn flow: preview → click Share on LinkedIn → share intent opens", async () => {
+  it("Share on LinkedIn flow: footer swaps to paste hint, [OPEN LINKEDIN TAB] triggers share intent", async () => {
     renderComponent();
     await openPreview();
 
     const buttons = container.querySelectorAll("button");
-    const linkedInBtn = Array.from(buttons).find((b) => b.textContent === "Share on LinkedIn");
+    const linkedInBtn = Array.from(buttons).find((b) => b.textContent?.includes("SHARE ON LINKEDIN"));
     expect(linkedInBtn).not.toBeNull();
 
     await act(async () => {
       linkedInBtn!.click();
     });
-
     await act(async () => {
-      vi.advanceTimersByTime(800);
+      await Promise.resolve();
     });
 
-    await act(async () => {
-      vi.advanceTimersByTime(1200);
-    });
+    expect(container.textContent).toContain("MANDATORY ACTION");
+    expect(mockOpenShareIntent).not.toHaveBeenCalled();
 
+    const buttonsAfter = container.querySelectorAll("button");
+    const openTabBtn = Array.from(buttonsAfter).find((b) => b.textContent?.includes("OPEN LINKEDIN TAB"));
+    expect(openTabBtn).not.toBeUndefined();
+    await act(async () => {
+      openTabBtn!.click();
+    });
     expect(mockOpenShareIntent).toHaveBeenCalledWith("linkedin");
   });
 
@@ -182,31 +183,25 @@ describe("ShareButton modal share flow", () => {
     expect(mockGetChatCardBlob).toHaveBeenCalledTimes(1);
   });
 
-  it("resets to idle after share flow completes", async () => {
+  it("paste hint reverts to action buttons after the 30s auto-revert timer", async () => {
     renderComponent();
     await openPreview();
 
     const buttons = container.querySelectorAll("button");
-    const shareXBtn = Array.from(buttons).find((b) => b.textContent === "Share on X");
+    const shareXBtn = Array.from(buttons).find((b) => b.textContent?.includes("SHARE ON X"));
 
     await act(async () => {
       shareXBtn!.click();
     });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain("IMAGE COPIED TO CLIPBOARD");
 
-    // Advance through full flow: 800ms (executeShare) + 1200ms (share intent) + 4000ms (resetAfterDelay)
     await act(async () => {
-      vi.advanceTimersByTime(800);
+      vi.advanceTimersByTime(30000);
     });
-    await act(async () => {
-      vi.advanceTimersByTime(1200);
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(4000);
-    });
-
-    // Should be back to showing the [share] button
-    const shareButton = container.querySelector("button");
-    expect(shareButton).not.toBeNull();
-    expect(shareButton!.textContent).toBe("[share]");
+    expect(container.textContent).not.toContain("IMAGE COPIED TO CLIPBOARD");
+    expect(container.querySelector("[role='dialog']")).not.toBeNull();
   });
 });

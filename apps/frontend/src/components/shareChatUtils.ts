@@ -269,11 +269,14 @@ export function generateShareText(): string {
 export function openShareIntent(platform: "twitter" | "linkedin"): void {
   const punchline = getRandomPunchline();
   if (platform === "twitter") {
-    const tweetText = `${punchline}\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://cope.bot`;
+    // Twitter expands the URL inline anyway, so the longer canonical domain
+    // costs no characters. The image card still renders the short cope.bot
+    // brand for compact visual readability.
+    const tweetText = `${punchline}\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://claudecope.com`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   } else {
-    const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://cope.bot")}`;
+    const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://claudecope.com")}`;
     window.open(url, "_blank", "noopener,noreferrer");
   }
 }
