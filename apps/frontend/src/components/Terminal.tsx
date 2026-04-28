@@ -146,20 +146,24 @@ function Terminal() {
 
   const triggerQuotaLockout = () => {
     playError();
-    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." }, { role: "warning", content: "[⚙️] Upgrading to $200/mo Max Tier..." }]);
-    setTimeout(() => {
-      const newLockouts = state.economy.quotaLockouts + 1;
-      const isNew = newLockouts >= 3 && unlockAchievementWithSound("homer_at_the_buffet");
-      const achievementMsg: Message[] = isNew ? [{ role: "warning", content: buildAchievementBox("homer_at_the_buffet") }] : [];
-      if (state.proKey || state.proKeyHash) {
+    const newLockouts = state.economy.quotaLockouts + 1;
+    if (state.proKey || state.proKeyHash) {
+      setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." }, { role: "warning", content: "[⚙️] Upgrading to $200/mo Max Tier..." }]);
+      setTimeout(() => {
+        const isNew = newLockouts >= 3 && unlockAchievementWithSound("homer_at_the_buffet");
+        const achievementMsg: Message[] = isNew ? [{ role: "warning", content: buildAchievementBox("homer_at_the_buffet") }] : [];
         resetQuota();
         if (newLockouts === 1) setInstantBanReady(true);
         setHistory((prev) => [...prev, { role: "system", content: "[SUCCESS] Max Tier activated. Quota refilled. Your paid plan limit applies — check the header bar." }, ...achievementMsg]);
-      } else {
-        setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent: 0, quotaLockouts: prev.economy.quotaLockouts + 1 } }));
-        setHistory((prev) => [...prev, { role: "error", content: "[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Max to continue." }, ...achievementMsg]);
-      }
-    }, 5000);
+      }, 5000);
+    } else {
+      // WinRAR nag: silently deplete quota so subsequent commands trigger the nag screen
+      setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent: 0, quotaLockouts: prev.economy.quotaLockouts + 1 } }));
+      const isNew = newLockouts >= 3 && unlockAchievementWithSound("homer_at_the_buffet");
+      const achievementMsg: Message[] = isNew ? [{ role: "warning", content: buildAchievementBox("homer_at_the_buffet") }] : [];
+      setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "warning", content: "[⚠️ QUOTA DEPLETED] Free tier exhausted. You may continue, but you'll need to dismiss the upgrade screen every time." }, ...achievementMsg]);
+      setShowUpgrade(true);
+    }
   };
 
   const triggerInstantBan = () => {
