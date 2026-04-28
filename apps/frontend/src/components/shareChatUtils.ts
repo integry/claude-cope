@@ -358,8 +358,10 @@ export function openShareIntent(platform: "twitter" | "linkedin"): void {
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   } else {
-    const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://claudecope.com")}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    // LinkedIn's share-offsite endpoint only supports URL sharing, not image
+    // uploads. Open the feed instead so the user can start a new post and
+    // paste the copied image directly into the composer.
+    window.open("https://www.linkedin.com/feed/", "_blank", "noopener,noreferrer");
   }
 }
 

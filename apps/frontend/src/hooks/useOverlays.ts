@@ -58,13 +58,12 @@ export function useOverlays(): OverlayState & OverlayActions {
     setShowProfile(false);
     setShowParty(false);
     setShowUpgrade(false);
-    // Normalize the URL when closing route-backed overlays.
-    // Use replaceState (not pushState) so switching between overlays doesn't
-    // leave intermediate "/" entries that break the Back button.
-    const path = window.location.pathname;
-    if (["/help", "/about", "/privacy", "/terms", "/contact", "/upgrade"].includes(path) || path.startsWith("/user/")) {
-      window.history.replaceState(null, "", "/");
-    }
+    // NOTE: URL cleanup is intentionally NOT done here. Individual overlay
+    // close handlers (in TerminalOverlays) already pushState("/") on close,
+    // and callers that open a new overlay immediately after closing all
+    // overlays will pushState the new route. Doing a replaceState("/") here
+    // would erase the current route-backed overlay from history, breaking
+    // the Back button when navigating between overlays (e.g. /privacy → /terms).
   }, []);
 
   useEffect(() => {

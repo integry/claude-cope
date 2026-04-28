@@ -2,6 +2,10 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { shareChatImage, openShareIntent, getChatCardBlob } from "./shareChatUtils";
 import type { ShareResult } from "./shareChatUtils";
 
+/** Sentinel value that async callbacks compare against to bail out when the
+ *  component has unmounted (or a newer request has superseded them). */
+type MountToken = { cancelled: boolean };
+
 const SPINNER_CHAR = "/";
 
 /** Detect Mac so the paste hint can show CMD+V instead of CTRL+V.
@@ -39,13 +43,27 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     return id;
   }, []);
 
-  // Clean up timeouts and object URLs on unmount
+  // Mounted-state token: async callbacks bail out when cancelled.
+  const mountTokenRef = useRef<MountToken>({ cancelled: false });
+
+  // Cancel in-flight async work on unmount only.
+  useEffect(() => {
+    const token: MountToken = { cancelled: false };
+    mountTokenRef.current = token;
+    return () => { token.cancelled = true; };
+  }, []);
+
+  // Revoke stale object URLs when previewUrl changes.
   useEffect(() => {
     return () => {
-      clearTimeouts();
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
-  }, [clearTimeouts, previewUrl]);
+  }, [previewUrl]);
+
+  // Clean up timeouts on unmount.
+  useEffect(() => {
+    return () => { clearTimeouts(); };
+  }, [clearTimeouts]);
 
   const resetAfterDelay = useCallback((ms: number) => {
     clearTimeouts();
@@ -68,17 +86,20 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   const handleOpenPreview = useCallback(async () => {
     if (generatingRef.current) return;
     generatingRef.current = true;
+    const token = mountTokenRef.current;
     setStatus("generating");
     setFeedback("Generating share image...");
 
     try {
       const blob = await getChatCardBlob(userMessage, systemMessage, username);
+      if (token.cancelled) return;
       const url = URL.createObjectURL(blob);
       setPreviewBlob(blob);
       setPreviewUrl(url);
       setStatus("idle");
       setFeedback(null);
     } catch {
+      if (token.cancelled) return;
       setStatus("error");
       setFeedback("Failed to generate preview.");
       resetAfterDelay(3000);
@@ -92,12 +113,17 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     successHandler: (result: ShareResult, platform?: "twitter" | "linkedin") => void,
   ) => {
     const cachedBlob = previewBlob;
+    const token = mountTokenRef.current;
     closePreview();
     clearTimeouts();
     setStatus("generating");
     setFeedback("Generating share image...");
 
-    await new Promise((r) => setTimeout(r, 800));
+    // Skip the artificial delay when the blob is already rendered.
+    if (!cachedBlob) {
+      await new Promise((r) => setTimeout(r, 800));
+    }
+    if (token.cancelled) return;
 
     try {
       const result: ShareResult = await shareChatImage({
@@ -107,10 +133,15 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         username,
         previewBlob: cachedBlob ?? undefined,
       });
+      if (token.cancelled) return;
       successHandler(result, opts.platform);
     } catch {
+      if (token.cancelled) return;
       setStatus("error");
       setFeedback(opts.platform ? "Something went wrong. Please try again." : "Failed to copy image.");
+      // Always reset on error so the button doesn't get permanently stuck.
+      resetAfterDelay(opts.platform ? 4000 : 3000);
+      return;
     }
 
     if (!opts.skipReset) {
@@ -120,13 +151,11 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
 
   const handleShare = useCallback(async (platform: "twitter" | "linkedin") => {
     if (!previewBlob) return;
-    // Swap the modal footer to the paste-hint state immediately. The image
-    // copy happens in the background; the user clicks the OPEN-tab action
-    // themselves when they're ready, which keeps the new tab inside a user
-    // gesture (so the popup blocker is happy) and lets them read the paste
-    // instructions first instead of being whisked away mid-read.
-    setPasteHint({ platform });
-    addTimeout(() => setPasteHint(null), 30000);
+    const token = mountTokenRef.current;
+
+    // Show a temporary generating state while the clipboard write runs.
+    setStatus("generating");
+    setFeedback("Copying image to clipboard...");
 
     try {
       const result: ShareResult = await shareChatImage({
@@ -136,7 +165,22 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         username,
         previewBlob,
       });
-      if (!result.success) {
+      if (token.cancelled) return;
+
+      if (result.success && result.method === "image") {
+        // Image successfully copied — show paste instructions.
+        setStatus("idle");
+        setFeedback(null);
+        setPasteHint({ platform });
+        addTimeout(() => setPasteHint(null), 30000);
+      } else if (result.success && result.method === "text") {
+        // Browser doesn't support image clipboard; text was copied instead.
+        setPasteHint(null);
+        setStatus("copied");
+        setFeedback("Text copied to clipboard (image copy not supported in this browser).");
+        closePreview();
+        resetAfterDelay(4000);
+      } else {
         setPasteHint(null);
         setStatus("error");
         setFeedback(result.message);
@@ -144,6 +188,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         resetAfterDelay(4000);
       }
     } catch {
+      if (token.cancelled) return;
       setPasteHint(null);
       setStatus("error");
       setFeedback("Something went wrong. Please try again.");

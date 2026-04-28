@@ -99,6 +99,21 @@ describe("ShareButton modal share flow", () => {
     return dialog!;
   };
 
+  /** Click a share-platform button and flush all async work. */
+  const clickShareButton = async (label: string) => {
+    const buttons = container.querySelectorAll("button");
+    const btn = Array.from(buttons).find((b) => b.textContent?.includes(label));
+    expect(btn).not.toBeNull();
+
+    await act(async () => {
+      btn!.click();
+      // Flush microtasks so the awaited mock promise resolves within act.
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    return btn!;
+  };
+
   it("opens preview modal when share button is clicked", async () => {
     renderComponent();
     const dialog = await openPreview();
@@ -110,16 +125,7 @@ describe("ShareButton modal share flow", () => {
     renderComponent();
     await openPreview();
 
-    const buttons = container.querySelectorAll("button");
-    const shareXBtn = Array.from(buttons).find((b) => b.textContent?.includes("SHARE ON X"));
-    expect(shareXBtn).not.toBeNull();
-
-    await act(async () => {
-      shareXBtn!.click();
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await clickShareButton("SHARE ON X");
 
     // Modal stays open — the footer swaps in place to a paste hint.
     expect(container.querySelector("[role='dialog']")).not.toBeNull();
@@ -143,16 +149,7 @@ describe("ShareButton modal share flow", () => {
     renderComponent();
     await openPreview();
 
-    const buttons = container.querySelectorAll("button");
-    const linkedInBtn = Array.from(buttons).find((b) => b.textContent?.includes("SHARE ON LINKEDIN"));
-    expect(linkedInBtn).not.toBeNull();
-
-    await act(async () => {
-      linkedInBtn!.click();
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await clickShareButton("SHARE ON LINKEDIN");
 
     expect(container.textContent).toContain("MANDATORY ACTION");
     expect(mockOpenShareIntent).not.toHaveBeenCalled();
@@ -186,15 +183,7 @@ describe("ShareButton modal share flow", () => {
     renderComponent();
     await openPreview();
 
-    const buttons = container.querySelectorAll("button");
-    const shareXBtn = Array.from(buttons).find((b) => b.textContent?.includes("SHARE ON X"));
-
-    await act(async () => {
-      shareXBtn!.click();
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await clickShareButton("SHARE ON X");
     expect(container.textContent).toContain("IMAGE COPIED TO CLIPBOARD");
 
     await act(async () => {
@@ -202,5 +191,69 @@ describe("ShareButton modal share flow", () => {
     });
     expect(container.textContent).not.toContain("IMAGE COPIED TO CLIPBOARD");
     expect(container.querySelector("[role='dialog']")).not.toBeNull();
+  });
+
+  it("shows text-fallback message when shareChatImage returns method 'text' during platform share", async () => {
+    renderComponent();
+    await openPreview();
+
+    // Override the mock AFTER preview opens so the preview itself succeeds
+    mockShareChatImage.mockResolvedValue({
+      success: true,
+      method: "text",
+      message: "Chat copied to clipboard as text.",
+    });
+
+    await clickShareButton("SHARE ON X");
+
+    // Should NOT show paste-image instructions since only text was copied
+    expect(container.textContent).not.toContain("IMAGE COPIED TO CLIPBOARD");
+    // Should show the text fallback message
+    expect(container.textContent).toContain("image copy not supported");
+  });
+
+  it("shows error and resets when shareChatImage throws during platform share", async () => {
+    renderComponent();
+    await openPreview();
+
+    // Override the mock AFTER preview opens
+    mockShareChatImage.mockRejectedValue(new Error("Network error"));
+
+    await clickShareButton("SHARE ON X");
+
+    // Should show error, not paste hint
+    expect(container.textContent).not.toContain("IMAGE COPIED TO CLIPBOARD");
+    expect(container.textContent).toContain("Something went wrong");
+
+    // Should auto-reset after delay
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+    // Back to idle with share button
+    const shareBtn = container.querySelector("button");
+    expect(shareBtn?.textContent).toBe("[share]");
+  });
+
+  it("shows error and resets when shareChatImage returns failure during platform share", async () => {
+    renderComponent();
+    await openPreview();
+
+    // Override the mock AFTER preview opens
+    mockShareChatImage.mockResolvedValue({
+      success: false,
+      method: "none",
+      message: "Failed to copy to clipboard.",
+    });
+
+    await clickShareButton("SHARE ON X");
+
+    expect(container.textContent).toContain("Failed to copy to clipboard.");
+  });
+
+  it("passes username through to getChatCardBlob for preview generation", async () => {
+    renderComponent();
+    await openPreview();
+
+    expect(mockGetChatCardBlob).toHaveBeenCalledWith("Hello", "World", "testuser");
   });
 });
