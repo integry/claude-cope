@@ -1,22 +1,19 @@
-import { useState, useRef, useEffect, useCallback, ChangeEvent, KeyboardEvent } from "react";
+import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import { SLASH_COMMANDS } from "./slashCommands";
-import TerminalOverlays from "./TerminalOverlays";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
 import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
 import { BuddyDisplay } from "./BuddyDisplay";
 import { parseGlitchStyle } from "./parseGlitchStyle";
 import { terminalContainerClassName } from "./terminalClassName";
-import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
-import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
+import { executeSlashCommand } from "./slashCommandExecutor";
 import { applyServerProfile } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
-import { buildAchievementBox } from "./achievementBox";
 import { filterChatHistory } from "./filterChatHistory";
 import { TerminalFooter } from "./TerminalFooter";
 import Ticker from "./Ticker";
@@ -31,6 +28,10 @@ import { runFreeTierDelay } from "./freeTierDelay";
 import { buildSprintCallbacks } from "./buildChatSubmitArgs";
 import MessageList from "./MessageList";
 import type { SlashCommandAction } from "./slashCommandDetect";
+import { triggerQuotaLockout, triggerInstantBan } from "./terminalHandlers";
+import { TerminalOverlays } from "./TerminalOverlays";
+import { useTerminalKeyboard } from "../hooks/useTerminalKeyboard";
+import { handleBragSubmit, handleBuddyConfirm, tryOutageDamage } from "./terminalInputHandlers";
 
 export type { Message };
 
@@ -110,7 +111,6 @@ function Terminal() {
   if (messageKeys.current.length > history.length) {
     messageKeys.current.length = history.length;
   }
-  const lastEscapeRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
   const pendingNagCommandRef = useRef<string | null>(null);
@@ -144,34 +144,17 @@ function Terminal() {
     fetchRandomTicketPrompt(setHistory);
   }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
 
-  const triggerQuotaLockout = () => {
-    playError();
-    const newLockouts = state.economy.quotaLockouts + 1;
-    if (state.proKey || state.proKeyHash) {
-      setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." }, { role: "warning", content: "[⚙️] Upgrading to $200/mo Max Tier..." }]);
-      setTimeout(() => {
-        const isNew = newLockouts >= 3 && unlockAchievementWithSound("homer_at_the_buffet");
-        const achievementMsg: Message[] = isNew ? [{ role: "warning", content: buildAchievementBox("homer_at_the_buffet") }] : [];
-        resetQuota();
-        if (newLockouts === 1) setInstantBanReady(true);
-        setHistory((prev) => [...prev, { role: "system", content: "[SUCCESS] Max Tier activated. Quota refilled. Your paid plan limit applies — check the header bar." }, ...achievementMsg]);
-      }, 5000);
-    } else {
-      // WinRAR nag: silently deplete quota so subsequent commands trigger the nag screen
-      setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent: 0, quotaLockouts: prev.economy.quotaLockouts + 1 } }));
-      const isNew = newLockouts >= 3 && unlockAchievementWithSound("homer_at_the_buffet");
-      const achievementMsg: Message[] = isNew ? [{ role: "warning", content: buildAchievementBox("homer_at_the_buffet") }] : [];
-      setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "warning", content: "[⚠️ QUOTA DEPLETED] Free tier exhausted. You may continue, but you'll need to dismiss the upgrade screen every time." }, ...achievementMsg]);
+  const handleQuotaLockout = useCallback(() => {
+    triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState });
+    // WinRAR nag: show upgrade overlay for free tier when quota is exhausted
+    if (!state.proKey && !state.proKeyHash) {
       setShowUpgrade(true);
     }
-  };
+  }, [playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState]);
 
-  const triggerInstantBan = () => {
-    setInstantBanReady(false); setIsProcessing(true);
-    playError();
-    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." }]);
-    setTimeout(() => { setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
-  };
+  const handleInstantBan = useCallback(() => {
+    triggerInstantBan({ setInstantBanReady, setIsProcessing, playError, setHistory });
+  }, [setIsProcessing, playError, setHistory]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
@@ -192,8 +175,6 @@ function Terminal() {
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
 
-  const anyOverlayOpen = [showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade].some(Boolean);
-
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") {
       runSlashCommandRef.current(command);
@@ -208,35 +189,28 @@ function Terminal() {
     }
   }, []);
 
-  const tryOutageDamage = (): boolean => {
-    if (outageHp === null || !DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) return false;
-    sendDamage();
-    setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: `[💥 HIT] Damage dealt to PROD OUTAGE!` }]);
-    setInputValue(""); return true;
-  };
+  // WinRAR nag: when free tier quota is exhausted, show upgrade overlay and defer command
+  const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
+    if (!effectiveApiKey && !state.proKey && !state.proKeyHash && state.economy.quotaPercent <= 0) {
+      pendingNagCommandRef.current = command;
+      setShowUpgrade(true);
+      return true;
+    }
+    return false;
+  }, [state.proKey, state.proKeyHash, state.economy.quotaPercent]);
 
-  const handleBragSubmit = () => {
-    const username = inputValue.trim(); setInputValue("");
-    const generatorsOwned = Object.values(state.inventory).reduce((sum, count) => sum + count, 0);
-    const mostAbusedCommand = Object.entries(state.commandUsage).reduce((best, [cmd, count]) => (count > best[1] ? [cmd, count] : best), ["/clear", 0] as [string, number])[0];
-    submitBrag({ username, currentRank: state.economy.currentRank, totalTDEarned: state.economy.totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending });
-  };
-
-  const handleBuddyConfirm = () => {
-    const answer = inputValue.trim().toLowerCase(); setInputValue(""); setBuddyPendingConfirm(false);
-    if (answer === "y" || answer === "yes") { setHistory((prev) => [...prev, { role: "user", content: inputValue }]); rollBuddy(setState, setHistory, state.buddy?.type ?? undefined); }
-    else { setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]); }
-  };
-
-  const processCommand = async (command: string) => {
-    const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
-    // Handle instant ban scenario (user fires command right after upgrade)
-    if (!effectiveApiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); triggerInstantBan(); return; }
-    const buddyResult = computeBuddyInterjection(state.buddy);
+  const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
     if (state.buddy.type) {
       const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
       setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount } }));
     }
+  }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
+
+  const processCommand = async (command: string) => {
+    const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
+    if (!effectiveApiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); handleInstantBan(); return; }
+    const buddyResult = computeBuddyInterjection(state.buddy);
+    handleBuddyInterjection(buddyResult);
     const userMessage: Message = { role: "user", content: command };
 
     // Free-tier artificial scarcity: fake queueing delay + terminal ads
@@ -253,12 +227,7 @@ function Terminal() {
       setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
       setIsProcessing(true);
     }
-    // Use fresh history (not the stale closure value) so messages arriving
-    // during artificial free-tier delays are included in the context.
     const contextMessages = filterChatHistory(historyRef.current);
-    // For free-tier, the user message was already added to history by
-    // runFreeTierDelay and the await allowed a re-render, so historyRef
-    // already contains it — don't duplicate it.
     const chatMessages = isFreeTier
       ? contextMessages
       : [...contextMessages, { role: "user", content: userMessage.content }];
@@ -276,10 +245,23 @@ function Terminal() {
         return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } };
       }),
       onQuotaUpdate: (quotaPercent) => setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })),
-      onQuotaExhausted: triggerQuotaLockout,
+      onQuotaExhausted: handleQuotaLockout,
       onProfileUpdate: (profile) => setState((prev) => applyServerProfile(prev, profile)),
       onError: playError, signal: controller.signal,
     });
+  };
+
+  const handleEnterSubmit = async () => {
+    if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
+    if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
+    if (bragPending) { handleBragSubmit({ inputValue, setInputValue, state, setHistory, setBragPending }); return; }
+    if (buddyPendingConfirm) { handleBuddyConfirm({ inputValue, setInputValue, setBuddyPendingConfirm, setState, setHistory, buddyType: state.buddy?.type ?? undefined }); return; }
+    if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
+    const command = inputValue;
+    setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
+    const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
+    if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
+    processCommand(command);
   };
 
   // WinRAR nag: when the UpgradeOverlay is dismissed while a command is pending, process it
@@ -292,94 +274,44 @@ function Terminal() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showUpgrade]);
 
-  const handleEnterSubmit = async () => {
-    if (tryOutageDamage()) return;
-    if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
-    if (bragPending) { handleBragSubmit(); return; }
-    if (buddyPendingConfirm) { handleBuddyConfirm(); return; }
-    if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
-    const command = inputValue;
-    setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
-    // Effective BYOK status for request routing — a stale apiKey must be
-    // ignored when the operator has disabled BYOK.
-    const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
-    // WinRAR nag screen: show UpgradeOverlay before every command when quota is exhausted
-    if (!effectiveApiKey && !state.proKey && !state.proKeyHash && state.economy.quotaPercent <= 0) {
-      pendingNagCommandRef.current = command;
-      setShowUpgrade(true);
-      return;
-    }
-    processCommand(command);
-  };
-
-  const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = val.length; } }, 0); };
-
-  const handleEscapeKey = () => {
-    if (anyOverlayOpen) { closeAllOverlays(); return; }
-    // Cancel free-tier artificial delay if one is in progress
-    if (isProcessing && freeTierDelayRef.current.timeoutId !== null) {
-      const ds = freeTierDelayRef.current;
-      const cancelBatchId = ds.batchId;
-      ds.cancelled = true;
-      if (ds.timeoutId) clearTimeout(ds.timeoutId);
-      freeTierDelayRef.current = { cancelled: false, timeoutId: null };
-      setIsProcessing(false);
-      // Only remove scaffold messages from the current in-flight batch, not prior ads
-      setHistory((prev) => [...prev.filter((msg) => {
-        if (msg.role === "loading") return false;
-        if (cancelBatchId && (msg as Message & { _freeTierBatchId?: string })._freeTierBatchId === cancelBatchId) return false;
-        return true;
-      }), { role: "warning", content: "[⚠️ ABORTED] Queue cancelled. Patience is a virtue you clearly lack." }]);
-      if (commandHistory.length > 0) { const lastCmd = commandHistory[commandHistory.length - 1]!; setInputValue(lastCmd); setCursorToEnd(lastCmd); }
-      return;
-    }
-    if (isProcessing && abortControllerRef.current) {
-      abortControllerRef.current.abort(); abortControllerRef.current = null; setIsProcessing(false);
-      setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading"), { role: "warning", content: "[⚠️ ABORTED] Generation cancelled. Your mass-produced cope has been recalled." }]);
-      if (commandHistory.length > 0) { const lastCmd = commandHistory[commandHistory.length - 1]!; setInputValue(lastCmd); setCursorToEnd(lastCmd); }
-      return;
-    }
-    const now = Date.now();
-    if (now - lastEscapeRef.current < 500) {
-      if (inputValue.length > 0) setHistory((prev) => [...prev, { role: "system", content: "[ESC ESC] Input cleared. Even your half-typed thoughts disappoint me." }]);
-      setInputValue(""); setSlashQuery(""); setSlashIndex(0); lastEscapeRef.current = 0;
-    } else { lastEscapeRef.current = now; }
-  };
-
-  // Global Escape listener so it works even when input is disabled during processing
-  useEffect(() => {
-    const onKeyDown = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") handleEscapeKey(); };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+  const { handleKeyDown } = useTerminalKeyboard({
+    slashQuery,
+    slashIndex,
+    suggestedReply,
+    inputValue,
+    isProcessing,
+    commandHistory,
+    historyIndex,
+    showStore,
+    showLeaderboard,
+    showAchievements,
+    showSynergize,
+    showHelp,
+    showAbout,
+    showPrivacy,
+    showTerms,
+    showContact,
+    showProfile,
+    showParty,
+    showUpgrade,
+    brrrrrrIntervalRef,
+    abortControllerRef,
+    freeTierDelayRef,
+    inputRef,
+    setSlashIndex,
+    setInputValue,
+    setSuggestedReply,
+    setSlashQuery,
+    setHistoryIndex,
+    setIsProcessing,
+    setHistory,
+    closeAllOverlays,
+    runSlashCommand,
+    handleEnterSubmit,
+    getFilteredSlashCommands,
   });
 
-  const handleArrow = (direction: "up" | "down", slashMenuOpen: boolean, filtered: string[]) => {
-    if (slashMenuOpen) { setSlashIndex((prev) => direction === "up" ? (prev > 0 ? prev - 1 : filtered.length - 1) : (prev < filtered.length - 1 ? prev + 1 : 0)); return; }
-    const newIndex = direction === "up" ? historyIndex + 1 : historyIndex - 1;
-    if ((direction === "up" && (commandHistory.length === 0 || newIndex >= commandHistory.length)) || (direction === "down" && newIndex < -1)) return;
-    setHistoryIndex(newIndex); const val = newIndex === -1 ? "" : commandHistory[commandHistory.length - 1 - newIndex]!; setInputValue(val); setCursorToEnd(val);
-  };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "c" && e.ctrlKey && brrrrrrIntervalRef.current) {
-      e.preventDefault(); clearInterval(brrrrrrIntervalRef.current); brrrrrrIntervalRef.current = null;
-      setHistory((prev) => [...prev, { role: "warning", content: "^C\n[✓] Process interrupted. Your CPU lives to fight another day." }]);
-      setIsProcessing(false); return;
-    }
-    const filtered = getFilteredSlashCommands();
-    const slashMenuOpen = slashQuery !== "" && filtered.length > 0;
-    if (e.key === "Escape") return; // handled by global listener
-    if (e.key === "Tab") {
-      if (slashMenuOpen) { e.preventDefault(); const selected = filtered[slashIndex]; if (selected) { setInputValue(selected); setSlashQuery(selected); } }
-      else if (suggestedReply && !inputValue) { e.preventDefault(); setInputValue(suggestedReply); setSuggestedReply(null); }
-      return;
-    }
-    if (e.key === "Enter") {
-      if (slashMenuOpen) { e.preventDefault(); const selected = filtered[slashIndex]; if (selected) runSlashCommand(selected); return; }
-      if (inputValue.trim() !== "" && !isProcessing) handleEnterSubmit();
-    } else if (e.key === "ArrowUp") { e.preventDefault(); handleArrow("up", slashMenuOpen, filtered); }
-    else if (e.key === "ArrowDown") { e.preventDefault(); handleArrow("down", slashMenuOpen, filtered); }
-  };
   return (
     <div
       className={terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme: state.activeTheme })}
@@ -404,7 +336,39 @@ function Terminal() {
           <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
         </div>
       </div>
-      <TerminalOverlays state={state} showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact} showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade} setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard} setShowAchievements={setShowAchievements} setShowSynergize={setShowSynergize} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms} setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty} setShowUpgrade={setShowUpgrade} setIsProcessing={setIsProcessing} setHistory={setHistory} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} />
+      <TerminalOverlays
+        showStore={showStore}
+        showLeaderboard={showLeaderboard}
+        showAchievements={showAchievements}
+        showHelp={showHelp}
+        showAbout={showAbout}
+        showPrivacy={showPrivacy}
+        showTerms={showTerms}
+        showContact={showContact}
+        showProfile={showProfile}
+        showParty={showParty}
+        showSynergize={showSynergize}
+        showUpgrade={showUpgrade}
+        state={state}
+        buyGenerator={buyGenerator}
+        buyUpgrade={buyUpgrade}
+        buyTheme={buyTheme}
+        setActiveTheme={setActiveTheme}
+        setShowStore={setShowStore}
+        setShowLeaderboard={setShowLeaderboard}
+        setShowAchievements={setShowAchievements}
+        setShowHelp={setShowHelp}
+        setShowAbout={setShowAbout}
+        setShowPrivacy={setShowPrivacy}
+        setShowTerms={setShowTerms}
+        setShowContact={setShowContact}
+        setShowProfile={setShowProfile}
+        setShowParty={setShowParty}
+        setShowSynergize={setShowSynergize}
+        setShowUpgrade={setShowUpgrade}
+        setIsProcessing={setIsProcessing}
+        setHistory={setHistory}
+      />
       <TerminalFooter closeAllOverlays={closeAllOverlays} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
     </div>
   );

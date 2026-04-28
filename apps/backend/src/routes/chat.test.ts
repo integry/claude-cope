@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import { sanitizeChatMessages, enforceContextTrimming, resolveFreeChatLicenseState } from "./chat";
 import { buildFreeChatProfileSnapshot } from "./chatHelpers";
 
@@ -304,5 +304,79 @@ describe("buildFreeChatProfileSnapshot", () => {
       multiplier: 1.5,
       quota_percent: 40,
     });
+  });
+});
+
+describe("Provider configuration in OpenRouter requests", () => {
+  let fetchSpy: MockInstance;
+  let capturedRequestBody: unknown;
+
+  beforeEach(() => {
+    capturedRequestBody = undefined;
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      if (url === "https://openrouter.ai/api/v1/chat/completions") {
+        capturedRequestBody = JSON.parse(init?.body as string);
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: "test response" } }], usage: {} }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  it("includes provider.order in fetch request body when OPENROUTER_PROVIDERS is configured", async () => {
+    const { callOpenRouter } = await import("./chat");
+    const { parseProviderList } = await import("@claude-cope/shared/openrouter");
+
+    const providerList = parseProviderList("Together,Fireworks");
+    expect(providerList).toEqual(["Together", "Fireworks"]);
+
+    await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
+
+    expect(capturedRequestBody).toBeDefined();
+    expect(capturedRequestBody).toHaveProperty("provider");
+    expect(capturedRequestBody).toMatchObject({
+      model: "openai/gpt-oss-20b",
+      messages: [{ role: "user", content: "test" }],
+      max_tokens: 2000,
+      reasoning: { effort: "low" },
+      provider: { order: ["Together", "Fireworks"] },
+    });
+  });
+
+  it("omits provider field in fetch request when OPENROUTER_PROVIDERS is not configured", async () => {
+    const { callOpenRouter } = await import("./chat");
+    const { parseProviderList } = await import("@claude-cope/shared/openrouter");
+
+    const providerList = parseProviderList(undefined);
+    expect(providerList).toEqual([]);
+
+    await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
+
+    expect(capturedRequestBody).toBeDefined();
+    expect(capturedRequestBody).not.toHaveProperty("provider");
+    expect(capturedRequestBody).toMatchObject({
+      model: "openai/gpt-oss-20b",
+      messages: [{ role: "user", content: "test" }],
+      max_tokens: 2000,
+      reasoning: { effort: "low" },
+    });
+  });
+
+  it("omits provider field when OPENROUTER_PROVIDERS is empty string", async () => {
+    const { callOpenRouter } = await import("./chat");
+    const { parseProviderList } = await import("@claude-cope/shared/openrouter");
+
+    const providerList = parseProviderList("");
+    expect(providerList).toEqual([]);
+
+    await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
+
+    expect(capturedRequestBody).toBeDefined();
+    expect(capturedRequestBody).not.toHaveProperty("provider");
   });
 });

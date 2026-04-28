@@ -11,15 +11,44 @@ import ContactOverlay from "./ContactOverlay";
 import UserProfileOverlay from "./UserProfileOverlay";
 import PartyOverlay from "./PartyOverlay";
 import UpgradeOverlay from "./UpgradeOverlay";
-import type { GameState } from "../hooks/useGameState";
-import type { Message } from "../hooks/useGameState";
+import type { GameState, Message } from "../hooks/useGameState";
 
-interface TerminalOverlaysProps {
-  state: GameState;
+export function TerminalOverlays({
+  showStore,
+  showLeaderboard,
+  showAchievements,
+  showHelp,
+  showAbout,
+  showPrivacy,
+  showTerms,
+  showContact,
+  showProfile,
+  showParty,
+  showSynergize,
+  showUpgrade,
+  state,
+  buyGenerator,
+  buyUpgrade,
+  buyTheme,
+  setActiveTheme,
+  setShowStore,
+  setShowLeaderboard,
+  setShowAchievements,
+  setShowHelp,
+  setShowAbout,
+  setShowPrivacy,
+  setShowTerms,
+  setShowContact,
+  setShowProfile,
+  setShowParty,
+  setShowSynergize,
+  setShowUpgrade,
+  setIsProcessing,
+  setHistory,
+}: {
   showStore: boolean;
   showLeaderboard: boolean;
   showAchievements: boolean;
-  showSynergize: boolean;
   showHelp: boolean;
   showAbout: boolean;
   showPrivacy: boolean;
@@ -27,11 +56,16 @@ interface TerminalOverlaysProps {
   showContact: boolean;
   showProfile: boolean;
   showParty: boolean;
+  showSynergize: boolean;
   showUpgrade: boolean;
+  state: GameState;
+  buyGenerator: (generatorId: string, amount?: number) => boolean;
+  buyUpgrade: (upgradeId: string) => boolean;
+  buyTheme: (themeId: string) => boolean;
+  setActiveTheme: (id: string) => void;
   setShowStore: Dispatch<SetStateAction<boolean>>;
   setShowLeaderboard: Dispatch<SetStateAction<boolean>>;
   setShowAchievements: Dispatch<SetStateAction<boolean>>;
-  setShowSynergize: Dispatch<SetStateAction<boolean>>;
   setShowHelp: Dispatch<SetStateAction<boolean>>;
   setShowAbout: Dispatch<SetStateAction<boolean>>;
   setShowPrivacy: Dispatch<SetStateAction<boolean>>;
@@ -39,28 +73,99 @@ interface TerminalOverlaysProps {
   setShowContact: Dispatch<SetStateAction<boolean>>;
   setShowProfile: Dispatch<SetStateAction<boolean>>;
   setShowParty: Dispatch<SetStateAction<boolean>>;
+  setShowSynergize: Dispatch<SetStateAction<boolean>>;
   setShowUpgrade: Dispatch<SetStateAction<boolean>>;
   setIsProcessing: Dispatch<SetStateAction<boolean>>;
   setHistory: Dispatch<SetStateAction<Message[]>>;
-  buyGenerator: (id: string) => boolean;
-  buyUpgrade: (id: string) => boolean;
-  buyTheme: (id: string) => boolean;
-  setActiveTheme: (id: string) => void;
-}
-
-export default function TerminalOverlays({ state, showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setIsProcessing, setHistory, buyGenerator, buyUpgrade, buyTheme, setActiveTheme }: TerminalOverlaysProps) {
-  return (<>
-    {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} equipTheme={setActiveTheme} onClose={() => setShowStore(false)} />}
-    {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
-    {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
-    {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
-    {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
-    {showPrivacy && <PrivacyOverlay onClose={() => { setShowPrivacy(false); window.history.pushState(null, "", "/"); }} />}
-    {showTerms && <TermsOverlay onClose={() => { setShowTerms(false); window.history.pushState(null, "", "/"); }} />}
-    {showContact && <ContactOverlay onClose={() => { setShowContact(false); window.history.pushState(null, "", "/"); }} />}
-    {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
-    {showParty && <PartyOverlay onClose={() => setShowParty(false)} />}
-    {showSynergize && <SynergizeOverlay onClose={() => { setShowSynergize(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]); }} />}
-    {showUpgrade && <UpgradeOverlay isUpgraded={!!state.proKey || !!state.proKeyHash} quotaPercent={state.economy.quotaPercent} onClose={() => { setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/"); }} />}
-  </>);
+}) {
+  return (
+    <>
+      {showStore && (
+        <StoreOverlay
+          state={state}
+          buyGenerator={buyGenerator}
+          buyUpgrade={buyUpgrade}
+          buyTheme={buyTheme}
+          equipTheme={setActiveTheme}
+          onClose={() => setShowStore(false)}
+        />
+      )}
+      {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
+      {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
+      {showHelp && (
+        <HelpOverlay
+          onClose={() => {
+            setShowHelp(false);
+            window.history.pushState(null, "", "/");
+          }}
+        />
+      )}
+      {showAbout && (
+        <AboutOverlay
+          onClose={() => {
+            setShowAbout(false);
+            window.history.pushState(null, "", "/");
+          }}
+        />
+      )}
+      {showPrivacy && (
+        <PrivacyOverlay
+          onClose={() => {
+            setShowPrivacy(false);
+            window.history.pushState(null, "", "/");
+          }}
+        />
+      )}
+      {showTerms && (
+        <TermsOverlay
+          onClose={() => {
+            setShowTerms(false);
+            window.history.pushState(null, "", "/");
+          }}
+        />
+      )}
+      {showContact && (
+        <ContactOverlay
+          onClose={() => {
+            setShowContact(false);
+            window.history.pushState(null, "", "/");
+          }}
+        />
+      )}
+      {showProfile && (
+        <UserProfileOverlay
+          state={state}
+          onClose={() => {
+            setShowProfile(false);
+            if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/");
+          }}
+        />
+      )}
+      {showParty && <PartyOverlay onClose={() => setShowParty(false)} />}
+      {showSynergize && (
+        <SynergizeOverlay
+          onClose={() => {
+            setShowSynergize(false);
+            setIsProcessing(false);
+            setHistory((prev) =>
+              [
+                ...prev,
+                { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." },
+              ]
+            );
+          }}
+        />
+      )}
+      {showUpgrade && (
+        <UpgradeOverlay
+          isUpgraded={!!state.proKey || !!state.proKeyHash}
+          quotaPercent={state.economy.quotaPercent}
+          onClose={() => {
+            setShowUpgrade(false);
+            if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
+          }}
+        />
+      )}
+    </>
+  );
 }
