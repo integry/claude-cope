@@ -315,50 +315,41 @@ function getContainerClass(message: Message, isNew: boolean): string {
 }
 
 function MessageContent({ message, isNew = false, isFreeTier = false, onSlashCommand }: { message: Message; isNew?: boolean; isFreeTier?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
-  const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
-  const isBuddyInterjection = message.role === "warning" && isBuddyMessage(message.content);
-  const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
-  const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
-  const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
-  const isStreaming = message.role === "loading" && !isAwaitingResponse;
+  const { role, content } = message;
+  const isWarning = role === "warning";
+  const isAchievement = isWarning && content.includes("ACHIEVEMENT UNLOCKED");
+  const isBuddyInterjection = isWarning && isBuddyMessage(content);
+  const isMarkdownRole = role === "system" || isWarning || role === "error";
+  const useMarkdown = isMarkdownRole && !isAchievement && !isBuddyInterjection;
+  const isAwaitingResponse = role === "loading" && content.startsWith("[⚙️]");
+  const isStreaming = role === "loading" && !isAwaitingResponse;
 
-  // Typewriter effect for new system/warning/error messages (not loading or streaming)
-  const shouldTypewrite = isNew && useMarkdown && (message.role === "system" || message.role === "warning" || message.role === "error");
-  const { visibleContent, isTyping } = useTypewriter(message.content, shouldTypewrite, isFreeTier);
+  // Typewriter: only for new markdown-rendered messages (not loading/streaming)
+  const shouldTypewrite = isNew && useMarkdown;
+  const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite, isFreeTier);
 
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand), [onSlashCommand]);
 
-  if (message.role === "user") return null;
+  if (role === "user") return null;
 
-  if (useMarkdown) {
-    const rawContent = shouldTypewrite ? visibleContent : message.content;
+  if (useMarkdown || isStreaming) {
+    const rawContent = shouldTypewrite ? visibleContent : content;
     const processedContent = cleanLLMOutput(rawContent);
+    const showCursor = isStreaming || isTyping;
     return (
       <div className="space-y-1">
         <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
           {processedContent}
         </ReactMarkdown>
-        {isTyping && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
+        {showCursor && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
       </div>
     );
   }
-
-  if (isStreaming) {
-    const processedContent = cleanLLMOutput(message.content);
-    return (
-      <div className="space-y-1">
-        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
-          {processedContent}
-        </ReactMarkdown>
-        <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />
-      </div>
-    );
-  }
-  if (isAwaitingResponse) return <>{message.content}</>;
-  if (message.role !== "loading") {
+  if (isAwaitingResponse) return <>{content}</>;
+  if (role !== "loading") {
     const linkify = (text: string): React.ReactNode =>
       onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
-    return <>{linkify(message.content)}</>;
+    return <>{linkify(content)}</>;
   }
   return null;
 }

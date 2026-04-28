@@ -29,7 +29,7 @@ import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
 import { usePingAcknowledged } from "../hooks/usePingAcknowledged";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
-import { getRandomAd } from "./terminalAds";
+import { runFreeTierDelay } from "./freeTierDelay";
 import type { SlashCommandAction } from "./slashCommandDetect";
 
 export type { Message };
@@ -210,6 +210,8 @@ function Terminal() {
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
 
+  const anyOverlayOpen = [showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade].some(Boolean);
+
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") {
       runSlashCommandRef.current(command);
@@ -276,34 +278,11 @@ function Terminal() {
       const newCount = freeCommandCount + 1;
       setFreeCommandCount(newCount);
       setIsProcessing(true);
-
-      // Track delay state so Escape can cancel
       const delayState = { cancelled: false, timeoutId: null as ReturnType<typeof setTimeout> | null };
       freeTierDelayRef.current = delayState;
-
-      const cancellableDelay = (ms: number) => new Promise<void>((resolve) => {
-        if (delayState.cancelled) { resolve(); return; }
-        delayState.timeoutId = setTimeout(() => { delayState.timeoutId = null; resolve(); }, ms);
-      });
-
-      // Use a unique marker so cleanup targets only this specific queue message
-      const queueMsgId = `__queue_${Date.now()}_${Math.random()}`;
-
-      // Every 4th command: show a terminal ad before processing
-      if (newCount % 4 === 0) {
-        const ad = getRandomAd();
-        setHistory((prev) => [...prev, userMessage, { role: "warning", content: ad }]);
-        await cancellableDelay(2000);
-        if (delayState.cancelled) return;
-      }
-
-      // Simulated queueing: show bureaucratic message and wait 3 seconds
-      const queueContent = "[INFO] Free tier detected. Yielding compute to paying customers. Please hold...";
-      setHistory((prev) => [...prev, ...(newCount % 4 === 0 ? [] : [userMessage]), { role: "warning", content: queueContent, _queueId: queueMsgId } as Message & { _queueId: string }]);
-      await cancellableDelay(3000);
-      if (delayState.cancelled) return;
+      const completed = await runFreeTierDelay({ commandCount: newCount, userMessage, delayState, setHistory });
+      if (!completed) return;
       freeTierDelayRef.current = { cancelled: false, timeoutId: null };
-      setHistory((prev) => [...prev.filter((m) => (m as Message & { _queueId?: string })._queueId !== queueMsgId), { role: "loading", content: getRandomLoadingPhrase() }]);
     } else {
       setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
       setIsProcessing(true);
@@ -372,7 +351,6 @@ function Terminal() {
   const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = val.length; } }, 0); };
 
   const handleEscapeKey = () => {
-    const anyOverlayOpen = showStore || showLeaderboard || showAchievements || showSynergize || showHelp || showAbout || showPrivacy || showTerms || showContact || showProfile || showParty || showUpgrade;
     if (anyOverlayOpen) { closeAllOverlays(); return; }
     // Cancel free-tier artificial delay if one is in progress
     if (isProcessing && freeTierDelayRef.current.timeoutId !== null) {
@@ -405,20 +383,11 @@ function Terminal() {
     return () => document.removeEventListener("keydown", onKeyDown);
   });
 
-  const handleArrowUp = (slashMenuOpen: boolean, filtered: string[]) => {
-    if (slashMenuOpen) { setSlashIndex((prev) => (prev > 0 ? prev - 1 : filtered.length - 1)); return; }
-    if (commandHistory.length === 0) return;
-    const newIndex = historyIndex + 1;
-    if (newIndex < commandHistory.length) { setHistoryIndex(newIndex); const val = commandHistory[commandHistory.length - 1 - newIndex]!; setInputValue(val); setCursorToEnd(val); }
-  };
-
-  const handleArrowDown = (slashMenuOpen: boolean, filtered: string[]) => {
-    if (slashMenuOpen) { setSlashIndex((prev) => (prev < filtered.length - 1 ? prev + 1 : 0)); return; }
-    const newIndex = historyIndex - 1;
-    if (newIndex < -1) return;
-    setHistoryIndex(newIndex);
-    const val = newIndex === -1 ? "" : commandHistory[commandHistory.length - 1 - newIndex]!;
-    setInputValue(val); setCursorToEnd(val);
+  const handleArrow = (direction: "up" | "down", slashMenuOpen: boolean, filtered: string[]) => {
+    if (slashMenuOpen) { setSlashIndex((prev) => direction === "up" ? (prev > 0 ? prev - 1 : filtered.length - 1) : (prev < filtered.length - 1 ? prev + 1 : 0)); return; }
+    const newIndex = direction === "up" ? historyIndex + 1 : historyIndex - 1;
+    if ((direction === "up" && (commandHistory.length === 0 || newIndex >= commandHistory.length)) || (direction === "down" && newIndex < -1)) return;
+    setHistoryIndex(newIndex); const val = newIndex === -1 ? "" : commandHistory[commandHistory.length - 1 - newIndex]!; setInputValue(val); setCursorToEnd(val);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -438,8 +407,8 @@ function Terminal() {
     if (e.key === "Enter") {
       if (slashMenuOpen) { e.preventDefault(); const selected = filtered[slashIndex]; if (selected) runSlashCommand(selected); return; }
       if (inputValue.trim() !== "" && !isProcessing) handleEnterSubmit();
-    } else if (e.key === "ArrowUp") { e.preventDefault(); handleArrowUp(slashMenuOpen, filtered); }
-    else if (e.key === "ArrowDown") { e.preventDefault(); handleArrowDown(slashMenuOpen, filtered); }
+    } else if (e.key === "ArrowUp") { e.preventDefault(); handleArrow("up", slashMenuOpen, filtered); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); handleArrow("down", slashMenuOpen, filtered); }
   };
 
 
