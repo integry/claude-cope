@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { shareChatImage, openShareIntent, getChatCardDataUrl } from "./shareChatUtils";
+import { shareChatImage, openShareIntent, getChatCardBlob } from "./shareChatUtils";
 import type { ShareResult } from "./shareChatUtils";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
@@ -7,8 +7,11 @@ const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 export function ShareButton({ userMessage, systemMessage, username }: { userMessage: string; systemMessage: string; username: string }) {
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "done" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const timeoutIds = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const modalRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const clearTimeouts = useCallback(() => {
     timeoutIds.current.forEach(clearTimeout);
@@ -24,31 +27,53 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     return id;
   }, []);
 
-  // Clean up timeouts on unmount
-  useEffect(() => clearTimeouts, [clearTimeouts]);
+  // Clean up timeouts and object URLs on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeouts();
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [clearTimeouts, previewUrl]);
+
+  const resetAfterDelay = useCallback((ms: number) => {
+    clearTimeouts();
+    addTimeout(() => {
+      setStatus("idle");
+      setFeedback(null);
+    }, ms);
+  }, [clearTimeouts, addTimeout]);
+
+  const closePreview = useCallback(() => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewBlob(null);
+    setPreviewUrl(null);
+  }, [previewUrl]);
 
   const handleOpenPreview = useCallback(async () => {
     setStatus("generating");
     setFeedback("Generating share image...");
 
     try {
-      const url = await getChatCardDataUrl(userMessage, systemMessage, username);
+      const blob = await getChatCardBlob(userMessage, systemMessage, username);
+      const url = URL.createObjectURL(blob);
+      setPreviewBlob(blob);
       setPreviewUrl(url);
       setStatus("idle");
       setFeedback(null);
     } catch {
       setStatus("error");
       setFeedback("Failed to generate preview.");
-      addTimeout(() => {
-        setStatus("idle");
-        setFeedback(null);
-      }, 3000);
+      resetAfterDelay(3000);
     }
-  }, [userMessage, systemMessage, username, addTimeout]);
+  }, [userMessage, systemMessage, username, resetAfterDelay]);
 
-  const handleShare = useCallback(async (platform: "twitter" | "linkedin") => {
-    const cachedUrl = previewUrl;
-    setPreviewUrl(null);
+  const executeShare = useCallback(async (
+    opts: { platform?: "twitter" | "linkedin" },
+    successHandler: (result: ShareResult, platform?: "twitter" | "linkedin") => void,
+  ) => {
+    const cachedBlob = previewBlob;
+    closePreview();
+    clearTimeouts();
     setStatus("generating");
     setFeedback("Generating share image...");
 
@@ -58,61 +83,58 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       const result: ShareResult = await shareChatImage({
         userMessage,
         systemMessage,
-        platform,
         openShareUrl: false,
         username,
-        previewDataUrl: cachedUrl ?? undefined,
+        previewBlob: cachedBlob ?? undefined,
       });
+      successHandler(result, opts.platform);
+    } catch {
+      setStatus("error");
+      setFeedback(opts.platform ? "Something went wrong. Please try again." : "Failed to copy image.");
+    }
 
+    resetAfterDelay(opts.platform ? 4000 : 3000);
+  }, [userMessage, systemMessage, username, previewBlob, closePreview, clearTimeouts, resetAfterDelay]);
+
+  const handleShare = useCallback(async (platform: "twitter" | "linkedin") => {
+    await executeShare({ platform }, (result, p) => {
       if (result.success && result.method === "image") {
         setStatus("copied");
         setFeedback("Image copied to clipboard!");
-        await new Promise((r) => setTimeout(r, 1200));
-        openShareIntent(platform);
-        setStatus("done");
-        setFeedback("Share dialog opened! Paste the image in your post.");
+        setTimeout(() => {
+          openShareIntent(p!);
+          setStatus("done");
+          if (p === "linkedin") {
+            setFeedback("LinkedIn share opened! Note: LinkedIn's share dialog shares a link — your image is still on your clipboard if you'd like to post it separately.");
+          } else {
+            setFeedback("Share dialog opened! Paste the image in your post.");
+          }
+        }, 1200);
       } else if (result.success && result.method === "text") {
         setStatus("copied");
         setFeedback("Text copied to clipboard (image copy not supported).");
-        await new Promise((r) => setTimeout(r, 1200));
-        openShareIntent(platform);
-        setStatus("done");
-        setFeedback("Share dialog opened! Paste the text in your post.");
+        setTimeout(() => {
+          openShareIntent(p!);
+          setStatus("done");
+          if (p === "linkedin") {
+            setFeedback("LinkedIn share opened! The link has been shared. Your copied text is on your clipboard.");
+          } else {
+            setFeedback("Share dialog opened! Paste the text in your post.");
+          }
+        }, 1200);
       } else if (result.success) {
-        openShareIntent(platform);
+        openShareIntent(p!);
         setStatus("done");
         setFeedback("Share dialog opened!");
       } else {
         setStatus("error");
         setFeedback(result.message);
       }
-    } catch {
-      setStatus("error");
-      setFeedback("Something went wrong. Please try again.");
-    }
-
-    addTimeout(() => {
-      setStatus("idle");
-      setFeedback(null);
-    }, 4000);
-  }, [userMessage, systemMessage, username, previewUrl, addTimeout]);
+    });
+  }, [executeShare]);
 
   const handleCopyImage = useCallback(async () => {
-    const cachedUrl = previewUrl;
-    setPreviewUrl(null);
-    setStatus("generating");
-    setFeedback("Generating share image...");
-
-    await new Promise((r) => setTimeout(r, 800));
-
-    try {
-      const result: ShareResult = await shareChatImage({
-        userMessage,
-        systemMessage,
-        openShareUrl: false,
-        username,
-        previewDataUrl: cachedUrl ?? undefined,
-      });
+    await executeShare({}, (result) => {
       if (result.success && result.method === "image") {
         setStatus("copied");
         setFeedback("Image copied to clipboard!");
@@ -123,30 +145,53 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         setStatus(result.success ? "done" : "error");
         setFeedback(result.message);
       }
-    } catch {
-      setStatus("error");
-      setFeedback("Failed to copy image.");
-    }
+    });
+  }, [executeShare]);
 
-    addTimeout(() => {
-      setStatus("idle");
-      setFeedback(null);
-    }, 3000);
-  }, [userMessage, systemMessage, username, previewUrl, addTimeout]);
-
-  // Close modal on Escape key — stopPropagation prevents Terminal's global
-  // Escape handler from also firing (clearing input, aborting generation, etc.)
+  // Focus trap and focus management for modal
   useEffect(() => {
     if (!previewUrl) return;
+
+    // Focus the modal on open
+    const modal = modalRef.current;
+    if (modal) {
+      const closeBtn = modal.querySelector<HTMLButtonElement>("[aria-label='Close']");
+      closeBtn?.focus();
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        setPreviewUrl(null);
+        closePreview();
+        triggerRef.current?.focus();
+        return;
+      }
+
+      // Focus trap: Tab and Shift+Tab
+      if (e.key === "Tab" && modal) {
+        const focusable = modal.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0]!;
+        const last = focusable[focusable.length - 1]!;
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       }
     };
+
     document.addEventListener("keydown", handleKeyDown, true);
     return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [previewUrl]);
+  }, [previewUrl, closePreview]);
 
   // When actively showing feedback, render it inline
   if (status !== "idle" && !previewUrl) {
@@ -163,6 +208,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   return (
     <div className="relative flex justify-end mt-1">
       <button
+        ref={triggerRef}
         onClick={handleOpenPreview}
         className="text-[11px] text-gray-600 hover:text-gray-400 transition-colors font-mono opacity-0 group-hover:opacity-100"
       >
@@ -171,17 +217,18 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       {previewUrl && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          onClick={() => setPreviewUrl(null)}
+          onClick={() => { closePreview(); triggerRef.current?.focus(); }}
           role="dialog"
           aria-modal="true"
           aria-label="Share preview"
         >
           <div
+            ref={modalRef}
             className="relative bg-gray-900 border border-gray-700 rounded-lg shadow-2xl p-4 max-w-[780px] w-full mx-4 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button
-              onClick={() => setPreviewUrl(null)}
+              onClick={() => { closePreview(); triggerRef.current?.focus(); }}
               className="absolute top-2 right-3 text-gray-500 hover:text-gray-300 text-lg font-mono"
               aria-label="Close"
             >

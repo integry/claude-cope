@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   renderChatCard,
   shareChatImage,
-  getChatCardDataUrl,
+  getChatCardBlob,
   type ShareResult,
 } from "../shareChatUtils";
 
@@ -104,7 +104,7 @@ describe("renderChatCard", () => {
   });
 });
 
-describe("getChatCardDataUrl", () => {
+describe("getChatCardBlob", () => {
   beforeEach(() => {
     vi.spyOn(document, "createElement").mockReturnValue(
       mockCanvas as unknown as HTMLCanvasElement
@@ -116,14 +116,15 @@ describe("getChatCardDataUrl", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns a data URL string", async () => {
-    const dataUrl = await getChatCardDataUrl("Hello", "World");
-    expect(dataUrl).toBe("data:image/png;base64,test");
+  it("returns a Blob", async () => {
+    const blob = await getChatCardBlob("Hello", "World");
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe("image/png");
   });
 
-  it("calls toDataURL with png format", async () => {
-    await getChatCardDataUrl("Hello", "World");
-    expect(mockCanvas.toDataURL).toHaveBeenCalledWith("image/png");
+  it("calls toBlob on canvas", async () => {
+    await getChatCardBlob("Hello", "World");
+    expect(mockCanvas.toBlob).toHaveBeenCalled();
   });
 });
 

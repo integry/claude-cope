@@ -290,7 +290,7 @@ export type ShareChatOptions = {
   platform?: "twitter" | "linkedin";
   openShareUrl?: boolean;
   username?: string;
-  previewDataUrl?: string;
+  previewBlob?: Blob;
 };
 
 /**
@@ -298,13 +298,10 @@ export type ShareChatOptions = {
  * Renders the chat card, copies to clipboard, and optionally opens share intent.
  */
 export async function shareChatImage(options: ShareChatOptions): Promise<ShareResult> {
-  const { userMessage, systemMessage, platform, openShareUrl = false, username, previewDataUrl } = options;
+  const { userMessage, systemMessage, platform, openShareUrl = false, username, previewBlob } = options;
 
-  let blob: Blob | null = null;
-  if (previewDataUrl) {
-    const res = await fetch(previewDataUrl);
-    blob = await res.blob();
-  } else {
+  let blob: Blob | null = previewBlob ?? null;
+  if (!blob) {
     const canvas = await renderChatCard(userMessage, systemMessage, username);
     blob = await canvasToBlob(canvas);
   }
@@ -333,9 +330,11 @@ export async function shareChatImage(options: ShareChatOptions): Promise<ShareRe
 }
 
 /**
- * Utility to get a PNG data URL from the chat card (useful for previews)
+ * Utility to get a PNG Blob from the chat card (useful for previews and sharing)
  */
-export async function getChatCardDataUrl(userMessage: string, systemMessage: string, username?: string): Promise<string> {
+export async function getChatCardBlob(userMessage: string, systemMessage: string, username?: string): Promise<Blob> {
   const canvas = await renderChatCard(userMessage, systemMessage, username);
-  return canvas.toDataURL("image/png");
+  const blob = await canvasToBlob(canvas);
+  if (!blob) throw new Error("Failed to convert canvas to blob");
+  return blob;
 }

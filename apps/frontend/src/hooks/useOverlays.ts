@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type Dispatch, type SetStateAction } from "react";
 
 export interface OverlayState {
   showStore: boolean;
@@ -16,18 +16,18 @@ export interface OverlayState {
 }
 
 export interface OverlayActions {
-  setShowStore: (v: boolean) => void;
-  setShowLeaderboard: (v: boolean) => void;
-  setShowAchievements: (v: boolean) => void;
-  setShowSynergize: (v: boolean) => void;
-  setShowHelp: (v: boolean) => void;
-  setShowAbout: (v: boolean) => void;
-  setShowPrivacy: (v: boolean) => void;
-  setShowTerms: (v: boolean) => void;
-  setShowContact: (v: boolean) => void;
-  setShowProfile: (v: boolean) => void;
-  setShowParty: (v: boolean) => void;
-  setShowUpgrade: (v: boolean) => void;
+  setShowStore: Dispatch<SetStateAction<boolean>>;
+  setShowLeaderboard: Dispatch<SetStateAction<boolean>>;
+  setShowAchievements: Dispatch<SetStateAction<boolean>>;
+  setShowSynergize: Dispatch<SetStateAction<boolean>>;
+  setShowHelp: Dispatch<SetStateAction<boolean>>;
+  setShowAbout: Dispatch<SetStateAction<boolean>>;
+  setShowPrivacy: Dispatch<SetStateAction<boolean>>;
+  setShowTerms: Dispatch<SetStateAction<boolean>>;
+  setShowContact: Dispatch<SetStateAction<boolean>>;
+  setShowProfile: Dispatch<SetStateAction<boolean>>;
+  setShowParty: Dispatch<SetStateAction<boolean>>;
+  setShowUpgrade: Dispatch<SetStateAction<boolean>>;
   closeAllOverlays: () => void;
 }
 
