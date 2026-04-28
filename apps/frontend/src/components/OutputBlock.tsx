@@ -329,7 +329,10 @@ function MessageContent({ message, isNew = false, isFreeTier = false, onSlashCom
   const { role, content } = message;
   const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(role, content);
 
-  const shouldTypewrite = isNew && useMarkdown && (role === "system" || isFreeTier);
+  // Only typewrite actual AI responses (system role). Scaffold messages (ads,
+  // queue warnings) render instantly so they don't vanish mid-animation when
+  // the fixed delay timers remove them.
+  const shouldTypewrite = isNew && useMarkdown && role === "system";
   const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite, isFreeTier);
 
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand), [onSlashCommand]);

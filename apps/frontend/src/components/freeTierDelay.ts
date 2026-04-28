@@ -3,7 +3,7 @@ import type { Message } from "../hooks/useGameState";
 import { getRandomAd } from "./terminalAds";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 
-type DelayState = { cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null };
+type DelayState = { cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string };
 
 function cancellableDelay(ms: number, delayState: DelayState): Promise<void> {
   return new Promise((resolve) => {
@@ -24,19 +24,22 @@ export async function runFreeTierDelay(opts: {
 }): Promise<boolean> {
   const { commandCount, userMessage, delayState, setHistory } = opts;
 
+  const batchId = `__batch_${Date.now()}_${Math.random()}`;
   const queueMsgId = `__queue_${Date.now()}_${Math.random()}`;
+  // Store the batch ID on the delay state so the escape handler can scope cleanup
+  delayState.batchId = batchId;
 
   // Every 4th command: show a terminal ad before processing
   if (commandCount % 4 === 0) {
     const ad = getRandomAd();
-    setHistory((prev) => [...prev, userMessage, { role: "warning", content: ad, _freeTierScaffold: true } as Message & { _freeTierScaffold: boolean }]);
+    setHistory((prev) => [...prev, userMessage, { role: "warning", content: ad, _freeTierScaffold: true, _freeTierBatchId: batchId } as Message & { _freeTierScaffold: boolean; _freeTierBatchId: string }]);
     await cancellableDelay(2000, delayState);
     if (delayState.cancelled) return false;
   }
 
   // Simulated queueing: show bureaucratic message and wait 3 seconds
   const queueContent = "[INFO] Free tier detected. Yielding compute to paying customers. Please hold...";
-  setHistory((prev) => [...prev, ...(commandCount % 4 === 0 ? [] : [userMessage]), { role: "warning", content: queueContent, _freeTierScaffold: true, _queueId: queueMsgId } as Message & { _freeTierScaffold: boolean; _queueId: string }]);
+  setHistory((prev) => [...prev, ...(commandCount % 4 === 0 ? [] : [userMessage]), { role: "warning", content: queueContent, _freeTierScaffold: true, _freeTierBatchId: batchId, _queueId: queueMsgId } as Message & { _freeTierScaffold: boolean; _freeTierBatchId: string; _queueId: string }]);
   await cancellableDelay(3000, delayState);
   if (delayState.cancelled) return false;
 

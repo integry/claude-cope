@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 
 /**
- * Gradually reveals text line-by-line with randomized delays,
- * simulating a typewriter / streaming effect for system messages.
+ * Gradually reveals text with randomized delays, simulating a typewriter /
+ * streaming effect for system messages.
  *
- * When `dialUpMode` is true, delays are drastically increased to simulate
- * an agonising dial-up connection for free-tier users.
+ * Normal mode: reveals line-by-line.
+ * Dial-up mode (`dialUpMode`): reveals character-by-character to create an
+ * agonising slow-connection feel — even single-line responses are throttled.
  */
 export function useTypewriter(
   content: string,
@@ -13,7 +14,8 @@ export function useTypewriter(
   dialUpMode = false,
 ): { visibleContent: string; isTyping: boolean } {
   const lines = content.split("\n");
-  const [visibleLineCount, setVisibleLineCount] = useState(enabled ? 0 : lines.length);
+  const totalUnits = dialUpMode ? content.length : lines.length;
+  const [visibleUnits, setVisibleUnits] = useState(enabled ? 0 : totalUnits);
   const contentRef = useRef(content);
   const completedRef = useRef(!enabled);
 
@@ -26,61 +28,86 @@ export function useTypewriter(
   }
 
   useEffect(() => {
-    const effectLines = content.split("\n");
+    const effectContent = content;
+    const effectLines = effectContent.split("\n");
+    const effectTotal = dialUpMode ? effectContent.length : effectLines.length;
 
     if (!enabled || completedRef.current) {
-      setVisibleLineCount(effectLines.length);
+      setVisibleUnits(effectTotal);
       return;
     }
 
-    // Start revealing after a small initial delay
     let timeout: ReturnType<typeof setTimeout>;
 
-    const revealNext = (currentCount: number) => {
-      if (currentCount >= effectLines.length) {
-        completedRef.current = true;
-        return;
-      }
-
-      // Base delay per line: 30-80ms for short lines, longer for content lines
-      // In dial-up mode, all delays are dramatically increased
-      const line = effectLines[currentCount] || "";
-      let delay: number;
-
-      if (dialUpMode) {
-        // Dial-up mode: agonisingly slow character-by-character feel
-        if (line.trim() === "") {
-          delay = 150 + Math.random() * 200;
-        } else if (currentCount > 0 && Math.random() < 0.25) {
-          // 25% chance of a long "buffering" pause (800-2000ms)
-          delay = 800 + Math.random() * 1200;
-        } else {
-          // Slow line reveal: 200-500ms per line, longer for longer lines
-          delay = 200 + Math.min(line.length * 3, 300) + Math.random() * 100;
+    if (dialUpMode) {
+      // Character-by-character reveal for that dial-up feel
+      const revealNextChar = (currentCount: number) => {
+        if (currentCount >= effectContent.length) {
+          completedRef.current = true;
+          return;
         }
-      } else if (line.trim() === "") {
-        // Blank lines: small pause
-        delay = 20 + Math.random() * 40;
-      } else if (currentCount > 0 && Math.random() < 0.15) {
-        // ~15% chance of a "thinking" pause (200-600ms)
-        delay = 200 + Math.random() * 400;
-      } else {
-        // Normal line reveal: 30-90ms, slightly longer for longer lines
-        delay = 30 + Math.min(line.length * 0.8, 60) + Math.random() * 30;
-      }
 
+        const char = effectContent[currentCount];
+        let delay: number;
+
+        if (char === "\n") {
+          // Newlines: longer pause like a line break loading
+          delay = 100 + Math.random() * 150;
+        } else if (currentCount > 0 && Math.random() < 0.05) {
+          // 5% chance of a "buffering" pause (400-1200ms)
+          delay = 400 + Math.random() * 800;
+        } else {
+          // Normal character delay: 20-60ms per character
+          delay = 20 + Math.random() * 40;
+        }
+
+        timeout = setTimeout(() => {
+          const next = currentCount + 1;
+          setVisibleUnits(next);
+          revealNextChar(next);
+        }, delay);
+      };
+
+      // Kick off with an initial delay
       timeout = setTimeout(() => {
-        const next = currentCount + 1;
-        setVisibleLineCount(next);
-        revealNext(next);
-      }, delay);
-    };
+        setVisibleUnits(1);
+        revealNextChar(1);
+      }, 300);
+    } else {
+      // Line-by-line reveal (normal mode)
+      const revealNext = (currentCount: number) => {
+        if (currentCount >= effectLines.length) {
+          completedRef.current = true;
+          return;
+        }
 
-    // Kick off with an initial delay (longer in dial-up mode)
-    timeout = setTimeout(() => {
-      setVisibleLineCount(1);
-      revealNext(1);
-    }, dialUpMode ? 300 : 40);
+        const line = effectLines[currentCount] || "";
+        let delay: number;
+
+        if (line.trim() === "") {
+          // Blank lines: small pause
+          delay = 20 + Math.random() * 40;
+        } else if (currentCount > 0 && Math.random() < 0.15) {
+          // ~15% chance of a "thinking" pause (200-600ms)
+          delay = 200 + Math.random() * 400;
+        } else {
+          // Normal line reveal: 30-90ms, slightly longer for longer lines
+          delay = 30 + Math.min(line.length * 0.8, 60) + Math.random() * 30;
+        }
+
+        timeout = setTimeout(() => {
+          const next = currentCount + 1;
+          setVisibleUnits(next);
+          revealNext(next);
+        }, delay);
+      };
+
+      // Kick off with an initial delay
+      timeout = setTimeout(() => {
+        setVisibleUnits(1);
+        revealNext(1);
+      }, 40);
+    }
 
     return () => clearTimeout(timeout);
   }, [enabled, content, dialUpMode]);
@@ -89,6 +116,9 @@ export function useTypewriter(
     return { visibleContent: content, isTyping: false };
   }
 
-  const visibleContent = lines.slice(0, visibleLineCount).join("\n");
-  return { visibleContent, isTyping: visibleLineCount < lines.length };
+  const visibleContent = dialUpMode
+    ? content.slice(0, visibleUnits)
+    : lines.slice(0, visibleUnits).join("\n");
+  const total = dialUpMode ? content.length : lines.length;
+  return { visibleContent, isTyping: visibleUnits < total };
 }

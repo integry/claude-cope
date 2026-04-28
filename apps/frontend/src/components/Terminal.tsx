@@ -133,7 +133,7 @@ function Terminal() {
   }
   const lastEscapeRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null }>({ cancelled: false, timeoutId: null });
+  const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
   const historyRef = useRef(history);
   historyRef.current = history;
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
@@ -370,11 +370,17 @@ function Terminal() {
     // Cancel free-tier artificial delay if one is in progress
     if (isProcessing && freeTierDelayRef.current.timeoutId !== null) {
       const ds = freeTierDelayRef.current;
+      const cancelBatchId = ds.batchId;
       ds.cancelled = true;
       if (ds.timeoutId) clearTimeout(ds.timeoutId);
       freeTierDelayRef.current = { cancelled: false, timeoutId: null };
       setIsProcessing(false);
-      setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading" && !(msg as Message & { _freeTierScaffold?: boolean })._freeTierScaffold), { role: "warning", content: "[⚠️ ABORTED] Queue cancelled. Patience is a virtue you clearly lack." }]);
+      // Only remove scaffold messages from the current in-flight batch, not prior ads
+      setHistory((prev) => [...prev.filter((msg) => {
+        if (msg.role === "loading") return false;
+        if (cancelBatchId && (msg as Message & { _freeTierBatchId?: string })._freeTierBatchId === cancelBatchId) return false;
+        return true;
+      }), { role: "warning", content: "[⚠️ ABORTED] Queue cancelled. Patience is a virtue you clearly lack." }]);
       if (commandHistory.length > 0) { const lastCmd = commandHistory[commandHistory.length - 1]!; setInputValue(lastCmd); setCursorToEnd(lastCmd); }
       return;
     }
