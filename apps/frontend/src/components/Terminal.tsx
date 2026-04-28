@@ -39,6 +39,7 @@ import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
 import { usePingAcknowledged } from "../hooks/usePingAcknowledged";
+import { useOverlays } from "../hooks/useOverlays";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 import type { SlashCommandAction } from "./slashCommandDetect";
 
@@ -95,23 +96,23 @@ function Terminal() {
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
-  const [instantBanReady, setInstantBanReady] = useState(false); const [commandHistory, setCommandHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1); const [isProcessing, setIsProcessing] = useState(false);
-  const [slashQuery, setSlashQuery] = useState(""); const [slashIndex, setSlashIndex] = useState(0);
+  const [instantBanReady, setInstantBanReady] = useState(false);
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [slashQuery, setSlashQuery] = useState("");
+  const [slashIndex, setSlashIndex] = useState(0);
   const [inputValue, setInputValue] = useState("");
   const [suggestedReply, setSuggestedReply] = useState<string | null>(null);
-  const [showStore, setShowStore] = useState(false);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [showAchievements, setShowAchievements] = useState(false);
-  const [showSynergize, setShowSynergize] = useState(false);
-  const [showHelp, setShowHelp] = useState(() => window.location.pathname === "/help");
-  const [showAbout, setShowAbout] = useState(() => window.location.pathname === "/about");
-  const [showPrivacy, setShowPrivacy] = useState(() => window.location.pathname === "/privacy");
-  const [showTerms, setShowTerms] = useState(() => window.location.pathname === "/terms");
-  const [showContact, setShowContact] = useState(() => window.location.pathname === "/contact");
-  const [showProfile, setShowProfile] = useState(() => window.location.pathname.startsWith("/user/"));
-  const [showParty, setShowParty] = useState(false);
-  const [showUpgrade, setShowUpgrade] = useState(() => window.location.pathname === "/upgrade");
+  const {
+    showStore, showLeaderboard, showAchievements, showSynergize,
+    showHelp, showAbout, showPrivacy, showTerms, showContact,
+    showProfile, showParty, showUpgrade,
+    setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize,
+    setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact,
+    setShowProfile, setShowParty, setShowUpgrade,
+    closeAllOverlays,
+  } = useOverlays();
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
@@ -146,16 +147,9 @@ function Terminal() {
     return isNew;
   }, [unlockAchievement, playChime]);
 
-  const closeAllOverlays = useCallback(() => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowPrivacy(false); setShowTerms(false); setShowContact(false); setShowProfile(false); setShowParty(false); setShowUpgrade(false); }, []);
-  const handleProfileClick = useCallback(() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlays, state.username]);
+  const handleProfileClick = useCallback(() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlays, setShowProfile, state.username]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [history]);
-
-  useEffect(() => {
-    const onPopState = () => { setShowHelp(window.location.pathname === "/help"); setShowAbout(window.location.pathname === "/about"); setShowPrivacy(window.location.pathname === "/privacy"); setShowTerms(window.location.pathname === "/terms"); setShowContact(window.location.pathname === "/contact"); setShowProfile(window.location.pathname.startsWith("/user/")); setShowUpgrade(window.location.pathname === "/upgrade"); };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
 
   useEffect(() => { if (!isProcessing && !isBooting) inputRef.current?.focus(); }, [isProcessing, isBooting]);
 
