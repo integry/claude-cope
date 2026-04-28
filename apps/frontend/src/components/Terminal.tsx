@@ -3,18 +3,7 @@ import OutputBlock from "./OutputBlock";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import { SLASH_COMMANDS } from "./slashCommands";
-import StoreOverlay from "./StoreOverlay";
-import LeaderboardOverlay from "./LeaderboardOverlay";
-import AchievementOverlay from "./AchievementOverlay";
-import SynergizeOverlay from "./SynergizeOverlay";
-import HelpOverlay from "./HelpOverlay";
-import AboutOverlay from "./AboutOverlay";
-import PrivacyOverlay from "./PrivacyOverlay";
-import TermsOverlay from "./TermsOverlay";
-import ContactOverlay from "./ContactOverlay";
-import UserProfileOverlay from "./UserProfileOverlay";
-import PartyOverlay from "./PartyOverlay";
-import UpgradeOverlay from "./UpgradeOverlay";
+import TerminalOverlays from "./TerminalOverlays";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
 import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
@@ -422,20 +411,6 @@ function Terminal() {
     else if (e.key === "ArrowDown") { e.preventDefault(); handleArrowDown(slashMenuOpen, filtered); }
   };
 
-  const renderOverlays = () => (<>
-    {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} equipTheme={setActiveTheme} onClose={() => setShowStore(false)} />}
-    {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
-    {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
-    {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
-    {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
-    {showPrivacy && <PrivacyOverlay onClose={() => { setShowPrivacy(false); window.history.pushState(null, "", "/"); }} />}
-    {showTerms && <TermsOverlay onClose={() => { setShowTerms(false); window.history.pushState(null, "", "/"); }} />}
-    {showContact && <ContactOverlay onClose={() => { setShowContact(false); window.history.pushState(null, "", "/"); }} />}
-    {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
-    {showParty && <PartyOverlay onClose={() => setShowParty(false)} />}
-    {showSynergize && <SynergizeOverlay onClose={() => { setShowSynergize(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]); }} />}
-    {showUpgrade && <UpgradeOverlay isUpgraded={!!state.proKey || !!state.proKeyHash} quotaPercent={state.economy.quotaPercent} onClose={() => { setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/"); }} />}
-  </>);
 
   return (
     <div
@@ -461,7 +436,7 @@ function Terminal() {
           <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
         </div>
       </div>
-      {renderOverlays()}
+      <TerminalOverlays state={state} showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact} showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade} setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard} setShowAchievements={setShowAchievements} setShowSynergize={setShowSynergize} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms} setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty} setShowUpgrade={setShowUpgrade} setIsProcessing={setIsProcessing} setHistory={setHistory} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} />
       <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-1 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
         <div><span className="text-gray-400">[LEGAL]</span> This is a parody project and is not affiliated with Anthropic.</div>
         <div className="flex items-center justify-between">
