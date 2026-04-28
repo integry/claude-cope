@@ -8,6 +8,11 @@ export const T = 30_000;
 const MAX_TOKENS = 2000;
 const REASONING = { effort: "low" };
 
+// Parse provider preferences to match backend production behavior
+const PROVIDERS = process.env.OPENROUTER_PROVIDERS
+  ? process.env.OPENROUTER_PROVIDERS.split(",").map(p => p.trim()).filter(p => p.length > 0)
+  : [];
+
 // ── HTML report collector ──────────────────────────────────
 export type ReportEntry = {
   test: string;
@@ -69,7 +74,7 @@ document.addEventListener('click', e => {
 </script>
 </head><body>
 <h1>Claude Cope — E2E LLM Quality Report</h1>
-<div class="meta">Model: ${MODEL} | max_tokens: ${MAX_TOKENS} | reasoning: ${JSON.stringify(REASONING)} | Generated: ${new Date().toISOString()}</div>
+<div class="meta">Model: ${MODEL} | max_tokens: ${MAX_TOKENS} | reasoning: ${JSON.stringify(REASONING)}${PROVIDERS.length > 0 ? ` | providers: [${PROVIDERS.join(", ")}]` : ""} | Generated: ${new Date().toISOString()}</div>
 ${suites
   .map(
     (suite) => `
@@ -156,6 +161,12 @@ export async function callLLM(
   meta: { suite: string; test: string; turn?: number },
 ): Promise<string> {
   const requestBody: Record<string, unknown> = { model: MODEL, messages, max_tokens: MAX_TOKENS, reasoning: REASONING };
+
+  // Match backend production behavior: include provider preferences when configured
+  if (PROVIDERS.length > 0) {
+    requestBody.provider = { order: PROVIDERS };
+  }
+
   const start = Date.now();
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
