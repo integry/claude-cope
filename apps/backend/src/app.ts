@@ -3,9 +3,11 @@ import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
 import { rateLimiter } from "./middleware/rateLimiter";
+import { botProtection } from "./middleware/botProtection";
 import { sessionMiddleware } from "./middleware/session";
 import { applyMigrations } from "./utils/migrations";
 import chat from "./routes/chat";
+import verify from "./routes/verify";
 import leaderboard from "./routes/leaderboard";
 import events from "./routes/events";
 import tickets from "./routes/tickets";
@@ -21,8 +23,9 @@ app.use(
   secureHeaders({
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: ["'self'", "https://openrouter.ai", "wss:", "ws:"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
+      connectSrc: ["'self'", "https://openrouter.ai", "https://challenges.cloudflare.com", "wss:", "ws:"],
+      frameSrc: ["https://challenges.cloudflare.com"],
       imgSrc: ["'self'", "data:"],
       styleSrc: ["'self'", "'unsafe-inline'"],
     },
@@ -71,8 +74,10 @@ app.use("*", async (c, next) => {
 });
 
 app.use("/api/chat", rateLimiter);
+app.use("/api/chat", botProtection);
 
 app.route("/api/chat", chat);
+app.route("/api/verify", verify);
 app.route("/api/leaderboard", leaderboard);
 // Mount the events route to expose the SWR polling fallback endpoints
 app.route("/api/recent-events", events);
