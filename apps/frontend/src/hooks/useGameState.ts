@@ -226,13 +226,12 @@ export function useGameState() {
       };
     });
 
-    track("generator_purchased", { generator_id: generatorId, amount, cost });
-
     // Pro users: fire server call, apply authoritative response
     if (current.proKeyHash) {
       buyGeneratorServer(current.username, generatorId, amount, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           setState((prev) => applyServerProfile(prev, result.profile!));
+          track("generator_purchased", { generator_id: generatorId, amount, cost });
         } else if (!result.success) {
           // Rollback on failure
           setState((prev) => ({
@@ -243,6 +242,7 @@ export function useGameState() {
         }
       }).catch(() => {});
     } else {
+      track("generator_purchased", { generator_id: generatorId, amount, cost });
       // Free users: broadcast big purchases
       if (cost > 1_000_000) {
         const playerName = stateRef.current.username || "A player";
@@ -350,13 +350,12 @@ export function useGameState() {
       };
     });
 
-    track("upgrade_purchased", { upgrade_id: upgradeId, cost: upgrade.cost });
-
     // Pro users: fire server call
     if (current.proKeyHash) {
       buyUpgradeServer(current.username, upgradeId, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           setState((prev) => applyServerProfile(prev, result.profile!));
+          track("upgrade_purchased", { upgrade_id: upgradeId, cost: upgrade.cost });
         } else if (!result.success) {
           // Rollback
           setState((prev) => ({
@@ -366,6 +365,8 @@ export function useGameState() {
           }));
         }
       }).catch(() => {});
+    } else {
+      track("upgrade_purchased", { upgrade_id: upgradeId, cost: upgrade.cost });
     }
 
     return true;

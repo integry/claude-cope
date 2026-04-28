@@ -60,6 +60,10 @@ export function initPostHog(): void {
       posthog.init(POSTHOG_KEY, {
         api_host: POSTHOG_HOST || POSTHOG_DEFAULT_HOST,
         persistence: "memory",
+        autocapture: false,
+        capture_pageview: false,
+        capture_pageleave: false,
+        disable_session_recording: true,
       });
 
       phInstance = posthog;
@@ -74,7 +78,8 @@ export function initPostHog(): void {
       flushPending();
     })
     .catch(() => {
-      // PostHog failed to load — discard buffered calls and continue without analytics.
+      // PostHog failed to load — discard buffered calls and disable further buffering.
+      readyPromise = null;
       pendingTrackCalls.length = 0;
       pendingIdentifyCalls.length = 0;
     });
