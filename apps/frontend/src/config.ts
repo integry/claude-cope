@@ -66,3 +66,13 @@ export const UPGRADE_PRICE_SINGLE: string =
 
 export const UPGRADE_PRICE_MULTI: string =
   (import.meta.env.VITE_UPGRADE_PRICE_MULTI as string | undefined) ?? "$19.99";
+
+/**
+ * PostHog analytics configuration. Set `VITE_POSTHOG_KEY` and
+ * `VITE_POSTHOG_HOST` to enable zero-cookie analytics tracking.
+ */
+export const POSTHOG_KEY: string =
+  (import.meta.env.VITE_POSTHOG_KEY as string | undefined) ?? "";
+
+export const POSTHOG_HOST: string =
+  (import.meta.env.VITE_POSTHOG_HOST as string | undefined) ?? "";
