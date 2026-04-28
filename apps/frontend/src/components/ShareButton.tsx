@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { shareChatImage, openShareIntent, getChatCardDataUrl } from "./shareChatUtils";
 import type { ShareResult } from "./shareChatUtils";
 
@@ -8,6 +8,21 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "done" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const timeoutIds = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearTimeouts = useCallback(() => {
+    timeoutIds.current.forEach(clearTimeout);
+    timeoutIds.current = [];
+  }, []);
+
+  const addTimeout = useCallback((fn: () => void, ms: number) => {
+    const id = setTimeout(fn, ms);
+    timeoutIds.current.push(id);
+    return id;
+  }, []);
+
+  // Clean up timeouts on unmount
+  useEffect(() => clearTimeouts, [clearTimeouts]);
 
   const handleOpenPreview = useCallback(async () => {
     setStatus("generating");
@@ -21,12 +36,12 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     } catch {
       setStatus("error");
       setFeedback("Failed to generate preview.");
-      setTimeout(() => {
+      addTimeout(() => {
         setStatus("idle");
         setFeedback(null);
       }, 3000);
     }
-  }, [userMessage, systemMessage, username]);
+  }, [userMessage, systemMessage, username, addTimeout]);
 
   const handleShare = useCallback(async (platform: "twitter" | "linkedin") => {
     setPreviewUrl(null);
@@ -51,8 +66,19 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         openShareIntent(platform);
         setStatus("done");
         setFeedback("Share dialog opened! Paste the image in your post.");
+      } else if (result.success && result.method === "text") {
+        setStatus("copied");
+        setFeedback("Text copied to clipboard (image copy not supported).");
+        await new Promise((r) => setTimeout(r, 1200));
+        openShareIntent(platform);
+        setStatus("done");
+        setFeedback("Share dialog opened! Paste the text in your post.");
+      } else if (result.success) {
+        openShareIntent(platform);
+        setStatus("done");
+        setFeedback("Share dialog opened!");
       } else {
-        setStatus(result.success ? "done" : "error");
+        setStatus("error");
         setFeedback(result.message);
       }
     } catch {
@@ -60,11 +86,11 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       setFeedback("Something went wrong. Please try again.");
     }
 
-    setTimeout(() => {
+    addTimeout(() => {
       setStatus("idle");
       setFeedback(null);
     }, 4000);
-  }, [userMessage, systemMessage, username]);
+  }, [userMessage, systemMessage, username, addTimeout]);
 
   const handleCopyImage = useCallback(async () => {
     setPreviewUrl(null);
@@ -80,18 +106,26 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         openShareUrl: false,
         username,
       });
-      setStatus(result.success ? "copied" : "error");
-      setFeedback(result.success ? "Image copied to clipboard!" : result.message);
+      if (result.success && result.method === "image") {
+        setStatus("copied");
+        setFeedback("Image copied to clipboard!");
+      } else if (result.success && result.method === "text") {
+        setStatus("copied");
+        setFeedback("Text copied to clipboard (image copy not supported in this browser).");
+      } else {
+        setStatus(result.success ? "done" : "error");
+        setFeedback(result.message);
+      }
     } catch {
       setStatus("error");
       setFeedback("Failed to copy image.");
     }
 
-    setTimeout(() => {
+    addTimeout(() => {
       setStatus("idle");
       setFeedback(null);
     }, 3000);
-  }, [userMessage, systemMessage, username]);
+  }, [userMessage, systemMessage, username, addTimeout]);
 
   // Close modal on Escape key
   useEffect(() => {
@@ -127,14 +161,18 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
           onClick={() => setPreviewUrl(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Share preview"
         >
           <div
-            className="relative bg-gray-900 border border-gray-700 rounded-lg shadow-2xl p-4 max-w-[780px] w-full mx-4"
+            className="relative bg-gray-900 border border-gray-700 rounded-lg shadow-2xl p-4 max-w-[780px] w-full mx-4 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => setPreviewUrl(null)}
               className="absolute top-2 right-3 text-gray-500 hover:text-gray-300 text-lg font-mono"
+              aria-label="Close"
             >
               ✕
             </button>
