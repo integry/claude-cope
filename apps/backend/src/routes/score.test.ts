@@ -21,9 +21,9 @@ function makeDB(existing?: { total_td: number; current_td: number; last_sync_tim
             };
           }),
           all: vi.fn().mockResolvedValue({ results: [] }),
+          run: vi.fn().mockResolvedValue({ success: true }),
         };
       }),
-      exec: vi.fn().mockResolvedValue({ results: [] }),
       batch: vi.fn((stmts: unknown[]) => {
         batchedStatements.push(...stmts);
         return Promise.resolve(stmts.map(() => ({ success: true })));
@@ -72,9 +72,9 @@ function makeDBWithTasks(
             };
           }),
           all: vi.fn().mockResolvedValue({ results: [] }),
+          run: vi.fn().mockResolvedValue({ success: true }),
         };
       }),
-      exec: vi.fn().mockResolvedValue({ results: [] }),
       batch: vi.fn((stmts: unknown[]) => {
         batchedStatements.push(...stmts);
         if (batchShouldFail) return Promise.reject(new Error("D1 batch transaction failed"));
