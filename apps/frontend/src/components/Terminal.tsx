@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useState, useRef, useEffect, useCallback, type Dispatch, type SetStateAction, ChangeEvent, KeyboardEvent, memo } from "react";
 import OutputBlock from "./OutputBlock";
 import CommandLine from "./CommandLine";
