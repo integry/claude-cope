@@ -160,8 +160,16 @@ function validateChatRequest(body: ChatBody, apiKey: string | undefined): { erro
   return null;
 }
 
+type OpenRouterRequestBody = {
+  model: string;
+  messages: { role: string; content: string }[];
+  max_tokens: number;
+  reasoning: { effort: string };
+  provider?: { order: string[] };
+};
+
 async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[], providers?: string[]) {
-  const requestBody: Record<string, unknown> = {
+  const requestBody: OpenRouterRequestBody = {
     model,
     messages,
     max_tokens: 2000,

@@ -5,9 +5,15 @@ import type { GameState, ByokUsage } from "../hooks/useGameState";
  * Validates an OpenRouter API key by making a small test request.
  * Returns true if valid, false if invalid.
  */
+type OpenRouterValidationRequestBody = {
+  model: string;
+  messages: { role: string; content: string }[];
+  max_tokens: number;
+};
+
 async function validateOpenRouterKey(key: string): Promise<{ valid: boolean; error?: string }> {
   try {
-    const requestBody: Record<string, unknown> = {
+    const requestBody: OpenRouterValidationRequestBody = {
       model: "nvidia/nemotron-nano-9b-v2:free",
       messages: [{ role: "user", content: "Hi" }],
       max_tokens: 5,

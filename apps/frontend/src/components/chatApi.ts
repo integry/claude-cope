@@ -298,7 +298,16 @@ export function submitChatMessage(opts: {
           activeTicket,
           buddyType: buddyTypeForContext,
         });
-        const requestBody: Record<string, unknown> = {
+        type OpenRouterByokRequestBody = {
+          model: string;
+          messages: { role: string; content: string }[];
+          max_tokens: number;
+          reasoning: { effort: string };
+          stream: boolean;
+          stream_options: { include_usage: boolean };
+        };
+
+        const requestBody: OpenRouterByokRequestBody = {
           model,
           messages,
           max_tokens: 2000,

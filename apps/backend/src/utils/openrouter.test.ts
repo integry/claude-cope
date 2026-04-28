@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseProviderList } from "./openrouter";
+import { parseProviderList } from "@claude-cope/shared/openrouter";
 
 describe("parseProviderList", () => {
   it("should return empty array when input is undefined", () => {

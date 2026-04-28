@@ -1,4 +1,5 @@
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
+import { parseProviderList } from "@claude-cope/shared/openrouter";
 
 export const API_KEY = process.env.OPENROUTER_API_KEY ?? "";
 export const MODEL = "nvidia/nemotron-nano-9b-v2";
@@ -9,9 +10,7 @@ const MAX_TOKENS = 2000;
 const REASONING = { effort: "low" };
 
 // Parse provider preferences to match backend production behavior
-const PROVIDERS = process.env.OPENROUTER_PROVIDERS
-  ? process.env.OPENROUTER_PROVIDERS.split(",").map(p => p.trim()).filter(p => p.length > 0)
-  : [];
+const PROVIDERS = parseProviderList(process.env.OPENROUTER_PROVIDERS);
 
 // ── HTML report collector ──────────────────────────────────
 export type ReportEntry = {
@@ -156,11 +155,19 @@ function logCallResult(
   console.log(`${"=".repeat(60)}\n`);
 }
 
+type OpenRouterRequestBody = {
+  model: string;
+  messages: { role: string; content: string }[];
+  max_tokens: number;
+  reasoning: { effort: string };
+  provider?: { order: string[] };
+};
+
 export async function callLLM(
   messages: { role: string; content: string }[],
   meta: { suite: string; test: string; turn?: number },
 ): Promise<string> {
-  const requestBody: Record<string, unknown> = { model: MODEL, messages, max_tokens: MAX_TOKENS, reasoning: REASONING };
+  const requestBody: OpenRouterRequestBody = { model: MODEL, messages, max_tokens: MAX_TOKENS, reasoning: REASONING };
 
   // Match backend production behavior: include provider preferences when configured
   if (PROVIDERS.length > 0) {

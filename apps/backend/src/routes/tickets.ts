@@ -59,7 +59,13 @@ tickets.post("/refine", async (c) => {
     },
   ];
 
-  const requestBody: Record<string, unknown> = {
+  type OpenRouterRequestBody = {
+    model: string;
+    messages: { role: string; content: string }[];
+    provider?: { order: string[] };
+  };
+
+  const requestBody: OpenRouterRequestBody = {
     model: "nvidia/nemotron-nano-9b-v2:free",
     messages,
   };

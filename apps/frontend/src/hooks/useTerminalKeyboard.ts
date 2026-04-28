@@ -1,4 +1,4 @@
-import { useRef, useEffect, type RefObject, type KeyboardEvent, type Dispatch, type SetStateAction } from "react";
+import { useRef, useEffect, useCallback, type RefObject, type KeyboardEvent, type Dispatch, type SetStateAction } from "react";
 import type { Message } from "./useGameState";
 
 export function useTerminalKeyboard({
@@ -82,7 +82,7 @@ export function useTerminalKeyboard({
     }, 0);
   };
 
-  const handleEscapeKey = () => {
+  const handleEscapeKey = useCallback(() => {
     const anyOverlayOpen =
       showStore || showLeaderboard || showAchievements || showSynergize || showHelp || showAbout || showPrivacy || showTerms || showContact || showProfile || showParty || showUpgrade;
     if (anyOverlayOpen) {
@@ -119,7 +119,7 @@ export function useTerminalKeyboard({
     } else {
       lastEscapeRef.current = now;
     }
-  };
+  }, [showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, isProcessing, abortControllerRef, commandHistory, inputValue, closeAllOverlays, setIsProcessing, setHistory, setInputValue, setSlashQuery, setSlashIndex]);
 
   const handleArrowUp = (slashMenuOpen: boolean, filtered: string[]) => {
     if (slashMenuOpen) {
@@ -202,7 +202,7 @@ export function useTerminalKeyboard({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  });
+  }, [handleEscapeKey]);
 
   return { handleKeyDown };
 }
