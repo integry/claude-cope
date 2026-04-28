@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { TICKET_PM_PROMPT } from "../prompts/ticketPrompt";
+import { parseProviderList } from "../utils/openrouter";
 
 type Env = {
   Bindings: {
@@ -35,7 +36,7 @@ tickets.post("/refine", async (c) => {
     return c.json({ error: "Database is not configured" }, 500);
   }
 
-  const apiKey = (c.env as unknown as Record<string, string | undefined>).OPENROUTER_API_KEY;
+  const apiKey = c.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
@@ -63,12 +64,9 @@ tickets.post("/refine", async (c) => {
     messages,
   };
 
-  const providers = (c.env as unknown as Record<string, string | undefined>).OPENROUTER_PROVIDERS;
-  if (providers) {
-    const providerList = providers.split(',').map(p => p.trim()).filter(p => p.length > 0);
-    if (providerList.length > 0) {
-      requestBody.provider = { order: providerList };
-    }
+  const providerList = parseProviderList(c.env.OPENROUTER_PROVIDERS);
+  if (providerList.length > 0) {
+    requestBody.provider = { order: providerList };
   }
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {

@@ -4,6 +4,7 @@ import { COPE_MODELS } from "@claude-cope/shared/models";
 
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { getProfileRow, isLicenseActive, resolveProUser } from "../utils/profile";
+import { parseProviderList } from "../utils/openrouter";
 import {
   checkQuotaAvailable,
   consumeQuotaPostSuccess,
@@ -159,7 +160,7 @@ function validateChatRequest(body: ChatBody, apiKey: string | undefined): { erro
   return null;
 }
 
-async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[], providers?: string) {
+async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[], providers?: string[]) {
   const requestBody: Record<string, unknown> = {
     model,
     messages,
@@ -167,11 +168,8 @@ async function callOpenRouter(apiKey: string, model: string, messages: { role: s
     reasoning: { effort: "low" },
   };
 
-  if (providers) {
-    const providerList = providers.split(',').map(p => p.trim()).filter(p => p.length > 0);
-    if (providerList.length > 0) {
-      requestBody.provider = { order: providerList };
-    }
+  if (providers && providers.length > 0) {
+    requestBody.provider = { order: providers };
   }
 
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -295,7 +293,7 @@ const chat = new Hono<Env>();
 chat.post("/", async (c) => {
   const body = await c.req.json<ChatBody>();
 
-  const apiKey = (c.env as Record<string, string | undefined>).OPENROUTER_API_KEY;
+  const apiKey = c.env.OPENROUTER_API_KEY;
   const validation = validateChatRequest(body, apiKey);
   if (validation) {
     return c.json({ error: validation.error }, validation.status);
@@ -324,8 +322,8 @@ chat.post("/", async (c) => {
     buddyType: body.buddyType,
   });
 
-  const providers = (c.env as Record<string, string | undefined>).OPENROUTER_PROVIDERS;
-  const orResponse = await callOpenRouter(apiKey!, model, messages, providers);
+  const providerList = parseProviderList(c.env.OPENROUTER_PROVIDERS);
+  const orResponse = await callOpenRouter(apiKey!, model, messages, providerList);
 
   if (!orResponse.ok) {
     const errData = await orResponse.json();
