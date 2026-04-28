@@ -27,6 +27,7 @@ const verify = new Hono<Env>();
 type VerifyContext = Context<Env>;
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+type VerifyFailureStatus = 502 | 503;
 
 verify.get("/", async (c) => {
   const secret = c.env?.TURNSTILE_SECRET_KEY;
@@ -44,12 +45,21 @@ const buildTurnstileForm = (secret: string, token: string, ip: string | null): U
   return form;
 };
 
-const verifyWithTurnstile = async (form: URLSearchParams) => {
+const verifyWithTurnstile = async (
+  form: URLSearchParams
+): Promise<
+  | { ok: true; data: TurnstileVerifyResponse }
+  | { ok: false; status: VerifyFailureStatus; body: { verified: false; error: string } }
+> => {
   let resp: Response;
   try {
     resp = await fetch(TURNSTILE_VERIFY_URL, { method: "POST", body: form });
   } catch {
-    return { ok: false as const, status: 503, body: { verified: false, error: "Verification service unavailable" } };
+    return {
+      ok: false as const,
+      status: 503,
+      body: { verified: false, error: "Verification service unavailable" },
+    };
   }
 
   if (!resp.ok) {
