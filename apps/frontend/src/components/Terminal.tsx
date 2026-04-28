@@ -95,12 +95,9 @@ function Terminal() {
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
-  const [instantBanReady, setInstantBanReady] = useState(false);
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [slashQuery, setSlashQuery] = useState("");
-  const [slashIndex, setSlashIndex] = useState(0);
+  const [instantBanReady, setInstantBanReady] = useState(false); const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1); const [isProcessing, setIsProcessing] = useState(false);
+  const [slashQuery, setSlashQuery] = useState(""); const [slashIndex, setSlashIndex] = useState(0);
   const [inputValue, setInputValue] = useState("");
   const [suggestedReply, setSuggestedReply] = useState<string | null>(null);
   const [showStore, setShowStore] = useState(false);
