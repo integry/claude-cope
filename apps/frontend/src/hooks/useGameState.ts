@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, SetStateAction } from "react";
-import posthog from "posthog-js";
+import { track, identify } from "../analytics";
 import { GENERATORS, UPGRADES, CORPORATE_RANKS, THEMES } from "../game/constants";
 import { supabase } from "../supabaseClient";
 import {
@@ -57,6 +57,8 @@ export function useGameState() {
     let cancelled = false;
     fetchSessionProfile().then((result) => {
       if (cancelled || !result.found) return;
+      const restoredUsername = result.profile?.username ?? result.username;
+      if (restoredUsername) identify({ username: restoredUsername });
       setState((prev) => {
         // Full profile restore (server has user_scores row).
         if (result.profile) {
@@ -224,7 +226,7 @@ export function useGameState() {
       };
     });
 
-    try { posthog.capture("generator_purchased", { generator_id: generatorId, amount, cost }); } catch { /* analytics should never block gameplay */ }
+    track("generator_purchased", { generator_id: generatorId, amount, cost });
 
     // Pro users: fire server call, apply authoritative response
     if (current.proKeyHash) {
@@ -348,7 +350,7 @@ export function useGameState() {
       };
     });
 
-    try { posthog.capture("upgrade_purchased", { upgrade_id: upgradeId, cost: upgrade.cost }); } catch { /* analytics should never block gameplay */ }
+    track("upgrade_purchased", { upgrade_id: upgradeId, cost: upgrade.cost });
 
     // Pro users: fire server call
     if (current.proKeyHash) {
