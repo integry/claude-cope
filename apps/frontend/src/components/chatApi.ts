@@ -197,67 +197,66 @@ async function handleErrorResponse(
   onQuotaExhausted?: () => void,
   onError?: () => void,
 ): Promise<boolean> {
-  if (res.status === 403) {
-    const errorData = await res.json().catch(() => null);
-    if (errorData?.error === "Human verification required") {
+  const removeLoading = () => setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
+  const pushMessage = (message: Message) =>
+    setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading"), message]);
+
+  const handlers: Record<number, () => Promise<boolean>> = {
+    403: async () => {
+      const errorData = await res.json().catch(() => null);
+      if (errorData?.error !== "Human verification required") return false;
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("turnstile:required"));
       }
-      setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
+      removeLoading();
       return true;
-    }
-  }
-
-  if (res.status === 402) {
-    if (onQuotaExhausted) {
-      setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
-      onQuotaExhausted();
-    } else {
-      setHistory((prev) => [
-        ...prev.filter((msg) => msg.role !== "loading"),
-        { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Max for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
-      ]);
-    }
-    return true;
-  }
-
-  if (res.status === 401) {
-    onError?.();
-    setHistory((prev) => [
-      ...prev.filter((msg) => msg.role !== "loading"),
-      { role: "error", content: "[🔑 ACCESS DENIED] OpenRouter just slammed the door in your face (HTTP 401). Your API key has been **rejected**, **ghosted**, and **emotionally unavailable**.\n\n[POSSIBLE CAUSES]\n\n• Your key is disabled — like your ambition after the third standup today\n\n• Your key expired — unlike your technical debt, which is eternal\n\n• You copy-pasted it wrong — classic Junior Code Monkey energy\n\n[RECOVERY OPTIONS]\n\n• Check your key at [openrouter.ai/keys](https://openrouter.ai/keys)\n\n• `/key clear` to crawl back to the default model\n\n• `/key <new-key>` to try again with whatever dignity you have left" },
-    ]);
-    return true;
-  }
-
-  if (res.status === 429) {
-    onError?.();
-    const errorData = await res.json().catch(() => null);
-    const upstreamRaw = errorData?.error?.metadata?.raw
-      ?? errorData?.error?.message
-      ?? (typeof errorData?.error === "string" ? errorData.error : "");
-    const details = upstreamRaw ? `\n\n${upstreamRaw}` : "";
-    setHistory((prev) => [
-      ...prev.filter((msg) => msg.role !== "loading"),
-      { role: "warning", content: `[⚠️] OpenRouter rate-limited your request. Please wait before sending another message.${details}` },
-    ]);
-    return true;
-  }
-
-  if (!res.ok) {
-    onError?.();
-    const errorData = await res.json().catch(() => null);
-    setHistory((prev) => [
-      ...prev.filter((msg) => msg.role !== "loading"),
-      {
+    },
+    402: async () => {
+      if (onQuotaExhausted) {
+        removeLoading();
+        onQuotaExhausted();
+      } else {
+        pushMessage({
+          role: "warning",
+          content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Max for 1,000 tokens\n• Shill us on Twitter for bonus tokens",
+        });
+      }
+      return true;
+    },
+    401: async () => {
+      onError?.();
+      pushMessage({
         role: "error",
-        content: `[❌ Error] ${errorData?.error?.message ?? errorData?.error ?? "Request failed"} (HTTP ${res.status})`,
-      },
-    ]);
-    return true;
-  }
+        content: "[🔑 ACCESS DENIED] OpenRouter just slammed the door in your face (HTTP 401). Your API key has been **rejected**, **ghosted**, and **emotionally unavailable**.\n\n[POSSIBLE CAUSES]\n\n• Your key is disabled — like your ambition after the third standup today\n\n• Your key expired — unlike your technical debt, which is eternal\n\n• You copy-pasted it wrong — classic Junior Code Monkey energy\n\n[RECOVERY OPTIONS]\n\n• Check your key at [openrouter.ai/keys](https://openrouter.ai/keys)\n\n• `/key clear` to crawl back to the default model\n\n• `/key <new-key>` to try again with whatever dignity you have left",
+      });
+      return true;
+    },
+    429: async () => {
+      onError?.();
+      const errorData = await res.json().catch(() => null);
+      const upstreamRaw = errorData?.error?.metadata?.raw
+        ?? errorData?.error?.message
+        ?? (typeof errorData?.error === "string" ? errorData.error : "");
+      const details = upstreamRaw ? `\n\n${upstreamRaw}` : "";
+      pushMessage({
+        role: "warning",
+        content: `[⚠️] OpenRouter rate-limited your request. Please wait before sending another message.${details}`,
+      });
+      return true;
+    },
+  };
 
-  return false;
+  const handler = handlers[res.status];
+  if (handler) return handler();
+  if (res.ok) return false;
+
+  onError?.();
+  const errorData = await res.json().catch(() => null);
+  pushMessage({
+    role: "error",
+    content: `[❌ Error] ${errorData?.error?.message ?? errorData?.error ?? "Request failed"} (HTTP ${res.status})`,
+  });
+  return true;
 }
 
 export function submitChatMessage(opts: {
