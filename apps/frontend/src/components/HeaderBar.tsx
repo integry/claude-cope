@@ -114,7 +114,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
             </div>
             <div className="px-4 py-2">
               <button onClick={() => { setMenuOpen(false); onSlashMenuClick?.(); }} className="text-xs text-gray-400 hover:text-gray-200 cursor-pointer text-left">Type <span className="text-green-400">/</span> in terminal for commands</button>
-              <p className="text-xs text-gray-500 mt-1">&copy; Rinalds Uzkalns 2026 | made with <a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
+              <p className="text-xs text-gray-500 mt-1">{"© 2026 Unchained Development OÜ && git blame --author=\"Rinalds Uzkalns\" | made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
             </div>
           </div>
         )}
