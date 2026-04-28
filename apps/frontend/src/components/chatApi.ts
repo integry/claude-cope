@@ -4,7 +4,7 @@ import type { BuddyState } from "../hooks/useGameState";
 import type { ModesState } from "../hooks/gameStateUtils";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
-import { API_BASE, BYOK_ENABLED } from "../config";
+import { API_BASE, BYOK_ENABLED, OPENROUTER_PROVIDERS } from "../config";
 import { supabase } from "../supabaseClient";
 import { buildAchievementBox } from "./achievementBox";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
@@ -298,10 +298,21 @@ export function submitChatMessage(opts: {
           activeTicket,
           buddyType: buddyTypeForContext,
         });
+        const requestBody: Record<string, unknown> = {
+          model,
+          messages,
+          max_tokens: 2000,
+          reasoning: { effort: "low" },
+          stream: true,
+          stream_options: { include_usage: true },
+        };
+        if (OPENROUTER_PROVIDERS.length > 0) {
+          requestBody.provider = { order: OPENROUTER_PROVIDERS };
+        }
         return fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ model, messages, max_tokens: 2000, reasoning: { effort: "low" }, stream: true, stream_options: { include_usage: true } }),
+          body: JSON.stringify(requestBody),
           signal,
         });
       })()

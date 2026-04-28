@@ -6,6 +6,7 @@ type Env = {
   Bindings: {
     DB: D1Database;
     OPENROUTER_API_KEY?: string;
+    OPENROUTER_PROVIDERS?: string;
   };
 };
 
@@ -57,16 +58,26 @@ tickets.post("/refine", async (c) => {
     },
   ];
 
+  const requestBody: Record<string, unknown> = {
+    model: "nvidia/nemotron-nano-9b-v2:free",
+    messages,
+  };
+
+  const providers = (c.env as unknown as Record<string, string | undefined>).OPENROUTER_PROVIDERS;
+  if (providers) {
+    const providerList = providers.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    if (providerList.length > 0) {
+      requestBody.provider = { order: providerList };
+    }
+  }
+
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: "nvidia/nemotron-nano-9b-v2:free",
-      messages,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {

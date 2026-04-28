@@ -1,5 +1,6 @@
 import type { Message } from "./Terminal";
 import type { GameState, ByokUsage } from "../hooks/useGameState";
+import { OPENROUTER_PROVIDERS } from "../config";
 
 /**
  * Validates an OpenRouter API key by making a small test request.
@@ -7,17 +8,21 @@ import type { GameState, ByokUsage } from "../hooks/useGameState";
  */
 async function validateOpenRouterKey(key: string): Promise<{ valid: boolean; error?: string }> {
   try {
+    const requestBody: Record<string, unknown> = {
+      model: "nvidia/nemotron-nano-9b-v2:free",
+      messages: [{ role: "user", content: "Hi" }],
+      max_tokens: 5,
+    };
+    if (OPENROUTER_PROVIDERS.length > 0) {
+      requestBody.provider = { order: OPENROUTER_PROVIDERS };
+    }
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${key}`,
       },
-      body: JSON.stringify({
-        model: "nvidia/nemotron-nano-9b-v2:free",
-        messages: [{ role: "user", content: "Hi" }],
-        max_tokens: 5,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {

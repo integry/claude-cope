@@ -16,6 +16,7 @@ import {
 type Env = {
   Bindings: {
     OPENROUTER_API_KEY?: string;
+    OPENROUTER_PROVIDERS?: string;
     DB?: D1Database;
     USAGE_KV?: KVNamespace;
     POLAR_ACCESS_TOKEN?: string;
@@ -158,19 +159,28 @@ function validateChatRequest(body: ChatBody, apiKey: string | undefined): { erro
   return null;
 }
 
-async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[]) {
+async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[], providers?: string) {
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages,
+    max_tokens: 2000,
+    reasoning: { effort: "low" },
+  };
+
+  if (providers) {
+    const providerList = providers.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    if (providerList.length > 0) {
+      requestBody.provider = { order: providerList };
+    }
+  }
+
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: 2000,
-      reasoning: { effort: "low" },
-    }),
+    body: JSON.stringify(requestBody),
   });
 }
 
@@ -314,7 +324,8 @@ chat.post("/", async (c) => {
     buddyType: body.buddyType,
   });
 
-  const orResponse = await callOpenRouter(apiKey!, model, messages);
+  const providers = (c.env as Record<string, string | undefined>).OPENROUTER_PROVIDERS;
+  const orResponse = await callOpenRouter(apiKey!, model, messages, providers);
 
   if (!orResponse.ok) {
     const errData = await orResponse.json();
