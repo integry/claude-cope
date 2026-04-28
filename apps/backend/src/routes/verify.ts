@@ -35,7 +35,7 @@ verify.post("/", async (c) => {
     return c.json({ verified: false, error: "Verification storage unavailable" }, 503);
   }
 
-  const body = await c.req.json<VerifyBody>().catch(() => ({}));
+  const body = await c.req.json<VerifyBody>().catch((): VerifyBody => ({}));
   const token = body.token;
   if (!token) {
     return c.json({ verified: false, error: "token is required" }, 400);
