@@ -1,7 +1,7 @@
 import { POSTHOG_KEY, POSTHOG_HOST, POSTHOG_DEFAULT_HOST } from "./config";
+import { STORAGE_KEY } from "./hooks/storageKey";
 
 const COPE_ID_KEY = "cope_id";
-const GAME_STATE_KEY = "claudeCopeState";
 
 /** Lazily-resolved PostHog instance — `null` when analytics is disabled. */
 let phInstance: import("posthog-js").PostHog | null = null;
@@ -27,7 +27,7 @@ function getOrCreateCopeId(): string {
 
 function getUsernameFromGameState(): string | undefined {
   try {
-    const raw = localStorage.getItem(GAME_STATE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return undefined;
     const state = JSON.parse(raw);
     return state.username || undefined;

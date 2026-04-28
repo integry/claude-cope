@@ -815,7 +815,7 @@ export function executeSlashCommand(
   };
 
   // Track command usage for performance review brag card
-  const baseCommand = command.startsWith("/ping ") ? "/ping" : command.startsWith("/alias ") ? "/alias" : command.startsWith("/model ") ? "/model" : command.startsWith("/user ") ? "/user" : command.startsWith("/buddy ") ? "/buddy" : command.startsWith("/sync ") ? "/sync" : command.startsWith("/theme ") ? "/theme" : command;
+  const baseCommand = command.split(" ")[0];
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {
