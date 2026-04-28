@@ -113,6 +113,8 @@ if ! $FRONTEND_ONLY; then
   echo "$OPENROUTER_API_KEY" | (cd "$ROOT/apps/backend" && wrangler secret put OPENROUTER_API_KEY --config "$WRANGLER_CFG")
   if [[ -n "${TURNSTILE_SECRET_KEY:-}" ]]; then
     echo "$TURNSTILE_SECRET_KEY" | (cd "$ROOT/apps/backend" && wrangler secret put TURNSTILE_SECRET_KEY --config "$WRANGLER_CFG")
+  else
+    (cd "$ROOT/apps/backend" && printf 'y\n' | wrangler secret delete TURNSTILE_SECRET_KEY --config "$WRANGLER_CFG") || true
   fi
   echo ""
 fi

@@ -44,6 +44,14 @@ async function verifyToken(token: string): Promise<VerifyTokenResult> {
     };
   }
 
+  if (res.status === 403) {
+    return {
+      verified: false,
+      retryable: typeof data?.error !== "string",
+      message: typeof data?.error === "string" ? data.error : undefined,
+    };
+  }
+
   if (res.status === 429 || res.status >= 500) {
     return {
       verified: false,

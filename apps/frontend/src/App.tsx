@@ -5,6 +5,15 @@ import LegalTermsPage from "./components/LegalTermsPage";
 import LegalPrivacyPage from "./components/LegalPrivacyPage";
 import TurnstileWidget from "./components/TurnstileWidget";
 
+const PUBLIC_APP_ROUTES = new Set([
+  "/help",
+  "/about",
+  "/privacy",
+  "/terms",
+  "/contact",
+  "/upgrade",
+]);
+
 function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [isHumanVerified, setIsHumanVerified] = useState(false);
@@ -37,8 +46,9 @@ function App() {
   const path = window.location.pathname;
   if (path === "/legal/terms") return <LegalTermsPage />;
   if (path === "/legal/privacy") return <LegalPrivacyPage />;
-  const showBlockingSplash = showSplash || !isHumanVerified;
-  const showVerificationError = !showSplash && !isHumanVerified && verificationError;
+  const isPublicAppRoute = PUBLIC_APP_ROUTES.has(path) || path.startsWith("/user/");
+  const showBlockingSplash = showSplash || (!isHumanVerified && !isPublicAppRoute);
+  const showVerificationError = !showSplash && !isHumanVerified && !isPublicAppRoute && verificationError;
 
   return (
     <>
