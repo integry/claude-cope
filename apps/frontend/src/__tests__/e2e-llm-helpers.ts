@@ -1,10 +1,8 @@
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
-import { parseProviderList } from "@claude-cope/shared/openrouter";
 
 export const API_KEY = process.env.OPENROUTER_API_KEY ?? "";
 export const MODEL = "nvidia/nemotron-nano-9b-v2";
 export const T = 30_000;
-const PROVIDERS = parseProviderList(process.env.VITE_OPENROUTER_PROVIDERS);
 
 // ── Production-matching constants (from chatApi.ts / chat.ts) ──
 const MAX_TOKENS = 2000;
@@ -153,24 +151,11 @@ function logCallResult(
   console.log(`${"=".repeat(60)}\n`);
 }
 
-type OpenRouterRequestBody = {
-  model: string;
-  messages: { role: string; content: string }[];
-  max_tokens: number;
-  reasoning: { effort: string };
-  provider?: { order: string[] };
-};
-
 export async function callLLM(
   messages: { role: string; content: string }[],
   meta: { suite: string; test: string; turn?: number },
 ): Promise<string> {
-  const requestBody: OpenRouterRequestBody = { model: MODEL, messages, max_tokens: MAX_TOKENS, reasoning: REASONING };
-
-  if (PROVIDERS.length > 0) {
-    requestBody.provider = { order: PROVIDERS };
-  }
-
+  const requestBody = { model: MODEL, messages, max_tokens: MAX_TOKENS, reasoning: REASONING };
   const start = Date.now();
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
