@@ -1,36 +1,22 @@
-import { useState, useRef, useEffect, useCallback, type Dispatch, type SetStateAction, ChangeEvent, KeyboardEvent, memo } from "react";
+import { useState, useRef, useEffect, useCallback, type Dispatch, type SetStateAction, ChangeEvent, memo } from "react";
 import OutputBlock from "./OutputBlock";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import { SLASH_COMMANDS } from "./slashCommands";
-import StoreOverlay from "./StoreOverlay";
-import LeaderboardOverlay from "./LeaderboardOverlay";
-import AchievementOverlay from "./AchievementOverlay";
-import SynergizeOverlay from "./SynergizeOverlay";
-import HelpOverlay from "./HelpOverlay";
-import AboutOverlay from "./AboutOverlay";
-import PrivacyOverlay from "./PrivacyOverlay";
-import TermsOverlay from "./TermsOverlay";
-import ContactOverlay from "./ContactOverlay";
-import UserProfileOverlay from "./UserProfileOverlay";
-import PartyOverlay from "./PartyOverlay";
-import UpgradeOverlay from "./UpgradeOverlay";
 import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
 import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
 import { BuddyDisplay } from "./BuddyDisplay";
 import { parseGlitchStyle } from "./parseGlitchStyle";
 import { terminalContainerClassName } from "./terminalClassName";
-import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { API_BASE, BYOK_ENABLED } from "../config";
 import { supabase } from "../supabaseClient";
-import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
+import { executeSlashCommand } from "./slashCommandExecutor";
 import { applyServerProfile } from "../hooks/profileSync";
 import { updateTicketServer } from "../api/profileApi";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
-import { buildAchievementBox } from "./achievementBox";
 import { filterChatHistory } from "./filterChatHistory";
 import Ticker from "./Ticker";
 import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
@@ -41,6 +27,10 @@ import { useSoundEffects } from "../hooks/useSoundEffects";
 import { usePingAcknowledged } from "../hooks/usePingAcknowledged";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 import type { SlashCommandAction } from "./slashCommandDetect";
+import { triggerQuotaLockout, triggerInstantBan } from "./terminalHandlers";
+import { TerminalOverlays } from "./TerminalOverlays";
+import { useTerminalKeyboard } from "../hooks/useTerminalKeyboard";
+import { handleBragSubmit, handleBuddyConfirm, tryOutageDamage } from "./terminalInputHandlers";
 
 export type { Message };
 
@@ -138,7 +128,6 @@ function Terminal() {
   if (messageKeys.current.length > history.length) {
     messageKeys.current.length = history.length;
   }
-  const lastEscapeRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
 
@@ -168,30 +157,13 @@ function Terminal() {
     fetchRandomTicketPrompt(setHistory);
   }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
 
-  const triggerQuotaLockout = () => {
-    playError();
-    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[HTTP 429] Limit Exceeded. You feel like Homer at an all-you-can-eat restaurant." }, { role: "warning", content: "[⚙️] Upgrading to $200/mo Max Tier..." }]);
-    setTimeout(() => {
-      const newLockouts = state.economy.quotaLockouts + 1;
-      const isNew = newLockouts >= 3 && unlockAchievementWithSound("homer_at_the_buffet");
-      const achievementMsg: Message[] = isNew ? [{ role: "warning", content: buildAchievementBox("homer_at_the_buffet") }] : [];
-      if (state.proKey || state.proKeyHash) {
-        resetQuota();
-        if (newLockouts === 1) setInstantBanReady(true);
-        setHistory((prev) => [...prev, { role: "system", content: "[SUCCESS] Max Tier activated. Quota refilled. Your paid plan limit applies — check the header bar." }, ...achievementMsg]);
-      } else {
-        setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent: 0, quotaLockouts: prev.economy.quotaLockouts + 1 } }));
-        setHistory((prev) => [...prev, { role: "error", content: "[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Max to continue." }, ...achievementMsg]);
-      }
-    }, 5000);
-  };
+  const handleQuotaLockout = useCallback(() => {
+    triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState });
+  }, [playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState]);
 
-  const triggerInstantBan = () => {
-    setInstantBanReady(false); setIsProcessing(true);
-    playError();
-    setHistory((prev) => [...prev.filter((m) => m.role !== "loading"), { role: "error", content: "[ACCOUNT BANNED] Suspicious activity detected. Thanks for the $200." }]);
-    setTimeout(() => { setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[APPEAL ACCEPTED] Your ban has been overturned. We kept the $200." }]); }, 5000);
-  };
+  const handleInstantBan = useCallback(() => {
+    triggerInstantBan({ setInstantBanReady, setIsProcessing, playError, setHistory });
+  }, [setIsProcessing, playError, setHistory]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
@@ -226,31 +198,12 @@ function Terminal() {
     }
   }, []);
 
-  const tryOutageDamage = (): boolean => {
-    if (outageHp === null || !DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) return false;
-    sendDamage();
-    setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: `[💥 HIT] Damage dealt to PROD OUTAGE!` }]);
-    setInputValue(""); return true;
-  };
-
-  const handleBragSubmit = () => {
-    const username = inputValue.trim(); setInputValue("");
-    const generatorsOwned = Object.values(state.inventory).reduce((sum, count) => sum + count, 0);
-    const mostAbusedCommand = Object.entries(state.commandUsage).reduce((best, [cmd, count]) => (count > best[1] ? [cmd, count] : best), ["/clear", 0] as [string, number])[0];
-    submitBrag({ username, currentRank: state.economy.currentRank, totalTDEarned: state.economy.totalTDEarned, generatorsOwned, mostAbusedCommand, setHistory, setBragPending });
-  };
-
-  const handleBuddyConfirm = () => {
-    const answer = inputValue.trim().toLowerCase(); setInputValue(""); setBuddyPendingConfirm(false);
-    if (answer === "y" || answer === "yes") { setHistory((prev) => [...prev, { role: "user", content: inputValue }]); rollBuddy(setState, setHistory, state.buddy?.type ?? undefined); }
-    else { setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]); }
-  };
 
   const handleEnterSubmit = async () => {
-    if (tryOutageDamage()) return;
+    if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
     if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
-    if (bragPending) { handleBragSubmit(); return; }
-    if (buddyPendingConfirm) { handleBuddyConfirm(); return; }
+    if (bragPending) { handleBragSubmit({ inputValue, setInputValue, state, setHistory, setBragPending }); return; }
+    if (buddyPendingConfirm) { handleBuddyConfirm({ inputValue, setInputValue, setBuddyPendingConfirm, setState, setHistory, buddyType: state.buddy?.type ?? undefined }); return; }
     if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
     setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
@@ -265,7 +218,7 @@ function Terminal() {
       return;
     }
     // Handle instant ban scenario (user fires command right after upgrade)
-    if (!effectiveApiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); triggerInstantBan(); return; }
+    if (!effectiveApiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); handleInstantBan(); return; }
     const buddyResult = computeBuddyInterjection(state.buddy);
     if (state.buddy.type) {
       const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
@@ -326,89 +279,49 @@ function Terminal() {
         return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } };
       }),
       onQuotaUpdate: (quotaPercent) => setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })),
-      onQuotaExhausted: triggerQuotaLockout,
+      onQuotaExhausted: handleQuotaLockout,
       onProfileUpdate: (profile) => setState((prev) => applyServerProfile(prev, profile)),
       onError: playError,
       signal: controller.signal,
     });
   };
 
-  const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = val.length; } }, 0); };
-
-  const handleEscapeKey = () => {
-    const anyOverlayOpen = showStore || showLeaderboard || showAchievements || showSynergize || showHelp || showAbout || showPrivacy || showTerms || showContact || showProfile || showParty || showUpgrade;
-    if (anyOverlayOpen) { closeAllOverlays(); return; }
-    if (isProcessing && abortControllerRef.current) {
-      abortControllerRef.current.abort(); abortControllerRef.current = null; setIsProcessing(false);
-      setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading"), { role: "warning", content: "[⚠️ ABORTED] Generation cancelled. Your mass-produced cope has been recalled." }]);
-      if (commandHistory.length > 0) { const lastCmd = commandHistory[commandHistory.length - 1]!; setInputValue(lastCmd); setCursorToEnd(lastCmd); }
-      return;
-    }
-    const now = Date.now();
-    if (now - lastEscapeRef.current < 500) {
-      if (inputValue.length > 0) setHistory((prev) => [...prev, { role: "system", content: "[ESC ESC] Input cleared. Even your half-typed thoughts disappoint me." }]);
-      setInputValue(""); setSlashQuery(""); setSlashIndex(0); lastEscapeRef.current = 0;
-    } else { lastEscapeRef.current = now; }
-  };
-
-  // Global Escape listener so it works even when input is disabled during processing
-  useEffect(() => {
-    const onKeyDown = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") handleEscapeKey(); };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+  const { handleKeyDown } = useTerminalKeyboard({
+    slashQuery,
+    slashIndex,
+    suggestedReply,
+    inputValue,
+    isProcessing,
+    commandHistory,
+    historyIndex,
+    showStore,
+    showLeaderboard,
+    showAchievements,
+    showSynergize,
+    showHelp,
+    showAbout,
+    showPrivacy,
+    showTerms,
+    showContact,
+    showProfile,
+    showParty,
+    showUpgrade,
+    brrrrrrIntervalRef,
+    abortControllerRef,
+    inputRef,
+    setSlashIndex,
+    setInputValue,
+    setSuggestedReply,
+    setSlashQuery,
+    setHistoryIndex,
+    setIsProcessing,
+    setHistory,
+    closeAllOverlays,
+    runSlashCommand,
+    handleEnterSubmit,
+    getFilteredSlashCommands,
   });
 
-  const handleArrowUp = (slashMenuOpen: boolean, filtered: string[]) => {
-    if (slashMenuOpen) { setSlashIndex((prev) => (prev > 0 ? prev - 1 : filtered.length - 1)); return; }
-    if (commandHistory.length === 0) return;
-    const newIndex = historyIndex + 1;
-    if (newIndex < commandHistory.length) { setHistoryIndex(newIndex); const val = commandHistory[commandHistory.length - 1 - newIndex]!; setInputValue(val); setCursorToEnd(val); }
-  };
-
-  const handleArrowDown = (slashMenuOpen: boolean, filtered: string[]) => {
-    if (slashMenuOpen) { setSlashIndex((prev) => (prev < filtered.length - 1 ? prev + 1 : 0)); return; }
-    const newIndex = historyIndex - 1;
-    if (newIndex < -1) return;
-    setHistoryIndex(newIndex);
-    const val = newIndex === -1 ? "" : commandHistory[commandHistory.length - 1 - newIndex]!;
-    setInputValue(val); setCursorToEnd(val);
-  };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "c" && e.ctrlKey && brrrrrrIntervalRef.current) {
-      e.preventDefault(); clearInterval(brrrrrrIntervalRef.current); brrrrrrIntervalRef.current = null;
-      setHistory((prev) => [...prev, { role: "warning", content: "^C\n[✓] Process interrupted. Your CPU lives to fight another day." }]);
-      setIsProcessing(false); return;
-    }
-    const filtered = getFilteredSlashCommands();
-    const slashMenuOpen = slashQuery !== "" && filtered.length > 0;
-    if (e.key === "Escape") return; // handled by global listener
-    if (e.key === "Tab") {
-      if (slashMenuOpen) { e.preventDefault(); const selected = filtered[slashIndex]; if (selected) { setInputValue(selected); setSlashQuery(selected); } }
-      else if (suggestedReply && !inputValue) { e.preventDefault(); setInputValue(suggestedReply); setSuggestedReply(null); }
-      return;
-    }
-    if (e.key === "Enter") {
-      if (slashMenuOpen) { e.preventDefault(); const selected = filtered[slashIndex]; if (selected) runSlashCommand(selected); return; }
-      if (inputValue.trim() !== "" && !isProcessing) handleEnterSubmit();
-    } else if (e.key === "ArrowUp") { e.preventDefault(); handleArrowUp(slashMenuOpen, filtered); }
-    else if (e.key === "ArrowDown") { e.preventDefault(); handleArrowDown(slashMenuOpen, filtered); }
-  };
-
-  const renderOverlays = () => (<>
-    {showStore && <StoreOverlay state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} equipTheme={setActiveTheme} onClose={() => setShowStore(false)} />}
-    {showLeaderboard && <LeaderboardOverlay onClose={() => setShowLeaderboard(false)} />}
-    {showAchievements && <AchievementOverlay unlockedIds={state.achievements} onClose={() => setShowAchievements(false)} />}
-    {showHelp && <HelpOverlay onClose={() => { setShowHelp(false); window.history.pushState(null, "", "/"); }} />}
-    {showAbout && <AboutOverlay onClose={() => { setShowAbout(false); window.history.pushState(null, "", "/"); }} />}
-    {showPrivacy && <PrivacyOverlay onClose={() => { setShowPrivacy(false); window.history.pushState(null, "", "/"); }} />}
-    {showTerms && <TermsOverlay onClose={() => { setShowTerms(false); window.history.pushState(null, "", "/"); }} />}
-    {showContact && <ContactOverlay onClose={() => { setShowContact(false); window.history.pushState(null, "", "/"); }} />}
-    {showProfile && <UserProfileOverlay state={state} onClose={() => { setShowProfile(false); if (window.location.pathname.startsWith("/user/")) window.history.pushState(null, "", "/"); }} />}
-    {showParty && <PartyOverlay onClose={() => setShowParty(false)} />}
-    {showSynergize && <SynergizeOverlay onClose={() => { setShowSynergize(false); setIsProcessing(false); setHistory((prev) => [...prev, { role: "system", content: "[✓] Survived a simulated 15-minute meeting of corporate synergy. No action items assigned." }]); }} />}
-    {showUpgrade && <UpgradeOverlay isUpgraded={!!state.proKey || !!state.proKeyHash} quotaPercent={state.economy.quotaPercent} onClose={() => { setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/"); }} />}
-  </>);
 
   return (
     <div
@@ -434,7 +347,39 @@ function Terminal() {
           <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
         </div>
       </div>
-      {renderOverlays()}
+      <TerminalOverlays
+        showStore={showStore}
+        showLeaderboard={showLeaderboard}
+        showAchievements={showAchievements}
+        showHelp={showHelp}
+        showAbout={showAbout}
+        showPrivacy={showPrivacy}
+        showTerms={showTerms}
+        showContact={showContact}
+        showProfile={showProfile}
+        showParty={showParty}
+        showSynergize={showSynergize}
+        showUpgrade={showUpgrade}
+        state={state}
+        buyGenerator={buyGenerator}
+        buyUpgrade={buyUpgrade}
+        buyTheme={buyTheme}
+        setActiveTheme={setActiveTheme}
+        setShowStore={setShowStore}
+        setShowLeaderboard={setShowLeaderboard}
+        setShowAchievements={setShowAchievements}
+        setShowHelp={setShowHelp}
+        setShowAbout={setShowAbout}
+        setShowPrivacy={setShowPrivacy}
+        setShowTerms={setShowTerms}
+        setShowContact={setShowContact}
+        setShowProfile={setShowProfile}
+        setShowParty={setShowParty}
+        setShowSynergize={setShowSynergize}
+        setShowUpgrade={setShowUpgrade}
+        setIsProcessing={setIsProcessing}
+        setHistory={setHistory}
+      />
       <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-1 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
         <div className="flex items-center justify-between"><span>This is a parody project and is not affiliated with Anthropic.</span><span className="ml-auto text-right">&copy; Rinalds Uzkalns 2026 | made with&nbsp;<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></span></div>
         <div className="flex items-center justify-between">
