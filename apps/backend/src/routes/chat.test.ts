@@ -308,7 +308,8 @@ describe("buildFreeChatProfileSnapshot", () => {
 });
 
 describe("Provider configuration in OpenRouter requests", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let fetchSpy: any;
   let capturedRequestBody: unknown;
 
   beforeEach(() => {
@@ -330,7 +331,7 @@ describe("Provider configuration in OpenRouter requests", () => {
 
   it("includes provider.order in fetch request body when OPENROUTER_PROVIDERS is configured", async () => {
     const { callOpenRouter } = await import("./chat");
-    const { parseProviderList } = await import("@claude-cope/shared/openrouter");
+    const { parseProviderList } = await import("../utils/openrouter");
 
     const providerList = parseProviderList("Together,Fireworks");
     expect(providerList).toEqual(["Together", "Fireworks"]);
@@ -350,7 +351,7 @@ describe("Provider configuration in OpenRouter requests", () => {
 
   it("omits provider field in fetch request when OPENROUTER_PROVIDERS is not configured", async () => {
     const { callOpenRouter } = await import("./chat");
-    const { parseProviderList } = await import("@claude-cope/shared/openrouter");
+    const { parseProviderList } = await import("../utils/openrouter");
 
     const providerList = parseProviderList(undefined);
     expect(providerList).toEqual([]);
@@ -369,7 +370,7 @@ describe("Provider configuration in OpenRouter requests", () => {
 
   it("omits provider field when OPENROUTER_PROVIDERS is empty string", async () => {
     const { callOpenRouter } = await import("./chat");
-    const { parseProviderList } = await import("@claude-cope/shared/openrouter");
+    const { parseProviderList } = await import("../utils/openrouter");
 
     const providerList = parseProviderList("");
     expect(providerList).toEqual([]);

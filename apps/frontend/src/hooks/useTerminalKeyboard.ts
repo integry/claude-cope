@@ -72,7 +72,7 @@ export function useTerminalKeyboard({
 }) {
   const lastEscapeRef = useRef<number>(0);
 
-  const setCursorToEnd = (val: string) => {
+  const setCursorToEnd = useCallback((val: string) => {
     setTimeout(() => {
       const el = inputRef.current;
       if (el) {
@@ -80,7 +80,7 @@ export function useTerminalKeyboard({
         el.selectionStart = el.selectionEnd = val.length;
       }
     }, 0);
-  };
+  }, [inputRef]);
 
   const handleEscapeKey = useCallback(() => {
     const anyOverlayOpen =
@@ -119,7 +119,7 @@ export function useTerminalKeyboard({
     } else {
       lastEscapeRef.current = now;
     }
-  }, [showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, isProcessing, abortControllerRef, commandHistory, inputValue, closeAllOverlays, setIsProcessing, setHistory, setInputValue, setSlashQuery, setSlashIndex]);
+  }, [showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, isProcessing, abortControllerRef, commandHistory, inputValue, closeAllOverlays, setIsProcessing, setHistory, setInputValue, setSlashQuery, setSlashIndex, setCursorToEnd]);
 
   const handleArrowUp = (slashMenuOpen: boolean, filtered: string[]) => {
     if (slashMenuOpen) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseProviderList } from "@claude-cope/shared/openrouter";
+import { parseProviderList } from "../utils/openrouter";
 import { buildTicketRefineRequest } from "./tickets";
 
 describe("Provider configuration in ticket refine requests", () => {
