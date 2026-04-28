@@ -75,13 +75,15 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   }, [clearTimeouts, addTimeout]);
 
   const closePreview = useCallback(() => {
+    clearTimeouts();
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewBlob(null);
     setPreviewUrl(null);
     setPasteHint(null);
-  }, [previewUrl]);
+  }, [previewUrl, clearTimeouts]);
 
   const generatingRef = useRef(false);
+  const sharingRef = useRef(false);
 
   const handleOpenPreview = useCallback(async () => {
     if (generatingRef.current) return;
@@ -109,8 +111,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   }, [userMessage, systemMessage, username, resetAfterDelay]);
 
   const executeShare = useCallback(async (
-    opts: { platform?: "twitter" | "linkedin"; skipReset?: boolean },
-    successHandler: (result: ShareResult, platform?: "twitter" | "linkedin") => void,
+    successHandler: (result: ShareResult) => void,
   ) => {
     const cachedBlob = previewBlob;
     const token = mountTokenRef.current;
@@ -134,23 +135,22 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         previewBlob: cachedBlob ?? undefined,
       });
       if (token.cancelled) return;
-      successHandler(result, opts.platform);
+      successHandler(result);
     } catch {
       if (token.cancelled) return;
       setStatus("error");
-      setFeedback(opts.platform ? "Something went wrong. Please try again." : "Failed to copy image.");
+      setFeedback("Failed to copy image.");
       // Always reset on error so the button doesn't get permanently stuck.
-      resetAfterDelay(opts.platform ? 4000 : 3000);
+      resetAfterDelay(3000);
       return;
     }
 
-    if (!opts.skipReset) {
-      resetAfterDelay(opts.platform ? 4000 : 3000);
-    }
+    resetAfterDelay(3000);
   }, [userMessage, systemMessage, username, previewBlob, closePreview, clearTimeouts, resetAfterDelay]);
 
   const handleShare = useCallback(async (platform: "twitter" | "linkedin") => {
-    if (!previewBlob) return;
+    if (!previewBlob || sharingRef.current) return;
+    sharingRef.current = true;
     const token = mountTokenRef.current;
 
     // Show a temporary generating state while the clipboard write runs.
@@ -194,6 +194,8 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       setFeedback("Something went wrong. Please try again.");
       closePreview();
       resetAfterDelay(4000);
+    } finally {
+      sharingRef.current = false;
     }
   }, [previewBlob, userMessage, systemMessage, username, addTimeout, closePreview, resetAfterDelay]);
 
@@ -204,7 +206,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   }, [closePreview]);
 
   const handleCopyImage = useCallback(async () => {
-    await executeShare({}, (result) => {
+    await executeShare((result) => {
       if (result.success && result.method === "image") {
         setStatus("copied");
         setFeedback("Image copied to clipboard!");
@@ -356,7 +358,8 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
                     <button
                       key={label}
                       onClick={onClick}
-                      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: "12px" }}
+                      disabled={status === "generating"}
+                      style={{ background: "none", border: "none", padding: 0, cursor: status === "generating" ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: "12px", opacity: status === "generating" ? 0.5 : 1 }}
                     >
                       <span style={{ color: "#4ade80", fontWeight: "bold" }}>{">"}</span>
                       <span style={{ color: "#4ade80", fontWeight: "bold" }}>{` [ ${label} ]`}</span>

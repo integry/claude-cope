@@ -68,6 +68,7 @@ export function useOverlays(): OverlayState & OverlayActions {
 
   useEffect(() => {
     const onPopState = () => {
+      // Update route-backed overlays to match the current URL.
       setShowHelp(window.location.pathname === "/help");
       setShowAbout(window.location.pathname === "/about");
       setShowPrivacy(window.location.pathname === "/privacy");
@@ -75,6 +76,12 @@ export function useOverlays(): OverlayState & OverlayActions {
       setShowContact(window.location.pathname === "/contact");
       setShowProfile(window.location.pathname.startsWith("/user/"));
       setShowUpgrade(window.location.pathname === "/upgrade");
+      // Close non-route overlays on navigation so they don't get stuck open.
+      setShowStore(false);
+      setShowLeaderboard(false);
+      setShowAchievements(false);
+      setShowSynergize(false);
+      setShowParty(false);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
