@@ -184,6 +184,37 @@ describe("app", () => {
       }
     });
 
+    it("rejects successful verification when hostname does not match expected hostname", async () => {
+      const usageKv = {
+        get: vi.fn(),
+        put: vi.fn(),
+      };
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ success: true, hostname: "evil.example.com" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+      try {
+        const res = await app.request(
+          "/api/verify",
+          { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ token: "token-123" }) },
+          {
+            ALLOWED_ORIGINS: "http://localhost:5173",
+            TURNSTILE_SECRET_KEY: "secret",
+            TURNSTILE_EXPECTED_HOSTNAME: "claudecope.com",
+            USAGE_KV: usageKv,
+          },
+        );
+        expect(res.status).toBe(403);
+        await expect(res.json()).resolves.toEqual({ verified: false, error: "Unexpected verification hostname" });
+        expect(usageKv.put).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
     it("uses a verify-specific rate limiter key", async () => {
       const limiter = {
         limit: vi.fn().mockResolvedValue({ success: true }),

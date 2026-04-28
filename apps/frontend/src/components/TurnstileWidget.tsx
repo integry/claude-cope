@@ -22,7 +22,13 @@ declare global {
   }
 }
 
-async function verifyToken(token: string): Promise<boolean> {
+type VerifyTokenResult = {
+  verified: boolean;
+  retryable: boolean;
+  message?: string;
+};
+
+async function verifyToken(token: string): Promise<VerifyTokenResult> {
   const res = await fetch(`${API_BASE}/api/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -30,9 +36,27 @@ async function verifyToken(token: string): Promise<boolean> {
     credentials: "include",
   });
 
-  if (!res.ok) return false;
   const data = await res.json().catch(() => ({}));
-  return Boolean(data?.verified);
+  if (res.ok) {
+    return {
+      verified: Boolean(data?.verified),
+      retryable: !data?.verified,
+    };
+  }
+
+  if (res.status === 429 || res.status >= 500) {
+    return {
+      verified: false,
+      retryable: false,
+      message: typeof data?.error === "string" ? data.error : "Verification service is temporarily unavailable.",
+    };
+  }
+
+  return {
+    verified: false,
+    retryable: true,
+    message: typeof data?.error === "string" ? data.error : undefined,
+  };
 }
 
 async function getBackendVerificationStatus(): Promise<"enabled" | "disabled" | "unavailable"> {
@@ -141,11 +165,20 @@ export default function TurnstileWidget({
         size: "invisible",
         callback: async (token: string) => {
           if (cancelled) return;
-          const ok = await verifyToken(token).catch(() => false);
+          const result = await verifyToken(token).catch(() => ({
+            verified: false,
+            retryable: false,
+            message: "Verification service is temporarily unavailable.",
+          }));
           if (cancelled) return;
-          if (ok) {
+          if (result.verified) {
             clearVerificationTimeout();
             onVerified();
+            return;
+          }
+          if (!result.retryable) {
+            clearVerificationTimeout();
+            onError(result.message ?? "Human verification unavailable.");
             return;
           }
           if (retries < maxRetries) {

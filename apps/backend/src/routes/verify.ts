@@ -1,8 +1,10 @@
 import { Hono } from "hono";
+import { getClientIp } from "../middleware/rateLimiter";
 
 type Env = {
   Bindings: {
     TURNSTILE_SECRET_KEY?: string;
+    TURNSTILE_EXPECTED_HOSTNAME?: string;
     USAGE_KV?: KVNamespace;
   };
   Variables: {
@@ -16,6 +18,8 @@ type VerifyBody = {
 
 type TurnstileVerifyResponse = {
   success: boolean;
+  hostname?: string;
+  "error-codes"?: string[];
 };
 
 const HUMAN_TTL_SECONDS = 60 * 60 * 24;
@@ -49,11 +53,8 @@ verify.post("/", async (c) => {
   form.set("secret", secret);
   form.set("response", token);
 
-  const ip =
-    c.req.header("cf-connecting-ip") ??
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-    c.req.header("x-real-ip");
-  if (ip) form.set("remoteip", ip);
+  const ip = getClientIp(c.req);
+  if (ip && ip !== "unknown") form.set("remoteip", ip);
 
   let resp: Response;
   try {
@@ -69,9 +70,28 @@ verify.post("/", async (c) => {
     return c.json({ verified: false, error: "Failed to verify token" }, 502);
   }
 
-  const data = await resp.json() as TurnstileVerifyResponse;
+  const data = await resp.json().catch(() => null) as TurnstileVerifyResponse | null;
+  if (!data || typeof data.success !== "boolean") {
+    return c.json({ verified: false, error: "Invalid verification response" }, 502);
+  }
+
   if (!data.success) {
+    if (Array.isArray(data["error-codes"]) && data["error-codes"].length > 0) {
+      console.warn("Turnstile verification failed", { errorCodes: data["error-codes"] });
+    }
     return c.json({ verified: false }, 403);
+  }
+
+  const expectedHostname =
+    c.env?.TURNSTILE_EXPECTED_HOSTNAME ??
+    c.req.header("x-forwarded-host") ??
+    c.req.header("host");
+  if (expectedHostname && data.hostname && data.hostname !== expectedHostname) {
+    console.warn("Turnstile hostname mismatch", {
+      expectedHostname,
+      actualHostname: data.hostname,
+    });
+    return c.json({ verified: false, error: "Unexpected verification hostname" }, 403);
   }
 
   await kv.put(`human:${sessionId}`, "1", { expirationTtl: HUMAN_TTL_SECONDS });
