@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import { sanitizeChatMessages, enforceContextTrimming, resolveFreeChatLicenseState } from "./chat";
 import { buildFreeChatProfileSnapshot } from "./chatHelpers";
 
@@ -308,7 +308,7 @@ describe("buildFreeChatProfileSnapshot", () => {
 });
 
 describe("Provider configuration in OpenRouter requests", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn<typeof globalThis, "fetch">>;
+  let fetchSpy: MockInstance;
   let capturedRequestBody: unknown;
 
   beforeEach(() => {
