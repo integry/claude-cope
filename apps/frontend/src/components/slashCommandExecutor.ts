@@ -651,7 +651,11 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
         }
         return withKey;
       });
-      track("account_upgraded", { restored: Boolean(data.restored) });
+      if (data.restored) {
+        track("account_restored");
+      } else {
+        track("account_upgraded");
+      }
       identify({ username: data.profile?.username ?? ctx.state.username });
       if (data.restored && data.profile) {
         reply({ role: "system", content: `[✓ **PROFILE RESTORED**] Welcome back, **${data.profile.username}**! Your profile has been restored across devices.\n\n**TD:** ${data.profile.current_td.toLocaleString()} / ${data.profile.total_td.toLocaleString()} total\n**Rank:** ${data.profile.corporate_rank}\n**Generators:** ${Object.values(data.profile.inventory).reduce((a, b) => a + b, 0)} owned\n**Upgrades:** ${data.profile.upgrades.length} unlocked\n\nYou now have **${Math.round((data.profile.quota_percent ?? 100) * PRO_QUOTA_LIMIT / 100)} Max credits**. Your progress is synced across all devices.\n\n[🔐 *FYI*] Your license key doubles as the password to this account. Anyone with it can \`/sync\` in and live their best life on your dime.` });

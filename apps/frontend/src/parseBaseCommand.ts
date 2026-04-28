@@ -4,5 +4,5 @@
  * passed to `/key`) are never included in analytics or logging.
  */
 export function parseBaseCommand(command: string): string {
-  return command.split(" ")[0] as string;
+  return command.trim().split(/\s+/, 1)[0] as string;
 }

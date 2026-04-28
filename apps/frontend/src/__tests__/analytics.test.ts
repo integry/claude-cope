@@ -181,6 +181,46 @@ describe("analytics — init failure recovery", () => {
     // Second attempt should not be blocked by initialized flag
     expect(() => initPostHog()).not.toThrow();
   });
+
+  it("preserves pending events across init failure for retry flush", async () => {
+    const mockCapture = vi.fn();
+    const mockIdentify = vi.fn();
+
+    // First attempt: posthog-js fails to load
+    vi.doMock("posthog-js", () => {
+      throw new Error("chunk load failed");
+    });
+
+    const { initPostHog, track, identify } = await import("../analytics");
+    initPostHog();
+
+    // Queue events while init is in progress (readyPromise exists)
+    track("early_event", { key: "value" });
+    identify({ username: "player1" });
+
+    await flushPromises();
+    // First attempt failed — pending events should be preserved
+
+    // Reset mock to succeed on retry
+    vi.doMock("posthog-js", () => ({
+      default: {
+        init: vi.fn(),
+        capture: mockCapture,
+        identify: mockIdentify,
+      },
+    }));
+
+    // Retry
+    initPostHog();
+    track("retry_event", { retry: true });
+
+    await flushPromises();
+
+    // Events from before the failure should have been flushed on successful retry
+    expect(mockCapture).toHaveBeenCalledWith("early_event", { key: "value" });
+    expect(mockCapture).toHaveBeenCalledWith("retry_event", { retry: true });
+    expect(mockIdentify).toHaveBeenCalledWith("test-uuid", { username: "player1" });
+  });
 });
 
 describe("analytics — STORAGE_KEY is shared, not duplicated", () => {
@@ -204,5 +244,16 @@ describe("parseBaseCommand — command normalization", () => {
     const result = parseBaseCommand("/key sk-live-super-secret-key-12345");
     expect(result).toBe("/key");
     expect(result).not.toContain("sk-");
+  });
+
+  it("handles leading/trailing whitespace", () => {
+    expect(parseBaseCommand("  /key sk-live-1234")).toBe("/key");
+    expect(parseBaseCommand("/help  ")).toBe("/help");
+    expect(parseBaseCommand("  /clear  ")).toBe("/clear");
+  });
+
+  it("handles tabs and multiple spaces between tokens", () => {
+    expect(parseBaseCommand("/key\tsk-live-1234")).toBe("/key");
+    expect(parseBaseCommand("/sync   abc123")).toBe("/sync");
   });
 });

@@ -448,6 +448,8 @@ export function useGameState() {
       };
     });
 
+    track("theme_purchased", { theme_id: themeId, cost: theme.cost });
+
     // Pro users: fire server call
     if (current.proKeyHash) buyThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
       if (result.success && result.profile) {

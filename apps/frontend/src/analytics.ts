@@ -79,10 +79,9 @@ export function initPostHog(): void {
     })
     .catch((err) => {
       // PostHog failed to load — allow retry on next initPostHog() call.
+      // Pending events are preserved so they can be flushed on a successful retry.
       initialized = false;
       readyPromise = null;
-      pendingTrackCalls.length = 0;
-      pendingIdentifyCalls.length = 0;
       if (import.meta.env.DEV) {
         console.warn("[analytics] PostHog initialization failed:", err);
       }
