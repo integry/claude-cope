@@ -1,13 +1,37 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { TICKET_PM_PROMPT } from "../prompts/ticketPrompt";
+import { parseProviderList } from "@claude-cope/shared/openrouter";
 
 type Env = {
   Bindings: {
     DB: D1Database;
     OPENROUTER_API_KEY?: string;
+    OPENROUTER_PROVIDERS?: string;
   };
 };
+
+type OpenRouterRequestBody = {
+  model: string;
+  messages: { role: string; content: string }[];
+  provider?: { order: string[] };
+};
+
+export function buildTicketRefineRequest(
+  messages: { role: string; content: string }[],
+  providers?: string[]
+): OpenRouterRequestBody {
+  const requestBody: OpenRouterRequestBody = {
+    model: "nvidia/nemotron-nano-9b-v2:free",
+    messages,
+  };
+
+  if (providers && providers.length > 0) {
+    requestBody.provider = { order: providers };
+  }
+
+  return requestBody;
+}
 
 const tickets = new Hono<Env>();
 
@@ -34,7 +58,7 @@ tickets.post("/refine", async (c) => {
     return c.json({ error: "Database is not configured" }, 500);
   }
 
-  const apiKey = (c.env as unknown as Record<string, string | undefined>).OPENROUTER_API_KEY;
+  const apiKey = c.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
     return c.json({ error: "OPENROUTER_API_KEY is not configured" }, 500);
@@ -57,16 +81,16 @@ tickets.post("/refine", async (c) => {
     },
   ];
 
+  const providerList = parseProviderList(c.env.OPENROUTER_PROVIDERS);
+  const requestBody = buildTicketRefineRequest(messages, providerList);
+
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: "nvidia/nemotron-nano-9b-v2:free",
-      messages,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
