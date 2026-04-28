@@ -113,6 +113,7 @@ function Terminal() {
   const lastEscapeRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
+  const pendingNagCommandRef = useRef<string | null>(null);
   const historyRef = useRef(history);
   historyRef.current = history;
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
@@ -223,24 +224,8 @@ function Terminal() {
     else { setHistory((prev) => [...prev, { role: "user", content: inputValue }, { role: "system", content: "[✓] Buddy re-roll cancelled. Your current buddy is safe... for now." }]); }
   };
 
-  const handleEnterSubmit = async () => {
-    if (tryOutageDamage()) return;
-    if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
-    if (bragPending) { handleBragSubmit(); return; }
-    if (buddyPendingConfirm) { handleBuddyConfirm(); return; }
-    if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
-    const command = inputValue;
-    setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
-    // Effective BYOK status for request routing — a stale apiKey must be
-    // ignored when the operator has disabled BYOK.
+  const processCommand = async (command: string) => {
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
-    // Block submission when quota is exhausted and user has no BYOK or pro key
-    if (!effectiveApiKey && !state.proKey && !state.proKeyHash && state.economy.quotaPercent <= 0) {
-      const byokHint = BYOK_ENABLED ? " or use `/key <your-openrouter-key>`" : "";
-      setHistory((prev) => [...prev, { role: "user", content: command }, { role: "error", content: `[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Max${byokHint} to continue.` }]);
-      playError();
-      return;
-    }
     // Handle instant ban scenario (user fires command right after upgrade)
     if (!effectiveApiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); triggerInstantBan(); return; }
     const buddyResult = computeBuddyInterjection(state.buddy);
@@ -291,6 +276,36 @@ function Terminal() {
       onProfileUpdate: (profile) => setState((prev) => applyServerProfile(prev, profile)),
       onError: playError, signal: controller.signal,
     });
+  };
+
+  // WinRAR nag: when the UpgradeOverlay is dismissed while a command is pending, process it
+  useEffect(() => {
+    if (!showUpgrade && pendingNagCommandRef.current !== null) {
+      const command = pendingNagCommandRef.current;
+      pendingNagCommandRef.current = null;
+      processCommand(command);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showUpgrade]);
+
+  const handleEnterSubmit = async () => {
+    if (tryOutageDamage()) return;
+    if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
+    if (bragPending) { handleBragSubmit(); return; }
+    if (buddyPendingConfirm) { handleBuddyConfirm(); return; }
+    if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
+    const command = inputValue;
+    setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
+    // Effective BYOK status for request routing — a stale apiKey must be
+    // ignored when the operator has disabled BYOK.
+    const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
+    // WinRAR nag screen: show UpgradeOverlay before every command when quota is exhausted
+    if (!effectiveApiKey && !state.proKey && !state.proKeyHash && state.economy.quotaPercent <= 0) {
+      pendingNagCommandRef.current = command;
+      setShowUpgrade(true);
+      return;
+    }
+    processCommand(command);
   };
 
   const setCursorToEnd = (val: string) => { setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = val.length; } }, 0); };
