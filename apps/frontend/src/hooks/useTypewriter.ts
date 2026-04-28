@@ -3,10 +3,14 @@ import { useState, useEffect, useRef } from "react";
 /**
  * Gradually reveals text line-by-line with randomized delays,
  * simulating a typewriter / streaming effect for system messages.
+ *
+ * When `dialUpMode` is true, delays are drastically increased to simulate
+ * an agonising dial-up connection for free-tier users.
  */
 export function useTypewriter(
   content: string,
-  enabled: boolean
+  enabled: boolean,
+  dialUpMode = false,
 ): { visibleContent: string; isTyping: boolean } {
   const lines = content.split("\n");
   const [visibleLineCount, setVisibleLineCount] = useState(enabled ? 0 : lines.length);
@@ -39,10 +43,22 @@ export function useTypewriter(
       }
 
       // Base delay per line: 30-80ms for short lines, longer for content lines
+      // In dial-up mode, all delays are dramatically increased
       const line = effectLines[currentCount] || "";
       let delay: number;
 
-      if (line.trim() === "") {
+      if (dialUpMode) {
+        // Dial-up mode: agonisingly slow character-by-character feel
+        if (line.trim() === "") {
+          delay = 150 + Math.random() * 200;
+        } else if (currentCount > 0 && Math.random() < 0.25) {
+          // 25% chance of a long "buffering" pause (800-2000ms)
+          delay = 800 + Math.random() * 1200;
+        } else {
+          // Slow line reveal: 200-500ms per line, longer for longer lines
+          delay = 200 + Math.min(line.length * 3, 300) + Math.random() * 100;
+        }
+      } else if (line.trim() === "") {
         // Blank lines: small pause
         delay = 20 + Math.random() * 40;
       } else if (currentCount > 0 && Math.random() < 0.15) {
@@ -60,14 +76,14 @@ export function useTypewriter(
       }, delay);
     };
 
-    // Kick off with a tiny initial delay
+    // Kick off with an initial delay (longer in dial-up mode)
     timeout = setTimeout(() => {
       setVisibleLineCount(1);
       revealNext(1);
-    }, 40);
+    }, dialUpMode ? 300 : 40);
 
     return () => clearTimeout(timeout);
-  }, [enabled, content]);
+  }, [enabled, content, dialUpMode]);
 
   if (!enabled || completedRef.current) {
     return { visibleContent: content, isTyping: false };

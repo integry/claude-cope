@@ -314,7 +314,7 @@ function getContainerClass(message: Message, isNew: boolean): string {
   return `mb-5 ${colorClass} ${modifier}`;
 }
 
-function MessageContent({ message, isNew = false, onSlashCommand }: { message: Message; isNew?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
+function MessageContent({ message, isNew = false, isFreeTier = false, onSlashCommand }: { message: Message; isNew?: boolean; isFreeTier?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
   const isBuddyInterjection = message.role === "warning" && isBuddyMessage(message.content);
   const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
@@ -324,7 +324,7 @@ function MessageContent({ message, isNew = false, onSlashCommand }: { message: M
 
   // Typewriter effect for new system/warning/error messages (not loading or streaming)
   const shouldTypewrite = isNew && useMarkdown && message.role === "system";
-  const { visibleContent, isTyping } = useTypewriter(message.content, shouldTypewrite);
+  const { visibleContent, isTyping } = useTypewriter(message.content, shouldTypewrite, isFreeTier);
 
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand), [onSlashCommand]);
 
@@ -386,7 +386,7 @@ function getShareProps(message: Message, previousMessage?: Message, nextMessage?
   return { showShareButton, shareSystemMessage };
 }
 
-function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
+function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", isFreeTier = false, onSlashCommand }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; isFreeTier?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   const { showShareButton, shareSystemMessage } = getShareProps(message, previousMessage, nextMessage);
 
@@ -399,7 +399,7 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
         </div>
       )}
       {message.role === "loading" && !isAwaitingResponse && <Spinner />}
-      <MessageContent message={message} isNew={isNew} onSlashCommand={onSlashCommand} />
+      <MessageContent message={message} isNew={isNew} isFreeTier={isFreeTier} onSlashCommand={onSlashCommand} />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
       {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
@@ -423,6 +423,7 @@ function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps
   if (!messagesEqual(prev.previousMessage, next.previousMessage)) return false;
   if (!messagesEqual(prev.nextMessage, next.nextMessage)) return false;
   if (prev.username !== next.username) return false;
+  if (prev.isFreeTier !== next.isFreeTier) return false;
   if (prev.onSlashCommand !== next.onSlashCommand) return false;
   // Only compare activeTicketId for loading messages
   if (prev.message.role === "loading" && prev.activeTicketId !== next.activeTicketId) return false;

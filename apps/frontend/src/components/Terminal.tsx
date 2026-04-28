@@ -40,24 +40,26 @@ import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
 import { usePingAcknowledged } from "../hooks/usePingAcknowledged";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
+import { getRandomAd } from "./terminalAds";
 import type { SlashCommandAction } from "./slashCommandDetect";
 
 export type { Message };
 
 /** Memoized message list — only re-renders when history/keys/props actually change */
-const MessageList = memo(function MessageList({ history, messageKeys, initialHistoryLen, promptString, activeTicketId, username, onSlashCommand }: {
+const MessageList = memo(function MessageList({ history, messageKeys, initialHistoryLen, promptString, activeTicketId, username, isFreeTier, onSlashCommand }: {
   history: Message[];
   messageKeys: number[];
   initialHistoryLen: number;
   promptString: string;
   activeTicketId?: string | null;
   username: string;
+  isFreeTier: boolean;
   onSlashCommand?: (command: string, action: SlashCommandAction) => void;
 }) {
   return (
     <>
       {history.map((message, index) => (
-        <OutputBlock key={messageKeys[index]} message={message} previousMessage={history[index - 1]} nextMessage={history[index + 1]} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} username={username} onSlashCommand={onSlashCommand} />
+        <OutputBlock key={messageKeys[index]} message={message} previousMessage={history[index - 1]} nextMessage={history[index + 1]} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} username={username} isFreeTier={isFreeTier} onSlashCommand={onSlashCommand} />
       ))}
     </>
   );
@@ -119,6 +121,7 @@ function Terminal() {
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
   const [compactEffect, setCompactEffect] = useState(false);
+  const [freeCommandCount, setFreeCommandCount] = useState(0);
   // Stop the incoming-ping screen flash once the target has noticed the ping
   // (any mouse move, tap, or keypress). The ping itself remains pending until
   // /accept or expiry — only the flashing attention-grab is dismissed.
@@ -141,6 +144,9 @@ function Terminal() {
   const lastEscapeRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
+
+  // Free tier: no pro key, no BYOK key
+  const isFreeTier = !state.proKey && !state.proKeyHash && !(BYOK_ENABLED && state.apiKey);
 
   // Wrap unlockAchievement to also play a chime sound on success
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
@@ -272,8 +278,29 @@ function Terminal() {
       setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount } }));
     }
     const userMessage: Message = { role: "user", content: command };
-    setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
-    setIsProcessing(true);
+
+    // Free-tier artificial scarcity: fake queueing delay + terminal ads
+    if (isFreeTier) {
+      const newCount = freeCommandCount + 1;
+      setFreeCommandCount(newCount);
+
+      // Every 4th command: show a terminal ad before processing
+      if (newCount % 4 === 0) {
+        const ad = getRandomAd();
+        setHistory((prev) => [...prev, userMessage, { role: "warning", content: ad }]);
+        // Wait for the ad to be "read" before proceeding
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+
+      // Simulated queueing: show bureaucratic message and wait 3 seconds
+      setHistory((prev) => [...prev, ...(newCount % 4 === 0 ? [] : [userMessage]), { role: "warning", content: "[INFO] Free tier detected. Yielding compute to paying customers. Please hold..." }]);
+      setIsProcessing(true);
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      setHistory((prev) => [...prev.filter((m) => m.content !== "[INFO] Free tier detected. Yielding compute to paying customers. Please hold..."), { role: "loading", content: getRandomLoadingPhrase() }]);
+    } else {
+      setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
+      setIsProcessing(true);
+    }
     const contextMessages = filterChatHistory(history);
     const chatMessages = [...contextMessages, { role: "user", content: userMessage.content }];
     let sprintCompleteMessage: Message | null = null;
@@ -423,7 +450,7 @@ function Terminal() {
       </div>
       <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
-        <MessageList history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} activeTicketId={state.activeTicket?.id} username={state.username} onSlashCommand={handleSlashCommandClick} />
+        <MessageList history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} activeTicketId={state.activeTicket?.id} username={state.username} isFreeTier={isFreeTier} onSlashCommand={handleSlashCommandClick} />
         <div ref={bottomRef} />
       </div>
       <div className="shrink-0">
