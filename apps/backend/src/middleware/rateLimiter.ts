@@ -1,5 +1,11 @@
 import type { MiddlewareHandler } from "hono";
 
+type RateLimitContext = {
+  req: { header: (name: string) => string | undefined };
+  env: Record<string, unknown>;
+  json: (body: unknown, status?: number) => Response;
+};
+
 export function getClientIp(headers: { header: (name: string) => string | undefined }): string {
   return (
     headers.header("cf-connecting-ip") ??
@@ -10,11 +16,7 @@ export function getClientIp(headers: { header: (name: string) => string | undefi
 }
 
 export async function enforceRateLimit(
-  c: {
-    req: { header: (name: string) => string | undefined };
-    env: Record<string, unknown>;
-    json: (body: unknown, status?: number) => Response;
-  },
+  c: RateLimitContext,
   keyPrefix = "",
 ): Promise<Response | null> {
   const ip = getClientIp(c.req);
@@ -35,13 +37,11 @@ export async function enforceRateLimit(
   return null;
 }
 
-export const rateLimiter: MiddlewareHandler = async (c, next) => {
-  const blocked = await enforceRateLimit(c as unknown as {
-    req: { header: (name: string) => string | undefined };
-    env: Record<string, unknown>;
-    json: (body: unknown, status?: number) => Response;
-  });
+export const createRateLimiter = (keyPrefix = ""): MiddlewareHandler => async (c, next) => {
+  const blocked = await enforceRateLimit(c as unknown as RateLimitContext, keyPrefix);
   if (blocked) return blocked;
 
   await next();
 };
+
+export const rateLimiter = createRateLimiter();

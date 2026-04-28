@@ -54,7 +54,7 @@ async function verifyToken(token: string): Promise<VerifyTokenResult> {
 
   return {
     verified: false,
-    retryable: true,
+    retryable: false,
     message: typeof data?.error === "string" ? data.error : undefined,
   };
 }

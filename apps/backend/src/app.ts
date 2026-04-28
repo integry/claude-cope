@@ -2,8 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
-import type { MiddlewareHandler } from "hono";
-import { enforceRateLimit, rateLimiter } from "./middleware/rateLimiter";
+import { createRateLimiter, rateLimiter } from "./middleware/rateLimiter";
 import { botProtection } from "./middleware/botProtection";
 import { sessionMiddleware } from "./middleware/session";
 import { applyMigrations } from "./utils/migrations";
@@ -76,17 +75,7 @@ app.use("*", async (c, next) => {
 
 app.use("/api/chat", rateLimiter);
 app.use("/api/chat", botProtection);
-const verifyRateLimiter: MiddlewareHandler = async (c, next) => {
-  const blocked = await enforceRateLimit(c as unknown as {
-    req: { header: (name: string) => string | undefined };
-    env: Record<string, unknown>;
-    json: (body: unknown, status?: number) => Response;
-  }, "verify:");
-  if (blocked) return blocked;
-
-  await next();
-};
-app.use("/api/verify", verifyRateLimiter);
+app.use("/api/verify", createRateLimiter("verify:"));
 
 app.route("/api/chat", chat);
 app.route("/api/verify", verify);

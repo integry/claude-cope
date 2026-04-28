@@ -31,7 +31,10 @@ type VerifyFailureStatus = 502 | 503;
 
 verify.get("/", async (c) => {
   const secret = c.env?.TURNSTILE_SECRET_KEY;
-  return c.json({ enabled: Boolean(secret), bypassed: !secret });
+  const sessionId = c.get("sessionId");
+  const kv = c.env?.USAGE_KV;
+  const enabled = Boolean(secret && sessionId && kv);
+  return c.json({ enabled, bypassed: !secret });
 });
 
 const parseVerifyBody = async (c: VerifyContext): Promise<VerifyBody> =>
@@ -74,8 +77,15 @@ const verifyWithTurnstile = async (
   return { ok: true as const, data };
 };
 
-const expectedHostnameFromRequest = (c: VerifyContext): string | undefined =>
-  c.env?.TURNSTILE_EXPECTED_HOSTNAME ?? c.req.header("x-forwarded-host") ?? c.req.header("host");
+const normalizeHostname = (value: string | undefined): string | undefined => {
+  if (!value) return undefined;
+  const first = value.split(",")[0]?.trim();
+  if (!first) return undefined;
+  return first.replace(/:\d+$/, "").toLowerCase();
+};
+
+const expectedHostnameFromConfig = (c: VerifyContext): string | undefined =>
+  normalizeHostname(c.env?.TURNSTILE_EXPECTED_HOSTNAME);
 
 verify.post("/", async (c) => {
   const secret = c.env?.TURNSTILE_SECRET_KEY;
@@ -111,11 +121,12 @@ verify.post("/", async (c) => {
     return c.json({ verified: false }, 403);
   }
 
-  const expectedHostname = expectedHostnameFromRequest(c);
-  if (expectedHostname && data.hostname && data.hostname !== expectedHostname) {
+  const expectedHostname = expectedHostnameFromConfig(c);
+  const actualHostname = normalizeHostname(data.hostname);
+  if (expectedHostname && actualHostname && actualHostname !== expectedHostname) {
     console.warn("Turnstile hostname mismatch", {
       expectedHostname,
-      actualHostname: data.hostname,
+      actualHostname,
     });
     return c.json({ verified: false, error: "Unexpected verification hostname" }, 403);
   }

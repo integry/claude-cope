@@ -95,6 +95,16 @@ describe("app", () => {
       await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: true });
     });
 
+    it("reports verification disabled when secret is set but verification storage is unavailable", async () => {
+      const res = await app.request(
+        "/api/verify",
+        { method: "GET", headers: { Origin: "http://localhost:5173" } },
+        { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret" },
+      );
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: false });
+    });
+
     it("bypasses /api/verify when TURNSTILE_SECRET_KEY is not set", async () => {
       const res = await app.request(
         "/api/verify",
@@ -210,6 +220,36 @@ describe("app", () => {
         expect(res.status).toBe(403);
         await expect(res.json()).resolves.toEqual({ verified: false, error: "Unexpected verification hostname" });
         expect(usageKv.put).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it("accepts successful verification when TURNSTILE_EXPECTED_HOSTNAME includes a port", async () => {
+      const usageKv = {
+        get: vi.fn(),
+        put: vi.fn().mockResolvedValue(undefined),
+      };
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ success: true, hostname: "claudecope.com" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+      try {
+        const res = await app.request(
+          "/api/verify",
+          { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ token: "token-123" }) },
+          {
+            ALLOWED_ORIGINS: "http://localhost:5173",
+            TURNSTILE_SECRET_KEY: "secret",
+            TURNSTILE_EXPECTED_HOSTNAME: "claudecope.com:443",
+            USAGE_KV: usageKv,
+          },
+        );
+        expect(res.status).toBe(200);
+        await expect(res.json()).resolves.toEqual({ verified: true });
       } finally {
         fetchSpy.mockRestore();
       }
