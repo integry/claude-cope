@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { track, identify } from "../analytics";
+import { parseBaseCommand } from "../parseBaseCommand";
 import { PING_COST, THEMES } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import type { ServerProfile } from "@claude-cope/shared/profile";
@@ -815,7 +816,7 @@ export function executeSlashCommand(
   };
 
   // Track command usage for performance review brag card
-  const baseCommand = command.split(" ")[0] as string;
+  const baseCommand = parseBaseCommand(command);
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {

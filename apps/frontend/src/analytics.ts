@@ -77,11 +77,15 @@ export function initPostHog(): void {
 
       flushPending();
     })
-    .catch(() => {
-      // PostHog failed to load — discard buffered calls and disable further buffering.
+    .catch((err) => {
+      // PostHog failed to load — allow retry on next initPostHog() call.
+      initialized = false;
       readyPromise = null;
       pendingTrackCalls.length = 0;
       pendingIdentifyCalls.length = 0;
+      if (import.meta.env.DEV) {
+        console.warn("[analytics] PostHog initialization failed:", err);
+      }
     });
 }
 
@@ -93,7 +97,11 @@ export function track(event: string, properties?: Record<string, unknown>): void
     } else if (readyPromise) {
       pendingTrackCalls.push({ event, properties });
     }
-  } catch { /* analytics should never block gameplay */ }
+  } catch (err) {
+    if (import.meta.env.DEV) {
+      console.warn("[analytics] track() failed:", err);
+    }
+  }
 }
 
 /** Update PostHog person identity/properties. Never throws. */
@@ -105,5 +113,9 @@ export function identify(properties?: Record<string, unknown>): void {
     } else if (readyPromise) {
       pendingIdentifyCalls.push(properties);
     }
-  } catch { /* analytics should never block gameplay */ }
+  } catch (err) {
+    if (import.meta.env.DEV) {
+      console.warn("[analytics] identify() failed:", err);
+    }
+  }
 }
