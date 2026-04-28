@@ -1,6 +1,5 @@
 import type { Message } from "./Terminal";
 import type { GameState, ByokUsage } from "../hooks/useGameState";
-import { OPENROUTER_PROVIDERS } from "../config";
 
 /**
  * Validates an OpenRouter API key by making a small test request.
@@ -13,9 +12,6 @@ async function validateOpenRouterKey(key: string): Promise<{ valid: boolean; err
       messages: [{ role: "user", content: "Hi" }],
       max_tokens: 5,
     };
-    if (OPENROUTER_PROVIDERS.length > 0) {
-      requestBody.provider = { order: OPENROUTER_PROVIDERS };
-    }
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {

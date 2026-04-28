@@ -66,14 +66,3 @@ export const UPGRADE_PRICE_SINGLE: string =
 
 export const UPGRADE_PRICE_MULTI: string =
   (import.meta.env.VITE_UPGRADE_PRICE_MULTI as string | undefined) ?? "$19.99";
-
-/**
- * OpenRouter preferred providers configuration. When set (e.g., "Together,Fireworks"),
- * requests to OpenRouter will include `provider: { order: [...] }` to prefer cheaper
- * providers when available. Operators set this via `VITE_OPENROUTER_PROVIDERS`.
- */
-export const OPENROUTER_PROVIDERS: string[] = (() => {
-  const raw = (import.meta.env.VITE_OPENROUTER_PROVIDERS as string | undefined) ?? "";
-  if (!raw.trim()) return [];
-  return raw.split(',').map(p => p.trim()).filter(p => p.length > 0);
-})();

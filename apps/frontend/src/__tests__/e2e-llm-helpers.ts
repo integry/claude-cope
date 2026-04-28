@@ -8,13 +8,6 @@ export const T = 30_000;
 const MAX_TOKENS = 2000;
 const REASONING = { effort: "low" };
 
-// ── OpenRouter preferred providers ──
-const OPENROUTER_PROVIDERS: string[] = (() => {
-  const raw = process.env.OPENROUTER_PROVIDERS ?? "";
-  if (!raw.trim()) return [];
-  return raw.split(',').map(p => p.trim()).filter(p => p.length > 0);
-})();
-
 // ── HTML report collector ──────────────────────────────────
 export type ReportEntry = {
   test: string;
@@ -163,9 +156,6 @@ export async function callLLM(
   meta: { suite: string; test: string; turn?: number },
 ): Promise<string> {
   const requestBody: Record<string, unknown> = { model: MODEL, messages, max_tokens: MAX_TOKENS, reasoning: REASONING };
-  if (OPENROUTER_PROVIDERS.length > 0) {
-    requestBody.provider = { order: OPENROUTER_PROVIDERS };
-  }
   const start = Date.now();
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
