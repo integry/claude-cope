@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { getClientIp } from "../middleware/rateLimiter";
 
 type Env = {
@@ -24,11 +24,48 @@ type TurnstileVerifyResponse = {
 
 const HUMAN_TTL_SECONDS = 60 * 60 * 24;
 const verify = new Hono<Env>();
+type VerifyContext = Context<Env>;
+
+const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
 verify.get("/", async (c) => {
   const secret = c.env?.TURNSTILE_SECRET_KEY;
   return c.json({ enabled: Boolean(secret), bypassed: !secret });
 });
+
+const parseVerifyBody = async (c: VerifyContext): Promise<VerifyBody> =>
+  c.req.json<VerifyBody>().catch((): VerifyBody => ({}));
+
+const buildTurnstileForm = (secret: string, token: string, ip: string | null): URLSearchParams => {
+  const form = new URLSearchParams();
+  form.set("secret", secret);
+  form.set("response", token);
+  if (ip && ip !== "unknown") form.set("remoteip", ip);
+  return form;
+};
+
+const verifyWithTurnstile = async (form: URLSearchParams) => {
+  let resp: Response;
+  try {
+    resp = await fetch(TURNSTILE_VERIFY_URL, { method: "POST", body: form });
+  } catch {
+    return { ok: false as const, status: 503, body: { verified: false, error: "Verification service unavailable" } };
+  }
+
+  if (!resp.ok) {
+    return { ok: false as const, status: 502, body: { verified: false, error: "Failed to verify token" } };
+  }
+
+  const data = await resp.json().catch(() => null) as TurnstileVerifyResponse | null;
+  if (!data || typeof data.success !== "boolean") {
+    return { ok: false as const, status: 502, body: { verified: false, error: "Invalid verification response" } };
+  }
+
+  return { ok: true as const, data };
+};
+
+const expectedHostnameFromRequest = (c: VerifyContext): string | undefined =>
+  c.env?.TURNSTILE_EXPECTED_HOSTNAME ?? c.req.header("x-forwarded-host") ?? c.req.header("host");
 
 verify.post("/", async (c) => {
   const secret = c.env?.TURNSTILE_SECRET_KEY;
@@ -43,37 +80,19 @@ verify.post("/", async (c) => {
     return c.json({ verified: false, error: "Verification storage unavailable" }, 503);
   }
 
-  const body = await c.req.json<VerifyBody>().catch((): VerifyBody => ({}));
+  const body = await parseVerifyBody(c);
   const token = body.token;
   if (!token) {
     return c.json({ verified: false, error: "token is required" }, 400);
   }
 
-  const form = new URLSearchParams();
-  form.set("secret", secret);
-  form.set("response", token);
-
   const ip = getClientIp(c.req);
-  if (ip && ip !== "unknown") form.set("remoteip", ip);
-
-  let resp: Response;
-  try {
-    resp = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-      method: "POST",
-      body: form,
-    });
-  } catch {
-    return c.json({ verified: false, error: "Verification service unavailable" }, 503);
+  const form = buildTurnstileForm(secret, token, ip);
+  const verification = await verifyWithTurnstile(form);
+  if (!verification.ok) {
+    return c.json(verification.body, verification.status);
   }
-
-  if (!resp.ok) {
-    return c.json({ verified: false, error: "Failed to verify token" }, 502);
-  }
-
-  const data = await resp.json().catch(() => null) as TurnstileVerifyResponse | null;
-  if (!data || typeof data.success !== "boolean") {
-    return c.json({ verified: false, error: "Invalid verification response" }, 502);
-  }
+  const data = verification.data;
 
   if (!data.success) {
     if (Array.isArray(data["error-codes"]) && data["error-codes"].length > 0) {
@@ -82,10 +101,7 @@ verify.post("/", async (c) => {
     return c.json({ verified: false }, 403);
   }
 
-  const expectedHostname =
-    c.env?.TURNSTILE_EXPECTED_HOSTNAME ??
-    c.req.header("x-forwarded-host") ??
-    c.req.header("host");
+  const expectedHostname = expectedHostnameFromRequest(c);
   if (expectedHostname && data.hostname && data.hostname !== expectedHostname) {
     console.warn("Turnstile hostname mismatch", {
       expectedHostname,
