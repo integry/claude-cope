@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, type Dispatch, type SetStateAction, ChangeEvent, memo } from "react";
+import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import { SLASH_COMMANDS } from "./slashCommands";
@@ -10,7 +10,7 @@ import { parseGlitchStyle } from "./parseGlitchStyle";
 import { terminalContainerClassName } from "./terminalClassName";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
-import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
+import { executeSlashCommand } from "./slashCommandExecutor";
 import { applyServerProfile } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
@@ -170,8 +170,6 @@ function Terminal() {
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
 
-  const anyOverlayOpen = [showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade].some(Boolean);
-
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") {
       runSlashCommandRef.current(command);
@@ -186,6 +184,22 @@ function Terminal() {
     }
   }, []);
 
+  const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
+    if (!effectiveApiKey && !state.proKey && !state.proKeyHash && state.economy.quotaPercent <= 0) {
+      const byokHint = BYOK_ENABLED ? " or use `/key <your-openrouter-key>`" : "";
+      setHistory((prev) => [...prev, { role: "user", content: command }, { role: "error", content: `[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Max${byokHint} to continue.` }]);
+      playError();
+      return true;
+    }
+    return false;
+  }, [state.proKey, state.proKeyHash, state.economy.quotaPercent, setHistory, playError]);
+
+  const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
+    if (state.buddy.type) {
+      const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
+      setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount } }));
+    }
+  }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
 
   const handleEnterSubmit = async () => {
     if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
@@ -195,23 +209,11 @@ function Terminal() {
     if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
     setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
-    // Effective BYOK status for request routing — a stale apiKey must be
-    // ignored when the operator has disabled BYOK.
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
-    // Block submission when quota is exhausted and user has no BYOK or pro key
-    if (!effectiveApiKey && !state.proKey && !state.proKeyHash && state.economy.quotaPercent <= 0) {
-      const byokHint = BYOK_ENABLED ? " or use `/key <your-openrouter-key>`" : "";
-      setHistory((prev) => [...prev, { role: "user", content: command }, { role: "error", content: `[QUOTA EXHAUSTED] Free tier API quota depleted. Purchase Max${byokHint} to continue.` }]);
-      playError();
-      return;
-    }
-    // Handle instant ban scenario (user fires command right after upgrade)
+    if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
     if (!effectiveApiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); handleInstantBan(); return; }
     const buddyResult = computeBuddyInterjection(state.buddy);
-    if (state.buddy.type) {
-      const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
-      setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount } }));
-    }
+    handleBuddyInterjection(buddyResult);
     const userMessage: Message = { role: "user", content: command };
 
     // Free-tier artificial scarcity: fake queueing delay + terminal ads
@@ -228,12 +230,7 @@ function Terminal() {
       setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
       setIsProcessing(true);
     }
-    // Use fresh history (not the stale closure value) so messages arriving
-    // during artificial free-tier delays are included in the context.
     const contextMessages = filterChatHistory(historyRef.current);
-    // For free-tier, the user message was already added to history by
-    // runFreeTierDelay and the await allowed a re-render, so historyRef
-    // already contains it — don't duplicate it.
     const chatMessages = isFreeTier
       ? contextMessages
       : [...contextMessages, { role: "user", content: userMessage.content }];
