@@ -21,6 +21,11 @@ type TurnstileVerifyResponse = {
 const HUMAN_TTL_SECONDS = 60 * 60 * 24;
 const verify = new Hono<Env>();
 
+verify.get("/", async (c) => {
+  const secret = c.env?.TURNSTILE_SECRET_KEY;
+  return c.json({ enabled: Boolean(secret), bypassed: !secret });
+});
+
 verify.post("/", async (c) => {
   const secret = c.env?.TURNSTILE_SECRET_KEY;
   const sessionId = c.get("sessionId");
@@ -50,10 +55,15 @@ verify.post("/", async (c) => {
     c.req.header("x-real-ip");
   if (ip) form.set("remoteip", ip);
 
-  const resp = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-    method: "POST",
-    body: form,
-  });
+  let resp: Response;
+  try {
+    resp = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body: form,
+    });
+  } catch {
+    return c.json({ verified: false, error: "Verification service unavailable" }, 503);
+  }
 
   if (!resp.ok) {
     return c.json({ verified: false, error: "Failed to verify token" }, 502);

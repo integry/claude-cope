@@ -85,6 +85,16 @@ describe("app", () => {
   });
 
   describe("Turnstile verification and protection", () => {
+    it("reports verification disabled when TURNSTILE_SECRET_KEY is not set", async () => {
+      const res = await app.request(
+        "/api/verify",
+        { method: "GET", headers: { Origin: "http://localhost:5173" } },
+        { ALLOWED_ORIGINS: "http://localhost:5173" },
+      );
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: true });
+    });
+
     it("bypasses /api/verify when TURNSTILE_SECRET_KEY is not set", async () => {
       const res = await app.request(
         "/api/verify",
@@ -151,6 +161,40 @@ describe("app", () => {
       } finally {
         fetchSpy.mockRestore();
       }
+    });
+
+    it("returns 503 when Cloudflare verification request throws", async () => {
+      const usageKv = {
+        get: vi.fn(),
+        put: vi.fn(),
+      };
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
+
+      try {
+        const res = await app.request(
+          "/api/verify",
+          { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ token: "token-123" }) },
+          { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv },
+        );
+        expect(res.status).toBe(503);
+        await expect(res.json()).resolves.toEqual({ verified: false, error: "Verification service unavailable" });
+        expect(usageKv.put).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it("uses a verify-specific rate limiter key", async () => {
+      const limiter = {
+        limit: vi.fn().mockResolvedValue({ success: true }),
+      };
+      const res = await app.request(
+        "/api/verify",
+        { method: "GET", headers: { Origin: "http://localhost:5173", "cf-connecting-ip": "1.2.3.4" } },
+        { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
+      );
+      expect(res.status).toBe(200);
+      expect(limiter.limit).toHaveBeenCalledWith({ key: "verify:1.2.3.4" });
     });
   });
 });

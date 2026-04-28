@@ -35,19 +35,21 @@ async function verifyToken(token: string): Promise<boolean> {
   return Boolean(data?.verified);
 }
 
-async function isBackendVerificationEnabled(): Promise<boolean> {
+async function getBackendVerificationStatus(): Promise<"enabled" | "disabled" | "unavailable"> {
   const res = await fetch(`${API_BASE}/api/verify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
+    method: "GET",
     credentials: "include",
   }).catch(() => null);
-  if (!res) return false;
-  if (res.ok) {
-    const data = await res.json().catch(() => ({}));
-    return !Boolean(data?.bypassed);
+  if (!res || !res.ok) return "unavailable";
+
+  const data = await res.json().catch(() => ({}));
+  if (typeof data?.enabled === "boolean") {
+    return data.enabled ? "enabled" : "disabled";
   }
-  return res.status === 400;
+  if (typeof data?.bypassed === "boolean") {
+    return data.bypassed ? "disabled" : "enabled";
+  }
+  return "unavailable";
 }
 
 function ensureTurnstileScript(): Promise<void> {
@@ -86,18 +88,37 @@ export default function TurnstileWidget({
     let retries = 0;
     const maxRetries = 3;
     let widgetId: string | null = null;
+    let verificationTimeoutId: number | null = null;
     const scriptLoadTimeoutMs = 10_000;
     const verificationTimeoutMs = 20_000;
+    const clearVerificationTimeout = () => {
+      if (verificationTimeoutId !== null) {
+        window.clearTimeout(verificationTimeoutId);
+        verificationTimeoutId = null;
+      }
+    };
+    const startVerificationTimeout = () => {
+      clearVerificationTimeout();
+      verificationTimeoutId = window.setTimeout(() => {
+        if (!cancelled) {
+          onError("Human verification timed out.");
+        }
+      }, verificationTimeoutMs);
+    };
 
     const run = async () => {
       if (!TURNSTILE_SITE_KEY) {
-        const enabled = await isBackendVerificationEnabled().catch(() => false);
+        const status = await getBackendVerificationStatus();
         if (cancelled) return;
-        if (enabled) {
+        if (status === "enabled") {
           onError("Human verification is enabled on the server, but VITE_TURNSTILE_SITE_KEY is not configured.");
           return;
         }
-        onVerified();
+        if (status === "disabled") {
+          onVerified();
+          return;
+        }
+        onError("Unable to determine verification status from the server.");
         return;
       }
 
@@ -123,40 +144,48 @@ export default function TurnstileWidget({
           const ok = await verifyToken(token).catch(() => false);
           if (cancelled) return;
           if (ok) {
+            clearVerificationTimeout();
             onVerified();
             return;
           }
           if (retries < maxRetries) {
             retries += 1;
             turnstile.reset(renderedWidgetId);
+            startVerificationTimeout();
             turnstile.execute(renderedWidgetId);
             return;
           }
+          clearVerificationTimeout();
           onError("Human verification failed after multiple attempts.");
         },
         "error-callback": () => {
-          if (cancelled || retries >= maxRetries) return;
-          retries += 1;
-          turnstile.reset(renderedWidgetId);
-          turnstile.execute(renderedWidgetId);
+          if (cancelled) return;
           if (retries >= maxRetries) {
+            clearVerificationTimeout();
             onError("Turnstile reported repeated errors.");
+            return;
           }
+          retries += 1;
+          if (retries >= maxRetries) {
+            clearVerificationTimeout();
+            onError("Turnstile reported repeated errors.");
+            return;
+          }
+          turnstile.reset(renderedWidgetId);
+          startVerificationTimeout();
+          turnstile.execute(renderedWidgetId);
         },
         "expired-callback": () => {
           if (cancelled) return;
           turnstile.reset(renderedWidgetId);
+          startVerificationTimeout();
           turnstile.execute(renderedWidgetId);
         },
       });
       widgetId = renderedWidgetId;
 
+      startVerificationTimeout();
       turnstile.execute(renderedWidgetId);
-      window.setTimeout(() => {
-        if (!cancelled) {
-          onError("Human verification timed out.");
-        }
-      }, verificationTimeoutMs);
     };
 
     void run().catch(() => {
@@ -165,6 +194,7 @@ export default function TurnstileWidget({
 
     return () => {
       cancelled = true;
+      clearVerificationTimeout();
       if (widgetId && window.turnstile?.remove) {
         window.turnstile.remove(widgetId);
       }
