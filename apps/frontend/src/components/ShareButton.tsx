@@ -8,16 +8,19 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "done" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const timeoutIds = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const timeoutIds = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   const clearTimeouts = useCallback(() => {
     timeoutIds.current.forEach(clearTimeout);
-    timeoutIds.current = [];
+    timeoutIds.current.clear();
   }, []);
 
   const addTimeout = useCallback((fn: () => void, ms: number) => {
-    const id = setTimeout(fn, ms);
-    timeoutIds.current.push(id);
+    const id = setTimeout(() => {
+      timeoutIds.current.delete(id);
+      fn();
+    }, ms);
+    timeoutIds.current.add(id);
     return id;
   }, []);
 
@@ -44,6 +47,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   }, [userMessage, systemMessage, username, addTimeout]);
 
   const handleShare = useCallback(async (platform: "twitter" | "linkedin") => {
+    const cachedUrl = previewUrl;
     setPreviewUrl(null);
     setStatus("generating");
     setFeedback("Generating share image...");
@@ -57,6 +61,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         platform,
         openShareUrl: false,
         username,
+        previewDataUrl: cachedUrl ?? undefined,
       });
 
       if (result.success && result.method === "image") {
@@ -90,9 +95,10 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       setStatus("idle");
       setFeedback(null);
     }, 4000);
-  }, [userMessage, systemMessage, username, addTimeout]);
+  }, [userMessage, systemMessage, username, previewUrl, addTimeout]);
 
   const handleCopyImage = useCallback(async () => {
+    const cachedUrl = previewUrl;
     setPreviewUrl(null);
     setStatus("generating");
     setFeedback("Generating share image...");
@@ -105,6 +111,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         systemMessage,
         openShareUrl: false,
         username,
+        previewDataUrl: cachedUrl ?? undefined,
       });
       if (result.success && result.method === "image") {
         setStatus("copied");
@@ -125,16 +132,20 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       setStatus("idle");
       setFeedback(null);
     }, 3000);
-  }, [userMessage, systemMessage, username, addTimeout]);
+  }, [userMessage, systemMessage, username, previewUrl, addTimeout]);
 
-  // Close modal on Escape key
+  // Close modal on Escape key — stopPropagation prevents Terminal's global
+  // Escape handler from also firing (clearing input, aborting generation, etc.)
   useEffect(() => {
     if (!previewUrl) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPreviewUrl(null);
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setPreviewUrl(null);
+      }
     };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [previewUrl]);
 
   // When actively showing feedback, render it inline
@@ -174,7 +185,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
               className="absolute top-2 right-3 text-gray-500 hover:text-gray-300 text-lg font-mono"
               aria-label="Close"
             >
-              ✕
+              x
             </button>
             <img
               src={previewUrl}

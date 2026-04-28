@@ -290,6 +290,7 @@ export type ShareChatOptions = {
   platform?: "twitter" | "linkedin";
   openShareUrl?: boolean;
   username?: string;
+  previewDataUrl?: string;
 };
 
 /**
@@ -297,9 +298,16 @@ export type ShareChatOptions = {
  * Renders the chat card, copies to clipboard, and optionally opens share intent.
  */
 export async function shareChatImage(options: ShareChatOptions): Promise<ShareResult> {
-  const { userMessage, systemMessage, platform, openShareUrl = false, username } = options;
-  const canvas = await renderChatCard(userMessage, systemMessage, username);
-  const blob = await canvasToBlob(canvas);
+  const { userMessage, systemMessage, platform, openShareUrl = false, username, previewDataUrl } = options;
+
+  let blob: Blob | null = null;
+  if (previewDataUrl) {
+    const res = await fetch(previewDataUrl);
+    blob = await res.blob();
+  } else {
+    const canvas = await renderChatCard(userMessage, systemMessage, username);
+    blob = await canvasToBlob(canvas);
+  }
 
   if (blob) {
     const imageCopied = await copyImageToClipboard(blob);

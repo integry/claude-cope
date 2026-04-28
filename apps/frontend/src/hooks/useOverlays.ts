@@ -58,6 +58,11 @@ export function useOverlays(): OverlayState & OverlayActions {
     setShowProfile(false);
     setShowParty(false);
     setShowUpgrade(false);
+    // Normalize the URL when closing route-backed overlays
+    const path = window.location.pathname;
+    if (["/help", "/about", "/privacy", "/terms", "/contact", "/upgrade"].includes(path) || path.startsWith("/user/")) {
+      window.history.pushState(null, "", "/");
+    }
   }, []);
 
   useEffect(() => {
