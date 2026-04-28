@@ -815,7 +815,7 @@ export function executeSlashCommand(
   };
 
   // Track command usage for performance review brag card
-  const baseCommand = command.split(" ")[0];
+  const baseCommand = command.split(" ")[0] as string;
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {
