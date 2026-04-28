@@ -1,8 +1,10 @@
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
+import { parseProviderList } from "@claude-cope/shared/openrouter";
 
 export const API_KEY = process.env.OPENROUTER_API_KEY ?? "";
 export const MODEL = "nvidia/nemotron-nano-9b-v2";
 export const T = 30_000;
+const PROVIDERS = parseProviderList(process.env.VITE_OPENROUTER_PROVIDERS);
 
 // ── Production-matching constants (from chatApi.ts / chat.ts) ──
 const MAX_TOKENS = 2000;
@@ -164,6 +166,10 @@ export async function callLLM(
   meta: { suite: string; test: string; turn?: number },
 ): Promise<string> {
   const requestBody: OpenRouterRequestBody = { model: MODEL, messages, max_tokens: MAX_TOKENS, reasoning: REASONING };
+
+  if (PROVIDERS.length > 0) {
+    requestBody.provider = { order: PROVIDERS };
+  }
 
   const start = Date.now();
 

@@ -3,8 +3,8 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
+import { parseProviderList } from "@claude-cope/shared/openrouter";
 import { getProfileRow, isLicenseActive, resolveProUser } from "../utils/profile";
-import { parseProviderList } from "../utils/openrouter";
 import {
   checkQuotaAvailable,
   consumeQuotaPostSuccess,

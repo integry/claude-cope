@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { TICKET_PM_PROMPT } from "../prompts/ticketPrompt";
-import { parseProviderList } from "../utils/openrouter";
+import { parseProviderList } from "@claude-cope/shared/openrouter";
 
 type Env = {
   Bindings: {
