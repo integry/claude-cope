@@ -39,7 +39,7 @@ const QUEUE_MESSAGES: string[] = [
 ];
 
 function getRandomQueueMessage(): string {
-  return QUEUE_MESSAGES[Math.floor(Math.random() * QUEUE_MESSAGES.length)];
+  return QUEUE_MESSAGES[Math.floor(Math.random() * QUEUE_MESSAGES.length)]!;
 }
 
 function cancellableDelay(ms: number, delayState: DelayState): Promise<void> {
