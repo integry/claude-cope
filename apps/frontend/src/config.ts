@@ -76,3 +76,5 @@ export const POSTHOG_KEY: string =
 
 export const POSTHOG_HOST: string =
   (import.meta.env.VITE_POSTHOG_HOST as string | undefined) ?? "";
+
+export const POSTHOG_DEFAULT_HOST = "https://us.i.posthog.com";
