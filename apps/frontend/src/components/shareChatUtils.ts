@@ -327,7 +327,7 @@ export async function shareChatImage(options: ShareChatOptions): Promise<ShareRe
 /**
  * Utility to get a PNG data URL from the chat card (useful for previews)
  */
-export async function getChatCardDataUrl(userMessage: string, systemMessage: string): Promise<string> {
-  const canvas = await renderChatCard(userMessage, systemMessage);
+export async function getChatCardDataUrl(userMessage: string, systemMessage: string, username?: string): Promise<string> {
+  const canvas = await renderChatCard(userMessage, systemMessage, username);
   return canvas.toDataURL("image/png");
 }
