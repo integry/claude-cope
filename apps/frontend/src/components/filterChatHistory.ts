@@ -8,6 +8,8 @@ import { Message } from "../hooks/useGameState";
 export function filterChatHistory(history: Message[]): { role: string; content: string }[] {
   const isSlashCmd = (content: string) => content.startsWith("/");
   return history.filter((m, i) => {
+    // Never send free-tier scaffolding (ads, queue messages) to the model
+    if ((m as Message & { _freeTierScaffold?: boolean })._freeTierScaffold) return false;
     if (m.role === "user") return !isSlashCmd(m.content);
     if (m.role === "system") {
       const prev = history[i - 1];

@@ -29,14 +29,14 @@ export async function runFreeTierDelay(opts: {
   // Every 4th command: show a terminal ad before processing
   if (commandCount % 4 === 0) {
     const ad = getRandomAd();
-    setHistory((prev) => [...prev, userMessage, { role: "warning", content: ad }]);
+    setHistory((prev) => [...prev, userMessage, { role: "warning", content: ad, _freeTierScaffold: true } as Message & { _freeTierScaffold: boolean }]);
     await cancellableDelay(2000, delayState);
     if (delayState.cancelled) return false;
   }
 
   // Simulated queueing: show bureaucratic message and wait 3 seconds
   const queueContent = "[INFO] Free tier detected. Yielding compute to paying customers. Please hold...";
-  setHistory((prev) => [...prev, ...(commandCount % 4 === 0 ? [] : [userMessage]), { role: "warning", content: queueContent, _queueId: queueMsgId } as Message & { _queueId: string }]);
+  setHistory((prev) => [...prev, ...(commandCount % 4 === 0 ? [] : [userMessage]), { role: "warning", content: queueContent, _freeTierScaffold: true, _queueId: queueMsgId } as Message & { _freeTierScaffold: boolean; _queueId: string }]);
   await cancellableDelay(3000, delayState);
   if (delayState.cancelled) return false;
 

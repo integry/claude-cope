@@ -324,8 +324,8 @@ function MessageContent({ message, isNew = false, isFreeTier = false, onSlashCom
   const isAwaitingResponse = role === "loading" && content.startsWith("[⚙️]");
   const isStreaming = role === "loading" && !isAwaitingResponse;
 
-  // Typewriter: only for new markdown-rendered messages (not loading/streaming)
-  const shouldTypewrite = isNew && useMarkdown;
+  // Typewriter: new system messages for all users; warnings/errors only for free-tier
+  const shouldTypewrite = isNew && useMarkdown && (role === "system" || isFreeTier);
   const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite, isFreeTier);
 
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand), [onSlashCommand]);

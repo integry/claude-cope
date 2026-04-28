@@ -140,6 +140,15 @@ function Terminal() {
   // Free tier: no pro key, no BYOK key
   const isFreeTier = !state.proKey && !state.proKeyHash && !(BYOK_ENABLED && state.apiKey);
 
+  // Cleanup pending free-tier delay timeouts on unmount
+  useEffect(() => {
+    return () => {
+      const ds = freeTierDelayRef.current;
+      ds.cancelled = true;
+      if (ds.timeoutId) clearTimeout(ds.timeoutId);
+    };
+  }, []);
+
   // Wrap unlockAchievement to also play a chime sound on success
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
     const isNew = unlockAchievement(id);
@@ -290,7 +299,12 @@ function Terminal() {
     // Use fresh history (not the stale closure value) so messages arriving
     // during artificial free-tier delays are included in the context.
     const contextMessages = filterChatHistory(historyRef.current);
-    const chatMessages = [...contextMessages, { role: "user", content: userMessage.content }];
+    // For free-tier, the user message was already added to history by
+    // runFreeTierDelay and the await allowed a re-render, so historyRef
+    // already contains it — don't duplicate it.
+    const chatMessages = isFreeTier
+      ? contextMessages
+      : [...contextMessages, { role: "user", content: userMessage.content }];
     let sprintCompleteMessage: Message | null = null;
     const onSprintProgress = (rawAmount: number) => {
       if (!state.activeTicket) return;
@@ -359,7 +373,7 @@ function Terminal() {
       if (ds.timeoutId) clearTimeout(ds.timeoutId);
       freeTierDelayRef.current = { cancelled: false, timeoutId: null };
       setIsProcessing(false);
-      setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading"), { role: "warning", content: "[⚠️ ABORTED] Queue cancelled. Patience is a virtue you clearly lack." }]);
+      setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading" && !(msg as Message & { _freeTierScaffold?: boolean })._freeTierScaffold), { role: "warning", content: "[⚠️ ABORTED] Queue cancelled. Patience is a virtue you clearly lack." }]);
       if (commandHistory.length > 0) { const lastCmd = commandHistory[commandHistory.length - 1]!; setInputValue(lastCmd); setCursorToEnd(lastCmd); }
       return;
     }
