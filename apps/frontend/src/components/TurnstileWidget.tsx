@@ -67,11 +67,14 @@ async function getBackendVerificationStatus(): Promise<"enabled" | "disabled" | 
   if (!res || !res.ok) return "unavailable";
 
   const data = await res.json().catch(() => ({}));
-  if (typeof data?.enabled === "boolean") {
-    return data.enabled ? "enabled" : "disabled";
+  if (typeof data?.misconfigured === "boolean" && data.misconfigured) {
+    return "unavailable";
   }
   if (typeof data?.bypassed === "boolean") {
     return data.bypassed ? "disabled" : "enabled";
+  }
+  if (typeof data?.enabled === "boolean") {
+    return data.enabled ? "enabled" : "unavailable";
   }
   return "unavailable";
 }
@@ -131,18 +134,19 @@ export default function TurnstileWidget({
     };
 
     const run = async () => {
-      if (!TURNSTILE_SITE_KEY) {
-        const status = await getBackendVerificationStatus();
-        if (cancelled) return;
-        if (status === "enabled") {
-          onError("Human verification is enabled on the server, but VITE_TURNSTILE_SITE_KEY is not configured.");
-          return;
-        }
-        if (status === "disabled") {
-          onVerified();
-          return;
-        }
+      const status = await getBackendVerificationStatus();
+      if (cancelled) return;
+      if (status === "disabled") {
+        onVerified();
+        return;
+      }
+      if (status === "unavailable") {
         onError("Unable to determine verification status from the server.");
+        return;
+      }
+
+      if (!TURNSTILE_SITE_KEY) {
+        onError("Human verification is enabled on the server, but VITE_TURNSTILE_SITE_KEY is not configured.");
         return;
       }
 

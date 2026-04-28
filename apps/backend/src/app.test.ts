@@ -92,7 +92,7 @@ describe("app", () => {
         { ALLOWED_ORIGINS: "http://localhost:5173" },
       );
       expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: true });
+      await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: true, misconfigured: false });
     });
 
     it("reports verification disabled when secret is set but verification storage is unavailable", async () => {
@@ -102,7 +102,7 @@ describe("app", () => {
         { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret" },
       );
       expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: false });
+      await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: false, misconfigured: true });
     });
 
     it("bypasses /api/verify when TURNSTILE_SECRET_KEY is not set", async () => {
@@ -250,6 +250,37 @@ describe("app", () => {
         );
         expect(res.status).toBe(200);
         await expect(res.json()).resolves.toEqual({ verified: true });
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it("rejects successful verification when expected hostname is configured but hostname is missing", async () => {
+      const usageKv = {
+        get: vi.fn(),
+        put: vi.fn(),
+      };
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+      try {
+        const res = await app.request(
+          "/api/verify",
+          { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ token: "token-123" }) },
+          {
+            ALLOWED_ORIGINS: "http://localhost:5173",
+            TURNSTILE_SECRET_KEY: "secret",
+            TURNSTILE_EXPECTED_HOSTNAME: "claudecope.com",
+            USAGE_KV: usageKv,
+          },
+        );
+        expect(res.status).toBe(403);
+        await expect(res.json()).resolves.toEqual({ verified: false, error: "Unexpected verification hostname" });
+        expect(usageKv.put).not.toHaveBeenCalled();
       } finally {
         fetchSpy.mockRestore();
       }

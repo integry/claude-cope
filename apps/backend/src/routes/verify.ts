@@ -34,7 +34,9 @@ verify.get("/", async (c) => {
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
   const enabled = Boolean(secret && sessionId && kv);
-  return c.json({ enabled, bypassed: !secret });
+  const bypassed = !secret;
+  const misconfigured = Boolean(secret) && !enabled;
+  return c.json({ enabled, bypassed, misconfigured });
 });
 
 const parseVerifyBody = async (c: VerifyContext): Promise<VerifyBody> =>
@@ -123,12 +125,14 @@ verify.post("/", async (c) => {
 
   const expectedHostname = expectedHostnameFromConfig(c);
   const actualHostname = normalizeHostname(data.hostname);
-  if (expectedHostname && actualHostname && actualHostname !== expectedHostname) {
-    console.warn("Turnstile hostname mismatch", {
-      expectedHostname,
-      actualHostname,
-    });
-    return c.json({ verified: false, error: "Unexpected verification hostname" }, 403);
+  if (expectedHostname) {
+    if (!actualHostname || actualHostname !== expectedHostname) {
+      console.warn("Turnstile hostname mismatch", {
+        expectedHostname,
+        actualHostname,
+      });
+      return c.json({ verified: false, error: "Unexpected verification hostname" }, 403);
+    }
   }
 
   await kv.put(`human:${sessionId}`, "1", { expirationTtl: HUMAN_TTL_SECONDS });
