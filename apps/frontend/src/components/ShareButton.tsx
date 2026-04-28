@@ -50,7 +50,11 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     setPreviewUrl(null);
   }, [previewUrl]);
 
+  const generatingRef = useRef(false);
+
   const handleOpenPreview = useCallback(async () => {
+    if (generatingRef.current) return;
+    generatingRef.current = true;
     setStatus("generating");
     setFeedback("Generating share image...");
 
@@ -65,11 +69,13 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       setStatus("error");
       setFeedback("Failed to generate preview.");
       resetAfterDelay(3000);
+    } finally {
+      generatingRef.current = false;
     }
   }, [userMessage, systemMessage, username, resetAfterDelay]);
 
   const executeShare = useCallback(async (
-    opts: { platform?: "twitter" | "linkedin" },
+    opts: { platform?: "twitter" | "linkedin"; skipReset?: boolean },
     successHandler: (result: ShareResult, platform?: "twitter" | "linkedin") => void,
   ) => {
     const cachedBlob = previewBlob;
@@ -94,11 +100,13 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       setFeedback(opts.platform ? "Something went wrong. Please try again." : "Failed to copy image.");
     }
 
-    resetAfterDelay(opts.platform ? 4000 : 3000);
+    if (!opts.skipReset) {
+      resetAfterDelay(opts.platform ? 4000 : 3000);
+    }
   }, [userMessage, systemMessage, username, previewBlob, closePreview, clearTimeouts, resetAfterDelay]);
 
   const handleShare = useCallback(async (platform: "twitter" | "linkedin") => {
-    await executeShare({ platform }, (result, p) => {
+    await executeShare({ platform, skipReset: true }, (result, p) => {
       if (result.success && result.method === "image") {
         setStatus("copied");
         setFeedback("Image copied to clipboard!");
@@ -110,6 +118,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
           } else {
             setFeedback("Share dialog opened! Paste the image in your post.");
           }
+          resetAfterDelay(4000);
         }, 1200);
       } else if (result.success && result.method === "text") {
         setStatus("copied");
@@ -122,17 +131,20 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
           } else {
             setFeedback("Share dialog opened! Paste the text in your post.");
           }
+          resetAfterDelay(4000);
         }, 1200);
       } else if (result.success) {
         openShareIntent(p!);
         setStatus("done");
         setFeedback("Share dialog opened!");
+        resetAfterDelay(4000);
       } else {
         setStatus("error");
         setFeedback(result.message);
+        resetAfterDelay(4000);
       }
     });
-  }, [executeShare, addTimeout]);
+  }, [executeShare, addTimeout, resetAfterDelay]);
 
   const handleCopyImage = useCallback(async () => {
     await executeShare({}, (result) => {
