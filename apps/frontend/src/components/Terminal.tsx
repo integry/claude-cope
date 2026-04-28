@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect, useCallback, ChangeEvent, KeyboardEvent, memo } from "react";
-import OutputBlock from "./OutputBlock";
+import { useState, useRef, useEffect, useCallback, ChangeEvent, KeyboardEvent } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import { SLASH_COMMANDS } from "./slashCommands";
@@ -12,11 +11,9 @@ import { parseGlitchStyle } from "./parseGlitchStyle";
 import { terminalContainerClassName } from "./terminalClassName";
 import { submitBrag } from "./submitBrag";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
-import { API_BASE, BYOK_ENABLED } from "../config";
-import { supabase } from "../supabaseClient";
+import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand, rollBuddy } from "./slashCommandExecutor";
 import { applyServerProfile } from "../hooks/profileSync";
-import { updateTicketServer } from "../api/profileApi";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { buildAchievementBox } from "./achievementBox";
@@ -31,30 +28,11 @@ import { useSoundEffects } from "../hooks/useSoundEffects";
 import { usePingAcknowledged } from "../hooks/usePingAcknowledged";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 import { runFreeTierDelay } from "./freeTierDelay";
+import { buildSprintCallbacks } from "./buildChatSubmitArgs";
+import MessageList from "./MessageList";
 import type { SlashCommandAction } from "./slashCommandDetect";
 
 export type { Message };
-
-/** Memoized message list — only re-renders when history/keys/props actually change */
-const MessageList = memo(function MessageList({ history, messageKeys, initialHistoryLen, promptString, activeTicketId, username, isFreeTier, onSlashCommand }: {
-  history: Message[];
-  messageKeys: number[];
-  initialHistoryLen: number;
-  promptString: string;
-  activeTicketId?: string | null;
-  username: string;
-  isFreeTier: boolean;
-  onSlashCommand?: (command: string, action: SlashCommandAction) => void;
-}) {
-  return (
-    <>
-      {history.map((message, index) => (
-        <OutputBlock key={messageKeys[index]} message={message} previousMessage={history[index - 1]} nextMessage={history[index + 1]} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} username={username} isFreeTier={isFreeTier} onSlashCommand={onSlashCommand} />
-      ))}
-    </>
-  );
-});
-
 
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
@@ -99,14 +77,15 @@ function Terminal() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [showSynergize, setShowSynergize] = useState(false);
-  const [showHelp, setShowHelp] = useState(() => window.location.pathname === "/help");
-  const [showAbout, setShowAbout] = useState(() => window.location.pathname === "/about");
-  const [showPrivacy, setShowPrivacy] = useState(() => window.location.pathname === "/privacy");
-  const [showTerms, setShowTerms] = useState(() => window.location.pathname === "/terms");
-  const [showContact, setShowContact] = useState(() => window.location.pathname === "/contact");
-  const [showProfile, setShowProfile] = useState(() => window.location.pathname.startsWith("/user/"));
+  const p = window.location.pathname;
+  const [showHelp, setShowHelp] = useState(() => p === "/help");
+  const [showAbout, setShowAbout] = useState(() => p === "/about");
+  const [showPrivacy, setShowPrivacy] = useState(() => p === "/privacy");
+  const [showTerms, setShowTerms] = useState(() => p === "/terms");
+  const [showContact, setShowContact] = useState(() => p === "/contact");
+  const [showProfile, setShowProfile] = useState(() => p.startsWith("/user/"));
   const [showParty, setShowParty] = useState(false);
-  const [showUpgrade, setShowUpgrade] = useState(() => window.location.pathname === "/upgrade");
+  const [showUpgrade, setShowUpgrade] = useState(() => p === "/upgrade");
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
@@ -137,31 +116,19 @@ function Terminal() {
   const historyRef = useRef(history);
   historyRef.current = history;
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
-
-  // Free tier: no pro key, no BYOK key
   const isFreeTier = !state.proKey && !state.proKeyHash && !(BYOK_ENABLED && state.apiKey);
 
-  // Cleanup pending free-tier delay timeouts on unmount
   useEffect(() => {
-    return () => {
-      const ds = freeTierDelayRef.current;
-      ds.cancelled = true;
-      if (ds.timeoutId) clearTimeout(ds.timeoutId);
-    };
+    return () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); };
   }, []);
 
-  // Wrap unlockAchievement to also play a chime sound on success
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
-    const isNew = unlockAchievement(id);
-    if (isNew) playChime();
-    return isNew;
+    const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
   }, [unlockAchievement, playChime]);
 
   const closeAllOverlays = useCallback(() => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowPrivacy(false); setShowTerms(false); setShowContact(false); setShowProfile(false); setShowParty(false); setShowUpgrade(false); }, []);
   const handleProfileClick = useCallback(() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlays, state.username]);
-
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [history]);
-
   useEffect(() => {
     const onPopState = () => { setShowHelp(window.location.pathname === "/help"); setShowAbout(window.location.pathname === "/about"); setShowPrivacy(window.location.pathname === "/privacy"); setShowTerms(window.location.pathname === "/terms"); setShowContact(window.location.pathname === "/contact"); setShowProfile(window.location.pathname.startsWith("/user/")); setShowUpgrade(window.location.pathname === "/upgrade"); };
     window.addEventListener("popstate", onPopState);
@@ -306,51 +273,15 @@ function Terminal() {
     const chatMessages = isFreeTier
       ? contextMessages
       : [...contextMessages, { role: "user", content: userMessage.content }];
-    let sprintCompleteMessage: Message | null = null;
-    const onSprintProgress = (rawAmount: number) => {
-      if (!state.activeTicket) return;
-      const amount = Math.round(rawAmount * 1.5);
-      updateTicketProgress(amount);
-      if (Math.min(state.activeTicket.sprintProgress + amount, state.activeTicket.sprintGoal) >= state.activeTicket.sprintGoal) {
-        const payout = state.activeTicket.sprintGoal * 10;
-        addActiveTD(payout); playChime();
-        sprintCompleteMessage = { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${state.activeTicket!.id} "${state.activeTicket!.title}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` };
-        setState((prev) => ({
-          ...prev,
-          activeTicket: null,
-          pendingCompletedTaskIds: [...prev.pendingCompletedTaskIds, state.activeTicket!.id],
-        }));
-        if (state.proKeyHash && state.username) {
-          void updateTicketServer(state.username, null, state.proKeyHash);
-        }
-        const completedMessage = `✅ ${state.username || "A player"} completed ticket "${state.activeTicket!.title}" and earned ${payout.toLocaleString()} TD!`;
-        fetch(`${API_BASE}/api/recent-events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: completedMessage }) }).catch(() => {});
-        supabase?.channel('global_incidents').send({ type: 'broadcast', event: 'new_incident', payload: { message: completedMessage } }).catch(() => {});
-      }
-    };
+    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({ state, updateTicketProgress, addActiveTD, playChime, setState });
     const controller = new AbortController();
     abortControllerRef.current = controller;
     submitChatMessage({
-      chatMessages,
-      buddyResult,
-      unlockAchievement: unlockAchievementWithSound,
-      setHistory,
-      setIsProcessing,
-      currentRank: rank,
-      apiKey: effectiveApiKey,
-      customModel: state.selectedModel,
-      proKey: state.proKey,
-      proKeyHash: state.proKeyHash,
-      modes: state.modes,
-      activeTicket: state.activeTicket,
-      onSprintProgress,
-      getSprintCompleteMessage: () => { const msg = sprintCompleteMessage; sprintCompleteMessage = null; return msg; },
-      addActiveTD,
-      onSuggestedReply: setSuggestedReply,
-      buddyType: state.buddy.type,
-      username: state.username,
-      inventory: state.inventory,
-      upgrades: state.upgrades,
+      chatMessages, buddyResult, unlockAchievement: unlockAchievementWithSound, setHistory, setIsProcessing,
+      currentRank: rank, apiKey: effectiveApiKey, customModel: state.selectedModel, proKey: state.proKey,
+      proKeyHash: state.proKeyHash, modes: state.modes, activeTicket: state.activeTicket,
+      onSprintProgress, getSprintCompleteMessage, addActiveTD, onSuggestedReply: setSuggestedReply,
+      buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades,
       onByokUsage: (usage) => setState((prev) => {
         const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 };
         return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } };
@@ -358,8 +289,7 @@ function Terminal() {
       onQuotaUpdate: (quotaPercent) => setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })),
       onQuotaExhausted: triggerQuotaLockout,
       onProfileUpdate: (profile) => setState((prev) => applyServerProfile(prev, profile)),
-      onError: playError,
-      signal: controller.signal,
+      onError: playError, signal: controller.signal,
     });
   };
 
@@ -431,8 +361,6 @@ function Terminal() {
     } else if (e.key === "ArrowUp") { e.preventDefault(); handleArrow("up", slashMenuOpen, filtered); }
     else if (e.key === "ArrowDown") { e.preventDefault(); handleArrow("down", slashMenuOpen, filtered); }
   };
-
-
   return (
     <div
       className={terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme: state.activeTheme })}
