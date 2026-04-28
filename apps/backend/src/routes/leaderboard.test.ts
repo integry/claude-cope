@@ -19,9 +19,9 @@ function createGetMockDB(results: unknown[] = []) {
             };
           }),
           all: vi.fn().mockResolvedValue({ results: isMigrationSelect ? [] : results }),
+          run: vi.fn().mockResolvedValue({ success: true }),
         };
       }),
-      exec: vi.fn().mockResolvedValue({ results: [] }),
     },
     getSQL: () => capturedSQL,
     getBindings: () => capturedBindings,
