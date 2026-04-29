@@ -39,7 +39,8 @@ type VerifyTokenResult = {
 
 type BackendVerificationStatus =
   | { status: "enabled" | "disabled" | "verified" }
-  | { status: "unavailable" | "misconfigured"; message: string };
+  | { status: "misconfigured"; message: string }
+  | { status: "unavailable"; message: string; retryable: boolean };
 
 function parseBackendVerificationStatus(data: unknown): BackendVerificationStatus {
   const payload = data as
@@ -63,18 +64,21 @@ function parseBackendVerificationStatus(data: unknown): BackendVerificationStatu
       return {
         status: "unavailable",
         message: "Human verification could not start because the session is unavailable. Please retry.",
+        retryable: false,
       };
     }
     if (payload.reason === UNAVAILABLE_REASON.VERIFICATION_CHECK_FAILED) {
       return {
         status: "unavailable",
         message: "Human verification status could not be checked. Please retry.",
+        retryable: true,
       };
     }
     return {
       status: "unavailable",
       message:
         "Human verification is temporarily unavailable.",
+      retryable: true,
     };
   }
   if (payload?.status === VERIFY_STATUS.DISABLED || payload?.status === VERIFY_STATUS.ENABLED || payload?.status === VERIFY_STATUS.VERIFIED) {
@@ -87,14 +91,19 @@ function parseBackendVerificationStatus(data: unknown): BackendVerificationStatu
     return payload.enabled
       ? { status: "enabled" }
       : {
-          status: "unavailable",
-          message: payload.misconfigured
-            ? "Human verification is unavailable because the server is misconfigured."
-            : "Human verification is temporarily unavailable.",
+        status: "unavailable",
+        message: payload.misconfigured
+          ? "Human verification is unavailable because the server is misconfigured."
+          : "Human verification is temporarily unavailable.",
+        retryable: !payload.misconfigured,
         };
   }
 
-  return { status: "unavailable", message: "Unable to determine verification status from the server." };
+  return {
+    status: "unavailable",
+    message: "Unable to determine verification status from the server.",
+    retryable: true,
+  };
 }
 
 async function verifyToken(token: string): Promise<VerifyTokenResult> {
@@ -152,16 +161,16 @@ async function getBackendVerificationStatus(): Promise<BackendVerificationStatus
     credentials: "include",
   }).catch(() => null);
   if (!res) {
-    return { status: "unavailable", message: "Unable to determine verification status from the server." };
+    return { status: "unavailable", message: "Unable to determine verification status from the server.", retryable: true };
   }
   if (res.status === 429) {
-    return { status: "unavailable", message: "Human verification is temporarily rate limited. Please retry shortly." };
+    return { status: "unavailable", message: "Human verification is temporarily rate limited. Please retry shortly.", retryable: true };
   }
   if (res.status >= 500) {
-    return { status: "unavailable", message: "Human verification is temporarily unavailable. Please retry shortly." };
+    return { status: "unavailable", message: "Human verification is temporarily unavailable. Please retry shortly.", retryable: true };
   }
   if (!res.ok) {
-    return { status: "unavailable", message: "Verification service is temporarily unavailable." };
+    return { status: "unavailable", message: "Verification service is temporarily unavailable.", retryable: true };
   }
 
   const data = await res.json().catch(() => ({}));
@@ -266,10 +275,15 @@ export default function TurnstileWidget({
     let settled = false;
     let retries = 0;
     const maxRetries = 3;
+    let bootstrapRetries = 0;
+    const maxBootstrapRetries = 3;
     let widgetId: string | null = null;
     let verificationTimeoutId: number | null = null;
     const scriptLoadTimeoutMs = 10_000;
     const verificationTimeoutMs = 60_000;
+    const wait = (ms: number) => new Promise<void>((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
     const clearVerificationTimeout = () => {
       if (verificationTimeoutId !== null) {
         window.clearTimeout(verificationTimeoutId);
@@ -305,15 +319,28 @@ export default function TurnstileWidget({
     let turnstile: TurnstileApi | undefined;
 
     const run = async () => {
-      const status = await getBackendVerificationStatus();
-      if (cancelled) return;
-      if (status.status === "disabled" || status.status === "verified") {
-        onVerified();
-        return;
-      }
-      if (status.status === "unavailable" || status.status === "misconfigured") {
-        onError(status.message);
-        return;
+      while (true) {
+        const status = await getBackendVerificationStatus();
+        if (cancelled) return;
+        if (status.status === "disabled" || status.status === "verified") {
+          onVerified();
+          return;
+        }
+        if (status.status === "enabled") {
+          break;
+        }
+        if (status.status === "misconfigured") {
+          onError(status.message);
+          return;
+        }
+        if (!status.retryable || bootstrapRetries >= maxBootstrapRetries) {
+          onError(status.message);
+          return;
+        }
+
+        bootstrapRetries += 1;
+        await wait(Math.min(1000 * 2 ** (bootstrapRetries - 1), 4000));
+        if (cancelled) return;
       }
 
       if (!TURNSTILE_SITE_KEY) {

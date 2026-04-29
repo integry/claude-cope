@@ -236,25 +236,50 @@ describe("TurnstileWidget bootstrap gating", () => {
     );
   });
 
-  it("blocks the app when bootstrap returns 429", async () => {
+  it("retries bootstrap when verify status is temporarily rate limited", async () => {
     const onVerified = vi.fn();
     const onError = vi.fn();
+    let verifyCallback: ((token: string) => void) | undefined;
+    window.turnstile = {
+      render: (_target, options) => {
+        verifyCallback = options.callback;
+        return "widget-1";
+      },
+      execute: () => {
+        verifyCallback?.("token-123");
+      },
+      reset: vi.fn(),
+    };
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ error: "Too many requests" }), {
           status: 429,
           headers: { "Content-Type": "application/json" },
         }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "enabled", enabled: true, bypassed: false, misconfigured: false }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ verified: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
       );
 
     await renderWidget({ onVerified, onError });
-    await flushEffects();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
 
-    expect(onVerified).not.toHaveBeenCalled();
-    expect(onError).toHaveBeenCalledWith("Human verification is temporarily rate limited. Please retry shortly.");
+    expect(onVerified).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
   });
 
-  it("blocks the app when bootstrap returns 500", async () => {
+  it("blocks the app after bootstrap retries are exhausted", async () => {
     const onVerified = vi.fn();
     const onError = vi.fn();
     vi.spyOn(globalThis, "fetch")
@@ -263,10 +288,30 @@ describe("TurnstileWidget bootstrap gating", () => {
           status: 500,
           headers: { "Content-Type": "application/json" },
         }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "Internal server error" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "Internal server error" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "Internal server error" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }),
       );
 
     await renderWidget({ onVerified, onError });
-    await flushEffects();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(7000);
+    });
 
     expect(onVerified).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith("Human verification is temporarily unavailable. Please retry shortly.");

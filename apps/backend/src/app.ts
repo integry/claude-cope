@@ -98,8 +98,8 @@ app.use("*", async (c, next) => {
   return next();
 });
 
-app.use("/api/chat", botProtection);
 app.use("/api/chat", rateLimiter);
+app.use("/api/chat", botProtection);
 
 app.route("/api/chat", chat);
 app.route("/api/verify", verify);

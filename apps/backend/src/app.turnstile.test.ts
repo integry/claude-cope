@@ -164,7 +164,7 @@ describe("Turnstile verification and protection", () => {
     expect(usageKv.get).toHaveBeenCalled();
   });
 
-  it("checks bot protection before rate limiting on /api/chat", async () => {
+  it("rate limits /api/chat before checking bot protection", async () => {
     const usageKv = { get: vi.fn().mockResolvedValue(null) };
     const limiter = { limit: vi.fn().mockResolvedValue({ success: false }) };
     const res = await app.request(
@@ -177,8 +177,9 @@ describe("Turnstile verification and protection", () => {
         RATE_LIMITER: limiter,
       },
     );
-    expect(res.status).toBe(403);
-    expect(limiter.limit).not.toHaveBeenCalled();
+    expect(res.status).toBe(429);
+    expect(limiter.limit).toHaveBeenCalled();
+    expect(usageKv.get).not.toHaveBeenCalled();
   });
 
   it("rejects /api/chat with 503 and a reason when bot protection storage is unavailable", async () => {
@@ -253,6 +254,31 @@ describe("Turnstile verification and protection", () => {
       expect(usageKv.put).not.toHaveBeenCalled();
     } finally {
       fetchSpy.mockRestore();
+    }
+  });
+
+  it("aborts Cloudflare verification when the siteverify request hangs", async () => {
+    vi.useFakeTimers();
+    const usageKv = { get: vi.fn(), put: vi.fn() };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => {
+        reject(new DOMException("The operation was aborted.", "AbortError"));
+      });
+    }));
+    try {
+      const responsePromise = app.request(
+        "/api/verify",
+        { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ token: "token-123" }) },
+        { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv },
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+      const res = await responsePromise;
+      expect(res.status).toBe(503);
+      await expect(res.json()).resolves.toEqual({ verified: false, error: "Verification service unavailable" });
+      expect(usageKv.put).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+      vi.useRealTimers();
     }
   });
 
@@ -358,7 +384,7 @@ describe("Turnstile verification and protection", () => {
     }
   });
 
-  it("uses a verify-status-specific rate limiter key for status checks", async () => {
+  it("does not rate limit verify status checks when Turnstile is enabled", async () => {
     const limiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
     const res = await app.request(
       "/api/verify",
@@ -371,24 +397,8 @@ describe("Turnstile verification and protection", () => {
       },
     );
     expect(res.status).toBe(200);
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "verify-status:1.2.3.4" });
-  });
-
-  it("returns no-store and retry guidance when verify status is rate limited", async () => {
-    const limiter = { limit: vi.fn().mockResolvedValue({ success: false }) };
-    const res = await app.request(
-      "/api/verify",
-      { method: "GET", headers: { Origin: "http://localhost:5173", "cf-connecting-ip": "1.2.3.4" } },
-      {
-        ALLOWED_ORIGINS: "http://localhost:5173",
-        TURNSTILE_SECRET_KEY: "secret",
-        USAGE_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn() },
-        RATE_LIMITER: limiter,
-      },
-    );
-    expect(res.status).toBe(429);
     expect(res.headers.get("Cache-Control")).toBe("no-store, max-age=0");
-    expect(res.headers.get("Retry-After")).toBe("60");
+    expect(limiter.limit).not.toHaveBeenCalled();
   });
 
   it("uses a separate verify-submit rate limiter key for token submission", async () => {

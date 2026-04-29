@@ -1,6 +1,6 @@
 import { type Context, Hono } from "hono";
 import { getClientIp, createRateLimiter } from "../middleware/rateLimiter";
-import { normalizeHostname, getExpectedHostnameConfig as getHostnameConfig } from "../utils/hostname";
+import { normalizeHostname, getExpectedHostnameConfig } from "../utils/hostname";
 import {
   VERIFY_STATUS,
   UNAVAILABLE_REASON,
@@ -36,10 +36,11 @@ const verify = new Hono<Env>();
 type VerifyContext = Context<Env>;
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+const TURNSTILE_VERIFY_TIMEOUT_MS = 10_000;
 type VerifyFailureStatus = 502 | 503;
 const VERIFY_NO_STORE = "no-store, max-age=0";
 
-const getExpectedHostnameConfig = (c: VerifyContext) => getHostnameConfig(c.env?.TURNSTILE_EXPECTED_HOSTNAME);
+const getHostnameConfig = (c: VerifyContext) => getExpectedHostnameConfig(c.env?.TURNSTILE_EXPECTED_HOSTNAME);
 const getTurnstileSecret = (c: VerifyContext): string | undefined => c.env?.TURNSTILE_SECRET_KEY;
 
 verify.use("*", async (c, next) => {
@@ -48,8 +49,8 @@ verify.use("*", async (c, next) => {
 });
 
 verify.get("/", async (c, next) => {
-  // Skip rate limiting when Turnstile is disabled so status checks cannot
-  // return 429 instead of the documented bypass response.
+  // Status checks stay unthrottled so refreshes and re-verification probes
+  // do not lock a legitimate session behind a temporary 429.
   if (!getTurnstileSecret(c)) {
     const response: VerifyStatusResponse = {
       status: VERIFY_STATUS.DISABLED,
@@ -60,10 +61,10 @@ verify.get("/", async (c, next) => {
     return c.json(response);
   }
   await next();
-}, createRateLimiter("verify-status:"), async (c) => {
+}, async (c) => {
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
-  const expectedHostname = getExpectedHostnameConfig(c);
+  const expectedHostname = getHostnameConfig(c);
   if (expectedHostname.invalid) {
     const response: VerifyStatusResponse = {
       status: VERIFY_STATUS.MISCONFIGURED,
@@ -145,15 +146,21 @@ const verifyWithTurnstile = async (
   | { ok: true; data: TurnstileVerifyResponse }
   | { ok: false; status: VerifyFailureStatus; body: { verified: false; error: string } }
 > => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, TURNSTILE_VERIFY_TIMEOUT_MS);
   let resp: Response;
   try {
-    resp = await fetch(TURNSTILE_VERIFY_URL, { method: "POST", body: form });
+    resp = await fetch(TURNSTILE_VERIFY_URL, { method: "POST", body: form, signal: controller.signal });
   } catch {
     return {
       ok: false as const,
       status: 503,
       body: { verified: false, error: "Verification service unavailable" },
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   if (!resp.ok) {
@@ -179,7 +186,7 @@ verify.post("/", async (c, next) => {
   const secret = getTurnstileSecret(c);
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
-  const expectedHostname = getExpectedHostnameConfig(c);
+  const expectedHostname = getHostnameConfig(c);
 
   if (!secret) {
     return c.json({ verified: true, bypassed: true });
