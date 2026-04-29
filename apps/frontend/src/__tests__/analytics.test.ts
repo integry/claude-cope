@@ -281,6 +281,7 @@ describe("parseBaseCommand — command normalization", () => {
       "/blame", "/brrrrrr", "/ticket", "/backlog", "/sync", "/shill",
       "/key", "/feedback", "/bug", "/upgrade", "/take", "/accept",
       "/abandon", "/alias", "/model", "/new",
+      "/leaderboard", "/achievements", "/profile", "/party",
     ];
     for (const cmd of knownCommands) {
       expect(parseBaseCommand(cmd)).toBe(cmd);

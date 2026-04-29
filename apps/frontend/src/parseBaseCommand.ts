@@ -38,6 +38,10 @@ const KNOWN_COMMANDS = new Set([
   "/alias",
   "/model",
   "/new",
+  "/leaderboard",
+  "/achievements",
+  "/profile",
+  "/party",
 ]);
 
 /**
