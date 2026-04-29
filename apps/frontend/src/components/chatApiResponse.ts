@@ -169,7 +169,7 @@ export async function handleChatErrorResponse(
 
   const handleServiceUnavailable = async () => {
     const errorData = await readErrorData();
-    if (isReverifiableReason(errorData?.reason)) {
+    if (isReverifiableReason(errorData?.reason) || isServerSideFailure(errorData?.reason)) {
       triggerReverification();
       return true;
     }
