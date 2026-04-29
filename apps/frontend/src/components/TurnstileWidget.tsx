@@ -35,6 +35,52 @@ type BackendVerificationStatus =
   | { status: "enabled" | "disabled" }
   | { status: "unavailable"; message: string };
 
+function parseBackendVerificationStatus(data: unknown): BackendVerificationStatus {
+  const payload = data as
+    | {
+        status?: string;
+        reason?: string;
+        bypassed?: boolean;
+        enabled?: boolean;
+        misconfigured?: boolean;
+      }
+    | undefined;
+
+  if (payload?.status === "misconfigured") {
+    return {
+      status: "unavailable",
+      message: "Human verification is unavailable because the server is misconfigured.",
+    };
+  }
+  if (payload?.status === "unavailable") {
+    return {
+      status: "unavailable",
+      message:
+        payload.reason === "session_unavailable"
+          ? "Human verification could not start because your session is unavailable. Check that cookies are enabled and try again."
+          : "Human verification is temporarily unavailable.",
+    };
+  }
+  if (payload?.status === "disabled" || payload?.status === "enabled") {
+    return { status: payload.status };
+  }
+  if (typeof payload?.bypassed === "boolean") {
+    return { status: payload.bypassed ? "disabled" : "enabled" };
+  }
+  if (typeof payload?.enabled === "boolean") {
+    return payload.enabled
+      ? { status: "enabled" }
+      : {
+          status: "unavailable",
+          message: payload.misconfigured
+            ? "Human verification is unavailable because the server is misconfigured."
+            : "Human verification is temporarily unavailable.",
+        };
+  }
+
+  return { status: "unavailable", message: "Unable to determine verification status from the server." };
+}
+
 async function verifyToken(token: string): Promise<VerifyTokenResult> {
   const res = await fetch(`${API_BASE}/api/verify`, {
     method: "POST",
@@ -87,38 +133,7 @@ async function getBackendVerificationStatus(): Promise<BackendVerificationStatus
   }
 
   const data = await res.json().catch(() => ({}));
-  if (data?.status === "misconfigured") {
-    return {
-      status: "unavailable",
-      message: "Human verification is unavailable because the server is misconfigured.",
-    };
-  }
-  if (data?.status === "unavailable") {
-    return {
-      status: "unavailable",
-      message:
-        data?.reason === "session_unavailable"
-          ? "Human verification could not start because your session is unavailable. Check that cookies are enabled and try again."
-          : "Human verification is temporarily unavailable.",
-    };
-  }
-  if (data?.status === "disabled" || data?.status === "enabled") {
-    return { status: data.status };
-  }
-  if (typeof data?.bypassed === "boolean") {
-    return { status: data.bypassed ? "disabled" : "enabled" };
-  }
-  if (typeof data?.enabled === "boolean") {
-    return data.enabled
-      ? { status: "enabled" }
-      : {
-          status: "unavailable",
-          message: data?.misconfigured
-            ? "Human verification is unavailable because the server is misconfigured."
-            : "Human verification is temporarily unavailable.",
-        };
-  }
-  return { status: "unavailable", message: "Unable to determine verification status from the server." };
+  return parseBackendVerificationStatus(data);
 }
 
 function waitForTurnstileApi(timeoutMs: number): Promise<void> {
@@ -277,9 +292,10 @@ export default function TurnstileWidget({
         onError("Turnstile did not initialize.");
         return;
       }
+      const turnstileApi = turnstile;
       container.innerHTML = "";
 
-      const renderedWidgetId = turnstile.render(container, {
+      const renderedWidgetId = turnstileApi.render(container, {
         sitekey: TURNSTILE_SITE_KEY,
         size: "invisible",
         callback: async (token: string) => {
@@ -308,15 +324,15 @@ export default function TurnstileWidget({
         },
         "expired-callback": () => {
           if (cancelled) return;
-          turnstile.reset(renderedWidgetId);
+          turnstileApi.reset(renderedWidgetId);
           startVerificationTimeout();
-          turnstile.execute(renderedWidgetId);
+          turnstileApi.execute(renderedWidgetId);
         },
       });
       widgetId = renderedWidgetId;
 
       startVerificationTimeout();
-      turnstile.execute(renderedWidgetId);
+      turnstileApi.execute(renderedWidgetId);
     };
 
     void run().catch(() => {
