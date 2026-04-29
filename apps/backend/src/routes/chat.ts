@@ -243,6 +243,30 @@ export function resolveFreeChatLicenseState(profileLicenseHash: string | null, l
   return { activeProfileLicenseHash: null, revokedProfileLicenseHash: profileLicenseHash };
 }
 
+async function validateFreeUserAccess(
+  env: Env["Bindings"],
+  opts: { db: D1Database | undefined; sessionId: string; username: string; hasRow: boolean; profileLicenseHash: string | null },
+): Promise<PreChatResult | { profileLicenseHash: string | null; revokedProfileLicenseHash: string | null }> {
+  let { profileLicenseHash } = opts;
+  const ownershipCheck = await checkFreeOwnership(env, opts.sessionId, opts.username, opts.hasRow);
+  if (!ownershipCheck.owns) {
+    if ('kvUnavailable' in ownershipCheck && ownershipCheck.kvUnavailable) {
+      return rejectPreChat("Ownership verification unavailable: KV storage is not configured", 500, { profileLicenseHash });
+    }
+    return rejectPreChat("Session does not own this username", 403, { profileLicenseHash });
+  }
+  let revokedProfileLicenseHash: string | null = null;
+  if (profileLicenseHash && opts.db) {
+    const licenseState = resolveFreeChatLicenseState(profileLicenseHash, await isLicenseActive(opts.db, profileLicenseHash));
+    profileLicenseHash = licenseState.activeProfileLicenseHash;
+    revokedProfileLicenseHash = licenseState.revokedProfileLicenseHash;
+  }
+  if (profileLicenseHash) {
+    return rejectPreChat("This account is linked to a Pro license — authenticate with proKeyHash", 403, { profileLicenseHash });
+  }
+  return { profileLicenseHash, revokedProfileLicenseHash };
+}
+
 async function preChatChecks(
   env: Env["Bindings"],
   ctx: { waitUntil: (p: Promise<unknown>) => void },
@@ -272,22 +296,11 @@ async function preChatChecks(
     deferredKvWrites = m.deferredKvWrites;
   }
 
-  const ownershipCheck = effectiveProKeyHash ? { owns: true } : await checkFreeOwnership(env, sessionId, username, hasRow);
-  const ownsUsername = ownershipCheck.owns;
-
-  if (!effectiveProKeyHash && !ownsUsername) {
-    if ('kvUnavailable' in ownershipCheck && ownershipCheck.kvUnavailable) {
-      return rejectPreChat("Ownership verification unavailable: KV storage is not configured", 500, { effectiveProKeyHash, profileLicenseHash });
-    }
-    return rejectPreChat("Session does not own this username", 403, { effectiveProKeyHash, profileLicenseHash });
-  }
-  if (!effectiveProKeyHash && profileLicenseHash && db) {
-    const licenseState = resolveFreeChatLicenseState(profileLicenseHash, await isLicenseActive(db, profileLicenseHash));
-    profileLicenseHash = licenseState.activeProfileLicenseHash;
-    revokedProfileLicenseHash = licenseState.revokedProfileLicenseHash;
-  }
-  if (!effectiveProKeyHash && profileLicenseHash) {
-    return rejectPreChat("This account is linked to a Pro license — authenticate with proKeyHash", 403, { effectiveProKeyHash, profileLicenseHash });
+  if (!effectiveProKeyHash) {
+    const freeAccess = await validateFreeUserAccess(env, { db, sessionId, username, hasRow, profileLicenseHash });
+    if ('error' in freeAccess) return freeAccess;
+    profileLicenseHash = freeAccess.profileLicenseHash;
+    revokedProfileLicenseHash = freeAccess.revokedProfileLicenseHash;
   }
 
   // WinRAR nag (issue #736): free-tier quota enforcement is handled entirely
@@ -309,7 +322,7 @@ async function preChatChecks(
     quotaPercent = await getQuotaPercent(quotaKv, { tier: "free", sessionId, limits: getQuotaLimits(env) });
   }
 
-  return { effectiveProKeyHash, profileLicenseHash, revokedProfileLicenseHash, quotaPercent, ownsUsername, deferredKvWrites };
+  return { effectiveProKeyHash, profileLicenseHash, revokedProfileLicenseHash, quotaPercent, ownsUsername: true, deferredKvWrites };
 }
 
 const chat = new Hono<Env>();
