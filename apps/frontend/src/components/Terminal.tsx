@@ -153,7 +153,12 @@ function Terminal() {
   }, [history]);
   useEffect(() => {
     const onPopState = () => {
-      if (pendingNagCommandRef.current !== null) return;
+      if (pendingNagCommandRef.current !== null) {
+        // Keep the nag visible while a blocked command is still armed, even if
+        // another popstate listener syncs route-backed overlays from "/" .
+        setShowUpgrade(true);
+        return;
+      }
       if (window.location.pathname !== "/upgrade") {
         setShowUpgrade(false);
       } else {
