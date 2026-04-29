@@ -17,17 +17,6 @@ const DIM = "#aaaaaa"; // dim footer
 const INNER_W = 64; // inner content width (between ║ chars)
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
 
-/** Returns a humorous status adjective scaled to the user's current credits. */
-function getQuotaStatus(credits: number): string {
-  if (credits <= 0) return "Depleted";
-  if (credits <= 5) return "Pathetic";
-  if (credits <= 15) return "Embarrassing";
-  if (credits <= 50) return "Insufficient";
-  if (credits <= 200) return "Mediocre";
-  if (credits <= 500) return "Tolerable";
-  return "Adequate";
-}
-
 /* ── types ──────────────────────────────────────────────────── */
 
 export type LayoutProps = {
@@ -35,9 +24,9 @@ export type LayoutProps = {
   multiLabel: string;
   singleAvailable: boolean;
   multiAvailable: boolean;
-  isUpgraded: boolean;
-  currentCredits: number;
-  onClose: () => void;
+  quotaLine: string;
+  dismissMode?: "manual" | "nag";
+  onDismiss?: () => void;
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -49,8 +38,9 @@ export default function DesktopLayout({
   multiLabel,
   singleAvailable,
   multiAvailable,
-  currentCredits,
-  onClose,
+  quotaLine,
+  dismissMode = "manual",
+  onDismiss,
 }: LayoutProps) {
   const topBorder = (
     <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>
@@ -188,16 +178,18 @@ export default function DesktopLayout({
   const closeBtn = "[x]";
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
+  const canPointerDismiss = dismissMode === "manual" && !!onDismiss;
 
   return (
     <div
       className="upgrade-desktop fixed inset-0 z-50 flex items-center justify-center"
-      onClick={onClose}
+      onClick={canPointerDismiss ? onDismiss : undefined}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
 
       <pre
         className="relative z-10 mx-4"
+        onClick={(e) => e.stopPropagation()}
         style={{
           fontFamily: MONO_FONT,
           fontSize: "13px",
@@ -210,26 +202,36 @@ export default function DesktopLayout({
           overflowX: "auto",
           overflowY: "hidden",
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {topBorder}{"\n"}
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: B }}>{" " + title + " ".repeat(titleGap - 1)}</span>
-        <span
-          style={{ color: DIM, cursor: "pointer" }}
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = W; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = DIM; }}
-        >
-          {closeBtn}
-        </span>
+        {canPointerDismiss ? (
+          <button
+            type="button"
+            onClick={onDismiss}
+            style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
+            title="Click to dismiss"
+          >
+            {closeBtn}
+          </button>
+        ) : dismissMode === "nag" ? (
+          <span>{" ".repeat(closeBtn.length)}</span>
+        ) : (
+          <span
+            style={{ color: DIM }}
+            title="Press ESC to dismiss"
+          >
+            {closeBtn}
+          </span>
+        )}
         <span style={{ color: B }}>{" ".repeat(titlePadRight)}</span>
         <span style={{ color: B }}>{"║"}</span>
         {"\n"}
         {midBorder}{"\n"}
         {emptyLine}{"\n"}
         {centeredBoxLine("INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]", Y)}{"\n"}
-        {boxLine(`  > CURRENT QUOTA: ${currentCredits} Credits. Status: ${getQuotaStatus(currentCredits)}.`, DIM)}{"\n"}
+        {boxLine(`  > ${quotaLine}`, DIM)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [ THROUGHPUT BENCHMARKS ]", Y)}{"\n"}
         {boxLine("  Industry standards artificially throttle assistant capacity")}{"\n"}
@@ -281,30 +283,27 @@ export default function DesktopLayout({
           const left = Math.max(0, Math.floor(totalPad / 2));
           const right = Math.max(0, totalPad - left);
           return (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onClose(); }}
-              style={{
-                display: "inline",
-                background: "none",
-                border: "none",
-                padding: 0,
-                margin: 0,
-                font: "inherit",
-                cursor: "pointer",
-                lineHeight: "inherit",
-              }}
-              className="upgrade-esc-btn"
-            >
+            <span style={{ display: "inline" }} className="upgrade-esc-btn">
               <span style={{ color: B }}>{"║"}</span>
-              <span
-                data-esc=""
-                style={{ color: DIM }}
-              >
-                {" ".repeat(left) + text + " ".repeat(right)}
-              </span>
+              {canPointerDismiss ? (
+                <button
+                  type="button"
+                  onClick={onDismiss}
+                  data-esc=""
+                  style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
+                >
+                  {" ".repeat(left) + text + " ".repeat(right)}
+                </button>
+              ) : (
+                <span
+                  data-esc=""
+                  style={{ color: DIM }}
+                >
+                  {" ".repeat(left) + text + " ".repeat(right)}
+                </span>
+              )}
               <span style={{ color: B }}>{"║"}</span>
-            </button>
+            </span>
           );
         })()}{"\n"}
         {botBorder}

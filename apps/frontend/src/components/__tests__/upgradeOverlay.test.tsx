@@ -16,11 +16,12 @@ vi.mock("../../config", () => ({
 import UpgradeOverlay from "../UpgradeOverlay";
 
 let container: HTMLDivElement;
+let root: ReturnType<typeof createRoot>;
 
-function render(props: { isUpgraded: boolean; quotaPercent: number; onClose: () => void }) {
+function render(props: { quotaPercent: number; totalQuota: number; isBYOK: boolean; onDismiss: () => void; dismissMode?: "manual" | "nag" }) {
   container = document.createElement("div");
   document.body.appendChild(container);
-  const root = createRoot(container);
+  root = createRoot(container);
   act(() => {
     root.render(createElement(UpgradeOverlay, props));
   });
@@ -28,8 +29,9 @@ function render(props: { isUpgraded: boolean; quotaPercent: number; onClose: () 
 }
 
 function cleanup() {
-  if (container) {
-    document.body.removeChild(container);
+  if (root) act(() => root.unmount());
+  if (container && container.parentNode) {
+    container.parentNode.removeChild(container);
   }
 }
 
@@ -37,7 +39,7 @@ describe("UpgradeOverlay", () => {
   afterEach(cleanup);
 
   it("renders both desktop and mobile layout containers in the DOM", () => {
-    render({ isUpgraded: false, quotaPercent: 65, onClose: vi.fn() });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
     const desktop = container.querySelector(".upgrade-desktop");
     const mobile = container.querySelector(".upgrade-mobile");
     expect(desktop).not.toBeNull();
@@ -45,7 +47,7 @@ describe("UpgradeOverlay", () => {
   });
 
   it("renders the WALLET EXTRACTION UTILITY title in both layouts", () => {
-    render({ isUpgraded: false, quotaPercent: 65, onClose: vi.fn() });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
     const text = container.textContent ?? "";
     // Desktop uses spaced-out title, mobile uses compact title
     expect(text).toContain("W A L L E T   E X T R A C T I O N   U T I L I T Y");
@@ -53,14 +55,14 @@ describe("UpgradeOverlay", () => {
   });
 
   it("renders both purchase options with prices", () => {
-    render({ isUpgraded: false, quotaPercent: 65, onClose: vi.fn() });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
     const text = container.textContent ?? "";
     expect(text).toContain("AUTHORIZE EXTRACTION - $4.99");
     expect(text).toContain("EXTRACT TEAM FUNDS - $19.99");
   });
 
   it("renders checkout links for both options", () => {
-    render({ isUpgraded: false, quotaPercent: 65, onClose: vi.fn() });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
     const links = container.querySelectorAll("a[href]");
     const hrefs = Array.from(links).map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("https://example.com/single");
@@ -68,7 +70,7 @@ describe("UpgradeOverlay", () => {
   });
 
   it("renders the close [x] button in both layouts", () => {
-    render({ isUpgraded: false, quotaPercent: 65, onClose: vi.fn() });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
     const text = container.textContent ?? "";
     // Both layouts render [x]
     const matches = text.match(/\[x\]/g);
@@ -76,26 +78,35 @@ describe("UpgradeOverlay", () => {
     expect(matches!.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("calls onClose when the backdrop is clicked", () => {
-    const onClose = vi.fn();
-    render({ isUpgraded: false, quotaPercent: 65, onClose });
-    // Click the desktop backdrop (first .upgrade-desktop element)
+  it("does call onDismiss when the manual backdrop is clicked", () => {
+    const onDismiss = vi.fn();
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss });
     const desktop = container.querySelector(".upgrade-desktop");
     act(() => {
       desktop?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(onClose).toHaveBeenCalled();
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it("does NOT call onDismiss when the nag backdrop is clicked", () => {
+    const onDismiss = vi.fn();
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss, dismissMode: "nag" });
+    const desktop = container.querySelector(".upgrade-desktop");
+    act(() => {
+      desktop?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 
   it("renders the ESC / close footer in both layouts", () => {
-    render({ isUpgraded: false, quotaPercent: 65, onClose: vi.fn() });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
     const text = container.textContent ?? "";
     expect(text).toContain("Press ESC to retain your net worth");
     expect(text).toContain("Tap to retain your net worth");
   });
 
   it("desktop layout uses overflow-x auto, not hidden", () => {
-    render({ isUpgraded: false, quotaPercent: 65, onClose: vi.fn() });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
     const pre = container.querySelector(".upgrade-desktop pre");
     expect(pre).not.toBeNull();
     expect((pre as HTMLElement).style.overflowX).toBe("auto");

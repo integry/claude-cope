@@ -42,6 +42,7 @@ export default defineConfig(({ mode }) => {
     test: {
       globals: true,
       environment: "node",
+      setupFiles: ["./src/test/setup.ts"],
       exclude: ["src/__tests__/e2e-llm.test.ts", "node_modules/**"],
     },
   };
