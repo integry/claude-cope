@@ -258,7 +258,7 @@ describe("analytics — STORAGE_KEY is shared, not duplicated", () => {
 
     const { initPostHog } = await import("../analytics");
     initPostHog();
-    await flushPromises();
+    await vi.waitFor(() => expect(mockInit).toHaveBeenCalled());
 
     // The identify call should include the username read via STORAGE_KEY
     expect(mockIdentify).toHaveBeenCalledWith(
