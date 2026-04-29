@@ -760,6 +760,7 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
       } else if (handleNewCommand(command, ctx, reply)) {
         if (command === "/brrrrrr") return "async";
       } else if (command.startsWith("/")) {
+        track("slash_command_failed", { command: parseBaseCommand(command) });
         reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
       } else {
         reply({ role: "system", content: `[✓] Executed \`${command}\`` });
@@ -829,7 +830,7 @@ export function executeSlashCommand(
     },
   }));
 
-  track("slash_command_executed", { command: baseCommand });
+  track("slash_command_attempted", { command: baseCommand });
 
   // /clear fires instantly — no fake processing delay
   if (command === "/clear") {
