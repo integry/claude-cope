@@ -279,10 +279,7 @@ describe("analytics — STORAGE_KEY is shared, not duplicated", () => {
     await vi.waitFor(() => expect(mockInit).toHaveBeenCalled());
 
     // The identify call should include the username read via STORAGE_KEY
-    expect(mockIdentify).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ username: "shared_key_user" }),
-    );
+    expect(mockIdentify).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ username: "shared_key_user" }));
 
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
@@ -433,14 +430,8 @@ describe("analytics — /key disabled (BYOK off) fires SLASH_COMMAND_FAILED", ()
     vi.advanceTimersByTime(4000);
 
     // Should have tracked SLASH_COMMAND_ATTEMPTED and SLASH_COMMAND_FAILED
-    expect(mockTrack).toHaveBeenCalledWith(
-      AnalyticsEvents.SLASH_COMMAND_ATTEMPTED,
-      { command: "/key" },
-    );
-    expect(mockTrack).toHaveBeenCalledWith(
-      AnalyticsEvents.SLASH_COMMAND_FAILED,
-      { command: "/key", reason: "disabled" },
-    );
+    expect(mockTrack).toHaveBeenCalledWith(AnalyticsEvents.SLASH_COMMAND_ATTEMPTED, { command: "/key" });
+    expect(mockTrack).toHaveBeenCalledWith(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/key", reason: "disabled" });
 
     // Ensure no duplicate SLASH_COMMAND_FAILED tracking (only one call)
     const failedCalls = mockTrack.mock.calls.filter(
@@ -491,15 +482,8 @@ describe("parseBaseCommand — command normalization", () => {
   });
 
   it("recognises all known game commands", () => {
-    const knownCommands = [
-      "/help", "/clear", "/store", "/synergize", "/user", "/compact",
-      "/buddy", "/ping", "/theme", "/support", "/preworkout", "/who",
-      "/about", "/privacy", "/terms", "/contact", "/fast", "/voice",
-      "/blame", "/brrrrrr", "/ticket", "/backlog", "/sync", "/shill",
-      "/key", "/feedback", "/bug", "/upgrade", "/take", "/accept",
-      "/abandon", "/alias", "/model",
-      "/leaderboard", "/achievements", "/profile", "/party",
-    ];
+    const knownCommands = ["/help", "/clear", "/store", "/synergize", "/user", "/compact", "/buddy", "/ping", "/theme", "/support", "/preworkout", "/who", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice"];
+    knownCommands.push("/blame", "/brrrrrr", "/ticket", "/backlog", "/sync", "/shill", "/key", "/feedback", "/bug", "/upgrade", "/take", "/accept", "/abandon", "/alias", "/model", "/leaderboard", "/achievements", "/profile", "/party");
     for (const cmd of knownCommands) {
       expect(parseBaseCommand(cmd)).toBe(cmd);
     }
