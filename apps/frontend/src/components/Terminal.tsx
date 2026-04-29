@@ -37,22 +37,20 @@ import { shouldShowNag } from "./winrarNag";
 
 export type { Message };
 
-/* ── WinRAR nag helpers (issue #736) ─────────────────────────── */
-// Per spec: "The user has to manually press [ESC] every single time."
-// Desktop: only ESC key dismisses and replays the pending command.
-// Mobile: footer tap is the only dismiss affordance (no physical ESC).
-// Backdrop clicks and [x] buttons do NOT dismiss.
+function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
+  while (messageKeys.length < historyLength) {
+    messageKeys.push(nextKeyId.current++);
+  }
+  if (messageKeys.length > historyLength) {
+    messageKeys.length = historyLength;
+  }
+}
 
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
-  // Review-ping payouts and refunds are server-decided TD; pass `raw=true` so
-  // we don't double-apply the local generator multiplier on top of them.
   const creditTD = useCallback((amount: number) => addActiveTD(amount, true), [addActiveTD]);
-  // Debit only `currentTD` (spendable balance). Do NOT touch `totalTDEarned`,
-  // which is a monotonic lifetime counter used for rank — paying for a review
-  // shouldn't lower your rank.
   const debitTD = useCallback((amount: number) => {
     setState((prev) => ({
       ...prev,
@@ -62,9 +60,6 @@ function Terminal() {
       },
     }));
   }, [setState]);
-  // Sender's sprint-progress boost only applies if their *current* active
-  // ticket still matches the one that was reviewed — in case they've abandoned
-  // and taken a different ticket between sending and acceptance.
   const activeTicketRef = useRef(state.activeTicket);
   activeTicketRef.current = state.activeTicket;
   const applyReviewSprintBoost = useCallback((ticketId: string, boost: number) => {
@@ -82,39 +77,20 @@ function Terminal() {
   const [slashIndex, setSlashIndex] = useState(0);
   const [inputValue, setInputValue] = useState("");
   const [suggestedReply, setSuggestedReply] = useState<string | null>(null);
-  const {
-    showStore, showLeaderboard, showAchievements, showSynergize,
-    showHelp, showAbout, showPrivacy, showTerms, showContact,
-    showProfile, showParty, showUpgrade,
-    setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize,
-    setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact,
-    setShowProfile, setShowParty, setShowUpgrade,
-    closeAllOverlays,
-  } = useOverlays();
+  const { showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, closeAllOverlays } = useOverlays();
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
   const [compactEffect, setCompactEffect] = useState(false);
   const [freeCommandCount, setFreeCommandCount] = useState(0);
-  // Stop the incoming-ping screen flash once the target has noticed the ping
-  // (any mouse move, tap, or keypress). The ping itself remains pending until
-  // /accept or expiry — only the flashing attention-grab is dismissed.
   const pingAcknowledged = usePingAcknowledged(pendingReviewPing);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialHistoryLen = useRef(history.length);
-  // Stable keys for messages — assign once, persist across re-renders
   const messageKeys = useRef<number[]>([]);
   const nextKeyId = useRef(0);
-  // Grow the keys array to match history length (new messages get new IDs)
-  while (messageKeys.current.length < history.length) {
-    messageKeys.current.push(nextKeyId.current++);
-  }
-  // Shrink if history was truncated (e.g. /clear, /compact)
-  if (messageKeys.current.length > history.length) {
-    messageKeys.current.length = history.length;
-  }
+  syncMessageKeys(messageKeys.current, nextKeyId, history.length);
   const abortControllerRef = useRef<AbortController | null>(null);
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
   const pendingNagCommandRef = useRef<string | null>(null);
@@ -160,8 +136,6 @@ function Terminal() {
   useEffect(() => {
     const onPopState = () => {
       if (pendingNagCommandRef.current !== null) {
-        // Keep the nag visible while a blocked command is still armed, even if
-        // another popstate listener syncs route-backed overlays from "/" .
         setShowUpgrade(true);
         return;
       }
@@ -185,7 +159,6 @@ function Terminal() {
 
   const handleQuotaLockout = useCallback((command?: string) => {
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
-    // BYOK users should never be gated by platform quota
     if (effectiveApiKey) return;
     if (!state.proKey && !state.proKeyHash) {
       if (command) {
@@ -193,17 +166,13 @@ function Terminal() {
         nagArmedFromQuotaRef.current = true;
         setShowUpgrade(true);
       } else {
-        // Record the exhausted state, but wait until the next command attempt
-        // to display the nag so the current response remains visible.
         nagArmedFromQuotaRef.current = true;
       }
     } else {
-      // Pro users: run the normal lockout flow (quota refill, etc.)
       triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState });
     }
   }, [playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState, setShowUpgrade]);
 
-  // WinRAR nag: check free tier quota exhaustion and defer command behind the nag overlay
   const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
     if (shouldShowNag(effectiveApiKey, state.proKey, state.proKeyHash, state.economy.quotaPercent)) {
       handleQuotaLockout(command);
@@ -263,8 +232,6 @@ function Terminal() {
     const buddyResult = computeBuddyInterjection(state.buddy);
     handleBuddyInterjection(buddyResult);
     const userMessage: Message = { role: "user", content: command };
-
-    // Free-tier artificial scarcity: fake queueing delay + terminal ads
     if (isFreeTier) {
       const newCount = freeCommandCount + 1;
       setFreeCommandCount(newCount);
@@ -302,15 +269,10 @@ function Terminal() {
         }
       },
       onQuotaExhausted: () => {
-        // The backend rejected the request (402) — the command was NOT
-        // processed.  Undo the history additions from the initial attempt
-        // so the replay in handleUpgradeNagClose doesn't create duplicates.
         setCommandHistory((prev) => {
           const idx = prev.lastIndexOf(command);
           return idx >= 0 ? [...prev.slice(0, idx), ...prev.slice(idx + 1)] : prev;
         });
-        // handleErrorResponse already stripped loading messages; also remove
-        // the user message that processCommand appended.
         setHistory((prev) => {
           for (let i = prev.length - 1; i >= 0; i--) {
             if (prev[i]?.role === "user" && prev[i]?.content === command) {
@@ -341,15 +303,11 @@ function Terminal() {
       setShowUpgrade(true);
       return;
     }
-    // Check quota before adding to history — if the nag is dismissed without
-    // replaying, the command should not appear in command history.
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
     setCommandHistory((prev) => [...prev, command]);
     processCommand(command);
   };
 
-  // WinRAR nag: ESC (desktop) or footer tap (mobile) replays the pending command.
-  // The user must still dismiss every single time — faithful to WinRAR UX.
   const handleUpgradeNagClose = useCallback(() => {
     setShowUpgrade(false);
     if (window.location.pathname === "/upgrade") {
@@ -372,43 +330,13 @@ function Terminal() {
   }, [setShowUpgrade]);
 
   const { handleKeyDown } = useTerminalKeyboard({
-    slashQuery,
-    slashIndex,
-    suggestedReply,
-    inputValue,
-    isProcessing,
-    commandHistory,
-    historyIndex,
-    showStore,
-    showLeaderboard,
-    showAchievements,
-    showSynergize,
-    showHelp,
-    showAbout,
-    showPrivacy,
-    showTerms,
-    showContact,
-    showProfile,
-    showParty,
-    showUpgrade,
-    brrrrrrIntervalRef,
-    abortControllerRef,
-    freeTierDelayRef,
-    inputRef,
-    setSlashIndex,
-    setInputValue,
-    setSuggestedReply,
-    setSlashQuery,
-    setHistoryIndex,
-    setIsProcessing,
-    setHistory,
-    closeAllOverlays: closeAllOverlaysPreservingNag,
-    handleUpgradeNagClose,
-    runSlashCommand,
-    handleEnterSubmit,
-    getFilteredSlashCommands,
+    slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex,
+    showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy,
+    showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
+    freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery,
+    setHistoryIndex, setIsProcessing, setHistory, closeAllOverlays: closeAllOverlaysPreservingNag,
+    handleUpgradeNagClose, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
   });
-
 
   return (
     <div
@@ -435,36 +363,14 @@ function Terminal() {
         </div>
       </div>
       <TerminalOverlays
-        showStore={showStore}
-        showLeaderboard={showLeaderboard}
-        showAchievements={showAchievements}
-        showHelp={showHelp}
-        showAbout={showAbout}
-        showPrivacy={showPrivacy}
-        showTerms={showTerms}
-        showContact={showContact}
-        showProfile={showProfile}
-        showParty={showParty}
-        showSynergize={showSynergize}
-        showUpgrade={showUpgrade}
-        state={state}
-        buyGenerator={buyGenerator}
-        buyUpgrade={buyUpgrade}
-        buyTheme={buyTheme}
-        setActiveTheme={setActiveTheme}
-        setShowStore={setShowStore}
-        setShowLeaderboard={setShowLeaderboard}
-        setShowAchievements={setShowAchievements}
-        setShowHelp={setShowHelp}
-        setShowAbout={setShowAbout}
-        setShowPrivacy={setShowPrivacy}
-        setShowTerms={setShowTerms}
-        setShowContact={setShowContact}
-        setShowProfile={setShowProfile}
-        setShowParty={setShowParty}
-        setShowSynergize={setShowSynergize}
-        setIsProcessing={setIsProcessing}
-        setHistory={setHistory}
+        showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showHelp={showHelp}
+        showAbout={showAbout} showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact}
+        showProfile={showProfile} showParty={showParty} showSynergize={showSynergize} showUpgrade={showUpgrade}
+        state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme}
+        setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard} setShowAchievements={setShowAchievements}
+        setShowHelp={setShowHelp} setShowAbout={setShowAbout} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms}
+        setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty}
+        setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory}
         onUpgradeDismiss={pendingNagCommandRef.current !== null ? handleUpgradeNagClose : handleManualUpgradeDismiss}
         upgradeDismissMode={pendingNagCommandRef.current !== null ? "nag" : "manual"}
       />
