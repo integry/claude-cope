@@ -215,6 +215,8 @@ export default function DesktopLayout({
           >
             {closeBtn}
           </button>
+        ) : dismissMode === "nag" ? (
+          <span>{" ".repeat(closeBtn.length)}</span>
         ) : (
           <span
             style={{ color: DIM }}
