@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
-import { sanitizeChatMessages, enforceContextTrimming, resolveFreeChatLicenseState } from "./chat";
+import { sanitizeChatMessages, enforceContextTrimming, resolveFreeChatLicenseState, resolveProviderList } from "./chat";
 import { buildFreeChatProfileSnapshot } from "./chatHelpers";
 
 describe("sanitizeChatMessages", () => {
@@ -378,5 +378,29 @@ describe("Provider configuration in OpenRouter requests", () => {
 
     expect(capturedRequestBody).toBeDefined();
     expect(capturedRequestBody).not.toHaveProperty("provider");
+  });
+});
+
+describe("resolveProviderList", () => {
+  it("returns parsed providers for a free user", () => {
+    expect(resolveProviderList("DeepInfra,NovitaAI", "true", false)).toEqual(["DeepInfra", "NovitaAI"]);
+  });
+
+  it("returns empty list for a Pro user when FREE_ONLY is enabled", () => {
+    expect(resolveProviderList("DeepInfra,NovitaAI", "true", true)).toEqual([]);
+  });
+
+  it("returns parsed providers for a Pro user when FREE_ONLY is unset", () => {
+    expect(resolveProviderList("DeepInfra,NovitaAI", undefined, true)).toEqual(["DeepInfra", "NovitaAI"]);
+  });
+
+  it("returns parsed providers for a Pro user when FREE_ONLY is any non-'true' value", () => {
+    expect(resolveProviderList("DeepInfra,NovitaAI", "false", true)).toEqual(["DeepInfra", "NovitaAI"]);
+    expect(resolveProviderList("DeepInfra,NovitaAI", "1", true)).toEqual(["DeepInfra", "NovitaAI"]);
+  });
+
+  it("returns empty list when no providers are configured", () => {
+    expect(resolveProviderList(undefined, "true", false)).toEqual([]);
+    expect(resolveProviderList("", "true", true)).toEqual([]);
   });
 });

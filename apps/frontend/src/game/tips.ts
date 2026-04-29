@@ -1,4 +1,6 @@
-export const TIPS = [
+import { TICKET_REFINE_ENABLED } from "../config";
+
+const ALL_TIPS = [
   "Tip: Use /help to see all commands. There is no actual help, only commands.",
   "Tip: The /store sells generators that produce Technical Debt while you sleep. Or cry.",
   "Tip: /backlog shows your tickets. Spoiler: they multiply faster than you can close them.",
@@ -28,6 +30,8 @@ export const TIPS = [
   "Tip: /voice lets you scream your prompts. Therapeutic, but the neighbors complain.",
   "Tip: /shill tweets about us for free tokens. Your dignity was already in the backlog anyway.",
 ];
+
+export const TIPS = ALL_TIPS.filter((tip) => TICKET_REFINE_ENABLED || !tip.includes("/ticket "));
 
 export function getRandomTip(): string {
   return TIPS[Math.floor(Math.random() * TIPS.length)]!;

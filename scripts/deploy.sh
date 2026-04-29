@@ -116,6 +116,15 @@ if ! $FRONTEND_ONLY; then
   else
     (cd "$ROOT/apps/backend" && printf 'y\n' | wrangler secret delete TURNSTILE_SECRET_KEY --config "$WRANGLER_CFG") || true
   fi
+  if [[ -n "${OPENROUTER_PROVIDERS:-}" ]]; then
+    echo "$OPENROUTER_PROVIDERS" | (cd "$ROOT/apps/backend" && wrangler secret put OPENROUTER_PROVIDERS --config "$WRANGLER_CFG")
+  fi
+  if [[ -n "${OPENROUTER_PROVIDERS_FREE_ONLY:-}" ]]; then
+    echo "$OPENROUTER_PROVIDERS_FREE_ONLY" | (cd "$ROOT/apps/backend" && wrangler secret put OPENROUTER_PROVIDERS_FREE_ONLY --config "$WRANGLER_CFG")
+  fi
+  if [[ -n "${ENABLE_TICKET_REFINE:-}" ]]; then
+    echo "$ENABLE_TICKET_REFINE" | (cd "$ROOT/apps/backend" && wrangler secret put ENABLE_TICKET_REFINE --config "$WRANGLER_CFG")
+  fi
   echo ""
 fi
 

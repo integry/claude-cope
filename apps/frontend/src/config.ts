@@ -52,6 +52,19 @@ export const BYOK_ENABLED = parseBoolEnv(
 );
 
 /**
+ * Ticket-refinement feature flag. When disabled (default), the `/ticket` slash
+ * command is hidden from autocomplete and the backend `/api/tickets/refine`
+ * endpoint returns 404. The endpoint is unauthenticated and writes into the
+ * shared community backlog, so it ships off by default — operators opt in by
+ * setting `VITE_ENABLE_TICKET_REFINE=true` (and matching backend
+ * `ENABLE_TICKET_REFINE=true`).
+ */
+export const TICKET_REFINE_ENABLED = parseBoolEnv(
+  import.meta.env.VITE_ENABLE_TICKET_REFINE as string | undefined,
+  false,
+);
+
+/**
  * Checkout URLs for the upgrade overlay. Operators set these to point at their
  * payment provider (e.g. Polar, Stripe). When a URL is empty/unset the
  * corresponding button is disabled with a terminal-style error message.
