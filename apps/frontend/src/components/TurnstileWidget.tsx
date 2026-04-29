@@ -143,10 +143,12 @@ async function getBackendVerificationStatus(): Promise<BackendVerificationStatus
   if (!res) {
     return { status: "unavailable", message: "Unable to determine verification status from the server." };
   }
-  // Treat transient server errors (429, 5xx) as "enabled" so the widget
-  // proceeds with the Turnstile challenge instead of hard-blocking the UI.
+  // When the site key is not configured, transient server errors (429, 5xx)
+  // should be treated as "disabled" to avoid hard-blocking users when
+  // Turnstile is intentionally unconfigured. When the site key IS present,
+  // treat errors as "enabled" so the widget proceeds with the challenge.
   if (res.status === 429 || res.status >= 500) {
-    return { status: "enabled" };
+    return { status: TURNSTILE_SITE_KEY ? "enabled" : "disabled" };
   }
   if (!res.ok) {
     return { status: "unavailable", message: "Verification service is temporarily unavailable." };

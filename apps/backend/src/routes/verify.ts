@@ -66,12 +66,10 @@ type VerifyFailureStatus = 502 | 503;
 
 const getExpectedHostnameConfig = (c: VerifyContext) => getHostnameConfig(c.env?.TURNSTILE_EXPECTED_HOSTNAME);
 
-verify.get("/", createRateLimiter("verify-status:"), async (c) => {
-  const secret = c.env?.TURNSTILE_SECRET_KEY;
-  const sessionId = c.get("sessionId");
-  const kv = c.env?.USAGE_KV;
-  const expectedHostname = getExpectedHostnameConfig(c);
-  if (!secret) {
+verify.get("/", async (c, next) => {
+  // Bypass rate limiting when Turnstile is disabled so that unconfigured
+  // environments never receive 429 instead of the documented bypass response.
+  if (!c.env?.TURNSTILE_SECRET_KEY) {
     const response: VerifyStatusResponse = {
       status: VERIFY_STATUS.DISABLED,
       enabled: false,
@@ -80,6 +78,12 @@ verify.get("/", createRateLimiter("verify-status:"), async (c) => {
     };
     return c.json(response);
   }
+  await next();
+}, createRateLimiter("verify-status:"), async (c) => {
+  const secret = c.env?.TURNSTILE_SECRET_KEY;
+  const sessionId = c.get("sessionId");
+  const kv = c.env?.USAGE_KV;
+  const expectedHostname = getExpectedHostnameConfig(c);
   if (expectedHostname.invalid) {
     const response: VerifyStatusResponse = {
       status: VERIFY_STATUS.MISCONFIGURED,
@@ -184,15 +188,18 @@ const verifyWithTurnstile = async (
   return { ok: true as const, data };
 };
 
-verify.post("/", createRateLimiter("verify-submit:"), async (c) => {
+verify.post("/", async (c, next) => {
+  // Bypass rate limiting when Turnstile is disabled so that unconfigured
+  // environments never receive 429 instead of the documented bypass response.
+  if (!c.env?.TURNSTILE_SECRET_KEY) {
+    return c.json({ verified: true, bypassed: true });
+  }
+  await next();
+}, createRateLimiter("verify-submit:"), async (c) => {
   const secret = c.env?.TURNSTILE_SECRET_KEY;
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
   const expectedHostname = getExpectedHostnameConfig(c);
-
-  if (!secret) {
-    return c.json({ verified: true, bypassed: true });
-  }
 
   if (!sessionId) {
     return c.json({ verified: false, error: "Session unavailable" }, 503);

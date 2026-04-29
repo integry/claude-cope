@@ -67,7 +67,7 @@ function normalizeBracketedIpv6(trimmed: string, preservePort: boolean): string 
   const port = bracketMatch[2];
   if (port && !isValidPort(port)) return undefined;
   const base = ipv6Addr.toLowerCase();
-  return preservePort && port ? `${base}:${port}` : base;
+  return preservePort && port ? `[${base}]:${port}` : base;
 }
 
 function normalizeHostOrIpv4(parts: string[], preservePort: boolean): string | undefined {
