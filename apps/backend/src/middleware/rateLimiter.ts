@@ -6,9 +6,15 @@ type RateLimitContext = {
   json: (body: unknown, status?: number) => Response;
 };
 
+// cf-connecting-ip is set by Cloudflare and cannot be spoofed by clients.
+// x-forwarded-for / x-real-ip are only used as fallback for local dev
+// where no Cloudflare proxy is present. In production Workers deployments,
+// cf-connecting-ip is always present so the fallback never triggers.
 export function getClientIp(headers: { header: (name: string) => string | undefined }): string {
+  const cfIp = headers.header("cf-connecting-ip");
+  if (cfIp) return cfIp;
+
   return (
-    headers.header("cf-connecting-ip") ??
     headers.header("x-forwarded-for")?.split(",")[0]?.trim() ??
     headers.header("x-real-ip") ??
     "unknown"

@@ -67,18 +67,6 @@ verify.get("/", async (c, next) => {
   }
   await next();
 }, async (c, next) => {
-  const limiter = c.env?.RATE_LIMITER;
-  if (!limiter) return next();
-  const sessionId = c.get("sessionId");
-  const suffix = sessionId || getClientIp(c.req);
-  const { success } = await limiter.limit({ key: `verify-status:${suffix}` });
-  if (!success) {
-    return c.json({ error: "Too many requests. Please try again later." }, 429);
-  }
-  return next();
-}, async (c) => {
-  const sessionId = c.get("sessionId");
-  const kv = c.env?.USAGE_KV;
   const expectedHostname = getHostnameConfig(c);
   if (expectedHostname.invalid) {
     const response: VerifyStatusResponse = {
@@ -90,7 +78,7 @@ verify.get("/", async (c, next) => {
     };
     return c.json(response);
   }
-  if (!sessionId) {
+  if (!c.get("sessionId")) {
     const response: VerifyStatusResponse = {
       status: VERIFY_STATUS.UNAVAILABLE,
       enabled: false,
@@ -100,7 +88,7 @@ verify.get("/", async (c, next) => {
     };
     return c.json(response);
   }
-  if (!kv) {
+  if (!c.env?.USAGE_KV) {
     const response: VerifyStatusResponse = {
       status: VERIFY_STATUS.UNAVAILABLE,
       enabled: false,
@@ -110,6 +98,20 @@ verify.get("/", async (c, next) => {
     };
     return c.json(response);
   }
+  await next();
+}, async (c, next) => {
+  const limiter = c.env?.RATE_LIMITER;
+  if (!limiter) return next();
+  const sessionId = c.get("sessionId");
+  const suffix = sessionId || getClientIp(c.req);
+  const { success } = await limiter.limit({ key: `verify-status:${suffix}` });
+  if (!success) {
+    return c.json({ error: "Too many requests. Please try again later." }, 429);
+  }
+  return next();
+}, async (c) => {
+  const sessionId = c.get("sessionId");
+  const kv = c.env?.USAGE_KV as KVNamespace;
 
   let humanFlag: string | null;
   try {
