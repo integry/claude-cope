@@ -297,11 +297,11 @@ describe("WinRAR nag: replay state-machine (duplicate prevention)", () => {
     const cleaned: Message[] = [];
     let removedUser = false;
     for (let i = afterErrorFilter.length - 1; i >= 0; i--) {
-      if (!removedUser && afterErrorFilter[i].role === "user" && afterErrorFilter[i].content === command) {
+      if (!removedUser && afterErrorFilter[i]?.role === "user" && afterErrorFilter[i]?.content === command) {
         removedUser = true;
         continue;
       }
-      cleaned.unshift(afterErrorFilter[i]);
+      cleaned.unshift(afterErrorFilter[i]!);
     }
 
     // --- handleUpgradeNagClose replay ---

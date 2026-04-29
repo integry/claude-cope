@@ -293,7 +293,7 @@ function Terminal() {
         // the user message that processCommand appended.
         setHistory((prev) => {
           for (let i = prev.length - 1; i >= 0; i--) {
-            if (prev[i].role === "user" && prev[i].content === command) {
+            if (prev[i]?.role === "user" && prev[i]?.content === command) {
               return [...prev.slice(0, i), ...prev.slice(i + 1)];
             }
           }
