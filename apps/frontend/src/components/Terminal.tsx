@@ -146,7 +146,11 @@ function Terminal() {
     setShowProfile(true);
     window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`);
   }, [closeAllOverlaysAndClearNag, setShowProfile, state.username]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [history]);
+  useEffect(() => {
+    if (typeof bottomRef.current?.scrollIntoView === "function") {
+      bottomRef.current.scrollIntoView({ behavior: "auto" });
+    }
+  }, [history]);
   // Restore pending nag command to input when navigating away from /upgrade via browser back/forward
   useEffect(() => {
     const onPopState = () => {
