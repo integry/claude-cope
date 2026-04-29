@@ -67,7 +67,7 @@ async function clickSplash() {
 function latestTurnstileProps(): TurnstileWidgetProps {
   const calls = turnstileWidgetMock.mock.calls;
   expect(calls.length).toBeGreaterThan(0);
-  return calls.at(-1)?.[0] as TurnstileWidgetProps;
+  return calls[calls.length - 1]?.[0] as TurnstileWidgetProps;
 }
 
 afterEach(async () => {
