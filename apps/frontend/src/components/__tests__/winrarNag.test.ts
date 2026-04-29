@@ -349,15 +349,11 @@ describe("WinRAR nag: TerminalOverlays production wiring", () => {
     expect(props.onUpgradeDismiss).not.toHaveBeenCalled();
   });
 
-  it("does NOT fire onUpgradeDismiss when desktop [x] is clicked in nag mode", () => {
-    const { container, props } = renderOverlays({ showUpgrade: true, upgradeDismissMode: "nag" });
+  it("does NOT render desktop [x] button in nag mode", () => {
+    const { container } = renderOverlays({ showUpgrade: true, upgradeDismissMode: "nag" });
     const desktopClose = Array.from(container.querySelectorAll(".upgrade-desktop *"))
       .find((el) => el.textContent?.includes("[x]"));
-    expect(desktopClose).toBeTruthy();
-    act(() => {
-      desktopClose!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(props.onUpgradeDismiss).not.toHaveBeenCalled();
+    expect(desktopClose).toBeFalsy();
   });
 
   it("fires onUpgradeDismiss when desktop [x] is clicked in manual mode", () => {
