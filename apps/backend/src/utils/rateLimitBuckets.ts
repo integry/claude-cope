@@ -50,6 +50,8 @@ function parseCounter(raw: string | null): CounterState | null {
   try {
     const parsed = JSON.parse(raw) as CounterState;
     if (typeof parsed.count !== "number" || typeof parsed.expiresAt !== "number") return null;
+    if (!Number.isFinite(parsed.count) || !Number.isFinite(parsed.expiresAt)) return null;
+    if (parsed.count < 0) return null;
     return parsed;
   } catch {
     return null;

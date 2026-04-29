@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
-import { rateLimiter } from "./middleware/rateLimiter";
+import { rateLimiter, kvRateLimiter } from "./middleware/rateLimiter";
 import { botProtection } from "./middleware/botProtection";
 import { sessionMiddleware } from "./middleware/session";
 import { applyMigrations } from "./utils/migrations";
@@ -99,6 +99,7 @@ app.use("*", async (c, next) => {
 });
 
 app.use("/api/chat", rateLimiter);
+app.use("/api/chat", kvRateLimiter);
 app.use("/api/chat", botProtection);
 
 app.route("/api/chat", chat);

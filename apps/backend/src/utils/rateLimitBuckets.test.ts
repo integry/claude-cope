@@ -12,6 +12,18 @@ function mockKV(store: Record<string, string> = {}) {
 
 const KEYS = { ip: "10.0.0.1", identity: "sess-abc" };
 
+function fillBucket(
+  store: Record<string, string>,
+  bucketName: string,
+  count: number,
+  expiresAt: number,
+) {
+  const bucket = BUCKETS.find((b) => b.name === bucketName)!;
+  const id = bucket.keyType === "ip" ? KEYS.ip : KEYS.identity;
+  const key = `${bucket.keyPrefix}${id}`;
+  store[key] = JSON.stringify({ count, expiresAt });
+}
+
 describe("checkRateLimits", () => {
   it("returns blocked: false when all buckets are under their limits", async () => {
     const kv = mockKV();
@@ -66,18 +78,6 @@ describe("checkRateLimits", () => {
   });
 
   describe("blocking behavior", () => {
-    async function fillBucket(
-      store: Record<string, string>,
-      bucketName: string,
-      count: number,
-      expiresAt: number,
-    ) {
-      const bucket = BUCKETS.find((b) => b.name === bucketName)!;
-      const id = bucket.keyType === "ip" ? KEYS.ip : KEYS.identity;
-      const key = `${bucket.keyPrefix}${id}`;
-      store[key] = JSON.stringify({ count, expiresAt });
-    }
-
     it("blocks and returns shouldTrack: true on the threshold-crossing request", async () => {
       const store: Record<string, string> = {};
       const now = 100_000;
@@ -145,17 +145,6 @@ describe("checkRateLimits", () => {
 
       expect(result.blocked).toBe(true);
       if (result.blocked) expect(result.bucket).toBe("swarm");
-
-      function fillBucket(
-        s: Record<string, string>,
-        name: string,
-        count: number,
-        expiresAt: number,
-      ) {
-        const b = BUCKETS.find((x) => x.name === name)!;
-        const id = b.keyType === "ip" ? KEYS.ip : KEYS.identity;
-        s[`${b.keyPrefix}${id}`] = JSON.stringify({ count, expiresAt });
-      }
     });
 
     it("checks ip_burst before burst", async () => {
@@ -163,16 +152,10 @@ describe("checkRateLimits", () => {
       const now = 100_000;
 
       const ipBurst = BUCKETS.find((b) => b.name === "ip_burst")!;
-      store[`${ipBurst.keyPrefix}${KEYS.ip}`] = JSON.stringify({
-        count: ipBurst.limit,
-        expiresAt: now + 60_000,
-      });
+      fillBucket(store, "ip_burst", ipBurst.limit, now + 60_000);
 
       const burst = BUCKETS.find((b) => b.name === "burst")!;
-      store[`${burst.keyPrefix}${KEYS.identity}`] = JSON.stringify({
-        count: burst.limit,
-        expiresAt: now + 60_000,
-      });
+      fillBucket(store, "burst", burst.limit, now + 60_000);
 
       const kv = mockKV(store);
       const result = await checkRateLimits(kv, KEYS, now);
@@ -243,6 +226,52 @@ describe("checkRateLimits", () => {
       const store: Record<string, string> = {};
       const burst = BUCKETS.find((b) => b.name === "burst")!;
       store[`${burst.keyPrefix}${KEYS.identity}`] = JSON.stringify({ count: 5 });
+
+      const kv = mockKV(store);
+      const result = await checkRateLimits(kv, KEYS, 1000);
+
+      expect(result.blocked).toBe(false);
+    });
+
+    it("rejects negative count values", async () => {
+      const store: Record<string, string> = {};
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+      store[`${burst.keyPrefix}${KEYS.identity}`] = JSON.stringify({
+        count: -5,
+        expiresAt: 100_000,
+      });
+
+      const kv = mockKV(store);
+      const result = await checkRateLimits(kv, KEYS, 1000);
+
+      expect(result.blocked).toBe(false);
+      const stored = JSON.parse(store[`${burst.keyPrefix}${KEYS.identity}`]);
+      expect(stored.count).toBe(1);
+    });
+
+    it("rejects non-finite count values", async () => {
+      const store: Record<string, string> = {};
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+      store[`${burst.keyPrefix}${KEYS.identity}`] = JSON.stringify({
+        count: Infinity,
+        expiresAt: 100_000,
+      });
+
+      const kv = mockKV(store);
+      const result = await checkRateLimits(kv, KEYS, 1000);
+
+      expect(result.blocked).toBe(false);
+      const stored = JSON.parse(store[`${burst.keyPrefix}${KEYS.identity}`]);
+      expect(stored.count).toBe(1);
+    });
+
+    it("rejects NaN expiresAt values", async () => {
+      const store: Record<string, string> = {};
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+      store[`${burst.keyPrefix}${KEYS.identity}`] = JSON.stringify({
+        count: 5,
+        expiresAt: NaN,
+      });
 
       const kv = mockKV(store);
       const result = await checkRateLimits(kv, KEYS, 1000);

@@ -1,4 +1,6 @@
 import type { MiddlewareHandler } from "hono";
+import { checkRateLimits } from "../utils/rateLimitBuckets";
+import { hashIpDaily } from "../utils/identity";
 
 type RateLimitContext = {
   req: { header: (name: string) => string | undefined };
@@ -51,3 +53,38 @@ export const createRateLimiter = (keyPrefix = ""): MiddlewareHandler => async (c
 };
 
 export const rateLimiter = createRateLimiter();
+
+export const kvRateLimiter: MiddlewareHandler = async (c, next) => {
+  const env = c.env as Record<string, unknown>;
+  const kv = env.RATE_LIMIT_KV as KVNamespace | undefined;
+  if (!kv) return next();
+
+  const ip = getClientIp(c.req);
+  const sessionId = c.get("sessionId") as string | undefined;
+  const ipHash = await hashIpDaily(ip);
+  const identity = sessionId || ipHash;
+
+  const result = await checkRateLimits(kv, { ip: ipHash, identity });
+
+  if (result.blocked) {
+    const retryAfterSeconds = Math.ceil(result.retryAfterMs / 1000);
+    c.header("Retry-After", String(retryAfterSeconds));
+
+    if (result.shouldTrack) {
+      console.log(
+        `[RATE_LIMIT] bucket=${result.bucket} retryAfterMs=${result.retryAfterMs}`,
+      );
+    }
+
+    return c.json(
+      {
+        error: result.lore,
+        bucket: result.bucket,
+        retryAfterMs: result.retryAfterMs,
+      },
+      429,
+    );
+  }
+
+  await next();
+};
