@@ -288,17 +288,26 @@ function Terminal() {
     processCommand(command);
   };
 
-  // WinRAR nag: any dismiss path (ESC, [x], backdrop, footer button) closes the
-  // overlay and replays the pending command if one exists. When opened via /upgrade
-  // or the header button (no pending command), it just closes.
+  // WinRAR nag: ESC replays the pending command (the user must press ESC every
+  // time — faithful to the WinRAR UX). Click/backdrop/[x]/footer dismissals
+  // simply drop the pending command without executing it.
   const handleUpgradeNagClose = useCallback(() => {
     setShowUpgrade(false);
     if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
     if (pendingNagCommandRef.current !== null) {
       const command = pendingNagCommandRef.current;
       pendingNagCommandRef.current = null;
+      // Record the replayed command in command history so arrow-up navigation works
+      setCommandHistory((prev) => [...prev, command]);
       processCommandRef.current(command);
     }
+  }, [setShowUpgrade]);
+
+  // Click/backdrop/[x]/footer dismiss: close overlay and drop the pending command
+  const handleUpgradeDismissDrop = useCallback(() => {
+    setShowUpgrade(false);
+    pendingNagCommandRef.current = null;
+    if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
   }, [setShowUpgrade]);
 
   const { handleKeyDown } = useTerminalKeyboard({
@@ -395,7 +404,7 @@ function Terminal() {
         setShowSynergize={setShowSynergize}
         setIsProcessing={setIsProcessing}
         setHistory={setHistory}
-        onUpgradeDismiss={handleUpgradeNagClose}
+        onUpgradeDismiss={handleUpgradeDismissDrop}
       />
       <TerminalFooter closeAllOverlays={closeAllOverlaysAndClearNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
     </div>
