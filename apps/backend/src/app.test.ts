@@ -50,10 +50,37 @@ describe("app", () => {
       const csp = res.headers.get("content-security-policy");
       expect(csp).toBeTruthy();
       expect(csp).toContain("default-src 'self'");
-      expect(csp).toContain("script-src 'self' 'unsafe-inline'");
-      expect(csp).toContain("connect-src 'self' https://openrouter.ai wss: ws:");
+      expect(csp).toContain("script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com");
+      expect(csp).toContain("connect-src 'self' https://openrouter.ai https://challenges.cloudflare.com https://us.i.posthog.com https://us-assets.i.posthog.com https://eu.i.posthog.com https://eu-assets.i.posthog.com wss: ws: http://localhost:5173");
+      expect(csp).toContain("frame-src https://challenges.cloudflare.com");
       expect(csp).toContain("img-src 'self' data: blob:");
       expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    });
+  });
+
+  describe("CORS headers", () => {
+    it("sets Access-Control-Allow-Origin for allowed origins", async () => {
+      const res = await app.request(
+        "/api/leaderboard",
+        {
+          method: "GET",
+          headers: { Origin: "http://localhost:5173" },
+        },
+        { ALLOWED_ORIGINS: "http://localhost:5173" },
+      );
+      expect(res.headers.get("access-control-allow-origin")).toBe("http://localhost:5173");
+    });
+
+    it("does not set Access-Control-Allow-Origin for disallowed origins", async () => {
+      const res = await app.request(
+        "/api/leaderboard",
+        {
+          method: "GET",
+          headers: { Origin: "https://evil.com" },
+        },
+        { ALLOWED_ORIGINS: "http://localhost:5173" },
+      );
+      expect(res.headers.get("access-control-allow-origin")).toBeNull();
     });
   });
 
@@ -82,4 +109,5 @@ describe("app", () => {
       expect(res.status).not.toBe(403);
     });
   });
+
 });

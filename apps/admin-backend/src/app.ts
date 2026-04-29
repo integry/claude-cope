@@ -33,7 +33,7 @@ app.use("*", (c, next) => {
   return cors({
     origin: (origin) => {
       if (!origin || allowed.includes(origin)) return origin;
-      return allowed[0]!;
+      return null;
     },
   })(c, next);
 });

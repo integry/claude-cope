@@ -1,15 +1,18 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { Message } from "./Terminal";
+import type { Message } from "../hooks/gameStateUtils";
 import type { BuddyState } from "../hooks/useGameState";
 import type { ModesState } from "../hooks/gameStateUtils";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
-import { API_BASE, BYOK_ENABLED } from "../config";
+import { API_BASE, BYOK_ENABLED, VERIFY_URL } from "../config";
 import { supabase } from "../supabaseClient";
 import { buildAchievementBox } from "./achievementBox";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { COPE_MODELS } from "@claude-cope/shared/models";
+import { handleChatErrorResponse, parseChatResponseBody } from "./chatApiResponse";
+import { TURNSTILE_REQUIRED_EVENT } from "../turnstileEvents";
+import { VERIFY_STATUS, UNAVAILABLE_REASON } from "@claude-cope/shared/turnstile";
 
 export type BuddyInterjectionResult = {
   message: Message;
@@ -29,59 +32,6 @@ export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionRe
     message: { role: "warning", content: `${icon}\n[${buddy.type}] ${text}` },
     shouldDeleteHistory,
   };
-}
-
-function processSSEChunk(chunk: string, state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number; cost?: number } }, setHistory: Dispatch<SetStateAction<Message[]>>) {
-  const lines = chunk.split("\n");
-  for (const line of lines) {
-    if (!line.startsWith("data: ")) continue;
-    const data = line.slice(6).trim();
-    if (data === "[DONE]") continue;
-    try {
-      const parsed = JSON.parse(data);
-      // Capture usage data from the final stream chunk (sent when stream_options.include_usage is true)
-      if (parsed?.usage) {
-        state.usage = {
-          prompt_tokens: parsed.usage.prompt_tokens ?? 0,
-          completion_tokens: parsed.usage.completion_tokens ?? 0,
-          cost: parsed.usage.cost ?? parsed.usage.total_cost ?? undefined,
-        };
-      }
-      const delta = parsed?.choices?.[0]?.delta?.content;
-      if (delta) {
-        state.rawReply += delta;
-        const currentReply = state.rawReply;
-        setHistory((prev) =>
-          prev.map((msg) =>
-            msg.role === "loading" ? { ...msg, content: currentReply } : msg
-          )
-        );
-      }
-    } catch {
-      // Skip malformed JSON chunks
-    }
-  }
-}
-
-type StreamResult = {
-  rawReply: string;
-  usage?: { prompt_tokens: number; completion_tokens: number; cost?: number };
-};
-
-async function readStreamedResponse(res: Response, setHistory: Dispatch<SetStateAction<Message[]>>): Promise<StreamResult> {
-  const state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number; cost?: number } } = { rawReply: "" };
-  const reader = res.body?.getReader();
-  if (!reader) return { rawReply: "" };
-  const decoder = new TextDecoder();
-  let done = false;
-  while (!done) {
-    const { value, done: readerDone } = await reader.read();
-    done = readerDone;
-    if (value) {
-      processSSEChunk(decoder.decode(value, { stream: true }), state, setHistory);
-    }
-  }
-  return { rawReply: state.rawReply, usage: state.usage };
 }
 
 function processReplyTags(
@@ -139,51 +89,6 @@ function processReplyTags(
   return { achievementMessages, reply, suggestedReply, buddySays };
 }
 
-function extractJsonResponseFields(data: Record<string, unknown>): { rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number; quotaPercent?: number } {
-  const choices = data?.choices as Array<{ message?: { content?: string } }> | undefined;
-  const rawReply = choices?.[0]?.message?.content ?? "";
-  const usage = data?.usage as { prompt_tokens?: number; completion_tokens?: number; cost?: number; total_cost?: number } | undefined;
-  const quotaPercent = typeof data?.quotaPercent === "number" ? data.quotaPercent : undefined;
-  return {
-    rawReply,
-    tokensSent: usage?.prompt_tokens,
-    tokensReceived: usage?.completion_tokens,
-    cost: usage?.cost ?? usage?.total_cost,
-    quotaPercent,
-  };
-}
-
-function extractStreamFields(usage: StreamResult["usage"]): { tokensSent?: number; tokensReceived?: number; cost?: number } {
-  return {
-    tokensSent: usage?.prompt_tokens,
-    tokensReceived: usage?.completion_tokens,
-    cost: usage?.cost,
-  };
-}
-
-async function parseResponseBody(
-  res: Response,
-  setHistory: Dispatch<SetStateAction<Message[]>>,
-  addActiveTD?: (n: number, raw?: boolean) => void,
-  onProfileUpdate?: (profile: ServerProfile) => void,
-): Promise<{ rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number; quotaPercent?: number }> {
-  const contentType = res.headers.get("content-type") ?? "";
-  if (contentType.includes("text/event-stream")) {
-    const streamResult = await readStreamedResponse(res, setHistory);
-    return { rawReply: streamResult.rawReply, ...extractStreamFields(streamResult.usage) };
-  }
-  const data = await res.json();
-  const fields = extractJsonResponseFields(data);
-  // Pro users: apply full profile from server (includes TD)
-  if (data?.profile && onProfileUpdate) {
-    onProfileUpdate(data.profile as ServerProfile);
-  } else if (data?.td_awarded && addActiveTD) {
-    // Free user fallback
-    addActiveTD(data.td_awarded, true);
-  }
-  return fields;
-}
-
 async function hashKey(key: string): Promise<string> {
   const encoded = new TextEncoder().encode(key);
   const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
@@ -191,62 +96,54 @@ async function hashKey(key: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function handleErrorResponse(
-  res: Response,
-  setHistory: Dispatch<SetStateAction<Message[]>>,
-  onQuotaExhausted?: () => void,
-  onError?: () => void,
-): Promise<boolean> {
-  if (res.status === 402) {
-    if (onQuotaExhausted) {
-      setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
-      onQuotaExhausted();
-    } else {
-      setHistory((prev) => [
-        ...prev.filter((msg) => msg.role !== "loading"),
-        { role: "warning", content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Max for 1,000 tokens\n• Shill us on Twitter for bonus tokens" },
-      ]);
+class ByokVerificationError extends Error {
+  constructor(
+    message: string,
+    readonly reverify: boolean,
+  ) {
+    super(message);
+    this.name = "ByokVerificationError";
+  }
+}
+
+async function assertByokHumanSession(): Promise<void> {
+  const res = await fetch(VERIFY_URL, {
+    method: "GET",
+    credentials: "include",
+  }).catch(() => null);
+
+  if (!res) {
+    throw new ByokVerificationError("Unable to confirm human verification status. Please retry.", false);
+  }
+
+  const data = await res.json().catch(() => ({} as Record<string, unknown>));
+  const status = data?.status;
+  if (status === VERIFY_STATUS.DISABLED || status === VERIFY_STATUS.VERIFIED) {
+    return;
+  }
+  if (status === VERIFY_STATUS.ENABLED) {
+    throw new ByokVerificationError("Human verification required", true);
+  }
+  if (status === VERIFY_STATUS.MISCONFIGURED) {
+    throw new ByokVerificationError(
+      "Human verification is unavailable because the server is misconfigured.",
+      false,
+    );
+  }
+  if (status === VERIFY_STATUS.UNAVAILABLE) {
+    if (data?.reason === UNAVAILABLE_REASON.SESSION_UNAVAILABLE) {
+      throw new ByokVerificationError(
+        "Human verification could not start because the session is unavailable. Please retry.",
+        false,
+      );
     }
-    return true;
+    if (data?.reason === UNAVAILABLE_REASON.VERIFICATION_CHECK_FAILED) {
+      throw new ByokVerificationError("Human verification status could not be checked. Please retry.", false);
+    }
+    throw new ByokVerificationError("Human verification is temporarily unavailable.", false);
   }
 
-  if (res.status === 401) {
-    onError?.();
-    setHistory((prev) => [
-      ...prev.filter((msg) => msg.role !== "loading"),
-      { role: "error", content: "[🔑 ACCESS DENIED] OpenRouter just slammed the door in your face (HTTP 401). Your API key has been **rejected**, **ghosted**, and **emotionally unavailable**.\n\n[POSSIBLE CAUSES]\n\n• Your key is disabled — like your ambition after the third standup today\n\n• Your key expired — unlike your technical debt, which is eternal\n\n• You copy-pasted it wrong — classic Junior Code Monkey energy\n\n[RECOVERY OPTIONS]\n\n• Check your key at [openrouter.ai/keys](https://openrouter.ai/keys)\n\n• `/key clear` to crawl back to the default model\n\n• `/key <new-key>` to try again with whatever dignity you have left" },
-    ]);
-    return true;
-  }
-
-  if (res.status === 429) {
-    onError?.();
-    const errorData = await res.json().catch(() => null);
-    const upstreamRaw = errorData?.error?.metadata?.raw
-      ?? errorData?.error?.message
-      ?? (typeof errorData?.error === "string" ? errorData.error : "");
-    const details = upstreamRaw ? `\n\n${upstreamRaw}` : "";
-    setHistory((prev) => [
-      ...prev.filter((msg) => msg.role !== "loading"),
-      { role: "warning", content: `[⚠️] OpenRouter rate-limited your request. Please wait before sending another message.${details}` },
-    ]);
-    return true;
-  }
-
-  if (!res.ok) {
-    onError?.();
-    const errorData = await res.json().catch(() => null);
-    setHistory((prev) => [
-      ...prev.filter((msg) => msg.role !== "loading"),
-      {
-        role: "error",
-        content: `[❌ Error] ${errorData?.error?.message ?? errorData?.error ?? "Request failed"} (HTTP ${res.status})`,
-      },
-    ]);
-    return true;
-  }
-
-  return false;
+  throw new ByokVerificationError("Unable to determine verification status from the server.", false);
 }
 
 export function submitChatMessage(opts: {
@@ -290,36 +187,38 @@ export function submitChatMessage(opts: {
 
   const requestPromise = isBYOK
     ? (() => {
-        // BYOK: Build messages client-side for direct OpenRouter requests
-        const messages = buildChatMessages({
-          rank: currentRank,
-          chatMessages,
-          modes,
-          activeTicket,
-          buddyType: buddyTypeForContext,
-        });
-        type OpenRouterByokRequestBody = {
-          model: string;
-          messages: { role: string; content: string }[];
-          max_tokens: number;
-          reasoning: { effort: string };
-          stream: boolean;
-          stream_options: { include_usage: boolean };
-        };
+        return assertByokHumanSession().then(() => {
+          // BYOK: Build messages client-side for direct OpenRouter requests
+          const messages = buildChatMessages({
+            rank: currentRank,
+            chatMessages,
+            modes,
+            activeTicket,
+            buddyType: buddyTypeForContext,
+          });
+          type OpenRouterByokRequestBody = {
+            model: string;
+            messages: { role: string; content: string }[];
+            max_tokens: number;
+            reasoning: { effort: string };
+            stream: boolean;
+            stream_options: { include_usage: boolean };
+          };
 
-        const requestBody: OpenRouterByokRequestBody = {
-          model,
-          messages,
-          max_tokens: 2000,
-          reasoning: { effort: "low" },
-          stream: true,
-          stream_options: { include_usage: true },
-        };
-        return fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify(requestBody),
-          signal,
+          const requestBody: OpenRouterByokRequestBody = {
+            model,
+            messages,
+            max_tokens: 2000,
+            reasoning: { effort: "low" },
+            stream: true,
+            stream_options: { include_usage: true },
+          };
+          return fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify(requestBody),
+            signal,
+          });
         });
       })()
     : (async () => {
@@ -328,6 +227,7 @@ export function submitChatMessage(opts: {
         return fetch(`${API_BASE}/api/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
             chatMessages,
             modes,
@@ -346,9 +246,9 @@ export function submitChatMessage(opts: {
 
   requestPromise
     .then(async (res) => {
-      if (await handleErrorResponse(res, setHistory, opts.onQuotaExhausted, onError)) return;
+      if (await handleChatErrorResponse(res, setHistory, opts.onQuotaExhausted, onError)) return;
 
-      const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD, opts.onProfileUpdate);
+      const parsed = await parseChatResponseBody(res, setHistory, opts.addActiveTD, opts.onProfileUpdate);
       let { rawReply } = parsed;
       const { tokensSent, tokensReceived, cost, quotaPercent } = parsed;
 
@@ -411,6 +311,19 @@ export function submitChatMessage(opts: {
     })
     .catch((err) => {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      if (err instanceof ByokVerificationError) {
+        onError?.();
+        if (err.reverify) {
+          window.dispatchEvent(new CustomEvent(TURNSTILE_REQUIRED_EVENT));
+          setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
+          return;
+        }
+        setHistory((prev) => [
+          ...prev.filter((msg) => msg.role !== "loading"),
+          { role: "error", content: `[❌ Error] ${err.message}` },
+        ]);
+        return;
+      }
       onError?.();
       setHistory((prev) => [
         ...prev.filter((msg) => msg.role !== "loading"),
