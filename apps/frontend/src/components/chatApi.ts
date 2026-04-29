@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { Message } from "./Terminal";
+import type { Message } from "../hooks/gameStateUtils";
 import type { BuddyState } from "../hooks/useGameState";
 import type { ModesState } from "../hooks/gameStateUtils";
 import type { ServerProfile } from "@claude-cope/shared/profile";
@@ -10,8 +10,7 @@ import { buildAchievementBox } from "./achievementBox";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { COPE_MODELS } from "@claude-cope/shared/models";
-import { TURNSTILE_REQUIRED_EVENT } from "../turnstileEvents";
-import { BOT_PROTECTION_REASON } from "@claude-cope/shared/turnstile";
+import { handleChatErrorResponse, parseChatResponseBody } from "./chatApiResponse";
 
 export type BuddyInterjectionResult = {
   message: Message;
@@ -31,59 +30,6 @@ export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionRe
     message: { role: "warning", content: `${icon}\n[${buddy.type}] ${text}` },
     shouldDeleteHistory,
   };
-}
-
-function processSSEChunk(chunk: string, state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number; cost?: number } }, setHistory: Dispatch<SetStateAction<Message[]>>) {
-  const lines = chunk.split("\n");
-  for (const line of lines) {
-    if (!line.startsWith("data: ")) continue;
-    const data = line.slice(6).trim();
-    if (data === "[DONE]") continue;
-    try {
-      const parsed = JSON.parse(data);
-      // Capture usage data from the final stream chunk (sent when stream_options.include_usage is true)
-      if (parsed?.usage) {
-        state.usage = {
-          prompt_tokens: parsed.usage.prompt_tokens ?? 0,
-          completion_tokens: parsed.usage.completion_tokens ?? 0,
-          cost: parsed.usage.cost ?? parsed.usage.total_cost ?? undefined,
-        };
-      }
-      const delta = parsed?.choices?.[0]?.delta?.content;
-      if (delta) {
-        state.rawReply += delta;
-        const currentReply = state.rawReply;
-        setHistory((prev) =>
-          prev.map((msg) =>
-            msg.role === "loading" ? { ...msg, content: currentReply } : msg
-          )
-        );
-      }
-    } catch {
-      // Skip malformed JSON chunks
-    }
-  }
-}
-
-type StreamResult = {
-  rawReply: string;
-  usage?: { prompt_tokens: number; completion_tokens: number; cost?: number };
-};
-
-async function readStreamedResponse(res: Response, setHistory: Dispatch<SetStateAction<Message[]>>): Promise<StreamResult> {
-  const state: { rawReply: string; usage?: { prompt_tokens: number; completion_tokens: number; cost?: number } } = { rawReply: "" };
-  const reader = res.body?.getReader();
-  if (!reader) return { rawReply: "" };
-  const decoder = new TextDecoder();
-  let done = false;
-  while (!done) {
-    const { value, done: readerDone } = await reader.read();
-    done = readerDone;
-    if (value) {
-      processSSEChunk(decoder.decode(value, { stream: true }), state, setHistory);
-    }
-  }
-  return { rawReply: state.rawReply, usage: state.usage };
 }
 
 function processReplyTags(
@@ -141,149 +87,11 @@ function processReplyTags(
   return { achievementMessages, reply, suggestedReply, buddySays };
 }
 
-function extractJsonResponseFields(data: Record<string, unknown>): { rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number; quotaPercent?: number } {
-  const choices = data?.choices as Array<{ message?: { content?: string } }> | undefined;
-  const rawReply = choices?.[0]?.message?.content ?? "";
-  const usage = data?.usage as { prompt_tokens?: number; completion_tokens?: number; cost?: number; total_cost?: number } | undefined;
-  const quotaPercent = typeof data?.quotaPercent === "number" ? data.quotaPercent : undefined;
-  return {
-    rawReply,
-    tokensSent: usage?.prompt_tokens,
-    tokensReceived: usage?.completion_tokens,
-    cost: usage?.cost ?? usage?.total_cost,
-    quotaPercent,
-  };
-}
-
-function extractStreamFields(usage: StreamResult["usage"]): { tokensSent?: number; tokensReceived?: number; cost?: number } {
-  return {
-    tokensSent: usage?.prompt_tokens,
-    tokensReceived: usage?.completion_tokens,
-    cost: usage?.cost,
-  };
-}
-
-async function parseResponseBody(
-  res: Response,
-  setHistory: Dispatch<SetStateAction<Message[]>>,
-  addActiveTD?: (n: number, raw?: boolean) => void,
-  onProfileUpdate?: (profile: ServerProfile) => void,
-): Promise<{ rawReply: string; tokensSent?: number; tokensReceived?: number; cost?: number; quotaPercent?: number }> {
-  const contentType = res.headers.get("content-type") ?? "";
-  if (contentType.includes("text/event-stream")) {
-    const streamResult = await readStreamedResponse(res, setHistory);
-    return { rawReply: streamResult.rawReply, ...extractStreamFields(streamResult.usage) };
-  }
-  const data = await res.json();
-  const fields = extractJsonResponseFields(data);
-  // Pro users: apply full profile from server (includes TD)
-  if (data?.profile && onProfileUpdate) {
-    onProfileUpdate(data.profile as ServerProfile);
-  } else if (data?.td_awarded && addActiveTD) {
-    // Free user fallback
-    addActiveTD(data.td_awarded, true);
-  }
-  return fields;
-}
-
 async function hashKey(key: string): Promise<string> {
   const encoded = new TextEncoder().encode(key);
   const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function handleErrorResponse(
-  res: Response,
-  setHistory: Dispatch<SetStateAction<Message[]>>,
-  onQuotaExhausted?: () => void,
-  onError?: () => void,
-): Promise<boolean> {
-  const removeLoading = () => setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
-  const pushMessage = (message: Message) =>
-    setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading"), message]);
-
-  const triggerReverification = () => {
-    onError?.();
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent(TURNSTILE_REQUIRED_EVENT));
-    }
-    removeLoading();
-  };
-
-  const readErrorData = () => res.json().catch(() => null);
-  const isBotProtectionFailure = (reason: unknown) =>
-    reason === BOT_PROTECTION_REASON.HUMAN_VERIFICATION_REQUIRED
-    || reason === BOT_PROTECTION_REASON.SESSION_UNAVAILABLE
-    || reason === BOT_PROTECTION_REASON.STORAGE_UNAVAILABLE
-    || reason === BOT_PROTECTION_REASON.VERIFICATION_CHECK_FAILED;
-
-  const handlers: Record<number, () => Promise<boolean>> = {
-    403: async () => {
-      const errorData = await readErrorData();
-      if (!isBotProtectionFailure(errorData?.reason)) return false;
-      triggerReverification();
-      return true;
-    },
-    503: async () => {
-      const errorData = await readErrorData();
-      if (isBotProtectionFailure(errorData?.reason)) {
-        triggerReverification();
-        return true;
-      }
-      onError?.();
-      pushMessage({
-        role: "error",
-        content: `[❌ Error] ${errorData?.error ?? "Service temporarily unavailable"} (HTTP 503)`,
-      });
-      return true;
-    },
-    402: async () => {
-      if (onQuotaExhausted) {
-        removeLoading();
-        onQuotaExhausted();
-      } else {
-        pushMessage({
-          role: "warning",
-          content: "[🚫 Quota Exceeded] You've used all your available tokens.\n\n• Downgrade your expectations\n• Upgrade to Max for 1,000 tokens\n• Shill us on Twitter for bonus tokens",
-        });
-      }
-      return true;
-    },
-    401: async () => {
-      onError?.();
-      pushMessage({
-        role: "error",
-        content: "[🔑 ACCESS DENIED] OpenRouter just slammed the door in your face (HTTP 401). Your API key has been **rejected**, **ghosted**, and **emotionally unavailable**.\n\n[POSSIBLE CAUSES]\n\n• Your key is disabled — like your ambition after the third standup today\n\n• Your key expired — unlike your technical debt, which is eternal\n\n• You copy-pasted it wrong — classic Junior Code Monkey energy\n\n[RECOVERY OPTIONS]\n\n• Check your key at [openrouter.ai/keys](https://openrouter.ai/keys)\n\n• `/key clear` to crawl back to the default model\n\n• `/key <new-key>` to try again with whatever dignity you have left",
-      });
-      return true;
-    },
-    429: async () => {
-      onError?.();
-      const errorData = await res.json().catch(() => null);
-      const upstreamRaw = errorData?.error?.metadata?.raw
-        ?? errorData?.error?.message
-        ?? (typeof errorData?.error === "string" ? errorData.error : "");
-      const details = upstreamRaw ? `\n\n${upstreamRaw}` : "";
-      pushMessage({
-        role: "warning",
-        content: `[⚠️] OpenRouter rate-limited your request. Please wait before sending another message.${details}`,
-      });
-      return true;
-    },
-  };
-
-  const handler = handlers[res.status];
-  if (handler) return handler();
-  if (res.ok) return false;
-
-  onError?.();
-  const errorData = await res.json().catch(() => null);
-  pushMessage({
-    role: "error",
-    content: `[❌ Error] ${errorData?.error?.message ?? errorData?.error ?? "Request failed"} (HTTP ${res.status})`,
-  });
-  return true;
 }
 
 export function submitChatMessage(opts: {
@@ -384,9 +192,9 @@ export function submitChatMessage(opts: {
 
   requestPromise
     .then(async (res) => {
-      if (await handleErrorResponse(res, setHistory, opts.onQuotaExhausted, onError)) return;
+      if (await handleChatErrorResponse(res, setHistory, opts.onQuotaExhausted, onError)) return;
 
-      const parsed = await parseResponseBody(res, setHistory, opts.addActiveTD, opts.onProfileUpdate);
+      const parsed = await parseChatResponseBody(res, setHistory, opts.addActiveTD, opts.onProfileUpdate);
       let { rawReply } = parsed;
       const { tokensSent, tokensReceived, cost, quotaPercent } = parsed;
 

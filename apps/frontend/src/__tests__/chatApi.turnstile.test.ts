@@ -1,26 +1,25 @@
 // @vitest-environment jsdom
+import type { Dispatch, SetStateAction } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { submitChatMessage, type BuddyInterjectionResult } from "../components/chatApi";
+import type { Message } from "../hooks/gameStateUtils";
 import { TURNSTILE_REQUIRED_EVENT } from "../turnstileEvents";
-
-type Message = {
-  role: string;
-  content: string;
-};
 
 function createStateHarness(initial: Message[]) {
   let history = initial;
   let processing = true;
+  const setHistory: Dispatch<SetStateAction<Message[]>> = (updater) => {
+    history = typeof updater === "function" ? updater(history) : updater;
+  };
+  const setIsProcessing: Dispatch<SetStateAction<boolean>> = (updater) => {
+    processing = typeof updater === "function" ? updater(processing) : updater;
+  };
 
   return {
     getHistory: () => history,
     getProcessing: () => processing,
-    setHistory: vi.fn((updater: Message[] | ((prev: Message[]) => Message[])) => {
-      history = typeof updater === "function" ? updater(history) : updater;
-    }),
-    setIsProcessing: vi.fn((updater: boolean | ((prev: boolean) => boolean)) => {
-      processing = typeof updater === "function" ? updater(processing) : updater;
-    }),
+    setHistory: vi.fn(setHistory),
+    setIsProcessing: vi.fn(setIsProcessing),
   };
 }
 
