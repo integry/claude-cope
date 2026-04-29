@@ -84,7 +84,15 @@ describe("VITE_ENABLE_BYOK — chat request routing", () => {
 
   it("routes directly to OpenRouter when BYOK is enabled and apiKey is set", async () => {
     const { submitChatMessage } = await loadChatApi(true);
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(createMockStreamResponse());
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "verified" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(createMockStreamResponse());
 
     submitChatMessage({
       chatMessages: [{ role: "user", content: "hi" }],
@@ -98,8 +106,9 @@ describe("VITE_ENABLE_BYOK — chat request routing", () => {
 
     await vi.advanceTimersByTimeAsync(3000);
 
-    expect(fetchSpy).toHaveBeenCalled();
-    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("/api/verify");
+    const [url, init] = fetchSpy.mock.calls[1]!;
     expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
     const headers = (init as RequestInit).headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer sk-or-v1-stale-key-from-older-session");

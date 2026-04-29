@@ -203,7 +203,7 @@ describe("TurnstileWidget bootstrap gating", () => {
   it("blocks the app when verify bootstrap reports unavailable", async () => {
     const onVerified = vi.fn();
     const onError = vi.fn();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
       new Response(JSON.stringify({ status: "unavailable", reason: "storage_unavailable" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
