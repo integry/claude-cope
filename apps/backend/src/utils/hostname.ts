@@ -25,51 +25,52 @@ function isValidIpv6(value: string): boolean {
   return groups.every((g) => g.length <= 4);
 }
 
-export const normalizeHostname = (value: string | undefined): string | undefined => {
-  if (!value) return undefined;
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.includes(",") || trimmed.includes("/") || /\s/.test(trimmed)) {
-    return undefined;
-  }
+function isValidPort(port: string): boolean {
+  const portNumber = Number(port);
+  return /^\d{1,5}$/.test(port) && Number.isInteger(portNumber) && portNumber >= 1 && portNumber <= 65_535;
+}
 
-  // Handle bracketed IPv6 with optional port: [::1]:8080
+function hasInvalidCharacters(value: string): boolean {
+  return !value || value.includes(",") || value.includes("/") || /\s/.test(value);
+}
+
+function normalizeBracketedIpv6(trimmed: string): string | undefined | null {
   const bracketMatch = /^\[([^\]]+)\](?::(\d+))?$/.exec(trimmed);
-  if (bracketMatch) {
-    const ipv6Addr = bracketMatch[1]!;
-    if (!isValidIpv6(ipv6Addr)) return undefined;
-    const port = bracketMatch[2];
-    if (port) {
-      const portNumber = Number(port);
-      if (!/^\d{1,5}$/.test(port) || !Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65_535) {
-        return undefined;
-      }
-    }
-    return ipv6Addr.toLowerCase();
-  }
+  if (!bracketMatch) return null;
+  const ipv6Addr = bracketMatch[1]!;
+  if (!isValidIpv6(ipv6Addr)) return undefined;
+  const port = bracketMatch[2];
+  if (port && !isValidPort(port)) return undefined;
+  return ipv6Addr.toLowerCase();
+}
 
-  const parts = trimmed.split(":");
-  if (parts.length > 2) {
-    // Could be bare IPv6 like ::1
-    if (isValidIpv6(trimmed)) return trimmed.toLowerCase();
-    return undefined;
-  }
+function normalizeHostOrIpv4(parts: string[]): string | undefined {
   const [hostname, port] = parts;
   if (!hostname) return undefined;
 
-  // Check IPv4 first, then DNS hostname
   const looksLikeIpv4 = IPV4_PATTERN.test(hostname);
   if (looksLikeIpv4) {
     if (!isValidIpv4(hostname)) return undefined;
   } else if (!HOSTNAME_PATTERN.test(hostname)) {
     return undefined;
   }
-  if (port) {
-    const portNumber = Number(port);
-    if (!/^\d{1,5}$/.test(port) || !Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65_535) {
-      return undefined;
-    }
-  }
+  if (port && !isValidPort(port)) return undefined;
   return hostname.toLowerCase();
+}
+
+export const normalizeHostname = (value: string | undefined): string | undefined => {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (hasInvalidCharacters(trimmed)) return undefined;
+
+  const bracketResult = normalizeBracketedIpv6(trimmed);
+  if (bracketResult !== null) return bracketResult;
+
+  const parts = trimmed.split(":");
+  if (parts.length > 2) {
+    return isValidIpv6(trimmed) ? trimmed.toLowerCase() : undefined;
+  }
+  return normalizeHostOrIpv4(parts);
 };
 
 export const getExpectedHostnameConfig = (raw: string | undefined): { hostname?: string; invalid: boolean } => {
