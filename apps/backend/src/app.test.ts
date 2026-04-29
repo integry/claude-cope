@@ -58,6 +58,32 @@ describe("app", () => {
     });
   });
 
+  describe("CORS headers", () => {
+    it("sets Access-Control-Allow-Origin for allowed origins", async () => {
+      const res = await app.request(
+        "/api/leaderboard",
+        {
+          method: "GET",
+          headers: { Origin: "http://localhost:5173" },
+        },
+        { ALLOWED_ORIGINS: "http://localhost:5173" },
+      );
+      expect(res.headers.get("access-control-allow-origin")).toBe("http://localhost:5173");
+    });
+
+    it("does not set Access-Control-Allow-Origin for disallowed origins", async () => {
+      const res = await app.request(
+        "/api/leaderboard",
+        {
+          method: "GET",
+          headers: { Origin: "https://evil.com" },
+        },
+        { ALLOWED_ORIGINS: "http://localhost:5173" },
+      );
+      expect(res.headers.get("access-control-allow-origin")).toBeNull();
+    });
+  });
+
   describe("CSRF protection", () => {
     it("rejects /api/* requests from disallowed origins with 403", async () => {
       const res = await app.request(
