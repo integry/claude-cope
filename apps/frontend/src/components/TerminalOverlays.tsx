@@ -46,6 +46,7 @@ export function TerminalOverlays({
   setIsProcessing,
   setHistory,
   onUpgradeDismiss,
+  upgradeDismissMode = "manual",
 }: {
   showStore: boolean;
   showLeaderboard: boolean;
@@ -78,6 +79,7 @@ export function TerminalOverlays({
   setIsProcessing: Dispatch<SetStateAction<boolean>>;
   setHistory: Dispatch<SetStateAction<Message[]>>;
   onUpgradeDismiss: () => void;
+  upgradeDismissMode?: "manual" | "nag";
 }) {
   return (
     <>
@@ -163,6 +165,7 @@ export function TerminalOverlays({
           totalQuota={state.proKey || state.proKeyHash ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT}
           isBYOK={Boolean(state.apiKey) && !state.proKey && !state.proKeyHash}
           onDismiss={onUpgradeDismiss}
+          dismissMode={upgradeDismissMode}
         />
       )}
     </>

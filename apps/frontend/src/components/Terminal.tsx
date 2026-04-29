@@ -118,6 +118,7 @@ function Terminal() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
   const pendingNagCommandRef = useRef<string | null>(null);
+  const nagArmedFromQuotaRef = useRef(false);
   const historyRef = useRef(history);
   historyRef.current = history;
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
@@ -136,16 +137,21 @@ function Terminal() {
       setInputValue(pendingNagCommandRef.current);
       pendingNagCommandRef.current = null;
     }
+    nagArmedFromQuotaRef.current = false;
   }, []);
-  const closeAllOverlaysAndClearNag = useCallback(() => {
+  const closeAllOverlaysAndRestoreNag = useCallback(() => {
     closeAllOverlays();
     restorePendingNagCommand();
   }, [restorePendingNagCommand, closeAllOverlays]);
+  const closeAllOverlaysPreservingNag = useCallback(() => {
+    closeAllOverlays();
+    if (pendingNagCommandRef.current !== null) setShowUpgrade(true);
+  }, [closeAllOverlays, setShowUpgrade]);
   const handleProfileClick = useCallback(() => {
-    closeAllOverlaysAndClearNag();
+    closeAllOverlaysPreservingNag();
     setShowProfile(true);
     window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`);
-  }, [closeAllOverlaysAndClearNag, setShowProfile, state.username]);
+  }, [closeAllOverlaysPreservingNag, setShowProfile, state.username]);
   useEffect(() => {
     if (typeof bottomRef.current?.scrollIntoView === "function") {
       bottomRef.current.scrollIntoView({ behavior: "auto" });
@@ -184,10 +190,12 @@ function Terminal() {
     if (!state.proKey && !state.proKeyHash) {
       if (command) {
         pendingNagCommandRef.current = command;
+        nagArmedFromQuotaRef.current = true;
         setShowUpgrade(true);
       } else {
-        // No command to arm (e.g. backend quota-exhausted callback) — just show overlay
-        setShowUpgrade(true);
+        // Record the exhausted state, but wait until the next command attempt
+        // to display the nag so the current response remains visible.
+        nagArmedFromQuotaRef.current = true;
       }
     } else {
       // Pro users: run the normal lockout flow (quota refill, etc.)
@@ -221,7 +229,7 @@ function Terminal() {
   });
 
   const runSlashCommand = (command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndClearNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: setSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: setSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
   };
 
   const runSlashCommandRef = useRef(runSlashCommand);
@@ -289,11 +297,8 @@ function Terminal() {
       }),
       onQuotaUpdate: (quotaPercent) => {
         setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } }));
-        // Catch stale client state: if the backend reports exhausted quota
-        // for a free user whose local state was out-of-date, show the nag
-        // now so the user must dismiss before the next command.
         if (quotaPercent <= 0 && isFreeTier) {
-          setShowUpgrade(true);
+          nagArmedFromQuotaRef.current = true;
         }
       },
       onQuotaExhausted: () => {
@@ -331,6 +336,11 @@ function Terminal() {
     const command = inputValue;
     setInputValue(""); setHistoryIndex(-1);
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
+    if (nagArmedFromQuotaRef.current && pendingNagCommandRef.current === null) {
+      pendingNagCommandRef.current = command;
+      setShowUpgrade(true);
+      return;
+    }
     // Check quota before adding to history — if the nag is dismissed without
     // replaying, the command should not appear in command history.
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
@@ -348,8 +358,16 @@ function Terminal() {
     if (pendingNagCommandRef.current !== null) {
       const command = pendingNagCommandRef.current;
       pendingNagCommandRef.current = null;
+      nagArmedFromQuotaRef.current = false;
       setCommandHistory((prev) => [...prev, command]);
       processCommandRef.current(command);
+    }
+  }, [setShowUpgrade]);
+
+  const handleManualUpgradeDismiss = useCallback(() => {
+    setShowUpgrade(false);
+    if (window.location.pathname === "/upgrade") {
+      window.history.pushState(null, "", "/");
     }
   }, [setShowUpgrade]);
 
@@ -384,7 +402,7 @@ function Terminal() {
     setHistoryIndex,
     setIsProcessing,
     setHistory,
-    closeAllOverlays: closeAllOverlaysAndClearNag,
+    closeAllOverlays: closeAllOverlaysPreservingNag,
     handleUpgradeNagClose,
     runSlashCommand,
     handleEnterSubmit,
@@ -399,9 +417,9 @@ function Terminal() {
       onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
       <div className="shrink-0">
-        <Ticker onExpand={() => { closeAllOverlaysAndClearNag(); setShowParty(true); }} onlineCount={onlineCount} />
+        <Ticker onExpand={() => { closeAllOverlaysPreservingNag(); setShowParty(true); }} onlineCount={onlineCount} />
         {outageHp !== null && <OutageBar outageHp={outageHp} />}
-        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} isBYOK={BYOK_ENABLED && !!state.apiKey} isMax={!!state.proKey || !!state.proKeyHash} byokTotalCost={state.byokTotalCost} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlaysAndClearNag(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlaysAndClearNag(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} onUpgradeClick={() => { closeAllOverlaysAndClearNag(); setShowUpgrade(true); window.history.pushState(null, "", "/upgrade"); }} />
+        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} isBYOK={BYOK_ENABLED && !!state.apiKey} isMax={!!state.proKey || !!state.proKeyHash} byokTotalCost={state.byokTotalCost} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlaysPreservingNag(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlaysPreservingNag(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} onUpgradeClick={() => { closeAllOverlaysPreservingNag(); setShowUpgrade(true); window.history.pushState(null, "", "/upgrade"); }} />
       </div>
       <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
@@ -447,9 +465,10 @@ function Terminal() {
         setShowSynergize={setShowSynergize}
         setIsProcessing={setIsProcessing}
         setHistory={setHistory}
-        onUpgradeDismiss={handleUpgradeNagClose}
+        onUpgradeDismiss={pendingNagCommandRef.current !== null ? handleUpgradeNagClose : handleManualUpgradeDismiss}
+        upgradeDismissMode={pendingNagCommandRef.current !== null ? "nag" : "manual"}
       />
-      <TerminalFooter closeAllOverlays={closeAllOverlaysAndClearNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
+      <TerminalFooter closeAllOverlays={closeAllOverlaysPreservingNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
     </div>
   );
 }

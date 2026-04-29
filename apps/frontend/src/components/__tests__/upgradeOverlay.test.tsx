@@ -18,7 +18,7 @@ import UpgradeOverlay from "../UpgradeOverlay";
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 
-function render(props: { quotaPercent: number; totalQuota: number; isBYOK: boolean; onDismiss: () => void }) {
+function render(props: { quotaPercent: number; totalQuota: number; isBYOK: boolean; onDismiss: () => void; dismissMode?: "manual" | "nag" }) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -78,10 +78,19 @@ describe("UpgradeOverlay", () => {
     expect(matches!.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("does NOT call onDismiss when the backdrop is clicked (ESC-only)", () => {
+  it("does call onDismiss when the manual backdrop is clicked", () => {
     const onDismiss = vi.fn();
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss });
-    // Click the desktop backdrop — should NOT dismiss (ESC-only per spec)
+    const desktop = container.querySelector(".upgrade-desktop");
+    act(() => {
+      desktop?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it("does NOT call onDismiss when the nag backdrop is clicked", () => {
+    const onDismiss = vi.fn();
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss, dismissMode: "nag" });
     const desktop = container.querySelector(".upgrade-desktop");
     act(() => {
       desktop?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

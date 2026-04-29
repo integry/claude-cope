@@ -251,6 +251,7 @@ function makeOverlayProps(overrides: Record<string, unknown> = {}) {
     setIsProcessing: noop,
     setHistory: noop as React.Dispatch<React.SetStateAction<Message[]>>,
     onUpgradeDismiss: vi.fn(),
+    upgradeDismissMode: "manual" as const,
     ...overrides,
   };
 }
@@ -326,8 +327,8 @@ describe("WinRAR nag: TerminalOverlays production wiring", () => {
     expect(container.querySelector(".upgrade-mobile")).toBeNull();
   });
 
-  it("does NOT fire onUpgradeDismiss when desktop backdrop is clicked (ESC-only)", () => {
-    const { container, props } = renderOverlays({ showUpgrade: true });
+  it("does NOT fire onUpgradeDismiss when desktop backdrop is clicked in nag mode", () => {
+    const { container, props } = renderOverlays({ showUpgrade: true, upgradeDismissMode: "nag" });
     const desktop = container.querySelector(".upgrade-desktop");
     act(() => {
       desktop?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -335,8 +336,8 @@ describe("WinRAR nag: TerminalOverlays production wiring", () => {
     expect(props.onUpgradeDismiss).not.toHaveBeenCalled();
   });
 
-  it("does NOT fire onUpgradeDismiss when mobile backdrop is clicked", () => {
-    const { container, props } = renderOverlays({ showUpgrade: true });
+  it("does NOT fire onUpgradeDismiss when mobile backdrop is clicked in nag mode", () => {
+    const { container, props } = renderOverlays({ showUpgrade: true, upgradeDismissMode: "nag" });
     const mobile = container.querySelector(".upgrade-mobile");
     act(() => {
       mobile?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -344,19 +345,30 @@ describe("WinRAR nag: TerminalOverlays production wiring", () => {
     expect(props.onUpgradeDismiss).not.toHaveBeenCalled();
   });
 
-  it("does NOT fire onUpgradeDismiss when desktop [x] is clicked (ESC-only)", () => {
-    const { container, props } = renderOverlays({ showUpgrade: true });
-    const desktopCloseButtons = Array.from(container.querySelectorAll(".upgrade-desktop span[style]"))
-      .filter((el) => el.textContent?.includes("[x]"));
-    expect(desktopCloseButtons.length).toBeGreaterThanOrEqual(1);
+  it("does NOT fire onUpgradeDismiss when desktop [x] is clicked in nag mode", () => {
+    const { container, props } = renderOverlays({ showUpgrade: true, upgradeDismissMode: "nag" });
+    const desktopClose = Array.from(container.querySelectorAll(".upgrade-desktop *"))
+      .find((el) => el.textContent?.includes("[x]"));
+    expect(desktopClose).toBeTruthy();
     act(() => {
-      desktopCloseButtons[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      desktopClose!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(props.onUpgradeDismiss).not.toHaveBeenCalled();
   });
 
+  it("fires onUpgradeDismiss when desktop [x] is clicked in manual mode", () => {
+    const { container, props } = renderOverlays({ showUpgrade: true, upgradeDismissMode: "manual" });
+    const desktopClose = Array.from(container.querySelectorAll(".upgrade-desktop button"))
+      .find((el) => el.textContent?.includes("[x]"));
+    expect(desktopClose).toBeTruthy();
+    act(() => {
+      desktopClose!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(props.onUpgradeDismiss).toHaveBeenCalledTimes(1);
+  });
+
   it("fires onUpgradeDismiss when mobile footer dismiss button is tapped", () => {
-    const { container, props } = renderOverlays({ showUpgrade: true });
+    const { container, props } = renderOverlays({ showUpgrade: true, upgradeDismissMode: "nag" });
     // Mobile footer uses a <button> with class "upgrade-esc-btn"
     const escBtn = container.querySelector(".upgrade-mobile .upgrade-esc-btn");
     expect(escBtn).not.toBeNull();
@@ -405,7 +417,7 @@ describe("WinRAR nag: dismiss replay path", () => {
   });
 
   it("mobile footer tap fires onUpgradeDismiss exactly once (triggers command replay)", () => {
-    const { container, props } = renderOverlays({ showUpgrade: true });
+    const { container, props } = renderOverlays({ showUpgrade: true, upgradeDismissMode: "nag" });
     const escBtn = container.querySelector(".upgrade-mobile .upgrade-esc-btn");
     expect(escBtn).not.toBeNull();
     act(() => {
@@ -415,7 +427,7 @@ describe("WinRAR nag: dismiss replay path", () => {
   });
 
   it("clicking purchase links does NOT fire onUpgradeDismiss (command stays pending)", () => {
-    const { container, props } = renderOverlays({ showUpgrade: true });
+    const { container, props } = renderOverlays({ showUpgrade: true, upgradeDismissMode: "nag" });
     const links = container.querySelectorAll("a[href]");
     expect(links.length).toBeGreaterThan(0);
     act(() => {
@@ -425,7 +437,7 @@ describe("WinRAR nag: dismiss replay path", () => {
   });
 
   it("clicking desktop backdrop does NOT fire onUpgradeDismiss (command stays pending)", () => {
-    const { container, props } = renderOverlays({ showUpgrade: true });
+    const { container, props } = renderOverlays({ showUpgrade: true, upgradeDismissMode: "nag" });
     const backdrop = container.querySelector(".upgrade-desktop .absolute");
     expect(backdrop).not.toBeNull();
     act(() => {
@@ -482,6 +494,30 @@ describe("WinRAR nag: Terminal integration", () => {
     expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
     expect(input.value).toBe("");
     expect(submitChatMessageMock).not.toHaveBeenCalled();
+  });
+
+  it("arms the next-command nag after a stale quota update instead of showing it immediately", async () => {
+    submitChatMessageMock.mockImplementation(({ onQuotaUpdate }: { onQuotaUpdate: (quotaPercent: number) => void }) => {
+      onQuotaUpdate(0);
+    });
+
+    await renderTerminal();
+    const input = await submitTerminalCommand("status");
+
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".upgrade-desktop")).toBeNull();
+    expect(input.value).toBe("");
+
+    await act(async () => {
+      input.value = "why";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
   });
 });
 

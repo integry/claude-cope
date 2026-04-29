@@ -25,6 +25,8 @@ export type LayoutProps = {
   singleAvailable: boolean;
   multiAvailable: boolean;
   quotaLine: string;
+  dismissMode?: "manual" | "nag";
+  onDismiss?: () => void;
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -37,6 +39,8 @@ export default function DesktopLayout({
   singleAvailable,
   multiAvailable,
   quotaLine,
+  dismissMode = "manual",
+  onDismiss,
 }: LayoutProps) {
   const topBorder = (
     <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>
@@ -174,15 +178,18 @@ export default function DesktopLayout({
   const closeBtn = "[x]";
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
+  const canPointerDismiss = dismissMode === "manual" && !!onDismiss;
 
   return (
     <div
       className="upgrade-desktop fixed inset-0 z-50 flex items-center justify-center"
+      onClick={canPointerDismiss ? onDismiss : undefined}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
 
       <pre
         className="relative z-10 mx-4"
+        onClick={(e) => e.stopPropagation()}
         style={{
           fontFamily: MONO_FONT,
           fontSize: "13px",
@@ -199,12 +206,23 @@ export default function DesktopLayout({
         {topBorder}{"\n"}
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: B }}>{" " + title + " ".repeat(titleGap - 1)}</span>
-        <span
-          style={{ color: DIM }}
-          title="Press ESC to dismiss"
-        >
-          {closeBtn}
-        </span>
+        {canPointerDismiss ? (
+          <button
+            type="button"
+            onClick={onDismiss}
+            style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
+            title="Click to dismiss"
+          >
+            {closeBtn}
+          </button>
+        ) : (
+          <span
+            style={{ color: DIM }}
+            title="Press ESC to dismiss"
+          >
+            {closeBtn}
+          </span>
+        )}
         <span style={{ color: B }}>{" ".repeat(titlePadRight)}</span>
         <span style={{ color: B }}>{"║"}</span>
         {"\n"}
@@ -263,19 +281,25 @@ export default function DesktopLayout({
           const left = Math.max(0, Math.floor(totalPad / 2));
           const right = Math.max(0, totalPad - left);
           return (
-            <span
-              style={{
-                display: "inline",
-              }}
-              className="upgrade-esc-btn"
-            >
+            <span style={{ display: "inline" }} className="upgrade-esc-btn">
               <span style={{ color: B }}>{"║"}</span>
-              <span
-                data-esc=""
-                style={{ color: DIM }}
-              >
-                {" ".repeat(left) + text + " ".repeat(right)}
-              </span>
+              {canPointerDismiss ? (
+                <button
+                  type="button"
+                  onClick={onDismiss}
+                  data-esc=""
+                  style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
+                >
+                  {" ".repeat(left) + text + " ".repeat(right)}
+                </button>
+              ) : (
+                <span
+                  data-esc=""
+                  style={{ color: DIM }}
+                >
+                  {" ".repeat(left) + text + " ".repeat(right)}
+                </span>
+              )}
               <span style={{ color: B }}>{"║"}</span>
             </span>
           );

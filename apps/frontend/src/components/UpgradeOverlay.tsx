@@ -27,9 +27,10 @@ type UpgradeOverlayProps = {
   totalQuota: number;
   isBYOK: boolean;
   onDismiss: () => void;
+  dismissMode?: "manual" | "nag";
 };
 
-function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss }: UpgradeOverlayProps) {
+function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss, dismissMode = "manual" }: UpgradeOverlayProps) {
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
@@ -50,6 +51,8 @@ function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss }: Upgrade
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
         quotaLine={quotaLine}
+        dismissMode={dismissMode}
+        onDismiss={onDismiss}
       />
       {/* Mobile: visible ≤640px, hidden above via CSS */}
       <MobileLayout
@@ -59,6 +62,7 @@ function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss }: Upgrade
         multiAvailable={multiAvailable}
         quotaLine={quotaLine}
         onDismiss={onDismiss}
+        dismissMode={dismissMode}
       />
     </>
   );
@@ -75,6 +79,7 @@ function MobileLayout({
   multiAvailable,
   quotaLine,
   onDismiss,
+  dismissMode = "manual",
 }: LayoutProps & { onDismiss: () => void }) {
   const sectionStyle = { padding: "8px 12px" } as const;
   const hrStyle = {
@@ -134,11 +139,13 @@ function MobileLayout({
   return (
     <div
       className="upgrade-mobile fixed inset-0 z-50 flex items-center justify-center"
+      onClick={dismissMode === "manual" ? onDismiss : undefined}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
 
       <div
         className="relative z-10"
+        onClick={(e) => e.stopPropagation()}
         style={{
           fontFamily: MONO_FONT,
           fontSize: "13px",
@@ -166,12 +173,23 @@ function MobileLayout({
           <span style={{ color: B, fontWeight: "bold", fontSize: "11px" }}>
             WALLET EXTRACTION UTILITY
           </span>
-          <span
-            style={{ color: DIM, fontSize: "14px" }}
-            title="Tap footer to dismiss"
-          >
-            [x]
-          </span>
+          {dismissMode === "manual" ? (
+            <button
+              type="button"
+              onClick={onDismiss}
+              style={{ color: DIM, fontSize: "14px", background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
+              title="Tap to dismiss"
+            >
+              [x]
+            </button>
+          ) : (
+            <span
+              style={{ color: DIM, fontSize: "14px" }}
+              title="Tap footer to dismiss"
+            >
+              [x]
+            </span>
+          )}
         </div>
 
         {/* Subtitle */}
