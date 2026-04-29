@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, SetStateAction } from "react";
 import { track, identify } from "../analytics";
+import { AnalyticsEvents } from "../analyticsEvents";
 import { GENERATORS, UPGRADES, THEMES } from "../game/constants";
 import { supabase } from "../supabaseClient";
 import {
@@ -133,7 +134,7 @@ export function useGameState() {
       buyGeneratorServer(current.username, generatorId, amount, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           setState((prev) => applyServerProfile(prev, result.profile!));
-          track("generator_purchased", { generator_id: generatorId, amount, cost });
+          track(AnalyticsEvents.GENERATOR_PURCHASED, { generator_id: generatorId, amount, cost });
         } else if (!result.success) {
           // Rollback on failure
           setState((prev) => ({
@@ -144,7 +145,7 @@ export function useGameState() {
         }
       }).catch(() => {});
     } else {
-      track("generator_purchased", { generator_id: generatorId, amount, cost });
+      track(AnalyticsEvents.GENERATOR_PURCHASED, { generator_id: generatorId, amount, cost });
       // Free users: broadcast big purchases
       if (cost > 1_000_000) {
         const playerName = stateRef.current.username || "A player";
@@ -257,7 +258,7 @@ export function useGameState() {
       buyUpgradeServer(current.username, upgradeId, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           setState((prev) => applyServerProfile(prev, result.profile!));
-          track("upgrade_purchased", { upgrade_id: upgradeId, cost: upgrade.cost });
+          track(AnalyticsEvents.UPGRADE_PURCHASED, { upgrade_id: upgradeId, cost: upgrade.cost });
         } else if (!result.success) {
           // Rollback
           setState((prev) => ({
@@ -268,7 +269,7 @@ export function useGameState() {
         }
       }).catch(() => {});
     } else {
-      track("upgrade_purchased", { upgrade_id: upgradeId, cost: upgrade.cost });
+      track(AnalyticsEvents.UPGRADE_PURCHASED, { upgrade_id: upgradeId, cost: upgrade.cost });
     }
 
     return true;
@@ -349,7 +350,7 @@ export function useGameState() {
       buyThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           setState((prev) => applyServerProfile(prev, result.profile!));
-          track("theme_purchased", { theme_id: themeId, cost: theme.cost });
+          track(AnalyticsEvents.THEME_PURCHASED, { theme_id: themeId, cost: theme.cost });
         } else if (!result.success) {
           // Rollback
           setState((prev) => ({
@@ -360,7 +361,7 @@ export function useGameState() {
         }
       }).catch(() => {});
     } else {
-      track("theme_purchased", { theme_id: themeId, cost: theme.cost });
+      track(AnalyticsEvents.THEME_PURCHASED, { theme_id: themeId, cost: theme.cost });
     }
 
     return true;

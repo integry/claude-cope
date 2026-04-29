@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { track, identify } from "../analytics";
+import { AnalyticsEvents } from "../analyticsEvents";
 import { parseBaseCommand } from "../parseBaseCommand";
 import { PING_COST, THEMES } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
@@ -652,9 +653,9 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
         return withKey;
       });
       if (data.restored) {
-        track("account_restored");
+        track(AnalyticsEvents.ACCOUNT_RESTORED);
       } else {
-        track("account_upgraded");
+        track(AnalyticsEvents.ACCOUNT_UPGRADED);
       }
       identify({ username: data.profile?.username ?? ctx.state.username });
       if (data.restored && data.profile) {
@@ -760,7 +761,7 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
       } else if (handleNewCommand(command, ctx, reply)) {
         if (command === "/brrrrrr") return "async";
       } else if (command.startsWith("/")) {
-        track("slash_command_failed", { command: parseBaseCommand(command) });
+        track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: parseBaseCommand(command) });
         reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
       } else {
         reply({ role: "system", content: `[✓] Executed \`${command}\`` });
@@ -830,7 +831,7 @@ export function executeSlashCommand(
     },
   }));
 
-  track("slash_command_attempted", { command: baseCommand });
+  track(AnalyticsEvents.SLASH_COMMAND_ATTEMPTED, { command: baseCommand });
 
   // /clear fires instantly — no fake processing delay
   if (command === "/clear") {

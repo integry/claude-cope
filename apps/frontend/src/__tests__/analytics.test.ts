@@ -234,7 +234,7 @@ describe("analytics — STORAGE_KEY is shared, not duplicated", () => {
 });
 
 describe("parseBaseCommand — command normalization", () => {
-  it("strips arguments from slash commands", () => {
+  it("strips arguments from known slash commands", () => {
     expect(parseBaseCommand("/key sk-live-1234567890")).toBe("/key");
     expect(parseBaseCommand("/sync abc123")).toBe("/sync");
     expect(parseBaseCommand("/ping @user")).toBe("/ping");
@@ -258,5 +258,32 @@ describe("parseBaseCommand — command normalization", () => {
   it("handles tabs and multiple spaces between tokens", () => {
     expect(parseBaseCommand("/key\tsk-live-1234")).toBe("/key");
     expect(parseBaseCommand("/sync   abc123")).toBe("/sync");
+  });
+
+  it("maps unknown slash commands to /unknown to prevent secret leakage", () => {
+    expect(parseBaseCommand("/sk-live-super-secret")).toBe("/unknown");
+    expect(parseBaseCommand("/COPE-SECRET-12345")).toBe("/unknown");
+    expect(parseBaseCommand("/randomgarbage")).toBe("/unknown");
+    expect(parseBaseCommand("/phc_test_key_123")).toBe("/unknown");
+  });
+
+  it("returns /unknown for malformed or empty input", () => {
+    expect(parseBaseCommand("")).toBe("/unknown");
+    expect(parseBaseCommand("   ")).toBe("/unknown");
+    expect(parseBaseCommand("noSlash")).toBe("/unknown");
+  });
+
+  it("recognises all known game commands", () => {
+    const knownCommands = [
+      "/help", "/clear", "/store", "/synergize", "/user", "/compact",
+      "/buddy", "/ping", "/theme", "/support", "/preworkout", "/who",
+      "/about", "/privacy", "/terms", "/contact", "/fast", "/voice",
+      "/blame", "/brrrrrr", "/ticket", "/backlog", "/sync", "/shill",
+      "/key", "/feedback", "/bug", "/upgrade", "/take", "/accept",
+      "/abandon", "/alias", "/model", "/new",
+    ];
+    for (const cmd of knownCommands) {
+      expect(parseBaseCommand(cmd)).toBe(cmd);
+    }
   });
 });
