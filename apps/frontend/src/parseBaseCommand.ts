@@ -6,7 +6,7 @@ import { ALL_SLASH_COMMANDS } from "./components/slashCommands";
  * anything else is mapped to "/unknown" to prevent accidental leakage of
  * secrets pasted after a `/`.
  */
-const KNOWN_COMMANDS = new Set<string>(ALL_SLASH_COMMANDS);
+const KNOWN_COMMANDS = new Set<string>([...ALL_SLASH_COMMANDS, "/exit", "/quit"]);
 
 /**
  * Extracts the base command (first token) from a slash command string,

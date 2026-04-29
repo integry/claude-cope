@@ -1,3 +1,5 @@
+import { track } from "../analytics";
+import { AnalyticsEvents } from "../analyticsEvents";
 import { API_BASE } from "../config";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
@@ -15,6 +17,7 @@ let lastBacklogResults: BacklogTicket[] = [];
 export async function handleTicketCommand(command: string, reply: Reply): Promise<boolean> {
   const task = command.slice("/ticket".length).trim();
   if (!task) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ticket", reason: "no_argument" });
     reply({ role: "error", content: "[❌] Usage: `/ticket <description>` — Describe a task for the PM to over-engineer." });
     return true;
   }
@@ -27,6 +30,7 @@ export async function handleTicketCommand(command: string, reply: Reply): Promis
     });
 
     if (!res.ok) {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ticket", reason: "server_error" });
       reply({ role: "error", content: `[❌] Ticket refinement failed (HTTP ${res.status}). The PM is on PTO.` });
       return true;
     }
@@ -37,6 +41,7 @@ export async function handleTicketCommand(command: string, reply: Reply): Promis
       content: `[📋 **TICKET REFINED**] Your PM has over-scoped your request:\n\n**${data.title}**\n\n${data.description}\n\n**Story Points:** ${data.estimatedTechDebt} TD\n**Ticket ID:** \`${data.id}\``,
     });
   } catch {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ticket", reason: "network_error" });
     reply({ role: "error", content: "[❌] Network error — could not reach the PM. They're probably in a meeting about meetings." });
   }
   return true;
@@ -46,6 +51,7 @@ export async function handleBacklogCommand(reply: Reply): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/api/tickets/community`);
     if (!res.ok) {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: "server_error" });
       reply({ role: "error", content: `[❌] Failed to fetch backlog (HTTP ${res.status}).` });
       return true;
     }
@@ -74,6 +80,7 @@ export async function handleBacklogCommand(reply: Reply): Promise<boolean> {
     const table = [sep, header, sep, ...rows, sep].join("\n");
     reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]\n\n\`\`\`\n${table}\n\`\`\`\n\nType \`/take 1\` through \`/take ${tickets.length}\` to claim a ticket.` });
   } catch {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: "network_error" });
     reply({ role: "error", content: "[❌] Network error — the backlog server is unreachable." });
   }
   return true;
@@ -89,11 +96,13 @@ export function handleTakeCommand(
   const { onAccept, onSuggestedReply } = opts;
   const input = command.slice("/take".length).trim();
   if (!input) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: "no_argument" });
     reply({ role: "error", content: "[❌] Usage: `/take <number>` — Run `/backlog` first, then pick a row number." });
     return true;
   }
 
   if (state.activeTicket) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: "already_active" });
     reply({ role: "error", content: `[❌] You already have an active ticket: **${state.activeTicket.title}**. Finish it first!` });
     return true;
   }
@@ -108,6 +117,7 @@ export function handleTakeCommand(
   }
 
   if (!ticket) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: "not_found" });
     reply({ role: "error", content: `[❌] Ticket "${input}" not found. Run \`/backlog\` to see available tickets.` });
     return true;
   }
@@ -142,6 +152,7 @@ export function handleAbandonCommand(
   reply: Reply,
 ): boolean {
   if (!state.activeTicket) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/abandon", reason: "no_ticket" });
     reply({ role: "error", content: "[❌] No active ticket to abandon. You have nothing to flee from." });
     return true;
   }
