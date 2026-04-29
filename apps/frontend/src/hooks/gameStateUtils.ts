@@ -1,6 +1,5 @@
 import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE, UPGRADES } from "../game/constants";
-
-const STORAGE_KEY = "claudeCopeState";
+import { STORAGE_KEY } from "./storageKey";
 const STATE_VERSION = "1.0";
 
 const USERNAME_ADJECTIVES = [

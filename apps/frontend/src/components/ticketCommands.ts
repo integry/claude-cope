@@ -1,3 +1,5 @@
+import { track } from "../analytics";
+import { AnalyticsEvents, SlashCommandFailureReasons } from "../analyticsEvents";
 import { API_BASE, TICKET_REFINE_ENABLED } from "../config";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
@@ -14,12 +16,14 @@ let lastBacklogResults: BacklogTicket[] = [];
 
 export async function handleTicketCommand(command: string, reply: Reply): Promise<boolean> {
   if (!TICKET_REFINE_ENABLED) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ticket", reason: SlashCommandFailureReasons.DISABLED });
     reply({ role: "error", content: "[❌] Unknown command: `/ticket`. Type `/help` to see available commands." });
     return true;
   }
 
   const task = command.slice("/ticket".length).trim();
   if (!task) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ticket", reason: SlashCommandFailureReasons.NO_ARGUMENT });
     reply({ role: "error", content: "[❌] Usage: `/ticket <description>` — Describe a task for the PM to over-engineer." });
     return true;
   }
@@ -32,6 +36,7 @@ export async function handleTicketCommand(command: string, reply: Reply): Promis
     });
 
     if (!res.ok) {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ticket", reason: SlashCommandFailureReasons.SERVER_ERROR });
       reply({ role: "error", content: `[❌] Ticket refinement failed (HTTP ${res.status}). The PM is on PTO.` });
       return true;
     }
@@ -42,6 +47,7 @@ export async function handleTicketCommand(command: string, reply: Reply): Promis
       content: `[📋 **TICKET REFINED**] Your PM has over-scoped your request:\n\n**${data.title}**\n\n${data.description}\n\n**Story Points:** ${data.estimatedTechDebt} TD\n**Ticket ID:** \`${data.id}\``,
     });
   } catch {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ticket", reason: SlashCommandFailureReasons.NETWORK_ERROR });
     reply({ role: "error", content: "[❌] Network error — could not reach the PM. They're probably in a meeting about meetings." });
   }
   return true;
@@ -51,6 +57,7 @@ export async function handleBacklogCommand(reply: Reply): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/api/tickets/community`);
     if (!res.ok) {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.SERVER_ERROR });
       reply({ role: "error", content: `[❌] Failed to fetch backlog (HTTP ${res.status}).` });
       return true;
     }
@@ -80,6 +87,7 @@ export async function handleBacklogCommand(reply: Reply): Promise<boolean> {
     const table = [sep, header, sep, ...rows, sep].join("\n");
     reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]\n\n\`\`\`\n${table}\n\`\`\`\n\nType \`/take 1\` through \`/take ${tickets.length}\` to claim a ticket.` });
   } catch {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.NETWORK_ERROR });
     reply({ role: "error", content: "[❌] Network error — the backlog server is unreachable." });
   }
   return true;
@@ -95,11 +103,13 @@ export function handleTakeCommand(
   const { onAccept, onSuggestedReply } = opts;
   const input = command.slice("/take".length).trim();
   if (!input) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: SlashCommandFailureReasons.NO_ARGUMENT });
     reply({ role: "error", content: "[❌] Usage: `/take <number>` — Run `/backlog` first, then pick a row number." });
     return true;
   }
 
   if (state.activeTicket) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: SlashCommandFailureReasons.ALREADY_ACTIVE });
     reply({ role: "error", content: `[❌] You already have an active ticket: **${state.activeTicket.title}**. Finish it first!` });
     return true;
   }
@@ -114,6 +124,7 @@ export function handleTakeCommand(
   }
 
   if (!ticket) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: SlashCommandFailureReasons.NOT_FOUND });
     reply({ role: "error", content: `[❌] Ticket "${input}" not found. Run \`/backlog\` to see available tickets.` });
     return true;
   }
@@ -148,6 +159,7 @@ export function handleAbandonCommand(
   reply: Reply,
 ): boolean {
   if (!state.activeTicket) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/abandon", reason: SlashCommandFailureReasons.NO_TICKET });
     reply({ role: "error", content: "[❌] No active ticket to abandon. You have nothing to flee from." });
     return true;
   }

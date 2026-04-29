@@ -4,7 +4,7 @@ import { BYOK_ENABLED, TICKET_REFINE_ENABLED } from "../config";
 // both ticket offers and incoming review-pings — there is no separate defense
 // command, because the new protocol is opt-in and ignoring a ping just refunds
 // the sender.
-const ALL_SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/help", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user", "/sync", "/shill", "/party", "/theme"];
+export const ALL_SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/help", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user", "/sync", "/shill", "/party", "/theme"];
 
 // Feature-gated: `/key` requires BYOK; `/ticket` requires ticket refinement.
 export const SLASH_COMMANDS = ALL_SLASH_COMMANDS.filter((cmd) => {

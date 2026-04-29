@@ -39,7 +39,7 @@ function toConnectSrcOrigin(origin: string): string | undefined {
 app.use("*", (c, next) => {
   const env = c.env as Record<string, string | undefined>;
   const origins = getAllowedOrigins(env);
-  const connectSrc: string[] = ["'self'", "https://openrouter.ai", "https://challenges.cloudflare.com", "wss:", "ws:"];
+  const connectSrc: string[] = ["'self'", "https://openrouter.ai", "https://challenges.cloudflare.com", "https://us.i.posthog.com", "https://us-assets.i.posthog.com", "https://eu.i.posthog.com", "https://eu-assets.i.posthog.com", "wss:", "ws:"];
   for (const origin of origins) {
     const connectOrigin = toConnectSrcOrigin(origin);
     if (connectOrigin && !connectSrc.includes(connectOrigin)) {
