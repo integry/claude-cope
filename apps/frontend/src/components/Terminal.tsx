@@ -30,6 +30,7 @@ import { buildSprintCallbacks } from "./buildChatSubmitArgs";
 import MessageList from "./MessageList";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { triggerQuotaLockout, triggerInstantBan } from "./terminalHandlers";
+import { shouldShowNag, armNagCommand, dismissNagAndReplay } from "./winrarNagHelpers";
 import { TerminalOverlays } from "./TerminalOverlays";
 import { useTerminalKeyboard } from "../hooks/useTerminalKeyboard";
 import { handleBragSubmit, handleBuddyConfirm, tryOutageDamage } from "./terminalInputHandlers";
@@ -157,9 +158,12 @@ function Terminal() {
     // BYOK users should never be gated by platform quota
     if (effectiveApiKey) return;
     if (!state.proKey && !state.proKeyHash) {
-      if (command) pendingNagCommandRef.current = command;
-      // WinRAR nag: show upgrade overlay instead of the old lockout messages
-      setShowUpgrade(true);
+      if (command) {
+        armNagCommand(command, pendingNagCommandRef, setShowUpgrade);
+      } else {
+        // No command to arm (e.g. backend quota-exhausted callback) — just show overlay
+        setShowUpgrade(true);
+      }
     } else {
       // Pro users: run the normal lockout flow (quota refill, etc.)
       triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState });
@@ -168,7 +172,7 @@ function Terminal() {
 
   // WinRAR nag: check free tier quota exhaustion and defer command behind the nag overlay
   const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
-    if (!effectiveApiKey && !state.proKey && !state.proKeyHash && state.economy.quotaPercent <= 0) {
+    if (shouldShowNag({ effectiveApiKey, proKey: state.proKey, proKeyHash: state.proKeyHash, quotaPercent: state.economy.quotaPercent })) {
       handleQuotaLockout(command);
       return true;
     }
@@ -287,18 +291,16 @@ function Terminal() {
     processCommand(command);
   };
 
-  // WinRAR nag: any dismissal (ESC, backdrop click, [x], footer tap) replays
-  // the pending command. The user must dismiss every time — faithful to WinRAR UX.
+  // WinRAR nag: ANY dismissal (ESC, backdrop click, [x], footer tap) replays
+  // the pending command. This broadens the original ESC-only requirement so that
+  // mobile users (no physical ESC key) are not stuck in a dead-end overlay.
+  // The user must still dismiss every single time — faithful to WinRAR UX.
   const handleUpgradeNagClose = useCallback(() => {
-    setShowUpgrade(false);
-    if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
-    if (pendingNagCommandRef.current !== null) {
-      const command = pendingNagCommandRef.current;
-      pendingNagCommandRef.current = null;
-      // Record the replayed command in command history so arrow-up navigation works
-      setCommandHistory((prev) => [...prev, command]);
-      processCommandRef.current(command);
-    }
+    dismissNagAndReplay(
+      { pendingNagCommandRef, processCommandRef },
+      setShowUpgrade,
+      setCommandHistory,
+    );
   }, [setShowUpgrade]);
 
   const { handleKeyDown } = useTerminalKeyboard({
