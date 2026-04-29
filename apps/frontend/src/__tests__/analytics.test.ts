@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { parseBaseCommand } from "../parseBaseCommand";
 
@@ -427,7 +426,7 @@ describe("analytics — /key disabled (BYOK off) fires SLASH_COMMAND_FAILED", ()
 
     // Ensure no duplicate SLASH_COMMAND_FAILED tracking (only one call)
     const failedCalls = mockTrack.mock.calls.filter(
-      ([event]: [string]) => event === AnalyticsEvents.SLASH_COMMAND_FAILED,
+      (call: unknown[]) => call[0] === AnalyticsEvents.SLASH_COMMAND_FAILED,
     );
     expect(failedCalls).toHaveLength(1);
   });
