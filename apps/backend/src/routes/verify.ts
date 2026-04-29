@@ -49,8 +49,6 @@ verify.use("*", async (c, next) => {
 });
 
 verify.get("/", async (c, next) => {
-  // Status checks stay unthrottled so refreshes and re-verification probes
-  // do not lock a legitimate session behind a temporary 429.
   if (!getTurnstileSecret(c)) {
     const response: VerifyStatusResponse = {
       status: VERIFY_STATUS.DISABLED,
@@ -61,7 +59,7 @@ verify.get("/", async (c, next) => {
     return c.json(response);
   }
   await next();
-}, async (c) => {
+}, createRateLimiter("verify-status:"), async (c) => {
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
   const expectedHostname = getHostnameConfig(c);
@@ -191,10 +189,6 @@ verify.post("/", async (c, next) => {
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
   const expectedHostname = getHostnameConfig(c);
-
-  if (!secret) {
-    return c.json({ verified: true, bypassed: true });
-  }
 
   if (!sessionId) {
     return c.json({ verified: false, error: "Session unavailable" }, 503);

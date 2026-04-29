@@ -319,7 +319,7 @@ describe("Turnstile verification and protection", () => {
     }
   });
 
-  it("does not rate limit verify status checks when Turnstile is enabled", async () => {
+  it("rate limits verify status checks when Turnstile is enabled", async () => {
     const limiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
     const res = await requestVerify(
       "GET",
@@ -333,7 +333,7 @@ describe("Turnstile verification and protection", () => {
     );
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("no-store, max-age=0");
-    expect(limiter.limit).not.toHaveBeenCalled();
+    expect(limiter.limit).toHaveBeenCalledWith({ key: "verify-status:1.2.3.4" });
   });
 
   it("uses a separate verify-submit rate limiter key for token submission", async () => {

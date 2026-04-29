@@ -28,12 +28,10 @@ export async function enforceRateLimit(
 
   const { success } = await limiter.limit({ key: `${keyPrefix}${ip}` });
   if (!success) {
-    const response = c.json(
+    return c.json(
       { error: "Too many requests. Please try again later." },
       429,
     );
-    response.headers.set("Retry-After", "60");
-    return response;
   }
 
   return null;
