@@ -33,6 +33,7 @@ export function useTerminalKeyboard({
   setIsProcessing,
   setHistory,
   closeAllOverlays,
+  handleUpgradeNagClose,
   runSlashCommand,
   handleEnterSubmit,
   getFilteredSlashCommands,
@@ -68,6 +69,7 @@ export function useTerminalKeyboard({
   setIsProcessing: (val: boolean) => void;
   setHistory: Dispatch<SetStateAction<Message[]>>;
   closeAllOverlays: () => void;
+  handleUpgradeNagClose: () => void;
   runSlashCommand: (cmd: string) => void;
   handleEnterSubmit: () => void;
   getFilteredSlashCommands: () => string[];
@@ -100,7 +102,7 @@ export function useTerminalKeyboard({
     const cancelBatchId = ds.batchId;
     ds.cancelled = true;
     if (ds.timeoutId) clearTimeout(ds.timeoutId);
-    (freeTierDelayRef as { current: { cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null } }).current = { cancelled: false, timeoutId: null };
+    freeTierDelayRef.current = { cancelled: false, timeoutId: null };
     setIsProcessing(false);
     // Only remove scaffold messages from the current in-flight batch, not prior ads
     setHistory((prev) => [...prev.filter((msg) => {
@@ -126,7 +128,11 @@ export function useTerminalKeyboard({
 
   const handleEscapeKey = useCallback(() => {
     if (anyOverlayOpen) {
-      closeAllOverlays();
+      if (showUpgrade) {
+        handleUpgradeNagClose();
+      } else {
+        closeAllOverlays();
+      }
       return;
     }
     // Cancel free-tier artificial delay if one is in progress
@@ -151,7 +157,7 @@ export function useTerminalKeyboard({
     } else {
       lastEscapeRef.current = now;
     }
-  }, [anyOverlayOpen, isProcessing, abortControllerRef, freeTierDelayRef, inputValue, closeAllOverlays, setHistory, setInputValue, setSlashQuery, setSlashIndex, cancelFreeTierDelay, cancelAbortController]);
+  }, [anyOverlayOpen, showUpgrade, isProcessing, abortControllerRef, freeTierDelayRef, inputValue, closeAllOverlays, handleUpgradeNagClose, setHistory, setInputValue, setSlashQuery, setSlashIndex, cancelFreeTierDelay, cancelAbortController]);
 
   const handleArrowUp = (slashMenuOpen: boolean, filtered: string[]) => {
     if (slashMenuOpen) {

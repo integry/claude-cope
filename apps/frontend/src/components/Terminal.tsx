@@ -127,7 +127,7 @@ function Terminal() {
     const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
   }, [unlockAchievement, playChime]);
 
-  const closeAllOverlays = useCallback(() => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowPrivacy(false); setShowTerms(false); setShowContact(false); setShowProfile(false); setShowParty(false); setShowUpgrade(false); pendingNagCommandRef.current = null; }, []);
+  const closeAllOverlays = useCallback(() => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowPrivacy(false); setShowTerms(false); setShowContact(false); setShowProfile(false); setShowParty(false); setShowUpgrade(false); }, []);
   const handleProfileClick = useCallback(() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlays, state.username]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [history]);
   useEffect(() => {
@@ -318,6 +318,7 @@ function Terminal() {
     setIsProcessing,
     setHistory,
     closeAllOverlays,
+    handleUpgradeNagClose,
     runSlashCommand,
     handleEnterSubmit,
     getFilteredSlashCommands,
