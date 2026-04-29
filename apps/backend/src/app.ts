@@ -64,7 +64,7 @@ app.use("*", (c, next) => {
   return cors({
     origin: (origin) => {
       if (!origin || allowed.includes(origin)) return origin;
-      return null as unknown as string;
+      return "";
     },
     credentials: true,
   })(c, next);
