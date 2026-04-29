@@ -34,12 +34,12 @@ function getQuotaStatus(credits: number): string {
 /* ── component ───────────────────────────────────────────────── */
 
 type UpgradeOverlayProps = {
-  isUpgraded: boolean;
   quotaPercent: number;
   onDismiss: () => void;
 };
 
-function UpgradeOverlay({ isUpgraded, quotaPercent, onDismiss }: UpgradeOverlayProps) {
+function UpgradeOverlay({ quotaPercent, onDismiss }: UpgradeOverlayProps) {
+  const isUpgraded = false; // Only free-tier users see this overlay
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
@@ -57,7 +57,6 @@ function UpgradeOverlay({ isUpgraded, quotaPercent, onDismiss }: UpgradeOverlayP
         multiLabel={multiLabel}
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
-        isUpgraded={isUpgraded}
         currentCredits={currentCredits}
         onDismiss={onDismiss}
       />
@@ -67,7 +66,6 @@ function UpgradeOverlay({ isUpgraded, quotaPercent, onDismiss }: UpgradeOverlayP
         multiLabel={multiLabel}
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
-        isUpgraded={isUpgraded}
         currentCredits={currentCredits}
         onDismiss={onDismiss}
       />
@@ -145,7 +143,6 @@ function MobileLayout({
   return (
     <div
       className="upgrade-mobile fixed inset-0 z-50 flex items-center justify-center"
-      onClick={onDismiss}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
 
@@ -164,7 +161,6 @@ function MobileLayout({
           overflowY: "auto",
           color: W,
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Title bar */}
         <div
@@ -180,8 +176,8 @@ function MobileLayout({
             WALLET EXTRACTION UTILITY
           </span>
           <span
-            style={{ color: DIM, cursor: "pointer", fontSize: "14px" }}
-            onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+            style={{ color: DIM, fontSize: "14px" }}
+            title="Tap footer to dismiss"
           >
             [x]
           </span>

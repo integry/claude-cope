@@ -35,7 +35,6 @@ export type LayoutProps = {
   multiLabel: string;
   singleAvailable: boolean;
   multiAvailable: boolean;
-  isUpgraded: boolean;
   currentCredits: number;
   onDismiss: () => void;
 };
@@ -50,7 +49,6 @@ export default function DesktopLayout({
   singleAvailable,
   multiAvailable,
   currentCredits,
-  onDismiss,
 }: LayoutProps) {
   const topBorder = (
     <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>
@@ -192,7 +190,6 @@ export default function DesktopLayout({
   return (
     <div
       className="upgrade-desktop fixed inset-0 z-50 flex items-center justify-center"
-      onClick={onDismiss}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
 
@@ -210,16 +207,13 @@ export default function DesktopLayout({
           overflowX: "auto",
           overflowY: "hidden",
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {topBorder}{"\n"}
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: B }}>{" " + title + " ".repeat(titleGap - 1)}</span>
         <span
-          style={{ color: DIM, cursor: "pointer" }}
-          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = W; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = DIM; }}
+          style={{ color: DIM }}
+          title="Press ESC to dismiss"
         >
           {closeBtn}
         </span>
@@ -281,18 +275,9 @@ export default function DesktopLayout({
           const left = Math.max(0, Math.floor(totalPad / 2));
           const right = Math.max(0, totalPad - left);
           return (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+            <span
               style={{
                 display: "inline",
-                background: "none",
-                border: "none",
-                padding: 0,
-                margin: 0,
-                font: "inherit",
-                cursor: "pointer",
-                lineHeight: "inherit",
               }}
               className="upgrade-esc-btn"
             >
@@ -304,7 +289,7 @@ export default function DesktopLayout({
                 {" ".repeat(left) + text + " ".repeat(right)}
               </span>
               <span style={{ color: B }}>{"║"}</span>
-            </button>
+            </span>
           );
         })()}{"\n"}
         {botBorder}

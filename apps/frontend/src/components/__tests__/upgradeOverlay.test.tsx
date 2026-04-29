@@ -17,12 +17,14 @@ import UpgradeOverlay from "../UpgradeOverlay";
 
 let container: HTMLDivElement;
 
-function render(props: { isUpgraded: boolean; quotaPercent: number; onDismiss: () => void }) {
+function render(props: { isUpgraded?: boolean; quotaPercent: number; onDismiss: () => void }) {
+  // isUpgraded was removed from UpgradeOverlay props — strip it before passing
+  const { isUpgraded: _, ...rest } = props;
   container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   act(() => {
-    root.render(createElement(UpgradeOverlay, props));
+    root.render(createElement(UpgradeOverlay, rest));
   });
   return container;
 }
@@ -76,15 +78,15 @@ describe("UpgradeOverlay", () => {
     expect(matches!.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("calls onDismiss when the backdrop is clicked", () => {
+  it("does NOT call onDismiss when the backdrop is clicked (ESC-only)", () => {
     const onDismiss = vi.fn();
     render({ isUpgraded: false, quotaPercent: 65, onDismiss });
-    // Click the desktop backdrop (first .upgrade-desktop element)
+    // Click the desktop backdrop — should NOT dismiss (ESC-only per spec)
     const desktop = container.querySelector(".upgrade-desktop");
     act(() => {
       desktop?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(onDismiss).toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 
   it("renders the ESC / close footer in both layouts", () => {

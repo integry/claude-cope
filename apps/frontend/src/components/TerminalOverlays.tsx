@@ -158,7 +158,6 @@ export function TerminalOverlays({
       )}
       {showUpgrade && (
         <UpgradeOverlay
-          isUpgraded={!!state.proKey || !!state.proKeyHash}
           quotaPercent={state.economy.quotaPercent}
           onDismiss={onUpgradeDismiss}
         />

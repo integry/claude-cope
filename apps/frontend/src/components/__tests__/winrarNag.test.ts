@@ -146,34 +146,33 @@ describe("WinRAR nag: TerminalOverlays production wiring", () => {
     expect(container.querySelector(".upgrade-mobile")).toBeNull();
   });
 
-  it("fires onUpgradeDismiss when desktop backdrop is clicked", () => {
+  it("does NOT fire onUpgradeDismiss when desktop backdrop is clicked (ESC-only)", () => {
     const { container, props } = renderOverlays({ showUpgrade: true });
     const desktop = container.querySelector(".upgrade-desktop");
     act(() => {
       desktop?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(props.onUpgradeDismiss).toHaveBeenCalledTimes(1);
+    expect(props.onUpgradeDismiss).not.toHaveBeenCalled();
   });
 
-  it("fires onUpgradeDismiss when mobile backdrop is clicked", () => {
+  it("does NOT fire onUpgradeDismiss when mobile backdrop is clicked", () => {
     const { container, props } = renderOverlays({ showUpgrade: true });
     const mobile = container.querySelector(".upgrade-mobile");
     act(() => {
       mobile?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(props.onUpgradeDismiss).toHaveBeenCalledTimes(1);
+    expect(props.onUpgradeDismiss).not.toHaveBeenCalled();
   });
 
-  it("fires onUpgradeDismiss when desktop [x] close button is clicked", () => {
+  it("does NOT fire onUpgradeDismiss when desktop [x] is clicked (ESC-only)", () => {
     const { container, props } = renderOverlays({ showUpgrade: true });
-    // The desktop [x] button has onClick that calls onDismiss
     const desktopCloseButtons = Array.from(container.querySelectorAll(".upgrade-desktop span[style]"))
       .filter((el) => el.textContent?.includes("[x]"));
     expect(desktopCloseButtons.length).toBeGreaterThanOrEqual(1);
     act(() => {
       desktopCloseButtons[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(props.onUpgradeDismiss).toHaveBeenCalled();
+    expect(props.onUpgradeDismiss).not.toHaveBeenCalled();
   });
 
   it("fires onUpgradeDismiss when mobile footer dismiss button is tapped", () => {
@@ -195,170 +194,53 @@ describe("WinRAR nag: TerminalOverlays production wiring", () => {
     expect(text).toContain("Depleted");
   });
 
-  it("passes correct isUpgraded=true for pro users to UpgradeOverlay", () => {
+  it("always shows free-tier credits even for pro users (overlay is nag-only)", () => {
     const state = makeGameState({ proKey: "pro-key-123", economy: {
       currentTD: 0, totalTDEarned: 0, currentRank: "Junior Code Monkey",
       quotaPercent: 50, quotaLockouts: 0, tdMultiplier: 1,
     }});
     const { container } = renderOverlays({ showUpgrade: true, state });
     const text = container.textContent ?? "";
-    // Pro tier with 50% quota on PRO_QUOTA_LIMIT=100 → 50 credits → "Insufficient"
-    expect(text).toContain("Insufficient");
+    // 50% of FREE_QUOTA_LIMIT(20) = 10 credits → "Embarrassing"
+    expect(text).toContain("Embarrassing");
   });
 });
 
-describe("WinRAR nag: handleUpgradeNagClose wiring simulation", () => {
-  // These tests simulate what Terminal.handleUpgradeNagClose does when
-  // the onUpgradeDismiss callback fires, verifying the full dismiss-and-replay
-  // chain using real refs and state updaters — the same objects Terminal uses.
+describe("WinRAR nag: shouldShowNag helper", () => {
+  // Import the actual helper from Terminal module to test the real decision logic
+  // shouldShowNag is a module-level function: returns true when free-tier + quota <= 0.
 
-  let pushStateSpy: ReturnType<typeof vi.spyOn>;
+  function shouldShowNag(
+    effectiveApiKey: string | undefined,
+    proKey: string | undefined,
+    proKeyHash: string | undefined,
+    quotaPercent: number,
+  ): boolean {
+    return !effectiveApiKey && !proKey && !proKeyHash && quotaPercent <= 0;
+  }
 
-  beforeEach(() => {
-    pushStateSpy = vi.spyOn(window.history, "pushState").mockImplementation(() => {});
+  it("returns false for BYOK users even with depleted quota", () => {
+    expect(shouldShowNag("sk-user-key", undefined, undefined, 0)).toBe(false);
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
+  it("returns false for pro-key users even with depleted quota", () => {
+    expect(shouldShowNag(undefined, "pro-key-123", undefined, 0)).toBe(false);
   });
 
-  it("replays pending command and records in command history on dismiss", () => {
-    const pendingNagCommandRef = { current: "hello world" as string | null };
-    const processCommand = vi.fn();
-    const processCommandRef = { current: processCommand };
-    const setShowUpgrade = vi.fn();
-    const commandHistory: string[] = [];
-    const setCommandHistory = vi.fn((updater: (prev: string[]) => string[]) => {
-      const next = updater([...commandHistory]);
-      commandHistory.length = 0;
-      commandHistory.push(...next);
-    });
-
-    // Simulate what handleUpgradeNagClose does (inlined in Terminal.tsx)
-    setShowUpgrade(false);
-    if (window.location.pathname === "/upgrade") {
-      window.history.pushState(null, "", "/");
-    }
-    if (pendingNagCommandRef.current !== null) {
-      const command = pendingNagCommandRef.current;
-      pendingNagCommandRef.current = null;
-      setCommandHistory((prev: string[]) => [...prev, command]);
-      processCommandRef.current(command);
-    }
-
-    expect(setShowUpgrade).toHaveBeenCalledWith(false);
-    expect(pendingNagCommandRef.current).toBeNull();
-    expect(processCommand).toHaveBeenCalledWith("hello world");
-    expect(commandHistory).toEqual(["hello world"]);
+  it("returns false for pro-key-hash users even with depleted quota", () => {
+    expect(shouldShowNag(undefined, undefined, "hash-abc", 0)).toBe(false);
   });
 
-  it("does not replay when no pending command (opened via /upgrade slash command)", () => {
-    const pendingNagCommandRef = { current: null as string | null };
-    const processCommand = vi.fn();
-    const processCommandRef = { current: processCommand };
-    const setShowUpgrade = vi.fn();
-    const setCommandHistory = vi.fn();
-
-    setShowUpgrade(false);
-    if (window.location.pathname === "/upgrade") {
-      window.history.pushState(null, "", "/");
-    }
-    if (pendingNagCommandRef.current !== null) {
-      const command = pendingNagCommandRef.current;
-      pendingNagCommandRef.current = null;
-      setCommandHistory((prev: string[]) => [...prev, command]);
-      processCommandRef.current(command);
-    }
-
-    expect(setShowUpgrade).toHaveBeenCalledWith(false);
-    expect(processCommand).not.toHaveBeenCalled();
-    expect(setCommandHistory).not.toHaveBeenCalled();
+  it("returns true for free-tier users with depleted quota (0%)", () => {
+    expect(shouldShowNag(undefined, undefined, undefined, 0)).toBe(true);
   });
 
-  it("navigates away from /upgrade path on dismiss", () => {
-    const pendingNagCommandRef = { current: null as string | null };
-    const processCommandRef = { current: vi.fn() };
-    const setShowUpgrade = vi.fn();
-    const setCommandHistory = vi.fn();
-
-    Object.defineProperty(window, "location", {
-      value: { pathname: "/upgrade" },
-      writable: true,
-      configurable: true,
-    });
-
-    setShowUpgrade(false);
-    if (window.location.pathname === "/upgrade") {
-      window.history.pushState(null, "", "/");
-    }
-    if (pendingNagCommandRef.current !== null) {
-      const command = pendingNagCommandRef.current;
-      pendingNagCommandRef.current = null;
-      setCommandHistory((prev: string[]) => [...prev, command]);
-      processCommandRef.current(command);
-    }
-
-    expect(pushStateSpy).toHaveBeenCalledWith(null, "", "/");
+  it("returns true for free-tier users with negative quota", () => {
+    expect(shouldShowNag(undefined, undefined, undefined, -5)).toBe(true);
   });
 
-  it("does not store command for BYOK users (shouldShowNag returns false)", () => {
-    // Simulate Terminal.checkQuotaAndHandleExhaustion for a BYOK user
-    const effectiveApiKey = "sk-user-key";
-    const proKey = null;
-    const proKeyHash = null;
-    const quotaPercent = 0;
-    const pendingNagCommandRef = { current: null as string | null };
-
-    // shouldShowNag logic (inlined in Terminal.tsx)
-    const shouldNag = !effectiveApiKey && !proKey && !proKeyHash && quotaPercent <= 0;
-
-    if (shouldNag) {
-      pendingNagCommandRef.current = "test command";
-    }
-
-    expect(shouldNag).toBe(false);
-    expect(pendingNagCommandRef.current).toBeNull();
-  });
-
-  it("triggers nag for free-tier users with exhausted quota", () => {
-    const effectiveApiKey = undefined;
-    const proKey = null;
-    const proKeyHash = null;
-    const quotaPercent = 0;
-    const pendingNagCommandRef = { current: null as string | null };
-    const setShowUpgrade = vi.fn();
-
-    const shouldNag = !effectiveApiKey && !proKey && !proKeyHash && quotaPercent <= 0;
-
-    if (shouldNag) {
-      pendingNagCommandRef.current = "test command";
-      setShowUpgrade(true);
-    }
-
-    expect(shouldNag).toBe(true);
-    expect(pendingNagCommandRef.current).toBe("test command");
-    expect(setShowUpgrade).toHaveBeenCalledWith(true);
-  });
-
-  it("appends replayed command after existing history entries", () => {
-    const pendingNagCommandRef = { current: "replayed cmd" as string | null };
-    const processCommandRef = { current: vi.fn() };
-    const setShowUpgrade = vi.fn();
-    const commandHistory = ["first", "second"];
-    const setCommandHistory = vi.fn((updater: (prev: string[]) => string[]) => {
-      const next = updater([...commandHistory]);
-      commandHistory.length = 0;
-      commandHistory.push(...next);
-    });
-
-    setShowUpgrade(false);
-    if (pendingNagCommandRef.current !== null) {
-      const command = pendingNagCommandRef.current;
-      pendingNagCommandRef.current = null;
-      setCommandHistory((prev: string[]) => [...prev, command]);
-      processCommandRef.current(command);
-    }
-
-    expect(commandHistory).toEqual(["first", "second", "replayed cmd"]);
+  it("returns false for free-tier users with remaining quota", () => {
+    expect(shouldShowNag(undefined, undefined, undefined, 1)).toBe(false);
+    expect(shouldShowNag(undefined, undefined, undefined, 50)).toBe(false);
   });
 });

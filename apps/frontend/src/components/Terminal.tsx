@@ -37,10 +37,10 @@ import { handleBragSubmit, handleBuddyConfirm, tryOutageDamage } from "./termina
 export type { Message };
 
 /* ── WinRAR nag helpers (issue #736) ─────────────────────────── */
-// Product decision: ALL dismiss affordances (ESC key, backdrop click,
-// [x] button, mobile footer tap) replay the pending command. The
-// original requirement specified ESC-only, but this was broadened so
-// mobile users (no physical ESC key) are not left in a dead-end state.
+// Per spec: "The user has to manually press [ESC] every single time."
+// Desktop: only ESC key dismisses and replays the pending command.
+// Mobile: footer tap is the only dismiss affordance (no physical ESC).
+// Backdrop clicks and [x] buttons do NOT dismiss.
 
 function shouldShowNag(
   effectiveApiKey: string | undefined,
@@ -279,10 +279,9 @@ function Terminal() {
       }),
       onQuotaUpdate: (quotaPercent) => setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })),
       onQuotaExhausted: () => {
-        // Do NOT re-arm the command here — it was already submitted to the backend.
-        // Re-arming would cause a nag → ESC → resubmit → quota-exhausted → nag loop.
-        // Just show the upgrade overlay without storing a pending command.
-        handleQuotaLockout();
+        // The backend rejected the request — the command was NOT processed.
+        // Store it for replay so the user doesn't lose their message.
+        handleQuotaLockout(command);
       },
       onProfileUpdate: (profile) => setState((prev) => applyServerProfile(prev, profile)),
       onError: playError, signal: controller.signal,
@@ -306,9 +305,7 @@ function Terminal() {
     processCommand(command);
   };
 
-  // WinRAR nag: ANY dismissal (ESC, backdrop click, [x], footer tap) replays
-  // the pending command. This broadens the original ESC-only requirement so that
-  // mobile users (no physical ESC key) are not stuck in a dead-end overlay.
+  // WinRAR nag: ESC (desktop) or footer tap (mobile) replays the pending command.
   // The user must still dismiss every single time — faithful to WinRAR UX.
   const handleUpgradeNagClose = useCallback(() => {
     setShowUpgrade(false);
