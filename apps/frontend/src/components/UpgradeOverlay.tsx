@@ -7,6 +7,7 @@ import {
 } from "../config";
 import DesktopLayout from "./UpgradeDesktopLayout";
 import type { LayoutProps } from "./UpgradeDesktopLayout";
+import { getQuotaStatus } from "./upgradeQuotaStatus";
 
 /* ── helpers ─────────────────────────────────────────────────── */
 
@@ -19,26 +20,16 @@ const DIM = "#aaaaaa"; // dim footer
 
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
 
-/** Returns a humorous status adjective scaled to the user's current credits. */
-function getQuotaStatus(credits: number): string {
-  if (credits <= 0) return "Depleted";
-  if (credits <= 5) return "Pathetic";
-  if (credits <= 15) return "Embarrassing";
-  if (credits <= 50) return "Insufficient";
-  if (credits <= 200) return "Mediocre";
-  if (credits <= 500) return "Tolerable";
-  return "Adequate";
-}
-
 /* ── component ───────────────────────────────────────────────── */
 
 type UpgradeOverlayProps = {
   quotaPercent: number;
   totalQuota: number;
+  isBYOK: boolean;
   onDismiss: () => void;
 };
 
-function UpgradeOverlay({ quotaPercent, totalQuota, onDismiss }: UpgradeOverlayProps) {
+function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss }: UpgradeOverlayProps) {
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
@@ -46,6 +37,9 @@ function UpgradeOverlay({ quotaPercent, totalQuota, onDismiss }: UpgradeOverlayP
   const multiLabel = `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`;
 
   const currentCredits = Math.round((quotaPercent / 100) * totalQuota);
+  const quotaLine = isBYOK
+    ? "EXTERNAL BILLING ACTIVE. Status: BYOK bypass engaged."
+    : `CURRENT QUOTA: ${currentCredits} Credits. Status: ${getQuotaStatus(currentCredits)}.`;
 
   return (
     <>
@@ -55,7 +49,7 @@ function UpgradeOverlay({ quotaPercent, totalQuota, onDismiss }: UpgradeOverlayP
         multiLabel={multiLabel}
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
-        currentCredits={currentCredits}
+        quotaLine={quotaLine}
       />
       {/* Mobile: visible ≤640px, hidden above via CSS */}
       <MobileLayout
@@ -63,7 +57,7 @@ function UpgradeOverlay({ quotaPercent, totalQuota, onDismiss }: UpgradeOverlayP
         multiLabel={multiLabel}
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
-        currentCredits={currentCredits}
+        quotaLine={quotaLine}
         onDismiss={onDismiss}
       />
     </>
@@ -79,7 +73,7 @@ function MobileLayout({
   multiLabel,
   singleAvailable,
   multiAvailable,
-  currentCredits,
+  quotaLine,
   onDismiss,
 }: LayoutProps & { onDismiss: () => void }) {
   const sectionStyle = { padding: "8px 12px" } as const;
@@ -186,7 +180,7 @@ function MobileLayout({
             INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]
           </span>
           <div style={{ color: DIM, fontSize: "11px", marginTop: "4px" }}>
-            {">"} CURRENT QUOTA: {currentCredits} Credits. Status: {getQuotaStatus(currentCredits)}.
+            {">"} {quotaLine}
           </div>
         </div>
 

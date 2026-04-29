@@ -161,6 +161,7 @@ export function TerminalOverlays({
         <UpgradeOverlay
           quotaPercent={state.economy.quotaPercent}
           totalQuota={state.proKey || state.proKeyHash ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT}
+          isBYOK={Boolean(state.apiKey) && !state.proKey && !state.proKeyHash}
           onDismiss={onUpgradeDismiss}
         />
       )}

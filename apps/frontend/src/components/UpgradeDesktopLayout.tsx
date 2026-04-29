@@ -17,17 +17,6 @@ const DIM = "#aaaaaa"; // dim footer
 const INNER_W = 64; // inner content width (between ║ chars)
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
 
-/** Returns a humorous status adjective scaled to the user's current credits. */
-function getQuotaStatus(credits: number): string {
-  if (credits <= 0) return "Depleted";
-  if (credits <= 5) return "Pathetic";
-  if (credits <= 15) return "Embarrassing";
-  if (credits <= 50) return "Insufficient";
-  if (credits <= 200) return "Mediocre";
-  if (credits <= 500) return "Tolerable";
-  return "Adequate";
-}
-
 /* ── types ──────────────────────────────────────────────────── */
 
 export type LayoutProps = {
@@ -35,7 +24,7 @@ export type LayoutProps = {
   multiLabel: string;
   singleAvailable: boolean;
   multiAvailable: boolean;
-  currentCredits: number;
+  quotaLine: string;
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -47,7 +36,7 @@ export default function DesktopLayout({
   multiLabel,
   singleAvailable,
   multiAvailable,
-  currentCredits,
+  quotaLine,
 }: LayoutProps) {
   const topBorder = (
     <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>
@@ -222,7 +211,7 @@ export default function DesktopLayout({
         {midBorder}{"\n"}
         {emptyLine}{"\n"}
         {centeredBoxLine("INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]", Y)}{"\n"}
-        {boxLine(`  > CURRENT QUOTA: ${currentCredits} Credits. Status: ${getQuotaStatus(currentCredits)}.`, DIM)}{"\n"}
+        {boxLine(`  > ${quotaLine}`, DIM)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [ THROUGHPUT BENCHMARKS ]", Y)}{"\n"}
         {boxLine("  Industry standards artificially throttle assistant capacity")}{"\n"}

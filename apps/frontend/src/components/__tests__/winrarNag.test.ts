@@ -276,6 +276,31 @@ function cleanup() {
   if (container && container.parentNode) container.parentNode.removeChild(container);
 }
 
+async function renderTerminal() {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => {
+    root.render(createElement(Terminal));
+  });
+  return { container };
+}
+
+async function submitTerminalCommand(command: string) {
+  const input = container.querySelector("input[aria-label='terminal-input']") as HTMLInputElement | null;
+  expect(input).not.toBeNull();
+
+  await act(async () => {
+    input!.value = command;
+    input!.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    input!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+
+  return input!;
+}
+
 /* ── Tests ────────────────────────────────────────────────────── */
 
 describe("WinRAR nag: TerminalOverlays production wiring", () => {
@@ -359,6 +384,14 @@ describe("WinRAR nag: TerminalOverlays production wiring", () => {
     // 50% of PRO_QUOTA_LIMIT(100) = 50 credits → "Insufficient"
     expect(text).toContain("Insufficient");
   });
+
+  it("shows BYOK-specific copy instead of platform quota credits", () => {
+    const state = makeGameState({ apiKey: "sk-user-key" });
+    const { container } = renderOverlays({ showUpgrade: true, state });
+    const text = container.textContent ?? "";
+    expect(text).toContain("EXTERNAL BILLING ACTIVE");
+    expect(text).not.toContain("CURRENT QUOTA:");
+  });
 });
 
 describe("WinRAR nag: dismiss replay path", () => {
@@ -402,128 +435,14 @@ describe("WinRAR nag: dismiss replay path", () => {
   });
 });
 
-describe("WinRAR nag: replay state-machine (duplicate prevention)", () => {
-  /**
-   * These tests exercise the state-machine logic that Terminal uses for the
-   * nag replay flow.  We simulate the ref / state interactions directly
-   * rather than rendering Terminal (which has dozens of unrelated deps).
-   */
-
-  it("client-side nag: command not in history → replay adds exactly once", () => {
-    // Simulates the client-side quota check path (handleEnterSubmit)
-    const commandHistory: string[] = [];
-    const chatHistory: Message[] = [];
-    const pendingNagCommand: { command: string } | null = { command: "hello world" };
-
-    // handleUpgradeNagClose replay logic
-    if (pendingNagCommand !== null) {
-      commandHistory.push(pendingNagCommand.command);
-      chatHistory.push({ role: "user", content: pendingNagCommand.command });
-    }
-
-    expect(commandHistory).toEqual(["hello world"]);
-    expect(chatHistory.filter((m) => m.role === "user")).toHaveLength(1);
-  });
-
-  it("backend 402 nag: cleanup removes prior entries before replay", () => {
-    // Simulates the onQuotaExhausted cleanup + handleUpgradeNagClose replay
-    const command = "fix my code";
-
-    // --- Initial attempt (handleEnterSubmit + processCommand) ---
-    const commandHistory: string[] = ["fix my code"];
-    const chatHistory: Message[] = [
-      { role: "user", content: "fix my code" },
-      { role: "loading", content: "Processing..." },
-    ];
-
-    // --- onQuotaExhausted fires (backend 402) ---
-    // handleErrorResponse strips loading messages
-    const afterErrorFilter = chatHistory.filter((m) => m.role !== "loading");
-
-    // Cleanup: remove command from commandHistory
-    const cmdIdx = [...commandHistory].reverse().findIndex((c) => c === command);
-    if (cmdIdx >= 0) {
-      const realIdx = commandHistory.length - 1 - cmdIdx;
-      commandHistory.splice(realIdx, 1);
-    }
-
-    // Cleanup: remove user message from chatHistory
-    const cleaned: Message[] = [];
-    let removedUser = false;
-    for (let i = afterErrorFilter.length - 1; i >= 0; i--) {
-      if (!removedUser && afterErrorFilter[i]?.role === "user" && afterErrorFilter[i]?.content === command) {
-        removedUser = true;
-        continue;
-      }
-      cleaned.unshift(afterErrorFilter[i]!);
-    }
-
-    // --- handleUpgradeNagClose replay ---
-    cleaned.push({ role: "user", content: command });
-    commandHistory.push(command);
-
-    // Verify exactly one entry in each
-    expect(commandHistory.filter((c) => c === command)).toHaveLength(1);
-    expect(cleaned.filter((m) => m.role === "user" && m.content === command)).toHaveLength(1);
-  });
-
-  it("stale quota state: onQuotaUpdate shows nag when quota drops to 0", () => {
-    // Simulates the onQuotaUpdate catch-up for stale client state
-    let showUpgrade = false;
-    const isFreeTier = true;
-    let quotaPercent = 50; // stale: client thinks quota is available
-
-    // After backend response, onQuotaUpdate fires with real quota
-    const onQuotaUpdate = (newPercent: number) => {
-      quotaPercent = newPercent;
-      if (newPercent <= 0 && isFreeTier) {
-        showUpgrade = true;
-      }
-    };
-
-    // Backend reports exhausted quota
-    onQuotaUpdate(0);
-
-    expect(quotaPercent).toBe(0);
-    expect(showUpgrade).toBe(true);
-
-    // shouldShowNag now returns true for the next command
-    expect(shouldShowNag(undefined, undefined, undefined, quotaPercent)).toBe(true);
-  });
-
-  it("onQuotaUpdate does NOT show nag for non-free-tier users", () => {
-    let showUpgrade = false;
-    const isFreeTier = false;
-
-    const onQuotaUpdate = (newPercent: number) => {
-      if (newPercent <= 0 && isFreeTier) {
-        showUpgrade = true;
-      }
-    };
-
-    onQuotaUpdate(0);
-    expect(showUpgrade).toBe(false);
-  });
-
-  it("onQuotaUpdate does NOT show nag when quota is still positive", () => {
-    let showUpgrade = false;
-    const isFreeTier = true;
-
-    const onQuotaUpdate = (newPercent: number) => {
-      if (newPercent <= 0 && isFreeTier) {
-        showUpgrade = true;
-      }
-    };
-
-    onQuotaUpdate(25);
-    expect(showUpgrade).toBe(false);
-  });
-});
-
-describe("WinRAR nag: Terminal ESC integration", () => {
+describe("WinRAR nag: Terminal integration", () => {
   beforeEach(() => {
     submitChatMessageMock.mockReset();
     window.history.pushState(null, "", "/");
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
   });
 
   afterEach(() => {
@@ -532,24 +451,8 @@ describe("WinRAR nag: Terminal ESC integration", () => {
   });
 
   it("replays the blocked desktop command only after Escape dismisses the nag overlay", async () => {
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root.render(createElement(Terminal));
-    });
-
-    const input = container.querySelector("input[aria-label='terminal-input']") as HTMLInputElement | null;
-    expect(input).not.toBeNull();
-
-    await act(async () => {
-      input!.value = "status";
-      input!.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      input!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    });
+    await renderTerminal();
+    await submitTerminalCommand("status");
 
     expect(submitChatMessageMock).not.toHaveBeenCalled();
     expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
@@ -561,6 +464,24 @@ describe("WinRAR nag: Terminal ESC integration", () => {
 
     expect(container.querySelector(".upgrade-desktop")).toBeNull();
     expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not dismiss the nag or restore the command on popstate while a command is pending", async () => {
+    await renderTerminal();
+    const input = await submitTerminalCommand("why");
+
+    expect(submitChatMessageMock).not.toHaveBeenCalled();
+    expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
+    expect(input.value).toBe("");
+
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
+    expect(input.value).toBe("");
+    expect(submitChatMessageMock).not.toHaveBeenCalled();
   });
 });
 

@@ -151,17 +151,18 @@ function Terminal() {
       bottomRef.current.scrollIntoView({ behavior: "auto" });
     }
   }, [history]);
-  // Restore pending nag command to input when navigating away from /upgrade via browser back/forward
   useEffect(() => {
     const onPopState = () => {
+      if (pendingNagCommandRef.current !== null) return;
       if (window.location.pathname !== "/upgrade") {
         setShowUpgrade(false);
-        restorePendingNagCommand();
+      } else {
+        setShowUpgrade(true);
       }
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [restorePendingNagCommand, setShowUpgrade]);
+  }, [setShowUpgrade]);
 
   useEffect(() => { if (!isProcessing && !isBooting) inputRef.current?.focus(); }, [isProcessing, isBooting]);
 
