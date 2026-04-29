@@ -314,51 +314,49 @@ function getContainerClass(message: Message, isNew: boolean): string {
   return `mb-5 ${colorClass} ${modifier}`;
 }
 
-function MessageContent({ message, isNew = false, onSlashCommand }: { message: Message; isNew?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
-  const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
-  const isBuddyInterjection = message.role === "warning" && isBuddyMessage(message.content);
-  const isSpecialAsciiArt = isAchievement || isBuddyInterjection;
-  const useMarkdown = (message.role === "system" || message.role === "warning" || message.role === "error") && !isSpecialAsciiArt;
-  const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
-  const isStreaming = message.role === "loading" && !isAwaitingResponse;
+function getMessageFlags(role: string, content: string) {
+  const isWarning = role === "warning";
+  const isAchievement = isWarning && content.includes("ACHIEVEMENT UNLOCKED");
+  const isBuddyInterjection = isWarning && isBuddyMessage(content);
+  const isMarkdownRole = role === "system" || isWarning || role === "error";
+  const useMarkdown = isMarkdownRole && !isAchievement && !isBuddyInterjection;
+  const isAwaitingResponse = role === "loading" && content.startsWith("[⚙️]");
+  const isStreaming = role === "loading" && !isAwaitingResponse;
+  return { useMarkdown, isAwaitingResponse, isStreaming };
+}
 
-  // Typewriter effect for new system/warning/error messages (not loading or streaming)
-  const shouldTypewrite = isNew && useMarkdown && message.role === "system";
-  const { visibleContent, isTyping } = useTypewriter(message.content, shouldTypewrite);
+function MessageContent({ message, isNew = false, isFreeTier = false, onSlashCommand }: { message: Message; isNew?: boolean; isFreeTier?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
+  const { role, content } = message;
+  const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(role, content);
+
+  // Only typewrite actual AI responses (system role). Scaffold messages (ads,
+  // queue warnings) render instantly so they don't vanish mid-animation when
+  // the fixed delay timers remove them.
+  const shouldTypewrite = isNew && useMarkdown && role === "system";
+  const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite, isFreeTier);
 
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand), [onSlashCommand]);
 
-  if (message.role === "user") return null;
+  if (role === "user") return null;
 
-  if (useMarkdown) {
-    const rawContent = shouldTypewrite ? visibleContent : message.content;
+  if (useMarkdown || isStreaming) {
+    const rawContent = shouldTypewrite ? visibleContent : content;
     const processedContent = cleanLLMOutput(rawContent);
+    const showCursor = isStreaming || isTyping;
     return (
       <div className="space-y-1">
         <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
           {processedContent}
         </ReactMarkdown>
-        {isTyping && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
+        {showCursor && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
       </div>
     );
   }
-
-  if (isStreaming) {
-    const processedContent = cleanLLMOutput(message.content);
-    return (
-      <div className="space-y-1">
-        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
-          {processedContent}
-        </ReactMarkdown>
-        <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />
-      </div>
-    );
-  }
-  if (isAwaitingResponse) return <>{message.content}</>;
-  if (message.role !== "loading") {
+  if (isAwaitingResponse) return <>{content}</>;
+  if (role !== "loading") {
     const linkify = (text: string): React.ReactNode =>
       onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
-    return <>{linkify(message.content)}</>;
+    return <>{linkify(content)}</>;
   }
   return null;
 }
@@ -386,7 +384,7 @@ function getShareProps(message: Message, previousMessage?: Message, nextMessage?
   return { showShareButton, shareSystemMessage };
 }
 
-function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
+function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", isFreeTier = false, onSlashCommand }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; isFreeTier?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   const { showShareButton, shareSystemMessage } = getShareProps(message, previousMessage, nextMessage);
 
@@ -399,7 +397,7 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
         </div>
       )}
       {message.role === "loading" && !isAwaitingResponse && <Spinner />}
-      <MessageContent message={message} isNew={isNew} onSlashCommand={onSlashCommand} />
+      <MessageContent message={message} isNew={isNew} isFreeTier={isFreeTier} onSlashCommand={onSlashCommand} />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
       {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
@@ -423,6 +421,7 @@ function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps
   if (!messagesEqual(prev.previousMessage, next.previousMessage)) return false;
   if (!messagesEqual(prev.nextMessage, next.nextMessage)) return false;
   if (prev.username !== next.username) return false;
+  if (prev.isFreeTier !== next.isFreeTier) return false;
   if (prev.onSlashCommand !== next.onSlashCommand) return false;
   // Only compare activeTicketId for loading messages
   if (prev.message.role === "loading" && prev.activeTicketId !== next.activeTicketId) return false;

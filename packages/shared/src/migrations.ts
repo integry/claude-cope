@@ -12,9 +12,9 @@
 
 /** Minimal subset of D1Database used by the migration runner. */
 export interface MigrationDB {
-  exec(sql: string): Promise<unknown>;
   prepare(sql: string): {
     all<T = unknown>(): Promise<{ results?: T[] }>;
+    run(): Promise<unknown>;
     bind(...values: unknown[]): {
       run(): Promise<unknown>;
     };
@@ -26,6 +26,12 @@ export interface Migration {
   name: string;
   /** A single SQL statement.  Must be idempotent (IF NOT EXISTS / etc.). */
   sql: string;
+  /**
+   * Optional matcher for errors that should be treated as "already applied"
+   * rather than failures.  Use sparingly — only when the SQL itself can't
+   * be made idempotent (e.g. RENAME COLUMN with no IF EXISTS variant).
+   */
+  ignoreErrorMatching?: RegExp;
 }
 
 /**
@@ -131,6 +137,19 @@ export const migrations: Migration[] = [
     name: "018_normalize_license_hash_empty_to_null",
     sql: "UPDATE user_scores SET license_hash = NULL WHERE license_hash = ''",
   },
+
+  // ── repair stale-DB column drift on `licenses` ─────────────────────
+  // Older databases were created with the column `activated_at`; the code
+  // and migration 012 now use `last_activated_at`.  On those stale DBs,
+  // 012 was a no-op (table already existed) and the column never got
+  // renamed.  On fresh DBs the column is already named correctly, so the
+  // RENAME below errors with "no such column: activated_at" — which we
+  // intentionally swallow via ignoreErrorMatching.
+  {
+    name: "019_rename_licenses_activated_at",
+    sql: "ALTER TABLE licenses RENAME COLUMN activated_at TO last_activated_at",
+    ignoreErrorMatching: /no such column.*activated_at/i,
+  },
 ];
 
 /**
@@ -139,13 +158,17 @@ export const migrations: Migration[] = [
  * first run it becomes a single cheap SELECT.
  */
 export async function applyMigrations(db: MigrationDB): Promise<void> {
-  // Create the bookkeeping table (idempotent).
-  await db.exec(
-    `CREATE TABLE IF NOT EXISTS schema_migrations (
-       name TEXT PRIMARY KEY,
-       applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-     )`
-  );
+  // Create the bookkeeping table (idempotent). We use prepare().run() rather
+  // than db.exec() because D1's exec() requires each statement to be on a
+  // single line — a footgun that silently breaks any multi-line DDL.
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS schema_migrations (
+         name TEXT PRIMARY KEY,
+         applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+       )`
+    )
+    .run();
 
   // Fetch already-applied migration names in one round-trip.
   const applied = new Set<string>();
@@ -159,15 +182,18 @@ export async function applyMigrations(db: MigrationDB): Promise<void> {
   for (const m of migrations) {
     if (applied.has(m.name)) continue;
     try {
-      await db.exec(m.sql);
+      await db.prepare(m.sql).run();
     } catch (err: unknown) {
       // "duplicate column name" / "table already exists" — the column
       // or table was added outside the migration system (e.g. by
       // running schema.sql directly).  Record it and move on.
       const msg = err instanceof Error ? err.message : String(err);
+      const matchesPerMigration =
+        m.ignoreErrorMatching instanceof RegExp && m.ignoreErrorMatching.test(msg);
       if (
         msg.includes("duplicate column") ||
-        msg.includes("already exists")
+        msg.includes("already exists") ||
+        matchesPerMigration
       ) {
         // Column/table/index already present — safe to continue.
       } else {

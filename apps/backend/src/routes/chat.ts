@@ -3,6 +3,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
+import { parseProviderList } from "@claude-cope/shared/openrouter";
 import { getProfileRow, isLicenseActive, resolveProUser } from "../utils/profile";
 import {
   checkQuotaAvailable,
@@ -16,6 +17,8 @@ import {
 type Env = {
   Bindings: {
     OPENROUTER_API_KEY?: string;
+    OPENROUTER_PROVIDERS?: string;
+    OPENROUTER_PROVIDERS_FREE_ONLY?: string;
     DB?: D1Database;
     USAGE_KV?: KVNamespace;
     POLAR_ACCESS_TOKEN?: string;
@@ -158,19 +161,42 @@ function validateChatRequest(body: ChatBody, apiKey: string | undefined): { erro
   return null;
 }
 
-async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[]) {
+type OpenRouterRequestBody = {
+  model: string;
+  messages: { role: string; content: string }[];
+  max_tokens: number;
+  reasoning: { effort: string };
+  provider?: { order: string[] };
+};
+
+export function resolveProviderList(
+  providersEnv: string | undefined,
+  freeOnlyEnv: string | undefined,
+  isProUser: boolean,
+): string[] {
+  if (isProUser && freeOnlyEnv === "true") return [];
+  return parseProviderList(providersEnv);
+}
+
+export async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[], providers?: string[]) {
+  const requestBody: OpenRouterRequestBody = {
+    model,
+    messages,
+    max_tokens: 2000,
+    reasoning: { effort: "low" },
+  };
+
+  if (providers && providers.length > 0) {
+    requestBody.provider = { order: providers };
+  }
+
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: 2000,
-      reasoning: { effort: "low" },
-    }),
+    body: JSON.stringify(requestBody),
   });
 }
 
@@ -285,7 +311,7 @@ const chat = new Hono<Env>();
 chat.post("/", async (c) => {
   const body = await c.req.json<ChatBody>();
 
-  const apiKey = (c.env as Record<string, string | undefined>).OPENROUTER_API_KEY;
+  const apiKey = c.env.OPENROUTER_API_KEY;
   const validation = validateChatRequest(body, apiKey);
   if (validation) {
     return c.json({ error: validation.error }, validation.status);
@@ -314,7 +340,12 @@ chat.post("/", async (c) => {
     buddyType: body.buddyType,
   });
 
-  const orResponse = await callOpenRouter(apiKey!, model, messages);
+  const providerList = resolveProviderList(
+    c.env.OPENROUTER_PROVIDERS,
+    c.env.OPENROUTER_PROVIDERS_FREE_ONLY,
+    Boolean(preCheck.effectiveProKeyHash),
+  );
+  const orResponse = await callOpenRouter(apiKey!, model, messages, providerList);
 
   if (!orResponse.ok) {
     const errData = await orResponse.json();
