@@ -54,12 +54,13 @@ function parseBackendVerificationStatus(data: unknown): BackendVerificationStatu
     };
   }
   if (payload?.status === VERIFY_STATUS.UNAVAILABLE) {
+    if (payload.reason === UNAVAILABLE_REASON.SESSION_UNAVAILABLE) {
+      return { status: "disabled" };
+    }
     return {
       status: "unavailable",
       message:
-        payload.reason === UNAVAILABLE_REASON.SESSION_UNAVAILABLE
-          ? "Human verification could not start because your session is unavailable. Check that cookies are enabled and try again."
-          : "Human verification is temporarily unavailable.",
+        "Human verification is temporarily unavailable.",
     };
   }
   if (payload?.status === VERIFY_STATUS.DISABLED || payload?.status === VERIFY_STATUS.ENABLED || payload?.status === VERIFY_STATUS.VERIFIED) {

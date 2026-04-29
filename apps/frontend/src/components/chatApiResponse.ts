@@ -128,6 +128,8 @@ export async function handleChatErrorResponse(
   const pushMessage = (message: Message) =>
     setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading"), message]);
   const readErrorData = () => res.json().catch(() => null);
+  const matchesBotProtectionMessage = (error: unknown) =>
+    typeof error === "string" && error.toLowerCase().includes("human verification required");
   const isBotProtectionFailure = (reason: unknown) =>
     reason === BOT_PROTECTION_REASON.HUMAN_VERIFICATION_REQUIRED
     || reason === BOT_PROTECTION_REASON.SESSION_UNAVAILABLE
@@ -144,7 +146,7 @@ export async function handleChatErrorResponse(
 
   const handleBotProtectionFailure = async () => {
     const errorData = await readErrorData();
-    if (!isBotProtectionFailure(errorData?.reason)) return false;
+    if (!isBotProtectionFailure(errorData?.reason) && !matchesBotProtectionMessage(errorData?.error)) return false;
     triggerReverification();
     return true;
   };
