@@ -37,6 +37,12 @@ type VerifyStatusResponse =
       misconfigured: false;
     }
   | {
+      status: "verified";
+      enabled: true;
+      bypassed: false;
+      misconfigured: false;
+    }
+  | {
       status: "misconfigured";
       enabled: false;
       bypassed: false;
@@ -134,6 +140,17 @@ verify.get("/", createRateLimiter("verify-status:"), async (c) => {
       bypassed: false,
       misconfigured: false,
       reason: "storage_unavailable",
+    };
+    return c.json(response);
+  }
+
+  const humanFlag = await kv.get(`human:${sessionId}`);
+  if (humanFlag) {
+    const response: VerifyStatusResponse = {
+      status: "verified",
+      enabled: true,
+      bypassed: false,
+      misconfigured: false,
     };
     return c.json(response);
   }

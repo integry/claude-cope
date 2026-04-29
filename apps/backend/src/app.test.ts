@@ -141,6 +141,45 @@ describe("app", () => {
       });
     });
 
+    it("reports already verified when human flag exists in KV", async () => {
+      const usageKv = {
+        get: vi.fn().mockResolvedValue("1"),
+        put: vi.fn(),
+      };
+      const res = await app.request(
+        "/api/verify",
+        { method: "GET", headers: { Origin: "http://localhost:5173" } },
+        { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv },
+      );
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        status: "verified",
+        enabled: true,
+        bypassed: false,
+        misconfigured: false,
+      });
+      expect(usageKv.get).toHaveBeenCalledWith(expect.stringMatching(/^human:/));
+    });
+
+    it("reports enabled when human flag is absent in KV", async () => {
+      const usageKv = {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn(),
+      };
+      const res = await app.request(
+        "/api/verify",
+        { method: "GET", headers: { Origin: "http://localhost:5173" } },
+        { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv },
+      );
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        status: "enabled",
+        enabled: true,
+        bypassed: false,
+        misconfigured: false,
+      });
+    });
+
     it("bypasses /api/verify when TURNSTILE_SECRET_KEY is not set", async () => {
       const res = await app.request(
         "/api/verify",

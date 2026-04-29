@@ -32,7 +32,7 @@ type VerifyTokenResult = {
 };
 
 type BackendVerificationStatus =
-  | { status: "enabled" | "disabled" }
+  | { status: "enabled" | "disabled" | "verified" }
   | { status: "unavailable"; message: string };
 
 function parseBackendVerificationStatus(data: unknown): BackendVerificationStatus {
@@ -61,7 +61,7 @@ function parseBackendVerificationStatus(data: unknown): BackendVerificationStatu
           : "Human verification is temporarily unavailable.",
     };
   }
-  if (payload?.status === "disabled" || payload?.status === "enabled") {
+  if (payload?.status === "disabled" || payload?.status === "enabled" || payload?.status === "verified") {
     return { status: payload.status };
   }
   if (typeof payload?.bypassed === "boolean") {
@@ -266,7 +266,7 @@ export default function TurnstileWidget({
     const run = async () => {
       const status = await getBackendVerificationStatus();
       if (cancelled) return;
-      if (status.status === "disabled") {
+      if (status.status === "disabled" || status.status === "verified") {
         onVerified();
         return;
       }
