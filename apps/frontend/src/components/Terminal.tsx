@@ -124,11 +124,12 @@ function Terminal() {
     const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
   }, [unlockAchievement, playChime]);
 
-  const closeAllOverlays = useCallback(() => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowPrivacy(false); setShowTerms(false); setShowContact(false); setShowProfile(false); setShowParty(false); setShowUpgrade(false); pendingNagCommandRef.current = null; }, []);
-  const handleProfileClick = useCallback(() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlays, setShowProfile, state.username]);
+  const closeAllOverlaysAndNag = useCallback(() => { closeAllOverlays(); pendingNagCommandRef.current = null; }, [closeAllOverlays]);
+  const handleProfileClick = useCallback(() => { closeAllOverlaysAndNag(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlaysAndNag, setShowProfile, state.username]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [history]);
+  // Clear pending nag command when navigating away from /upgrade via browser back/forward
   useEffect(() => {
-    const onPopState = () => { setShowHelp(window.location.pathname === "/help"); setShowAbout(window.location.pathname === "/about"); setShowPrivacy(window.location.pathname === "/privacy"); setShowTerms(window.location.pathname === "/terms"); setShowContact(window.location.pathname === "/contact"); setShowProfile(window.location.pathname.startsWith("/user/")); const shouldShowUpgrade = window.location.pathname === "/upgrade"; setShowUpgrade(shouldShowUpgrade); if (!shouldShowUpgrade) pendingNagCommandRef.current = null; };
+    const onPopState = () => { if (window.location.pathname !== "/upgrade") pendingNagCommandRef.current = null; };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
@@ -152,7 +153,7 @@ function Terminal() {
       // Pro users: run the normal lockout flow (quota refill, etc.)
       triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState });
     }
-  }, [playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState]);
+  }, [playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState, setShowUpgrade]);
 
   const handleInstantBan = useCallback(() => {
     triggerInstantBan({ setInstantBanReady, setIsProcessing, playError, setHistory });
@@ -199,7 +200,7 @@ function Terminal() {
       return true;
     }
     return false;
-  }, [state.proKey, state.proKeyHash, state.economy.quotaPercent]);
+  }, [state.proKey, state.proKeyHash, state.economy.quotaPercent, setShowUpgrade]);
 
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
     if (state.buddy.type) {
@@ -281,7 +282,7 @@ function Terminal() {
       pendingNagCommandRef.current = null;
       processCommandRef.current(command);
     }
-  }, []);
+  }, [setShowUpgrade]);
 
   const { handleKeyDown } = useTerminalKeyboard({
     slashQuery,
