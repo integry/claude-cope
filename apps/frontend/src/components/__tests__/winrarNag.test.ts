@@ -73,7 +73,6 @@ describe("WinRAR nag: pending command storage", () => {
 
   it("does not store command for BYOK users", () => {
     const pendingNagCommandRef = { current: null as string | null };
-    const setShowUpgrade = vi.fn();
     const state = { proKey: null, proKeyHash: null, economy: { quotaPercent: 0 } };
 
     const effectiveApiKey = "sk-user-key";
