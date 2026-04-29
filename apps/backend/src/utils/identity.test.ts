@@ -24,6 +24,13 @@ describe("hashIpDaily", () => {
     const b = await hashIpDaily("10.0.0.1", "2026-01-01");
     expect(a).toBe(b);
   });
+
+  it("never contains the raw IP in the output", async () => {
+    const ip = "192.168.1.42";
+    const hash = await hashIpDaily(ip, "2026-04-29");
+    expect(hash).not.toContain(ip);
+    expect(hash).not.toContain(ip.replace(/\./g, ""));
+  });
 });
 
 describe("resolveRequestIdentity", () => {
@@ -45,6 +52,15 @@ describe("resolveRequestIdentity", () => {
     expect(id.cope_id).toBe("sess-abc-123");
   });
 
+  it("uses the sessionId verbatim, not a hash", async () => {
+    const session = "my-unique-session-id-xyz";
+    const id = await resolveRequestIdentity(
+      session,
+      makeReq({ "cf-connecting-ip": "1.2.3.4" }),
+    );
+    expect(id.cope_id).toBe(session);
+  });
+
   it("hashes the IP instead of returning it raw", async () => {
     const id = await resolveRequestIdentity(
       "sess",
@@ -52,6 +68,16 @@ describe("resolveRequestIdentity", () => {
     );
     expect(id.ip_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(id.ip_hash).not.toContain("1.2.3.4");
+  });
+
+  it("no field in the returned identity contains the raw IP", async () => {
+    const rawIp = "203.0.113.77";
+    const id = await resolveRequestIdentity(
+      "sess",
+      makeReq({ "cf-connecting-ip": rawIp }),
+    );
+    const allValues = JSON.stringify(id);
+    expect(allValues).not.toContain(rawIp);
   });
 
   it("exposes asn and country from cf properties", async () => {
@@ -82,5 +108,23 @@ describe("resolveRequestIdentity", () => {
       makeReq({ "cf-connecting-ip": "9.9.9.9" }),
     );
     expect(a.ip_hash).toBe(b.ip_hash);
+  });
+
+  it("uses x-real-ip as a fallback when other headers are absent", async () => {
+    const a = await resolveRequestIdentity(
+      "sess",
+      makeReq({ "x-real-ip": "10.10.10.10" }),
+    );
+    const b = await resolveRequestIdentity(
+      "sess",
+      makeReq({ "cf-connecting-ip": "10.10.10.10" }),
+    );
+    expect(a.ip_hash).toBe(b.ip_hash);
+  });
+
+  it("falls back to 'unknown' when no IP headers are present", async () => {
+    const id = await resolveRequestIdentity("sess", makeReq({}));
+    const unknownHash = await hashIpDaily("unknown");
+    expect(id.ip_hash).toBe(unknownHash);
   });
 });
