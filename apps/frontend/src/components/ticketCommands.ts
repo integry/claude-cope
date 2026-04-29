@@ -16,6 +16,7 @@ let lastBacklogResults: BacklogTicket[] = [];
 
 export async function handleTicketCommand(command: string, reply: Reply): Promise<boolean> {
   if (!TICKET_REFINE_ENABLED) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ticket", reason: "disabled" });
     reply({ role: "error", content: "[❌] Unknown command: `/ticket`. Type `/help` to see available commands." });
     return true;
   }

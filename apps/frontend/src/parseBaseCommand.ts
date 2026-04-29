@@ -16,6 +16,10 @@ const KNOWN_COMMANDS = new Set<string>([...ALL_SLASH_COMMANDS, "/exit", "/quit"]
  */
 export function parseBaseCommand(command: string): string {
   const token = command.trim().split(/\s+/, 1)[0] as string;
-  if (!token || !token.startsWith("/")) return "/unknown";
+  if (!token) return "/unknown";
+  // Normalize bare exit/quit (without slash prefix) to their slash equivalents
+  const bare = token.toLowerCase();
+  if (bare === "exit" || bare === "quit") return `/${bare}`;
+  if (!token.startsWith("/")) return "/unknown";
   return KNOWN_COMMANDS.has(token) ? token : "/unknown";
 }

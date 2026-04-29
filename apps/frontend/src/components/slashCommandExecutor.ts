@@ -715,6 +715,7 @@ async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Prom
 function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | false {
   if (command === "/key" || command.startsWith("/key ")) {
     if (!BYOK_ENABLED) {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/key", reason: "disabled" });
       reply({ role: "error", content: `[❌ Error] Command not found: \`/key\`` });
       return false;
     }
@@ -848,13 +849,15 @@ export function executeSlashCommand(
 
   // Track command usage for performance review brag card
   const baseCommand = parseBaseCommand(command);
-  ctx.setState((prev) => ({
-    ...prev,
-    commandUsage: {
-      ...prev.commandUsage,
-      [baseCommand]: (prev.commandUsage[baseCommand] ?? 0) + 1,
-    },
-  }));
+  if (baseCommand !== "/unknown") {
+    ctx.setState((prev) => ({
+      ...prev,
+      commandUsage: {
+        ...prev.commandUsage,
+        [baseCommand]: (prev.commandUsage[baseCommand] ?? 0) + 1,
+      },
+    }));
+  }
 
   track(AnalyticsEvents.SLASH_COMMAND_ATTEMPTED, { command: baseCommand });
 
