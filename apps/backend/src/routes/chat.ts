@@ -18,6 +18,7 @@ type Env = {
   Bindings: {
     OPENROUTER_API_KEY?: string;
     OPENROUTER_PROVIDERS?: string;
+    OPENROUTER_PROVIDERS_FREE_ONLY?: string;
     DB?: D1Database;
     USAGE_KV?: KVNamespace;
     POLAR_ACCESS_TOKEN?: string;
@@ -167,6 +168,15 @@ type OpenRouterRequestBody = {
   reasoning: { effort: string };
   provider?: { order: string[] };
 };
+
+export function resolveProviderList(
+  providersEnv: string | undefined,
+  freeOnlyEnv: string | undefined,
+  isProUser: boolean,
+): string[] {
+  if (isProUser && freeOnlyEnv === "true") return [];
+  return parseProviderList(providersEnv);
+}
 
 export async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[], providers?: string[]) {
   const requestBody: OpenRouterRequestBody = {
@@ -330,7 +340,11 @@ chat.post("/", async (c) => {
     buddyType: body.buddyType,
   });
 
-  const providerList = parseProviderList(c.env.OPENROUTER_PROVIDERS);
+  const providerList = resolveProviderList(
+    c.env.OPENROUTER_PROVIDERS,
+    c.env.OPENROUTER_PROVIDERS_FREE_ONLY,
+    Boolean(preCheck.effectiveProKeyHash),
+  );
   const orResponse = await callOpenRouter(apiKey!, model, messages, providerList);
 
   if (!orResponse.ok) {

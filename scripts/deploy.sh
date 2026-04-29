@@ -110,6 +110,12 @@ if ! $FRONTEND_ONLY; then
 
   echo "--- Setting Worker secrets ---"
   echo "$OPENROUTER_API_KEY" | (cd "$ROOT/apps/backend" && wrangler secret put OPENROUTER_API_KEY --config "$WRANGLER_CFG")
+  if [[ -n "${OPENROUTER_PROVIDERS:-}" ]]; then
+    echo "$OPENROUTER_PROVIDERS" | (cd "$ROOT/apps/backend" && wrangler secret put OPENROUTER_PROVIDERS --config "$WRANGLER_CFG")
+  fi
+  if [[ -n "${OPENROUTER_PROVIDERS_FREE_ONLY:-}" ]]; then
+    echo "$OPENROUTER_PROVIDERS_FREE_ONLY" | (cd "$ROOT/apps/backend" && wrangler secret put OPENROUTER_PROVIDERS_FREE_ONLY --config "$WRANGLER_CFG")
+  fi
   echo ""
 fi
 
