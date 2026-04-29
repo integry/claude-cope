@@ -21,6 +21,7 @@ describe("analytics — /key disabled (BYOK off) fires SLASH_COMMAND_FAILED", ()
     vi.doMock("../game/constants", () => ({
       PING_COST: 100,
       THEMES: [],
+      PRO_GATED_COMMANDS: new Set(["/brrrrrr", "/blame", "/synergize", "/alias"]),
     }));
     vi.doMock("@claude-cope/shared/models", () => ({
       COPE_MODELS: [],

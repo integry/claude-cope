@@ -20,6 +20,7 @@ export const SlashCommandFailureReasons = {
   NETWORK_ERROR: "network_error",
   NO_ARGUMENT: "no_argument",
   NO_BUDDY: "no_buddy",
+  PRO_GATED: "pro_gated",
   NO_KEY: "no_key",
   NO_OFFER: "no_offer",
   NO_TICKET: "no_ticket",

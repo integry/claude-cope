@@ -1,6 +1,7 @@
 import { consumeQuota, getQuotaLimits, getQuotaPercent, QuotaExhaustedError } from "../utils/quota";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { getProfile, getProfileByLicenseHash, resolveRank } from "../utils/profile";
+import { FREE_TIER_RANK_CAP } from "../gameConstants";
 import { syncPolarUsage } from "../utils/polar";
 
 type EnvBindings = {
@@ -31,12 +32,11 @@ export function buildFreeChatProfileSnapshot(params: FreeProfileSnapshotParams):
   if (!serverProfile && tdAwarded <= 0) return null;
 
   if (!serverProfile) {
-    const rank = resolveRank(tdAwarded);
     return {
       username,
       total_td: tdAwarded,
       current_td: tdAwarded,
-      corporate_rank: rank,
+      corporate_rank: FREE_TIER_RANK_CAP,
       inventory: {},
       upgrades: [],
       achievements: [],
@@ -56,7 +56,7 @@ export function buildFreeChatProfileSnapshot(params: FreeProfileSnapshotParams):
     ...serverProfile,
     total_td: totalTD,
     current_td: serverProfile.current_td + tdAwarded,
-    corporate_rank: resolveRank(totalTD),
+    corporate_rank: FREE_TIER_RANK_CAP,
     quota_percent: quotaPercent,
   };
 }
@@ -203,7 +203,7 @@ export function recordUsage(
       db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, license_hash, credits_used) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, license_hash = ?, credits_used = credits_used + 1, updated_at = datetime('now')").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.proKeyHash, params.tdAwarded, params.tdAwarded, params.proKeyHash).run(),
     );
   } else if (!isOwnershipSpoofed) {
-    const serverDerivedRank = params.rank ?? resolveRank(params.tdAwarded);
+    const serverDerivedRank = params.rank ?? FREE_TIER_RANK_CAP;
     queries.push(
       db.prepare(
         `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, credits_used)
@@ -248,12 +248,11 @@ export async function handleFreeUserResponse(
 ): Promise<Response> {
   let serverProfile: ServerProfile | null = null;
   let serverMultiplier = 1;
-  let serverRank = "Junior Code Monkey";
+  const serverRank = FREE_TIER_RANK_CAP;
   if (db) {
     serverProfile = await getProfile(db, params.username);
     if (serverProfile) {
       serverMultiplier = serverProfile.multiplier;
-      serverRank = serverProfile.corporate_rank;
     }
   }
 

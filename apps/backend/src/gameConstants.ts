@@ -2,6 +2,7 @@ export {
   GENERATORS,
   UPGRADES,
   CORPORATE_RANKS,
+  FREE_TIER_RANK_CAP,
   THEMES,
   GROWTH_RATE,
   calcBulkCost,

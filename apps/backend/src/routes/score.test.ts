@@ -222,8 +222,8 @@ describe("POST /api/score", () => {
     expect(json.corporate_rank).toBe("🤡 DevTools Hacker");
   });
 
-  it("resolves rank from CORPORATE_RANKS thresholds for existing user", async () => {
-    // Existing user with 100k server total, claiming 100k
+  it("caps rank to Junior Code Monkey for free users regardless of TD", async () => {
+    // Existing free user with 100k server total, claiming 100k
     const { db } = makeDB({ total_td: 100000, current_td: 90000 });
     const res = await postScore(db, {
       username: "pro",
@@ -234,8 +234,7 @@ describe("POST /api/score", () => {
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { corporate_rank: string };
-    // 100k >= 89k threshold = "Mid-Level Googler"
-    expect(json.corporate_rank).toBe("Mid-Level Googler");
+    expect(json.corporate_rank).toBe("Junior Code Monkey");
   });
 
   it("uses cf-ipcountry header for country detection", async () => {

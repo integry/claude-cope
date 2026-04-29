@@ -2,7 +2,7 @@
 import { track, identify } from "../analytics";
 import { AnalyticsEvents, SlashCommandFailureReasons } from "../analyticsEvents";
 import { parseBaseCommand } from "../parseBaseCommand";
-import { PING_COST, THEMES } from "../game/constants";
+import { PING_COST, THEMES, PRO_GATED_COMMANDS } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE, BYOK_ENABLED, PRO_QUOTA_LIMIT } from "../config";
@@ -859,6 +859,18 @@ export function executeSlashCommand(
   }
 
   track(AnalyticsEvents.SLASH_COMMAND_ATTEMPTED, { command: baseCommand });
+
+  // Pro-gated commands: block free users with a 403-style error
+  if (PRO_GATED_COMMANDS.has(baseCommand)) {
+    const isPro = Boolean(ctx.state.proKey);
+    const isBYOK = BYOK_ENABLED && Boolean(ctx.state.apiKey);
+    if (!isPro && !isBYOK) {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: baseCommand, reason: SlashCommandFailureReasons.PRO_GATED });
+      reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] \`${baseCommand}\` is a Max-tier command. Free users may look, but not touch.\n\nUpgrade at \`/upgrade\` to unlock the full command arsenal.` });
+      ctx.setIsProcessing(false);
+      return;
+    }
+  }
 
   // /clear fires instantly — no fake processing delay
   if (command === "/clear") {

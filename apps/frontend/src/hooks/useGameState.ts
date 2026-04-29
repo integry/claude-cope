@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, SetStateAction } from "react";
 import { track, identify } from "../analytics";
 import { AnalyticsEvents } from "../analyticsEvents";
-import { GENERATORS, UPGRADES, THEMES } from "../game/constants";
+import { GENERATORS, UPGRADES, THEMES, FREE_TIER_RANK_CAP } from "../game/constants";
+import { BYOK_ENABLED } from "../config";
 import { supabase } from "../supabaseClient";
 import {
   type Message,
@@ -175,7 +176,8 @@ export function useGameState() {
       const boosted = Math.round(amount * multiplier);
       const newCurrentTD = Math.max(0, prev.economy.currentTD + boosted);
       const newTotalTDEarned = Math.max(0, prev.economy.totalTDEarned + boosted);
-      const newRank = resolveRank(newTotalTDEarned, prev.economy.currentRank);
+      const isFree = !prev.proKey && !(BYOK_ENABLED && prev.apiKey);
+      const newRank = isFree ? FREE_TIER_RANK_CAP : resolveRank(newTotalTDEarned, prev.economy.currentRank);
 
       return {
         ...prev,

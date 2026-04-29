@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { CORPORATE_RANKS } from "./rankConstants";
+import { FREE_TIER_RANK_CAP } from "./rankConstants";
 import { computeMultiplier } from "../gameConstants";
 import { getProfile, getProfileByLicenseHash, isLicenseActive, resolveRank as resolveRankFromProfile, resolveProUser } from "../utils/profile";
 
@@ -149,12 +149,8 @@ function computeTimeCap(existing: { last_sync_time: string } | null, serverTotal
 }
 
 function resolveRankAndFlags(validatedTotal: number, claimedTotal: number, serverTotal: number): string {
-  let rank = "Junior Code Monkey";
-  for (const r of CORPORATE_RANKS) {
-    if (validatedTotal >= r.threshold) rank = r.title;
-  }
-  if (claimedTotal > serverTotal * 2 && serverTotal > 1000) rank = "🤡 DevTools Hacker";
-  return rank;
+  if (claimedTotal > serverTotal * 2 && serverTotal > 1000) return "🤡 DevTools Hacker";
+  return FREE_TIER_RANK_CAP;
 }
 
 // INVARIANT: opts.validatedTotal includes opts.validatedClaims' bonus_td (computed
