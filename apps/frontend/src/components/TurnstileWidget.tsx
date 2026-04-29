@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { API_BASE, TURNSTILE_SITE_KEY } from "../config";
+import { VERIFY_STATUS, UNAVAILABLE_REASON, VERIFY_FAILURE_REASON } from "@claude-cope/shared/turnstile";
 
 type TurnstileRenderOptions = {
   sitekey: string;
@@ -46,22 +47,22 @@ function parseBackendVerificationStatus(data: unknown): BackendVerificationStatu
       }
     | undefined;
 
-  if (payload?.status === "misconfigured") {
+  if (payload?.status === VERIFY_STATUS.MISCONFIGURED) {
     return {
       status: "unavailable",
       message: "Human verification is unavailable because the server is misconfigured.",
     };
   }
-  if (payload?.status === "unavailable") {
+  if (payload?.status === VERIFY_STATUS.UNAVAILABLE) {
     return {
       status: "unavailable",
       message:
-        payload.reason === "session_unavailable"
+        payload.reason === UNAVAILABLE_REASON.SESSION_UNAVAILABLE
           ? "Human verification could not start because your session is unavailable. Check that cookies are enabled and try again."
           : "Human verification is temporarily unavailable.",
     };
   }
-  if (payload?.status === "disabled" || payload?.status === "enabled" || payload?.status === "verified") {
+  if (payload?.status === VERIFY_STATUS.DISABLED || payload?.status === VERIFY_STATUS.ENABLED || payload?.status === VERIFY_STATUS.VERIFIED) {
     return { status: payload.status };
   }
   if (typeof payload?.bypassed === "boolean") {
@@ -99,7 +100,7 @@ async function verifyToken(token: string): Promise<VerifyTokenResult> {
 
   if (res.status === 403) {
     const reason = data?.reason as string | undefined;
-    const retryable = reason === "challenge_failed" || reason === "token_expired" || typeof data?.error !== "string";
+    const retryable = reason === VERIFY_FAILURE_REASON.CHALLENGE_FAILED || reason === VERIFY_FAILURE_REASON.TOKEN_EXPIRED || typeof data?.error !== "string";
     return {
       verified: false,
       retryable,
@@ -107,7 +108,15 @@ async function verifyToken(token: string): Promise<VerifyTokenResult> {
     };
   }
 
-  if (res.status === 429 || res.status >= 500) {
+  if (res.status === 429) {
+    return {
+      verified: false,
+      retryable: false,
+      message: typeof data?.error === "string" ? data.error : "Too many verification attempts. Please wait and try again.",
+    };
+  }
+
+  if (res.status >= 500) {
     return {
       verified: false,
       retryable: true,
@@ -260,9 +269,13 @@ export default function TurnstileWidget({
         onError(message);
         return false;
       }
-      turnstile?.reset(widgetId ?? "");
-      startVerificationTimeout();
-      turnstile?.execute(widgetId ?? "");
+      const backoffMs = Math.min(1000 * 2 ** (retries - 1), 8000);
+      window.setTimeout(() => {
+        if (cancelled) return;
+        turnstile?.reset(widgetId ?? "");
+        startVerificationTimeout();
+        turnstile?.execute(widgetId ?? "");
+      }, backoffMs);
       return true;
     };
     let turnstile: TurnstileApi | undefined;
@@ -275,7 +288,11 @@ export default function TurnstileWidget({
         return;
       }
       if (status.status === "unavailable") {
-        onError(status.message);
+        // Soft-fail: let the user through to the terminal. The backend's
+        // botProtection middleware on /api/chat is the real gate — blocking
+        // the entire UI here turns a KV/session outage into a full-site outage.
+        console.warn("[turnstile] verification infrastructure unavailable, allowing passthrough:", status.message);
+        onVerified();
         return;
       }
 

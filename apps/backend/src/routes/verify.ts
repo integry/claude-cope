@@ -1,6 +1,7 @@
 import { type Context, Hono } from "hono";
 import { getClientIp, createRateLimiter } from "../middleware/rateLimiter";
 import { normalizeHostname, getExpectedHostnameConfig as getHostnameConfig } from "../utils/hostname";
+import { VERIFY_STATUS, UNAVAILABLE_REASON, VERIFY_FAILURE_REASON, MISCONFIGURED_REASON } from "@claude-cope/shared/turnstile";
 
 type Env = {
   Bindings: {
@@ -25,36 +26,36 @@ type TurnstileVerifyResponse = {
 
 type VerifyStatusResponse =
   | {
-      status: "disabled";
+      status: typeof VERIFY_STATUS.DISABLED;
       enabled: false;
       bypassed: true;
       misconfigured: false;
     }
   | {
-      status: "enabled";
+      status: typeof VERIFY_STATUS.ENABLED;
       enabled: true;
       bypassed: false;
       misconfigured: false;
     }
   | {
-      status: "verified";
+      status: typeof VERIFY_STATUS.VERIFIED;
       enabled: true;
       bypassed: false;
       misconfigured: false;
     }
   | {
-      status: "misconfigured";
+      status: typeof VERIFY_STATUS.MISCONFIGURED;
       enabled: false;
       bypassed: false;
       misconfigured: true;
-      reason: "invalid_expected_hostname";
+      reason: typeof MISCONFIGURED_REASON.INVALID_EXPECTED_HOSTNAME;
     }
   | {
-      status: "unavailable";
+      status: typeof VERIFY_STATUS.UNAVAILABLE;
       enabled: false;
       bypassed: false;
       misconfigured: false;
-      reason: "session_unavailable" | "storage_unavailable";
+      reason: typeof UNAVAILABLE_REASON.SESSION_UNAVAILABLE | typeof UNAVAILABLE_REASON.STORAGE_UNAVAILABLE;
     };
 
 const HUMAN_TTL_SECONDS = 60 * 60 * 24;
@@ -73,7 +74,7 @@ verify.get("/", createRateLimiter("verify-status:"), async (c) => {
   const expectedHostname = getExpectedHostnameConfig(c);
   if (!secret) {
     const response: VerifyStatusResponse = {
-      status: "disabled",
+      status: VERIFY_STATUS.DISABLED,
       enabled: false,
       bypassed: true,
       misconfigured: false,
@@ -82,31 +83,31 @@ verify.get("/", createRateLimiter("verify-status:"), async (c) => {
   }
   if (expectedHostname.invalid) {
     const response: VerifyStatusResponse = {
-      status: "misconfigured",
+      status: VERIFY_STATUS.MISCONFIGURED,
       enabled: false,
       bypassed: false,
       misconfigured: true,
-      reason: "invalid_expected_hostname",
+      reason: MISCONFIGURED_REASON.INVALID_EXPECTED_HOSTNAME,
     };
     return c.json(response);
   }
   if (!sessionId) {
     const response: VerifyStatusResponse = {
-      status: "unavailable",
+      status: VERIFY_STATUS.UNAVAILABLE,
       enabled: false,
       bypassed: false,
       misconfigured: false,
-      reason: "session_unavailable",
+      reason: UNAVAILABLE_REASON.SESSION_UNAVAILABLE,
     };
     return c.json(response);
   }
   if (!kv) {
     const response: VerifyStatusResponse = {
-      status: "unavailable",
+      status: VERIFY_STATUS.UNAVAILABLE,
       enabled: false,
       bypassed: false,
       misconfigured: false,
-      reason: "storage_unavailable",
+      reason: UNAVAILABLE_REASON.STORAGE_UNAVAILABLE,
     };
     return c.json(response);
   }
@@ -117,17 +118,17 @@ verify.get("/", createRateLimiter("verify-status:"), async (c) => {
   } catch (e) {
     console.error("KV read error in verify status", e);
     const response: VerifyStatusResponse = {
-      status: "unavailable",
+      status: VERIFY_STATUS.UNAVAILABLE,
       enabled: false,
       bypassed: false,
       misconfigured: false,
-      reason: "storage_unavailable",
+      reason: UNAVAILABLE_REASON.STORAGE_UNAVAILABLE,
     };
     return c.json(response);
   }
   if (humanFlag) {
     const response: VerifyStatusResponse = {
-      status: "verified",
+      status: VERIFY_STATUS.VERIFIED,
       enabled: true,
       bypassed: false,
       misconfigured: false,
@@ -136,7 +137,7 @@ verify.get("/", createRateLimiter("verify-status:"), async (c) => {
   }
 
   const response: VerifyStatusResponse = {
-    status: "enabled",
+    status: VERIFY_STATUS.ENABLED,
     enabled: true,
     bypassed: false,
     misconfigured: false,
@@ -225,7 +226,7 @@ verify.post("/", createRateLimiter("verify-submit:"), async (c) => {
     if (errorCodes.length > 0) {
       console.warn("Turnstile verification failed", { errorCodes });
     }
-    const reason = errorCodes.includes("timeout-or-duplicate") ? "token_expired" : "challenge_failed";
+    const reason = errorCodes.includes("timeout-or-duplicate") ? VERIFY_FAILURE_REASON.TOKEN_EXPIRED : VERIFY_FAILURE_REASON.CHALLENGE_FAILED;
     return c.json({ verified: false, reason }, 403);
   }
 

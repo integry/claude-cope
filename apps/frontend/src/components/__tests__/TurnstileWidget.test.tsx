@@ -104,7 +104,7 @@ describe("TurnstileWidget", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it("shows a recoverable session-unavailable message instead of misconfigured", async () => {
+  it("soft-fails on session-unavailable and lets the user through", async () => {
     const onVerified = vi.fn();
     const onError = vi.fn();
 
@@ -138,13 +138,11 @@ describe("TurnstileWidget", () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    expect(onVerified).not.toHaveBeenCalled();
-    expect(onError).toHaveBeenCalledWith(
-      "Human verification could not start because your session is unavailable. Check that cookies are enabled and try again.",
-    );
+    expect(onVerified).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
   });
 
-  it("applies the same retry budget to widget errors as token verification retries", async () => {
+  it("applies the same retry budget to widget errors as token verification retries (with backoff)", async () => {
     const onVerified = vi.fn();
     const onError = vi.fn();
 
@@ -178,6 +176,13 @@ describe("TurnstileWidget", () => {
         }),
       );
     });
+
+    // Initial execute fires immediately; retries use exponential backoff (1s, 2s, 4s).
+    // Advance timers to trigger each backoff retry.
+    expect(execute).toHaveBeenCalledTimes(1); // initial execute
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); }); // 1s backoff → retry 1
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); }); // 2s backoff → retry 2
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000); }); // 4s backoff → retry 3
 
     expect(reset).toHaveBeenCalledTimes(3);
     expect(execute).toHaveBeenCalledTimes(4);
