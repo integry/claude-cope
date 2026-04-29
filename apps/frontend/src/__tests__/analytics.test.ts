@@ -110,7 +110,8 @@ describe("analytics — enabled path (with POSTHOG_KEY)", () => {
   it("track() captures events after init completes", async () => {
     const { initPostHog, track } = await import("../analytics");
     initPostHog();
-    await flushPromises();
+    // Wait until the dynamic import("posthog-js") resolves and init runs
+    await vi.waitFor(() => expect(mockInit).toHaveBeenCalled());
 
     track("game_started", { level: 1 });
     expect(mockCapture).toHaveBeenCalledWith("game_started", { level: 1 });
