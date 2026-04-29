@@ -2,6 +2,7 @@ import { POSTHOG_KEY, POSTHOG_HOST, POSTHOG_DEFAULT_HOST } from "./config";
 import { STORAGE_KEY } from "./hooks/storageKey";
 
 const COPE_ID_KEY = "cope_id";
+let volatileCopeId: string | null = null;
 
 /** Lazily-resolved PostHog instance — `null` when analytics is disabled. */
 let phInstance: import("posthog-js").PostHog | null = null;
@@ -30,18 +31,42 @@ function generateId(): string {
   });
 }
 
-function getOrCreateCopeId(): string {
-  let id = localStorage.getItem(COPE_ID_KEY);
-  if (!id) {
-    id = generateId();
-    localStorage.setItem(COPE_ID_KEY, id);
+function getBrowserStorage(): Pick<Storage, "getItem" | "setItem"> | null {
+  try {
+    return localStorage;
+  } catch {
+    return null;
   }
+}
+
+function getOrCreateCopeId(): string {
+  const storage = getBrowserStorage();
+
+  try {
+    const storedId = storage?.getItem(COPE_ID_KEY);
+    if (storedId) {
+      volatileCopeId = storedId;
+      return storedId;
+    }
+  } catch {
+    // Ignore storage read failures and fall back to an in-memory ID.
+  }
+
+  const id = volatileCopeId ?? generateId();
+  volatileCopeId = id;
+
+  try {
+    storage?.setItem(COPE_ID_KEY, id);
+  } catch {
+    // Ignore storage write failures and keep using the in-memory ID.
+  }
+
   return id;
 }
 
 function getUsernameFromGameState(): string | undefined {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = getBrowserStorage()?.getItem(STORAGE_KEY);
     if (!raw) return undefined;
     const state = JSON.parse(raw);
     return state.username || undefined;

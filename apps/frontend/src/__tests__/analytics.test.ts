@@ -143,6 +143,24 @@ describe("analytics — enabled path (with POSTHOG_KEY)", () => {
     expect(mockIdentify).toHaveBeenCalledTimes(2);
     expect(mockIdentify).toHaveBeenCalledWith("test-uuid-1234", { username: "player1" });
   });
+
+  it("falls back to an in-memory identity when storage access throws", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn(() => { throw new Error("storage denied"); }),
+      setItem: vi.fn(() => { throw new Error("storage denied"); }),
+      removeItem: vi.fn(),
+    });
+
+    const { initPostHog, identify } = await import("../analytics");
+
+    expect(() => initPostHog()).not.toThrow();
+    await flushPromises();
+
+    expect(mockInit).toHaveBeenCalled();
+    expect(mockIdentify).toHaveBeenCalledWith("test-uuid-1234", expect.any(Object));
+    expect(() => identify({ username: "fallback-user" })).not.toThrow();
+    expect(mockIdentify).toHaveBeenCalledWith("test-uuid-1234", { username: "fallback-user" });
+  });
 });
 
 describe("analytics — init failure recovery", () => {

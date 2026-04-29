@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { track, identify } from "../analytics";
-import { AnalyticsEvents } from "../analyticsEvents";
+import { AnalyticsEvents, SlashCommandFailureReasons } from "../analyticsEvents";
 import { parseBaseCommand } from "../parseBaseCommand";
 import { PING_COST, THEMES } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
@@ -233,12 +233,12 @@ export function handlePingCommand(command: string, ctx: SlashCommandContext, rep
   const target = command.slice(5).trim();
   const ticket = ctx.state.activeTicket;
   if (!ticket) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ping", reason: "no_ticket" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ping", reason: SlashCommandFailureReasons.NO_TICKET });
     reply({ role: "error", content: pickRandom(PING_NO_TICKET_MESSAGES) });
     return true;
   }
   if (ctx.state.economy.currentTD < PING_COST) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ping", reason: "insufficient_td" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ping", reason: SlashCommandFailureReasons.INSUFFICIENT_TD });
     reply({ role: "error", content: pickRandom(PING_BROKE_MESSAGES)(PING_COST, ctx.state.economy.currentTD) });
     return true;
   }
@@ -266,7 +266,7 @@ export function handleUpgradeCommand(ctx: SlashCommandContext): void {
 
 function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   if (ctx.state.economy.totalTDEarned < 1000) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/store", reason: "locked" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/store", reason: SlashCommandFailureReasons.LOCKED });
     reply({ role: "error", content: "[❌ Error] Store access denied. Requires **1,000 Technical Debt**." });
   } else {
     openOverlay(ctx, () => ctx.setShowStore(true));
@@ -278,7 +278,7 @@ function handleBuddyCommand(command: string, ctx: SlashCommandContext, reply: Re
   const arg = command.slice(6).trim().toLowerCase();
   if (arg === "clear" || arg === "remove") {
     if (!ctx.state.buddy.type) {
-      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/buddy", reason: "no_buddy" });
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/buddy", reason: SlashCommandFailureReasons.NO_BUDDY });
       reply({ role: "system", content: "[❌] You don't have a buddy to dismiss. Use `/buddy` to roll for one." });
       return true;
     }
@@ -322,13 +322,13 @@ function handleThemeCommand(command: string, ctx: SlashCommandContext, reply: Re
 
   const theme = THEMES.find((t) => t.id === arg);
   if (!theme) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/theme", reason: "unknown_theme" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/theme", reason: SlashCommandFailureReasons.UNKNOWN_THEME });
     reply({ role: "error", content: `[❌] Unknown theme: \`${arg}\`. Available: ${unlocked.map((t) => t.id).join(", ")}` });
     return true;
   }
 
   if (!ctx.state.unlockedThemes.includes(theme.id)) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/theme", reason: "locked" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/theme", reason: SlashCommandFailureReasons.LOCKED });
     reply({ role: "error", content: `[🔒] Theme \`${theme.name}\` is locked. Purchase it from the /store first.` });
     return true;
   }
@@ -500,22 +500,22 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
 async function handleAliasCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<void> {
   const newName = command.slice(6).trim();
   if (!newName) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: "no_argument" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.NO_ARGUMENT });
     reply({ role: "system", content: `[👤] Your current alias is **${ctx.state.username}**. Usage: \`/alias <new-name>\` to change it.` });
     return;
   }
   if (newName.length < 3) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: "too_short" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.TOO_SHORT });
     reply({ role: "error", content: `[❌] Alias must be at least 3 characters long.` });
     return;
   }
   if (newName.length > 33) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: "too_long" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.TOO_LONG });
     reply({ role: "error", content: `[❌] Alias must be at most 33 characters long.` });
     return;
   }
   if (!/^[a-zA-Z0-9_-]+$/.test(newName)) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: "invalid_characters" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.INVALID_CHARACTERS });
     reply({ role: "error", content: `[❌] Alias can only contain letters, numbers, hyphens, and underscores.` });
     return;
   }
@@ -524,12 +524,12 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     if (!res.ok) throw new Error("Failed to check alias");
     const { taken } = (await res.json()) as { taken: boolean };
     if (taken) {
-      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: "taken" });
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.TAKEN });
       reply({ role: "error", content: `[❌] The alias **${newName}** is already in use by another player. Pick something else.` });
       return;
     }
   } catch {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: "network_error" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.NETWORK_ERROR });
     reply({ role: "error", content: `[❌] Could not verify alias availability. Try again later.` });
     return;
   }
@@ -577,14 +577,14 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   // Non-BYOK mode: only allow predefined COPE_MODELS
   if (!copeModel && !isBYOK) {
     const byokHint = BYOK_ENABLED ? " Set your own API key with `/key` first." : "";
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/model", reason: "unavailable" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/model", reason: SlashCommandFailureReasons.UNAVAILABLE });
     reply({ role: "system", content: `[🚫] Custom models are not available on this instance.${byokHint}\n\nAvailable models: ` + COPE_MODELS.map((m) => "`" + m.id + "`").join(", ") });
     return;
   }
 
   if (copeModel && copeModel.tier === "pro" && !isPro && !isBYOK) {
     const byokHint = BYOK_ENABLED ? ", or set your own API key with `/key` to bypass limits entirely" : "";
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/model", reason: "locked" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/model", reason: SlashCommandFailureReasons.LOCKED });
     reply({ role: "system", content: `[🔒] **${copeModel.name}** is a Max model (${copeModel.multiplier}x cost). You need a Max license to use this.\n\nUpgrade at \`/upgrade\` to unlock premium models${byokHint}.` });
     return;
   }
@@ -611,10 +611,10 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
   }
   const offer = getPendingOffer();
   if (!offer) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: "no_offer" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.NO_OFFER });
     reply({ role: "error", content: pickRandom(ACCEPT_NO_TICKET_MESSAGES) });
   } else if (ctx.state.activeTicket) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: "already_active" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.ALREADY_ACTIVE });
     reply({ role: "error", content: pickRandom(ACCEPT_ALREADY_ACTIVE_MESSAGES)(ctx.state.activeTicket.title) });
   } else {
     clearPendingOffer();
@@ -632,7 +632,7 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
 async function handleSyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<void> {
   const licenseKey = command.slice(5).trim();
   if (!licenseKey) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/sync", reason: "no_key" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/sync", reason: SlashCommandFailureReasons.NO_KEY });
     reply({ role: "system", content: "[🔑] Usage: `/sync <COPE-XXX>` — Link your Polar license key to unlock Max tier." });
     return;
   }
@@ -681,11 +681,11 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
         reply({ role: "system", content: `[✓ **MAX ACTIVATED**] License key validated and profile linked. Welcome to the premium suffering tier. You now have **${PRO_QUOTA_LIMIT} Max credits**. Your progress will now sync across devices.\n\n[🔐 *FYI*] Your license key doubles as the password to this account. Anyone with it can \`/sync\` in and live their best life on your dime.` });
       }
     } else {
-      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/sync", reason: "validation_failed" });
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/sync", reason: SlashCommandFailureReasons.VALIDATION_FAILED });
       reply({ role: "error", content: `[❌] License validation failed: ${data.error ?? "Unknown error"}. Double-check your key and try again.` });
     }
   } catch {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/sync", reason: "network_error" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/sync", reason: SlashCommandFailureReasons.NETWORK_ERROR });
     reply({ role: "error", content: "[❌] Network error while validating license key. The backend is probably on fire." });
   }
 }
@@ -703,11 +703,11 @@ async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Prom
       track(AnalyticsEvents.SHILL_COMPLETED, { creditsGranted: data.creditsGranted });
       reply({ role: "system", content: `[✓ **SHILL COMPLETE**] You sold your dignity for **${data.creditsGranted} free tokens**. The marketing team approves. A tweet window has been opened — go spread the gospel of suffering.` });
     } else {
-      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/shill", reason: "server_error" });
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/shill", reason: SlashCommandFailureReasons.SERVER_ERROR });
       reply({ role: "error", content: `[❌] Shill failed: ${data.error ?? "Unknown error"}. ${data.error === "Shill credit already claimed" ? "You already sold out once. There is no second helping of shame." : ""}` });
     }
   } catch {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/shill", reason: "network_error" });
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/shill", reason: SlashCommandFailureReasons.NETWORK_ERROR });
     reply({ role: "error", content: "[❌] Network error while claiming shill credits. The backend ghosted you." });
   }
 }
@@ -715,7 +715,7 @@ async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Prom
 function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | false {
   if (command === "/key" || command.startsWith("/key ")) {
     if (!BYOK_ENABLED) {
-      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/key", reason: "disabled" });
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/key", reason: SlashCommandFailureReasons.DISABLED });
       reply({ role: "error", content: `[❌ Error] Command not found: \`/key\`` });
       return false;
     }
@@ -786,7 +786,7 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
       } else if (handleNewCommand(command, ctx, reply)) {
         if (command === "/brrrrrr") return "async";
       } else if (command.startsWith("/")) {
-        track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: parseBaseCommand(command), reason: "unknown_command" });
+        track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: parseBaseCommand(command), reason: SlashCommandFailureReasons.UNKNOWN_COMMAND });
         reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
       } else {
         reply({ role: "system", content: `[✓] Executed \`${command}\`` });
