@@ -30,7 +30,6 @@ export function useGameState() {
   const stateRef = useRef(state);
   const [offlineTDEarned, setOfflineTDEarned] = useState(0);
 
-  // Keep the ref in sync with the latest state
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -144,8 +143,6 @@ export function useGameState() {
 
     return () => clearInterval(syncInterval);
   }, []);
-
-
 
   // Background loop — checks achievements (no passive TD generation)
   useEffect(() => {
