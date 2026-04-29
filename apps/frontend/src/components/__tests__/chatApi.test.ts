@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { computeBuddyInterjection, submitChatMessage } from "../chatApi";
