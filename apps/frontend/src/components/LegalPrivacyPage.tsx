@@ -2,7 +2,7 @@ function LegalPrivacyPage() {
   return (
     <div className="min-h-screen bg-white text-gray-800 px-6 py-12 max-w-3xl mx-auto font-sans leading-relaxed">
       <h1 className="text-3xl font-bold mb-2">Privacy Policy</h1>
-      <p className="text-sm text-gray-500 mb-8">Last updated: April 8, 2026</p>
+      <p className="text-sm text-gray-500 mb-8">Last updated: April 29, 2026</p>
 
       <p className="mb-4">
         This Privacy Policy describes how Rinalds Uzkalns ("we", "us", or "our") collects, uses, and protects your information when you use Claude Cope ("the Service").
@@ -39,16 +39,21 @@ function LegalPrivacyPage() {
 
       <h2 className="text-xl font-semibold mt-8 mb-3">3. Cookies and Tracking Technologies</h2>
       <p className="mb-4">
-        We use cookies and similar tracking technologies to collect and track information about your use of the Service. Cookies are small data files stored on your device. You can instruct your browser to refuse all cookies or to indicate when a cookie is being sent. However, some features of the Service may not function properly without cookies.
+        Claude Cope does not set tracking cookies. Our product analytics provider (PostHog, see Section 4) is configured with memory-only persistence, which means no cookies and no <code>localStorage</code> entries are written for analytics purposes; all analytics state is held in tab memory and discarded when you close the tab.
+      </p>
+      <p className="mb-4">
+        We do use a small number of strictly-necessary browser <code>localStorage</code> entries to remember your in-game state (username, score, theme preference) so that the Service can function across page reloads. These entries stay on your device and are not transmitted to third parties for tracking purposes.
       </p>
 
       <h2 className="text-xl font-semibold mt-8 mb-3">4. Data Sharing and Disclosure</h2>
       <p className="mb-4">We do not sell your personal information. We may share your information with:</p>
       <ul className="list-disc pl-6 mb-4 space-y-1">
-        <li><strong>Service providers:</strong> Third-party companies that perform services on our behalf, such as payment processing (Polar.sh), hosting, and analytics</li>
+        <li><strong>Hosting and infrastructure:</strong> Cloudflare (Workers, Pages, D1, KV) for hosting and content delivery.</li>
+        <li><strong>Payment processing:</strong> Polar.sh acts as our merchant of record for paid licenses. Polar collects and processes payment details directly; we receive only the resulting license metadata.</li>
+        <li><strong>Product analytics:</strong> PostHog (PostHog Inc., hosted in the European Union at <code>eu.i.posthog.com</code>) processes anonymous product-usage events on our behalf. The events captured are limited to the actions you take inside the terminal (slash commands attempted or failed, in-game purchases, account events such as restore/upgrade/shill). Each event is associated with a randomly generated anonymous identifier (the "cope_id"), the username you have chosen within the Service, and the standard request metadata that PostHog collects automatically (browser, device type, IP address, timestamp). PostHog is configured with autocapture, page-view tracking, and session recording disabled. Acts as a processor under GDPR; the data processing agreement is published by PostHog at <a href="https://posthog.com/dpa" className="text-blue-600 hover:underline">posthog.com/dpa</a>.</li>
         <li><strong>AI Model Providers:</strong> We utilize third-party API providers (such as OpenRouter) to process the text prompts you submit to the Service in order to generate responses. Please do not submit confidential, sensitive, or personally identifiable information into the terminal.</li>
-        <li><strong>Legal requirements:</strong> When required by law, regulation, legal process, or governmental request</li>
-        <li><strong>Protection of rights:</strong> When we believe disclosure is necessary to protect our rights, your safety, or the safety of others</li>
+        <li><strong>Legal requirements:</strong> When required by law, regulation, legal process, or governmental request.</li>
+        <li><strong>Protection of rights:</strong> When we believe disclosure is necessary to protect our rights, your safety, or the safety of others.</li>
       </ul>
 
       <h2 className="text-xl font-semibold mt-8 mb-3">5. Data Retention</h2>
