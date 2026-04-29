@@ -12,6 +12,7 @@ import UserProfileOverlay from "./UserProfileOverlay";
 import PartyOverlay from "./PartyOverlay";
 import UpgradeOverlay from "./UpgradeOverlay";
 import type { GameState, Message } from "../hooks/useGameState";
+import { FREE_QUOTA_LIMIT, PRO_QUOTA_LIMIT } from "../config";
 
 export function TerminalOverlays({
   showStore,
@@ -42,9 +43,10 @@ export function TerminalOverlays({
   setShowProfile,
   setShowParty,
   setShowSynergize,
-  setShowUpgrade,
   setIsProcessing,
   setHistory,
+  onUpgradeDismiss,
+  upgradeDismissMode = "manual",
 }: {
   showStore: boolean;
   showLeaderboard: boolean;
@@ -74,9 +76,10 @@ export function TerminalOverlays({
   setShowProfile: Dispatch<SetStateAction<boolean>>;
   setShowParty: Dispatch<SetStateAction<boolean>>;
   setShowSynergize: Dispatch<SetStateAction<boolean>>;
-  setShowUpgrade: Dispatch<SetStateAction<boolean>>;
   setIsProcessing: Dispatch<SetStateAction<boolean>>;
   setHistory: Dispatch<SetStateAction<Message[]>>;
+  onUpgradeDismiss: () => void;
+  upgradeDismissMode?: "manual" | "nag";
 }) {
   return (
     <>
@@ -158,12 +161,11 @@ export function TerminalOverlays({
       )}
       {showUpgrade && (
         <UpgradeOverlay
-          isUpgraded={!!state.proKey || !!state.proKeyHash}
           quotaPercent={state.economy.quotaPercent}
-          onClose={() => {
-            setShowUpgrade(false);
-            if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
-          }}
+          totalQuota={state.proKey || state.proKeyHash ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT}
+          isBYOK={Boolean(state.apiKey) && !state.proKey && !state.proKeyHash}
+          onDismiss={onUpgradeDismiss}
+          dismissMode={upgradeDismissMode}
         />
       )}
     </>

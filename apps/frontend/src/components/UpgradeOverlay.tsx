@@ -1,13 +1,13 @@
 import {
   UPGRADE_CHECKOUT_SINGLE,
   UPGRADE_CHECKOUT_MULTI,
-  PRO_QUOTA_LIMIT,
-  FREE_QUOTA_LIMIT,
   UPGRADE_PRICE_SINGLE,
   UPGRADE_PRICE_MULTI,
+  PRO_QUOTA_LIMIT,
 } from "../config";
 import DesktopLayout from "./UpgradeDesktopLayout";
 import type { LayoutProps } from "./UpgradeDesktopLayout";
+import { getQuotaStatus } from "./upgradeQuotaStatus";
 
 /* ── helpers ─────────────────────────────────────────────────── */
 
@@ -20,34 +20,27 @@ const DIM = "#aaaaaa"; // dim footer
 
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
 
-/** Returns a humorous status adjective scaled to the user's current credits. */
-function getQuotaStatus(credits: number): string {
-  if (credits <= 0) return "Depleted";
-  if (credits <= 5) return "Pathetic";
-  if (credits <= 15) return "Embarrassing";
-  if (credits <= 50) return "Insufficient";
-  if (credits <= 200) return "Mediocre";
-  if (credits <= 500) return "Tolerable";
-  return "Adequate";
-}
-
 /* ── component ───────────────────────────────────────────────── */
 
 type UpgradeOverlayProps = {
-  isUpgraded: boolean;
   quotaPercent: number;
-  onClose: () => void;
+  totalQuota: number;
+  isBYOK: boolean;
+  onDismiss: () => void;
+  dismissMode?: "manual" | "nag";
 };
 
-function UpgradeOverlay({ isUpgraded, quotaPercent, onClose }: UpgradeOverlayProps) {
+function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss, dismissMode = "manual" }: UpgradeOverlayProps) {
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
   const singleLabel = `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`;
   const multiLabel = `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`;
 
-  const totalQuota = isUpgraded ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT;
   const currentCredits = Math.round((quotaPercent / 100) * totalQuota);
+  const quotaLine = isBYOK
+    ? "EXTERNAL BILLING ACTIVE. Status: BYOK bypass engaged."
+    : `CURRENT QUOTA: ${currentCredits} Credits. Status: ${getQuotaStatus(currentCredits)}.`;
 
   return (
     <>
@@ -57,9 +50,9 @@ function UpgradeOverlay({ isUpgraded, quotaPercent, onClose }: UpgradeOverlayPro
         multiLabel={multiLabel}
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
-        isUpgraded={isUpgraded}
-        currentCredits={currentCredits}
-        onClose={onClose}
+        quotaLine={quotaLine}
+        dismissMode={dismissMode}
+        onDismiss={onDismiss}
       />
       {/* Mobile: visible ≤640px, hidden above via CSS */}
       <MobileLayout
@@ -67,9 +60,9 @@ function UpgradeOverlay({ isUpgraded, quotaPercent, onClose }: UpgradeOverlayPro
         multiLabel={multiLabel}
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
-        isUpgraded={isUpgraded}
-        currentCredits={currentCredits}
-        onClose={onClose}
+        quotaLine={quotaLine}
+        onDismiss={onDismiss}
+        dismissMode={dismissMode}
       />
     </>
   );
@@ -84,9 +77,10 @@ function MobileLayout({
   multiLabel,
   singleAvailable,
   multiAvailable,
-  currentCredits,
-  onClose,
-}: LayoutProps) {
+  quotaLine,
+  onDismiss,
+  dismissMode = "manual",
+}: LayoutProps & { onDismiss: () => void }) {
   const sectionStyle = { padding: "8px 12px" } as const;
   const hrStyle = {
     border: "none",
@@ -145,12 +139,13 @@ function MobileLayout({
   return (
     <div
       className="upgrade-mobile fixed inset-0 z-50 flex items-center justify-center"
-      onClick={onClose}
+      onClick={dismissMode === "manual" ? onDismiss : undefined}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
 
       <div
         className="relative z-10"
+        onClick={(e) => e.stopPropagation()}
         style={{
           fontFamily: MONO_FONT,
           fontSize: "13px",
@@ -164,7 +159,6 @@ function MobileLayout({
           overflowY: "auto",
           color: W,
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Title bar */}
         <div
@@ -179,12 +173,23 @@ function MobileLayout({
           <span style={{ color: B, fontWeight: "bold", fontSize: "11px" }}>
             WALLET EXTRACTION UTILITY
           </span>
-          <span
-            style={{ color: DIM, cursor: "pointer", fontSize: "14px" }}
-            onClick={(e) => { e.stopPropagation(); onClose(); }}
-          >
-            [x]
-          </span>
+          {dismissMode === "manual" ? (
+            <button
+              type="button"
+              onClick={onDismiss}
+              style={{ color: DIM, fontSize: "14px", background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
+              title="Tap to dismiss"
+            >
+              [x]
+            </button>
+          ) : (
+            <span
+              style={{ color: DIM, fontSize: "14px" }}
+              title="Tap footer to dismiss"
+            >
+              [x]
+            </span>
+          )}
         </div>
 
         {/* Subtitle */}
@@ -193,7 +198,7 @@ function MobileLayout({
             INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]
           </span>
           <div style={{ color: DIM, fontSize: "11px", marginTop: "4px" }}>
-            {">"} CURRENT QUOTA: {currentCredits} Credits. Status: {getQuotaStatus(currentCredits)}.
+            {">"} {quotaLine}
           </div>
         </div>
 
@@ -272,7 +277,7 @@ function MobileLayout({
         {/* ESC / close */}
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
           style={{
             display: "block",
             width: "100%",
