@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { API_BASE, TURNSTILE_SITE_KEY } from "../config";
 
 type TurnstileRenderOptions = {
@@ -227,6 +227,8 @@ export default function TurnstileWidget({
   onError: (message: string) => void;
   verificationNonce: number;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     let cancelled = false;
     let retries = 0;
@@ -287,7 +289,7 @@ export default function TurnstileWidget({
       if (cancelled) return;
 
       turnstile = window.turnstile;
-      const container = document.getElementById("turnstile-container");
+      const container = containerRef.current;
       if (!turnstile || !container) {
         onError("Turnstile did not initialize.");
         return;
@@ -348,5 +350,5 @@ export default function TurnstileWidget({
     };
   }, [onError, onVerified, verificationNonce]);
 
-  return <div id="turnstile-container" style={{ display: "none" }} aria-hidden="true" />;
+  return <div ref={containerRef} style={{ display: "none" }} aria-hidden="true" />;
 }

@@ -11,8 +11,12 @@ export const botProtection: MiddlewareHandler = async (c, next) => {
   const usageKv = kv?.USAGE_KV;
   const sessionId = c.get("sessionId") as string | undefined;
 
-  if (!usageKv || !sessionId) {
-    return c.json({ error: "Bot protection is not available" }, 503);
+  if (!sessionId) {
+    return c.json({ error: "Session unavailable" }, 503);
+  }
+
+  if (!usageKv) {
+    return c.json({ error: "Bot protection storage is not available" }, 503);
   }
 
   const isHuman = await usageKv.get(`human:${sessionId}`);
