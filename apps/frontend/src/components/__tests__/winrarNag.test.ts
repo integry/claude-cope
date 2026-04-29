@@ -39,6 +39,9 @@ vi.mock("../CommandLine", async () => {
       onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
       placeholder?: string;
     }>(function MockCommandLine({ value, disabled, onChange, onKeyDown, placeholder }, ref) {
+      const handleInput = (e: React.FormEvent<HTMLInputElement>) => {
+        onChange(e as React.ChangeEvent<HTMLInputElement>);
+      };
       return (
         React.createElement("input", {
           ref,
@@ -47,6 +50,7 @@ vi.mock("../CommandLine", async () => {
           disabled,
           placeholder,
           onChange,
+          onInput: handleInput,
           onKeyDown,
         })
       );
