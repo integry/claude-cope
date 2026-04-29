@@ -1,6 +1,11 @@
 import { useEffect, useRef } from "react";
 import { API_BASE, TURNSTILE_SITE_KEY } from "../config";
-import { VERIFY_STATUS, UNAVAILABLE_REASON, VERIFY_FAILURE_REASON } from "@claude-cope/shared/turnstile";
+import {
+  VERIFY_STATUS,
+  UNAVAILABLE_REASON,
+  VERIFY_FAILURE_REASON,
+  type VerifyStatusResponse,
+} from "@claude-cope/shared/turnstile";
 
 type TurnstileRenderOptions = {
   sitekey: string;
@@ -38,13 +43,13 @@ type BackendVerificationStatus =
 
 function parseBackendVerificationStatus(data: unknown): BackendVerificationStatus {
   const payload = data as
-    | {
+    | (Partial<VerifyStatusResponse> & {
         status?: string;
         reason?: string;
         bypassed?: boolean;
         enabled?: boolean;
         misconfigured?: boolean;
-      }
+      })
     | undefined;
 
   if (payload?.status === VERIFY_STATUS.MISCONFIGURED) {
@@ -58,6 +63,12 @@ function parseBackendVerificationStatus(data: unknown): BackendVerificationStatu
       return {
         status: "unavailable",
         message: "Human verification could not start because the session is unavailable. Please retry.",
+      };
+    }
+    if (payload.reason === UNAVAILABLE_REASON.VERIFICATION_CHECK_FAILED) {
+      return {
+        status: "unavailable",
+        message: "Human verification status could not be checked. Please retry.",
       };
     }
     return {
@@ -143,12 +154,10 @@ async function getBackendVerificationStatus(): Promise<BackendVerificationStatus
   if (!res) {
     return { status: "unavailable", message: "Unable to determine verification status from the server." };
   }
-  // When the site key is not configured, transient server errors (429, 5xx)
-  // should be treated as "disabled" to avoid hard-blocking users when
-  // Turnstile is intentionally unconfigured. When the site key IS present,
-  // treat errors as "enabled" so the widget proceeds with the challenge.
   if (res.status === 429 || res.status >= 500) {
-    return { status: TURNSTILE_SITE_KEY ? "enabled" : "disabled" };
+    return TURNSTILE_SITE_KEY
+      ? { status: "enabled" }
+      : { status: "unavailable", message: "Verification service is temporarily unavailable." };
   }
   if (!res.ok) {
     return { status: "unavailable", message: "Verification service is temporarily unavailable." };

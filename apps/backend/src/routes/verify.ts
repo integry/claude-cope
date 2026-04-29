@@ -1,7 +1,15 @@
 import { type Context, Hono } from "hono";
 import { getClientIp, createRateLimiter } from "../middleware/rateLimiter";
 import { normalizeHostname, getExpectedHostnameConfig as getHostnameConfig } from "../utils/hostname";
-import { VERIFY_STATUS, UNAVAILABLE_REASON, VERIFY_FAILURE_REASON, MISCONFIGURED_REASON, humanFlagKey, HUMAN_FLAG_TTL_SECONDS } from "@claude-cope/shared/turnstile";
+import {
+  VERIFY_STATUS,
+  UNAVAILABLE_REASON,
+  VERIFY_FAILURE_REASON,
+  MISCONFIGURED_REASON,
+  humanFlagKey,
+  HUMAN_FLAG_TTL_SECONDS,
+  type VerifyStatusResponse,
+} from "@claude-cope/shared/turnstile";
 
 type Env = {
   Bindings: {
@@ -24,40 +32,6 @@ type TurnstileVerifyResponse = {
   "error-codes"?: string[];
 };
 
-type VerifyStatusResponse =
-  | {
-      status: typeof VERIFY_STATUS.DISABLED;
-      enabled: false;
-      bypassed: true;
-      misconfigured: false;
-    }
-  | {
-      status: typeof VERIFY_STATUS.ENABLED;
-      enabled: true;
-      bypassed: false;
-      misconfigured: false;
-    }
-  | {
-      status: typeof VERIFY_STATUS.VERIFIED;
-      enabled: true;
-      bypassed: false;
-      misconfigured: false;
-    }
-  | {
-      status: typeof VERIFY_STATUS.MISCONFIGURED;
-      enabled: false;
-      bypassed: false;
-      misconfigured: true;
-      reason: typeof MISCONFIGURED_REASON.INVALID_EXPECTED_HOSTNAME;
-    }
-  | {
-      status: typeof VERIFY_STATUS.UNAVAILABLE;
-      enabled: false;
-      bypassed: false;
-      misconfigured: false;
-      reason: typeof UNAVAILABLE_REASON.SESSION_UNAVAILABLE | typeof UNAVAILABLE_REASON.STORAGE_UNAVAILABLE;
-    };
-
 const verify = new Hono<Env>();
 type VerifyContext = Context<Env>;
 
@@ -65,11 +39,10 @@ const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/sit
 type VerifyFailureStatus = 502 | 503;
 
 const getExpectedHostnameConfig = (c: VerifyContext) => getHostnameConfig(c.env?.TURNSTILE_EXPECTED_HOSTNAME);
+const getTurnstileSecret = (c: VerifyContext): string | undefined => c.env?.TURNSTILE_SECRET_KEY;
 
-verify.get("/", async (c, next) => {
-  // Bypass rate limiting when Turnstile is disabled so that unconfigured
-  // environments never receive 429 instead of the documented bypass response.
-  if (!c.env?.TURNSTILE_SECRET_KEY) {
+verify.get("/", createRateLimiter("verify-status:"), async (c) => {
+  if (!getTurnstileSecret(c)) {
     const response: VerifyStatusResponse = {
       status: VERIFY_STATUS.DISABLED,
       enabled: false,
@@ -78,9 +51,7 @@ verify.get("/", async (c, next) => {
     };
     return c.json(response);
   }
-  await next();
-}, createRateLimiter("verify-status:"), async (c) => {
-  const secret = c.env?.TURNSTILE_SECRET_KEY;
+
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
   const expectedHostname = getExpectedHostnameConfig(c);
@@ -125,7 +96,7 @@ verify.get("/", async (c, next) => {
       enabled: false,
       bypassed: false,
       misconfigured: false,
-      reason: UNAVAILABLE_REASON.STORAGE_UNAVAILABLE,
+      reason: UNAVAILABLE_REASON.VERIFICATION_CHECK_FAILED,
     };
     return c.json(response);
   }
@@ -196,10 +167,14 @@ verify.post("/", async (c, next) => {
   }
   await next();
 }, createRateLimiter("verify-submit:"), async (c) => {
-  const secret = c.env?.TURNSTILE_SECRET_KEY;
+  const secret = getTurnstileSecret(c);
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
   const expectedHostname = getExpectedHostnameConfig(c);
+
+  if (!secret) {
+    return c.json({ verified: true, bypassed: true });
+  }
 
   if (!sessionId) {
     return c.json({ verified: false, error: "Session unavailable" }, 503);

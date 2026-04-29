@@ -20,9 +20,47 @@ export type VerifyStatus = (typeof VERIFY_STATUS)[keyof typeof VERIFY_STATUS];
 export const UNAVAILABLE_REASON = {
   SESSION_UNAVAILABLE: "session_unavailable",
   STORAGE_UNAVAILABLE: "storage_unavailable",
+  VERIFICATION_CHECK_FAILED: "verification_check_failed",
 } as const;
 
 export type UnavailableReason = (typeof UNAVAILABLE_REASON)[keyof typeof UNAVAILABLE_REASON];
+
+export type VerifyStatusResponse =
+  | {
+      status: typeof VERIFY_STATUS.DISABLED;
+      enabled: false;
+      bypassed: true;
+      misconfigured: false;
+    }
+  | {
+      status: typeof VERIFY_STATUS.ENABLED;
+      enabled: true;
+      bypassed: false;
+      misconfigured: false;
+    }
+  | {
+      status: typeof VERIFY_STATUS.VERIFIED;
+      enabled: true;
+      bypassed: false;
+      misconfigured: false;
+    }
+  | {
+      status: typeof VERIFY_STATUS.MISCONFIGURED;
+      enabled: false;
+      bypassed: false;
+      misconfigured: true;
+      reason: typeof MISCONFIGURED_REASON.INVALID_EXPECTED_HOSTNAME;
+    }
+  | {
+      status: typeof VERIFY_STATUS.UNAVAILABLE;
+      enabled: false;
+      bypassed: false;
+      misconfigured: false;
+      reason:
+        | typeof UNAVAILABLE_REASON.SESSION_UNAVAILABLE
+        | typeof UNAVAILABLE_REASON.STORAGE_UNAVAILABLE
+        | typeof UNAVAILABLE_REASON.VERIFICATION_CHECK_FAILED;
+    };
 
 /** Reason strings for POST /api/verify 403 responses */
 export const VERIFY_FAILURE_REASON = {

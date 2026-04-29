@@ -17,15 +17,33 @@ import account from "./routes/account";
 import webhooks from "./routes/webhooks";
 
 const app = new Hono();
+const DEFAULT_ALLOWED_ORIGINS = "https://claudecope.com,http://localhost:5173";
+
+function getAllowedOrigins(env: Record<string, string | undefined>): string[] {
+  const csv = env.ALLOWED_ORIGINS || DEFAULT_ALLOWED_ORIGINS;
+  return csv.split(",").map((s: string) => s.trim()).filter(Boolean);
+}
+
+function toConnectSrcOrigin(origin: string): string | undefined {
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return undefined;
+    }
+    return url.origin;
+  } catch {
+    return undefined;
+  }
+}
 
 app.use("*", (c, next) => {
   const env = c.env as Record<string, string | undefined>;
-  const csv = env.ALLOWED_ORIGINS || "https://claudecope.com,http://localhost:5173";
-  const origins = csv.split(",").map((s: string) => s.trim()).filter(Boolean);
+  const origins = getAllowedOrigins(env);
   const connectSrc: string[] = ["'self'", "https://openrouter.ai", "https://challenges.cloudflare.com", "wss:", "ws:"];
   for (const origin of origins) {
-    if (!connectSrc.includes(origin)) {
-      connectSrc.push(origin);
+    const connectOrigin = toConnectSrcOrigin(origin);
+    if (connectOrigin && !connectSrc.includes(connectOrigin)) {
+      connectSrc.push(connectOrigin);
     }
   }
   return secureHeaders({
@@ -42,8 +60,7 @@ app.use("*", (c, next) => {
 
 app.use("*", (c, next) => {
   const env = c.env as Record<string, string | undefined>;
-  const csv = env.ALLOWED_ORIGINS || "https://claudecope.com,http://localhost:5173";
-  const allowed = csv.split(",").map((s: string) => s.trim());
+  const allowed = getAllowedOrigins(env);
   return cors({
     origin: (origin) => {
       if (!origin || allowed.includes(origin)) return origin;
@@ -55,8 +72,7 @@ app.use("*", (c, next) => {
 
 app.use("/api/*", (c, next) => {
   const env = c.env as Record<string, string | undefined>;
-  const csv = env.ALLOWED_ORIGINS || "https://claudecope.com,http://localhost:5173";
-  const allowed = csv.split(",").map((s: string) => s.trim());
+  const allowed = getAllowedOrigins(env);
   return csrf({ origin: allowed })(c, next);
 });
 
