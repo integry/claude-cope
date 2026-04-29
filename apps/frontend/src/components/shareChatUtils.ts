@@ -261,20 +261,107 @@ function getRandomPunchline(): string {
   return SHARE_PUNCHLINES[Math.floor(Math.random() * SHARE_PUNCHLINES.length)] ?? SHARE_PUNCHLINES[0]!;
 }
 
+/**
+ * Algorithm-bait hashtags — surfaced to the dev/AI/tech feeds where the
+ * crowd actually scrolls. Kept generic on purpose (no specific languages,
+ * tools, or company brands) so the rotation never looks like ad-bait.
+ */
+const SERIOUS_TAGS = [
+  "TechTwitter", "SoftwareEngineering", "CodeReview", "WebDev", "DevOps",
+  "AI", "TechnicalDebt", "LLM", "AIcoding", "Coding", "Programming",
+  "DevTools", "CodingHumor", "DeveloperLife", "Frontend", "Backend",
+  "FullStack", "StartupLife", "TechHumor", "BuildInPublic", "CleanCode",
+  "PromptEngineering", "Engineering", "Productivity", "Refactor",
+  "VibeCoding", "OpenSource", "IndieHacker", "IndieDev",
+  "MachineLearning", "ML", "GenAI", "GenerativeAI", "DataScience",
+  "CyberSecurity", "Cloud", "SaaS", "ProductManagement",
+  "TechLeadership", "EngineeringManagement", "DistributedSystems",
+  "Microservices", "APIDesign", "TDD", "DesignPatterns", "SystemDesign",
+  "DeveloperExperience", "DX", "CodeQuality", "SoftwareArchitecture",
+  "TechBlog", "DevBlog", "HackerNews", "SoftwareCraftsmanship",
+  "DevRel", "CodingLife", "EngineeringCulture", "MobileDev",
+  "A11y", "WebAccessibility", "UX", "UI", "UXDesign", "ProductDesign",
+  "DataEngineering", "Observability", "SRE", "Hackathon",
+  "CICD", "ContinuousDelivery", "RemoteWork", "RemoteDev",
+  "AgileDev", "DevCommunity", "100DaysOfCode", "CodeNewbie",
+  "TechCareers", "TechCulture", "TechWriter", "EngLeadership",
+  "ProductDev", "ShipIt", "ProgrammingHumor", "DeveloperHumor",
+  "CodeAndCoffee", "ReadTheDocs", "DocsAsCode",
+] as const;
+
+/**
+ * Lore hashtags — the absurd-corporate punchline that makes a developer
+ * stop scrolling. Pairing one of these with a serious tag is the trojan
+ * horse: the algorithm distributes the post on tech feeds, the
+ * unhinged tag converts the click.
+ */
+const UNHINGED_TAGS = [
+  "HRViolation", "PIP", "ToxicWorkplace", "CorporateDystopia", "FiredByAI",
+  "RageQuit", "PerformanceReview", "ManagerEnergy", "StandupTrauma",
+  "SprintFromHell", "MergeConflict", "ItsAFeature", "WorksOnMyMachine",
+  "LegacyCode", "Burnout", "BlamedTheIntern", "LiveInProd", "CodeMonkey",
+  "OnCallSurvival", "ExitInterview", "TheJiraKnows", "Hotfix",
+  "StakeholderTears", "KPIPanic", "ReviewerFromHell", "LayoffSeason",
+  "DeprecatedHuman", "WeeklySync", "BackToTheOffice", "AgileCeremony",
+  "SynergyOps", "RetroOfShame", "OutOfBudget", "Q4Targets",
+  "CalendarChaos", "ZeroProgressTuesday", "MondayDeploy",
+  "ArchitectureAstronaut", "ScopeCreep", "ColdMergedToMain",
+  "GhostedByPM", "PerformanceSpiral", "9To5Hostage", "OfficeHostage",
+  "PlsAdvise", "GentleReminder", "CircleBack", "TouchBase",
+  "SlackTrauma", "EmailHell", "InboxBankruptcy", "OnboardingFromHell",
+  "OffboardingSpeedrun", "BurnoutCertified", "RageRefactor",
+  "JiraHell", "BacklogGrooming", "EstimationTheater", "PlanningPoker",
+  "MandatoryFun", "PowerPointKaraoke", "DeckOfDoom", "JobHopping",
+  "RTOFatigue", "LayoffSurvivor", "LinkedinPremium", "RecruiterSpam",
+  "GhostJob", "ImposterSyndrome", "VibeRecession", "ReorgSeason",
+  "NewCEO", "AlignmentMeeting", "TakeItOffline", "StockOptionsExpired",
+  "VestingCliff", "NoDeployFriday", "MondayMortem", "AlertFatigue",
+  "PagerHell", "SilentReorg", "QuietFiring", "MeetingHell",
+  "CalendarHell", "StatusUpdateHell", "WhatHaveYouDone",
+  "DailyMicromanage", "StakeholderHell", "BlueDotMisery",
+  "AlwaysOnSlack", "ResumeUpdate", "ZeroProgressFriday",
+  "PlanningTheater", "ScrumOfShame", "DevPainOlympics",
+  "ProductivityTheater", "ChartCrime", "BurnoutBingo",
+  "QuarterlyExistentialism", "OffsiteSurvivor", "RetreatTrauma",
+  "AllHandsHostage", "TownHallHostage", "OffsiteRebrand",
+  "MisalignedPriorities", "ExecutiveSummary", "EmptyVision",
+  "RoadmapTheater", "GoalCascade", "OKRapocalypse",
+] as const;
+
+function pickRandom<T>(pool: readonly T[]): T {
+  return pool[Math.floor(Math.random() * pool.length)]!;
+}
+
+/**
+ * Build the rotated hashtag triplet for share posts. `#ClaudeCope` is
+ * always first (brand anchor); the second slot rotates through serious
+ * tags for algorithmic distribution; the third rotates through lore tags
+ * for click-through. Returned as a space-separated string with the `#`
+ * prefix already applied so callers can drop it straight into a tweet.
+ */
+export function generateShareHashtags(): string {
+  return `#ClaudeCope #${pickRandom(SERIOUS_TAGS)} #${pickRandom(UNHINGED_TAGS)}`;
+}
+
 export function generateShareText(): string {
   const punchline = getRandomPunchline();
-  return `${punchline}\n\n[paste your image here]\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://cope.bot`;
+  return `${punchline}\n\n[paste your image here]\n\n${generateShareHashtags()}\nhttps://cope.bot`;
 }
 
 export function openShareIntent(platform: "twitter" | "linkedin"): void {
   const punchline = getRandomPunchline();
   if (platform === "twitter") {
-    const tweetText = `${punchline}\n\n#ClaudeCope #AI #TechnicalDebt\nhttps://cope.bot`;
+    // Twitter expands the URL inline anyway, so the longer canonical domain
+    // costs no characters. The image card still renders the short cope.bot
+    // brand for compact visual readability.
+    const tweetText = `${punchline}\n\n${generateShareHashtags()}\nhttps://claudecope.com`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   } else {
-    const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://cope.bot")}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    // LinkedIn's share-offsite endpoint only supports URL sharing, not image
+    // uploads. Open the feed instead so the user can start a new post and
+    // paste the copied image directly into the composer.
+    window.open("https://www.linkedin.com/feed/", "_blank", "noopener,noreferrer");
   }
 }
 
@@ -290,6 +377,7 @@ export type ShareChatOptions = {
   platform?: "twitter" | "linkedin";
   openShareUrl?: boolean;
   username?: string;
+  previewBlob?: Blob;
 };
 
 /**
@@ -297,9 +385,13 @@ export type ShareChatOptions = {
  * Renders the chat card, copies to clipboard, and optionally opens share intent.
  */
 export async function shareChatImage(options: ShareChatOptions): Promise<ShareResult> {
-  const { userMessage, systemMessage, platform, openShareUrl = false, username } = options;
-  const canvas = await renderChatCard(userMessage, systemMessage, username);
-  const blob = await canvasToBlob(canvas);
+  const { userMessage, systemMessage, platform, openShareUrl = false, username, previewBlob } = options;
+
+  let blob: Blob | null = previewBlob ?? null;
+  if (!blob) {
+    const canvas = await renderChatCard(userMessage, systemMessage, username);
+    blob = await canvasToBlob(canvas);
+  }
 
   if (blob) {
     const imageCopied = await copyImageToClipboard(blob);
@@ -325,9 +417,11 @@ export async function shareChatImage(options: ShareChatOptions): Promise<ShareRe
 }
 
 /**
- * Utility to get a PNG data URL from the chat card (useful for previews)
+ * Utility to get a PNG Blob from the chat card (useful for previews and sharing)
  */
-export async function getChatCardDataUrl(userMessage: string, systemMessage: string): Promise<string> {
-  const canvas = await renderChatCard(userMessage, systemMessage);
-  return canvas.toDataURL("image/png");
+export async function getChatCardBlob(userMessage: string, systemMessage: string, username?: string): Promise<Blob> {
+  const canvas = await renderChatCard(userMessage, systemMessage, username);
+  const blob = await canvasToBlob(canvas);
+  if (!blob) throw new Error("Failed to convert canvas to blob");
+  return blob;
 }

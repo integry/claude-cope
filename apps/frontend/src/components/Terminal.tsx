@@ -23,6 +23,7 @@ import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
 import { usePingAcknowledged } from "../hooks/usePingAcknowledged";
+import { useOverlays } from "../hooks/useOverlays";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 import { runFreeTierDelay } from "./freeTierDelay";
 import { buildSprintCallbacks } from "./buildChatSubmitArgs";
@@ -74,19 +75,15 @@ function Terminal() {
   const [slashIndex, setSlashIndex] = useState(0);
   const [inputValue, setInputValue] = useState("");
   const [suggestedReply, setSuggestedReply] = useState<string | null>(null);
-  const [showStore, setShowStore] = useState(false);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [showAchievements, setShowAchievements] = useState(false);
-  const [showSynergize, setShowSynergize] = useState(false);
-  const p = window.location.pathname;
-  const [showHelp, setShowHelp] = useState(() => p === "/help");
-  const [showAbout, setShowAbout] = useState(() => p === "/about");
-  const [showPrivacy, setShowPrivacy] = useState(() => p === "/privacy");
-  const [showTerms, setShowTerms] = useState(() => p === "/terms");
-  const [showContact, setShowContact] = useState(() => p === "/contact");
-  const [showProfile, setShowProfile] = useState(() => p.startsWith("/user/"));
-  const [showParty, setShowParty] = useState(false);
-  const [showUpgrade, setShowUpgrade] = useState(() => p === "/upgrade");
+  const {
+    showStore, showLeaderboard, showAchievements, showSynergize,
+    showHelp, showAbout, showPrivacy, showTerms, showContact,
+    showProfile, showParty, showUpgrade,
+    setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize,
+    setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact,
+    setShowProfile, setShowParty, setShowUpgrade,
+    closeAllOverlays,
+  } = useOverlays();
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
@@ -128,7 +125,7 @@ function Terminal() {
   }, [unlockAchievement, playChime]);
 
   const closeAllOverlays = useCallback(() => { setShowStore(false); setShowLeaderboard(false); setShowAchievements(false); setShowSynergize(false); setShowHelp(false); setShowAbout(false); setShowPrivacy(false); setShowTerms(false); setShowContact(false); setShowProfile(false); setShowParty(false); setShowUpgrade(false); pendingNagCommandRef.current = null; }, []);
-  const handleProfileClick = useCallback(() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlays, state.username]);
+  const handleProfileClick = useCallback(() => { closeAllOverlays(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlays, setShowProfile, state.username]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [history]);
   useEffect(() => {
     const onPopState = () => { setShowHelp(window.location.pathname === "/help"); setShowAbout(window.location.pathname === "/about"); setShowPrivacy(window.location.pathname === "/privacy"); setShowTerms(window.location.pathname === "/terms"); setShowContact(window.location.pathname === "/contact"); setShowProfile(window.location.pathname.startsWith("/user/")); const shouldShowUpgrade = window.location.pathname === "/upgrade"; setShowUpgrade(shouldShowUpgrade); if (!shouldShowUpgrade) pendingNagCommandRef.current = null; };
