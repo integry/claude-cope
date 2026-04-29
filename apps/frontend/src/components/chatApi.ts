@@ -11,6 +11,8 @@ import { ALL_ACHIEVEMENTS } from "../game/achievements";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { handleChatErrorResponse, parseChatResponseBody } from "./chatApiResponse";
+import { TURNSTILE_REQUIRED_EVENT } from "../turnstileEvents";
+import { VERIFY_STATUS, UNAVAILABLE_REASON } from "@claude-cope/shared/turnstile";
 
 export type BuddyInterjectionResult = {
   message: Message;
@@ -94,6 +96,56 @@ async function hashKey(key: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+class ByokVerificationError extends Error {
+  constructor(
+    message: string,
+    readonly reverify: boolean,
+  ) {
+    super(message);
+    this.name = "ByokVerificationError";
+  }
+}
+
+async function assertByokHumanSession(): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/verify`, {
+    method: "GET",
+    credentials: "include",
+  }).catch(() => null);
+
+  if (!res) {
+    throw new ByokVerificationError("Unable to confirm human verification status. Please retry.", false);
+  }
+
+  const data = await res.json().catch(() => ({} as Record<string, unknown>));
+  const status = data?.status;
+  if (status === VERIFY_STATUS.DISABLED || status === VERIFY_STATUS.VERIFIED) {
+    return;
+  }
+  if (status === VERIFY_STATUS.ENABLED) {
+    throw new ByokVerificationError("Human verification required", true);
+  }
+  if (status === VERIFY_STATUS.MISCONFIGURED) {
+    throw new ByokVerificationError(
+      "Human verification is unavailable because the server is misconfigured.",
+      false,
+    );
+  }
+  if (status === VERIFY_STATUS.UNAVAILABLE) {
+    if (data?.reason === UNAVAILABLE_REASON.SESSION_UNAVAILABLE) {
+      throw new ByokVerificationError(
+        "Human verification could not start because the session is unavailable. Please retry.",
+        false,
+      );
+    }
+    if (data?.reason === UNAVAILABLE_REASON.VERIFICATION_CHECK_FAILED) {
+      throw new ByokVerificationError("Human verification status could not be checked. Please retry.", false);
+    }
+    throw new ByokVerificationError("Human verification is temporarily unavailable.", false);
+  }
+
+  throw new ByokVerificationError("Unable to determine verification status from the server.", false);
+}
+
 export function submitChatMessage(opts: {
   chatMessages: { role: string; content: string }[];
   buddyResult: BuddyInterjectionResult | null;
@@ -135,36 +187,38 @@ export function submitChatMessage(opts: {
 
   const requestPromise = isBYOK
     ? (() => {
-        // BYOK: Build messages client-side for direct OpenRouter requests
-        const messages = buildChatMessages({
-          rank: currentRank,
-          chatMessages,
-          modes,
-          activeTicket,
-          buddyType: buddyTypeForContext,
-        });
-        type OpenRouterByokRequestBody = {
-          model: string;
-          messages: { role: string; content: string }[];
-          max_tokens: number;
-          reasoning: { effort: string };
-          stream: boolean;
-          stream_options: { include_usage: boolean };
-        };
+        return assertByokHumanSession().then(() => {
+          // BYOK: Build messages client-side for direct OpenRouter requests
+          const messages = buildChatMessages({
+            rank: currentRank,
+            chatMessages,
+            modes,
+            activeTicket,
+            buddyType: buddyTypeForContext,
+          });
+          type OpenRouterByokRequestBody = {
+            model: string;
+            messages: { role: string; content: string }[];
+            max_tokens: number;
+            reasoning: { effort: string };
+            stream: boolean;
+            stream_options: { include_usage: boolean };
+          };
 
-        const requestBody: OpenRouterByokRequestBody = {
-          model,
-          messages,
-          max_tokens: 2000,
-          reasoning: { effort: "low" },
-          stream: true,
-          stream_options: { include_usage: true },
-        };
-        return fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify(requestBody),
-          signal,
+          const requestBody: OpenRouterByokRequestBody = {
+            model,
+            messages,
+            max_tokens: 2000,
+            reasoning: { effort: "low" },
+            stream: true,
+            stream_options: { include_usage: true },
+          };
+          return fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify(requestBody),
+            signal,
+          });
         });
       })()
     : (async () => {
@@ -257,6 +311,19 @@ export function submitChatMessage(opts: {
     })
     .catch((err) => {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      if (err instanceof ByokVerificationError) {
+        onError?.();
+        if (err.reverify) {
+          window.dispatchEvent(new CustomEvent(TURNSTILE_REQUIRED_EVENT));
+          setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
+          return;
+        }
+        setHistory((prev) => [
+          ...prev.filter((msg) => msg.role !== "loading"),
+          { role: "error", content: `[❌ Error] ${err.message}` },
+        ]);
+        return;
+      }
       onError?.();
       setHistory((prev) => [
         ...prev.filter((msg) => msg.role !== "loading"),

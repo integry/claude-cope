@@ -153,7 +153,11 @@ const verifyWithTurnstile = async (
   let resp: Response;
   try {
     resp = await fetch(TURNSTILE_VERIFY_URL, { method: "POST", body: form, signal: controller.signal });
-  } catch {
+  } catch (error) {
+    console.warn("Turnstile siteverify request failed", {
+      error: error instanceof Error ? error.message : String(error),
+      aborted: controller.signal.aborted,
+    });
     return {
       ok: false as const,
       status: 503,

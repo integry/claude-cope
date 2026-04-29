@@ -37,7 +37,7 @@ describe("Turnstile verification and protection", () => {
       bypassed: true,
       misconfigured: false,
     });
-    expect(res.headers.get("Cache-Control")).toBe("no-store, max-age=0");
+    expect(res.headers.get("cache-control")).toBe("no-store, max-age=0");
   });
 
   it("bypasses verify status rate limiting when TURNSTILE_SECRET_KEY is not set", async () => {

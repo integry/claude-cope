@@ -85,6 +85,11 @@ describe("normalizeHostname", () => {
     expect(normalizeHostname("[:1::2]")).toBeUndefined();
     expect(normalizeHostname("[1::2:]")).toBeUndefined();
   });
+
+  it("rejects non-IPv6 hostnames that only look valid because they contain colons", () => {
+    expect(normalizeHostname("not:ipv6")).toBeUndefined();
+    expect(normalizeHostname("example.com:abc:def")).toBeUndefined();
+  });
 });
 
 describe("getExpectedHostnameConfig", () => {

@@ -48,10 +48,19 @@ function isValidIpv4(hostname: string): boolean {
   });
 }
 
+function isValidIpv6(hostname: string): boolean {
+  try {
+    const parsed = new URL(`http://[${hostname}]`);
+    return stripIpv6Brackets(parsed.hostname.toLowerCase()) === hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 const HOSTNAME_PATTERN = /^(?:localhost|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*)$/i;
 
 function isValidHostname(hostname: string): boolean {
-  if (hostname.includes(":")) return true;
+  if (hostname.includes(":")) return isValidIpv6(hostname);
   if (/^\d+(?:\.\d+){3}$/.test(hostname)) return isValidIpv4(hostname);
   return HOSTNAME_PATTERN.test(hostname);
 }

@@ -26,6 +26,7 @@ function App() {
     setVerificationPhase("required");
   }, []);
   const retryVerification = useCallback(() => {
+    setIsHumanVerified(false);
     setVerificationError(null);
     setVerificationPhase("retrying");
     setVerificationNonce((n) => n + 1);
@@ -68,14 +69,12 @@ function App() {
                 ? "Retrying human verification..."
                 : verificationError}
             </p>
-            {verificationPhase !== "retrying" && (
-              <button
-                onClick={retryVerification}
-                className="border border-zinc-500 px-3 py-1 text-sm hover:border-white"
-              >
-                Retry verification
-              </button>
-            )}
+            <button
+              onClick={retryVerification}
+              className="border border-zinc-500 px-3 py-1 text-sm hover:border-white"
+            >
+              {verificationPhase === "retrying" ? "Restart verification" : "Retry verification"}
+            </button>
           </div>
         </div>
       )}

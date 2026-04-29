@@ -421,9 +421,16 @@ describe("submitChatMessage - achievement parsing", () => {
     vi.stubEnv("VITE_ENABLE_BYOK", "true");
     const { submitChatMessage: submitWithByok } = await import("../chatApi");
 
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      createMockStreamResponse(["reply"])
-    );
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "verified", enabled: true, bypassed: false, misconfigured: false }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        createMockStreamResponse(["reply"])
+      );
 
     submitWithByok({
       chatMessages: [{ role: "user", content: "hi" }],
@@ -438,11 +445,52 @@ describe("submitChatMessage - achievement parsing", () => {
     await vi.advanceTimersByTimeAsync(3000);
 
     expect(fetchSpy).toHaveBeenCalled();
-    const callArgs = fetchSpy.mock.calls[0]!;
+    const callArgs = fetchSpy.mock.calls[1]!;
     const reqInit = callArgs[1] as RequestInit;
     const headers = reqInit.headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer sk-test-key");
     expect(callArgs[0]).toBe("https://openrouter.ai/api/v1/chat/completions");
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("re-verifies the backend session before BYOK chat requests", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_ENABLE_BYOK", "true");
+    const { submitChatMessage: submitWithByok } = await import("../chatApi");
+
+    const setHistory = vi.fn();
+    const setIsProcessing = vi.fn();
+    const onError = vi.fn();
+    const dispatchEventSpy = vi.spyOn(window, "dispatchEvent");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: "enabled", enabled: true, bypassed: false, misconfigured: false }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    submitWithByok({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+      apiKey: "sk-test-key",
+      onError,
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("/api/verify");
+    expect(dispatchEventSpy).toHaveBeenCalledWith(expect.objectContaining({ type: TURNSTILE_REQUIRED_EVENT }));
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    const updater = setHistory.mock.calls[0]![0] as (prev: unknown[]) => unknown[];
+    expect(updater([{ role: "loading", content: "..." }])).toEqual([]);
 
     vi.unstubAllEnvs();
     vi.resetModules();
