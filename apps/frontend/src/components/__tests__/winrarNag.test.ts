@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createElement } from "react";
+import type React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 
@@ -23,8 +24,154 @@ vi.mock("../../config", () => ({
 }));
 
 vi.mock("../../supabaseClient", () => ({ supabase: {} }));
+const submitChatMessageMock = vi.fn();
+
+vi.mock("../CommandLine", async () => {
+  const React = await import("react");
+  return {
+    default: React.forwardRef<HTMLInputElement, {
+      value: string;
+      disabled?: boolean;
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+      onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+      placeholder?: string;
+    }>(function MockCommandLine({ value, disabled, onChange, onKeyDown, placeholder }, ref) {
+      return (
+        React.createElement("input", {
+          ref,
+          "aria-label": "terminal-input",
+          value,
+          disabled,
+          placeholder,
+          onChange,
+          onKeyDown,
+        })
+      );
+    }),
+  };
+});
+vi.mock("../SlashMenu", () => ({ default: () => null }));
+vi.mock("../slashCommands", () => ({ SLASH_COMMANDS: [] }));
+vi.mock("../HeaderBar", () => ({ default: () => null }));
+vi.mock("../../hooks/useGameState", async () => {
+  const React = await import("react");
+  const initialState = {
+    version: "1",
+    username: "TestUser0",
+    lastLogin: Date.now(),
+    economy: {
+      currentTD: 0,
+      totalTDEarned: 0,
+      currentRank: "Junior Code Monkey",
+      quotaPercent: 0,
+      quotaLockouts: 0,
+      tdMultiplier: 1,
+    },
+    inventory: {},
+    upgrades: [],
+    achievements: [],
+    buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 },
+    chatHistory: [],
+    proKey: undefined,
+    proKeyHash: undefined,
+    apiKey: "",
+    hasSeenTicketPrompt: false,
+    activeTicket: null,
+    selectedModel: null,
+    modes: {},
+    soundEnabled: true,
+    activeTheme: null,
+    byokTotalCost: 0,
+    byokUsage: {},
+  };
+  return {
+    useGameState: () => {
+      const [state, setState] = React.useState(initialState);
+      const setChatHistory = React.useCallback((updater: React.SetStateAction<typeof initialState.chatHistory>) => {
+        setState((prev) => ({
+          ...prev,
+          chatHistory: typeof updater === "function" ? updater(prev.chatHistory) : updater,
+        }));
+      }, []);
+      return {
+        state,
+        setState,
+        addActiveTD: () => undefined,
+        buyGenerator: () => false,
+        buyUpgrade: () => false,
+        resetQuota: () => undefined,
+        unlockAchievement: () => false,
+        applyOutageReward: () => undefined,
+        applyOutagePenalty: () => undefined,
+        setChatHistory,
+        setActiveTheme: () => undefined,
+        buyTheme: () => false,
+        offlineTDEarned: 0,
+        clearOfflineTDEarned: () => undefined,
+        updateTicketProgress: () => undefined,
+      };
+    },
+  };
+});
+vi.mock("../../hooks/gameStateUtils", () => ({ calculateActiveMultiplier: () => 1 }));
+vi.mock("../BuddyDisplay", () => ({ BuddyDisplay: () => null }));
+vi.mock("../parseGlitchStyle", () => ({ parseGlitchStyle: () => ({}) }));
+vi.mock("../terminalClassName", () => ({ terminalContainerClassName: () => "terminal" }));
+vi.mock("../chatApi", () => ({
+  computeBuddyInterjection: () => null,
+  submitChatMessage: submitChatMessageMock,
+}));
+vi.mock("../slashCommandExecutor", () => ({ executeSlashCommand: () => undefined }));
+vi.mock("../../hooks/profileSync", () => ({ applyServerProfile: (prev: unknown) => prev }));
+vi.mock("../keyCommandHandler", () => ({ handleKeyCommand: async () => false }));
+vi.mock("../ticketPrompt", () => ({ fetchRandomTicketPrompt: () => undefined }));
+vi.mock("../filterChatHistory", () => ({ filterChatHistory: (history: unknown[]) => history }));
+vi.mock("../TerminalFooter", () => ({ TerminalFooter: () => null }));
+vi.mock("../Ticker", () => ({ default: () => null }));
+vi.mock("../OutageBar", () => ({ OutageBar: () => null, DAMAGE_COMMANDS: [] }));
+vi.mock("../SprintProgressBar", () => ({ default: () => null }));
+vi.mock("../../hooks/useMultiplayer", () => ({
+  useMultiplayer: () => ({
+    onlineCount: 0,
+    onlineUsers: [],
+    sendPing: () => undefined,
+    pendingReviewPing: null,
+    acceptReviewPing: () => undefined,
+    outageHp: null,
+    sendDamage: () => undefined,
+  }),
+}));
+vi.mock("../../hooks/useTerminalEffects", () => ({
+  useTerminalEffects: () => ({ isBooting: false, regressionGlitch: null, activeRegression: null }),
+}));
+vi.mock("../../hooks/useSoundEffects", () => ({
+  useSoundEffects: () => ({ playError: () => undefined, playChime: () => undefined }),
+}));
+vi.mock("../../hooks/usePingAcknowledged", () => ({ usePingAcknowledged: () => false }));
+vi.mock("../loadingPhrases", () => ({ getRandomLoadingPhrase: () => "Loading..." }));
+vi.mock("../freeTierDelay", () => ({ runFreeTierDelay: async () => true }));
+vi.mock("../buildChatSubmitArgs", () => ({
+  buildSprintCallbacks: () => ({
+    onSprintProgress: () => undefined,
+    getSprintCompleteMessage: () => undefined,
+  }),
+}));
+vi.mock("../MessageList", () => ({
+  default: ({ history }: { history: Array<{ role: string; content: string }> }) =>
+    createElement("div", { "data-testid": "message-list" }, history.map((msg, index) => createElement("div", { key: index }, msg.content))),
+}));
+vi.mock("../terminalHandlers", () => ({
+  triggerQuotaLockout: () => undefined,
+  triggerInstantBan: () => undefined,
+}));
+vi.mock("../terminalInputHandlers", () => ({
+  handleBragSubmit: () => undefined,
+  handleBuddyConfirm: () => undefined,
+  tryOutageDamage: () => false,
+}));
 
 import { TerminalOverlays } from "../TerminalOverlays";
+import Terminal from "../Terminal";
 import { shouldShowNag } from "../winrarNag";
 import type { GameState, Message } from "../../hooks/useGameState";
 
@@ -195,15 +342,15 @@ describe("WinRAR nag: TerminalOverlays production wiring", () => {
     expect(text).toContain("Depleted");
   });
 
-  it("always shows free-tier credits even for pro users (overlay is nag-only)", () => {
+  it("shows pro-tier credits for upgraded users who open the overlay manually", () => {
     const state = makeGameState({ proKey: "pro-key-123", economy: {
       currentTD: 0, totalTDEarned: 0, currentRank: "Junior Code Monkey",
       quotaPercent: 50, quotaLockouts: 0, tdMultiplier: 1,
     }});
     const { container } = renderOverlays({ showUpgrade: true, state });
     const text = container.textContent ?? "";
-    // 50% of FREE_QUOTA_LIMIT(20) = 10 credits → "Embarrassing"
-    expect(text).toContain("Embarrassing");
+    // 50% of PRO_QUOTA_LIMIT(100) = 50 credits → "Insufficient"
+    expect(text).toContain("Insufficient");
   });
 });
 
@@ -363,6 +510,50 @@ describe("WinRAR nag: replay state-machine (duplicate prevention)", () => {
 
     onQuotaUpdate(25);
     expect(showUpgrade).toBe(false);
+  });
+});
+
+describe("WinRAR nag: Terminal ESC integration", () => {
+  beforeEach(() => {
+    submitChatMessageMock.mockReset();
+    window.history.pushState(null, "", "/");
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("replays the blocked desktop command only after Escape dismisses the nag overlay", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Terminal));
+    });
+
+    const input = container.querySelector("input[aria-label='terminal-input']") as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    await act(async () => {
+      input!.value = "status";
+      input!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    expect(submitChatMessageMock).not.toHaveBeenCalled();
+    expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(".upgrade-desktop")).toBeNull();
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
   });
 });
 

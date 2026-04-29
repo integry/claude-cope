@@ -12,6 +12,7 @@ import UserProfileOverlay from "./UserProfileOverlay";
 import PartyOverlay from "./PartyOverlay";
 import UpgradeOverlay from "./UpgradeOverlay";
 import type { GameState, Message } from "../hooks/useGameState";
+import { FREE_QUOTA_LIMIT, PRO_QUOTA_LIMIT } from "../config";
 
 export function TerminalOverlays({
   showStore,
@@ -159,6 +160,7 @@ export function TerminalOverlays({
       {showUpgrade && (
         <UpgradeOverlay
           quotaPercent={state.economy.quotaPercent}
+          totalQuota={state.proKey || state.proKeyHash ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT}
           onDismiss={onUpgradeDismiss}
         />
       )}

@@ -1,8 +1,6 @@
 import {
   UPGRADE_CHECKOUT_SINGLE,
   UPGRADE_CHECKOUT_MULTI,
-  PRO_QUOTA_LIMIT,
-  FREE_QUOTA_LIMIT,
   UPGRADE_PRICE_SINGLE,
   UPGRADE_PRICE_MULTI,
 } from "../config";
@@ -35,18 +33,17 @@ function getQuotaStatus(credits: number): string {
 
 type UpgradeOverlayProps = {
   quotaPercent: number;
+  totalQuota: number;
   onDismiss: () => void;
 };
 
-function UpgradeOverlay({ quotaPercent, onDismiss }: UpgradeOverlayProps) {
+function UpgradeOverlay({ quotaPercent, totalQuota, onDismiss }: UpgradeOverlayProps) {
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
   const singleLabel = `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`;
   const multiLabel = `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`;
 
-  // Only free-tier users see this overlay, so always use FREE_QUOTA_LIMIT.
-  const totalQuota = FREE_QUOTA_LIMIT;
   const currentCredits = Math.round((quotaPercent / 100) * totalQuota);
 
   return (
