@@ -333,6 +333,10 @@ export default function TurnstileWidget({
           onError(status.message);
           return;
         }
+        if (status.status !== "unavailable") {
+          onError("Unable to determine verification status from the server.");
+          return;
+        }
         if (!status.retryable || bootstrapRetries >= maxBootstrapRetries) {
           onError(status.message);
           return;
