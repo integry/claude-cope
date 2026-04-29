@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { resolveRequestIdentity } from "../utils/identity";
+import { capturePostHogEvent } from "../utils/posthog";
 import { checkRateLimits } from "../utils/rateLimitBuckets";
 
 type RateLimitContext = {
@@ -75,6 +76,27 @@ export const rateLimiter: MiddlewareHandler = async (c, next) => {
   });
 
   if (result.blocked) {
+    if (result.shouldTrack) {
+      const telemetry = capturePostHogEvent(
+        env as { POSTHOG_API_KEY?: string; POSTHOG_HOST?: string },
+        {
+          event: "Rate_Limit_Triggered",
+          distinct_id: identity.cope_id,
+          properties: {
+            limit_type: result.bucket,
+            asn: identity.asn,
+            country: identity.country,
+          },
+        },
+      ).catch(() => {});
+
+      try {
+        c.executionCtx.waitUntil(telemetry);
+      } catch {
+        // No execution context (e.g. test environment) — fire and forget
+      }
+    }
+
     const retryAfterSeconds = Math.ceil(result.retryAfterMs / 1000);
     c.header("Retry-After", String(retryAfterSeconds));
     return c.json(
