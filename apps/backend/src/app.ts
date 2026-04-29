@@ -18,19 +18,27 @@ import webhooks from "./routes/webhooks";
 
 const app = new Hono();
 
-app.use(
-  "*",
-  secureHeaders({
+app.use("*", (c, next) => {
+  const env = c.env as Record<string, string | undefined>;
+  const csv = env.ALLOWED_ORIGINS || "https://claudecope.com,http://localhost:5173";
+  const origins = csv.split(",").map((s: string) => s.trim()).filter(Boolean);
+  const connectSrc: string[] = ["'self'", "https://openrouter.ai", "https://challenges.cloudflare.com", "wss:", "ws:"];
+  for (const origin of origins) {
+    if (!connectSrc.includes(origin)) {
+      connectSrc.push(origin);
+    }
+  }
+  return secureHeaders({
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
-      connectSrc: ["'self'", "https://*.workers.dev", "https://openrouter.ai", "https://challenges.cloudflare.com", "wss:", "ws:"],
+      connectSrc,
       frameSrc: ["https://challenges.cloudflare.com"],
       imgSrc: ["'self'", "data:", "blob:"],
       styleSrc: ["'self'", "'unsafe-inline'"],
     },
-  })
-);
+  })(c, next);
+});
 
 app.use("*", (c, next) => {
   const env = c.env as Record<string, string | undefined>;

@@ -39,6 +39,12 @@ export const MISCONFIGURED_REASON = {
 
 export type MisconfiguredReason = (typeof MISCONFIGURED_REASON)[keyof typeof MISCONFIGURED_REASON];
 
+/** Human verification KV key prefix and TTL */
+export const HUMAN_FLAG_PREFIX = "human:";
+export const HUMAN_FLAG_TTL_SECONDS = 60 * 60 * 24; // 24 hours
+
+export const humanFlagKey = (sessionId: string): string => `${HUMAN_FLAG_PREFIX}${sessionId}`;
+
 /** Reason strings for /api/chat bot-protection failures */
 export const BOT_PROTECTION_REASON = {
   HUMAN_VERIFICATION_REQUIRED: "human_verification_required",

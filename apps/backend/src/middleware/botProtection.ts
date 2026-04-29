@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import { BOT_PROTECTION_REASON } from "@claude-cope/shared/turnstile";
+import { BOT_PROTECTION_REASON, humanFlagKey } from "@claude-cope/shared/turnstile";
 
 export const botProtection: MiddlewareHandler = async (c, next) => {
   const secret = (c.env as { TURNSTILE_SECRET_KEY?: string } | undefined)?.TURNSTILE_SECRET_KEY;
@@ -22,7 +22,7 @@ export const botProtection: MiddlewareHandler = async (c, next) => {
 
   let isHuman: string | null;
   try {
-    isHuman = await usageKv.get(`human:${sessionId}`);
+    isHuman = await usageKv.get(humanFlagKey(sessionId));
   } catch (e) {
     console.error("KV read error in bot protection", e);
     return c.json({ error: "Verification check failed", reason: BOT_PROTECTION_REASON.VERIFICATION_CHECK_FAILED }, 503);

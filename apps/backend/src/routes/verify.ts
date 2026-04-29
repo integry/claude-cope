@@ -1,7 +1,7 @@
 import { type Context, Hono } from "hono";
 import { getClientIp, createRateLimiter } from "../middleware/rateLimiter";
 import { normalizeHostname, getExpectedHostnameConfig as getHostnameConfig } from "../utils/hostname";
-import { VERIFY_STATUS, UNAVAILABLE_REASON, VERIFY_FAILURE_REASON, MISCONFIGURED_REASON } from "@claude-cope/shared/turnstile";
+import { VERIFY_STATUS, UNAVAILABLE_REASON, VERIFY_FAILURE_REASON, MISCONFIGURED_REASON, humanFlagKey, HUMAN_FLAG_TTL_SECONDS } from "@claude-cope/shared/turnstile";
 
 type Env = {
   Bindings: {
@@ -58,7 +58,6 @@ type VerifyStatusResponse =
       reason: typeof UNAVAILABLE_REASON.SESSION_UNAVAILABLE | typeof UNAVAILABLE_REASON.STORAGE_UNAVAILABLE;
     };
 
-const HUMAN_TTL_SECONDS = 60 * 60 * 24;
 const verify = new Hono<Env>();
 type VerifyContext = Context<Env>;
 
@@ -114,7 +113,7 @@ verify.get("/", createRateLimiter("verify-status:"), async (c) => {
 
   let humanFlag: string | null;
   try {
-    humanFlag = await kv.get(`human:${sessionId}`);
+    humanFlag = await kv.get(humanFlagKey(sessionId));
   } catch (e) {
     console.error("KV read error in verify status", e);
     const response: VerifyStatusResponse = {
@@ -242,7 +241,7 @@ verify.post("/", createRateLimiter("verify-submit:"), async (c) => {
   }
 
   try {
-    await kv.put(`human:${sessionId}`, "1", { expirationTtl: HUMAN_TTL_SECONDS });
+    await kv.put(humanFlagKey(sessionId), "1", { expirationTtl: HUMAN_FLAG_TTL_SECONDS });
   } catch (e) {
     console.error("KV write error in verify", e);
     return c.json({ verified: false, error: "Failed to store verification" }, 503);

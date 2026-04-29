@@ -14,7 +14,28 @@ function isValidIpv6(value: string): boolean {
   // Accept bracketed IPv6 (e.g. [::1]) — extract the inner address
   const match = IPV6_BRACKET_PATTERN.exec(value);
   const addr = match ? match[1]! : value;
-  // Basic structural check: 1-8 groups of hex separated by colons, with optional :: shorthand
+
+  // Check for IPv4-mapped/compatible suffix (e.g. ::ffff:127.0.0.1)
+  const lastColon = addr.lastIndexOf(":");
+  if (lastColon !== -1) {
+    const suffix = addr.slice(lastColon + 1);
+    if (IPV4_PATTERN.test(suffix) && isValidIpv4(suffix)) {
+      // Validate the prefix portion as a valid IPv6 prefix
+      const prefix = addr.slice(0, lastColon + 1);
+      // Prefix must end with ":" and contain only hex and colons
+      if (!/^[0-9a-f:]+$/i.test(prefix)) return false;
+      if (prefix.includes(":::")) return false;
+      const doubleColonCount = (prefix.match(/::/g) || []).length;
+      if (doubleColonCount > 1) return false;
+      // The IPv4 suffix replaces the last two groups, so prefix can have up to 6 groups
+      const groups = prefix.split(":").filter((g) => g !== "");
+      if (doubleColonCount === 0 && groups.length !== 6) return false;
+      if (doubleColonCount === 1 && groups.length > 6) return false;
+      return groups.every((g) => g.length <= 4 && /^[0-9a-f]+$/i.test(g));
+    }
+  }
+
+  // Pure hex IPv6 address
   if (!/^[0-9a-f:]+$/i.test(addr)) return false;
   if (addr.includes(":::")) return false;
   // Reject leading/trailing single colons that are not part of :: shorthand
