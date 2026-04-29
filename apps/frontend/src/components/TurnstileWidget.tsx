@@ -251,22 +251,25 @@ export default function TurnstileWidget({
 
   useEffect(() => {
     let cancelled = false;
+    let settled = false;
     let retries = 0;
     const maxRetries = 3;
     let widgetId: string | null = null;
     let verificationTimeoutId: number | null = null;
     const scriptLoadTimeoutMs = 10_000;
-    const verificationTimeoutMs = 20_000;
+    const verificationTimeoutMs = 60_000;
     const clearVerificationTimeout = () => {
       if (verificationTimeoutId !== null) {
         window.clearTimeout(verificationTimeoutId);
         verificationTimeoutId = null;
       }
     };
+    const settle = () => { settled = true; clearVerificationTimeout(); };
     const startVerificationTimeout = () => {
       clearVerificationTimeout();
       verificationTimeoutId = window.setTimeout(() => {
-        if (!cancelled) {
+        if (!cancelled && !settled) {
+          settle();
           onError("Human verification timed out.");
         }
       }, verificationTimeoutMs);
@@ -274,7 +277,7 @@ export default function TurnstileWidget({
     const retryChallenge = (message: string) => {
       retries += 1;
       if (retries > maxRetries) {
-        clearVerificationTimeout();
+        settle();
         onError(message);
         return false;
       }
@@ -325,31 +328,31 @@ export default function TurnstileWidget({
         sitekey: TURNSTILE_SITE_KEY,
         size: "invisible",
         callback: async (token: string) => {
-          if (cancelled) return;
+          if (cancelled || settled) return;
           const result = await verifyToken(token).catch(() => ({
             verified: false,
             retryable: false,
             message: "Verification service is temporarily unavailable.",
           }));
-          if (cancelled) return;
+          if (cancelled || settled) return;
           if (result.verified) {
-            clearVerificationTimeout();
+            settle();
             onVerified();
             return;
           }
           if (!result.retryable) {
-            clearVerificationTimeout();
+            settle();
             onError(result.message ?? "Human verification unavailable.");
             return;
           }
           retryChallenge("Human verification failed after multiple attempts.");
         },
         "error-callback": () => {
-          if (cancelled) return;
+          if (cancelled || settled) return;
           retryChallenge("Turnstile reported repeated errors.");
         },
         "expired-callback": () => {
-          if (cancelled) return;
+          if (cancelled || settled) return;
           turnstileApi.reset(renderedWidgetId);
           startVerificationTimeout();
           turnstileApi.execute(renderedWidgetId);
@@ -362,7 +365,7 @@ export default function TurnstileWidget({
     };
 
     void run().catch(() => {
-      if (!cancelled) onError("Unable to start human verification.");
+      if (!cancelled && !settled) onError("Unable to start human verification.");
     });
 
     return () => {

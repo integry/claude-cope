@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 describe("submitChatMessage turnstile recovery", () => {
-  it("re-triggers verification when chat returns a bot-protection storage failure", async () => {
+  it("shows an infrastructure error when chat returns a bot-protection storage failure", async () => {
     const harness = createStateHarness([
       { role: "user", content: "hello" },
       { role: "loading", content: "..." },
@@ -66,8 +66,11 @@ describe("submitChatMessage turnstile recovery", () => {
       await flushAsyncWork();
 
       expect(onError).toHaveBeenCalled();
-      expect(onReverify).toHaveBeenCalledTimes(1);
-      expect(harness.getHistory()).toEqual([{ role: "user", content: "hello" }]);
+      expect(onReverify).not.toHaveBeenCalled();
+      expect(harness.getHistory()).toEqual([
+        { role: "user", content: "hello" },
+        { role: "error", content: "[❌ Error] Bot protection storage is not available" },
+      ]);
       expect(harness.getProcessing()).toBe(false);
     } finally {
       window.removeEventListener(TURNSTILE_REQUIRED_EVENT, onReverify);

@@ -169,8 +169,16 @@ export async function handleChatErrorResponse(
 
   const handleServiceUnavailable = async () => {
     const errorData = await readErrorData();
-    if (isReverifiableReason(errorData?.reason) || isServerSideFailure(errorData?.reason)) {
+    if (isReverifiableReason(errorData?.reason)) {
       triggerReverification();
+      return true;
+    }
+    if (isServerSideFailure(errorData?.reason)) {
+      onError?.();
+      pushMessage({
+        role: "error",
+        content: `[❌ Error] ${errorData?.error ?? "Verification service is temporarily unavailable. Please try again later."}`,
+      });
       return true;
     }
     onError?.();
