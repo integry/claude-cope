@@ -260,7 +260,12 @@ function Terminal() {
         return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } };
       }),
       onQuotaUpdate: (quotaPercent) => setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })),
-      onQuotaExhausted: () => handleQuotaLockout(command),
+      onQuotaExhausted: () => {
+        // Do NOT re-arm the command here — it was already submitted to the backend.
+        // Re-arming would cause a nag → ESC → resubmit → quota-exhausted → nag loop.
+        // Just show the upgrade overlay without storing a pending command.
+        handleQuotaLockout();
+      },
       onProfileUpdate: (profile) => setState((prev) => applyServerProfile(prev, profile)),
       onError: playError, signal: controller.signal,
     });
@@ -274,20 +279,18 @@ function Terminal() {
     if (buddyPendingConfirm) { handleBuddyConfirm({ inputValue, setInputValue, setBuddyPendingConfirm, setState, setHistory, buddyType: state.buddy?.type ?? undefined }); return; }
     if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
-    setCommandHistory((prev) => [...prev, command]); setHistoryIndex(-1); setInputValue("");
+    setInputValue(""); setHistoryIndex(-1);
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
+    // Check quota before adding to history — if the nag is dismissed without
+    // replaying, the command should not appear in command history.
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
+    setCommandHistory((prev) => [...prev, command]);
     processCommand(command);
   };
 
-  const handleUpgradeDismiss = useCallback(() => {
-    setShowUpgrade(false);
-    clearPendingNagCommand();
-    if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
-  }, [clearPendingNagCommand, setShowUpgrade]);
-
-  // WinRAR nag: replay the pending command only when the user explicitly presses ESC.
-  // Other dismiss paths close the overlay and intentionally drop the deferred command.
+  // WinRAR nag: any dismiss path (ESC, [x], backdrop, footer button) closes the
+  // overlay and replays the pending command if one exists. When opened via /upgrade
+  // or the header button (no pending command), it just closes.
   const handleUpgradeNagClose = useCallback(() => {
     setShowUpgrade(false);
     if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
@@ -392,7 +395,7 @@ function Terminal() {
         setShowSynergize={setShowSynergize}
         setIsProcessing={setIsProcessing}
         setHistory={setHistory}
-        onUpgradeDismiss={handleUpgradeDismiss}
+        onUpgradeDismiss={handleUpgradeNagClose}
       />
       <TerminalFooter closeAllOverlays={closeAllOverlaysAndClearNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
     </div>
