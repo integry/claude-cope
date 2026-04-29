@@ -41,7 +41,9 @@ type VerifyFailureStatus = 502 | 503;
 const getExpectedHostnameConfig = (c: VerifyContext) => getHostnameConfig(c.env?.TURNSTILE_EXPECTED_HOSTNAME);
 const getTurnstileSecret = (c: VerifyContext): string | undefined => c.env?.TURNSTILE_SECRET_KEY;
 
-verify.get("/", createRateLimiter("verify-status:"), async (c) => {
+verify.get("/", async (c, next) => {
+  // Skip rate limiting when Turnstile is disabled so status checks cannot
+  // return 429 instead of the documented bypass response.
   if (!getTurnstileSecret(c)) {
     const response: VerifyStatusResponse = {
       status: VERIFY_STATUS.DISABLED,
@@ -51,7 +53,8 @@ verify.get("/", createRateLimiter("verify-status:"), async (c) => {
     };
     return c.json(response);
   }
-
+  await next();
+}, createRateLimiter("verify-status:"), async (c) => {
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
   const expectedHostname = getExpectedHostnameConfig(c);

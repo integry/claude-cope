@@ -17,6 +17,23 @@ describe("Turnstile verification and protection", () => {
     });
   });
 
+  it("bypasses verify status rate limiting when TURNSTILE_SECRET_KEY is not set", async () => {
+    const limiter = { limit: vi.fn().mockResolvedValue({ success: false }) };
+    const res = await app.request(
+      "/api/verify",
+      { method: "GET", headers: { Origin: "http://localhost:5173", "cf-connecting-ip": "1.2.3.4" } },
+      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
+    );
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      status: "disabled",
+      enabled: false,
+      bypassed: true,
+      misconfigured: false,
+    });
+    expect(limiter.limit).not.toHaveBeenCalled();
+  });
+
   it("reports verification unavailable when secret is set but verification storage is unavailable", async () => {
     const res = await app.request(
       "/api/verify",
@@ -328,7 +345,12 @@ describe("Turnstile verification and protection", () => {
     const res = await app.request(
       "/api/verify",
       { method: "GET", headers: { Origin: "http://localhost:5173", "cf-connecting-ip": "1.2.3.4" } },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
+      {
+        ALLOWED_ORIGINS: "http://localhost:5173",
+        TURNSTILE_SECRET_KEY: "secret",
+        USAGE_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn() },
+        RATE_LIMITER: limiter,
+      },
     );
     expect(res.status).toBe(200);
     expect(limiter.limit).toHaveBeenCalledWith({ key: "verify-status:1.2.3.4" });
