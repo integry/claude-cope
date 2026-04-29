@@ -6,7 +6,7 @@ import LegalPrivacyPage from "./components/LegalPrivacyPage";
 import TurnstileWidget from "./components/TurnstileWidget";
 import { TURNSTILE_REQUIRED_EVENT } from "./turnstileEvents";
 
-type VerificationPhase = "boot" | "idle" | "required";
+type VerificationPhase = "boot" | "idle" | "required" | "retrying";
 
 function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -27,7 +27,7 @@ function App() {
   }, []);
   const retryVerification = useCallback(() => {
     setVerificationError(null);
-    setVerificationPhase("required");
+    setVerificationPhase("retrying");
     setVerificationNonce((n) => n + 1);
   }, []);
 
@@ -45,8 +45,8 @@ function App() {
   const path = window.location.pathname;
   if (path === "/legal/terms") return <LegalTermsPage />;
   if (path === "/legal/privacy") return <LegalPrivacyPage />;
-  const showBlockingSplash = showSplash || (!isHumanVerified && verificationPhase !== "idle");
-  const showVerificationError = !showSplash && verificationPhase === "required" && !isHumanVerified && verificationError;
+  const showSplashScreen = showSplash || (!isHumanVerified && verificationPhase === "boot");
+  const showVerificationGate = !showSplash && !isHumanVerified && (verificationPhase === "required" || verificationPhase === "retrying");
 
   return (
     <>
@@ -55,19 +55,27 @@ function App() {
         onError={handleVerificationError}
         verificationNonce={verificationNonce}
       />
-      {!showBlockingSplash && <Terminal />}
-      {showBlockingSplash && !showVerificationError && <SplashScreen onComplete={handleSplashComplete} />}
-      {showVerificationError && (
+      {!showSplashScreen && !showVerificationGate && <Terminal />}
+      {showSplashScreen && <SplashScreen onComplete={handleSplashComplete} />}
+      {showVerificationGate && (
         <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center p-6">
           <div className="max-w-xl border border-red-500/70 bg-zinc-950 p-5">
-            <p className="text-red-400 mb-3">[HUMAN VERIFICATION FAILED]</p>
-            <p className="text-sm text-zinc-200 mb-4">{verificationError}</p>
-            <button
-              onClick={retryVerification}
-              className="border border-zinc-500 px-3 py-1 text-sm hover:border-white"
-            >
-              Retry verification
-            </button>
+            <p className="text-red-400 mb-3">
+              {verificationPhase === "retrying" ? "[RETRYING HUMAN VERIFICATION]" : "[HUMAN VERIFICATION FAILED]"}
+            </p>
+            <p className="text-sm text-zinc-200 mb-4">
+              {verificationPhase === "retrying"
+                ? "Retrying human verification..."
+                : verificationError}
+            </p>
+            {verificationPhase !== "retrying" && (
+              <button
+                onClick={retryVerification}
+                className="border border-zinc-500 px-3 py-1 text-sm hover:border-white"
+              >
+                Retry verification
+              </button>
+            )}
           </div>
         </div>
       )}

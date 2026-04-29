@@ -40,7 +40,7 @@ describe("TurnstileWidget", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ enabled: true, bypassed: false, misconfigured: false }), {
+        new Response(JSON.stringify({ status: "enabled", enabled: true, bypassed: false, misconfigured: false }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -102,5 +102,86 @@ describe("TurnstileWidget", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(onVerified).toHaveBeenCalledTimes(1);
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("shows a recoverable session-unavailable message instead of misconfigured", async () => {
+    const onVerified = vi.fn();
+    const onError = vi.fn();
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: "unavailable",
+          enabled: false,
+          bypassed: false,
+          misconfigured: false,
+          reason: "session_unavailable",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await act(async () => {
+      root.render(
+        createElement(TurnstileWidget, {
+          onVerified,
+          onError,
+          verificationNonce: 0,
+        }),
+      );
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(onVerified).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(
+      "Human verification could not start because your session is unavailable. Check that cookies are enabled and try again.",
+    );
+  });
+
+  it("applies the same retry budget to widget errors as token verification retries", async () => {
+    const onVerified = vi.fn();
+    const onError = vi.fn();
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: "enabled", enabled: true, bypassed: false, misconfigured: false }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    let errorCallback: (() => void) | undefined;
+    const execute = vi.fn(() => {
+      errorCallback?.();
+    });
+    const reset = vi.fn();
+    window.turnstile = {
+      render: (_target, options) => {
+        errorCallback = options["error-callback"];
+        return "widget-1";
+      },
+      execute,
+      reset,
+    };
+
+    await act(async () => {
+      root.render(
+        createElement(TurnstileWidget, {
+          onVerified,
+          onError,
+          verificationNonce: 0,
+        }),
+      );
+    });
+
+    expect(reset).toHaveBeenCalledTimes(3);
+    expect(execute).toHaveBeenCalledTimes(4);
+    expect(onError).toHaveBeenCalledWith("Turnstile reported repeated errors.");
+    expect(onVerified).not.toHaveBeenCalled();
   });
 });

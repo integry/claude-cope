@@ -23,6 +23,34 @@ type TurnstileVerifyResponse = {
   "error-codes"?: string[];
 };
 
+type VerifyStatusResponse =
+  | {
+      status: "disabled";
+      enabled: false;
+      bypassed: true;
+      misconfigured: false;
+    }
+  | {
+      status: "enabled";
+      enabled: true;
+      bypassed: false;
+      misconfigured: false;
+    }
+  | {
+      status: "misconfigured";
+      enabled: false;
+      bypassed: false;
+      misconfigured: true;
+      reason: "invalid_expected_hostname";
+    }
+  | {
+      status: "unavailable";
+      enabled: false;
+      bypassed: false;
+      misconfigured: false;
+      reason: "session_unavailable" | "storage_unavailable";
+    };
+
 const HUMAN_TTL_SECONDS = 60 * 60 * 24;
 const verify = new Hono<Env>();
 type VerifyContext = Context<Env>;
@@ -70,10 +98,53 @@ verify.get("/", createRateLimiter("verify-status:"), async (c) => {
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
   const expectedHostname = getExpectedHostnameConfig(c);
-  const enabled = Boolean(secret && sessionId && kv && !expectedHostname.invalid);
-  const bypassed = !secret;
-  const misconfigured = Boolean(secret) && !enabled;
-  return c.json({ enabled, bypassed, misconfigured });
+  if (!secret) {
+    const response: VerifyStatusResponse = {
+      status: "disabled",
+      enabled: false,
+      bypassed: true,
+      misconfigured: false,
+    };
+    return c.json(response);
+  }
+  if (expectedHostname.invalid) {
+    const response: VerifyStatusResponse = {
+      status: "misconfigured",
+      enabled: false,
+      bypassed: false,
+      misconfigured: true,
+      reason: "invalid_expected_hostname",
+    };
+    return c.json(response);
+  }
+  if (!sessionId) {
+    const response: VerifyStatusResponse = {
+      status: "unavailable",
+      enabled: false,
+      bypassed: false,
+      misconfigured: false,
+      reason: "session_unavailable",
+    };
+    return c.json(response);
+  }
+  if (!kv) {
+    const response: VerifyStatusResponse = {
+      status: "unavailable",
+      enabled: false,
+      bypassed: false,
+      misconfigured: false,
+      reason: "storage_unavailable",
+    };
+    return c.json(response);
+  }
+
+  const response: VerifyStatusResponse = {
+    status: "enabled",
+    enabled: true,
+    bypassed: false,
+    misconfigured: false,
+  };
+  return c.json(response);
 });
 
 const parseVerifyBody = async (c: VerifyContext): Promise<VerifyBody> =>

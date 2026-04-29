@@ -87,11 +87,23 @@ async function getBackendVerificationStatus(): Promise<BackendVerificationStatus
   }
 
   const data = await res.json().catch(() => ({}));
-  if (typeof data?.misconfigured === "boolean" && data.misconfigured) {
+  if (data?.status === "misconfigured") {
     return {
       status: "unavailable",
       message: "Human verification is unavailable because the server is misconfigured.",
     };
+  }
+  if (data?.status === "unavailable") {
+    return {
+      status: "unavailable",
+      message:
+        data?.reason === "session_unavailable"
+          ? "Human verification could not start because your session is unavailable. Check that cookies are enabled and try again."
+          : "Human verification is temporarily unavailable.",
+    };
+  }
+  if (data?.status === "disabled" || data?.status === "enabled") {
+    return { status: data.status };
   }
   if (typeof data?.bypassed === "boolean") {
     return { status: data.bypassed ? "disabled" : "enabled" };
@@ -99,7 +111,12 @@ async function getBackendVerificationStatus(): Promise<BackendVerificationStatus
   if (typeof data?.enabled === "boolean") {
     return data.enabled
       ? { status: "enabled" }
-      : { status: "unavailable", message: "Unable to determine verification status from the server." };
+      : {
+          status: "unavailable",
+          message: data?.misconfigured
+            ? "Human verification is unavailable because the server is misconfigured."
+            : "Human verification is temporarily unavailable.",
+        };
   }
   return { status: "unavailable", message: "Unable to determine verification status from the server." };
 }
@@ -217,6 +234,19 @@ export default function TurnstileWidget({
         }
       }, verificationTimeoutMs);
     };
+    const retryChallenge = (message: string) => {
+      retries += 1;
+      if (retries > maxRetries) {
+        clearVerificationTimeout();
+        onError(message);
+        return false;
+      }
+      turnstile?.reset(widgetId ?? "");
+      startVerificationTimeout();
+      turnstile?.execute(widgetId ?? "");
+      return true;
+    };
+    let turnstile: TurnstileApi | undefined;
 
     const run = async () => {
       const status = await getBackendVerificationStatus();
@@ -241,7 +271,7 @@ export default function TurnstileWidget({
       ]);
       if (cancelled) return;
 
-      const turnstile = window.turnstile;
+      turnstile = window.turnstile;
       const container = document.getElementById("turnstile-container");
       if (!turnstile || !container) {
         onError("Turnstile did not initialize.");
@@ -270,32 +300,11 @@ export default function TurnstileWidget({
             onError(result.message ?? "Human verification unavailable.");
             return;
           }
-          if (retries < maxRetries) {
-            retries += 1;
-            turnstile.reset(renderedWidgetId);
-            startVerificationTimeout();
-            turnstile.execute(renderedWidgetId);
-            return;
-          }
-          clearVerificationTimeout();
-          onError("Human verification failed after multiple attempts.");
+          retryChallenge("Human verification failed after multiple attempts.");
         },
         "error-callback": () => {
           if (cancelled) return;
-          if (retries >= maxRetries) {
-            clearVerificationTimeout();
-            onError("Turnstile reported repeated errors.");
-            return;
-          }
-          retries += 1;
-          if (retries >= maxRetries) {
-            clearVerificationTimeout();
-            onError("Turnstile reported repeated errors.");
-            return;
-          }
-          turnstile.reset(renderedWidgetId);
-          startVerificationTimeout();
-          turnstile.execute(renderedWidgetId);
+          retryChallenge("Turnstile reported repeated errors.");
         },
         "expired-callback": () => {
           if (cancelled) return;

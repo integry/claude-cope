@@ -113,6 +113,29 @@ describe("App turnstile gating", () => {
     expect(container.textContent).toContain("[HUMAN VERIFICATION FAILED]");
   });
 
+  it("keeps the verification overlay mounted while retrying", async () => {
+    await renderApp("/");
+    await clickSplash();
+
+    await act(async () => {
+      latestTurnstileProps().onError("Human verification failed after multiple attempts.");
+    });
+    expect(container.textContent).toContain("[HUMAN VERIFICATION FAILED]");
+
+    const retryButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Retry verification",
+    );
+    expect(retryButton).toBeTruthy();
+
+    await act(async () => {
+      retryButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("[RETRYING HUMAN VERIFICATION]");
+    expect(container.textContent).toContain("Retrying human verification...");
+    expect(container.textContent).not.toContain("finish splash");
+  });
+
   it("re-blocks the terminal when chat requests re-verification", async () => {
     await renderApp("/");
 

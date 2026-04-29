@@ -92,17 +92,28 @@ describe("app", () => {
         { ALLOWED_ORIGINS: "http://localhost:5173" },
       );
       expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: true, misconfigured: false });
+      await expect(res.json()).resolves.toEqual({
+        status: "disabled",
+        enabled: false,
+        bypassed: true,
+        misconfigured: false,
+      });
     });
 
-    it("reports verification disabled when secret is set but verification storage is unavailable", async () => {
+    it("reports verification unavailable when secret is set but verification storage is unavailable", async () => {
       const res = await app.request(
         "/api/verify",
         { method: "GET", headers: { Origin: "http://localhost:5173" } },
         { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret" },
       );
       expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: false, misconfigured: true });
+      await expect(res.json()).resolves.toEqual({
+        status: "unavailable",
+        enabled: false,
+        bypassed: false,
+        misconfigured: false,
+        reason: "storage_unavailable",
+      });
     });
 
     it("reports verification misconfigured when TURNSTILE_EXPECTED_HOSTNAME is invalid", async () => {
@@ -121,7 +132,13 @@ describe("app", () => {
         },
       );
       expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: false, misconfigured: true });
+      await expect(res.json()).resolves.toEqual({
+        status: "misconfigured",
+        enabled: false,
+        bypassed: false,
+        misconfigured: true,
+        reason: "invalid_expected_hostname",
+      });
     });
 
     it("bypasses /api/verify when TURNSTILE_SECRET_KEY is not set", async () => {
@@ -316,7 +333,13 @@ describe("app", () => {
         },
       );
       expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: false, misconfigured: true });
+      await expect(res.json()).resolves.toEqual({
+        status: "misconfigured",
+        enabled: false,
+        bypassed: false,
+        misconfigured: true,
+        reason: "invalid_expected_hostname",
+      });
     });
 
     it("rejects successful verification when expected hostname is configured but hostname is missing", async () => {
