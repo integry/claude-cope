@@ -227,9 +227,47 @@ describe("analytics — init failure recovery", () => {
 });
 
 describe("analytics — STORAGE_KEY is shared, not duplicated", () => {
-  it("analytics imports STORAGE_KEY from the storageKey module", async () => {
-    const analyticsSource = await import("../analytics?raw") as unknown as { default: string };
-    expect(analyticsSource.default).toContain('from "./hooks/storageKey"');
+  it("getUsernameFromGameState reads from the same STORAGE_KEY used by game state", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_POSTHOG_KEY", "phc_test_key_123");
+
+    const mockCapture = vi.fn();
+    const mockIdentify = vi.fn();
+    const mockInit = vi.fn();
+
+    vi.doMock("posthog-js", () => ({
+      default: {
+        init: mockInit,
+        capture: mockCapture,
+        identify: mockIdentify,
+      },
+    }));
+
+    const store: Record<string, string> = {};
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn((key: string) => store[key] ?? null),
+      setItem: vi.fn((key: string, val: string) => { store[key] = val; }),
+      removeItem: vi.fn((key: string) => { delete store[key]; }),
+    });
+    vi.stubGlobal("crypto", { randomUUID: () => "test-uuid" });
+
+    // Write game state under the canonical STORAGE_KEY
+    const { STORAGE_KEY } = await import("../hooks/storageKey");
+    store[STORAGE_KEY] = JSON.stringify({ username: "shared_key_user" });
+
+    const { initPostHog } = await import("../analytics");
+    initPostHog();
+    await flushPromises();
+
+    // The identify call should include the username read via STORAGE_KEY
+    expect(mockIdentify).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ username: "shared_key_user" }),
+    );
+
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.resetModules();
   });
 });
 
@@ -280,7 +318,7 @@ describe("parseBaseCommand — command normalization", () => {
       "/about", "/privacy", "/terms", "/contact", "/fast", "/voice",
       "/blame", "/brrrrrr", "/ticket", "/backlog", "/sync", "/shill",
       "/key", "/feedback", "/bug", "/upgrade", "/take", "/accept",
-      "/abandon", "/alias", "/model", "/new",
+      "/abandon", "/alias", "/model",
       "/leaderboard", "/achievements", "/profile", "/party",
     ];
     for (const cmd of knownCommands) {

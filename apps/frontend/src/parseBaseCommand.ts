@@ -1,48 +1,12 @@
+import { ALL_SLASH_COMMANDS } from "./components/slashCommands";
+
 /**
- * Known slash commands in the game. Only these will be passed through
- * to analytics — anything else is mapped to "/unknown" to prevent
- * accidental leakage of secrets pasted after a `/`.
+ * Known slash commands in the game, derived from the single source of truth
+ * in slashCommands.ts. Only these will be passed through to analytics —
+ * anything else is mapped to "/unknown" to prevent accidental leakage of
+ * secrets pasted after a `/`.
  */
-const KNOWN_COMMANDS = new Set([
-  "/help",
-  "/clear",
-  "/store",
-  "/synergize",
-  "/user",
-  "/compact",
-  "/buddy",
-  "/ping",
-  "/theme",
-  "/support",
-  "/preworkout",
-  "/who",
-  "/about",
-  "/privacy",
-  "/terms",
-  "/contact",
-  "/fast",
-  "/voice",
-  "/blame",
-  "/brrrrrr",
-  "/ticket",
-  "/backlog",
-  "/sync",
-  "/shill",
-  "/key",
-  "/feedback",
-  "/bug",
-  "/upgrade",
-  "/take",
-  "/accept",
-  "/abandon",
-  "/alias",
-  "/model",
-  "/new",
-  "/leaderboard",
-  "/achievements",
-  "/profile",
-  "/party",
-]);
+const KNOWN_COMMANDS = new Set<string>(ALL_SLASH_COMMANDS);
 
 /**
  * Extracts the base command (first token) from a slash command string,

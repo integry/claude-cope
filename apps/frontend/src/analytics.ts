@@ -12,6 +12,9 @@ let readyPromise: Promise<void> | null = null;
 /** Guard against double initialization. */
 let initialized = false;
 
+/** Maximum number of events buffered before PostHog finishes loading. */
+const MAX_PENDING_EVENTS = 100;
+
 /** Buffered calls made before PostHog finished loading. */
 const pendingTrackCalls: Array<{ event: string; properties?: Record<string, unknown> }> = [];
 const pendingIdentifyCalls: Array<Record<string, unknown> | undefined> = [];
@@ -95,7 +98,7 @@ export function track(event: string, properties?: Record<string, unknown>): void
   try {
     if (phInstance) {
       phInstance.capture(event, properties);
-    } else if (readyPromise) {
+    } else if (readyPromise && pendingTrackCalls.length < MAX_PENDING_EVENTS) {
       pendingTrackCalls.push({ event, properties });
     }
   } catch (err) {
@@ -111,7 +114,7 @@ export function identify(properties?: Record<string, unknown>): void {
     if (phInstance) {
       const copeId = getOrCreateCopeId();
       phInstance.identify(copeId, properties);
-    } else if (readyPromise) {
+    } else if (readyPromise && pendingIdentifyCalls.length < MAX_PENDING_EVENTS) {
       pendingIdentifyCalls.push(properties);
     }
   } catch (err) {
