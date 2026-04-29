@@ -25,8 +25,9 @@ vi.mock("../../config", () => ({
 }));
 
 vi.mock("../../supabaseClient", () => ({ supabase: {} }));
-const { submitChatMessageMock } = vi.hoisted(() => ({
+const { submitChatMessageMock, testConfig } = vi.hoisted(() => ({
   submitChatMessageMock: vi.fn(),
+  testConfig: { initialQuotaPercent: 0 },
 }));
 
 vi.mock("../CommandLine", async () => {
@@ -93,7 +94,10 @@ vi.mock("../../hooks/useGameState", async () => {
   };
   return {
     useGameState: () => {
-      const [state, setState] = React.useState(initialState);
+      const [state, setState] = React.useState(() => ({
+        ...initialState,
+        economy: { ...initialState.economy, quotaPercent: testConfig.initialQuotaPercent },
+      }));
       const setChatHistory = React.useCallback((updater: React.SetStateAction<typeof initialState.chatHistory>) => {
         setState((prev) => ({
           ...prev,
@@ -460,6 +464,7 @@ describe("WinRAR nag: Terminal integration", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    testConfig.initialQuotaPercent = 0;
   });
 
   it("replays the blocked desktop command only after Escape dismisses the nag overlay", async () => {
@@ -497,8 +502,10 @@ describe("WinRAR nag: Terminal integration", () => {
   });
 
   it("arms the next-command nag after a stale quota update instead of showing it immediately", async () => {
-    submitChatMessageMock.mockImplementation(({ onQuotaUpdate }: { onQuotaUpdate: (quotaPercent: number) => void }) => {
+    testConfig.initialQuotaPercent = 50;
+    submitChatMessageMock.mockImplementation(({ onQuotaUpdate, setIsProcessing }: { onQuotaUpdate: (quotaPercent: number) => void; setIsProcessing: (v: boolean) => void }) => {
       onQuotaUpdate(0);
+      setIsProcessing(false);
     });
 
     await renderTerminal();
