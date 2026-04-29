@@ -150,10 +150,14 @@ describe("Turnstile verification and protection", () => {
 
   it("rate limits /api/chat before checking bot protection", async () => {
     const usageKv = { get: vi.fn().mockResolvedValue(null) };
-    const limiter = { limit: vi.fn().mockResolvedValue({ success: false }) };
-    const res = await requestChat({ TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv, RATE_LIMITER: limiter });
+    const overLimitCounter = JSON.stringify({ count: 100, expiresAt: Date.now() + 60_000 });
+    const rateLimitKv = {
+      get: vi.fn().mockResolvedValue(overLimitCounter),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+    const res = await requestChat({ TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv, RATE_LIMIT_KV: rateLimitKv });
     expect(res.status).toBe(429);
-    expect(limiter.limit).toHaveBeenCalled();
+    expect(rateLimitKv.get).toHaveBeenCalled();
     expect(usageKv.get).not.toHaveBeenCalled();
   });
 

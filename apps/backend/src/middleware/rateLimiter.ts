@@ -1,4 +1,6 @@
 import type { MiddlewareHandler } from "hono";
+import { resolveRequestIdentity } from "../utils/identity";
+import { checkRateLimits } from "../utils/rateLimitBuckets";
 
 type RateLimitContext = {
   req: { header: (name: string) => string | undefined };
@@ -6,10 +8,6 @@ type RateLimitContext = {
   json: (body: unknown, status?: number) => Response;
 };
 
-// cf-connecting-ip is set by Cloudflare and cannot be spoofed by clients.
-// x-forwarded-for / x-real-ip are only used as fallback for local dev
-// where no Cloudflare proxy is present. In production Workers deployments,
-// cf-connecting-ip is always present so the fallback never triggers.
 export function getClientIp(headers: { header: (name: string) => string | undefined }): string {
   const cfIp = headers.header("cf-connecting-ip");
   if (cfIp) return cfIp;
@@ -50,4 +48,44 @@ export const createRateLimiter = (keyPrefix = ""): MiddlewareHandler => async (c
   await next();
 };
 
-export const rateLimiter = createRateLimiter();
+export const rateLimiter: MiddlewareHandler = async (c, next) => {
+  const env = c.env as Record<string, unknown>;
+  const kv = env.RATE_LIMIT_KV as KVNamespace | undefined;
+
+  if (!kv) {
+    console.warn("RATE_LIMIT_KV not configured – rate limiting disabled");
+    return next();
+  }
+
+  try {
+    const body = await c.req.raw.clone().json() as Record<string, unknown>;
+    if (body?.proKeyHash) {
+      return next();
+    }
+  } catch {
+    // Body parsing failed – continue with rate limiting
+  }
+
+  const sessionId = (c.get("sessionId") as string) || "anonymous";
+  const identity = await resolveRequestIdentity(sessionId, c.req);
+
+  const result = await checkRateLimits(kv, {
+    ip: identity.ip_hash,
+    identity: identity.cope_id,
+  });
+
+  if (result.blocked) {
+    const retryAfterSeconds = Math.ceil(result.retryAfterMs / 1000);
+    c.header("Retry-After", String(retryAfterSeconds));
+    return c.json(
+      {
+        limitType: result.bucket,
+        message: result.lore,
+        retryAfterSeconds,
+      },
+      429,
+    );
+  }
+
+  return next();
+};

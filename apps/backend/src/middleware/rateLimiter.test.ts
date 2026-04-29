@@ -1,34 +1,41 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import app from "../app";
 
-function createMockLimiter(success: boolean) {
+function createMockKV(counters: Map<string, string> = new Map()) {
   return {
-    limit: vi.fn().mockResolvedValue({ success }),
+    get: vi.fn(async (key: string) => counters.get(key) ?? null),
+    put: vi.fn(async (key: string, value: string) => {
+      counters.set(key, value);
+    }),
   };
 }
 
-describe("rateLimiter middleware", () => {
-  it("returns 200 when rate limit is not exceeded", async () => {
-    const limiter = createMockLimiter(true);
+function makeEnv(overrides: Record<string, unknown> = {}) {
+  return { ALLOWED_ORIGINS: "http://localhost:5173", ...overrides };
+}
+
+describe("rateLimiter middleware (hybrid KV)", () => {
+  let kv: ReturnType<typeof createMockKV>;
+
+  beforeEach(() => {
+    kv = createMockKV();
+  });
+
+  it("allows requests through when RATE_LIMIT_KV is not configured (fail open)", async () => {
     const res = await app.request(
       "/api/chat",
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-forwarded-for": "1.2.3.4",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: "hello" }),
       },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
+      makeEnv(),
     );
 
     expect(res.status).not.toBe(429);
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "1.2.3.4" });
   });
 
-  it("returns 429 when rate limit is exceeded", async () => {
-    const limiter = createMockLimiter(false);
+  it("allows requests when under rate limit", async () => {
     const res = await app.request(
       "/api/chat",
       {
@@ -39,97 +46,89 @@ describe("rateLimiter middleware", () => {
         },
         body: JSON.stringify({ message: "hello" }),
       },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
+      makeEnv({ RATE_LIMIT_KV: kv }),
+    );
+
+    expect(res.status).not.toBe(429);
+    expect(kv.put).toHaveBeenCalled();
+  });
+
+  it("bypasses rate limiter when proKeyHash is present", async () => {
+    const res = await app.request(
+      "/api/chat",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-forwarded-for": "1.2.3.4",
+        },
+        body: JSON.stringify({ message: "hello", proKeyHash: "abc123" }),
+      },
+      makeEnv({ RATE_LIMIT_KV: kv }),
+    );
+
+    expect(res.status).not.toBe(429);
+    expect(kv.get).not.toHaveBeenCalled();
+  });
+
+  it("returns structured 429 when rate limit is exceeded", async () => {
+    const counters = new Map<string, string>();
+    const hotKv = createMockKV(counters);
+
+    const headers = {
+      "Content-Type": "application/json",
+      "x-forwarded-for": "1.2.3.4",
+      Cookie: "cope_session_id=fixed-session",
+    };
+
+    // burst bucket: 10 requests in 60s window (identity-based)
+    for (let i = 0; i < 10; i++) {
+      await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ message: "hello" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+    }
+
+    // 11th request should be blocked
+    const res = await app.request(
+      "/api/chat",
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ message: "hello" }),
+      },
+      makeEnv({ RATE_LIMIT_KV: hotKv }),
     );
 
     expect(res.status).toBe(429);
-    const body = await res.json();
-    expect(body).toEqual({ error: "Too many requests. Please try again later." });
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "1.2.3.4" });
+    const body = (await res.json()) as { limitType: string; message: string; retryAfterSeconds: number };
+    expect(body.limitType).toBeDefined();
+    expect(body.message).toBeDefined();
+    expect(body.retryAfterSeconds).toBeGreaterThan(0);
+    expect(res.headers.get("Retry-After")).toBeDefined();
   });
 
-  it("prioritizes cf-connecting-ip over x-forwarded-for", async () => {
-    const limiter = createMockLimiter(true);
-    await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "cf-connecting-ip": "9.9.9.9",
-          "x-forwarded-for": "1.2.3.4",
-          "x-real-ip": "5.6.7.8",
-        },
-        body: JSON.stringify({ message: "hello" }),
-      },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
-    );
-
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "9.9.9.9" });
-  });
-
-  it("uses x-real-ip when x-forwarded-for is absent", async () => {
-    const limiter = createMockLimiter(true);
-    await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-real-ip": "5.6.7.8",
-        },
-        body: JSON.stringify({ message: "hello" }),
-      },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
-    );
-
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "5.6.7.8" });
-  });
-
-  it("uses first IP from x-forwarded-for when multiple are present", async () => {
-    const limiter = createMockLimiter(true);
-    await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-forwarded-for": "10.0.0.1, 10.0.0.2, 10.0.0.3",
-        },
-        body: JSON.stringify({ message: "hello" }),
-      },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
-    );
-
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "10.0.0.1" });
-  });
-
-  it("falls back to 'unknown' when no IP headers are present", async () => {
-    const limiter = createMockLimiter(true);
-    await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "hello" }),
-      },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
-    );
-
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "unknown" });
-  });
-
-  it("allows requests through when RATE_LIMITER binding is not configured", async () => {
+  it("does not bypass rate limiter when proKeyHash is falsy", async () => {
     const res = await app.request(
       "/api/chat",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "hello" }),
+        headers: {
+          "Content-Type": "application/json",
+          "x-forwarded-for": "1.2.3.4",
+        },
+        body: JSON.stringify({ message: "hello", proKeyHash: "" }),
       },
-      { ALLOWED_ORIGINS: "http://localhost:5173" },
+      makeEnv({ RATE_LIMIT_KV: kv }),
     );
 
     expect(res.status).not.toBe(429);
+    // KV should have been consulted (not bypassed)
+    expect(kv.get).toHaveBeenCalled();
   });
 });
