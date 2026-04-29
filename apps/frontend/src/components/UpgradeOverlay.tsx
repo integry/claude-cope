@@ -58,7 +58,6 @@ function UpgradeOverlay({ quotaPercent, onDismiss }: UpgradeOverlayProps) {
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
         currentCredits={currentCredits}
-        onDismiss={onDismiss}
       />
       {/* Mobile: visible ≤640px, hidden above via CSS */}
       <MobileLayout
@@ -84,7 +83,7 @@ function MobileLayout({
   multiAvailable,
   currentCredits,
   onDismiss,
-}: LayoutProps) {
+}: LayoutProps & { onDismiss: () => void }) {
   const sectionStyle = { padding: "8px 12px" } as const;
   const hrStyle = {
     border: "none",

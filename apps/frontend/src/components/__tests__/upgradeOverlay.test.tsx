@@ -16,11 +16,12 @@ vi.mock("../../config", () => ({
 import UpgradeOverlay from "../UpgradeOverlay";
 
 let container: HTMLDivElement;
+let root: ReturnType<typeof createRoot>;
 
 function render(props: { quotaPercent: number; onDismiss: () => void }) {
   container = document.createElement("div");
   document.body.appendChild(container);
-  const root = createRoot(container);
+  root = createRoot(container);
   act(() => {
     root.render(createElement(UpgradeOverlay, props));
   });
@@ -28,8 +29,9 @@ function render(props: { quotaPercent: number; onDismiss: () => void }) {
 }
 
 function cleanup() {
-  if (container) {
-    document.body.removeChild(container);
+  if (root) act(() => root.unmount());
+  if (container && container.parentNode) {
+    container.parentNode.removeChild(container);
   }
 }
 

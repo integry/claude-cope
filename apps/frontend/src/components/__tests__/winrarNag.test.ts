@@ -207,6 +207,47 @@ describe("WinRAR nag: TerminalOverlays production wiring", () => {
   });
 });
 
+describe("WinRAR nag: dismiss replay path", () => {
+  beforeEach(() => {
+    vi.spyOn(window.history, "pushState").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("mobile footer tap fires onUpgradeDismiss exactly once (triggers command replay)", () => {
+    const { container, props } = renderOverlays({ showUpgrade: true });
+    const escBtn = container.querySelector(".upgrade-mobile .upgrade-esc-btn");
+    expect(escBtn).not.toBeNull();
+    act(() => {
+      escBtn!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(props.onUpgradeDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("clicking purchase links does NOT fire onUpgradeDismiss (command stays pending)", () => {
+    const { container, props } = renderOverlays({ showUpgrade: true });
+    const links = container.querySelectorAll("a[href]");
+    expect(links.length).toBeGreaterThan(0);
+    act(() => {
+      links[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(props.onUpgradeDismiss).not.toHaveBeenCalled();
+  });
+
+  it("clicking desktop backdrop does NOT fire onUpgradeDismiss (command stays pending)", () => {
+    const { container, props } = renderOverlays({ showUpgrade: true });
+    const backdrop = container.querySelector(".upgrade-desktop .absolute");
+    expect(backdrop).not.toBeNull();
+    act(() => {
+      backdrop!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(props.onUpgradeDismiss).not.toHaveBeenCalled();
+  });
+});
+
 describe("WinRAR nag: shouldShowNag helper", () => {
   it("returns false for BYOK users even with depleted quota", () => {
     expect(shouldShowNag("sk-user-key", undefined, undefined, 0)).toBe(false);

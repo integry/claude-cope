@@ -36,7 +36,6 @@ export type LayoutProps = {
   singleAvailable: boolean;
   multiAvailable: boolean;
   currentCredits: number;
-  onDismiss: () => void;
 };
 
 /* ══════════════════════════════════════════════════════════════

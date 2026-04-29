@@ -131,25 +131,28 @@ function Terminal() {
     const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
   }, [unlockAchievement, playChime]);
 
-  const clearPendingNagCommand = useCallback(() => {
-    pendingNagCommandRef.current = null;
+  const restorePendingNagCommand = useCallback(() => {
+    if (pendingNagCommandRef.current !== null) {
+      setInputValue(pendingNagCommandRef.current);
+      pendingNagCommandRef.current = null;
+    }
   }, []);
   const closeAllOverlaysAndClearNag = useCallback(() => {
     closeAllOverlays();
-    clearPendingNagCommand();
-  }, [clearPendingNagCommand, closeAllOverlays]);
+    restorePendingNagCommand();
+  }, [restorePendingNagCommand, closeAllOverlays]);
   const handleProfileClick = useCallback(() => {
     closeAllOverlaysAndClearNag();
     setShowProfile(true);
     window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`);
   }, [closeAllOverlaysAndClearNag, setShowProfile, state.username]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [history]);
-  // Clear pending nag command when navigating away from /upgrade via browser back/forward
+  // Restore pending nag command to input when navigating away from /upgrade via browser back/forward
   useEffect(() => {
-    const onPopState = () => { if (window.location.pathname !== "/upgrade") clearPendingNagCommand(); };
+    const onPopState = () => { if (window.location.pathname !== "/upgrade") restorePendingNagCommand(); };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [clearPendingNagCommand]);
+  }, [restorePendingNagCommand]);
 
   useEffect(() => { if (!isProcessing && !isBooting) inputRef.current?.focus(); }, [isProcessing, isBooting]);
 
