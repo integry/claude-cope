@@ -312,13 +312,7 @@ export function useGameState() {
   }, []);
 
   const unlockTheme = useCallback((themeId: string) => {
-    setState((prev) => {
-      if (prev.unlockedThemes.includes(themeId)) return prev;
-      return {
-        ...prev,
-        unlockedThemes: [...prev.unlockedThemes, themeId],
-      };
-    });
+    setState((prev) => prev.unlockedThemes.includes(themeId) ? prev : { ...prev, unlockedThemes: [...prev.unlockedThemes, themeId] });
   }, []);
 
   /** Purchase a theme. Requires proKey, sufficient TD, and theme not already owned. Returns true on success. */
