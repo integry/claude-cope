@@ -216,7 +216,7 @@ describe("TurnstileWidget bootstrap gating", () => {
     });
 
     expect(onVerified).not.toHaveBeenCalled();
-    expect(onError).toHaveBeenCalledWith("Human verification is temporarily unavailable.");
+    expect(onError).toHaveBeenCalledWith("Unable to determine verification status from the server.");
   });
 
   it("blocks the app when verify bootstrap reports session unavailable", async () => {
