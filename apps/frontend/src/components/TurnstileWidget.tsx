@@ -31,6 +31,10 @@ type VerifyTokenResult = {
   message?: string;
 };
 
+type BackendVerificationStatus =
+  | { status: "enabled" | "disabled" }
+  | { status: "unavailable"; message: string };
+
 async function verifyToken(token: string): Promise<VerifyTokenResult> {
   const res = await fetch(`${API_BASE}/api/verify`, {
     method: "POST",
@@ -70,24 +74,34 @@ async function verifyToken(token: string): Promise<VerifyTokenResult> {
   };
 }
 
-async function getBackendVerificationStatus(): Promise<"enabled" | "disabled" | "unavailable"> {
+async function getBackendVerificationStatus(): Promise<BackendVerificationStatus> {
   const res = await fetch(`${API_BASE}/api/verify`, {
     method: "GET",
     credentials: "include",
   }).catch(() => null);
-  if (!res || !res.ok) return "unavailable";
+  if (!res) {
+    return { status: "unavailable", message: "Unable to determine verification status from the server." };
+  }
+  if (!res.ok) {
+    return { status: "unavailable", message: "Verification service is temporarily unavailable." };
+  }
 
   const data = await res.json().catch(() => ({}));
   if (typeof data?.misconfigured === "boolean" && data.misconfigured) {
-    return "unavailable";
+    return {
+      status: "unavailable",
+      message: "Human verification is unavailable because the server is misconfigured.",
+    };
   }
   if (typeof data?.bypassed === "boolean") {
-    return data.bypassed ? "disabled" : "enabled";
+    return { status: data.bypassed ? "disabled" : "enabled" };
   }
   if (typeof data?.enabled === "boolean") {
-    return data.enabled ? "enabled" : "unavailable";
+    return data.enabled
+      ? { status: "enabled" }
+      : { status: "unavailable", message: "Unable to determine verification status from the server." };
   }
-  return "unavailable";
+  return { status: "unavailable", message: "Unable to determine verification status from the server." };
 }
 
 function waitForTurnstileApi(timeoutMs: number): Promise<void> {
@@ -207,12 +221,12 @@ export default function TurnstileWidget({
     const run = async () => {
       const status = await getBackendVerificationStatus();
       if (cancelled) return;
-      if (status === "disabled") {
+      if (status.status === "disabled") {
         onVerified();
         return;
       }
-      if (status === "unavailable") {
-        onError("Unable to determine verification status from the server.");
+      if (status.status === "unavailable") {
+        onError(status.message);
         return;
       }
 

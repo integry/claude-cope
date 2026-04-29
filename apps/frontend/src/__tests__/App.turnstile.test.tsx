@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { TURNSTILE_REQUIRED_EVENT } from "../turnstileEvents";
 
 type TurnstileWidgetProps = {
   onVerified: () => void;
@@ -87,16 +88,29 @@ afterEach(async () => {
 });
 
 describe("App turnstile gating", () => {
-  it("degrades to the terminal after a bootstrap verification error", async () => {
+  it("shows a blocking verification error after a bootstrap verification error", async () => {
     await renderApp("/");
     await clickSplash();
 
     await act(async () => {
-      latestTurnstileProps().onError("Unable to determine verification status from the server.");
+      latestTurnstileProps().onError("Human verification is unavailable because the server is misconfigured.");
     });
 
-    expect(container.textContent).toContain("terminal");
-    expect(container.textContent).not.toContain("[HUMAN VERIFICATION FAILED]");
+    expect(container.textContent).not.toContain("terminal");
+    expect(container.textContent).toContain("[HUMAN VERIFICATION FAILED]");
+    expect(container.textContent).toContain("server is misconfigured");
+  });
+
+  it("keeps public app routes behind turnstile", async () => {
+    await renderApp("/help");
+    await clickSplash();
+
+    await act(async () => {
+      latestTurnstileProps().onError("Human verification failed after multiple attempts.");
+    });
+
+    expect(container.textContent).not.toContain("terminal");
+    expect(container.textContent).toContain("[HUMAN VERIFICATION FAILED]");
   });
 
   it("re-blocks the terminal when chat requests re-verification", async () => {
@@ -109,7 +123,7 @@ describe("App turnstile gating", () => {
     expect(container.textContent).toContain("terminal");
 
     await act(async () => {
-      window.dispatchEvent(new CustomEvent("turnstile:required"));
+      window.dispatchEvent(new CustomEvent(TURNSTILE_REQUIRED_EVENT));
     });
     expect(container.textContent).not.toContain("terminal");
 

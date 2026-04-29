@@ -300,6 +300,25 @@ describe("app", () => {
       }
     });
 
+    it("treats impossible TURNSTILE_EXPECTED_HOSTNAME ports as invalid", async () => {
+      const usageKv = {
+        get: vi.fn(),
+        put: vi.fn(),
+      };
+      const res = await app.request(
+        "/api/verify",
+        { method: "GET", headers: { Origin: "http://localhost:5173" } },
+        {
+          ALLOWED_ORIGINS: "http://localhost:5173",
+          TURNSTILE_SECRET_KEY: "secret",
+          TURNSTILE_EXPECTED_HOSTNAME: "claudecope.com:99999",
+          USAGE_KV: usageKv,
+        },
+      );
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ enabled: false, bypassed: false, misconfigured: true });
+    });
+
     it("rejects successful verification when expected hostname is configured but hostname is missing", async () => {
       const usageKv = {
         get: vi.fn(),
@@ -331,7 +350,7 @@ describe("app", () => {
       }
     });
 
-    it("uses a verify-specific rate limiter key", async () => {
+    it("uses a verify-status-specific rate limiter key for status checks", async () => {
       const limiter = {
         limit: vi.fn().mockResolvedValue({ success: true }),
       };
@@ -341,7 +360,33 @@ describe("app", () => {
         { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
       );
       expect(res.status).toBe(200);
-      expect(limiter.limit).toHaveBeenCalledWith({ key: "verify:1.2.3.4" });
+      expect(limiter.limit).toHaveBeenCalledWith({ key: "verify-status:1.2.3.4" });
+    });
+
+    it("uses a separate verify-submit rate limiter key for token submission", async () => {
+      const limiter = {
+        limit: vi.fn().mockResolvedValue({ success: true }),
+      };
+      const res = await app.request(
+        "/api/verify",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Origin: "http://localhost:5173",
+            "cf-connecting-ip": "1.2.3.4",
+          },
+          body: JSON.stringify({}),
+        },
+        {
+          ALLOWED_ORIGINS: "http://localhost:5173",
+          TURNSTILE_SECRET_KEY: "secret",
+          USAGE_KV: { get: vi.fn(), put: vi.fn() },
+          RATE_LIMITER: limiter,
+        },
+      );
+      expect(res.status).toBe(400);
+      expect(limiter.limit).toHaveBeenCalledWith({ key: "verify-submit:1.2.3.4" });
     });
   });
 });

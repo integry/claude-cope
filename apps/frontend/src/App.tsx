@@ -4,15 +4,7 @@ import SplashScreen from "./components/SplashScreen";
 import LegalTermsPage from "./components/LegalTermsPage";
 import LegalPrivacyPage from "./components/LegalPrivacyPage";
 import TurnstileWidget from "./components/TurnstileWidget";
-
-const PUBLIC_APP_ROUTES = new Set([
-  "/help",
-  "/about",
-  "/privacy",
-  "/terms",
-  "/contact",
-  "/upgrade",
-]);
+import { TURNSTILE_REQUIRED_EVENT } from "./turnstileEvents";
 
 type VerificationPhase = "boot" | "idle" | "required";
 
@@ -31,7 +23,7 @@ function App() {
   const handleVerificationError = useCallback((message: string) => {
     setIsHumanVerified(false);
     setVerificationError(message);
-    setVerificationPhase((currentPhase) => (currentPhase === "required" ? currentPhase : "idle"));
+    setVerificationPhase("required");
   }, []);
   const retryVerification = useCallback(() => {
     setVerificationError(null);
@@ -46,16 +38,15 @@ function App() {
       setVerificationPhase("required");
       setVerificationNonce((n) => n + 1);
     };
-    window.addEventListener("turnstile:required", onVerificationRequired);
-    return () => window.removeEventListener("turnstile:required", onVerificationRequired);
+    window.addEventListener(TURNSTILE_REQUIRED_EVENT, onVerificationRequired);
+    return () => window.removeEventListener(TURNSTILE_REQUIRED_EVENT, onVerificationRequired);
   }, []);
 
   const path = window.location.pathname;
   if (path === "/legal/terms") return <LegalTermsPage />;
   if (path === "/legal/privacy") return <LegalPrivacyPage />;
-  const isPublicAppRoute = PUBLIC_APP_ROUTES.has(path) || path.startsWith("/user/");
-  const showBlockingSplash = showSplash || (!isHumanVerified && verificationPhase !== "idle" && !isPublicAppRoute);
-  const showVerificationError = !showSplash && verificationPhase === "required" && !isHumanVerified && !isPublicAppRoute && verificationError;
+  const showBlockingSplash = showSplash || (!isHumanVerified && verificationPhase !== "idle");
+  const showVerificationError = !showSplash && verificationPhase === "required" && !isHumanVerified && verificationError;
 
   return (
     <>

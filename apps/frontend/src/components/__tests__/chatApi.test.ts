@@ -1,6 +1,8 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { computeBuddyInterjection, submitChatMessage } from "../chatApi";
 import type { BuddyState } from "../../hooks/useGameState";
+import { TURNSTILE_REQUIRED_EVENT } from "../../turnstileEvents";
 
 /**
  * Creates a mock ReadableStream that simulates an SSE streamed response
@@ -382,6 +384,34 @@ describe("submitChatMessage - achievement parsing", () => {
     expect(systemMsg).toBeDefined();
     expect(systemMsg!.tokensSent).toBe(150);
     expect(systemMsg!.tokensReceived).toBe(42);
+  });
+
+  it("calls onError and requests re-verification on human verification 403", async () => {
+    const setHistory = vi.fn();
+    const setIsProcessing = vi.fn();
+    const onError = vi.fn();
+    const dispatchEventSpy = vi.spyOn(window, "dispatchEvent");
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({ error: "Human verification required" }),
+    } as Response);
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+      onError,
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(dispatchEventSpy).toHaveBeenCalledWith(expect.objectContaining({ type: TURNSTILE_REQUIRED_EVENT }));
   });
 
   it("sends apiKey in request body when provided", async () => {

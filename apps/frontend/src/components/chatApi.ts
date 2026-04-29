@@ -10,6 +10,7 @@ import { buildAchievementBox } from "./achievementBox";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { COPE_MODELS } from "@claude-cope/shared/models";
+import { TURNSTILE_REQUIRED_EVENT } from "../turnstileEvents";
 
 export type BuddyInterjectionResult = {
   message: Message;
@@ -205,8 +206,9 @@ async function handleErrorResponse(
     403: async () => {
       const errorData = await res.json().catch(() => null);
       if (errorData?.error !== "Human verification required") return false;
+      onError?.();
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("turnstile:required"));
+        window.dispatchEvent(new CustomEvent(TURNSTILE_REQUIRED_EVENT));
       }
       removeLoading();
       return true;

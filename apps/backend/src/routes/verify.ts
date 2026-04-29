@@ -1,5 +1,6 @@
 import { type Context, Hono } from "hono";
 import { getClientIp } from "../middleware/rateLimiter";
+import { createRateLimiter } from "../middleware/rateLimiter";
 
 type Env = {
   Bindings: {
@@ -28,7 +29,7 @@ type VerifyContext = Context<Env>;
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 type VerifyFailureStatus = 502 | 503;
-const HOSTNAME_PATTERN = /^(?:localhost|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*)(?::\d{1,5})?$/i;
+const HOSTNAME_PATTERN = /^(?:localhost|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*)$/i;
 
 const normalizeHostname = (value: string | undefined): string | undefined => {
   if (!value) return undefined;
@@ -36,10 +37,21 @@ const normalizeHostname = (value: string | undefined): string | undefined => {
   if (!trimmed || trimmed.includes(",") || trimmed.includes("/") || /\s/.test(trimmed)) {
     return undefined;
   }
-  if (!HOSTNAME_PATTERN.test(trimmed)) {
+  const parts = trimmed.split(":");
+  if (parts.length > 2) {
     return undefined;
   }
-  return trimmed.replace(/:\d{1,5}$/, "").toLowerCase();
+  const [hostname, port] = parts;
+  if (!hostname || !HOSTNAME_PATTERN.test(hostname)) {
+    return undefined;
+  }
+  if (port) {
+    const portNumber = Number(port);
+    if (!/^\d{1,5}$/.test(port) || !Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65_535) {
+      return undefined;
+    }
+  }
+  return hostname.toLowerCase();
 };
 
 const getExpectedHostnameConfig = (c: VerifyContext): { hostname?: string; invalid: boolean } => {
@@ -53,7 +65,7 @@ const getExpectedHostnameConfig = (c: VerifyContext): { hostname?: string; inval
   return { hostname, invalid: false };
 };
 
-verify.get("/", async (c) => {
+verify.get("/", createRateLimiter("verify-status:"), async (c) => {
   const secret = c.env?.TURNSTILE_SECRET_KEY;
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
@@ -104,7 +116,7 @@ const verifyWithTurnstile = async (
   return { ok: true as const, data };
 };
 
-verify.post("/", async (c) => {
+verify.post("/", createRateLimiter("verify-submit:"), async (c) => {
   const secret = c.env?.TURNSTILE_SECRET_KEY;
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
