@@ -36,10 +36,10 @@ function getQuotaStatus(credits: number): string {
 type UpgradeOverlayProps = {
   isUpgraded: boolean;
   quotaPercent: number;
-  onClose: () => void;
+  onDismiss: () => void;
 };
 
-function UpgradeOverlay({ isUpgraded, quotaPercent, onClose }: UpgradeOverlayProps) {
+function UpgradeOverlay({ isUpgraded, quotaPercent, onDismiss }: UpgradeOverlayProps) {
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
@@ -59,7 +59,7 @@ function UpgradeOverlay({ isUpgraded, quotaPercent, onClose }: UpgradeOverlayPro
         multiAvailable={multiAvailable}
         isUpgraded={isUpgraded}
         currentCredits={currentCredits}
-        onClose={onClose}
+        onDismiss={onDismiss}
       />
       {/* Mobile: visible ≤640px, hidden above via CSS */}
       <MobileLayout
@@ -69,7 +69,7 @@ function UpgradeOverlay({ isUpgraded, quotaPercent, onClose }: UpgradeOverlayPro
         multiAvailable={multiAvailable}
         isUpgraded={isUpgraded}
         currentCredits={currentCredits}
-        onClose={onClose}
+        onDismiss={onDismiss}
       />
     </>
   );
@@ -85,7 +85,7 @@ function MobileLayout({
   singleAvailable,
   multiAvailable,
   currentCredits,
-  onClose,
+  onDismiss,
 }: LayoutProps) {
   const sectionStyle = { padding: "8px 12px" } as const;
   const hrStyle = {
@@ -145,7 +145,7 @@ function MobileLayout({
   return (
     <div
       className="upgrade-mobile fixed inset-0 z-50 flex items-center justify-center"
-      onClick={onClose}
+      onClick={onDismiss}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
 
@@ -181,7 +181,7 @@ function MobileLayout({
           </span>
           <span
             style={{ color: DIM, cursor: "pointer", fontSize: "14px" }}
-            onClick={(e) => { e.stopPropagation(); onClose(); }}
+            onClick={(e) => { e.stopPropagation(); onDismiss(); }}
           >
             [x]
           </span>
@@ -272,7 +272,7 @@ function MobileLayout({
         {/* ESC / close */}
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
           style={{
             display: "block",
             width: "100%",

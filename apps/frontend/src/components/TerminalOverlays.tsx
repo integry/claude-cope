@@ -44,7 +44,7 @@ export function TerminalOverlays({
   setShowSynergize,
   setIsProcessing,
   setHistory,
-  onUpgradeNagClose,
+  onUpgradeDismiss,
 }: {
   showStore: boolean;
   showLeaderboard: boolean;
@@ -76,7 +76,7 @@ export function TerminalOverlays({
   setShowSynergize: Dispatch<SetStateAction<boolean>>;
   setIsProcessing: Dispatch<SetStateAction<boolean>>;
   setHistory: Dispatch<SetStateAction<Message[]>>;
-  onUpgradeNagClose: () => void;
+  onUpgradeDismiss: () => void;
 }) {
   return (
     <>
@@ -160,7 +160,7 @@ export function TerminalOverlays({
         <UpgradeOverlay
           isUpgraded={!!state.proKey || !!state.proKeyHash}
           quotaPercent={state.economy.quotaPercent}
-          onClose={onUpgradeNagClose}
+          onDismiss={onUpgradeDismiss}
         />
       )}
     </>

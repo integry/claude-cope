@@ -124,15 +124,25 @@ function Terminal() {
     const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
   }, [unlockAchievement, playChime]);
 
-  const closeAllOverlaysAndNag = useCallback(() => { closeAllOverlays(); pendingNagCommandRef.current = null; }, [closeAllOverlays]);
-  const handleProfileClick = useCallback(() => { closeAllOverlaysAndNag(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlaysAndNag, setShowProfile, state.username]);
+  const clearPendingNagCommand = useCallback(() => {
+    pendingNagCommandRef.current = null;
+  }, []);
+  const closeAllOverlaysAndClearNag = useCallback(() => {
+    closeAllOverlays();
+    clearPendingNagCommand();
+  }, [clearPendingNagCommand, closeAllOverlays]);
+  const handleProfileClick = useCallback(() => {
+    closeAllOverlaysAndClearNag();
+    setShowProfile(true);
+    window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`);
+  }, [closeAllOverlaysAndClearNag, setShowProfile, state.username]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [history]);
   // Clear pending nag command when navigating away from /upgrade via browser back/forward
   useEffect(() => {
-    const onPopState = () => { if (window.location.pathname !== "/upgrade") pendingNagCommandRef.current = null; };
+    const onPopState = () => { if (window.location.pathname !== "/upgrade") clearPendingNagCommand(); };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [clearPendingNagCommand]);
 
   useEffect(() => { if (!isProcessing && !isBooting) inputRef.current?.focus(); }, [isProcessing, isBooting]);
 
@@ -142,11 +152,12 @@ function Terminal() {
     fetchRandomTicketPrompt(setHistory);
   }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
 
-  const handleQuotaLockout = useCallback(() => {
+  const handleQuotaLockout = useCallback((command?: string) => {
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
     // BYOK users should never be gated by platform quota
     if (effectiveApiKey) return;
     if (!state.proKey && !state.proKeyHash) {
+      if (command) pendingNagCommandRef.current = command;
       // WinRAR nag: show upgrade overlay instead of the old lockout messages
       setShowUpgrade(true);
     } else {
@@ -172,7 +183,7 @@ function Terminal() {
   });
 
   const runSlashCommand = (command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: setSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndClearNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: setSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
   };
 
   const runSlashCommandRef = useRef(runSlashCommand);
@@ -249,7 +260,7 @@ function Terminal() {
         return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } };
       }),
       onQuotaUpdate: (quotaPercent) => setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })),
-      onQuotaExhausted: handleQuotaLockout,
+      onQuotaExhausted: () => handleQuotaLockout(command),
       onProfileUpdate: (profile) => setState((prev) => applyServerProfile(prev, profile)),
       onError: playError, signal: controller.signal,
     });
@@ -269,11 +280,14 @@ function Terminal() {
     processCommand(command);
   };
 
-  // WinRAR nag: replay the pending command only when the user explicitly dismisses
-  // the UpgradeOverlay (ESC, [x] click, or backdrop click). This is intentionally a
-  // callback rather than an effect on `showUpgrade` so that programmatic closes
-  // (e.g. closeAllOverlays opening another overlay, or route changes) don't accidentally
-  // replay the command. Uses processCommandRef to always call the latest version.
+  const handleUpgradeDismiss = useCallback(() => {
+    setShowUpgrade(false);
+    clearPendingNagCommand();
+    if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
+  }, [clearPendingNagCommand, setShowUpgrade]);
+
+  // WinRAR nag: replay the pending command only when the user explicitly presses ESC.
+  // Other dismiss paths close the overlay and intentionally drop the deferred command.
   const handleUpgradeNagClose = useCallback(() => {
     setShowUpgrade(false);
     if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
@@ -315,7 +329,7 @@ function Terminal() {
     setHistoryIndex,
     setIsProcessing,
     setHistory,
-    closeAllOverlays,
+    closeAllOverlays: closeAllOverlaysAndClearNag,
     handleUpgradeNagClose,
     runSlashCommand,
     handleEnterSubmit,
@@ -330,9 +344,9 @@ function Terminal() {
       onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
       <div className="shrink-0">
-        <Ticker onExpand={() => { closeAllOverlays(); setShowParty(true); }} onlineCount={onlineCount} />
+        <Ticker onExpand={() => { closeAllOverlaysAndClearNag(); setShowParty(true); }} onlineCount={onlineCount} />
         {outageHp !== null && <OutageBar outageHp={outageHp} />}
-        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} isBYOK={BYOK_ENABLED && !!state.apiKey} isMax={!!state.proKey || !!state.proKeyHash} byokTotalCost={state.byokTotalCost} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlays(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlays(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} onUpgradeClick={() => { closeAllOverlays(); setShowUpgrade(true); window.history.pushState(null, "", "/upgrade"); }} />
+        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} isBYOK={BYOK_ENABLED && !!state.apiKey} isMax={!!state.proKey || !!state.proKeyHash} byokTotalCost={state.byokTotalCost} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlaysAndClearNag(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlaysAndClearNag(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} onUpgradeClick={() => { closeAllOverlaysAndClearNag(); setShowUpgrade(true); window.history.pushState(null, "", "/upgrade"); }} />
       </div>
       <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
@@ -378,9 +392,9 @@ function Terminal() {
         setShowSynergize={setShowSynergize}
         setIsProcessing={setIsProcessing}
         setHistory={setHistory}
-        onUpgradeNagClose={handleUpgradeNagClose}
+        onUpgradeDismiss={handleUpgradeDismiss}
       />
-      <TerminalFooter closeAllOverlays={closeAllOverlays} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
+      <TerminalFooter closeAllOverlays={closeAllOverlaysAndClearNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
     </div>
   );
 }

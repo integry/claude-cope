@@ -37,7 +37,7 @@ export type LayoutProps = {
   multiAvailable: boolean;
   isUpgraded: boolean;
   currentCredits: number;
-  onClose: () => void;
+  onDismiss: () => void;
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -50,7 +50,7 @@ export default function DesktopLayout({
   singleAvailable,
   multiAvailable,
   currentCredits,
-  onClose,
+  onDismiss,
 }: LayoutProps) {
   const topBorder = (
     <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>
@@ -192,7 +192,7 @@ export default function DesktopLayout({
   return (
     <div
       className="upgrade-desktop fixed inset-0 z-50 flex items-center justify-center"
-      onClick={onClose}
+      onClick={onDismiss}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
 
@@ -217,7 +217,7 @@ export default function DesktopLayout({
         <span style={{ color: B }}>{" " + title + " ".repeat(titleGap - 1)}</span>
         <span
           style={{ color: DIM, cursor: "pointer" }}
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
           onMouseEnter={(e) => { e.currentTarget.style.color = W; }}
           onMouseLeave={(e) => { e.currentTarget.style.color = DIM; }}
         >
@@ -283,7 +283,7 @@ export default function DesktopLayout({
           return (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              onClick={(e) => { e.stopPropagation(); onDismiss(); }}
               style={{
                 display: "inline",
                 background: "none",
