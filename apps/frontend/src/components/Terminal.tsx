@@ -30,12 +30,26 @@ import { buildSprintCallbacks } from "./buildChatSubmitArgs";
 import MessageList from "./MessageList";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { triggerQuotaLockout, triggerInstantBan } from "./terminalHandlers";
-import { shouldShowNag, armNagCommand, dismissNagAndReplay } from "./winrarNagHelpers";
 import { TerminalOverlays } from "./TerminalOverlays";
 import { useTerminalKeyboard } from "../hooks/useTerminalKeyboard";
 import { handleBragSubmit, handleBuddyConfirm, tryOutageDamage } from "./terminalInputHandlers";
 
 export type { Message };
+
+/* ── WinRAR nag helpers (issue #736) ─────────────────────────── */
+// Product decision: ALL dismiss affordances (ESC key, backdrop click,
+// [x] button, mobile footer tap) replay the pending command. The
+// original requirement specified ESC-only, but this was broadened so
+// mobile users (no physical ESC key) are not left in a dead-end state.
+
+function shouldShowNag(
+  effectiveApiKey: string | undefined,
+  proKey: string | undefined,
+  proKeyHash: string | undefined,
+  quotaPercent: number,
+): boolean {
+  return !effectiveApiKey && !proKey && !proKeyHash && quotaPercent <= 0;
+}
 
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
@@ -159,7 +173,8 @@ function Terminal() {
     if (effectiveApiKey) return;
     if (!state.proKey && !state.proKeyHash) {
       if (command) {
-        armNagCommand(command, pendingNagCommandRef, setShowUpgrade);
+        pendingNagCommandRef.current = command;
+        setShowUpgrade(true);
       } else {
         // No command to arm (e.g. backend quota-exhausted callback) — just show overlay
         setShowUpgrade(true);
@@ -172,7 +187,7 @@ function Terminal() {
 
   // WinRAR nag: check free tier quota exhaustion and defer command behind the nag overlay
   const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
-    if (shouldShowNag({ effectiveApiKey, proKey: state.proKey, proKeyHash: state.proKeyHash, quotaPercent: state.economy.quotaPercent })) {
+    if (shouldShowNag(effectiveApiKey, state.proKey, state.proKeyHash, state.economy.quotaPercent)) {
       handleQuotaLockout(command);
       return true;
     }
@@ -296,11 +311,16 @@ function Terminal() {
   // mobile users (no physical ESC key) are not stuck in a dead-end overlay.
   // The user must still dismiss every single time — faithful to WinRAR UX.
   const handleUpgradeNagClose = useCallback(() => {
-    dismissNagAndReplay(
-      { pendingNagCommandRef, processCommandRef },
-      setShowUpgrade,
-      setCommandHistory,
-    );
+    setShowUpgrade(false);
+    if (window.location.pathname === "/upgrade") {
+      window.history.pushState(null, "", "/");
+    }
+    if (pendingNagCommandRef.current !== null) {
+      const command = pendingNagCommandRef.current;
+      pendingNagCommandRef.current = null;
+      setCommandHistory((prev) => [...prev, command]);
+      processCommandRef.current(command);
+    }
   }, [setShowUpgrade]);
 
   const { handleKeyDown } = useTerminalKeyboard({
