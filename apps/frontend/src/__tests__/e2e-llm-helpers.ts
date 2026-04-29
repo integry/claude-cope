@@ -122,6 +122,35 @@ type TestOpts = {
   buddy?: string;
 };
 
+function detectQualityIssues(reply: string): string[] {
+  const issues: string[] = [];
+  if (reply.length < 50) issues.push("VERY SHORT response (<50 chars)");
+  if (reply.length > 3000) issues.push(`VERY LONG response (${reply.length} chars)`);
+  if (/format \d|multiple choice trap|unhinged tool call|abrupt refusal|existential crisis|silent fix|over-?engineered diff|chosen response format/i.test(reply)) {
+    issues.push("LEAKED format name");
+  }
+  if (/awaiting input/i.test(reply) && reply.replace(/awaiting input.*/i, "").trim().length < 20) {
+    issues.push("Response is mostly 'Awaiting input'");
+  }
+  return issues;
+}
+
+function logCallResult(
+  meta: { suite: string; test: string; turn?: number },
+  reply: string,
+  data: { usage?: { prompt_tokens?: number; completion_tokens?: number } },
+  durationMs: number,
+  qualityIssues: string[],
+): void {
+  console.log(`\n${"=".repeat(60)}`);
+  console.log(`${meta.suite} > ${meta.test}${meta.turn != null ? ` [Turn ${meta.turn}]` : ""}`);
+  console.log(`TOKENS: ${data.usage?.prompt_tokens ?? "?"}→${data.usage?.completion_tokens ?? "?"} | ${durationMs}ms`);
+  console.log(`${"—".repeat(60)}`);
+  console.log(reply.slice(0, 400) + (reply.length > 400 ? `... [${reply.length - 400} more chars]` : ""));
+  if (qualityIssues.length) console.log(`⚠️  ${qualityIssues.join(", ")}`);
+  console.log(`${"=".repeat(60)}\n`);
+}
+
 export async function callLLM(
   messages: { role: string; content: string }[],
   meta: { suite: string; test: string; turn?: number },
@@ -140,11 +169,7 @@ export async function callLLM(
   const data = await res.json();
   const reply = data.choices?.[0]?.message?.content ?? "";
 
-  const qualityIssues: string[] = [];
-  if (reply.length < 50) qualityIssues.push("VERY SHORT response (<50 chars)");
-  if (reply.length > 3000) qualityIssues.push(`VERY LONG response (${reply.length} chars)`);
-  if (/format \d|multiple choice trap|unhinged tool call|abrupt refusal|existential crisis|silent fix|over-?engineered diff|chosen response format/i.test(reply)) qualityIssues.push("LEAKED format name");
-  if (/awaiting input/i.test(reply) && reply.replace(/awaiting input.*/i, "").trim().length < 20) qualityIssues.push("Response is mostly 'Awaiting input'");
+  const qualityIssues = detectQualityIssues(reply);
 
   report.push({
     suite: meta.suite,
@@ -158,13 +183,7 @@ export async function callLLM(
     durationMs,
   });
 
-  console.log(`\n${"=".repeat(60)}`);
-  console.log(`${meta.suite} > ${meta.test}${meta.turn != null ? ` [Turn ${meta.turn}]` : ""}`);
-  console.log(`TOKENS: ${data.usage?.prompt_tokens ?? "?"}→${data.usage?.completion_tokens ?? "?"} | ${durationMs}ms`);
-  console.log(`${"—".repeat(60)}`);
-  console.log(reply.slice(0, 400) + (reply.length > 400 ? `... [${reply.length - 400} more chars]` : ""));
-  if (qualityIssues.length) console.log(`⚠️  ${qualityIssues.join(", ")}`);
-  console.log(`${"=".repeat(60)}\n`);
+  logCallResult(meta, reply, data, durationMs, qualityIssues);
 
   return reply;
 }

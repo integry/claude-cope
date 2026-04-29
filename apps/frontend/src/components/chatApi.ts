@@ -308,10 +308,27 @@ export function submitChatMessage(opts: {
           activeTicket,
           buddyType: buddyTypeForContext,
         });
+        type OpenRouterByokRequestBody = {
+          model: string;
+          messages: { role: string; content: string }[];
+          max_tokens: number;
+          reasoning: { effort: string };
+          stream: boolean;
+          stream_options: { include_usage: boolean };
+        };
+
+        const requestBody: OpenRouterByokRequestBody = {
+          model,
+          messages,
+          max_tokens: 2000,
+          reasoning: { effort: "low" },
+          stream: true,
+          stream_options: { include_usage: true },
+        };
         return fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ model, messages, max_tokens: 2000, reasoning: { effort: "low" }, stream: true, stream_options: { include_usage: true } }),
+          body: JSON.stringify(requestBody),
           signal,
         });
       })()

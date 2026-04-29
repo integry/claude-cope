@@ -26,7 +26,7 @@ app.use(
       scriptSrc: ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
       connectSrc: ["'self'", "https://openrouter.ai", "https://challenges.cloudflare.com", "wss:", "ws:"],
       frameSrc: ["https://challenges.cloudflare.com"],
-      imgSrc: ["'self'", "data:"],
+      imgSrc: ["'self'", "data:", "blob:"],
       styleSrc: ["'self'", "'unsafe-inline'"],
     },
   })
