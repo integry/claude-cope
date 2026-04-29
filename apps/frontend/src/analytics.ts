@@ -1,3 +1,4 @@
+import posthog from "posthog-js";
 import { POSTHOG_KEY, POSTHOG_HOST, POSTHOG_DEFAULT_HOST } from "./config";
 import { STORAGE_KEY } from "./hooks/storageKey";
 
@@ -5,7 +6,7 @@ const COPE_ID_KEY = "cope_id";
 let volatileCopeId: string | null = null;
 
 /** Lazily-resolved PostHog instance — `null` when analytics is disabled. */
-let phInstance: import("posthog-js").PostHog | null = null;
+let phInstance: typeof posthog | null = null;
 
 /** Promise that resolves when PostHog is ready; stays `null` when analytics is disabled. */
 let readyPromise: Promise<void> | null = null;
@@ -118,8 +119,8 @@ export function initPostHog(): void {
   }
   initialized = true;
 
-  readyPromise = import("posthog-js")
-    .then(({ default: posthog }) => {
+  readyPromise = Promise.resolve()
+    .then(() => {
       posthog.init(POSTHOG_KEY, {
         api_host: POSTHOG_HOST || POSTHOG_DEFAULT_HOST,
         persistence: "memory",
