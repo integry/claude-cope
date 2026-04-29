@@ -7,4 +7,5 @@ export const AnalyticsEvents = {
   SLASH_COMMAND_FAILED: "slash_command_failed",
   ACCOUNT_RESTORED: "account_restored",
   ACCOUNT_UPGRADED: "account_upgraded",
+  SHILL_COMPLETED: "shill_completed",
 } as const;

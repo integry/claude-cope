@@ -278,6 +278,7 @@ function handleBuddyCommand(command: string, ctx: SlashCommandContext, reply: Re
   const arg = command.slice(6).trim().toLowerCase();
   if (arg === "clear" || arg === "remove") {
     if (!ctx.state.buddy.type) {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/buddy", reason: "no_buddy" });
       reply({ role: "system", content: "[❌] You don't have a buddy to dismiss. Use `/buddy` to roll for one." });
       return true;
     }
@@ -499,6 +500,7 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
 async function handleAliasCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<void> {
   const newName = command.slice(6).trim();
   if (!newName) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: "no_argument" });
     reply({ role: "system", content: `[👤] Your current alias is **${ctx.state.username}**. Usage: \`/alias <new-name>\` to change it.` });
     return;
   }
@@ -630,6 +632,7 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
 async function handleSyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<void> {
   const licenseKey = command.slice(5).trim();
   if (!licenseKey) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/sync", reason: "no_key" });
     reply({ role: "system", content: "[🔑] Usage: `/sync <COPE-XXX>` — Link your Polar license key to unlock Max tier." });
     return;
   }
@@ -697,6 +700,7 @@ async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Prom
     });
     const data = await res.json() as { success?: boolean; creditsGranted?: number; error?: string };
     if (res.ok && data.success) {
+      track(AnalyticsEvents.SHILL_COMPLETED, { creditsGranted: data.creditsGranted });
       reply({ role: "system", content: `[✓ **SHILL COMPLETE**] You sold your dignity for **${data.creditsGranted} free tokens**. The marketing team approves. A tweet window has been opened — go spread the gospel of suffering.` });
     } else {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/shill", reason: "server_error" });
