@@ -15,6 +15,7 @@ describe("Turnstile verification and protection", () => {
       bypassed: true,
       misconfigured: false,
     });
+    expect(res.headers.get("Cache-Control")).toBe("no-store, max-age=0");
   });
 
   it("bypasses verify status rate limiting when TURNSTILE_SECRET_KEY is not set", async () => {
@@ -161,6 +162,23 @@ describe("Turnstile verification and protection", () => {
       reason: "human_verification_required",
     });
     expect(usageKv.get).toHaveBeenCalled();
+  });
+
+  it("checks bot protection before rate limiting on /api/chat", async () => {
+    const usageKv = { get: vi.fn().mockResolvedValue(null) };
+    const limiter = { limit: vi.fn().mockResolvedValue({ success: false }) };
+    const res = await app.request(
+      "/api/chat",
+      { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ chatMessages: [] }) },
+      {
+        ALLOWED_ORIGINS: "http://localhost:5173",
+        TURNSTILE_SECRET_KEY: "secret",
+        USAGE_KV: usageKv,
+        RATE_LIMITER: limiter,
+      },
+    );
+    expect(res.status).toBe(403);
+    expect(limiter.limit).not.toHaveBeenCalled();
   });
 
   it("rejects /api/chat with 503 and a reason when bot protection storage is unavailable", async () => {
@@ -354,6 +372,23 @@ describe("Turnstile verification and protection", () => {
     );
     expect(res.status).toBe(200);
     expect(limiter.limit).toHaveBeenCalledWith({ key: "verify-status:1.2.3.4" });
+  });
+
+  it("returns no-store and retry guidance when verify status is rate limited", async () => {
+    const limiter = { limit: vi.fn().mockResolvedValue({ success: false }) };
+    const res = await app.request(
+      "/api/verify",
+      { method: "GET", headers: { Origin: "http://localhost:5173", "cf-connecting-ip": "1.2.3.4" } },
+      {
+        ALLOWED_ORIGINS: "http://localhost:5173",
+        TURNSTILE_SECRET_KEY: "secret",
+        USAGE_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn() },
+        RATE_LIMITER: limiter,
+      },
+    );
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Cache-Control")).toBe("no-store, max-age=0");
+    expect(res.headers.get("Retry-After")).toBe("60");
   });
 
   it("uses a separate verify-submit rate limiter key for token submission", async () => {

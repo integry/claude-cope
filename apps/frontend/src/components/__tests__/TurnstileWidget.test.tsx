@@ -236,7 +236,7 @@ describe("TurnstileWidget bootstrap gating", () => {
     );
   });
 
-  it("falls back to enabled when bootstrap returns 429", async () => {
+  it("blocks the app when bootstrap returns 429", async () => {
     const onVerified = vi.fn();
     const onError = vi.fn();
     vi.spyOn(globalThis, "fetch")
@@ -247,21 +247,14 @@ describe("TurnstileWidget bootstrap gating", () => {
         }),
       );
 
-    // The widget should treat 429 as "enabled" and attempt to load Turnstile
-    // rather than hard-blocking. Since we don't set up window.turnstile, it
-    // will eventually error, but the key assertion is it does NOT immediately
-    // call onError with an unavailable message.
     await renderWidget({ onVerified, onError });
     await flushEffects();
 
-    // Should not have been called with an "unavailable" error
-    const unavailableCalls = onError.mock.calls.filter(
-      (args: unknown[]) => typeof args[0] === "string" && (args[0].includes("unavailable") || args[0].includes("Verification service")),
-    );
-    expect(unavailableCalls).toHaveLength(0);
+    expect(onVerified).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith("Human verification is temporarily rate limited. Please retry shortly.");
   });
 
-  it("falls back to enabled when bootstrap returns 500", async () => {
+  it("blocks the app when bootstrap returns 500", async () => {
     const onVerified = vi.fn();
     const onError = vi.fn();
     vi.spyOn(globalThis, "fetch")
@@ -275,9 +268,7 @@ describe("TurnstileWidget bootstrap gating", () => {
     await renderWidget({ onVerified, onError });
     await flushEffects();
 
-    const unavailableCalls = onError.mock.calls.filter(
-      (args: unknown[]) => typeof args[0] === "string" && (args[0].includes("unavailable") || args[0].includes("Verification service")),
-    );
-    expect(unavailableCalls).toHaveLength(0);
+    expect(onVerified).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith("Human verification is temporarily unavailable. Please retry shortly.");
   });
 });

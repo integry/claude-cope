@@ -154,10 +154,11 @@ async function getBackendVerificationStatus(): Promise<BackendVerificationStatus
   if (!res) {
     return { status: "unavailable", message: "Unable to determine verification status from the server." };
   }
-  if (res.status === 429 || res.status >= 500) {
-    return TURNSTILE_SITE_KEY
-      ? { status: "enabled" }
-      : { status: "unavailable", message: "Verification service is temporarily unavailable." };
+  if (res.status === 429) {
+    return { status: "unavailable", message: "Human verification is temporarily rate limited. Please retry shortly." };
+  }
+  if (res.status >= 500) {
+    return { status: "unavailable", message: "Human verification is temporarily unavailable. Please retry shortly." };
   }
   if (!res.ok) {
     return { status: "unavailable", message: "Verification service is temporarily unavailable." };

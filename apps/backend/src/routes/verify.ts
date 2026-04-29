@@ -37,9 +37,15 @@ type VerifyContext = Context<Env>;
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 type VerifyFailureStatus = 502 | 503;
+const VERIFY_NO_STORE = "no-store, max-age=0";
 
 const getExpectedHostnameConfig = (c: VerifyContext) => getHostnameConfig(c.env?.TURNSTILE_EXPECTED_HOSTNAME);
 const getTurnstileSecret = (c: VerifyContext): string | undefined => c.env?.TURNSTILE_SECRET_KEY;
+
+verify.use("*", async (c, next) => {
+  c.header("Cache-Control", VERIFY_NO_STORE);
+  await next();
+});
 
 verify.get("/", async (c, next) => {
   // Skip rate limiting when Turnstile is disabled so status checks cannot

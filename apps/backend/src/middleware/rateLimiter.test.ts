@@ -45,6 +45,7 @@ describe("rateLimiter middleware", () => {
     expect(res.status).toBe(429);
     const body = await res.json();
     expect(body).toEqual({ error: "Too many requests. Please try again later." });
+    expect(res.headers.get("Retry-After")).toBe("60");
     expect(limiter.limit).toHaveBeenCalledWith({ key: "1.2.3.4" });
   });
 
