@@ -448,21 +448,24 @@ export function useGameState() {
       };
     });
 
-    track("theme_purchased", { theme_id: themeId, cost: theme.cost });
-
     // Pro users: fire server call
-    if (current.proKeyHash) buyThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
-      if (result.success && result.profile) {
-        setState((prev) => applyServerProfile(prev, result.profile!));
-      } else if (!result.success) {
-        // Rollback
-        setState((prev) => ({
-          ...prev,
-          economy: { ...prev.economy, currentTD: prev.economy.currentTD + theme.cost },
-          unlockedThemes: prev.unlockedThemes.filter((id) => id !== themeId),
-        }));
-      }
-    }).catch(() => {});
+    if (current.proKeyHash) {
+      buyThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
+        if (result.success && result.profile) {
+          setState((prev) => applyServerProfile(prev, result.profile!));
+          track("theme_purchased", { theme_id: themeId, cost: theme.cost });
+        } else if (!result.success) {
+          // Rollback
+          setState((prev) => ({
+            ...prev,
+            economy: { ...prev.economy, currentTD: prev.economy.currentTD + theme.cost },
+            unlockedThemes: prev.unlockedThemes.filter((id) => id !== themeId),
+          }));
+        }
+      }).catch(() => {});
+    } else {
+      track("theme_purchased", { theme_id: themeId, cost: theme.cost });
+    }
 
     return true;
   }, []);

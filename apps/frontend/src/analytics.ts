@@ -6,7 +6,7 @@ const COPE_ID_KEY = "cope_id";
 /** Lazily-resolved PostHog instance — `null` when analytics is disabled. */
 let phInstance: import("posthog-js").PostHog | null = null;
 
-/** Promise that resolves when PostHog is ready (or `null` when analytics is disabled). */
+/** Promise that resolves when PostHog is ready; stays `null` when analytics is disabled. */
 let readyPromise: Promise<void> | null = null;
 
 /** Guard against double initialization. */
@@ -51,9 +51,11 @@ function flushPending(): void {
 
 export function initPostHog(): void {
   if (initialized) return;
+  if (!POSTHOG_KEY) {
+    initialized = true;
+    return;
+  }
   initialized = true;
-
-  if (!POSTHOG_KEY) return;
 
   readyPromise = import("posthog-js")
     .then(({ default: posthog }) => {

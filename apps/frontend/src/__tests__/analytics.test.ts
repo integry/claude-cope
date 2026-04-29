@@ -227,9 +227,9 @@ describe("analytics — init failure recovery", () => {
 });
 
 describe("analytics — STORAGE_KEY is shared, not duplicated", () => {
-  it("analytics uses the same STORAGE_KEY as storageKey module", async () => {
-    const { STORAGE_KEY } = await import("../hooks/storageKey");
-    expect(STORAGE_KEY).toBe("claudeCopeState");
+  it("analytics imports STORAGE_KEY from the storageKey module", async () => {
+    const analyticsSource = await import("../analytics?raw") as unknown as { default: string };
+    expect(analyticsSource.default).toContain('from "./hooks/storageKey"');
   });
 });
 
