@@ -14,9 +14,21 @@ describe("normalizeHostname", () => {
     expect(normalizeHostname("sub.domain.example.com")).toBe("sub.domain.example.com");
   });
 
-  it("strips the port but returns the hostname", () => {
+  it("strips the port and returns only the hostname by default", () => {
     expect(normalizeHostname("example.com:443")).toBe("example.com");
     expect(normalizeHostname("localhost:8080")).toBe("localhost");
+  });
+
+  it("preserves the port when preservePort is true", () => {
+    expect(normalizeHostname("example.com:443", true)).toBe("example.com:443");
+    expect(normalizeHostname("localhost:8080", true)).toBe("localhost:8080");
+    expect(normalizeHostname("10.0.0.1:8080", true)).toBe("10.0.0.1:8080");
+    expect(normalizeHostname("[::1]:8080", true)).toBe("::1:8080");
+  });
+
+  it("returns hostname without port when preservePort is true but no port given", () => {
+    expect(normalizeHostname("example.com", true)).toBe("example.com");
+    expect(normalizeHostname("localhost", true)).toBe("localhost");
   });
 
   it("rejects values with commas (multiple hostnames)", () => {

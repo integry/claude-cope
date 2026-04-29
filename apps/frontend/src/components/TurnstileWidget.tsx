@@ -110,7 +110,7 @@ async function verifyToken(token: string): Promise<VerifyTokenResult> {
   if (res.status === 429 || res.status >= 500) {
     return {
       verified: false,
-      retryable: false,
+      retryable: true,
       message: typeof data?.error === "string" ? data.error : "Verification service is temporarily unavailable.",
     };
   }

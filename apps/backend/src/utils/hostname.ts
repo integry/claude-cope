@@ -34,17 +34,18 @@ function hasInvalidCharacters(value: string): boolean {
   return !value || value.includes(",") || value.includes("/") || /\s/.test(value);
 }
 
-function normalizeBracketedIpv6(trimmed: string): string | undefined | null {
+function normalizeBracketedIpv6(trimmed: string, preservePort: boolean): string | undefined | null {
   const bracketMatch = /^\[([^\]]+)\](?::(\d+))?$/.exec(trimmed);
   if (!bracketMatch) return null;
   const ipv6Addr = bracketMatch[1]!;
   if (!isValidIpv6(ipv6Addr)) return undefined;
   const port = bracketMatch[2];
   if (port && !isValidPort(port)) return undefined;
-  return ipv6Addr.toLowerCase();
+  const base = ipv6Addr.toLowerCase();
+  return preservePort && port ? `${base}:${port}` : base;
 }
 
-function normalizeHostOrIpv4(parts: string[]): string | undefined {
+function normalizeHostOrIpv4(parts: string[], preservePort: boolean): string | undefined {
   const [hostname, port] = parts;
   if (!hostname) return undefined;
 
@@ -55,28 +56,33 @@ function normalizeHostOrIpv4(parts: string[]): string | undefined {
     return undefined;
   }
   if (port && !isValidPort(port)) return undefined;
-  return hostname.toLowerCase();
+  const base = hostname.toLowerCase();
+  return preservePort && port ? `${base}:${port}` : base;
 }
 
-export const normalizeHostname = (value: string | undefined): string | undefined => {
+export const normalizeHostname = (value: string | undefined, preservePort = false): string | undefined => {
   if (!value) return undefined;
   const trimmed = value.trim();
   if (hasInvalidCharacters(trimmed)) return undefined;
 
-  const bracketResult = normalizeBracketedIpv6(trimmed);
+  const bracketResult = normalizeBracketedIpv6(trimmed, preservePort);
   if (bracketResult !== null) return bracketResult;
 
   const parts = trimmed.split(":");
   if (parts.length > 2) {
     return isValidIpv6(trimmed) ? trimmed.toLowerCase() : undefined;
   }
-  return normalizeHostOrIpv4(parts);
+  return normalizeHostOrIpv4(parts, preservePort);
 };
 
 export const getExpectedHostnameConfig = (raw: string | undefined): { hostname?: string; invalid: boolean } => {
   const trimmed = raw?.trim();
   if (!trimmed) return { invalid: false };
 
+  // Validate the full value (including port syntax) but return only the
+  // hostname for comparison. Cloudflare's siteverify API returns the bare
+  // hostname without a port, so a port in the config is accepted for
+  // convenience but cannot be enforced at verification time.
   const hostname = normalizeHostname(trimmed);
   if (!hostname) {
     return { invalid: true };
