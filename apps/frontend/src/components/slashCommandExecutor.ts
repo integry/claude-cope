@@ -700,7 +700,7 @@ async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Prom
     });
     const data = await res.json() as { success?: boolean; creditsGranted?: number; error?: string };
     if (res.ok && data.success) {
-      track(AnalyticsEvents.SHILL_COMPLETED, { creditsGranted: data.creditsGranted });
+      track(AnalyticsEvents.SHILL_COMPLETED, { credits_granted: data.creditsGranted });
       reply({ role: "system", content: `[✓ **SHILL COMPLETE**] You sold your dignity for **${data.creditsGranted} free tokens**. The marketing team approves. A tweet window has been opened — go spread the gospel of suffering.` });
     } else {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/shill", reason: SlashCommandFailureReasons.SERVER_ERROR });

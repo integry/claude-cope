@@ -13,6 +13,12 @@ let readyPromise: Promise<void> | null = null;
 /** Guard against double initialization. */
 let initialized = false;
 
+/** Bounded retry budget for transient PostHog bootstrap failures. */
+const MAX_INIT_RETRIES = 3;
+const INIT_RETRY_DELAY_MS = 5000;
+let initRetryCount = 0;
+let initRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
 /** Maximum number of events buffered before PostHog finishes loading. */
 const MAX_PENDING_EVENTS = 100;
 
@@ -88,6 +94,22 @@ function flushPending(): void {
   pendingIdentifyCalls.length = 0;
 }
 
+function clearInitRetryTimer(): void {
+  if (initRetryTimer) {
+    clearTimeout(initRetryTimer);
+    initRetryTimer = null;
+  }
+}
+
+function scheduleInitRetry(): void {
+  if (initRetryCount >= MAX_INIT_RETRIES || initRetryTimer) return;
+  initRetryCount += 1;
+  initRetryTimer = setTimeout(() => {
+    initRetryTimer = null;
+    initPostHog();
+  }, INIT_RETRY_DELAY_MS);
+}
+
 export function initPostHog(): void {
   if (initialized) return;
   if (!POSTHOG_KEY) {
@@ -108,6 +130,8 @@ export function initPostHog(): void {
       });
 
       phInstance = posthog;
+      initRetryCount = 0;
+      clearInitRetryTimer();
 
       const copeId = getOrCreateCopeId();
       const username = getUsernameFromGameState();
@@ -119,11 +143,11 @@ export function initPostHog(): void {
       flushPending();
     })
     .catch((err) => {
-      // PostHog failed to load — allow retry on next initPostHog() call.
-      // Pending events are preserved so they can be flushed on a successful retry.
+      // PostHog failed to load — preserve pending events and retry automatically.
       initialized = false;
       readyPromise = null;
       phInstance = null;
+      scheduleInitRetry();
       if (import.meta.env.DEV) {
         console.warn("[analytics] PostHog initialization failed:", err);
       }
