@@ -256,7 +256,7 @@ describe("TurnstileWidget bootstrap gating", () => {
 
     // Should not have been called with an "unavailable" error
     const unavailableCalls = onError.mock.calls.filter(
-      ([msg]: [string]) => msg.includes("unavailable") || msg.includes("Verification service"),
+      (args: unknown[]) => typeof args[0] === "string" && (args[0].includes("unavailable") || args[0].includes("Verification service")),
     );
     expect(unavailableCalls).toHaveLength(0);
   });
@@ -276,7 +276,7 @@ describe("TurnstileWidget bootstrap gating", () => {
     await flushEffects();
 
     const unavailableCalls = onError.mock.calls.filter(
-      ([msg]: [string]) => msg.includes("unavailable") || msg.includes("Verification service"),
+      (args: unknown[]) => typeof args[0] === "string" && (args[0].includes("unavailable") || args[0].includes("Verification service")),
     );
     expect(unavailableCalls).toHaveLength(0);
   });
