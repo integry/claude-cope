@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, SetStateAction } from "react";
 import { track, identify } from "../analytics";
-import { GENERATORS, UPGRADES, CORPORATE_RANKS, THEMES } from "../game/constants";
+import { GENERATORS, UPGRADES, THEMES } from "../game/constants";
 import { supabase } from "../supabaseClient";
 import {
   type Message,
@@ -20,6 +20,7 @@ import {
   updateTicketServer,
   fetchSessionProfile,
 } from "../api/profileApi";
+import { useScoreSync, useAchievementChecker } from "./useGameEffects";
 
 export type { Message };
 export type { GameState, BuddyState, EconomyState, ActiveTicket, ByokUsage } from "./gameStateUtils";
@@ -95,104 +96,8 @@ export function useGameState() {
     }
   }, [state]);
 
-  // Background server score sync — fires every 5 minutes if TD has changed
-  // Skip for pro users (server is authoritative)
-  const lastSyncedTD = useRef(state.economy.totalTDEarned);
-  useEffect(() => {
-    const syncInterval = setInterval(() => {
-      const current = stateRef.current;
-      // Skip sync for pro users — server is authoritative
-      if (current.proKeyHash) return;
-      // Only sync if totalTDEarned has changed since last sync
-      if (current.economy.totalTDEarned === lastSyncedTD.current) return;
-      lastSyncedTD.current = current.economy.totalTDEarned;
-      // Extract country code from browser locale (fallback for cf-ipcountry)
-      let country = "Unknown";
-      try {
-        const locale = new Intl.Locale(navigator.language);
-        country = locale.region ?? "Unknown";
-      } catch {
-        // Intl.Locale not supported or invalid — keep "Unknown"
-      }
-
-      const completedTaskIds = current.pendingCompletedTaskIds ?? [];
-      fetch("/api/score", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: current.username,
-          currentTD: Math.floor(current.economy.currentTD),
-          totalTDEarned: Math.floor(current.economy.totalTDEarned),
-          inventory: current.inventory,
-          upgrades: current.upgrades,
-          country,
-          completedTaskIds,
-        }),
-      }).then((res) => {
-        // Only clear pending task IDs on successful (2xx) response
-        if (res.ok && completedTaskIds.length > 0) {
-          setState((prev) => ({
-            ...prev,
-            pendingCompletedTaskIds: prev.pendingCompletedTaskIds.filter(
-              (id) => !completedTaskIds.includes(id),
-            ),
-          }));
-        }
-      }).catch(() => {});
-    }, 300000); // 5 minutes
-
-    return () => clearInterval(syncInterval);
-  }, []);
-
-  // Background loop — checks achievements (no passive TD generation)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setState((prev) => {
-        // Check economy achievements
-        const newAchievements = [...prev.achievements];
-
-        // dependency_hell: own 10+ NPM Dependency Importers
-        if (!newAchievements.includes("dependency_hell") && (prev.inventory["npm"] ?? 0) >= 10) {
-          newAchievements.push("dependency_hell");
-        }
-
-        // ten_x_developer: active multiplier exceeds 100x
-        const multiplier = calculateActiveMultiplier(prev.inventory, prev.upgrades);
-        if (!newAchievements.includes("ten_x_developer") && multiplier >= 100) {
-          newAchievements.push("ten_x_developer");
-        }
-
-        // the_java_enterprise: own 5+ different team member types
-        if (!newAchievements.includes("the_java_enterprise")) {
-          const ownedTypes = GENERATORS.filter((g) => (prev.inventory[g.id] ?? 0) > 0).length;
-          if (ownedTypes >= 5) newAchievements.push("the_java_enterprise");
-        }
-
-        // heat_death: reach the maximum corporate rank
-        const maxRankTitle = CORPORATE_RANKS[CORPORATE_RANKS.length - 1]!.title;
-        if (!newAchievements.includes("heat_death") && prev.economy.currentRank === maxRankTitle) {
-          newAchievements.push("heat_death");
-        }
-
-        if (newAchievements.length === prev.achievements.length) return prev;
-
-        // For pro users, fire server calls for new achievements
-        if (prev.proKeyHash) {
-          const added = newAchievements.filter((a) => !prev.achievements.includes(a));
-          for (const achievementId of added) {
-            unlockAchievementServer(prev.username, achievementId, prev.proKeyHash).catch(() => {});
-          }
-        }
-
-        return {
-          ...prev,
-          achievements: newAchievements,
-        };
-      });
-    }, 1000); // 1s is enough — no smooth tick needed without passive income
-
-    return () => clearInterval(interval);
-  }, []);
+  useScoreSync(stateRef, setState, state.economy.totalTDEarned);
+  useAchievementChecker(setState);
 
   const buyGenerator = useCallback((generatorId: string, amount: number = 1): boolean => {
     const generator = GENERATORS.find((g) => g.id === generatorId);
