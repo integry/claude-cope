@@ -2,12 +2,15 @@ import { describe, it, expect, vi } from "vitest";
 import { checkRateLimits, BUCKETS, LORE } from "./rateLimitBuckets";
 
 function mockKV(store: Record<string, string> = {}) {
+  const ttls: Record<string, number> = {};
   return {
     get: vi.fn(async (key: string) => store[key] ?? null),
-    put: vi.fn(async (key: string, value: string) => {
+    put: vi.fn(async (key: string, value: string, opts?: { expirationTtl?: number }) => {
       store[key] = value;
+      if (opts?.expirationTtl) ttls[key] = opts.expirationTtl;
     }),
-  } as unknown as KVNamespace;
+    _ttls: ttls,
+  } as unknown as KVNamespace & { _ttls: Record<string, number> };
 }
 
 const KEYS = { ip: "10.0.0.1", identity: "sess-abc" };
@@ -109,6 +112,23 @@ describe("checkRateLimits", () => {
       if (result.blocked) {
         expect(result.shouldTrack).toBe(false);
       }
+    });
+
+    it("second blocked request in the same window does not set shouldTrack", async () => {
+      const store: Record<string, string> = {};
+      const now = 100_000;
+      const burstBucket = BUCKETS.find((b) => b.name === "burst")!;
+      fillBucket(store, "burst", burstBucket.limit, now + 30_000);
+
+      const kv = mockKV(store);
+
+      const first = await checkRateLimits(kv, KEYS, now);
+      expect(first.blocked).toBe(true);
+      if (first.blocked) expect(first.shouldTrack).toBe(true);
+
+      const second = await checkRateLimits(kv, KEYS, now + 1000);
+      expect(second.blocked).toBe(true);
+      if (second.blocked) expect(second.shouldTrack).toBe(false);
     });
 
     it("returns the first triggered bucket when multiple are exceeded", async () => {
@@ -282,6 +302,59 @@ describe("checkRateLimits", () => {
 
       const burstKey = `rl:burst:${KEYS.identity}`;
       expect(store[burstKey]).toBeUndefined();
+    });
+  });
+
+  describe("KV TTL handling", () => {
+    it("sets expirationTtl equal to windowSeconds for new counters", async () => {
+      const store: Record<string, string> = {};
+      const kv = mockKV(store);
+      await checkRateLimits(kv, KEYS, 1000);
+
+      const putCalls = (kv.put as ReturnType<typeof vi.fn>).mock.calls;
+      for (const bucket of BUCKETS) {
+        const id = bucket.keyType === "ip" ? KEYS.ip : KEYS.identity;
+        const key = `${bucket.keyPrefix}${id}`;
+        const call = putCalls.find((c: unknown[]) => c[0] === key);
+        expect(call).toBeDefined();
+        expect(call![2]).toEqual({ expirationTtl: bucket.windowSeconds });
+      }
+    });
+
+    it("uses remaining seconds as TTL on subsequent increments, clamped to minimum 60", async () => {
+      const store: Record<string, string> = {};
+      const now = 100_000;
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+      const expiresAt = now + 30_000;
+      store[`${burst.keyPrefix}${KEYS.identity}`] = JSON.stringify({
+        count: 1,
+        expiresAt,
+      });
+
+      const kv = mockKV(store);
+      await checkRateLimits(kv, KEYS, now);
+
+      const putCalls = (kv.put as ReturnType<typeof vi.fn>).mock.calls;
+      const burstCall = putCalls.find(
+        (c: unknown[]) => c[0] === `${burst.keyPrefix}${KEYS.identity}`,
+      );
+      expect(burstCall).toBeDefined();
+      const ttl = (burstCall![2] as { expirationTtl: number }).expirationTtl;
+      expect(ttl).toBe(60);
+    });
+  });
+
+  describe("key construction", () => {
+    it("uses ip_hash for ip-type buckets and cope_id for identity-type buckets", async () => {
+      const store: Record<string, string> = {};
+      const kv = mockKV(store);
+      await checkRateLimits(kv, KEYS, 1000);
+
+      for (const bucket of BUCKETS) {
+        const expectedId = bucket.keyType === "ip" ? KEYS.ip : KEYS.identity;
+        const key = `${bucket.keyPrefix}${expectedId}`;
+        expect(store[key]).toBeDefined();
+      }
     });
   });
 });

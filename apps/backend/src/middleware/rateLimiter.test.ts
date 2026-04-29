@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { BUCKETS, LORE, type BucketName } from "../utils/rateLimitBuckets";
 import app from "../app";
 
 function createMockKV(counters: Map<string, string> = new Map()) {
@@ -71,7 +72,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
     expect(kv.get).not.toHaveBeenCalled();
   });
 
-  it("returns structured 429 when rate limit is exceeded", async () => {
+  it("bypasses rate limiter with proKeyHash even when limit would be exceeded", async () => {
     const counters = new Map<string, string>();
     const hotKv = createMockKV(counters);
 
@@ -81,7 +82,6 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       Cookie: "cope_session_id=fixed-session",
     };
 
-    // burst bucket: 10 requests in 60s window (identity-based)
     for (let i = 0; i < 10; i++) {
       await app.request(
         "/api/chat",
@@ -94,23 +94,103 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       );
     }
 
-    // 11th request should be blocked
     const res = await app.request(
       "/api/chat",
       {
         method: "POST",
         headers,
-        body: JSON.stringify({ message: "hello" }),
+        body: JSON.stringify({ message: "hello", proKeyHash: "pro-user-key" }),
       },
       makeEnv({ RATE_LIMIT_KV: hotKv }),
     );
 
-    expect(res.status).toBe(429);
-    const body = (await res.json()) as { limitType: string; message: string; retryAfterSeconds: number };
-    expect(body.limitType).toBeDefined();
-    expect(body.message).toBeDefined();
-    expect(body.retryAfterSeconds).toBeGreaterThan(0);
-    expect(res.headers.get("Retry-After")).toBeDefined();
+    expect(res.status).not.toBe(429);
+  });
+
+  describe("lore 429 response shape", () => {
+    async function exhaust(
+      hotKv: ReturnType<typeof createMockKV>,
+      count: number,
+    ) {
+      const headers = {
+        "Content-Type": "application/json",
+        "x-forwarded-for": "1.2.3.4",
+        Cookie: "cope_session_id=fixed-session",
+      };
+      for (let i = 0; i < count; i++) {
+        await app.request(
+          "/api/chat",
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ message: "hello" }),
+          },
+          makeEnv({ RATE_LIMIT_KV: hotKv }),
+        );
+      }
+      return app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ message: "hello" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+    }
+
+    it("returns limitType matching a valid bucket name", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+
+      const res = await exhaust(hotKv, burst.limit);
+      expect(res.status).toBe(429);
+
+      const body = (await res.json()) as { limitType: string };
+      const validBucketNames = BUCKETS.map((b) => b.name);
+      expect(validBucketNames).toContain(body.limitType);
+    });
+
+    it("returns message matching the LORE entry for the triggered bucket", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+
+      const res = await exhaust(hotKv, burst.limit);
+      expect(res.status).toBe(429);
+
+      const body = (await res.json()) as { limitType: BucketName; message: string };
+      expect(body.message).toBe(LORE[body.limitType]);
+    });
+
+    it("sets Retry-After header matching retryAfterSeconds in body", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+
+      const res = await exhaust(hotKv, burst.limit);
+      expect(res.status).toBe(429);
+
+      const body = (await res.json()) as { retryAfterSeconds: number };
+      const headerVal = res.headers.get("Retry-After");
+      expect(headerVal).toBe(String(body.retryAfterSeconds));
+    });
+
+    it("does not include the old generic error field", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+
+      const res = await exhaust(hotKv, burst.limit);
+      expect(res.status).toBe(429);
+
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.error).toBeUndefined();
+      expect(body).toHaveProperty("limitType");
+      expect(body).toHaveProperty("message");
+      expect(body).toHaveProperty("retryAfterSeconds");
+    });
   });
 
   it("does not bypass rate limiter when proKeyHash is falsy", async () => {
@@ -128,7 +208,6 @@ describe("rateLimiter middleware (hybrid KV)", () => {
     );
 
     expect(res.status).not.toBe(429);
-    // KV should have been consulted (not bypassed)
     expect(kv.get).toHaveBeenCalled();
   });
 });
