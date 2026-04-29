@@ -1,13 +1,17 @@
-import { BYOK_ENABLED } from "../config";
+import { BYOK_ENABLED, TICKET_REFINE_ENABLED } from "../config";
 
 // /ping is a paid code-review request (see useMultiplayer). /accept handles
 // both ticket offers and incoming review-pings — there is no separate defense
 // command, because the new protocol is opt-in and ignoring a ping just refunds
 // the sender.
-const ALL_SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/help", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user", "/sync", "/shill", "/party", "/theme"];
+export const ALL_SLASH_COMMANDS = ["/backlog", "/take", "/clear", "/support", "/preworkout", "/buddy", "/store", "/synergize", "/compact", "/who", "/ping", "/help", "/about", "/privacy", "/terms", "/contact", "/fast", "/voice", "/blame", "/brrrrrr", "/feedback", "/bug", "/key", "/upgrade", "/leaderboard", "/achievements", "/profile", "/ticket", "/accept", "/abandon", "/alias", "/model", "/user", "/sync", "/shill", "/party", "/theme"];
 
-// BYOK-gated: `/key` only appears in autocomplete when BYOK is enabled.
-export const SLASH_COMMANDS = ALL_SLASH_COMMANDS.filter((cmd) => BYOK_ENABLED || cmd !== "/key");
+// Feature-gated: `/key` requires BYOK; `/ticket` requires ticket refinement.
+export const SLASH_COMMANDS = ALL_SLASH_COMMANDS.filter((cmd) => {
+  if (cmd === "/key" && !BYOK_ENABLED) return false;
+  if (cmd === "/ticket" && !TICKET_REFINE_ENABLED) return false;
+  return true;
+});
 
 export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/backlog": "Stare into the abyss of unfulfilled promises",

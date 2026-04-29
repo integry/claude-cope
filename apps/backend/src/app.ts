@@ -22,7 +22,16 @@ app.use(
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: ["'self'", "https://openrouter.ai", "wss:", "ws:"],
+      connectSrc: [
+        "'self'",
+        "https://openrouter.ai",
+        "https://us.i.posthog.com",
+        "https://us-assets.i.posthog.com",
+        "https://eu.i.posthog.com",
+        "https://eu-assets.i.posthog.com",
+        "wss:",
+        "ws:",
+      ],
       imgSrc: ["'self'", "data:", "blob:"],
       styleSrc: ["'self'", "'unsafe-inline'"],
     },

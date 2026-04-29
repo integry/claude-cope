@@ -51,6 +51,19 @@ export const BYOK_ENABLED = parseBoolEnv(
 );
 
 /**
+ * Ticket-refinement feature flag. When disabled (default), the `/ticket` slash
+ * command is hidden from autocomplete and the backend `/api/tickets/refine`
+ * endpoint returns 404. The endpoint is unauthenticated and writes into the
+ * shared community backlog, so it ships off by default — operators opt in by
+ * setting `VITE_ENABLE_TICKET_REFINE=true` (and matching backend
+ * `ENABLE_TICKET_REFINE=true`).
+ */
+export const TICKET_REFINE_ENABLED = parseBoolEnv(
+  import.meta.env.VITE_ENABLE_TICKET_REFINE as string | undefined,
+  false,
+);
+
+/**
  * Checkout URLs for the upgrade overlay. Operators set these to point at their
  * payment provider (e.g. Polar, Stripe). When a URL is empty/unset the
  * corresponding button is disabled with a terminal-style error message.
@@ -66,3 +79,15 @@ export const UPGRADE_PRICE_SINGLE: string =
 
 export const UPGRADE_PRICE_MULTI: string =
   (import.meta.env.VITE_UPGRADE_PRICE_MULTI as string | undefined) ?? "$19.99";
+
+/**
+ * PostHog analytics configuration. Set `VITE_POSTHOG_KEY` and
+ * `VITE_POSTHOG_HOST` to enable zero-cookie analytics tracking.
+ */
+export const POSTHOG_KEY: string =
+  (import.meta.env.VITE_POSTHOG_KEY as string | undefined) ?? "";
+
+export const POSTHOG_HOST: string =
+  (import.meta.env.VITE_POSTHOG_HOST as string | undefined) ?? "";
+
+export const POSTHOG_DEFAULT_HOST = "https://us.i.posthog.com";
