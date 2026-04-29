@@ -1,10 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import {
-  checkRateLimits,
-  BUCKETS,
-  LORE,
-  type RateLimitResult,
-} from "./rateLimitBuckets";
+import { checkRateLimits, BUCKETS, LORE } from "./rateLimitBuckets";
 
 function mockKV(store: Record<string, string> = {}) {
   return {
