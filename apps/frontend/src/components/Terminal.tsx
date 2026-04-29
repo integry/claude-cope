@@ -272,10 +272,33 @@ function Terminal() {
         const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 };
         return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } };
       }),
-      onQuotaUpdate: (quotaPercent) => setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })),
+      onQuotaUpdate: (quotaPercent) => {
+        setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } }));
+        // Catch stale client state: if the backend reports exhausted quota
+        // for a free user whose local state was out-of-date, show the nag
+        // now so the user must dismiss before the next command.
+        if (quotaPercent <= 0 && isFreeTier) {
+          setShowUpgrade(true);
+        }
+      },
       onQuotaExhausted: () => {
-        // The backend rejected the request — the command was NOT processed.
-        // Store it for replay so the user doesn't lose their message.
+        // The backend rejected the request (402) — the command was NOT
+        // processed.  Undo the history additions from the initial attempt
+        // so the replay in handleUpgradeNagClose doesn't create duplicates.
+        setCommandHistory((prev) => {
+          const idx = prev.lastIndexOf(command);
+          return idx >= 0 ? [...prev.slice(0, idx), ...prev.slice(idx + 1)] : prev;
+        });
+        // handleErrorResponse already stripped loading messages; also remove
+        // the user message that processCommand appended.
+        setHistory((prev) => {
+          for (let i = prev.length - 1; i >= 0; i--) {
+            if (prev[i].role === "user" && prev[i].content === command) {
+              return [...prev.slice(0, i), ...prev.slice(i + 1)];
+            }
+          }
+          return prev;
+        });
         handleQuotaLockout(command);
       },
       onProfileUpdate: (profile) => setState((prev) => applyServerProfile(prev, profile)),

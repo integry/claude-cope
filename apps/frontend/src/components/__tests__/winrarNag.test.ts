@@ -248,6 +248,124 @@ describe("WinRAR nag: dismiss replay path", () => {
   });
 });
 
+describe("WinRAR nag: replay state-machine (duplicate prevention)", () => {
+  /**
+   * These tests exercise the state-machine logic that Terminal uses for the
+   * nag replay flow.  We simulate the ref / state interactions directly
+   * rather than rendering Terminal (which has dozens of unrelated deps).
+   */
+
+  it("client-side nag: command not in history → replay adds exactly once", () => {
+    // Simulates the client-side quota check path (handleEnterSubmit)
+    const commandHistory: string[] = [];
+    const chatHistory: Message[] = [];
+    const pendingNagCommand: { command: string } | null = { command: "hello world" };
+
+    // handleUpgradeNagClose replay logic
+    if (pendingNagCommand !== null) {
+      commandHistory.push(pendingNagCommand.command);
+      chatHistory.push({ role: "user", content: pendingNagCommand.command });
+    }
+
+    expect(commandHistory).toEqual(["hello world"]);
+    expect(chatHistory.filter((m) => m.role === "user")).toHaveLength(1);
+  });
+
+  it("backend 402 nag: cleanup removes prior entries before replay", () => {
+    // Simulates the onQuotaExhausted cleanup + handleUpgradeNagClose replay
+    const command = "fix my code";
+
+    // --- Initial attempt (handleEnterSubmit + processCommand) ---
+    const commandHistory: string[] = ["fix my code"];
+    const chatHistory: Message[] = [
+      { role: "user", content: "fix my code" },
+      { role: "loading", content: "Processing..." },
+    ];
+
+    // --- onQuotaExhausted fires (backend 402) ---
+    // handleErrorResponse strips loading messages
+    const afterErrorFilter = chatHistory.filter((m) => m.role !== "loading");
+
+    // Cleanup: remove command from commandHistory
+    const cmdIdx = [...commandHistory].reverse().findIndex((c) => c === command);
+    if (cmdIdx >= 0) {
+      const realIdx = commandHistory.length - 1 - cmdIdx;
+      commandHistory.splice(realIdx, 1);
+    }
+
+    // Cleanup: remove user message from chatHistory
+    const cleaned: Message[] = [];
+    let removedUser = false;
+    for (let i = afterErrorFilter.length - 1; i >= 0; i--) {
+      if (!removedUser && afterErrorFilter[i].role === "user" && afterErrorFilter[i].content === command) {
+        removedUser = true;
+        continue;
+      }
+      cleaned.unshift(afterErrorFilter[i]);
+    }
+
+    // --- handleUpgradeNagClose replay ---
+    cleaned.push({ role: "user", content: command });
+    commandHistory.push(command);
+
+    // Verify exactly one entry in each
+    expect(commandHistory.filter((c) => c === command)).toHaveLength(1);
+    expect(cleaned.filter((m) => m.role === "user" && m.content === command)).toHaveLength(1);
+  });
+
+  it("stale quota state: onQuotaUpdate shows nag when quota drops to 0", () => {
+    // Simulates the onQuotaUpdate catch-up for stale client state
+    let showUpgrade = false;
+    const isFreeTier = true;
+    let quotaPercent = 50; // stale: client thinks quota is available
+
+    // After backend response, onQuotaUpdate fires with real quota
+    const onQuotaUpdate = (newPercent: number) => {
+      quotaPercent = newPercent;
+      if (newPercent <= 0 && isFreeTier) {
+        showUpgrade = true;
+      }
+    };
+
+    // Backend reports exhausted quota
+    onQuotaUpdate(0);
+
+    expect(quotaPercent).toBe(0);
+    expect(showUpgrade).toBe(true);
+
+    // shouldShowNag now returns true for the next command
+    expect(shouldShowNag(undefined, undefined, undefined, quotaPercent)).toBe(true);
+  });
+
+  it("onQuotaUpdate does NOT show nag for non-free-tier users", () => {
+    let showUpgrade = false;
+    const isFreeTier = false;
+
+    const onQuotaUpdate = (newPercent: number) => {
+      if (newPercent <= 0 && isFreeTier) {
+        showUpgrade = true;
+      }
+    };
+
+    onQuotaUpdate(0);
+    expect(showUpgrade).toBe(false);
+  });
+
+  it("onQuotaUpdate does NOT show nag when quota is still positive", () => {
+    let showUpgrade = false;
+    const isFreeTier = true;
+
+    const onQuotaUpdate = (newPercent: number) => {
+      if (newPercent <= 0 && isFreeTier) {
+        showUpgrade = true;
+      }
+    };
+
+    onQuotaUpdate(25);
+    expect(showUpgrade).toBe(false);
+  });
+});
+
 describe("WinRAR nag: shouldShowNag helper", () => {
   it("returns false for BYOK users even with depleted quota", () => {
     expect(shouldShowNag("sk-user-key", undefined, undefined, 0)).toBe(false);
