@@ -1,4 +1,5 @@
 export const API_BASE = import.meta.env.VITE_API_BASE || "";
+export const VERIFY_URL = `${API_BASE}/api/verify`;
 export const TURNSTILE_SITE_KEY = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined) ?? "";
 
 /**

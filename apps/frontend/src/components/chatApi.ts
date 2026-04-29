@@ -4,7 +4,7 @@ import type { BuddyState } from "../hooks/useGameState";
 import type { ModesState } from "../hooks/gameStateUtils";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
-import { API_BASE, BYOK_ENABLED } from "../config";
+import { API_BASE, BYOK_ENABLED, VERIFY_URL } from "../config";
 import { supabase } from "../supabaseClient";
 import { buildAchievementBox } from "./achievementBox";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
@@ -107,7 +107,7 @@ class ByokVerificationError extends Error {
 }
 
 async function assertByokHumanSession(): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/verify`, {
+  const res = await fetch(VERIFY_URL, {
     method: "GET",
     credentials: "include",
   }).catch(() => null);

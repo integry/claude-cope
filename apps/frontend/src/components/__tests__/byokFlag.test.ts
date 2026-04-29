@@ -107,7 +107,7 @@ describe("VITE_ENABLE_BYOK — chat request routing", () => {
     await vi.advanceTimersByTimeAsync(3000);
 
     expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(fetchSpy.mock.calls[0]?.[0]).toBe("/api/verify");
+    expect(fetchSpy.mock.calls[0]?.[0]).toContain("/api/verify");
     const [url, init] = fetchSpy.mock.calls[1]!;
     expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
     const headers = (init as RequestInit).headers as Record<string, string>;
@@ -157,5 +157,37 @@ describe("VITE_ENABLE_BYOK — chat request routing", () => {
 
     await vi.advanceTimersByTimeAsync(3000);
     expect(onByokUsage).not.toHaveBeenCalled();
+  });
+
+  it("prepends VITE_API_BASE to the verify URL for cross-origin deployments", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_ENABLE_BYOK", "true");
+    vi.stubEnv("VITE_API_BASE", "https://worker.example.com");
+    const { submitChatMessage } = await import("../chatApi");
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "verified" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(createMockStreamResponse());
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory: vi.fn(),
+      setIsProcessing: vi.fn(),
+      currentRank: "Junior Code Monkey",
+      apiKey: "sk-or-v1-cross-origin",
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("https://worker.example.com/api/verify");
   });
 });

@@ -1,11 +1,6 @@
 import { useEffect, useRef } from "react";
-import { API_BASE, TURNSTILE_SITE_KEY } from "../config";
-import {
-  VERIFY_STATUS,
-  UNAVAILABLE_REASON,
-  VERIFY_FAILURE_REASON,
-  type VerifyStatusResponse,
-} from "@claude-cope/shared/turnstile";
+import { TURNSTILE_SITE_KEY } from "../config";
+import { pollBootstrapStatus, verifyToken } from "./turnstileBootstrap";
 
 type TurnstileRenderOptions = {
   sitekey: string;
@@ -30,152 +25,6 @@ declare global {
 
 const TURNSTILE_SCRIPT_SELECTOR = 'script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]';
 const TURNSTILE_SCRIPT_STATE = "data-turnstile-state";
-
-type VerifyTokenResult = {
-  verified: boolean;
-  retryable: boolean;
-  message?: string;
-};
-
-type BackendVerificationStatus =
-  | { status: "enabled" | "disabled" | "verified" }
-  | { status: "misconfigured"; message: string }
-  | { status: "unavailable"; message: string; retryable: boolean };
-
-function parseBackendVerificationStatus(data: unknown): BackendVerificationStatus {
-  const payload = data as
-    | (Partial<VerifyStatusResponse> & {
-        status?: string;
-        reason?: string;
-        bypassed?: boolean;
-        enabled?: boolean;
-        misconfigured?: boolean;
-      })
-    | undefined;
-
-  if (payload?.status === VERIFY_STATUS.MISCONFIGURED) {
-    return {
-      status: "misconfigured",
-      message: "Human verification is unavailable because the server is misconfigured.",
-    };
-  }
-  if (payload?.status === VERIFY_STATUS.UNAVAILABLE) {
-    if (payload.reason === UNAVAILABLE_REASON.SESSION_UNAVAILABLE) {
-      return {
-        status: "unavailable",
-        message: "Human verification could not start because the session is unavailable. Please retry.",
-        retryable: false,
-      };
-    }
-    if (payload.reason === UNAVAILABLE_REASON.VERIFICATION_CHECK_FAILED) {
-      return {
-        status: "unavailable",
-        message: "Human verification status could not be checked. Please retry.",
-        retryable: true,
-      };
-    }
-    return {
-      status: "unavailable",
-      message:
-        "Human verification is temporarily unavailable.",
-      retryable: true,
-    };
-  }
-  if (payload?.status === VERIFY_STATUS.DISABLED || payload?.status === VERIFY_STATUS.ENABLED || payload?.status === VERIFY_STATUS.VERIFIED) {
-    return { status: payload.status };
-  }
-  if (typeof payload?.bypassed === "boolean") {
-    return { status: payload.bypassed ? "disabled" : "enabled" };
-  }
-  if (typeof payload?.enabled === "boolean") {
-    return payload.enabled
-      ? { status: "enabled" }
-      : {
-        status: "unavailable",
-        message: payload.misconfigured
-          ? "Human verification is unavailable because the server is misconfigured."
-          : "Human verification is temporarily unavailable.",
-        retryable: !payload.misconfigured,
-        };
-  }
-
-  return {
-    status: "unavailable",
-    message: "Unable to determine verification status from the server.",
-    retryable: true,
-  };
-}
-
-async function verifyToken(token: string): Promise<VerifyTokenResult> {
-  const res = await fetch(`${API_BASE}/api/verify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token }),
-    credentials: "include",
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (res.ok) {
-    return {
-      verified: Boolean(data?.verified),
-      retryable: !data?.verified,
-    };
-  }
-
-  if (res.status === 403) {
-    const reason = data?.reason as string | undefined;
-    const retryable = reason === VERIFY_FAILURE_REASON.CHALLENGE_FAILED || reason === VERIFY_FAILURE_REASON.TOKEN_EXPIRED || typeof data?.error !== "string";
-    return {
-      verified: false,
-      retryable,
-      message: typeof data?.error === "string" ? data.error : undefined,
-    };
-  }
-
-  if (res.status === 429) {
-    return {
-      verified: false,
-      retryable: false,
-      message: typeof data?.error === "string" ? data.error : "Too many verification attempts. Please wait and try again.",
-    };
-  }
-
-  if (res.status >= 500) {
-    return {
-      verified: false,
-      retryable: false,
-      message: typeof data?.error === "string" ? data.error : "Verification service is temporarily unavailable.",
-    };
-  }
-
-  return {
-    verified: false,
-    retryable: false,
-    message: typeof data?.error === "string" ? data.error : undefined,
-  };
-}
-
-async function getBackendVerificationStatus(): Promise<BackendVerificationStatus> {
-  const res = await fetch(`${API_BASE}/api/verify`, {
-    method: "GET",
-    credentials: "include",
-  }).catch(() => null);
-  if (!res) {
-    return { status: "unavailable", message: "Unable to determine verification status from the server.", retryable: true };
-  }
-  if (res.status === 429) {
-    return { status: "unavailable", message: "Human verification is temporarily rate limited. Please retry shortly.", retryable: true };
-  }
-  if (res.status >= 500) {
-    return { status: "unavailable", message: "Human verification is temporarily unavailable. Please retry shortly.", retryable: true };
-  }
-  if (!res.ok) {
-    return { status: "unavailable", message: "Verification service is temporarily unavailable.", retryable: true };
-  }
-
-  const data = await res.json().catch(() => ({}));
-  return parseBackendVerificationStatus(data);
-}
 
 function waitForTurnstileApi(timeoutMs: number): Promise<void> {
   if (window.turnstile) return Promise.resolve();
@@ -275,15 +124,10 @@ export default function TurnstileWidget({
     let settled = false;
     let retries = 0;
     const maxRetries = 3;
-    let bootstrapRetries = 0;
-    const maxBootstrapRetries = 3;
     let widgetId: string | null = null;
     let verificationTimeoutId: number | null = null;
     const scriptLoadTimeoutMs = 10_000;
     const verificationTimeoutMs = 60_000;
-    const wait = (ms: number) => new Promise<void>((resolve) => {
-      window.setTimeout(resolve, ms);
-    });
     const clearVerificationTimeout = () => {
       if (verificationTimeoutId !== null) {
         window.clearTimeout(verificationTimeoutId);
@@ -319,32 +163,15 @@ export default function TurnstileWidget({
     let turnstile: TurnstileApi | undefined;
 
     const run = async () => {
-      while (true) {
-        const status = await getBackendVerificationStatus();
-        if (cancelled) return;
-        if (status.status === "disabled" || status.status === "verified") {
-          onVerified();
-          return;
-        }
-        if (status.status === "enabled") {
-          break;
-        }
-        if (status.status === "misconfigured") {
-          onError(status.message);
-          return;
-        }
-        if (status.status !== "unavailable") {
-          onError("Unable to determine verification status from the server.");
-          return;
-        }
-        if (!status.retryable || bootstrapRetries >= maxBootstrapRetries) {
-          onError(status.message);
-          return;
-        }
-
-        bootstrapRetries += 1;
-        await wait(Math.min(1000 * 2 ** (bootstrapRetries - 1), 4000));
-        if (cancelled) return;
+      const bootstrap = await pollBootstrapStatus(() => cancelled);
+      if (cancelled) return;
+      if (bootstrap.outcome === "verified") {
+        onVerified();
+        return;
+      }
+      if (bootstrap.outcome === "error") {
+        onError(bootstrap.message);
+        return;
       }
 
       if (!TURNSTILE_SITE_KEY) {

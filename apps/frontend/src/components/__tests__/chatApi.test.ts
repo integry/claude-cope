@@ -486,7 +486,7 @@ describe("submitChatMessage - achievement parsing", () => {
     await vi.advanceTimersByTimeAsync(3000);
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy.mock.calls[0]?.[0]).toBe("/api/verify");
+    expect(fetchSpy.mock.calls[0]?.[0]).toContain("/api/verify");
     expect(dispatchEventSpy).toHaveBeenCalledWith(expect.objectContaining({ type: TURNSTILE_REQUIRED_EVENT }));
     expect(onError).toHaveBeenCalledTimes(1);
 

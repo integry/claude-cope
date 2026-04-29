@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 
 vi.mock("../../config", () => ({
   API_BASE: "",
+  VERIFY_URL: "/api/verify",
   TURNSTILE_SITE_KEY: "site-key",
 }));
 
