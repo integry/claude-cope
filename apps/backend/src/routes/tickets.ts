@@ -8,6 +8,7 @@ type Env = {
     DB: D1Database;
     OPENROUTER_API_KEY?: string;
     OPENROUTER_PROVIDERS?: string;
+    ENABLE_TICKET_REFINE?: string;
   };
 };
 
@@ -52,6 +53,10 @@ tickets.get("/community", async (c) => {
 });
 
 tickets.post("/refine", async (c) => {
+  if (c.env.ENABLE_TICKET_REFINE !== "true") {
+    return c.json({ error: "Ticket refinement is disabled" }, 404);
+  }
+
   const db = c.env?.DB;
 
   if (!db) {

@@ -1,4 +1,4 @@
-import { API_BASE } from "../config";
+import { API_BASE, TICKET_REFINE_ENABLED } from "../config";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { prefetchSequences } from "./toolSequences";
@@ -13,6 +13,11 @@ type BacklogTicket = { id: string; title: string; description: string; technical
 let lastBacklogResults: BacklogTicket[] = [];
 
 export async function handleTicketCommand(command: string, reply: Reply): Promise<boolean> {
+  if (!TICKET_REFINE_ENABLED) {
+    reply({ role: "error", content: "[❌] Unknown command: `/ticket`. Type `/help` to see available commands." });
+    return true;
+  }
+
   const task = command.slice("/ticket".length).trim();
   if (!task) {
     reply({ role: "error", content: "[❌] Usage: `/ticket <description>` — Describe a task for the PM to over-engineer." });
@@ -52,7 +57,8 @@ export async function handleBacklogCommand(reply: Reply): Promise<boolean> {
 
     const tickets = await res.json() as BacklogTicket[];
     if (!tickets.length) {
-      reply({ role: "system", content: "[📋 **BACKLOG**] The backlog is empty. Submit tickets with `/ticket <description>`." });
+      const hint = TICKET_REFINE_ENABLED ? " Submit tickets with `/ticket <description>`." : "";
+      reply({ role: "system", content: `[📋 **BACKLOG**] The backlog is empty.${hint}` });
       return true;
     }
 

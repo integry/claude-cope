@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { Hono } from "hono";
 import { parseProviderList } from "@claude-cope/shared/openrouter";
-import { buildTicketRefineRequest } from "./tickets";
+import tickets, { buildTicketRefineRequest } from "./tickets";
 
 describe("Provider configuration in ticket refine requests", () => {
   it("includes provider.order in request body when OPENROUTER_PROVIDERS is configured", () => {
@@ -71,5 +72,33 @@ describe("Provider configuration in ticket refine requests", () => {
     const requestBody = buildTicketRefineRequest(messages, undefined);
 
     expect(requestBody).not.toHaveProperty("provider");
+  });
+});
+
+describe("POST /refine feature flag", () => {
+  const app = new Hono();
+  app.route("/api/tickets", tickets);
+
+  async function postRefine(env: Record<string, string | undefined>) {
+    return app.request(
+      "/api/tickets/refine",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task: "build a thing" }),
+      },
+      env,
+    );
+  }
+
+  it("returns 404 when ENABLE_TICKET_REFINE is unset", async () => {
+    const res = await postRefine({ OPENROUTER_API_KEY: "test" });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "Ticket refinement is disabled" });
+  });
+
+  it("returns 404 when ENABLE_TICKET_REFINE is any non-'true' value", async () => {
+    const res = await postRefine({ OPENROUTER_API_KEY: "test", ENABLE_TICKET_REFINE: "false" });
+    expect(res.status).toBe(404);
   });
 });
