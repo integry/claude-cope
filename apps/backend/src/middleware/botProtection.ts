@@ -19,7 +19,13 @@ export const botProtection: MiddlewareHandler = async (c, next) => {
     return c.json({ error: "Bot protection storage is not available" }, 503);
   }
 
-  const isHuman = await usageKv.get(`human:${sessionId}`);
+  let isHuman: string | null;
+  try {
+    isHuman = await usageKv.get(`human:${sessionId}`);
+  } catch (e) {
+    console.error("KV read error in bot protection", e);
+    return c.json({ error: "Verification check failed" }, 503);
+  }
   if (!isHuman) {
     return c.json({ error: "Human verification required" }, 403);
   }

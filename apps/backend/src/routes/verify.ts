@@ -111,7 +111,20 @@ verify.get("/", createRateLimiter("verify-status:"), async (c) => {
     return c.json(response);
   }
 
-  const humanFlag = await kv.get(`human:${sessionId}`);
+  let humanFlag: string | null;
+  try {
+    humanFlag = await kv.get(`human:${sessionId}`);
+  } catch (e) {
+    console.error("KV read error in verify status", e);
+    const response: VerifyStatusResponse = {
+      status: "unavailable",
+      enabled: false,
+      bypassed: false,
+      misconfigured: false,
+      reason: "storage_unavailable",
+    };
+    return c.json(response);
+  }
   if (humanFlag) {
     const response: VerifyStatusResponse = {
       status: "verified",
@@ -227,7 +240,12 @@ verify.post("/", createRateLimiter("verify-submit:"), async (c) => {
     }
   }
 
-  await kv.put(`human:${sessionId}`, "1", { expirationTtl: HUMAN_TTL_SECONDS });
+  try {
+    await kv.put(`human:${sessionId}`, "1", { expirationTtl: HUMAN_TTL_SECONDS });
+  } catch (e) {
+    console.error("KV write error in verify", e);
+    return c.json({ verified: false, error: "Failed to store verification" }, 503);
+  }
   return c.json({ verified: true });
 });
 
