@@ -738,6 +738,9 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
   } else if (command === "/key" || command.startsWith("/key ")) {
     const asyncResult = handleAsyncCommand(command, ctx, reply);
     if (asyncResult === "async") return "async";
+    // BYOK disabled — handleAsyncCommand replied with "Command not found" and
+    // returned false. Track the failure so disabled-command analytics are complete.
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: parseBaseCommand(command) });
   } else if (command === "/feedback" || command === "/bug") {
     reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
   } else if (command === "/upgrade") {

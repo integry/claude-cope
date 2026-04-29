@@ -271,6 +271,160 @@ describe("analytics — STORAGE_KEY is shared, not duplicated", () => {
   });
 });
 
+describe("analytics — /key disabled (BYOK off) fires SLASH_COMMAND_FAILED", () => {
+  const mockTrack = vi.fn();
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    mockTrack.mockClear();
+
+    // Disable BYOK so /key is rejected
+    vi.stubEnv("VITE_ENABLE_BYOK", "false");
+    vi.stubEnv("VITE_POSTHOG_KEY", "");
+
+    // Mock analytics to capture track() calls
+    vi.doMock("../analytics", () => ({
+      track: mockTrack,
+      identify: vi.fn(),
+      initPostHog: vi.fn(),
+    }));
+
+    // Mock heavy transitive dependencies that aren't installed in test env
+    vi.doMock("../game/constants", () => ({
+      PING_COST: 100,
+      THEMES: [],
+    }));
+    vi.doMock("@claude-cope/shared/models", () => ({
+      COPE_MODELS: [],
+    }));
+    vi.doMock("../api/profileApi", () => ({
+      updateTicketServer: vi.fn(),
+    }));
+    vi.doMock("../hooks/profileSync", () => ({
+      applyServerProfile: vi.fn(),
+    }));
+    vi.doMock("../components/ticketCommands", () => ({
+      handleTicketCommand: vi.fn(),
+      handleBacklogCommand: vi.fn(),
+      handleTakeCommand: vi.fn(),
+      handleAbandonCommand: vi.fn(),
+    }));
+    vi.doMock("../components/ticketPrompt", () => ({
+      getPendingOffer: vi.fn(() => null),
+      clearPendingOffer: vi.fn(),
+    }));
+    vi.doMock("../components/loadingPhrases", () => ({
+      getRandomLoadingPhrase: () => "Loading...",
+    }));
+    vi.doMock("../game/tips", () => ({
+      getRandomTip: () => "Tip",
+    }));
+    vi.doMock("../components/achievementBox", () => ({
+      buildAchievementBox: vi.fn(() => ""),
+    }));
+    vi.doMock("../components/sabotageParams", () => ({
+      parseSabotageParams: vi.fn(),
+    }));
+
+    // Stub localStorage
+    const store: Record<string, string> = {};
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn((key: string) => store[key] ?? null),
+      setItem: vi.fn((key: string, val: string) => { store[key] = val; }),
+      removeItem: vi.fn((key: string) => { delete store[key]; }),
+    });
+
+    // Stub window.history.pushState
+    vi.stubGlobal("history", { pushState: vi.fn() });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("tracks SLASH_COMMAND_FAILED when /key is used with BYOK disabled", async () => {
+    const { executeSlashCommand } = await import("../components/slashCommandExecutor");
+    const { AnalyticsEvents } = await import("../analyticsEvents");
+
+    const ctx = {
+      state: {
+        username: "test",
+        economy: { currentTD: 0, totalTDEarned: 0, tdMultiplier: 1, currentRank: "" },
+        modes: { fast: false, voice: false },
+        commandUsage: {} as Record<string, number>,
+        achievements: [],
+        inventory: {},
+        upgrades: [],
+        unlockedThemes: [],
+        activeTheme: "default",
+        buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 },
+        activeTicket: null,
+        apiKey: "",
+        proKey: "",
+        proKeyHash: "",
+        selectedModel: undefined,
+        hasSeenTicketPrompt: false,
+      },
+      setState: vi.fn(),
+      setHistory: vi.fn(),
+      setIsProcessing: vi.fn(),
+      closeAllOverlays: vi.fn(),
+      setShowStore: vi.fn(),
+      setShowLeaderboard: vi.fn(),
+      setShowAchievements: vi.fn(),
+      setShowSynergize: vi.fn(),
+      setShowHelp: vi.fn(),
+      setShowAbout: vi.fn(),
+      setShowPrivacy: vi.fn(),
+      setShowTerms: vi.fn(),
+      setShowContact: vi.fn(),
+      setShowProfile: vi.fn(),
+      setShowParty: vi.fn(),
+      setShowUpgrade: vi.fn(),
+      setBragPending: vi.fn(),
+      setBuddyPendingConfirm: vi.fn(),
+      unlockAchievement: vi.fn(),
+      clearCount: 0,
+      setClearCount: vi.fn(),
+      setInputValue: vi.fn(),
+      onSuggestedReply: vi.fn(),
+      setSlashQuery: vi.fn(),
+      setSlashIndex: vi.fn(),
+      addActiveTD: vi.fn(),
+      onlineCount: 0,
+      onlineUsers: [] as string[],
+      sendPing: vi.fn(),
+      pendingReviewPing: null,
+      acceptReviewPing: vi.fn(),
+      brrrrrrIntervalRef: { current: null },
+      triggerCompactEffect: vi.fn(),
+      playChime: vi.fn(),
+      playError: vi.fn(),
+      setActiveTheme: vi.fn(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+
+    executeSlashCommand("/key sk-live-secret", ctx);
+
+    // Advance past the setTimeout in executeSlashCommand (1500-3000ms)
+    vi.advanceTimersByTime(4000);
+
+    // Should have tracked SLASH_COMMAND_ATTEMPTED and SLASH_COMMAND_FAILED
+    expect(mockTrack).toHaveBeenCalledWith(
+      AnalyticsEvents.SLASH_COMMAND_ATTEMPTED,
+      { command: "/key" },
+    );
+    expect(mockTrack).toHaveBeenCalledWith(
+      AnalyticsEvents.SLASH_COMMAND_FAILED,
+      { command: "/key" },
+    );
+  });
+});
+
 describe("parseBaseCommand — command normalization", () => {
   it("strips arguments from known slash commands", () => {
     expect(parseBaseCommand("/key sk-live-1234567890")).toBe("/key");
