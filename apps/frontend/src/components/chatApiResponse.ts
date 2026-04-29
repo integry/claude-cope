@@ -130,10 +130,11 @@ export async function handleChatErrorResponse(
   const readErrorData = () => res.json().catch(() => null);
   const matchesBotProtectionMessage = (error: unknown) =>
     typeof error === "string" && error.toLowerCase().includes("human verification required");
-  const isBotProtectionFailure = (reason: unknown) =>
+  const isReverifiableReason = (reason: unknown) =>
     reason === BOT_PROTECTION_REASON.HUMAN_VERIFICATION_REQUIRED
-    || reason === BOT_PROTECTION_REASON.SESSION_UNAVAILABLE
-    || reason === BOT_PROTECTION_REASON.STORAGE_UNAVAILABLE
+    || reason === BOT_PROTECTION_REASON.SESSION_UNAVAILABLE;
+  const isServerSideFailure = (reason: unknown) =>
+    reason === BOT_PROTECTION_REASON.STORAGE_UNAVAILABLE
     || reason === BOT_PROTECTION_REASON.VERIFICATION_CHECK_FAILED;
 
   const triggerReverification = () => {
@@ -146,8 +147,16 @@ export async function handleChatErrorResponse(
 
   const handleBotProtectionFailure = async () => {
     const errorData = await readErrorData();
-    if (isBotProtectionFailure(errorData?.reason) || matchesBotProtectionMessage(errorData?.error)) {
+    if (isReverifiableReason(errorData?.reason) || matchesBotProtectionMessage(errorData?.error)) {
       triggerReverification();
+      return true;
+    }
+    if (isServerSideFailure(errorData?.reason)) {
+      onError?.();
+      pushMessage({
+        role: "error",
+        content: `[❌ Error] ${errorData?.error ?? "Verification service is temporarily unavailable. Please try again later."}`,
+      });
       return true;
     }
     onError?.();
@@ -160,7 +169,7 @@ export async function handleChatErrorResponse(
 
   const handleServiceUnavailable = async () => {
     const errorData = await readErrorData();
-    if (isBotProtectionFailure(errorData?.reason)) {
+    if (isReverifiableReason(errorData?.reason)) {
       triggerReverification();
       return true;
     }

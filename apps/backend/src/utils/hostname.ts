@@ -17,12 +17,16 @@ function isValidIpv6(value: string): boolean {
   // Basic structural check: 1-8 groups of hex separated by colons, with optional :: shorthand
   if (!/^[0-9a-f:]+$/i.test(addr)) return false;
   if (addr.includes(":::")) return false;
+  // Reject leading/trailing single colons that are not part of :: shorthand
+  if (addr.startsWith(":") && !addr.startsWith("::")) return false;
+  if (addr.endsWith(":") && !addr.endsWith("::")) return false;
   const doubleColonCount = (addr.match(/::/g) || []).length;
   if (doubleColonCount > 1) return false;
   const groups = addr.split(":");
   if (doubleColonCount === 0 && groups.length !== 8) return false;
   if (doubleColonCount === 1 && groups.length > 8) return false;
-  return groups.every((g) => g.length <= 4);
+  // Each non-empty group must be 1-4 hex digits
+  return groups.every((g) => g.length <= 4 && (g.length === 0 || /^[0-9a-f]+$/i.test(g)));
 }
 
 function isValidPort(port: string): boolean {

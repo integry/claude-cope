@@ -78,6 +78,13 @@ describe("normalizeHostname", () => {
     expect(normalizeHostname("-invalid.com")).toBeUndefined();
     expect(normalizeHostname("invalid-.com")).toBeUndefined();
   });
+
+  it("rejects malformed IPv6 addresses with leading/trailing single colons", () => {
+    expect(normalizeHostname(":1::2")).toBeUndefined();
+    expect(normalizeHostname("1::2:")).toBeUndefined();
+    expect(normalizeHostname("[:1::2]")).toBeUndefined();
+    expect(normalizeHostname("[1::2:]")).toBeUndefined();
+  });
 });
 
 describe("getExpectedHostnameConfig", () => {

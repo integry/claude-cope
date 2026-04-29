@@ -16,6 +16,18 @@ let root: Root;
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+async function renderWidget(props: { onVerified: () => void; onError: (message: string) => void; verificationNonce?: number }) {
+  await act(async () => {
+    root.render(createElement(TurnstileWidget, { verificationNonce: 0, ...props }));
+  });
+}
+
+async function flushEffects() {
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   container = document.createElement("div");
@@ -31,6 +43,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.useRealTimers();
   delete window.turnstile;
+  document.head.querySelectorAll('script[src*="challenges.cloudflare.com/turnstile"]').forEach((node) => node.remove());
 });
 
 describe("TurnstileWidget", () => {
@@ -81,15 +94,7 @@ describe("TurnstileWidget", () => {
       return result;
     });
 
-    await act(async () => {
-      root.render(
-        createElement(TurnstileWidget, {
-          onVerified,
-          onError,
-          verificationNonce: 0,
-        }),
-      );
-    });
+    await renderWidget({ onVerified, onError });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(700);
@@ -124,15 +129,7 @@ describe("TurnstileWidget", () => {
       ),
     );
 
-    await act(async () => {
-      root.render(
-        createElement(TurnstileWidget, {
-          onVerified,
-          onError,
-          verificationNonce: 0,
-        }),
-      );
-    });
+    await renderWidget({ onVerified, onError });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
@@ -169,15 +166,7 @@ describe("TurnstileWidget", () => {
       reset,
     };
 
-    await act(async () => {
-      root.render(
-        createElement(TurnstileWidget, {
-          onVerified,
-          onError,
-          verificationNonce: 0,
-        }),
-      );
-    });
+    await renderWidget({ onVerified, onError });
 
     // Initial execute fires immediately; retries use exponential backoff (1s, 2s, 4s).
     // Advance timers to trigger each backoff retry.
@@ -190,5 +179,105 @@ describe("TurnstileWidget", () => {
     expect(execute).toHaveBeenCalledTimes(4);
     expect(onError).toHaveBeenCalledWith("Turnstile reported repeated errors.");
     expect(onVerified).not.toHaveBeenCalled();
+  });
+});
+
+describe("TurnstileWidget bootstrap gating", () => {
+  it("blocks the app when verify bootstrap reports misconfigured", async () => {
+    const onVerified = vi.fn();
+    const onError = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "misconfigured", reason: "invalid_expected_hostname" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await renderWidget({ onVerified, onError });
+    await flushEffects();
+
+    expect(onVerified).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith("Human verification is unavailable because the server is misconfigured.");
+  });
+
+  it("blocks the app when verify bootstrap reports unavailable", async () => {
+    const onVerified = vi.fn();
+    const onError = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "unavailable", reason: "storage_unavailable" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await renderWidget({ onVerified, onError });
+    await flushEffects();
+
+    expect(onVerified).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith("Human verification is temporarily unavailable.");
+  });
+
+  it("blocks the app when verify bootstrap reports session unavailable", async () => {
+    const onVerified = vi.fn();
+    const onError = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "unavailable", reason: "session_unavailable" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await renderWidget({ onVerified, onError });
+    await flushEffects();
+
+    expect(onVerified).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(
+      "Human verification could not start because the session is unavailable. Please retry.",
+    );
+  });
+
+  it("falls back to enabled when bootstrap returns 429", async () => {
+    const onVerified = vi.fn();
+    const onError = vi.fn();
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "Too many requests" }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    // The widget should treat 429 as "enabled" and attempt to load Turnstile
+    // rather than hard-blocking. Since we don't set up window.turnstile, it
+    // will eventually error, but the key assertion is it does NOT immediately
+    // call onError with an unavailable message.
+    await renderWidget({ onVerified, onError });
+    await flushEffects();
+
+    // Should not have been called with an "unavailable" error
+    const unavailableCalls = onError.mock.calls.filter(
+      ([msg]: [string]) => msg.includes("unavailable") || msg.includes("Verification service"),
+    );
+    expect(unavailableCalls).toHaveLength(0);
+  });
+
+  it("falls back to enabled when bootstrap returns 500", async () => {
+    const onVerified = vi.fn();
+    const onError = vi.fn();
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "Internal server error" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    await renderWidget({ onVerified, onError });
+    await flushEffects();
+
+    const unavailableCalls = onError.mock.calls.filter(
+      ([msg]: [string]) => msg.includes("unavailable") || msg.includes("Verification service"),
+    );
+    expect(unavailableCalls).toHaveLength(0);
   });
 });
