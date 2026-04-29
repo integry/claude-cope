@@ -19,10 +19,21 @@ const MAX_PENDING_EVENTS = 100;
 const pendingTrackCalls: Array<{ event: string; properties?: Record<string, unknown> }> = [];
 const pendingIdentifyCalls: Array<Record<string, unknown> | undefined> = [];
 
+function generateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // Fallback for environments where randomUUID is unavailable
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 function getOrCreateCopeId(): string {
   let id = localStorage.getItem(COPE_ID_KEY);
   if (!id) {
-    id = crypto.randomUUID();
+    id = generateId();
     localStorage.setItem(COPE_ID_KEY, id);
   }
   return id;
@@ -87,6 +98,7 @@ export function initPostHog(): void {
       // Pending events are preserved so they can be flushed on a successful retry.
       initialized = false;
       readyPromise = null;
+      phInstance = null;
       if (import.meta.env.DEV) {
         console.warn("[analytics] PostHog initialization failed:", err);
       }

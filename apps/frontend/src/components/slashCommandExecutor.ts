@@ -233,10 +233,12 @@ export function handlePingCommand(command: string, ctx: SlashCommandContext, rep
   const target = command.slice(5).trim();
   const ticket = ctx.state.activeTicket;
   if (!ticket) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ping", reason: "no_ticket" });
     reply({ role: "error", content: pickRandom(PING_NO_TICKET_MESSAGES) });
     return true;
   }
   if (ctx.state.economy.currentTD < PING_COST) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/ping", reason: "insufficient_td" });
     reply({ role: "error", content: pickRandom(PING_BROKE_MESSAGES)(PING_COST, ctx.state.economy.currentTD) });
     return true;
   }
@@ -264,6 +266,7 @@ export function handleUpgradeCommand(ctx: SlashCommandContext): void {
 
 function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
   if (ctx.state.economy.totalTDEarned < 1000) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/store", reason: "locked" });
     reply({ role: "error", content: "[❌ Error] Store access denied. Requires **1,000 Technical Debt**." });
   } else {
     openOverlay(ctx, () => ctx.setShowStore(true));
@@ -318,11 +321,13 @@ function handleThemeCommand(command: string, ctx: SlashCommandContext, reply: Re
 
   const theme = THEMES.find((t) => t.id === arg);
   if (!theme) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/theme", reason: "unknown_theme" });
     reply({ role: "error", content: `[❌] Unknown theme: \`${arg}\`. Available: ${unlocked.map((t) => t.id).join(", ")}` });
     return true;
   }
 
   if (!ctx.state.unlockedThemes.includes(theme.id)) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/theme", reason: "locked" });
     reply({ role: "error", content: `[🔒] Theme \`${theme.name}\` is locked. Purchase it from the /store first.` });
     return true;
   }
@@ -498,14 +503,17 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     return;
   }
   if (newName.length < 3) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: "too_short" });
     reply({ role: "error", content: `[❌] Alias must be at least 3 characters long.` });
     return;
   }
   if (newName.length > 33) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: "too_long" });
     reply({ role: "error", content: `[❌] Alias must be at most 33 characters long.` });
     return;
   }
   if (!/^[a-zA-Z0-9_-]+$/.test(newName)) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: "invalid_characters" });
     reply({ role: "error", content: `[❌] Alias can only contain letters, numbers, hyphens, and underscores.` });
     return;
   }
@@ -514,10 +522,12 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     if (!res.ok) throw new Error("Failed to check alias");
     const { taken } = (await res.json()) as { taken: boolean };
     if (taken) {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: "taken" });
       reply({ role: "error", content: `[❌] The alias **${newName}** is already in use by another player. Pick something else.` });
       return;
     }
   } catch {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: "network_error" });
     reply({ role: "error", content: `[❌] Could not verify alias availability. Try again later.` });
     return;
   }
@@ -565,12 +575,14 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   // Non-BYOK mode: only allow predefined COPE_MODELS
   if (!copeModel && !isBYOK) {
     const byokHint = BYOK_ENABLED ? " Set your own API key with `/key` first." : "";
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/model", reason: "unavailable" });
     reply({ role: "system", content: `[🚫] Custom models are not available on this instance.${byokHint}\n\nAvailable models: ` + COPE_MODELS.map((m) => "`" + m.id + "`").join(", ") });
     return;
   }
 
   if (copeModel && copeModel.tier === "pro" && !isPro && !isBYOK) {
     const byokHint = BYOK_ENABLED ? ", or set your own API key with `/key` to bypass limits entirely" : "";
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/model", reason: "locked" });
     reply({ role: "system", content: `[🔒] **${copeModel.name}** is a Max model (${copeModel.multiplier}x cost). You need a Max license to use this.\n\nUpgrade at \`/upgrade\` to unlock premium models${byokHint}.` });
     return;
   }
@@ -597,8 +609,10 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
   }
   const offer = getPendingOffer();
   if (!offer) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: "no_offer" });
     reply({ role: "error", content: pickRandom(ACCEPT_NO_TICKET_MESSAGES) });
   } else if (ctx.state.activeTicket) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: "already_active" });
     reply({ role: "error", content: pickRandom(ACCEPT_ALREADY_ACTIVE_MESSAGES)(ctx.state.activeTicket.title) });
   } else {
     clearPendingOffer();
@@ -664,9 +678,11 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
         reply({ role: "system", content: `[✓ **MAX ACTIVATED**] License key validated and profile linked. Welcome to the premium suffering tier. You now have **${PRO_QUOTA_LIMIT} Max credits**. Your progress will now sync across devices.\n\n[🔐 *FYI*] Your license key doubles as the password to this account. Anyone with it can \`/sync\` in and live their best life on your dime.` });
       }
     } else {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/sync", reason: "validation_failed" });
       reply({ role: "error", content: `[❌] License validation failed: ${data.error ?? "Unknown error"}. Double-check your key and try again.` });
     }
   } catch {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/sync", reason: "network_error" });
     reply({ role: "error", content: "[❌] Network error while validating license key. The backend is probably on fire." });
   }
 }
@@ -683,9 +699,11 @@ async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Prom
     if (res.ok && data.success) {
       reply({ role: "system", content: `[✓ **SHILL COMPLETE**] You sold your dignity for **${data.creditsGranted} free tokens**. The marketing team approves. A tweet window has been opened — go spread the gospel of suffering.` });
     } else {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/shill", reason: "server_error" });
       reply({ role: "error", content: `[❌] Shill failed: ${data.error ?? "Unknown error"}. ${data.error === "Shill credit already claimed" ? "You already sold out once. There is no second helping of shame." : ""}` });
     }
   } catch {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/shill", reason: "network_error" });
     reply({ role: "error", content: "[❌] Network error while claiming shill credits. The backend ghosted you." });
   }
 }
