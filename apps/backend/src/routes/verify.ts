@@ -16,6 +16,7 @@ type Env = {
     TURNSTILE_SECRET_KEY?: string;
     TURNSTILE_EXPECTED_HOSTNAME?: string;
     USAGE_KV?: KVNamespace;
+    RATE_LIMITER?: { limit: (opts: { key: string }) => Promise<{ success: boolean }> };
   };
   Variables: {
     sessionId: string;
@@ -38,6 +39,12 @@ type VerifyContext = Context<Env>;
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const TURNSTILE_VERIFY_TIMEOUT_MS = 10_000;
 type VerifyFailureStatus = 502 | 503;
+
+const TURNSTILE_SERVER_ERROR_CODES = new Set([
+  "missing-input-secret",
+  "invalid-input-secret",
+  "internal-error",
+]);
 const VERIFY_NO_STORE = "no-store, max-age=0";
 
 const getHostnameConfig = (c: VerifyContext) => getExpectedHostnameConfig(c.env?.TURNSTILE_EXPECTED_HOSTNAME);
@@ -59,7 +66,17 @@ verify.get("/", async (c, next) => {
     return c.json(response);
   }
   await next();
-}, createRateLimiter("verify-status:"), async (c) => {
+}, async (c, next) => {
+  const limiter = c.env?.RATE_LIMITER;
+  if (!limiter) return next();
+  const sessionId = c.get("sessionId");
+  const suffix = sessionId || getClientIp(c.req);
+  const { success } = await limiter.limit({ key: `verify-status:${suffix}` });
+  if (!success) {
+    return c.json({ error: "Too many requests. Please try again later." }, 429);
+  }
+  return next();
+}, async (c) => {
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
   const expectedHostname = getHostnameConfig(c);
@@ -221,6 +238,11 @@ verify.post("/", async (c, next) => {
 
   if (!data.success) {
     const errorCodes = Array.isArray(data["error-codes"]) ? data["error-codes"] : [];
+    const hasServerError = errorCodes.some((code) => TURNSTILE_SERVER_ERROR_CODES.has(code));
+    if (hasServerError) {
+      console.error("Turnstile server-side error (likely misconfigured secret)", { errorCodes });
+      return c.json({ verified: false, error: "Verification service misconfigured" }, 500);
+    }
     if (errorCodes.length > 0) {
       console.warn("Turnstile verification failed", { errorCodes });
     }

@@ -237,6 +237,85 @@ describe("Turnstile verification and protection", () => {
     }
   });
 
+  it("returns 500 when Cloudflare reports server-side error codes like invalid-input-secret", async () => {
+    const usageKv = { get: vi.fn(), put: vi.fn() };
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ success: false, "error-codes": ["invalid-input-secret"] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    try {
+      const res = await requestVerify("POST", { TURNSTILE_SECRET_KEY: "bad-secret", USAGE_KV: usageKv }, { token: "token-123" });
+      expect(res.status).toBe(500);
+      await expect(res.json()).resolves.toEqual({ verified: false, error: "Verification service misconfigured" });
+      expect(usageKv.put).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("returns 500 when Cloudflare reports missing-input-secret error", async () => {
+    const usageKv = { get: vi.fn(), put: vi.fn() };
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ success: false, "error-codes": ["missing-input-secret"] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    try {
+      const res = await requestVerify("POST", { TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv }, { token: "token-123" });
+      expect(res.status).toBe(500);
+      await expect(res.json()).resolves.toEqual({ verified: false, error: "Verification service misconfigured" });
+      expect(usageKv.put).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("returns 500 when Cloudflare reports internal-error", async () => {
+    const usageKv = { get: vi.fn(), put: vi.fn() };
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ success: false, "error-codes": ["internal-error"] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    try {
+      const res = await requestVerify("POST", { TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv }, { token: "token-123" });
+      expect(res.status).toBe(500);
+      await expect(res.json()).resolves.toEqual({ verified: false, error: "Verification service misconfigured" });
+      expect(usageKv.put).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("returns 403 for client-side error codes like bad-request", async () => {
+    const usageKv = { get: vi.fn(), put: vi.fn() };
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ success: false, "error-codes": ["bad-request"] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    try {
+      const res = await requestVerify("POST", { TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv }, { token: "token-123" });
+      expect(res.status).toBe(403);
+      await expect(res.json()).resolves.toEqual({ verified: false, reason: "challenge_failed" });
+    } finally {
+      fetchSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
+
   it("rejects successful verification when hostname does not match expected hostname", async () => {
     const usageKv = { get: vi.fn(), put: vi.fn() };
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -333,7 +412,18 @@ describe("Turnstile verification and protection", () => {
     );
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("no-store, max-age=0");
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "verify-status:1.2.3.4" });
+    expect(limiter.limit).toHaveBeenCalledWith({ key: expect.stringMatching(/^verify-status:[0-9a-f-]{36}$/) });
+  });
+
+  it("falls back to IP for verify-status rate limit key when session is unavailable", async () => {
+    const limiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
+    const res = await app.request(
+      "/api/verify",
+      { method: "GET", headers: ipVerifyOriginHeaders },
+      { ALLOWED_ORIGINS, TURNSTILE_SECRET_KEY: "secret", USAGE_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn() }, RATE_LIMITER: limiter },
+    );
+    expect(res.status).toBe(200);
+    expect(limiter.limit).toHaveBeenCalledWith({ key: expect.stringMatching(/^verify-status:/) });
   });
 
   it("uses a separate verify-submit rate limiter key for token submission", async () => {
