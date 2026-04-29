@@ -186,6 +186,9 @@ verify.post("/", async (c, next) => {
   await next();
 }, createRateLimiter("verify-submit:"), async (c) => {
   const secret = getTurnstileSecret(c);
+  if (!secret) {
+    return c.json({ verified: true, bypassed: true });
+  }
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV;
   const expectedHostname = getHostnameConfig(c);
