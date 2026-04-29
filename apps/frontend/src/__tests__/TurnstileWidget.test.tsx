@@ -70,4 +70,23 @@ describe("TurnstileWidget bootstrap gating", () => {
     expect(onVerified).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith("Human verification is temporarily unavailable.");
   });
+
+  it("blocks the app when verify bootstrap reports session unavailable", async () => {
+    const onVerified = vi.fn();
+    const onError = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "unavailable", reason: "session_unavailable" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await renderWidget({ onVerified, onError });
+    await flushEffects();
+
+    expect(onVerified).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(
+      "Human verification could not start because the session is unavailable. Please retry.",
+    );
+  });
 });

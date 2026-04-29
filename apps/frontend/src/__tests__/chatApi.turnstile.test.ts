@@ -113,4 +113,44 @@ describe("submitChatMessage turnstile recovery", () => {
       window.removeEventListener(TURNSTILE_REQUIRED_EVENT, onReverify);
     }
   });
+
+  it("shows a normal 403 error when the reason is unrelated to bot protection", async () => {
+    const harness = createStateHarness([
+      { role: "user", content: "hello" },
+      { role: "loading", content: "..." },
+    ]);
+    const onError = vi.fn();
+    const onReverify = vi.fn();
+    window.addEventListener(TURNSTILE_REQUIRED_EVENT, onReverify);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "CSRF token invalid" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    try {
+      submitChatMessage({
+        chatMessages: [{ role: "user", content: "hello" }],
+        buddyResult: null as BuddyInterjectionResult | null,
+        unlockAchievement: vi.fn(),
+        setHistory: harness.setHistory,
+        setIsProcessing: harness.setIsProcessing,
+        currentRank: "Intern",
+        onError,
+      });
+
+      await flushAsyncWork();
+
+      expect(onError).toHaveBeenCalled();
+      expect(onReverify).not.toHaveBeenCalled();
+      expect(harness.getHistory()).toEqual([
+        { role: "user", content: "hello" },
+        { role: "error", content: "[❌ Error] CSRF token invalid (HTTP 403)" },
+      ]);
+      expect(harness.getProcessing()).toBe(false);
+    } finally {
+      window.removeEventListener(TURNSTILE_REQUIRED_EVENT, onReverify);
+    }
+  });
 });

@@ -55,7 +55,10 @@ function parseBackendVerificationStatus(data: unknown): BackendVerificationStatu
   }
   if (payload?.status === VERIFY_STATUS.UNAVAILABLE) {
     if (payload.reason === UNAVAILABLE_REASON.SESSION_UNAVAILABLE) {
-      return { status: "disabled" };
+      return {
+        status: "unavailable",
+        message: "Human verification could not start because the session is unavailable. Please retry.",
+      };
     }
     return {
       status: "unavailable",

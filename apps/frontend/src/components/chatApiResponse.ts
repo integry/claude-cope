@@ -146,8 +146,15 @@ export async function handleChatErrorResponse(
 
   const handleBotProtectionFailure = async () => {
     const errorData = await readErrorData();
-    if (!isBotProtectionFailure(errorData?.reason) && !matchesBotProtectionMessage(errorData?.error)) return false;
-    triggerReverification();
+    if (isBotProtectionFailure(errorData?.reason) || matchesBotProtectionMessage(errorData?.error)) {
+      triggerReverification();
+      return true;
+    }
+    onError?.();
+    pushMessage({
+      role: "error",
+      content: `[❌ Error] ${errorData?.error?.message ?? errorData?.error ?? "Request forbidden"} (HTTP 403)`,
+    });
     return true;
   };
 

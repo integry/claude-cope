@@ -104,7 +104,7 @@ describe("TurnstileWidget", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it("soft-fails on session-unavailable and lets the user through", async () => {
+  it("blocks the app when bootstrap reports session unavailable", async () => {
     const onVerified = vi.fn();
     const onError = vi.fn();
 
@@ -138,8 +138,10 @@ describe("TurnstileWidget", () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    expect(onVerified).toHaveBeenCalledTimes(1);
-    expect(onError).not.toHaveBeenCalled();
+    expect(onVerified).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(
+      "Human verification could not start because the session is unavailable. Please retry.",
+    );
   });
 
   it("applies the same retry budget to widget errors as token verification retries (with backoff)", async () => {
