@@ -25,7 +25,9 @@ vi.mock("../../config", () => ({
 }));
 
 vi.mock("../../supabaseClient", () => ({ supabase: {} }));
-const submitChatMessageMock = vi.fn();
+const { submitChatMessageMock } = vi.hoisted(() => ({
+  submitChatMessageMock: vi.fn(),
+}));
 
 vi.mock("../CommandLine", async () => {
   const React = await import("react");
