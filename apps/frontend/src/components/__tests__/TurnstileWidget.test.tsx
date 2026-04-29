@@ -211,7 +211,9 @@ describe("TurnstileWidget bootstrap gating", () => {
     );
 
     await renderWidget({ onVerified, onError });
-    await flushEffects();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(7000);
+    });
 
     expect(onVerified).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith("Human verification is temporarily unavailable.");
