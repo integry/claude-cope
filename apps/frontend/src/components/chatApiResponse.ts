@@ -214,6 +214,13 @@ export async function handleChatErrorResponse(
   const handleRateLimit = async () => {
     onError?.();
     const errorData = await readErrorData();
+    if (errorData?.limitType && typeof errorData?.message === "string") {
+      pushMessage({
+        role: "warning",
+        content: errorData.message,
+      });
+      return true;
+    }
     const upstreamRaw = errorData?.error?.metadata?.raw
       ?? errorData?.error?.message
       ?? (typeof errorData?.error === "string" ? errorData.error : "");
