@@ -98,9 +98,11 @@ async function verifyToken(token: string): Promise<VerifyTokenResult> {
   }
 
   if (res.status === 403) {
+    const reason = data?.reason as string | undefined;
+    const retryable = reason === "challenge_failed" || reason === "token_expired" || typeof data?.error !== "string";
     return {
       verified: false,
-      retryable: typeof data?.error !== "string",
+      retryable,
       message: typeof data?.error === "string" ? data.error : undefined,
     };
   }

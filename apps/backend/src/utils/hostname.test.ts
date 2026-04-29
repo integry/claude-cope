@@ -32,8 +32,22 @@ describe("normalizeHostname", () => {
     expect(normalizeHostname("example .com")).toBeUndefined();
   });
 
-  it("rejects values with more than one colon", () => {
-    expect(normalizeHostname("::1")).toBeUndefined();
+  it("accepts IPv4 addresses", () => {
+    expect(normalizeHostname("127.0.0.1")).toBe("127.0.0.1");
+    expect(normalizeHostname("192.168.1.1")).toBe("192.168.1.1");
+    expect(normalizeHostname("10.0.0.1:8080")).toBe("10.0.0.1");
+  });
+
+  it("rejects invalid IPv4 addresses", () => {
+    expect(normalizeHostname("999.999.999.999")).toBeUndefined();
+    expect(normalizeHostname("256.1.1.1")).toBeUndefined();
+  });
+
+  it("accepts IPv6 addresses", () => {
+    expect(normalizeHostname("::1")).toBe("::1");
+    expect(normalizeHostname("[::1]")).toBe("::1");
+    expect(normalizeHostname("[::1]:8080")).toBe("::1");
+    expect(normalizeHostname("[2001:db8::1]")).toBe("2001:db8::1");
   });
 
   it("rejects invalid port numbers", () => {

@@ -24,7 +24,7 @@ app.use(
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
-      connectSrc: ["'self'", "https://openrouter.ai", "https://challenges.cloudflare.com", "wss:", "ws:"],
+      connectSrc: ["'self'", "https://*.workers.dev", "https://openrouter.ai", "https://challenges.cloudflare.com", "wss:", "ws:"],
       frameSrc: ["https://challenges.cloudflare.com"],
       imgSrc: ["'self'", "data:", "blob:"],
       styleSrc: ["'self'", "'unsafe-inline'"],
@@ -41,6 +41,7 @@ app.use("*", (c, next) => {
       if (!origin || allowed.includes(origin)) return origin;
       return allowed[0]!;
     },
+    credentials: true,
   })(c, next);
 });
 

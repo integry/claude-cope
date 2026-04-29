@@ -209,10 +209,12 @@ verify.post("/", createRateLimiter("verify-submit:"), async (c) => {
   const data = verification.data;
 
   if (!data.success) {
-    if (Array.isArray(data["error-codes"]) && data["error-codes"].length > 0) {
-      console.warn("Turnstile verification failed", { errorCodes: data["error-codes"] });
+    const errorCodes = Array.isArray(data["error-codes"]) ? data["error-codes"] : [];
+    if (errorCodes.length > 0) {
+      console.warn("Turnstile verification failed", { errorCodes });
     }
-    return c.json({ verified: false }, 403);
+    const reason = errorCodes.includes("timeout-or-duplicate") ? "token_expired" : "challenge_failed";
+    return c.json({ verified: false, reason }, 403);
   }
 
   const actualHostname = normalizeHostname(data.hostname);
