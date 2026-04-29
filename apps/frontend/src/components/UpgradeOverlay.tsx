@@ -3,6 +3,7 @@ import {
   UPGRADE_CHECKOUT_MULTI,
   UPGRADE_PRICE_SINGLE,
   UPGRADE_PRICE_MULTI,
+  PRO_QUOTA_LIMIT,
 } from "../config";
 import DesktopLayout from "./UpgradeDesktopLayout";
 import type { LayoutProps } from "./UpgradeDesktopLayout";
