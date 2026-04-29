@@ -33,6 +33,7 @@ import { triggerQuotaLockout, triggerInstantBan } from "./terminalHandlers";
 import { TerminalOverlays } from "./TerminalOverlays";
 import { useTerminalKeyboard } from "../hooks/useTerminalKeyboard";
 import { handleBragSubmit, handleBuddyConfirm, tryOutageDamage } from "./terminalInputHandlers";
+import { shouldShowNag } from "./winrarNag";
 
 export type { Message };
 
@@ -41,15 +42,6 @@ export type { Message };
 // Desktop: only ESC key dismisses and replays the pending command.
 // Mobile: footer tap is the only dismiss affordance (no physical ESC).
 // Backdrop clicks and [x] buttons do NOT dismiss.
-
-function shouldShowNag(
-  effectiveApiKey: string | undefined,
-  proKey: string | undefined,
-  proKeyHash: string | undefined,
-  quotaPercent: number,
-): boolean {
-  return !effectiveApiKey && !proKey && !proKeyHash && quotaPercent <= 0;
-}
 
 function Terminal() {
   const { state, setState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();

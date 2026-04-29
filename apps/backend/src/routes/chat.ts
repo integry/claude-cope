@@ -13,6 +13,7 @@ import {
   handleFreeUserResponse,
   type ChatResponseData,
 } from "./chatHelpers";
+import { getQuotaPercent, getQuotaLimits } from "../utils/quota";
 
 type Env = {
   Bindings: {
@@ -289,11 +290,26 @@ async function preChatChecks(
     return rejectPreChat("This account is linked to a Pro license — authenticate with proKeyHash", 403, { effectiveProKeyHash, profileLicenseHash });
   }
 
-  const quotaCheck = await checkQuotaAvailable(env, sessionId, effectiveProKeyHash);
-  if (quotaCheck.exhaustedMessage) {
-    return rejectPreChat(quotaCheck.exhaustedMessage, 402, { effectiveProKeyHash, profileLicenseHash });
+  // WinRAR nag (issue #736): free-tier quota enforcement is handled entirely
+  // on the frontend — the nag overlay is shown before every command, but the
+  // command still executes after dismissal.  Only pro-tier users get a hard
+  // server-side block when their quota is exhausted.
+  if (effectiveProKeyHash) {
+    const quotaCheck = await checkQuotaAvailable(env, sessionId, effectiveProKeyHash);
+    if (quotaCheck.exhaustedMessage) {
+      return rejectPreChat(quotaCheck.exhaustedMessage, 402, { effectiveProKeyHash, profileLicenseHash });
+    }
   }
-  return { effectiveProKeyHash, profileLicenseHash, revokedProfileLicenseHash, quotaPercent: 100, ownsUsername, deferredKvWrites };
+
+  // For free-tier users we still fetch the current percentage so the frontend
+  // can update its nag state, but we never block the request.
+  let quotaPercent = 100;
+  const quotaKv = env.QUOTA_KV ?? env.USAGE_KV;
+  if (!effectiveProKeyHash && quotaKv) {
+    quotaPercent = await getQuotaPercent(quotaKv, { tier: "free", sessionId, limits: getQuotaLimits(env) });
+  }
+
+  return { effectiveProKeyHash, profileLicenseHash, revokedProfileLicenseHash, quotaPercent, ownsUsername, deferredKvWrites };
 }
 
 const chat = new Hono<Env>();

@@ -25,6 +25,7 @@ vi.mock("../../config", () => ({
 vi.mock("../../supabaseClient", () => ({ supabase: {} }));
 
 import { TerminalOverlays } from "../TerminalOverlays";
+import { shouldShowNag } from "../winrarNag";
 import type { GameState, Message } from "../../hooks/useGameState";
 
 /* ── Factory helpers ─────────────────────────────────────────── */
@@ -186,7 +187,7 @@ describe("WinRAR nag: TerminalOverlays production wiring", () => {
     expect(props.onUpgradeDismiss).toHaveBeenCalled();
   });
 
-  it("passes correct isUpgraded=false for free-tier users to UpgradeOverlay", () => {
+  it("shows free-tier quota status for free-tier users in UpgradeOverlay", () => {
     const state = makeGameState({ proKey: undefined, proKeyHash: undefined });
     const { container } = renderOverlays({ showUpgrade: true, state });
     const text = container.textContent ?? "";
@@ -207,18 +208,6 @@ describe("WinRAR nag: TerminalOverlays production wiring", () => {
 });
 
 describe("WinRAR nag: shouldShowNag helper", () => {
-  // Import the actual helper from Terminal module to test the real decision logic
-  // shouldShowNag is a module-level function: returns true when free-tier + quota <= 0.
-
-  function shouldShowNag(
-    effectiveApiKey: string | undefined,
-    proKey: string | undefined,
-    proKeyHash: string | undefined,
-    quotaPercent: number,
-  ): boolean {
-    return !effectiveApiKey && !proKey && !proKeyHash && quotaPercent <= 0;
-  }
-
   it("returns false for BYOK users even with depleted quota", () => {
     expect(shouldShowNag("sk-user-key", undefined, undefined, 0)).toBe(false);
   });
