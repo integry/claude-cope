@@ -166,6 +166,15 @@ function Terminal() {
     }
   }, [playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState, setShowUpgrade]);
 
+  // WinRAR nag: check free tier quota exhaustion and defer command behind the nag overlay
+  const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
+    if (!effectiveApiKey && !state.proKey && !state.proKeyHash && state.economy.quotaPercent <= 0) {
+      handleQuotaLockout(command);
+      return true;
+    }
+    return false;
+  }, [state.proKey, state.proKeyHash, state.economy.quotaPercent, handleQuotaLockout]);
+
   const handleInstantBan = useCallback(() => {
     triggerInstantBan({ setInstantBanReady, setIsProcessing, playError, setHistory });
   }, [setIsProcessing, playError, setHistory]);
@@ -202,16 +211,6 @@ function Terminal() {
       inputRef.current?.focus();
     }
   }, []);
-
-  // WinRAR nag: when free tier quota is exhausted, show upgrade overlay and defer command
-  const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
-    if (!effectiveApiKey && !state.proKey && !state.proKeyHash && state.economy.quotaPercent <= 0) {
-      pendingNagCommandRef.current = command;
-      setShowUpgrade(true);
-      return true;
-    }
-    return false;
-  }, [state.proKey, state.proKeyHash, state.economy.quotaPercent, setShowUpgrade]);
 
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
     if (state.buddy.type) {
@@ -288,9 +287,8 @@ function Terminal() {
     processCommand(command);
   };
 
-  // WinRAR nag: ESC replays the pending command (the user must press ESC every
-  // time — faithful to the WinRAR UX). Click/backdrop/[x]/footer dismissals
-  // simply drop the pending command without executing it.
+  // WinRAR nag: any dismissal (ESC, backdrop click, [x], footer tap) replays
+  // the pending command. The user must dismiss every time — faithful to WinRAR UX.
   const handleUpgradeNagClose = useCallback(() => {
     setShowUpgrade(false);
     if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
@@ -301,13 +299,6 @@ function Terminal() {
       setCommandHistory((prev) => [...prev, command]);
       processCommandRef.current(command);
     }
-  }, [setShowUpgrade]);
-
-  // Click/backdrop/[x]/footer dismiss: close overlay and drop the pending command
-  const handleUpgradeDismissDrop = useCallback(() => {
-    setShowUpgrade(false);
-    pendingNagCommandRef.current = null;
-    if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
   }, [setShowUpgrade]);
 
   const { handleKeyDown } = useTerminalKeyboard({
@@ -404,7 +395,7 @@ function Terminal() {
         setShowSynergize={setShowSynergize}
         setIsProcessing={setIsProcessing}
         setHistory={setHistory}
-        onUpgradeDismiss={handleUpgradeDismissDrop}
+        onUpgradeDismiss={handleUpgradeNagClose}
       />
       <TerminalFooter closeAllOverlays={closeAllOverlaysAndClearNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
     </div>
