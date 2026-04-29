@@ -1,6 +1,5 @@
 import { type Context, Hono } from "hono";
-import { getClientIp } from "../middleware/rateLimiter";
-import { createRateLimiter } from "../middleware/rateLimiter";
+import { getClientIp, createRateLimiter } from "../middleware/rateLimiter";
 import { normalizeHostname, getExpectedHostnameConfig as getHostnameConfig } from "../utils/hostname";
 
 type Env = {

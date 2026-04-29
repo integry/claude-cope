@@ -202,15 +202,32 @@ async function handleErrorResponse(
   const pushMessage = (message: Message) =>
     setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading"), message]);
 
+  const triggerReverification = () => {
+    onError?.();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(TURNSTILE_REQUIRED_EVENT));
+    }
+    removeLoading();
+  };
+
   const handlers: Record<number, () => Promise<boolean>> = {
     403: async () => {
       const errorData = await res.json().catch(() => null);
       if (errorData?.error !== "Human verification required") return false;
-      onError?.();
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent(TURNSTILE_REQUIRED_EVENT));
+      triggerReverification();
+      return true;
+    },
+    503: async () => {
+      const errorData = await res.json().catch(() => null);
+      if (errorData?.error === "Session unavailable") {
+        triggerReverification();
+        return true;
       }
-      removeLoading();
+      onError?.();
+      pushMessage({
+        role: "error",
+        content: `[❌ Error] ${errorData?.error ?? "Service temporarily unavailable"} (HTTP 503)`,
+      });
       return true;
     },
     402: async () => {
@@ -340,6 +357,7 @@ export function submitChatMessage(opts: {
         return fetch(`${API_BASE}/api/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
             chatMessages,
             modes,
