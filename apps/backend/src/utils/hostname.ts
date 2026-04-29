@@ -10,8 +10,31 @@ function isValidIpv4(value: string): boolean {
   });
 }
 
+function isValidIpv6Prefix(prefix: string): boolean {
+  if (!/^[0-9a-f:]+$/i.test(prefix)) return false;
+  if (prefix.includes(":::")) return false;
+  const doubleColonCount = (prefix.match(/::/g) || []).length;
+  if (doubleColonCount > 1) return false;
+  const groups = prefix.split(":").filter((g) => g !== "");
+  if (doubleColonCount === 0 && groups.length !== 6) return false;
+  if (doubleColonCount === 1 && groups.length > 6) return false;
+  return groups.every((g) => g.length <= 4 && /^[0-9a-f]+$/i.test(g));
+}
+
+function isValidPureIpv6(addr: string): boolean {
+  if (!/^[0-9a-f:]+$/i.test(addr)) return false;
+  if (addr.includes(":::")) return false;
+  if (addr.startsWith(":") && !addr.startsWith("::")) return false;
+  if (addr.endsWith(":") && !addr.endsWith("::")) return false;
+  const doubleColonCount = (addr.match(/::/g) || []).length;
+  if (doubleColonCount > 1) return false;
+  const groups = addr.split(":");
+  if (doubleColonCount === 0 && groups.length !== 8) return false;
+  if (doubleColonCount === 1 && groups.length > 8) return false;
+  return groups.every((g) => g.length <= 4 && (g.length === 0 || /^[0-9a-f]+$/i.test(g)));
+}
+
 function isValidIpv6(value: string): boolean {
-  // Accept bracketed IPv6 (e.g. [::1]) — extract the inner address
   const match = IPV6_BRACKET_PATTERN.exec(value);
   const addr = match ? match[1]! : value;
 
@@ -20,34 +43,11 @@ function isValidIpv6(value: string): boolean {
   if (lastColon !== -1) {
     const suffix = addr.slice(lastColon + 1);
     if (IPV4_PATTERN.test(suffix) && isValidIpv4(suffix)) {
-      // Validate the prefix portion as a valid IPv6 prefix
-      const prefix = addr.slice(0, lastColon + 1);
-      // Prefix must end with ":" and contain only hex and colons
-      if (!/^[0-9a-f:]+$/i.test(prefix)) return false;
-      if (prefix.includes(":::")) return false;
-      const doubleColonCount = (prefix.match(/::/g) || []).length;
-      if (doubleColonCount > 1) return false;
-      // The IPv4 suffix replaces the last two groups, so prefix can have up to 6 groups
-      const groups = prefix.split(":").filter((g) => g !== "");
-      if (doubleColonCount === 0 && groups.length !== 6) return false;
-      if (doubleColonCount === 1 && groups.length > 6) return false;
-      return groups.every((g) => g.length <= 4 && /^[0-9a-f]+$/i.test(g));
+      return isValidIpv6Prefix(addr.slice(0, lastColon + 1));
     }
   }
 
-  // Pure hex IPv6 address
-  if (!/^[0-9a-f:]+$/i.test(addr)) return false;
-  if (addr.includes(":::")) return false;
-  // Reject leading/trailing single colons that are not part of :: shorthand
-  if (addr.startsWith(":") && !addr.startsWith("::")) return false;
-  if (addr.endsWith(":") && !addr.endsWith("::")) return false;
-  const doubleColonCount = (addr.match(/::/g) || []).length;
-  if (doubleColonCount > 1) return false;
-  const groups = addr.split(":");
-  if (doubleColonCount === 0 && groups.length !== 8) return false;
-  if (doubleColonCount === 1 && groups.length > 8) return false;
-  // Each non-empty group must be 1-4 hex digits
-  return groups.every((g) => g.length <= 4 && (g.length === 0 || /^[0-9a-f]+$/i.test(g)));
+  return isValidPureIpv6(addr);
 }
 
 function isValidPort(port: string): boolean {
