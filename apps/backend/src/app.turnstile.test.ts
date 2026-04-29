@@ -139,8 +139,43 @@ describe("Turnstile verification and protection", () => {
       { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv },
     );
     expect(res.status).toBe(403);
-    await expect(res.json()).resolves.toEqual({ error: "Human verification required" });
+    await expect(res.json()).resolves.toEqual({
+      error: "Human verification required",
+      reason: "human_verification_required",
+    });
     expect(usageKv.get).toHaveBeenCalled();
+  });
+
+  it("rejects /api/chat with 503 and a reason when bot protection storage is unavailable", async () => {
+    const res = await app.request(
+      "/api/chat",
+      { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ chatMessages: [] }) },
+      { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret" },
+    );
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toEqual({
+      error: "Bot protection storage is not available",
+      reason: "storage_unavailable",
+    });
+  });
+
+  it("rejects /api/chat with 503 and a reason when the verification check fails", async () => {
+    const usageKv = { get: vi.fn().mockRejectedValue(new Error("kv down")) };
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await app.request(
+        "/api/chat",
+        { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ chatMessages: [] }) },
+        { ALLOWED_ORIGINS: "http://localhost:5173", TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv },
+      );
+      expect(res.status).toBe(503);
+      await expect(res.json()).resolves.toEqual({
+        error: "Verification check failed",
+        reason: "verification_check_failed",
+      });
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it("stores human flag in USAGE_KV on successful verification", async () => {

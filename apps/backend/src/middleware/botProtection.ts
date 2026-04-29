@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from "hono";
+import { BOT_PROTECTION_REASON } from "@claude-cope/shared/turnstile";
 
 export const botProtection: MiddlewareHandler = async (c, next) => {
   const secret = (c.env as { TURNSTILE_SECRET_KEY?: string } | undefined)?.TURNSTILE_SECRET_KEY;
@@ -12,11 +13,11 @@ export const botProtection: MiddlewareHandler = async (c, next) => {
   const sessionId = c.get("sessionId") as string | undefined;
 
   if (!sessionId) {
-    return c.json({ error: "Session unavailable" }, 503);
+    return c.json({ error: "Session unavailable", reason: BOT_PROTECTION_REASON.SESSION_UNAVAILABLE }, 503);
   }
 
   if (!usageKv) {
-    return c.json({ error: "Bot protection storage is not available" }, 503);
+    return c.json({ error: "Bot protection storage is not available", reason: BOT_PROTECTION_REASON.STORAGE_UNAVAILABLE }, 503);
   }
 
   let isHuman: string | null;
@@ -24,10 +25,10 @@ export const botProtection: MiddlewareHandler = async (c, next) => {
     isHuman = await usageKv.get(`human:${sessionId}`);
   } catch (e) {
     console.error("KV read error in bot protection", e);
-    return c.json({ error: "Verification check failed" }, 503);
+    return c.json({ error: "Verification check failed", reason: BOT_PROTECTION_REASON.VERIFICATION_CHECK_FAILED }, 503);
   }
   if (!isHuman) {
-    return c.json({ error: "Human verification required" }, 403);
+    return c.json({ error: "Human verification required", reason: BOT_PROTECTION_REASON.HUMAN_VERIFICATION_REQUIRED }, 403);
   }
 
   await next();

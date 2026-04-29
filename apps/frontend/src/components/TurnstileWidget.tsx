@@ -34,7 +34,7 @@ type VerifyTokenResult = {
 
 type BackendVerificationStatus =
   | { status: "enabled" | "disabled" | "verified" }
-  | { status: "unavailable"; message: string };
+  | { status: "unavailable" | "misconfigured"; message: string };
 
 function parseBackendVerificationStatus(data: unknown): BackendVerificationStatus {
   const payload = data as
@@ -49,7 +49,7 @@ function parseBackendVerificationStatus(data: unknown): BackendVerificationStatu
 
   if (payload?.status === VERIFY_STATUS.MISCONFIGURED) {
     return {
-      status: "unavailable",
+      status: "misconfigured",
       message: "Human verification is unavailable because the server is misconfigured.",
     };
   }
@@ -287,12 +287,8 @@ export default function TurnstileWidget({
         onVerified();
         return;
       }
-      if (status.status === "unavailable") {
-        // Soft-fail: let the user through to the terminal. The backend's
-        // botProtection middleware on /api/chat is the real gate — blocking
-        // the entire UI here turns a KV/session outage into a full-site outage.
-        console.warn("[turnstile] verification infrastructure unavailable, allowing passthrough:", status.message);
-        onVerified();
+      if (status.status === "unavailable" || status.status === "misconfigured") {
+        onError(status.message);
         return;
       }
 

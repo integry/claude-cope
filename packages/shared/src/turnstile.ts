@@ -38,3 +38,13 @@ export const MISCONFIGURED_REASON = {
 } as const;
 
 export type MisconfiguredReason = (typeof MISCONFIGURED_REASON)[keyof typeof MISCONFIGURED_REASON];
+
+/** Reason strings for /api/chat bot-protection failures */
+export const BOT_PROTECTION_REASON = {
+  HUMAN_VERIFICATION_REQUIRED: "human_verification_required",
+  SESSION_UNAVAILABLE: "session_unavailable",
+  STORAGE_UNAVAILABLE: "storage_unavailable",
+  VERIFICATION_CHECK_FAILED: "verification_check_failed",
+} as const;
+
+export type BotProtectionReason = (typeof BOT_PROTECTION_REASON)[keyof typeof BOT_PROTECTION_REASON];

@@ -11,6 +11,7 @@ import { ALL_ACHIEVEMENTS } from "../game/achievements";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import { TURNSTILE_REQUIRED_EVENT } from "../turnstileEvents";
+import { BOT_PROTECTION_REASON } from "@claude-cope/shared/turnstile";
 
 export type BuddyInterjectionResult = {
   message: Message;
@@ -210,16 +211,23 @@ async function handleErrorResponse(
     removeLoading();
   };
 
+  const readErrorData = () => res.json().catch(() => null);
+  const isBotProtectionFailure = (reason: unknown) =>
+    reason === BOT_PROTECTION_REASON.HUMAN_VERIFICATION_REQUIRED
+    || reason === BOT_PROTECTION_REASON.SESSION_UNAVAILABLE
+    || reason === BOT_PROTECTION_REASON.STORAGE_UNAVAILABLE
+    || reason === BOT_PROTECTION_REASON.VERIFICATION_CHECK_FAILED;
+
   const handlers: Record<number, () => Promise<boolean>> = {
     403: async () => {
-      const errorData = await res.json().catch(() => null);
-      if (errorData?.error !== "Human verification required") return false;
+      const errorData = await readErrorData();
+      if (!isBotProtectionFailure(errorData?.reason)) return false;
       triggerReverification();
       return true;
     },
     503: async () => {
-      const errorData = await res.json().catch(() => null);
-      if (errorData?.error === "Session unavailable") {
+      const errorData = await readErrorData();
+      if (isBotProtectionFailure(errorData?.reason)) {
         triggerReverification();
         return true;
       }
