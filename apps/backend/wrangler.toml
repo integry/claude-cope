@@ -22,6 +22,8 @@ id = "placeholder-quota-kv-id"
 binding = "RATE_LIMIT_KV"
 id = "placeholder-rate-limit-kv-id"
 
+# Legacy simple rate limiter — retained for /api/verify only.
+# /api/chat uses RATE_LIMIT_KV + WAF rules instead (see docs/rate-limit-rollout.md).
 [[unsafe.bindings]]
 name = "RATE_LIMITER"
 type = "ratelimit"

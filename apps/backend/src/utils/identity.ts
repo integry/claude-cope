@@ -22,17 +22,25 @@ function getCurrentDateString(): string {
   return `${y}-${m}-${d}`;
 }
 
+const hmacKeyCache = new Map<string, CryptoKey>();
+
 export async function hashIpDaily(ip: string, pepper: string, dateStr?: string): Promise<string> {
   const date = dateStr ?? getCurrentDateString();
   const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(pepper),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(ip + date));
+
+  let key = hmacKeyCache.get(pepper);
+  if (!key) {
+    key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(pepper),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    hmacKeyCache.set(pepper, key);
+  }
+
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(ip + "|" + date));
 
   return Array.from(new Uint8Array(signature))
     .map((b) => b.toString(16).padStart(2, "0"))

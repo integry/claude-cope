@@ -11,20 +11,6 @@ function createMockKV(counters: Map<string, string> = new Map()) {
   };
 }
 
-function createMockDB(licenses: Map<string, { status: string; last_activated_at: string }> = new Map()) {
-  const stmt = () => ({
-    bind: (...args: unknown[]) => ({
-      first: vi.fn(async () => licenses.get(args[0] as string) ?? null),
-      run: vi.fn(async () => ({ success: true })),
-      all: vi.fn(async () => ({ results: [] })),
-    }),
-    run: vi.fn(async () => ({ success: true })),
-    all: vi.fn(async () => ({ results: [] })),
-    first: vi.fn(async () => null),
-  });
-  return { prepare: vi.fn(stmt) };
-}
-
 const TEST_PEPPER = "test-pepper-for-rate-limiter";
 
 function makeEnv(overrides: Record<string, unknown> = {}) {
@@ -90,94 +76,9 @@ describe("rateLimiter middleware (hybrid KV)", () => {
     expect(kv.put).toHaveBeenCalled();
   });
 
-  it("bypasses rate limiter when proKeyHash is present and license is active", async () => {
-    const licenses = new Map([
-      ["abc123", { status: "active", last_activated_at: new Date().toISOString() }],
-    ]);
-    const db = createMockDB(licenses);
-
-    const res = await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-forwarded-for": "1.2.3.4",
-        },
-        body: JSON.stringify({ message: "hello", proKeyHash: "abc123" }),
-      },
-      makeEnv({ RATE_LIMIT_KV: kv, DB: db }),
-    );
-
-    expect(res.status).not.toBe(429);
-    expect(kv.get).not.toHaveBeenCalled();
-  });
-
-  it("does NOT bypass rate limiter when proKeyHash is present but license is revoked", async () => {
-    const licenses = new Map([
-      ["revoked-key", { status: "revoked", last_activated_at: new Date().toISOString() }],
-    ]);
-    const db = createMockDB(licenses);
-
-    await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-forwarded-for": "1.2.3.4",
-        },
-        body: JSON.stringify({ message: "hello", proKeyHash: "revoked-key" }),
-      },
-      makeEnv({ RATE_LIMIT_KV: kv, DB: db }),
-    );
-
-    expect(kv.get).toHaveBeenCalled();
-  });
-
-  it("does NOT bypass rate limiter when proKeyHash is unknown", async () => {
-    const db = createMockDB(new Map());
-
-    await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-forwarded-for": "1.2.3.4",
-        },
-        body: JSON.stringify({ message: "hello", proKeyHash: "unknown-key" }),
-      },
-      makeEnv({ RATE_LIMIT_KV: kv, DB: db }),
-    );
-
-    expect(kv.get).toHaveBeenCalled();
-  });
-
-  it("does NOT bypass rate limiter when proKeyHash is present but DB is unavailable", async () => {
-    await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-forwarded-for": "1.2.3.4",
-        },
-        body: JSON.stringify({ message: "hello", proKeyHash: "abc123" }),
-      },
-      makeEnv({ RATE_LIMIT_KV: kv }),
-    );
-
-    expect(kv.get).toHaveBeenCalled();
-  });
-
-  it("bypasses rate limiter with valid proKeyHash even when limit would be exceeded", async () => {
+  it("applies rate limits regardless of proKeyHash in body", async () => {
     const counters = new Map<string, string>();
     const hotKv = createMockKV(counters);
-    const licenses = new Map([
-      ["pro-user-key", { status: "active", last_activated_at: new Date().toISOString() }],
-    ]);
-    const db = createMockDB(licenses);
 
     const headers = {
       "Content-Type": "application/json",
@@ -185,15 +86,16 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       Cookie: "cope_session_id=fixed-session",
     };
 
-    for (let i = 0; i < 10; i++) {
+    const burst = BUCKETS.find((b) => b.name === "burst")!;
+    for (let i = 0; i < effectiveLimit(burst); i++) {
       await app.request(
         "/api/chat",
         {
           method: "POST",
           headers,
-          body: JSON.stringify({ message: "hello" }),
+          body: JSON.stringify({ message: "hello", proKeyHash: "some-key" }),
         },
-        makeEnv({ RATE_LIMIT_KV: hotKv, DB: db }),
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
       );
     }
 
@@ -202,12 +104,12 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       {
         method: "POST",
         headers,
-        body: JSON.stringify({ message: "hello", proKeyHash: "pro-user-key" }),
+        body: JSON.stringify({ message: "hello", proKeyHash: "some-key" }),
       },
-      makeEnv({ RATE_LIMIT_KV: hotKv, DB: db }),
+      makeEnv({ RATE_LIMIT_KV: hotKv }),
     );
 
-    expect(res.status).not.toBe(429);
+    expect(res.status).toBe(429);
   });
 
   describe("lore 429 response shape", () => {
@@ -296,21 +198,4 @@ describe("rateLimiter middleware (hybrid KV)", () => {
     });
   });
 
-  it("does not bypass rate limiter when proKeyHash is falsy", async () => {
-    const res = await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-forwarded-for": "1.2.3.4",
-        },
-        body: JSON.stringify({ message: "hello", proKeyHash: "" }),
-      },
-      makeEnv({ RATE_LIMIT_KV: kv }),
-    );
-
-    expect(res.status).not.toBe(429);
-    expect(kv.get).toHaveBeenCalled();
-  });
 });

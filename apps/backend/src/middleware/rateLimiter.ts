@@ -3,7 +3,6 @@ import { getClientIp } from "../utils/clientIp";
 import { resolveRequestIdentity } from "../utils/identity";
 import { capturePostHogEvent } from "../utils/posthog";
 import { checkRateLimits } from "../utils/rateLimitBuckets";
-import { isLicenseActive } from "../utils/profile";
 
 export { getClientIp } from "../utils/clientIp";
 
@@ -51,7 +50,7 @@ export const rateLimiter: MiddlewareHandler = async (c, next) => {
 
   if (!kv) {
     if (!kvWarningLogged) {
-      console.warn("RATE_LIMIT_KV not configured – rate limiting disabled");
+      console.warn("RATE_LIMIT_KV not configured – /api/chat rate limiting disabled (fail-open). WAF rules are the only backstop.");
       kvWarningLogged = true;
     }
     return next();
@@ -60,25 +59,13 @@ export const rateLimiter: MiddlewareHandler = async (c, next) => {
   const pepper = env.IP_HASH_PEPPER as string | undefined;
   if (!pepper) {
     if (!pepperWarningLogged) {
-      console.error("MISCONFIGURATION: RATE_LIMIT_KV is bound but IP_HASH_PEPPER is missing. Set IP_HASH_PEPPER via `wrangler secret put IP_HASH_PEPPER`.");
+      console.error("MISCONFIGURATION: RATE_LIMIT_KV is bound but IP_HASH_PEPPER is missing. Chat rate limiting is disabled (fail-closed 503). Set IP_HASH_PEPPER via `wrangler secret put IP_HASH_PEPPER`.");
       pepperWarningLogged = true;
     }
     return c.json(
       { error: "Service temporarily unavailable. Please try again later." },
       503,
     );
-  }
-
-  try {
-    const body = await c.req.raw.clone().json() as Record<string, unknown>;
-    if (body?.proKeyHash && typeof body.proKeyHash === "string") {
-      const db = env.DB as D1Database | undefined;
-      if (db && await isLicenseActive(db, body.proKeyHash)) {
-        return next();
-      }
-    }
-  } catch {
-    // Body parsing failed – continue with rate limiting
   }
 
   const sessionId = (c.get("sessionId") as string) || "anonymous";

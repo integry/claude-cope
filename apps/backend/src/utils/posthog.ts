@@ -10,6 +10,7 @@ type PostHogEnv = {
 };
 
 const DEFAULT_HOST = "https://app.posthog.com";
+const CAPTURE_TIMEOUT_MS = 5000;
 
 let captureFailureLogged = false;
 
@@ -32,14 +33,22 @@ export async function capturePostHogEvent(
     },
   });
 
-  const response = await fetch(`${host}/capture/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CAPTURE_TIMEOUT_MS);
 
-  if (!response.ok && !captureFailureLogged) {
-    console.warn(`PostHog capture failed: ${response.status} ${response.statusText}`);
-    captureFailureLogged = true;
+  try {
+    const response = await fetch(`${host}/capture/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      signal: controller.signal,
+    });
+
+    if (!response.ok && !captureFailureLogged) {
+      console.warn(`PostHog capture failed: ${response.status} ${response.statusText}`);
+      captureFailureLogged = true;
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 }
