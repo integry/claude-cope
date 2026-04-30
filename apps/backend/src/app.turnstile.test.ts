@@ -372,6 +372,41 @@ describe("Turnstile verification and protection", () => {
       errorSpy.mockRestore();
     }
   });
+  it("uses daily-rotating IP hash keys for verify-status rate limiting", async () => {
+    const rateLimitKv1 = { get: vi.fn().mockResolvedValue(null), put: vi.fn() };
+    const env1 = {
+      TURNSTILE_SECRET_KEY: "secret",
+      USAGE_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn() },
+      RATE_LIMIT_KV: rateLimitKv1,
+      IP_HASH_PEPPER: "test-pepper",
+    };
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-29T12:00:00Z"));
+    const res1 = await requestVerify("GET", env1, undefined, ipVerifyOriginHeaders);
+    expect(res1.status).toBe(200);
+    const keyDay1 = rateLimitKv1.get.mock.calls[0][0] as string;
+
+    const rateLimitKv2 = { get: vi.fn().mockResolvedValue(null), put: vi.fn() };
+    const env2 = {
+      TURNSTILE_SECRET_KEY: "secret",
+      USAGE_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn() },
+      RATE_LIMIT_KV: rateLimitKv2,
+      IP_HASH_PEPPER: "test-pepper",
+    };
+
+    vi.setSystemTime(new Date("2026-04-30T12:00:00Z"));
+    const res2 = await requestVerify("GET", env2, undefined, ipVerifyOriginHeaders);
+    expect(res2.status).toBe(200);
+    const keyDay2 = rateLimitKv2.get.mock.calls[0][0] as string;
+
+    expect(keyDay1).not.toBe(keyDay2);
+    expect(keyDay1).toMatch(/^rl:verify-status:/);
+    expect(keyDay2).toMatch(/^rl:verify-status:/);
+
+    vi.useRealTimers();
+  });
+
   it("uses a separate verify-submit rate limiter key that never contains raw IPs", async () => {
     const rateLimitKv = { get: vi.fn().mockResolvedValue(null), put: vi.fn() };
     const env = {

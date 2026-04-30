@@ -388,6 +388,11 @@ describe("rateLimiter middleware (hybrid KV)", () => {
         }),
       );
 
+      const posthogCall = vi.mocked(capturePostHogEvent).mock.calls[0];
+      const sentDistinctId = (posthogCall[1] as { distinct_id: string }).distinct_id;
+      expect(sentDistinctId).toMatch(/^[0-9a-f]{64}$/);
+      expect(sentDistinctId).not.toBe("fixed-session");
+
       vi.mocked(capturePostHogEvent).mockClear();
 
       const subsequentRes = await app.request(
