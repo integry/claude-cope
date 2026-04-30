@@ -16,14 +16,13 @@ export type PolarLicenseKeyItem = {
   status: string;
 };
 
-export function pickBestLicenseKey(granted: PolarLicenseKeyItem[], checkoutCreatedAt?: string): PolarLicenseKeyItem {
+export function pickBestLicenseKey(granted: PolarLicenseKeyItem[], checkoutCreatedAt?: string): PolarLicenseKeyItem | null {
   granted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  if (!checkoutCreatedAt || granted.length <= 1) return granted[0]!;
+  if (!checkoutCreatedAt) return granted[0] ?? null;
   const checkoutTime = new Date(checkoutCreatedAt).getTime();
-  return granted.reduce((best, key) => {
-    const t = new Date(key.created_at).getTime();
-    return t >= checkoutTime && t < new Date(best.created_at).getTime() ? key : best;
-  }, granted[0]!);
+  const eligible = granted.filter((k) => new Date(k.created_at).getTime() >= checkoutTime);
+  if (!eligible.length) return null;
+  return eligible[eligible.length - 1]!;
 }
 
 export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: string, organizationId: string): Promise<{ customerId: string; createdAt?: string } | { error: string; status: ContentfulStatusCode }> {

@@ -74,10 +74,15 @@ account.post("/checkout-license", async (c) => {
   const result = await fetchCheckoutCustomerId(body.checkoutId, accessToken, organizationId);
   if ("error" in result) return c.json({ error: result.error }, result.status);
 
-  const lkResp = await fetch(
-    `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(result.customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=100&sorting=-created_at`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+  let lkResp: Response;
+  try {
+    lkResp = await fetch(
+      `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(result.customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=100&sorting=-created_at`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+  } catch {
+    return c.json({ error: "Unable to reach Polar — please try again" }, 502);
+  }
   if (!lkResp.ok) return c.json({ error: "Failed to list license keys" }, 502);
   const lkData = await lkResp.json() as { items?: PolarLicenseKeyItem[] };
 
@@ -85,6 +90,7 @@ account.post("/checkout-license", async (c) => {
   if (!granted.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
 
   const best = pickBestLicenseKey(granted, result.createdAt);
+  if (!best) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
   if (kv) await kv.put(`checkout_used:${body.checkoutId}`, best.key, { expirationTtl: 60 * 60 * 24 });
   return c.json({ licenseKey: best.key });
 });

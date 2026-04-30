@@ -230,7 +230,8 @@ function Terminal() {
           if (res.status !== 409) break;
         }
         strip();
-        setHistory((prev) => [...prev, { role: "error", content: `[❌] License activation failed: ${lastData.error ?? "Unknown error"}. If your license arrived by email, you can run \`/sync <COPE-XXX>\` manually.` }]);
+        const manualHint = lastData.licenseKey ? ` Your key: \`${lastData.licenseKey}\` — run \`/sync ${lastData.licenseKey}\` manually.` : " If your license arrived by email, you can run `/sync <COPE-XXX>` manually.";
+        setHistory((prev) => [...prev, { role: "error", content: `[❌] License activation failed: ${lastData.error ?? "Unknown error"}.${manualHint}` }]);
       } catch {
         setHistory((prev) => [...prev, { role: "error", content: "[❌] Network error during license activation. Check your email for the license key and run `/sync <COPE-XXX>` manually." }]);
       }
