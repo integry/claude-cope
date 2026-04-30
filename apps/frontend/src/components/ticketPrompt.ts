@@ -53,7 +53,7 @@ export async function fetchRandomTicketPrompt(
         role: "system",
         content:
           `[📋 INCOMING TICKET] Your PM has assigned you a ticket:\n\n` +
-          `===\n\n` +
+          `---\n\n` +
           `**${ticket.title}**\n\n` +
           senderLine +
           `> ${body}\n\n` +

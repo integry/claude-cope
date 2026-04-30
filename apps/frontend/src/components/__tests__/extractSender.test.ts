@@ -143,4 +143,40 @@ describe("extractSender", () => {
       body: "prototype is ready.",
     });
   });
+
+  it("handles VP-style titles in body without false-positive on 'from'", () => {
+    expect(extractSender("VP of Engineering from the meeting, please follow up.")).toBeNull();
+  });
+
+  it("rejects 'from the' as article-prefixed department", () => {
+    expect(extractSender("Updates from the sprint retrospective are ready.")).toBeNull();
+  });
+
+  it("rejects 'from a' as article-prefixed department", () => {
+    expect(extractSender("Feedback from a customer survey needs review.")).toBeNull();
+  });
+
+  it("handles multi-word department names", () => {
+    const result = extractSender(
+      "Marcus from Cloud Infrastructure Platform here, the CI runner pool is exhausted.",
+    );
+    expect(result).toEqual({
+      sender: "Marcus (Cloud Infrastructure Platform)",
+      body: "the CI runner pool is exhausted.",
+    });
+  });
+
+  it("handles description starting with different clause before sender", () => {
+    expect(extractSender("As discussed, Brenda from Platform Governance needs help.")).toBeNull();
+  });
+
+  it("handles semicolon as delimiter", () => {
+    const result = extractSender(
+      "Priya from Data Science here; the model is overfitting.",
+    );
+    expect(result).toEqual({
+      sender: "Priya (Data Science)",
+      body: "the model is overfitting.",
+    });
+  });
 });

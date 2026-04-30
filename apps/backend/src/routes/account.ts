@@ -3,7 +3,7 @@ import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, pickBestLicenseKey, fetchCheckoutCustomerId } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, pickAllLicenseKeys, fetchCheckoutCustomerId } from "./accountHelpers";
 import type { SyncBody, PolarLicenseKeyItem } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -68,7 +68,14 @@ account.post("/checkout-license", async (c) => {
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
   if (kv) {
     const cached = await kv.get(`checkout_used:${body.checkoutId}`);
-    if (cached) return c.json({ licenseKey: cached });
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as string[];
+        return c.json({ licenseKey: parsed[0], allKeys: parsed });
+      } catch {
+        return c.json({ licenseKey: cached, allKeys: [cached] });
+      }
+    }
   }
 
   const result = await fetchCheckoutCustomerId(body.checkoutId, accessToken, organizationId);
@@ -89,10 +96,11 @@ account.post("/checkout-license", async (c) => {
   const granted = (lkData.items ?? []).filter((l) => l.status === "granted");
   if (!granted.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
 
-  const best = pickBestLicenseKey(granted, result.createdAt);
-  if (!best) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
-  if (kv) await kv.put(`checkout_used:${body.checkoutId}`, best.key, { expirationTtl: 60 * 60 * 24 });
-  return c.json({ licenseKey: best.key });
+  const allKeys = pickAllLicenseKeys(granted, result.createdAt);
+  if (!allKeys.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
+  const allKeyStrings = allKeys.map((k) => k.key);
+  if (kv) await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(allKeyStrings), { expirationTtl: 60 * 60 * 24 });
+  return c.json({ licenseKey: allKeyStrings[0], allKeys: allKeyStrings });
 });
 
 account.post("/sync", async (c) => {

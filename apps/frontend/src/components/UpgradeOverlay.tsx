@@ -88,6 +88,7 @@ function MobileLayout({
     margin: 0,
   } as const;
 
+  // Links open in same tab so the app receives checkout_id on return navigation.
   const mobileButton = (
     label: string,
     url: string,

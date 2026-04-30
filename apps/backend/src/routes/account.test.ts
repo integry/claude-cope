@@ -361,6 +361,58 @@ describe("POST /api/account/shill", () => {
   });
 });
 
+describe("POST /api/account/checkout-license", () => {
+  it("returns 400 when checkoutId is missing", async () => {
+    const res = await postJSON("/api/account/checkout-license", {}, {
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+    expect(res.status).toBe(400);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("checkoutId");
+  });
+
+  it("returns 500 when Polar is not configured", async () => {
+    const res = await postJSON("/api/account/checkout-license", { checkoutId: "co_123" }, {});
+    expect(res.status).toBe(500);
+  });
+
+  it("returns cached key from KV on repeated calls", async () => {
+    const kv = mockKV({ "checkout_used:co_123": JSON.stringify(["COPE-ABC"]) });
+    const res = await app.request("/api/account/checkout-license", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: "cope_session_id=s" },
+      body: JSON.stringify({ checkoutId: "co_123" }),
+    }, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      POLAR_ACCESS_TOKEN: "tok",
+      POLAR_ORGANIZATION_ID: "org",
+      QUOTA_KV: kv,
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json() as { licenseKey: string; allKeys: string[] };
+    expect(data.licenseKey).toBe("COPE-ABC");
+    expect(data.allKeys).toEqual(["COPE-ABC"]);
+  });
+
+  it("handles legacy cached string (not JSON array) gracefully", async () => {
+    const kv = mockKV({ "checkout_used:co_old": "COPE-LEGACY" });
+    const res = await app.request("/api/account/checkout-license", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: "cope_session_id=s" },
+      body: JSON.stringify({ checkoutId: "co_old" }),
+    }, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      POLAR_ACCESS_TOKEN: "tok",
+      POLAR_ORGANIZATION_ID: "org",
+      QUOTA_KV: kv,
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json() as { licenseKey: string; allKeys: string[] };
+    expect(data.licenseKey).toBe("COPE-LEGACY");
+    expect(data.allKeys).toEqual(["COPE-LEGACY"]);
+  });
+});
+
 describe("GET /api/account/me", () => {
   it("returns found: false when KV is not configured", async () => {
     const res = await app.request("/api/account/me", {
