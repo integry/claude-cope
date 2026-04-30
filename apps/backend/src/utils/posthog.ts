@@ -11,8 +11,9 @@ type PostHogEnv = {
 
 const DEFAULT_HOST = "https://app.posthog.com";
 const CAPTURE_TIMEOUT_MS = 5000;
+const FAILURE_LOG_INTERVAL_MS = 5 * 60 * 1000;
 
-let captureFailureLogged = false;
+let lastFailureLoggedAt = 0;
 
 export async function capturePostHogEvent(
   env: PostHogEnv,
@@ -44,14 +45,14 @@ export async function capturePostHogEvent(
       signal: controller.signal,
     });
 
-    if (!response.ok && !captureFailureLogged) {
+    if (!response.ok && Date.now() - lastFailureLoggedAt >= FAILURE_LOG_INTERVAL_MS) {
       console.warn(`PostHog capture failed: ${response.status} ${response.statusText}`);
-      captureFailureLogged = true;
+      lastFailureLoggedAt = Date.now();
     }
   } catch (err) {
-    if (!captureFailureLogged) {
+    if (Date.now() - lastFailureLoggedAt >= FAILURE_LOG_INTERVAL_MS) {
       console.warn("PostHog capture transport error:", err);
-      captureFailureLogged = true;
+      lastFailureLoggedAt = Date.now();
     }
   } finally {
     clearTimeout(timeout);

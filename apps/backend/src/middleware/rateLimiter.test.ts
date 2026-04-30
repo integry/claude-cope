@@ -112,6 +112,53 @@ describe("rateLimiter middleware (hybrid KV)", () => {
     expect(res.status).toBe(429);
   });
 
+  describe("no-session (anonymous) fallback", () => {
+    it("does not store raw IP in KV keys", async () => {
+      const rawIp = "203.0.113.42";
+
+      await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-forwarded-for": rawIp,
+          },
+          body: JSON.stringify({ message: "hello" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: kv }),
+      );
+
+      const allKeys = kv.put.mock.calls.map((call: unknown[]) => call[0] as string);
+      for (const key of allKeys) {
+        expect(key).not.toContain(rawIp);
+        expect(key).not.toContain(rawIp.replace(/\./g, ""));
+      }
+    });
+
+    it("does not store raw IP in KV values", async () => {
+      const rawIp = "203.0.113.42";
+
+      await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-forwarded-for": rawIp,
+          },
+          body: JSON.stringify({ message: "hello" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: kv }),
+      );
+
+      const allValues = kv.put.mock.calls.map((call: unknown[]) => call[1] as string);
+      for (const value of allValues) {
+        expect(value).not.toContain(rawIp);
+      }
+    });
+  });
+
   describe("lore 429 response shape", () => {
     async function exhaust(
       hotKv: ReturnType<typeof createMockKV>,

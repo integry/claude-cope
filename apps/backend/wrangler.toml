@@ -23,8 +23,9 @@ binding = "RATE_LIMIT_KV"
 id = "placeholder-rate-limit-kv-id"
 preview_id = "placeholder-rate-limit-kv-preview-id"
 
-# Legacy simple rate limiter — retained for /api/verify only.
+# Legacy simple rate limiter — used by /api/verify ONLY (see routes/verify.ts).
 # /api/chat uses RATE_LIMIT_KV + WAF rules instead (see docs/rate-limit-rollout.md).
+# TODO: migrate /api/verify to RATE_LIMIT_KV, then remove this binding.
 [[unsafe.bindings]]
 name = "RATE_LIMITER"
 type = "ratelimit"

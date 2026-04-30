@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { getClientIp } from "../utils/clientIp";
-import { resolveRequestIdentity } from "../utils/identity";
+import { resolveRequestIdentity, hashIpDaily } from "../utils/identity";
 import { capturePostHogEvent } from "../utils/posthog";
 import { checkRateLimits } from "../utils/rateLimitBuckets";
 
@@ -74,7 +74,7 @@ export const rateLimiter: MiddlewareHandler = async (c, next) => {
   try {
     const rawSessionId = c.get("sessionId") as string | undefined;
     const ip = getClientIp(c.req);
-    const sessionId = rawSessionId || `ip:${ip}`;
+    const sessionId = rawSessionId || `ip:${await hashIpDaily(ip, pepper)}`;
     identity = await resolveRequestIdentity(sessionId, c.req, pepper);
 
     result = await checkRateLimits(kv, {
