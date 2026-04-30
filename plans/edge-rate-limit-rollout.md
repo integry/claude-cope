@@ -103,7 +103,7 @@ that the WAF layer cannot enforce.
 | Per-user sustained limit | Worker KV limiter (`RATE_LIMIT_KV`) — advisory; see known limitations below |
 | Telemetry / alerting | PostHog server-side capture (`Rate_Limit_Triggered`) |
 | Legacy simple limiter | **Removed.** `/api/verify` now uses `RATE_LIMIT_KV` via `checkSimpleRateLimit` (same KV namespace as `/api/chat`). The `unsafe.bindings.RATE_LIMITER` block has been deleted from `wrangler.toml`. |
-| Missing `IP_HASH_PEPPER` | **Fail-closed (503)**. If `RATE_LIMIT_KV` is bound but `IP_HASH_PEPPER` is not set, the middleware returns 503 Service Unavailable. This forces operators to fix the misconfiguration before traffic flows. |
+| Missing `IP_HASH_PEPPER` | **Fail-closed (503) on all rate-limited paths**. If `RATE_LIMIT_KV` is bound but `IP_HASH_PEPPER` is not set, both `/api/chat` and `/api/verify` return 503 Service Unavailable. This affects Turnstile verification as well as chat — operators must set the pepper before either path can serve traffic. |
 
 ### 3.5 Known Limitation: KV Latency on `/api/chat`
 
@@ -133,6 +133,25 @@ but operators should understand that its counters are best-effort.
 If exact enforcement is required in the future, options include:
 - Durable Objects (atomic per-key, but higher latency and cost)
 - An external counter service with atomic increment support
+
+### 3.7 `/api/verify` Rate Limiting (KV-only, no WAF backstop)
+
+`/api/verify` (both `GET` and `POST`) uses the same `RATE_LIMIT_KV`-backed
+`checkSimpleRateLimit` as `/api/chat`, but does **not** have a corresponding
+Cloudflare WAF rate-limit rule. This means the non-atomic KV limiter is the
+only enforcement layer for verify traffic.
+
+This is acceptable because:
+- Verify endpoints are lower-value targets (no LLM spend behind them)
+- The configured limit (100 req/60 sec per IP) is generous enough that
+  the race-condition undercount is unlikely to matter in practice
+- Turnstile itself provides challenge-based abuse protection
+
+If `/api/verify` abuse becomes a concern, add a WAF rule matching:
+```txt
+(http.request.uri.path eq "/api/verify")
+```
+with the same rate-limit action parameters as Section 3.2.
 
 ---
 

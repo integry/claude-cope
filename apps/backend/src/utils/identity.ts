@@ -22,29 +22,45 @@ function getCurrentDateString(): string {
   return `${y}-${m}-${d}`;
 }
 
+const MAX_CACHED_KEYS = 10;
 const hmacKeyCache = new Map<string, CryptoKey>();
 
-export async function hashIpDaily(ip: string, pepper: string, dateStr?: string): Promise<string> {
-  const date = dateStr ?? getCurrentDateString();
-  const encoder = new TextEncoder();
-
+async function getHmacKey(pepper: string): Promise<CryptoKey> {
   let key = hmacKeyCache.get(pepper);
   if (!key) {
+    if (hmacKeyCache.size >= MAX_CACHED_KEYS) {
+      const oldest = hmacKeyCache.keys().next().value as string;
+      hmacKeyCache.delete(oldest);
+    }
     key = await crypto.subtle.importKey(
       "raw",
-      encoder.encode(pepper),
+      new TextEncoder().encode(pepper),
       { name: "HMAC", hash: "SHA-256" },
       false,
       ["sign"],
     );
     hmacKeyCache.set(pepper, key);
   }
+  return key;
+}
 
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(ip + "|" + date));
-
-  return Array.from(new Uint8Array(signature))
+function hexDigest(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+export async function hashIp(ip: string, pepper: string): Promise<string> {
+  const key = await getHmacKey(pepper);
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(ip));
+  return hexDigest(signature);
+}
+
+export async function hashIpDaily(ip: string, pepper: string, dateStr?: string): Promise<string> {
+  const date = dateStr ?? getCurrentDateString();
+  const key = await getHmacKey(pepper);
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(ip + "|" + date));
+  return hexDigest(signature);
 }
 
 export async function resolveRequestIdentity(

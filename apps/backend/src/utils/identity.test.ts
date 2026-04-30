@@ -1,5 +1,40 @@
 import { describe, it, expect } from "vitest";
-import { hashIpDaily, resolveRequestIdentity } from "./identity";
+import { hashIp, hashIpDaily, resolveRequestIdentity } from "./identity";
+
+describe("hashIp", () => {
+  it("returns a 64-char hex string", async () => {
+    const hash = await hashIp("1.2.3.4", "test-pepper");
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("is deterministic for the same input", async () => {
+    const a = await hashIp("10.0.0.1", "test-pepper");
+    const b = await hashIp("10.0.0.1", "test-pepper");
+    expect(a).toBe(b);
+  });
+
+  it("produces different hashes for different IPs", async () => {
+    const a = await hashIp("1.2.3.4", "test-pepper");
+    const b = await hashIp("5.6.7.8", "test-pepper");
+    expect(a).not.toBe(b);
+  });
+
+  it("does not rotate with date like hashIpDaily", async () => {
+    const stable = await hashIp("1.2.3.4", "test-pepper");
+    const daily1 = await hashIpDaily("1.2.3.4", "test-pepper", "2026-04-29");
+    const daily2 = await hashIpDaily("1.2.3.4", "test-pepper", "2026-04-30");
+    expect(daily1).not.toBe(daily2);
+    expect(stable).not.toBe(daily1);
+    expect(stable).not.toBe(daily2);
+  });
+
+  it("never contains the raw IP in the output", async () => {
+    const ip = "192.168.1.42";
+    const hash = await hashIp(ip, "test-pepper");
+    expect(hash).not.toContain(ip);
+    expect(hash).not.toContain(ip.replace(/\./g, ""));
+  });
+});
 
 describe("hashIpDaily", () => {
   it("returns a 64-char hex string", async () => {

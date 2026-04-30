@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { getClientIp } from "../utils/clientIp";
-import { resolveRequestIdentity, hashIpDaily } from "../utils/identity";
+import { resolveRequestIdentity, hashIp, hashIpDaily } from "../utils/identity";
 import { capturePostHogEvent } from "../utils/posthog";
 import { checkRateLimits, checkSimpleRateLimit } from "../utils/rateLimitBuckets";
 
@@ -18,29 +18,29 @@ export const createKvRateLimiter = (
 
   const pepper = env.IP_HASH_PEPPER as string | undefined;
 
-  let suffix: string;
-  if (opts?.keyStrategy === "ip") {
-    if (!pepper) {
-      console.error(`MISCONFIGURATION: RATE_LIMIT_KV is bound but IP_HASH_PEPPER is missing. ${keyPrefix} rate limiting is disabled (fail-closed 503). Set IP_HASH_PEPPER via \`wrangler secret put IP_HASH_PEPPER\`.`);
-      return c.json(
-        { error: "Service temporarily unavailable. Please try again later." },
-        503,
-      );
-    }
-    suffix = await hashIpDaily(getClientIp(c.req), pepper);
-  } else {
-    const sessionId = c.get("sessionId") as string | undefined;
-    if (sessionId) {
-      suffix = sessionId;
-    } else if (pepper) {
-      suffix = await hashIpDaily(getClientIp(c.req), pepper);
-    } else {
-      return next();
-    }
-  }
-
   let check;
   try {
+    let suffix: string;
+    if (opts?.keyStrategy === "ip") {
+      if (!pepper) {
+        console.error(`MISCONFIGURATION: RATE_LIMIT_KV is bound but IP_HASH_PEPPER is missing. ${keyPrefix} rate limiting is disabled (fail-closed 503). Set IP_HASH_PEPPER via \`wrangler secret put IP_HASH_PEPPER\`.`);
+        return c.json(
+          { error: "Service temporarily unavailable. Please try again later." },
+          503,
+        );
+      }
+      suffix = await hashIp(getClientIp(c.req), pepper);
+    } else {
+      const sessionId = c.get("sessionId") as string | undefined;
+      if (sessionId) {
+        suffix = sessionId;
+      } else if (pepper) {
+        suffix = await hashIpDaily(getClientIp(c.req), pepper);
+      } else {
+        return next();
+      }
+    }
+
     check = await checkSimpleRateLimit(kv, `rl:${keyPrefix}${suffix}`, { limit, windowSeconds });
   } catch (err) {
     console.error(`Rate-limit check failed for ${keyPrefix} (fail-closed 503).`, err);
