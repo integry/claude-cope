@@ -29,9 +29,11 @@ const WELL_KNOWN_KEYS = [
   { key: "model_multiplier", description: "Credit multiplier override for a model (tier = model ID)" },
   { key: "enable_ticket_refine", description: "Enable ticket refinement endpoint (true/false)" },
   { key: "enable_byok", description: "Enable Bring Your Own Key feature (true/false)" },
+  { key: "category_model", description: "OpenRouter model ID for a request category (tier = max/free/depleted)" },
+  { key: "category_api_key", description: "OpenRouter API key for a request category (tier = max/free/depleted)" },
 ];
 
-const SENSITIVE_KEYS = new Set(["openrouter_api_key", "turnstile_secret_key"]);
+const SENSITIVE_KEYS = new Set(["openrouter_api_key", "turnstile_secret_key", "category_api_key"]);
 
 function maskValue(key: string, value: string): string {
   if (SENSITIVE_KEYS.has(key) && value.length > 8) {
