@@ -41,18 +41,6 @@ export type RateLimitResult =
 
 const KV_MIN_TTL = 60;
 
-/**
- * KV counters can undercount under concurrency because get→compute→put
- * is not atomic. This factor reduces KV thresholds below the nominal
- * limit so that even with undercounting the effective enforcement stays
- * close to the intended limit. The WAF rule enforces the true ceiling.
- */
-export const KV_CONCURRENCY_HEADROOM = 0.8;
-
-export function effectiveLimit(bucket: BucketDefinition): number {
-  return Math.ceil(bucket.limit * KV_CONCURRENCY_HEADROOM);
-}
-
 function buildKey(bucket: BucketDefinition, identifier: string): string {
   return `${bucket.keyPrefix}${identifier}`;
 }
@@ -93,13 +81,12 @@ export async function checkRateLimits(
 
     await kv.put(key, JSON.stringify(newState), { expirationTtl: ttl });
 
-    const threshold = effectiveLimit(bucket);
-    if (newState.count > threshold) {
+    if (newState.count > bucket.limit) {
       return {
         blocked: true,
         bucket: bucket.name,
         retryAfterMs: Math.max(0, newState.expiresAt - ts),
-        shouldTrack: newState.count === threshold + 1,
+        shouldTrack: newState.count === bucket.limit + 1,
         lore: LORE[bucket.name],
       };
     }

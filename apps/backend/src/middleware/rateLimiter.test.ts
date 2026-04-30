@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { BUCKETS, LORE, type BucketName, effectiveLimit } from "../utils/rateLimitBuckets";
+import { BUCKETS, LORE, type BucketName } from "../utils/rateLimitBuckets";
 import app from "../app";
 
 function createMockKV(counters: Map<string, string> = new Map()) {
@@ -87,7 +87,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
     };
 
     const burst = BUCKETS.find((b) => b.name === "burst")!;
-    for (let i = 0; i < effectiveLimit(burst); i++) {
+    for (let i = 0; i < burst.limit; i++) {
       await app.request(
         "/api/chat",
         {
@@ -149,7 +149,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       const hotKv = createMockKV(counters);
       const burst = BUCKETS.find((b) => b.name === "burst")!;
 
-      const res = await exhaust(hotKv, effectiveLimit(burst));
+      const res = await exhaust(hotKv, burst.limit);
       expect(res.status).toBe(429);
 
       const body = (await res.json()) as { limitType: string };
@@ -162,7 +162,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       const hotKv = createMockKV(counters);
       const burst = BUCKETS.find((b) => b.name === "burst")!;
 
-      const res = await exhaust(hotKv, effectiveLimit(burst));
+      const res = await exhaust(hotKv, burst.limit);
       expect(res.status).toBe(429);
 
       const body = (await res.json()) as { limitType: BucketName; message: string };
@@ -174,7 +174,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       const hotKv = createMockKV(counters);
       const burst = BUCKETS.find((b) => b.name === "burst")!;
 
-      const res = await exhaust(hotKv, effectiveLimit(burst));
+      const res = await exhaust(hotKv, burst.limit);
       expect(res.status).toBe(429);
 
       const body = (await res.json()) as { retryAfterSeconds: number };
@@ -187,7 +187,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       const hotKv = createMockKV(counters);
       const burst = BUCKETS.find((b) => b.name === "burst")!;
 
-      const res = await exhaust(hotKv, effectiveLimit(burst));
+      const res = await exhaust(hotKv, burst.limit);
       expect(res.status).toBe(429);
 
       const body = (await res.json()) as Record<string, unknown>;

@@ -97,19 +97,27 @@ that the WAF layer cannot enforce.
 | Concept | Implementation |
 |---------|----------------|
 | Global burst protection | Cloudflare WAF rate-limit rule (this section) |
-| Per-user sustained limit | Worker KV limiter (`RATE_LIMIT_KV`) with concurrency headroom (see below) |
+| Per-user sustained limit | Worker KV limiter (`RATE_LIMIT_KV`) — advisory; see known limitations below |
 | Telemetry / alerting | PostHog server-side capture (`Rate_Limit_Triggered`) |
 | Legacy simple limiter | **Retained for `/api/verify` only** -- the `unsafe.bindings.RATE_LIMITER` block in `wrangler.toml` is kept for `/api/verify` throttling. It is NOT used as a fallback for `/api/chat`. |
 | Missing `IP_HASH_PEPPER` | **Fail-closed (503)**. If `RATE_LIMIT_KV` is bound but `IP_HASH_PEPPER` is not set, the middleware returns 503 Service Unavailable. This forces operators to fix the misconfiguration before traffic flows. |
 
-### 3.5 KV Concurrency Headroom
+### 3.5 Known Limitation: KV Counter Race Condition
 
-KV does not support atomic increments. Concurrent requests can read the
-same counter value and overwrite each other, causing undercounting. To
-compensate, KV thresholds are set to **80% of the nominal limit**
-(`KV_CONCURRENCY_HEADROOM = 0.8`). For example, the burst bucket's
-nominal limit of 10 triggers at 8 in KV, leaving headroom for
-undercounting. The WAF rule enforces the true ceiling atomically.
+KV does not support atomic increments. The get→compute→put cycle is not
+atomic, so concurrent requests can read the same counter value and
+overwrite each other, causing undercounting. This means the KV limiter
+is **advisory**: under high concurrency it may allow slightly more
+requests than the configured limit before blocking.
+
+The WAF rule (Section 3) is the authoritative enforcement layer and
+operates atomically at the Cloudflare edge. The KV limiter provides
+finer-grained per-user/per-session limits that the WAF cannot express,
+but operators should understand that its counters are best-effort.
+
+If exact enforcement is required in the future, options include:
+- Durable Objects (atomic per-key, but higher latency and cost)
+- An external counter service with atomic increment support
 
 ---
 
