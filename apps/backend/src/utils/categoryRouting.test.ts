@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { assignCategory, getCategoryConfig, type RequestCategory } from "./categoryRouting";
+import { assignCategory, getCategoryConfig } from "./categoryRouting";
 
 describe("assignCategory", () => {
   it("returns 'max' for pro users with available quota", () => {
