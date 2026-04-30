@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { capturePostHogEvent } from "../utils/posthog";
 import { BUCKETS, LORE, type BucketName } from "../utils/rateLimitBuckets";
 import app from "../app";
+
+vi.mock("../utils/posthog", () => ({
+  capturePostHogEvent: vi.fn().mockResolvedValue(undefined),
+}));
 
 function createMockKV(counters: Map<string, string> = new Map()) {
   return {
@@ -242,6 +247,59 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       expect(body).toHaveProperty("limitType");
       expect(body).toHaveProperty("message");
       expect(body).toHaveProperty("retryAfterSeconds");
+    });
+  });
+
+  describe("telemetry", () => {
+    beforeEach(() => {
+      vi.mocked(capturePostHogEvent).mockClear();
+    });
+
+    it("fires Rate_Limit_Triggered on the threshold-crossing request only", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+
+      const headers = {
+        "Content-Type": "application/json",
+        "x-forwarded-for": "1.2.3.4",
+        Cookie: "cope_session_id=fixed-session",
+      };
+
+      for (let i = 0; i < burst.limit; i++) {
+        await app.request(
+          "/api/chat",
+          { method: "POST", headers, body: JSON.stringify({ message: "hello" }) },
+          makeEnv({ RATE_LIMIT_KV: hotKv }),
+        );
+      }
+
+      vi.mocked(capturePostHogEvent).mockClear();
+
+      const thresholdRes = await app.request(
+        "/api/chat",
+        { method: "POST", headers, body: JSON.stringify({ message: "hello" }) },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+      expect(thresholdRes.status).toBe(429);
+      expect(capturePostHogEvent).toHaveBeenCalledOnce();
+      expect(capturePostHogEvent).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          event: "Rate_Limit_Triggered",
+          properties: expect.objectContaining({ limit_type: "burst" }),
+        }),
+      );
+
+      vi.mocked(capturePostHogEvent).mockClear();
+
+      const subsequentRes = await app.request(
+        "/api/chat",
+        { method: "POST", headers, body: JSON.stringify({ message: "hello" }) },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+      expect(subsequentRes.status).toBe(429);
+      expect(capturePostHogEvent).not.toHaveBeenCalled();
     });
   });
 

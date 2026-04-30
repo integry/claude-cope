@@ -55,6 +55,39 @@ function parseCounter(raw: string | null): CounterState | null {
     return null;
   }
 }
+export async function checkSimpleRateLimit(
+  kv: KVNamespace,
+  key: string,
+  limit: number,
+  windowSeconds: number,
+  now?: number,
+): Promise<{ allowed: boolean; retryAfterSeconds?: number }> {
+  const ts = now ?? Date.now();
+  const existing = parseCounter(await kv.get(key));
+
+  let newState: CounterState;
+  let ttl: number;
+
+  if (existing && existing.expiresAt > ts) {
+    newState = { count: existing.count + 1, expiresAt: existing.expiresAt };
+    ttl = Math.max(Math.ceil((existing.expiresAt - ts) / 1000), KV_MIN_TTL);
+  } else {
+    newState = { count: 1, expiresAt: ts + windowSeconds * 1000 };
+    ttl = windowSeconds;
+  }
+
+  await kv.put(key, JSON.stringify(newState), { expirationTtl: ttl });
+
+  if (newState.count > limit) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(0, Math.ceil((newState.expiresAt - ts) / 1000)),
+    };
+  }
+
+  return { allowed: true };
+}
+
 export async function checkRateLimits(
   kv: KVNamespace,
   keys: { ip: string; identity: string },
@@ -62,10 +95,15 @@ export async function checkRateLimits(
 ): Promise<RateLimitResult> {
   const ts = now ?? Date.now();
 
-  for (const bucket of BUCKETS) {
+  const bucketKeys = BUCKETS.map((bucket) => {
     const identifier = bucket.keyType === "ip" ? keys.ip : keys.identity;
-    const key = buildKey(bucket, identifier);
-    const existing = parseCounter(await kv.get(key));
+    return buildKey(bucket, identifier);
+  });
+  const rawValues = await Promise.all(bucketKeys.map((key) => kv.get(key)));
+
+  for (let i = 0; i < BUCKETS.length; i++) {
+    const bucket = BUCKETS[i];
+    const existing = parseCounter(rawValues[i]);
 
     let newState: CounterState;
     let ttl: number;
@@ -79,7 +117,7 @@ export async function checkRateLimits(
       ttl = bucket.windowSeconds;
     }
 
-    await kv.put(key, JSON.stringify(newState), { expirationTtl: ttl });
+    await kv.put(bucketKeys[i], JSON.stringify(newState), { expirationTtl: ttl });
 
     if (newState.count > bucket.limit) {
       return {

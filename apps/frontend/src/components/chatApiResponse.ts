@@ -214,7 +214,7 @@ export async function handleChatErrorResponse(
   const handleRateLimit = async () => {
     onError?.();
     const errorData = await readErrorData();
-    if (errorData?.limitType && typeof errorData?.message === "string") {
+    if (typeof errorData?.limitType === "string" && typeof errorData?.message === "string") {
       const retryHint =
         typeof errorData?.retryAfterSeconds === "number" && errorData.retryAfterSeconds > 0
           ? ` (retry in ${errorData.retryAfterSeconds}s)`

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { checkRateLimits, BUCKETS, LORE } from "./rateLimitBuckets";
+import { checkRateLimits, checkSimpleRateLimit, BUCKETS, LORE } from "./rateLimitBuckets";
 
 function mockKV(store: Record<string, string> = {}) {
   const ttls: Record<string, number> = {};
@@ -345,5 +345,38 @@ describe("checkRateLimits", () => {
         expect(store[key]).toBeDefined();
       }
     });
+  });
+});
+
+describe("checkSimpleRateLimit", () => {
+  it("allows requests under the limit", async () => {
+    const kv = mockKV();
+    const result = await checkSimpleRateLimit(kv, "rl:test:key", 5, 60, 1000);
+    expect(result.allowed).toBe(true);
+    expect(result.retryAfterSeconds).toBeUndefined();
+  });
+
+  it("blocks requests over the limit", async () => {
+    const store: Record<string, string> = {};
+    store["rl:test:key"] = JSON.stringify({ count: 5, expiresAt: 61_000 });
+    const kv = mockKV(store);
+    const result = await checkSimpleRateLimit(kv, "rl:test:key", 5, 60, 1000);
+    expect(result.allowed).toBe(false);
+    expect(result.retryAfterSeconds).toBe(60);
+  });
+
+  it("resets counter after window expires", async () => {
+    const store: Record<string, string> = {};
+    store["rl:test:key"] = JSON.stringify({ count: 100, expiresAt: 50_000 });
+    const kv = mockKV(store);
+    const result = await checkSimpleRateLimit(kv, "rl:test:key", 5, 60, 60_000);
+    expect(result.allowed).toBe(true);
+  });
+
+  it("handles corrupted KV values", async () => {
+    const store: Record<string, string> = { "rl:test:key": "not-json" };
+    const kv = mockKV(store);
+    const result = await checkSimpleRateLimit(kv, "rl:test:key", 5, 60, 1000);
+    expect(result.allowed).toBe(true);
   });
 });

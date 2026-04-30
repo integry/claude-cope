@@ -1,6 +1,7 @@
 import { type Context, Hono } from "hono";
 import { getClientIp } from "../utils/clientIp";
-import { createRateLimiter } from "../middleware/rateLimiter";
+import { createKvRateLimiter } from "../middleware/rateLimiter";
+import { checkSimpleRateLimit } from "../utils/rateLimitBuckets";
 import { normalizeHostname, getExpectedHostnameConfig } from "../utils/hostname";
 import {
   VERIFY_STATUS,
@@ -17,7 +18,7 @@ type Env = {
     TURNSTILE_SECRET_KEY?: string;
     TURNSTILE_EXPECTED_HOSTNAME?: string;
     USAGE_KV?: KVNamespace;
-    RATE_LIMITER?: { limit: (opts: { key: string }) => Promise<{ success: boolean }> };
+    RATE_LIMIT_KV?: KVNamespace;
   };
   Variables: {
     sessionId: string;
@@ -101,12 +102,12 @@ verify.get("/", async (c, next) => {
   }
   await next();
 }, async (c, next) => {
-  const limiter = c.env?.RATE_LIMITER;
-  if (!limiter) return next();
+  const kv = c.env?.RATE_LIMIT_KV as KVNamespace | undefined;
+  if (!kv) return next();
   const sessionId = c.get("sessionId");
   const suffix = sessionId || getClientIp(c.req);
-  const { success } = await limiter.limit({ key: `verify-status:${suffix}` });
-  if (!success) {
+  const check = await checkSimpleRateLimit(kv, `rl:verify-status:${suffix}`, 100, 60);
+  if (!check.allowed) {
     return c.json({ error: "Too many requests. Please try again later." }, 429);
   }
   return next();
@@ -204,7 +205,7 @@ verify.post("/", async (c, next) => {
     return c.json({ verified: true, bypassed: true });
   }
   await next();
-}, createRateLimiter("verify-submit:"), async (c) => {
+}, createKvRateLimiter("verify-submit:"), async (c) => {
   const secret = getTurnstileSecret(c);
   if (!secret) {
     return c.json({ verified: true, bypassed: true });

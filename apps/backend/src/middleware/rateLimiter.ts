@@ -2,43 +2,28 @@ import type { MiddlewareHandler } from "hono";
 import { getClientIp } from "../utils/clientIp";
 import { resolveRequestIdentity, hashIpDaily } from "../utils/identity";
 import { capturePostHogEvent } from "../utils/posthog";
-import { checkRateLimits } from "../utils/rateLimitBuckets";
+import { checkRateLimits, checkSimpleRateLimit } from "../utils/rateLimitBuckets";
 
 export { getClientIp } from "../utils/clientIp";
 
-type RateLimitContext = {
-  req: { header: (name: string) => string | undefined };
-  env: Record<string, unknown>;
-  json: (body: unknown, status?: number) => Response;
-};
+export const createKvRateLimiter = (
+  keyPrefix: string,
+  limit = 100,
+  windowSeconds = 60,
+): MiddlewareHandler => async (c, next) => {
+  const kv = (c.env as Record<string, unknown>).RATE_LIMIT_KV as KVNamespace | undefined;
+  if (!kv) return next();
 
-export async function enforceRateLimit(
-  c: RateLimitContext,
-  keyPrefix = "",
-): Promise<Response | null> {
   const ip = getClientIp(c.req);
-  const limiter = c.env.RATE_LIMITER as
-    | { limit: (opts: { key: string }) => Promise<{ success: boolean }> }
-    | undefined;
-
-  if (!limiter) return null;
-
-  const { success } = await limiter.limit({ key: `${keyPrefix}${ip}` });
-  if (!success) {
+  const check = await checkSimpleRateLimit(kv, `rl:${keyPrefix}${ip}`, limit, windowSeconds);
+  if (!check.allowed) {
     return c.json(
       { error: "Too many requests. Please try again later." },
       429,
     );
   }
 
-  return null;
-}
-
-export const createRateLimiter = (keyPrefix = ""): MiddlewareHandler => async (c, next) => {
-  const blocked = await enforceRateLimit(c as unknown as RateLimitContext, keyPrefix);
-  if (blocked) return blocked;
-
-  await next();
+  return next();
 };
 
 let kvWarningLogged = false;
@@ -82,8 +67,11 @@ export const rateLimiter: MiddlewareHandler = async (c, next) => {
       identity: identity.cope_id,
     });
   } catch (err) {
-    console.error("Rate-limit evaluation failed (fail-open). WAF rules remain the backstop.", err);
-    return next();
+    console.error("Rate-limit evaluation failed (fail-closed 503).", err);
+    return c.json(
+      { error: "Service temporarily unavailable. Please try again later." },
+      503,
+    );
   }
 
   if (result.blocked) {

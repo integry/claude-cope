@@ -99,18 +99,20 @@ that the WAF layer cannot enforce.
 | Global burst protection | Cloudflare WAF rate-limit rule (this section) |
 | Per-user sustained limit | Worker KV limiter (`RATE_LIMIT_KV`) — advisory; see known limitations below |
 | Telemetry / alerting | PostHog server-side capture (`Rate_Limit_Triggered`) |
-| Legacy simple limiter | **Retained for `/api/verify` only** -- the `unsafe.bindings.RATE_LIMITER` block in `wrangler.toml` is kept for `/api/verify` throttling. It is NOT used as a fallback for `/api/chat`. |
+| Legacy simple limiter | **Removed.** `/api/verify` now uses `RATE_LIMIT_KV` via `checkSimpleRateLimit` (same KV namespace as `/api/chat`). The `unsafe.bindings.RATE_LIMITER` block has been deleted from `wrangler.toml`. |
 | Missing `IP_HASH_PEPPER` | **Fail-closed (503)**. If `RATE_LIMIT_KV` is bound but `IP_HASH_PEPPER` is not set, the middleware returns 503 Service Unavailable. This forces operators to fix the misconfiguration before traffic flows. |
 
 ### 3.5 Known Limitation: KV Latency on `/api/chat`
 
-Each chat request evaluates up to 5 rate-limit buckets. Each bucket
-requires a sequential KV `get` + `put` (up to 10 KV operations total),
-because the loop must short-circuit on the first exceeded bucket. Under
-normal conditions Workers KV reads are fast (edge-cached), but operators
-should monitor P99 latency on `/api/chat` after enabling the KV limiter.
-If latency is unacceptable, consider reducing the number of active
-buckets or moving to Durable Objects for atomic single-call increments.
+Each chat request evaluates up to 5 rate-limit buckets. All 5 KV `get`
+calls are issued in parallel (single round-trip), followed by sequential
+`put` calls that short-circuit on the first exceeded bucket. Worst case
+is 5 parallel reads + 5 sequential writes; best case (first bucket
+blocks) is 5 parallel reads + 1 write. Under normal conditions Workers
+KV reads are fast (edge-cached), but operators should monitor P99
+latency on `/api/chat` after enabling the KV limiter. If latency is
+unacceptable, consider reducing the number of active buckets or moving
+to Durable Objects for atomic single-call increments.
 
 ### 3.6 Known Limitation: KV Counter Race Condition
 
