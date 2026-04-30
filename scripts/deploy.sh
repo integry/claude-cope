@@ -146,6 +146,12 @@ if ! $FRONTEND_ONLY; then
   if [[ -n "${ENABLE_TICKET_REFINE:-}" ]]; then
     echo "$ENABLE_TICKET_REFINE" | (cd "$ROOT/apps/backend" && wrangler secret put ENABLE_TICKET_REFINE --config "$WRANGLER_CFG")
   fi
+  if [[ -n "${SUPABASE_URL:-}" ]]; then
+    echo "$SUPABASE_URL" | (cd "$ROOT/apps/backend" && wrangler secret put SUPABASE_URL --config "$WRANGLER_CFG")
+  fi
+  if [[ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
+    echo "$SUPABASE_SERVICE_ROLE_KEY" | (cd "$ROOT/apps/backend" && wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config "$WRANGLER_CFG")
+  fi
   echo ""
 fi
 
