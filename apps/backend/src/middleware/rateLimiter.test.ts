@@ -117,6 +117,105 @@ describe("rateLimiter middleware (hybrid KV)", () => {
     expect(res.status).toBe(429);
   });
 
+  describe("per-session identity buckets", () => {
+    it("does not share burst/hourly/daily buckets between two sessions on the same IP", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+
+      const sessionAHeaders = {
+        "Content-Type": "application/json",
+        "x-forwarded-for": "1.2.3.4",
+        Cookie: "cope_session_id=session-AAA",
+      };
+
+      const sessionBHeaders = {
+        "Content-Type": "application/json",
+        "x-forwarded-for": "1.2.3.4",
+        Cookie: "cope_session_id=session-BBB",
+      };
+
+      for (let i = 0; i < burst.limit; i++) {
+        await app.request(
+          "/api/chat",
+          {
+            method: "POST",
+            headers: sessionAHeaders,
+            body: JSON.stringify({ message: "hello" }),
+          },
+          makeEnv({ RATE_LIMIT_KV: hotKv }),
+        );
+      }
+
+      const resA = await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: sessionAHeaders,
+          body: JSON.stringify({ message: "hello" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+      expect(resA.status).toBe(429);
+
+      const resB = await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: sessionBHeaders,
+          body: JSON.stringify({ message: "hello" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+      expect(resB.status).not.toBe(429);
+    });
+
+    it("uses different KV keys for identity-scoped buckets across sessions on the same IP", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+
+      const identityBuckets = BUCKETS.filter((b) => b.keyType === "identity");
+
+      await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-forwarded-for": "1.2.3.4",
+            Cookie: "cope_session_id=session-X",
+          },
+          body: JSON.stringify({ message: "hello" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+
+      const keysAfterFirst = new Set(hotKv.put.mock.calls.map((call: unknown[]) => call[0] as string));
+
+      await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-forwarded-for": "1.2.3.4",
+            Cookie: "cope_session_id=session-Y",
+          },
+          body: JSON.stringify({ message: "hello" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+
+      const allKeys = hotKv.put.mock.calls.map((call: unknown[]) => call[0] as string);
+
+      for (const bucket of identityBuckets) {
+        const bucketKeys = allKeys.filter((k: string) => k.startsWith(bucket.keyPrefix));
+        const uniqueKeys = new Set(bucketKeys);
+        expect(uniqueKeys.size).toBeGreaterThanOrEqual(2);
+      }
+    });
+  });
+
   describe("no-session (anonymous) fallback", () => {
     it("does not store raw IP in KV keys", async () => {
       const rawIp = "203.0.113.42";

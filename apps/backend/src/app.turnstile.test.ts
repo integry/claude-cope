@@ -336,7 +336,7 @@ describe("Turnstile verification and protection", () => {
       fetchSpy.mockRestore();
     }
   });
-  it("rate limits verify status checks with session key, never raw IPs", async () => {
+  it("rate limits verify status checks with IP hash key, never raw IPs", async () => {
     const rateLimitKv = { get: vi.fn().mockResolvedValue(null), put: vi.fn() };
     const env = {
       TURNSTILE_SECRET_KEY: "secret",

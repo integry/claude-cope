@@ -20,7 +20,13 @@ export const createKvRateLimiter = (
 
   let suffix: string;
   if (opts?.keyStrategy === "ip") {
-    if (!pepper) return next();
+    if (!pepper) {
+      console.error(`MISCONFIGURATION: RATE_LIMIT_KV is bound but IP_HASH_PEPPER is missing. ${keyPrefix} rate limiting is disabled (fail-closed 503). Set IP_HASH_PEPPER via \`wrangler secret put IP_HASH_PEPPER\`.`);
+      return c.json(
+        { error: "Service temporarily unavailable. Please try again later." },
+        503,
+      );
+    }
     suffix = await hashIpDaily(getClientIp(c.req), pepper);
   } else {
     const sessionId = c.get("sessionId") as string | undefined;
@@ -95,7 +101,7 @@ export const rateLimiter: MiddlewareHandler = async (c, next) => {
 
     result = await checkRateLimits(kv, {
       ip: identity.ip_hash,
-      identity: identity.ip_hash,
+      identity: identity.cope_id,
     });
   } catch (err) {
     console.error("Rate-limit evaluation failed (fail-closed 503).", err);
