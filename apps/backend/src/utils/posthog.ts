@@ -11,6 +11,8 @@ type PostHogEnv = {
 
 const DEFAULT_HOST = "https://app.posthog.com";
 
+let captureFailureLogged = false;
+
 export async function capturePostHogEvent(
   env: PostHogEnv,
   event: PostHogEvent,
@@ -36,7 +38,8 @@ export async function capturePostHogEvent(
     body,
   });
 
-  if (!response.ok) {
+  if (!response.ok && !captureFailureLogged) {
     console.warn(`PostHog capture failed: ${response.status} ${response.statusText}`);
+    captureFailureLogged = true;
   }
 }

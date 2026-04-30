@@ -25,8 +25,14 @@ function createMockDB(licenses: Map<string, { status: string; last_activated_at:
   return { prepare: vi.fn(stmt) };
 }
 
+const TEST_PEPPER = "test-pepper-for-rate-limiter";
+
 function makeEnv(overrides: Record<string, unknown> = {}) {
-  return { ALLOWED_ORIGINS: "http://localhost:5173", ...overrides };
+  const env: Record<string, unknown> = { ALLOWED_ORIGINS: "http://localhost:5173", ...overrides };
+  if (env.RATE_LIMIT_KV && !env.IP_HASH_PEPPER) {
+    env.IP_HASH_PEPPER = TEST_PEPPER;
+  }
+  return env;
 }
 
 describe("rateLimiter middleware (hybrid KV)", () => {

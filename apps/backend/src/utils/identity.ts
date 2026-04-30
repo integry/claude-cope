@@ -22,20 +22,18 @@ function getCurrentDateString(): string {
   return `${y}-${m}-${d}`;
 }
 
-const DEFAULT_PEPPER = "claude-cope-default-ip-hash-pepper";
-
-export async function hashIpDaily(ip: string, pepper?: string, dateStr?: string): Promise<string> {
+export async function hashIpDaily(ip: string, pepper: string, dateStr?: string): Promise<string> {
   const date = dateStr ?? getCurrentDateString();
   const encoder = new TextEncoder();
-  const secret = pepper || DEFAULT_PEPPER;
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(secret),
+    encoder.encode(pepper),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
   );
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(ip + date));
+
   return Array.from(new Uint8Array(signature))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
@@ -44,7 +42,7 @@ export async function hashIpDaily(ip: string, pepper?: string, dateStr?: string)
 export async function resolveRequestIdentity(
   sessionId: string,
   req: { header: (name: string) => string | undefined; raw: unknown },
-  pepper?: string,
+  pepper: string,
 ): Promise<RequestIdentity> {
   const ip = getClientIp(req as HeaderSource);
   const ip_hash = await hashIpDaily(ip, pepper);

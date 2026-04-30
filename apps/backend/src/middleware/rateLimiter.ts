@@ -43,6 +43,7 @@ export const createRateLimiter = (keyPrefix = ""): MiddlewareHandler => async (c
 };
 
 let kvWarningLogged = false;
+let pepperWarningLogged = false;
 
 export const rateLimiter: MiddlewareHandler = async (c, next) => {
   const env = c.env as Record<string, unknown>;
@@ -53,6 +54,17 @@ export const rateLimiter: MiddlewareHandler = async (c, next) => {
       console.warn("RATE_LIMIT_KV not configured – rate limiting disabled");
       kvWarningLogged = true;
     }
+    return next();
+  }
+
+  const pepper = env.IP_HASH_PEPPER as string | undefined;
+  if (!pepper) {
+    if (!pepperWarningLogged) {
+      console.warn("IP_HASH_PEPPER not configured – KV rate limiting disabled; falling back to simple limiter");
+      pepperWarningLogged = true;
+    }
+    const blocked = await enforceRateLimit(c as unknown as RateLimitContext);
+    if (blocked) return blocked;
     return next();
   }
 
@@ -69,7 +81,6 @@ export const rateLimiter: MiddlewareHandler = async (c, next) => {
   }
 
   const sessionId = (c.get("sessionId") as string) || "anonymous";
-  const pepper = (env.IP_HASH_PEPPER as string) || undefined;
   const identity = await resolveRequestIdentity(sessionId, c.req, pepper);
 
   const result = await checkRateLimits(kv, {

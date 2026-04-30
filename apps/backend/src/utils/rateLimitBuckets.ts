@@ -56,12 +56,6 @@ function parseCounter(raw: string | null): CounterState | null {
   }
 }
 
-type BucketEntry = {
-  bucket: BucketDefinition;
-  key: string;
-  existing: CounterState | null;
-};
-
 export async function checkRateLimits(
   kv: KVNamespace,
   keys: { ip: string; identity: string },
@@ -69,21 +63,15 @@ export async function checkRateLimits(
 ): Promise<RateLimitResult> {
   const ts = now ?? Date.now();
 
-  // Phase 1: Read all counters in parallel to reduce latency
-  const bucketReads = BUCKETS.map(async (bucket): Promise<BucketEntry> => {
+  // Process each bucket sequentially: read → increment → write.
+  // This minimizes the race window between read and write per bucket.
+  // KV is eventually consistent so races are not fully eliminated, but the
+  // WAF rate-limit rule provides hard atomic protection at the edge.
+  for (const bucket of BUCKETS) {
     const identifier = bucket.keyType === "ip" ? keys.ip : keys.identity;
     const key = buildKey(bucket, identifier);
-    const raw = await kv.get(key);
-    return { bucket, key, existing: parseCounter(raw) };
-  });
-  const entries = await Promise.all(bucketReads);
+    const existing = parseCounter(await kv.get(key));
 
-  // Phase 2: Check each bucket and compute incremented states up to the first block
-  const pendingWrites: { key: string; state: CounterState; ttl: number }[] = [];
-  let blockIndex = -1;
-
-  for (let i = 0; i < entries.length; i++) {
-    const { bucket, key, existing } = entries[i];
     let newState: CounterState;
     let ttl: number;
 
@@ -96,31 +84,17 @@ export async function checkRateLimits(
       ttl = bucket.windowSeconds;
     }
 
-    pendingWrites.push({ key, state: newState, ttl });
+    await kv.put(key, JSON.stringify(newState), { expirationTtl: ttl });
 
     if (newState.count > bucket.limit) {
-      blockIndex = i;
-      break;
+      return {
+        blocked: true,
+        bucket: bucket.name,
+        retryAfterMs: Math.max(0, newState.expiresAt - ts),
+        shouldTrack: newState.count === bucket.limit + 1,
+        lore: LORE[bucket.name],
+      };
     }
-  }
-
-  // Phase 3: Write all computed increments in parallel
-  await Promise.all(
-    pendingWrites.map(({ key, state, ttl }) =>
-      kv.put(key, JSON.stringify(state), { expirationTtl: ttl }),
-    ),
-  );
-
-  if (blockIndex !== -1) {
-    const { bucket } = entries[blockIndex];
-    const { state } = pendingWrites[blockIndex];
-    return {
-      blocked: true,
-      bucket: bucket.name,
-      retryAfterMs: Math.max(0, state.expiresAt - ts),
-      shouldTrack: state.count === bucket.limit + 1,
-      lore: LORE[bucket.name],
-    };
   }
 
   return { blocked: false };

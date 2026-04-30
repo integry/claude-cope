@@ -155,7 +155,7 @@ describe("Turnstile verification and protection", () => {
       get: vi.fn().mockResolvedValue(overLimitCounter),
       put: vi.fn().mockResolvedValue(undefined),
     };
-    const res = await requestChat({ TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv, RATE_LIMIT_KV: rateLimitKv });
+    const res = await requestChat({ TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv, RATE_LIMIT_KV: rateLimitKv, IP_HASH_PEPPER: "test-pepper" });
     expect(res.status).toBe(429);
     expect(rateLimitKv.get).toHaveBeenCalled();
     expect(usageKv.get).not.toHaveBeenCalled();
