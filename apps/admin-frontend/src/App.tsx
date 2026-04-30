@@ -3,12 +3,14 @@ import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
 import Licenses from "./pages/Licenses";
 import Backlog from "./pages/Backlog";
+import Configuration from "./pages/Configuration";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
   { to: "/users", label: "Users" },
   { to: "/licenses", label: "Licenses" },
   { to: "/backlog", label: "Backlog" },
+  { to: "/configuration", label: "Configuration" },
 ];
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -52,6 +54,7 @@ function App() {
           <Route path="/users" element={<Users />} />
           <Route path="/licenses" element={<Licenses />} />
           <Route path="/backlog" element={<Backlog />} />
+          <Route path="/configuration" element={<Configuration />} />
         </Routes>
       </Layout>
     </BrowserRouter>

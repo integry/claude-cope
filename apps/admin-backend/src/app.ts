@@ -4,6 +4,7 @@ import stats from "./routes/stats";
 import users from "./routes/users";
 import backlog from "./routes/backlog";
 import licenses from "./routes/licenses";
+import config from "./routes/config";
 import { applyMigrations } from "./utils/migrations";
 
 const app = new Hono();
@@ -44,5 +45,6 @@ app.route("/api/stats", stats);
 app.route("/api/users", users);
 app.route("/api/backlog", backlog);
 app.route("/api/licenses", licenses);
+app.route("/api/config", config);
 
 export default app;
