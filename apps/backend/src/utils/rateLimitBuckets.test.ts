@@ -16,6 +16,18 @@ function mockKV(store: Record<string, string> = {}) {
 const KEYS = { ip: "10.0.0.1", identity: "sess-abc" };
 
 describe("checkRateLimits", () => {
+  function fillBucket(
+    store: Record<string, string>,
+    bucketName: string,
+    count: number,
+    expiresAt: number,
+  ) {
+    const bucket = BUCKETS.find((b) => b.name === bucketName)!;
+    const id = bucket.keyType === "ip" ? KEYS.ip : KEYS.identity;
+    const key = `${bucket.keyPrefix}${id}`;
+    store[key] = JSON.stringify({ count, expiresAt });
+  }
+
   it("returns blocked: false when all buckets are under their limits", async () => {
     const kv = mockKV();
     const result = await checkRateLimits(kv, KEYS, 1000);
@@ -69,18 +81,6 @@ describe("checkRateLimits", () => {
   });
 
   describe("blocking behavior", () => {
-    async function fillBucket(
-      store: Record<string, string>,
-      bucketName: string,
-      count: number,
-      expiresAt: number,
-    ) {
-      const bucket = BUCKETS.find((b) => b.name === bucketName)!;
-      const id = bucket.keyType === "ip" ? KEYS.ip : KEYS.identity;
-      const key = `${bucket.keyPrefix}${id}`;
-      store[key] = JSON.stringify({ count, expiresAt });
-    }
-
     it("blocks and returns shouldTrack: true on the threshold-crossing request", async () => {
       const store: Record<string, string> = {};
       const now = 100_000;
@@ -165,17 +165,6 @@ describe("checkRateLimits", () => {
 
       expect(result.blocked).toBe(true);
       if (result.blocked) expect(result.bucket).toBe("swarm");
-
-      function fillBucket(
-        s: Record<string, string>,
-        name: string,
-        count: number,
-        expiresAt: number,
-      ) {
-        const b = BUCKETS.find((x) => x.name === name)!;
-        const id = b.keyType === "ip" ? KEYS.ip : KEYS.identity;
-        s[`${b.keyPrefix}${id}`] = JSON.stringify({ count, expiresAt });
-      }
     });
 
     it("checks ip_burst before burst", async () => {

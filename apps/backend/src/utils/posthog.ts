@@ -48,6 +48,11 @@ export async function capturePostHogEvent(
       console.warn(`PostHog capture failed: ${response.status} ${response.statusText}`);
       captureFailureLogged = true;
     }
+  } catch (err) {
+    if (!captureFailureLogged) {
+      console.warn("PostHog capture transport error:", err);
+      captureFailureLogged = true;
+    }
   } finally {
     clearTimeout(timeout);
   }

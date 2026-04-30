@@ -102,7 +102,17 @@ that the WAF layer cannot enforce.
 | Legacy simple limiter | **Retained for `/api/verify` only** -- the `unsafe.bindings.RATE_LIMITER` block in `wrangler.toml` is kept for `/api/verify` throttling. It is NOT used as a fallback for `/api/chat`. |
 | Missing `IP_HASH_PEPPER` | **Fail-closed (503)**. If `RATE_LIMIT_KV` is bound but `IP_HASH_PEPPER` is not set, the middleware returns 503 Service Unavailable. This forces operators to fix the misconfiguration before traffic flows. |
 
-### 3.5 Known Limitation: KV Counter Race Condition
+### 3.5 Known Limitation: KV Latency on `/api/chat`
+
+Each chat request evaluates up to 5 rate-limit buckets. Each bucket
+requires a sequential KV `get` + `put` (up to 10 KV operations total),
+because the loop must short-circuit on the first exceeded bucket. Under
+normal conditions Workers KV reads are fast (edge-cached), but operators
+should monitor P99 latency on `/api/chat` after enabling the KV limiter.
+If latency is unacceptable, consider reducing the number of active
+buckets or moving to Durable Objects for atomic single-call increments.
+
+### 3.6 Known Limitation: KV Counter Race Condition
 
 KV does not support atomic increments. The get→compute→put cycle is not
 atomic, so concurrent requests can read the same counter value and

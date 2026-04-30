@@ -68,13 +68,23 @@ export const rateLimiter: MiddlewareHandler = async (c, next) => {
     );
   }
 
-  const sessionId = (c.get("sessionId") as string) || "anonymous";
-  const identity = await resolveRequestIdentity(sessionId, c.req, pepper);
+  let identity;
+  let result;
 
-  const result = await checkRateLimits(kv, {
-    ip: identity.ip_hash,
-    identity: identity.cope_id,
-  });
+  try {
+    const rawSessionId = c.get("sessionId") as string | undefined;
+    const ip = getClientIp(c.req);
+    const sessionId = rawSessionId || `ip:${ip}`;
+    identity = await resolveRequestIdentity(sessionId, c.req, pepper);
+
+    result = await checkRateLimits(kv, {
+      ip: identity.ip_hash,
+      identity: identity.cope_id,
+    });
+  } catch (err) {
+    console.error("Rate-limit evaluation failed (fail-open). WAF rules remain the backstop.", err);
+    return next();
+  }
 
   if (result.blocked) {
     if (result.shouldTrack) {
@@ -89,7 +99,9 @@ export const rateLimiter: MiddlewareHandler = async (c, next) => {
             country: identity.country,
           },
         },
-      ).catch(() => {});
+      ).catch((err) => {
+        console.warn("PostHog telemetry capture failed:", err);
+      });
 
       try {
         c.executionCtx.waitUntil(telemetry);
