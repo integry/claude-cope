@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import app from "../app";
 
-// Minimal D1-like mock with SQL-aware routing via `firstBySQL`.
 function createMockDB(opts: {
   firstResults?: Record<string, unknown>;
   firstBySQL?: Record<string, Record<string, unknown> | null>;
@@ -53,14 +52,22 @@ function postJSON(path: string, body: unknown, env: Record<string, unknown>) {
   }, { ALLOWED_ORIGINS: "http://localhost:5173", ...env });
 }
 
-const BASE_PROFILE = {
-  username: "alice", license_hash: "hash",
-  total_td: 1000, current_td: 1000, corporate_rank: "CTO",
-  inventory: "{}", upgrades: "[]", achievements: "[]",
-  buddy_type: null, buddy_is_shiny: 0,
-  unlocked_themes: '["default"]', active_theme: "default",
-  active_ticket: null, td_multiplier: 1,
-};
+function postWithSession(path: string, body: unknown, env: Record<string, unknown>, sid = "test-session") {
+  return app.request(path, { method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: `cope_session_id=${sid}` },
+    body: JSON.stringify(body),
+  }, { ALLOWED_ORIGINS: "http://localhost:5173", ...env });
+}
+
+function getWithSession(path: string, env: Record<string, unknown>) {
+  return app.request(path, { headers: { Cookie: "cope_session_id=test-session" } },
+    { ALLOWED_ORIGINS: "http://localhost:5173", ...env });
+}
+
+const BASE_PROFILE = { username: "alice", license_hash: "hash", total_td: 1000, current_td: 1000,
+  corporate_rank: "CTO", inventory: "{}", upgrades: "[]", achievements: "[]", buddy_type: null,
+  buddy_is_shiny: 0, unlocked_themes: '["default"]', active_theme: "default", active_ticket: null,
+  td_multiplier: 1 };
 
 function profileWithHash(hash: string) {
   return { ...BASE_PROFILE, license_hash: hash };
@@ -76,11 +83,11 @@ function ownedMockDB(opts: { runChanges?: number } = {}) {
   });
 }
 
+const GEN_BODY = { username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash" };
+
 describe("POST /api/account/buy-generator", () => {
   it("returns 500 when DB is not configured", async () => {
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
-    }, {});
+    const res = await postJSON("/api/account/buy-generator", GEN_BODY, {});
     expect(res.status).toBe(500);
   });
   it("returns 400 when required fields are missing", async () => {
@@ -90,74 +97,56 @@ describe("POST /api/account/buy-generator", () => {
   });
   it("returns 400 when amount is not a positive integer", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: -1, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", { ...GEN_BODY, amount: -1 }, { DB: db });
     expect(res.status).toBe(400);
   });
   it("returns 400 when amount exceeds 1000", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1001, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", { ...GEN_BODY, amount: 1001 }, { DB: db });
     expect(res.status).toBe(400);
     const data = await res.json() as { error: string };
     expect(data.error).toContain("max 1000");
   });
   it("returns 400 for unknown generatorId", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "does-not-exist", amount: 1, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator",
+      { ...GEN_BODY, generatorId: "does-not-exist" }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("Unknown generator");
   });
   it("returns 404 when profile is not found", async () => {
     const { db } = createMockDB({ firstResults: undefined });
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
     expect(res.status).toBe(404);
   });
   it("returns 403 when license hash does not match", async () => {
     const { db } = createMockDB({ firstResults: profileWithHash("other-hash") });
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "wrong-hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator",
+      { ...GEN_BODY, licenseKeyHash: "wrong-hash" }, { DB: db });
     expect(res.status).toBe(403);
   });
   it("returns 403 when license is revoked", async () => {
     const { db } = createMockDB({
-      firstBySQL: {
-        "SELECT username": BASE_PROFILE,
-        "SELECT status": { status: "revoked" },
-      },
+      firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "revoked" } },
     });
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
     expect(res.status).toBe(403);
     const data = await res.json() as { error: string };
     expect(data.error).toContain("revoked");
   });
   it("succeeds with valid ownership and sufficient TD", async () => {
     const { db } = ownedMockDB();
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
     expect(res.status).toBe(200);
     const data = await res.json() as { success: boolean };
     expect(data.success).toBe(true);
   });
   it("returns 409 when concurrent update causes zero changes", async () => {
     const { db } = ownedMockDB({ runChanges: 0 });
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
     expect(res.status).toBe(409);
   });
 });
-
 describe("POST /api/account/buy-upgrade", () => {
   it("returns 400 when required fields are missing", async () => {
     const { db } = createMockDB();
@@ -173,7 +162,6 @@ describe("POST /api/account/buy-upgrade", () => {
     expect(((await res.json()) as { error: string }).error).toBe("Unknown upgrade");
   });
 });
-
 describe("POST /api/account/buy-theme", () => {
   it("returns 400 when required fields are missing", async () => {
     const { db } = createMockDB();
@@ -189,7 +177,6 @@ describe("POST /api/account/buy-theme", () => {
     expect(((await res.json()) as { error: string }).error).toBe("Unknown theme");
   });
 });
-
 describe("POST /api/account/unlock-achievement", () => {
   it("returns 400 when required fields are missing", async () => {
     const { db } = createMockDB();
@@ -212,7 +199,6 @@ describe("POST /api/account/unlock-achievement", () => {
     expect(res.status).toBe(404);
   });
 });
-
 describe("POST /api/account/update-buddy", () => {
   it("returns 400 when required fields are missing", async () => {
     const { db } = createMockDB();
@@ -267,7 +253,6 @@ describe("POST /api/account/update-buddy", () => {
     expect(res.status).toBe(409);
   });
 });
-
 describe("POST /api/account/update-ticket", () => {
   it("returns 400 when required fields are missing", async () => {
     const { db } = createMockDB();
@@ -285,9 +270,8 @@ describe("POST /api/account/update-ticket", () => {
   it("returns 400 for activeTicket with invalid sprintProgress", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-ticket", {
-      username: "alice",
+      username: "alice", licenseKeyHash: "hash",
       activeTicket: { id: "t1", title: "Task", sprintProgress: -1, sprintGoal: 10 },
-      licenseKeyHash: "hash",
     }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("sprintProgress");
@@ -295,9 +279,8 @@ describe("POST /api/account/update-ticket", () => {
   it("returns 400 when sprintProgress exceeds sprintGoal", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-ticket", {
-      username: "alice",
+      username: "alice", licenseKeyHash: "hash",
       activeTicket: { id: "t1", title: "Task", sprintProgress: 15, sprintGoal: 10 },
-      licenseKeyHash: "hash",
     }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("sprintProgress cannot exceed");
@@ -305,18 +288,16 @@ describe("POST /api/account/update-ticket", () => {
   it("returns 404 when profile does not exist", async () => {
     const { db } = createMockDB({ firstResults: undefined });
     const res = await postJSON("/api/account/update-ticket", {
-      username: "alice",
+      username: "alice", licenseKeyHash: "hash",
       activeTicket: { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 },
-      licenseKeyHash: "hash",
     }, { DB: db });
     expect(res.status).toBe(404);
   });
   it("succeeds when ownership is valid and update matches", async () => {
     const { db } = ownedMockDB();
     const res = await postJSON("/api/account/update-ticket", {
-      username: "alice",
+      username: "alice", licenseKeyHash: "hash",
       activeTicket: { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 },
-      licenseKeyHash: "hash",
     }, { DB: db });
     expect(res.status).toBe(200);
     const data = await res.json() as { success: boolean };
@@ -325,14 +306,12 @@ describe("POST /api/account/update-ticket", () => {
   it("returns 409 when update matches zero rows (revoked between check and write)", async () => {
     const { db } = ownedMockDB({ runChanges: 0 });
     const res = await postJSON("/api/account/update-ticket", {
-      username: "alice",
+      username: "alice", licenseKeyHash: "hash",
       activeTicket: { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 },
-      licenseKeyHash: "hash",
     }, { DB: db });
     expect(res.status).toBe(409);
   });
 });
-
 describe("POST /api/account/shill", () => {
   it("returns 500 when KV is not configured", async () => {
     const res = await postJSON("/api/account/shill", {}, {});
@@ -340,27 +319,18 @@ describe("POST /api/account/shill", () => {
   });
   it("returns 409 when shill credit was already claimed", async () => {
     const kv = mockKV({ "shill:test-session": "1" });
-    const res = await app.request("/api/account/shill", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: "cope_session_id=test-session" },
-      body: "{}",
-    }, { ALLOWED_ORIGINS: "http://localhost:5173", QUOTA_KV: kv });
+    const res = await postWithSession("/api/account/shill", {}, { QUOTA_KV: kv });
     expect(res.status).toBe(409);
   });
   it("grants shill credit on first claim", async () => {
     const kv = mockKV({});
-    const res = await app.request("/api/account/shill", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: "cope_session_id=test-session" },
-      body: "{}",
-    }, { ALLOWED_ORIGINS: "http://localhost:5173", QUOTA_KV: kv });
+    const res = await postWithSession("/api/account/shill", {}, { QUOTA_KV: kv });
     expect(res.status).toBe(200);
     const data = await res.json() as { success: boolean; creditsGranted: number };
     expect(data.success).toBe(true);
     expect(data.creditsGranted).toBe(5);
   });
 });
-
 describe("POST /api/account/checkout-license", () => {
   it("returns 400 when checkoutId is missing", async () => {
     const res = await postJSON("/api/account/checkout-license", {}, {
@@ -370,81 +340,48 @@ describe("POST /api/account/checkout-license", () => {
     const data = await res.json() as { error: string };
     expect(data.error).toContain("checkoutId");
   });
-
   it("returns 500 when Polar is not configured", async () => {
     const res = await postJSON("/api/account/checkout-license", { checkoutId: "co_123" }, {});
     expect(res.status).toBe(500);
   });
-
   it("returns cached key from KV on repeated calls", async () => {
     const kv = mockKV({ "checkout_used:co_123": JSON.stringify(["COPE-ABC"]) });
-    const res = await app.request("/api/account/checkout-license", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: "cope_session_id=s" },
-      body: JSON.stringify({ checkoutId: "co_123" }),
-    }, {
-      ALLOWED_ORIGINS: "http://localhost:5173",
-      POLAR_ACCESS_TOKEN: "tok",
-      POLAR_ORGANIZATION_ID: "org",
-      QUOTA_KV: kv,
-    });
+    const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_123" },
+      { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "s");
     expect(res.status).toBe(200);
     const data = await res.json() as { licenseKey: string; allKeys: string[] };
     expect(data.licenseKey).toBe("COPE-ABC");
     expect(data.allKeys).toEqual(["COPE-ABC"]);
   });
-
   it("handles legacy cached string (not JSON array) gracefully", async () => {
     const kv = mockKV({ "checkout_used:co_old": "COPE-LEGACY" });
-    const res = await app.request("/api/account/checkout-license", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: "cope_session_id=s" },
-      body: JSON.stringify({ checkoutId: "co_old" }),
-    }, {
-      ALLOWED_ORIGINS: "http://localhost:5173",
-      POLAR_ACCESS_TOKEN: "tok",
-      POLAR_ORGANIZATION_ID: "org",
-      QUOTA_KV: kv,
-    });
+    const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_old" },
+      { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "s");
     expect(res.status).toBe(200);
     const data = await res.json() as { licenseKey: string; allKeys: string[] };
     expect(data.licenseKey).toBe("COPE-LEGACY");
     expect(data.allKeys).toEqual(["COPE-LEGACY"]);
   });
-
   it("returns cached multi-key team pack from KV", async () => {
     const keys = ["COPE-T1", "COPE-T2", "COPE-T3"];
     const kv = mockKV({ "checkout_used:co_team": JSON.stringify(keys) });
-    const res = await app.request("/api/account/checkout-license", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: "cope_session_id=s" },
-      body: JSON.stringify({ checkoutId: "co_team" }),
-    }, {
-      ALLOWED_ORIGINS: "http://localhost:5173",
-      POLAR_ACCESS_TOKEN: "tok",
-      POLAR_ORGANIZATION_ID: "org",
-      QUOTA_KV: kv,
-    });
+    const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_team" },
+      { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "s");
     expect(res.status).toBe(200);
     const data = await res.json() as { licenseKey: string; allKeys: string[] };
     expect(data.licenseKey).toBe("COPE-T1");
     expect(data.allKeys).toEqual(keys);
   });
 });
-
 describe("GET /api/account/me", () => {
   it("returns found: false when KV is not configured", async () => {
-    const res = await app.request("/api/account/me", {
-      headers: { Cookie: "cope_session_id=test-session" },
-    }, { ALLOWED_ORIGINS: "http://localhost:5173" });
+    const res = await getWithSession("/api/account/me", {});
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ found: false });
   });
   it("returns found: false when session has no mapped username", async () => {
     const kv = mockKV({});
-    const res = await app.request("/api/account/me", {
-      headers: { Cookie: "cope_session_id=test-session" },
-    }, { ALLOWED_ORIGINS: "http://localhost:5173", QUOTA_KV: kv });
+    const res = await getWithSession("/api/account/me", { QUOTA_KV: kv });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ found: false });
   });
