@@ -67,6 +67,9 @@ score.get("/", async (c) => {
     .bind(username)
     .first<{ total_td: number; current_td: number; corporate_rank: string; license_hash: string | null }>();
 
+  // TODO(byok): BYOK users are treated as free tier here because the backend has no
+  // knowledge of client-side apiKey. Add a BYOK tier to allow rank progression for
+  // standalone installations once BYOK becomes a first-class feature.
   if (!row) return c.json({ total_td: 0, current_td: 0, corporate_rank: FREE_TIER_RANK_CAP });
   const licenseActive = row.license_hash ? await isLicenseActive(db, row.license_hash) : false;
   const rank = licenseActive ? row.corporate_rank : FREE_TIER_RANK_CAP;

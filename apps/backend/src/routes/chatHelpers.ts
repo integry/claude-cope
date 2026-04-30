@@ -27,6 +27,10 @@ type FreeProfileSnapshotParams = {
   quotaPercent: number;
 };
 
+// TODO(byok): This snapshot always caps rank at FREE_TIER_RANK_CAP. BYOK users
+// bypass the cap on the frontend, but server-synced profiles will reset their rank.
+// Once BYOK is promoted to a first-class feature, accept a BYOK flag so that rank
+// progression is preserved across sessions and devices.
 export function buildFreeChatProfileSnapshot(params: FreeProfileSnapshotParams): ServerProfile | null {
   const { username, serverProfile, tdAwarded, quotaPercent } = params;
   if (!serverProfile && tdAwarded <= 0) return null;

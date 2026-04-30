@@ -176,6 +176,9 @@ export function useGameState() {
       const boosted = Math.round(amount * multiplier);
       const newCurrentTD = Math.max(0, prev.economy.currentTD + boosted);
       const newTotalTDEarned = Math.max(0, prev.economy.totalTDEarned + boosted);
+      // TODO(byok): BYOK rank bypass is client-side only. If the user's localStorage
+      // is cleared or they sync from another device, the server will return
+      // FREE_TIER_RANK_CAP because the backend has no BYOK awareness yet.
       const isFree = !prev.proKey && !(BYOK_ENABLED && prev.apiKey);
       const newRank = isFree ? FREE_TIER_RANK_CAP : resolveRank(newTotalTDEarned, prev.economy.currentRank);
 

@@ -94,6 +94,9 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
   // Only cosmetic preferences (theme, buddy) are accepted from the client; scoring
   // fields (TD, inventory, upgrades, achievements) start at zero to prevent a
   // forged first-sync payload from minting arbitrary progress.
+  // TODO(byok): Profile creation only supports Pro licenses. BYOK users have no
+  // server-side persistence — their progress lives in localStorage only. To support
+  // cross-device sync for BYOK, add an apiKey-hash field to user_scores.
   const c = buildProfileCosmetics(body.currentProfile);
   const defaultRank = resolveRank(0);
 

@@ -889,6 +889,8 @@ export function executeSlashCommand(
   // Pro-gated commands: block free users with a 403-style error.
   // BYOK users are exempted for client-side commands but /alias requires a
   // real Max license key because it hits the backend.
+  // TODO(byok): This gating is enforced client-side only. The backend does not
+  // gate these commands for BYOK users — strengthen once BYOK is first-class.
   if (PRO_GATED_COMMANDS.has(baseCommand)) {
     const isPro = Boolean(ctx.state.proKey);
     const isBYOK = BYOK_ENABLED && Boolean(ctx.state.apiKey);
