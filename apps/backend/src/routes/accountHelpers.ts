@@ -26,11 +26,10 @@ export function pickBestLicenseKey(granted: PolarLicenseKeyItem[], checkoutCreat
 // Returns ALL keys associated with a checkout, ordered oldest-first (closest to checkout time first).
 // For team-pack purchases this will return multiple keys.
 export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreatedAt?: string): PolarLicenseKeyItem[] {
-  granted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  if (!checkoutCreatedAt) return granted.length ? [granted[0]!] : [];
+  const sorted = [...granted].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  if (!checkoutCreatedAt) return sorted.length ? [sorted[0]!] : [];
   const checkoutTime = new Date(checkoutCreatedAt).getTime();
-  const eligible = granted.filter((k) => new Date(k.created_at).getTime() >= checkoutTime);
-  return eligible;
+  return sorted.filter((k) => new Date(k.created_at).getTime() >= checkoutTime);
 }
 
 export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: string, organizationId: string): Promise<{ customerId: string; createdAt?: string } | { error: string; status: ContentfulStatusCode }> {

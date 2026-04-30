@@ -83,6 +83,17 @@ describe("pickAllLicenseKeys", () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.key).toBe("AFTER");
   });
+
+  it("does not mutate the input array", () => {
+    const keys = [
+      key("C", "2026-01-04T00:00:00Z"),
+      key("A", "2026-01-02T00:00:00Z"),
+      key("B", "2026-01-03T00:00:00Z"),
+    ];
+    const original = keys.map((k) => k.key);
+    pickAllLicenseKeys(keys, "2026-01-01T00:00:00Z");
+    expect(keys.map((k) => k.key)).toEqual(original);
+  });
 });
 
 describe("validateActiveTicket", () => {

@@ -218,15 +218,26 @@ function Terminal() {
     void (async () => {
       setHistory((prev) => [...prev, { role: "system", content: "[💳] Activating your license — one sec…" }]);
       try {
-        let lastData: { licenseKey?: string; error?: string } = {};
+        let lastData: { licenseKey?: string; allKeys?: string[]; error?: string } = {};
         for (let attempt = 0; attempt < 3; attempt++) {
           if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
           const res = await fetch(`${API_BASE}/api/account/checkout-license`, {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ checkoutId }),
           });
-          lastData = await res.json() as { licenseKey?: string; error?: string };
-          if (res.ok && lastData.licenseKey) { runSlashCommandRef.current(`/sync ${lastData.licenseKey}`); strip(); return; }
+          lastData = await res.json() as { licenseKey?: string; allKeys?: string[]; error?: string };
+          if (res.ok && lastData.licenseKey) {
+            const keys = lastData.allKeys ?? [lastData.licenseKey];
+            if (keys.length > 1) {
+              const keyList = keys.map((k, i) => `${i + 1}. \`${k}\``).join("\n");
+              setHistory((prev) => [...prev, { role: "system", content: `[✅ TEAM PACK] Your purchase includes **${keys.length} license keys**:\n\n${keyList}\n\nShare these with your team. Each person can activate their key by running \`/sync <KEY>\`.` }]);
+              strip();
+              return;
+            }
+            runSlashCommandRef.current(`/sync ${lastData.licenseKey}`);
+            strip();
+            return;
+          }
           if (res.status !== 409) break;
         }
         strip();

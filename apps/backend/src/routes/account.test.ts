@@ -411,6 +411,25 @@ describe("POST /api/account/checkout-license", () => {
     expect(data.licenseKey).toBe("COPE-LEGACY");
     expect(data.allKeys).toEqual(["COPE-LEGACY"]);
   });
+
+  it("returns cached multi-key team pack from KV", async () => {
+    const keys = ["COPE-T1", "COPE-T2", "COPE-T3"];
+    const kv = mockKV({ "checkout_used:co_team": JSON.stringify(keys) });
+    const res = await app.request("/api/account/checkout-license", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: "cope_session_id=s" },
+      body: JSON.stringify({ checkoutId: "co_team" }),
+    }, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      POLAR_ACCESS_TOKEN: "tok",
+      POLAR_ORGANIZATION_ID: "org",
+      QUOTA_KV: kv,
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json() as { licenseKey: string; allKeys: string[] };
+    expect(data.licenseKey).toBe("COPE-T1");
+    expect(data.allKeys).toEqual(keys);
+  });
 });
 
 describe("GET /api/account/me", () => {
