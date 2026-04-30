@@ -135,15 +135,8 @@ function Terminal() {
   }, [history]);
   useEffect(() => {
     const onPopState = () => {
-      if (pendingNagCommandRef.current !== null) {
-        setShowUpgrade(true);
-        return;
-      }
-      if (window.location.pathname !== "/upgrade") {
-        setShowUpgrade(false);
-      } else {
-        setShowUpgrade(true);
-      }
+      if (pendingNagCommandRef.current !== null) { setShowUpgrade(true); return; }
+      setShowUpgrade(window.location.pathname === "/upgrade");
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -158,19 +151,11 @@ function Terminal() {
   }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
 
   const handleQuotaLockout = useCallback((command?: string) => {
-    const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
-    if (effectiveApiKey) return;
+    if (BYOK_ENABLED && state.apiKey) return;
     if (!state.proKey && !state.proKeyHash) {
-      if (command) {
-        pendingNagCommandRef.current = command;
-        nagArmedFromQuotaRef.current = true;
-        setShowUpgrade(true);
-      } else {
-        nagArmedFromQuotaRef.current = true;
-      }
-    } else {
-      triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState });
-    }
+      nagArmedFromQuotaRef.current = true;
+      if (command) { pendingNagCommandRef.current = command; setShowUpgrade(true); }
+    } else { triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState }); }
   }, [playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState, setShowUpgrade]);
 
   const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
@@ -186,20 +171,11 @@ function Terminal() {
   }, [setIsProcessing, playError, setHistory]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value;
-    if (activeRegression === "backwards_typing" && value.length > inputValue.length) { value = value.slice(inputValue.length) + inputValue; }
-    setInputValue(value); setHistoryIndex(-1); setSuggestedReply(null);
-    setSlashQuery(value.startsWith("/") ? value : ""); setSlashIndex(0);
+    const value = activeRegression === "backwards_typing" && e.target.value.length > inputValue.length ? e.target.value.slice(inputValue.length) + inputValue : e.target.value;
+    setInputValue(value); setHistoryIndex(-1); setSuggestedReply(null); setSlashQuery(value.startsWith("/") ? value : ""); setSlashIndex(0);
   };
 
-  const getFilteredSlashCommands = () => {
-    const query = slashQuery.toLowerCase();
-
-    return SLASH_COMMANDS.filter((cmd) => {
-      const storeLocked = cmd === "/store" && state.economy.totalTDEarned < 1000;
-      return !storeLocked && cmd.startsWith(query);
-    });
-  };
+  const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => !(cmd === "/store" && state.economy.totalTDEarned < 1000) && cmd.startsWith(slashQuery.toLowerCase()));
 
   const runSlashCommand = (command: string) => {
     executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: setSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
@@ -257,24 +233,12 @@ function Terminal() {
   }, [isBooting, state.proKeyHash, setHistory]);
 
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
-    if (action === "execute") {
-      runSlashCommandRef.current(command);
-    } else {
-      // Prefill: write command + trailing space into input, update slash state, focus
-      const prefill = command + " ";
-      setInputValue(prefill);
-      setSlashQuery("");
-      setSlashIndex(0);
-      setSuggestedReply(null);
-      inputRef.current?.focus();
-    }
+    if (action === "execute") { runSlashCommandRef.current(command); return; }
+    setInputValue(command + " "); setSlashQuery(""); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
   }, []);
 
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
-    if (state.buddy.type) {
-      const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
-      setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount } }));
-    }
+    if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1 } }));
   }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
 
   const processCommandRef = useRef<(command: string) => void>(() => {});
@@ -361,24 +325,15 @@ function Terminal() {
   };
 
   const handleUpgradeNagClose = useCallback(() => {
-    setShowUpgrade(false);
-    if (window.location.pathname === "/upgrade") {
-      window.history.pushState(null, "", "/");
-    }
+    setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
     if (pendingNagCommandRef.current !== null) {
-      const command = pendingNagCommandRef.current;
-      pendingNagCommandRef.current = null;
-      nagArmedFromQuotaRef.current = false;
-      setCommandHistory((prev) => [...prev, command]);
-      processCommandRef.current(command);
+      const command = pendingNagCommandRef.current; pendingNagCommandRef.current = null; nagArmedFromQuotaRef.current = false;
+      setCommandHistory((prev) => [...prev, command]); processCommandRef.current(command);
     }
   }, [setShowUpgrade]);
 
   const handleManualUpgradeDismiss = useCallback(() => {
-    setShowUpgrade(false);
-    if (window.location.pathname === "/upgrade") {
-      window.history.pushState(null, "", "/");
-    }
+    setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
   }, [setShowUpgrade]);
 
   const { handleKeyDown } = useTerminalKeyboard({
