@@ -167,6 +167,15 @@ if ! $FRONTEND_ONLY; then
   if [[ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
     echo "$SUPABASE_SERVICE_ROLE_KEY" | (cd "$ROOT/apps/backend" && wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config "$WRANGLER_CFG")
   fi
+  if [[ -n "${POLAR_ACCESS_TOKEN:-}" ]]; then
+    echo "$POLAR_ACCESS_TOKEN" | (cd "$ROOT/apps/backend" && wrangler secret put POLAR_ACCESS_TOKEN --config "$WRANGLER_CFG")
+  fi
+  if [[ -n "${POLAR_ORGANIZATION_ID:-}" ]]; then
+    echo "$POLAR_ORGANIZATION_ID" | (cd "$ROOT/apps/backend" && wrangler secret put POLAR_ORGANIZATION_ID --config "$WRANGLER_CFG")
+  fi
+  if [[ -n "${POLAR_WEBHOOK_SECRET:-}" ]]; then
+    echo "$POLAR_WEBHOOK_SECRET" | (cd "$ROOT/apps/backend" && wrangler secret put POLAR_WEBHOOK_SECRET --config "$WRANGLER_CFG")
+  fi
   echo ""
 fi
 
