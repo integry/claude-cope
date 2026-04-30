@@ -1,4 +1,5 @@
 import { getProfile, getProfileByLicenseHash, getProfileRow, resolveRank } from "../utils/profile";
+import { getQuotaLimits } from "../utils/quota";
 
 export type SyncBody = {
   licenseKey?: string;
@@ -175,4 +176,55 @@ export function broadcastPurchase(message: string, db: D1Database | undefined, c
       db.prepare("INSERT INTO recent_events (message) VALUES (?)").bind(message).run(),
     );
   }
+}
+
+export const SHILL_CREDIT = 5;
+
+async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: number): Promise<void> {
+  const kvKey = `polar:${hash}`;
+  const existingQuota = await kv.get(kvKey);
+  if (existingQuota !== null) return;
+
+  const revokedKey = `polar_revoked:${hash}`;
+  const savedQuota = await kv.get(revokedKey);
+  if (savedQuota !== null) {
+    await kv.put(kvKey, savedQuota);
+    await kv.delete(revokedKey);
+  } else {
+    await kv.put(kvKey, String(proInitialQuota));
+  }
+}
+
+export async function commitSyncSideEffects(
+  deps: { db: D1Database; kv: KVNamespace; hash: string },
+  opts: { validationId?: string; limits: ReturnType<typeof getQuotaLimits>; sessionId?: string },
+) {
+  const { db, kv, hash } = deps;
+  await db
+    .prepare(
+      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
+    )
+    .bind(hash)
+    .run();
+
+  await ensureQuota(kv, hash, opts.limits.proInitialQuota);
+
+  if (opts.validationId) {
+    await kv.put(`polar_id:${hash}`, opts.validationId);
+  }
+}
+
+const MAX_TICKET_TITLE_LEN = 200;
+const MAX_TICKET_ID_LEN = 100;
+
+export function validateActiveTicket(ticket: unknown): string | null {
+  if (ticket === null || ticket === undefined) return null;
+  if (typeof ticket !== "object") return "activeTicket must be an object or null";
+  const t = ticket as Record<string, unknown>;
+  if (typeof t.id !== "string" || !t.id || t.id.length > MAX_TICKET_ID_LEN) return "Invalid ticket id";
+  if (typeof t.title !== "string" || !t.title || t.title.length > MAX_TICKET_TITLE_LEN) return "Invalid ticket title";
+  if (!Number.isFinite(t.sprintProgress) || (t.sprintProgress as number) < 0) return "Invalid sprintProgress";
+  if (!Number.isFinite(t.sprintGoal) || (t.sprintGoal as number) <= 0) return "Invalid sprintGoal";
+  if ((t.sprintProgress as number) > (t.sprintGoal as number)) return "sprintProgress cannot exceed sprintGoal";
+  return null;
 }

@@ -3,7 +3,7 @@ import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT } from "./accountHelpers";
 import type { SyncBody } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -22,25 +22,6 @@ type Env = {
     sessionId: string;
   };
 };
-const SHILL_CREDIT = 5;
-
-/** Ensure the KV quota entry exists for a license hash, restoring revoked quota if available. */
-async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: number): Promise<void> {
-  const kvKey = `polar:${hash}`;
-  const existingQuota = await kv.get(kvKey);
-  if (existingQuota !== null) return;
-
-  // If the license was previously revoked, restore the saved remaining
-  // quota instead of granting a fresh allocation.
-  const revokedKey = `polar_revoked:${hash}`;
-  const savedQuota = await kv.get(revokedKey);
-  if (savedQuota !== null) {
-    await kv.put(kvKey, savedQuota);
-    await kv.delete(revokedKey);
-  } else {
-    await kv.put(kvKey, String(proInitialQuota));
-  }
-}
 
 /** Validate preconditions for /sync and return the validated resources, or an error response. */
 async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response }) {
@@ -72,29 +53,6 @@ async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?
 
   const hash = await hashKey(body.licenseKey);
   return { body, validation, kv, db, hash } as const;
-}
-
-/** Provision the licenses row and KV quota for a license hash.
- *  Called AFTER resolveProfile succeeds so that a failed profile claim
- *  (username taken, concurrent race, etc.) never leaves behind orphaned
- *  active licenses or KV quota entries. */
-async function commitSyncSideEffects(
-  deps: { db: D1Database; kv: KVNamespace; hash: string },
-  opts: { validationId?: string; limits: ReturnType<typeof getQuotaLimits>; sessionId?: string },
-) {
-  const { db, kv, hash } = deps;
-  await db
-    .prepare(
-      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
-    )
-    .bind(hash)
-    .run();
-
-  await ensureQuota(kv, hash, opts.limits.proInitialQuota);
-
-  if (opts.validationId) {
-    await kv.put(`polar_id:${hash}`, opts.validationId);
-  }
 }
 
 const account = new Hono<Env>();
@@ -420,21 +378,6 @@ account.post("/buy-theme", async (c) => {
 // Allowlists for client-supplied IDs in mutation routes are imported from
 // @claude-cope/shared so frontend and backend share one source of truth —
 // no manual sync required when the achievement/buddy lists evolve.
-
-const MAX_TICKET_TITLE_LEN = 200;
-const MAX_TICKET_ID_LEN = 100;
-
-function validateActiveTicket(ticket: unknown): string | null {
-  if (ticket === null || ticket === undefined) return null;
-  if (typeof ticket !== "object") return "activeTicket must be an object or null";
-  const t = ticket as Record<string, unknown>;
-  if (typeof t.id !== "string" || !t.id || t.id.length > MAX_TICKET_ID_LEN) return "Invalid ticket id";
-  if (typeof t.title !== "string" || !t.title || t.title.length > MAX_TICKET_TITLE_LEN) return "Invalid ticket title";
-  if (!Number.isFinite(t.sprintProgress) || (t.sprintProgress as number) < 0) return "Invalid sprintProgress";
-  if (!Number.isFinite(t.sprintGoal) || (t.sprintGoal as number) <= 0) return "Invalid sprintGoal";
-  if ((t.sprintProgress as number) > (t.sprintGoal as number)) return "sprintProgress cannot exceed sprintGoal";
-  return null;
-}
 
 account.post("/unlock-achievement", async (c) => {
   const db = c.env?.DB;
