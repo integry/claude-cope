@@ -179,4 +179,24 @@ describe("extractSender", () => {
       body: "the model is overfitting.",
     });
   });
+
+  it("handles 'here' without punctuation", () => {
+    const result = extractSender(
+      "Brenda from Platform Governance here we need the login flow refactored.",
+    );
+    expect(result).toEqual({
+      sender: "Brenda (Platform Governance)",
+      body: "we need the login flow refactored.",
+    });
+  });
+
+  it("handles 'again' without punctuation", () => {
+    const result = extractSender(
+      "Derek from QA again the flaky tests are back.",
+    );
+    expect(result).toEqual({
+      sender: "Derek (QA)",
+      body: "the flaky tests are back.",
+    });
+  });
 });

@@ -60,6 +60,7 @@ const account = new Hono<Env>();
 account.post("/checkout-license", async (c) => {
   const body = await c.req.json<{ checkoutId?: string }>();
   if (!body.checkoutId) return c.json({ error: "checkoutId is required" }, 400);
+  if (!/^[\w-]{4,128}$/.test(body.checkoutId)) return c.json({ error: "Invalid checkoutId format" }, 400);
 
   const accessToken = c.env?.POLAR_ACCESS_TOKEN;
   const organizationId = c.env?.POLAR_ORGANIZATION_ID;
@@ -99,7 +100,7 @@ account.post("/checkout-license", async (c) => {
   const allKeys = pickAllLicenseKeys(granted, result.createdAt);
   if (!allKeys.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
   const allKeyStrings = allKeys.map((k) => k.key);
-  if (kv) await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(allKeyStrings), { expirationTtl: 60 * 60 * 24 });
+  if (kv) await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(allKeyStrings), { expirationTtl: 60 * 60 });
   return c.json({ licenseKey: allKeyStrings[0], allKeys: allKeyStrings });
 });
 

@@ -16,7 +16,7 @@ export function clearPendingOffer(): void {
 
 export function extractSender(description: string): { sender: string; body: string } | null {
   const match = description.match(
-    /^([\p{L}\w'-]+(?:\s[\p{L}\w'-]+)*)\s+from\s+(?!the\s|a\s|an\s)([\p{L}\w][\p{L}\w\s&-]*?)(?:\s+(?:here|again))?\s*[,.:;—–-]\s*([\s\S]+)/u,
+    /^([\p{L}\w'-]+(?:\s[\p{L}\w'-]+)*)\s+from\s+(?!the\s|a\s|an\s)([\p{L}\w][\p{L}\w\s&-]*?)(?:\s+(?:here|again)\s*[,.:;—–-]?\s+|\s*[,.:;—–-]\s*)([\s\S]+)/u,
   );
   if (!match) return null;
   return {

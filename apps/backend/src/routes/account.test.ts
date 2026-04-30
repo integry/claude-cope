@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import app from "../app";
 
 function createMockDB(opts: {
@@ -86,45 +86,21 @@ function ownedMockDB(opts: { runChanges?: number } = {}) {
 const GEN_BODY = { username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash" };
 
 describe("POST /api/account/buy-generator", () => {
-  it("returns 500 when DB is not configured", async () => {
-    const res = await postJSON("/api/account/buy-generator", GEN_BODY, {});
-    expect(res.status).toBe(500);
-  });
-  it("returns 400 when required fields are missing", async () => {
-    const { db } = createMockDB();
-    const res = await postJSON("/api/account/buy-generator", { username: "alice" }, { DB: db });
-    expect(res.status).toBe(400);
-  });
-  it("returns 400 when amount is not a positive integer", async () => {
-    const { db } = createMockDB();
-    const res = await postJSON("/api/account/buy-generator", { ...GEN_BODY, amount: -1 }, { DB: db });
-    expect(res.status).toBe(400);
-  });
+  it("returns 500 when DB is not configured", async () => { expect((await postJSON("/api/account/buy-generator", GEN_BODY, {})).status).toBe(500); });
+  it("returns 400 when required fields are missing", async () => { expect((await postJSON("/api/account/buy-generator", { username: "alice" }, { DB: createMockDB().db })).status).toBe(400); });
+  it("returns 400 when amount is not a positive integer", async () => { expect((await postJSON("/api/account/buy-generator", { ...GEN_BODY, amount: -1 }, { DB: createMockDB().db })).status).toBe(400); });
   it("returns 400 when amount exceeds 1000", async () => {
-    const { db } = createMockDB();
-    const res = await postJSON("/api/account/buy-generator", { ...GEN_BODY, amount: 1001 }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", { ...GEN_BODY, amount: 1001 }, { DB: createMockDB().db });
     expect(res.status).toBe(400);
-    const data = await res.json() as { error: string };
-    expect(data.error).toContain("max 1000");
+    expect(((await res.json()) as { error: string }).error).toContain("max 1000");
   });
   it("returns 400 for unknown generatorId", async () => {
-    const { db } = createMockDB();
-    const res = await postJSON("/api/account/buy-generator",
-      { ...GEN_BODY, generatorId: "does-not-exist" }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", { ...GEN_BODY, generatorId: "does-not-exist" }, { DB: createMockDB().db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("Unknown generator");
   });
-  it("returns 404 when profile is not found", async () => {
-    const { db } = createMockDB({ firstResults: undefined });
-    const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
-    expect(res.status).toBe(404);
-  });
-  it("returns 403 when license hash does not match", async () => {
-    const { db } = createMockDB({ firstResults: profileWithHash("other-hash") });
-    const res = await postJSON("/api/account/buy-generator",
-      { ...GEN_BODY, licenseKeyHash: "wrong-hash" }, { DB: db });
-    expect(res.status).toBe(403);
-  });
+  it("returns 404 when profile is not found", async () => { expect((await postJSON("/api/account/buy-generator", GEN_BODY, { DB: createMockDB({ firstResults: undefined }).db })).status).toBe(404); });
+  it("returns 403 when license hash does not match", async () => { expect((await postJSON("/api/account/buy-generator", { ...GEN_BODY, licenseKeyHash: "wrong-hash" }, { DB: createMockDB({ firstResults: profileWithHash("other-hash") }).db })).status).toBe(403); });
   it("returns 403 when license is revoked", async () => {
     const { db } = createMockDB({
       firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "revoked" } },
@@ -134,18 +110,8 @@ describe("POST /api/account/buy-generator", () => {
     const data = await res.json() as { error: string };
     expect(data.error).toContain("revoked");
   });
-  it("succeeds with valid ownership and sufficient TD", async () => {
-    const { db } = ownedMockDB();
-    const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
-    expect(res.status).toBe(200);
-    const data = await res.json() as { success: boolean };
-    expect(data.success).toBe(true);
-  });
-  it("returns 409 when concurrent update causes zero changes", async () => {
-    const { db } = ownedMockDB({ runChanges: 0 });
-    const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
-    expect(res.status).toBe(409);
-  });
+  it("succeeds with valid ownership and sufficient TD", async () => { expect((await postJSON("/api/account/buy-generator", GEN_BODY, { DB: ownedMockDB().db })).status).toBe(200); });
+  it("returns 409 when concurrent update causes zero changes", async () => { expect((await postJSON("/api/account/buy-generator", GEN_BODY, { DB: ownedMockDB({ runChanges: 0 }).db })).status).toBe(409); });
 });
 describe("POST /api/account/buy-upgrade", () => {
   it("returns 400 when required fields are missing", async () => {
@@ -371,6 +337,50 @@ describe("POST /api/account/checkout-license", () => {
     const data = await res.json() as { licenseKey: string; allKeys: string[] };
     expect(data.licenseKey).toBe("COPE-T1");
     expect(data.allKeys).toEqual(keys);
+  });
+  it("returns 400 for invalid checkoutId format", async () => {
+    expect((await postJSON("/api/account/checkout-license", { checkoutId: ";;;invalid" }, { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org" })).status).toBe(400);
+  });
+  describe("non-cached Polar fetch path", () => {
+    const origFetch = globalThis.fetch;
+    afterEach(() => { globalThis.fetch = origFetch; });
+    const penv = { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}) };
+    const T = "2026-01-02T00:00:00Z";
+    const co = (id: string) => postWithSession("/api/account/checkout-license", { checkoutId: id }, { ...penv, QUOTA_KV: mockKV({}) }, "s");
+    function stubPolar(checkout: object, lk?: object) {
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const u = typeof input === "string" ? input : input.toString();
+        if (u.includes("/v1/checkouts/")) return new Response(JSON.stringify(checkout));
+        if (u.includes("/v1/license-keys/")) return new Response(JSON.stringify(lk ?? { items: [] }));
+        return origFetch(input as RequestInfo, undefined);
+      }) as typeof fetch;
+    }
+    it("returns single key for successful checkout", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "COPE-NEW", created_at: "2026-01-02T00:00:05Z", status: "granted" }] });
+      const res = await co("co_new");
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-NEW"]);
+    });
+    it("returns multiple keys for team-pack", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: ["T1", "T2", "T3"].map((k, i) => ({ key: `COPE-${k}`, created_at: `2026-01-02T00:00:0${i + 1}Z`, status: "granted" })) });
+      expect(((await (await co("co_tp")).json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-T1", "COPE-T2", "COPE-T3"]);
+    });
+    it("returns 409 when no granted keys exist", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "X", created_at: "2026-01-02T00:00:05Z", status: "pending" }] });
+      expect((await co("co_p")).status).toBe(409);
+    });
+    it("returns 403 for wrong organization", async () => {
+      stubPolar({ organization_id: "other", status: "succeeded", customer_id: "c1" });
+      expect((await co("co_wo")).status).toBe(403);
+    });
+    it("returns 400 for unknown checkout (Polar 404)", async () => {
+      globalThis.fetch = vi.fn(async () => new Response("{}", { status: 404 })) as typeof fetch;
+      expect((await co("co_inv")).status).toBe(400);
+    });
+    it("excludes keys outside 5-minute window", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "THIS", created_at: "2026-01-02T00:00:10Z", status: "granted" }, { key: "LATER", created_at: "2026-01-02T01:00:00Z", status: "granted" }] });
+      expect(((await (await co("co_w")).json()) as { allKeys: string[] }).allKeys).toEqual(["THIS"]);
+    });
   });
 });
 describe("GET /api/account/me", () => {

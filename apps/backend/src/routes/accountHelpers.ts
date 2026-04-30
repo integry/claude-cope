@@ -16,20 +16,19 @@ export type PolarLicenseKeyItem = {
   status: string;
 };
 
-// Returns the single best key for a checkout (oldest key created after the checkout timestamp,
-// i.e. the key most likely minted as a direct result of this checkout).
-export function pickBestLicenseKey(granted: PolarLicenseKeyItem[], checkoutCreatedAt?: string): PolarLicenseKeyItem | null {
-  const keys = pickAllLicenseKeys(granted, checkoutCreatedAt);
-  return keys[0] ?? null;
-}
+const MAX_KEY_MINT_WINDOW_MS = 5 * 60 * 1000;
 
-// Returns ALL keys associated with a checkout, ordered oldest-first (closest to checkout time first).
-// For team-pack purchases this will return multiple keys.
+// Returns ALL keys minted by a checkout, ordered oldest-first.
+// Uses a 5-minute window after checkout creation to avoid returning keys from later purchases.
 export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreatedAt?: string): PolarLicenseKeyItem[] {
   const sorted = [...granted].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   if (!checkoutCreatedAt) return sorted.length ? [sorted[0]!] : [];
   const checkoutTime = new Date(checkoutCreatedAt).getTime();
-  return sorted.filter((k) => new Date(k.created_at).getTime() >= checkoutTime);
+  const upperBound = checkoutTime + MAX_KEY_MINT_WINDOW_MS;
+  return sorted.filter((k) => {
+    const t = new Date(k.created_at).getTime();
+    return t >= checkoutTime && t <= upperBound;
+  });
 }
 
 export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: string, organizationId: string): Promise<{ customerId: string; createdAt?: string } | { error: string; status: ContentfulStatusCode }> {

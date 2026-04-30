@@ -1,39 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { pickBestLicenseKey, pickAllLicenseKeys, validateActiveTicket } from "./accountHelpers";
+import { pickAllLicenseKeys, validateActiveTicket } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
-
-describe("pickBestLicenseKey", () => {
-  const key = (k: string, created_at: string): PolarLicenseKeyItem => ({ key: k, created_at, status: "granted" });
-
-  it("returns null for empty array", () => {
-    expect(pickBestLicenseKey([], "2026-01-01T00:00:00Z")).toBeNull();
-  });
-
-  it("returns the first key when no checkoutCreatedAt is provided", () => {
-    const keys = [key("A", "2026-01-02T00:00:00Z"), key("B", "2026-01-01T00:00:00Z")];
-    expect(pickBestLicenseKey(keys)).toEqual(expect.objectContaining({ key: "B" }));
-  });
-
-  it("returns the oldest eligible key (closest to checkout time)", () => {
-    const keys = [
-      key("OLD", "2026-01-01T00:00:00Z"),
-      key("MID", "2026-01-02T12:00:00Z"),
-      key("NEW", "2026-01-03T00:00:00Z"),
-    ];
-    const result = pickBestLicenseKey(keys, "2026-01-02T00:00:00Z");
-    expect(result?.key).toBe("MID");
-  });
-
-  it("returns null when no keys are created after checkout", () => {
-    const keys = [key("A", "2026-01-01T00:00:00Z")];
-    expect(pickBestLicenseKey(keys, "2026-01-02T00:00:00Z")).toBeNull();
-  });
-
-  it("returns key created at exactly checkout time", () => {
-    const keys = [key("EXACT", "2026-01-02T00:00:00Z")];
-    expect(pickBestLicenseKey(keys, "2026-01-02T00:00:00Z")?.key).toBe("EXACT");
-  });
-});
 
 describe("pickAllLicenseKeys", () => {
   const key = (k: string, created_at: string): PolarLicenseKeyItem => ({ key: k, created_at, status: "granted" });
@@ -42,7 +9,7 @@ describe("pickAllLicenseKeys", () => {
     expect(pickAllLicenseKeys([], "2026-01-01T00:00:00Z")).toEqual([]);
   });
 
-  it("returns all eligible keys for team-pack (multiple keys after checkout)", () => {
+  it("returns all eligible keys for team-pack (multiple keys after checkout within window)", () => {
     const checkoutTime = "2026-01-02T00:00:00Z";
     const keys = [
       key("OLD", "2026-01-01T00:00:00Z"),
@@ -59,11 +26,11 @@ describe("pickAllLicenseKeys", () => {
 
   it("returns keys ordered oldest-first", () => {
     const keys = [
-      key("C", "2026-01-04T00:00:00Z"),
-      key("A", "2026-01-02T00:00:00Z"),
-      key("B", "2026-01-03T00:00:00Z"),
+      key("C", "2026-01-02T00:02:00Z"),
+      key("A", "2026-01-02T00:00:01Z"),
+      key("B", "2026-01-02T00:01:00Z"),
     ];
-    const result = pickAllLicenseKeys(keys, "2026-01-01T00:00:00Z");
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
     expect(result.map((k) => k.key)).toEqual(["A", "B", "C"]);
   });
 
@@ -77,21 +44,40 @@ describe("pickAllLicenseKeys", () => {
   it("excludes keys created before checkout", () => {
     const keys = [
       key("BEFORE", "2026-01-01T00:00:00Z"),
-      key("AFTER", "2026-01-03T00:00:00Z"),
+      key("AFTER", "2026-01-02T00:01:00Z"),
     ];
     const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
     expect(result).toHaveLength(1);
     expect(result[0]!.key).toBe("AFTER");
   });
 
+  it("excludes keys created more than 5 minutes after checkout (later purchase)", () => {
+    const keys = [
+      key("THIS_CHECKOUT", "2026-01-02T00:00:10Z"),
+      key("LATER_PURCHASE", "2026-01-02T01:00:00Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.key).toBe("THIS_CHECKOUT");
+  });
+
+  it("includes keys within the 5-minute window", () => {
+    const keys = [
+      key("K1", "2026-01-02T00:00:01Z"),
+      key("K2", "2026-01-02T00:04:59Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
+    expect(result).toHaveLength(2);
+  });
+
   it("does not mutate the input array", () => {
     const keys = [
-      key("C", "2026-01-04T00:00:00Z"),
-      key("A", "2026-01-02T00:00:00Z"),
-      key("B", "2026-01-03T00:00:00Z"),
+      key("C", "2026-01-02T00:02:00Z"),
+      key("A", "2026-01-02T00:00:01Z"),
+      key("B", "2026-01-02T00:01:00Z"),
     ];
     const original = keys.map((k) => k.key);
-    pickAllLicenseKeys(keys, "2026-01-01T00:00:00Z");
+    pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
     expect(keys.map((k) => k.key)).toEqual(original);
   });
 });

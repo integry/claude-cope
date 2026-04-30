@@ -210,13 +210,14 @@ function Terminal() {
 
   const checkoutHandledRef = useRef(false);
   useEffect(() => {
-    if (isBooting || checkoutHandledRef.current || state.proKeyHash) return;
+    if (isBooting || checkoutHandledRef.current) return;
     const checkoutId = new URLSearchParams(window.location.search).get("checkout_id");
     if (!checkoutId) return;
     checkoutHandledRef.current = true;
     const strip = () => { const p = new URLSearchParams(window.location.search); p.delete("checkout_id"); const qs = p.toString(); window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "")); };
+    const alreadyPro = Boolean(state.proKeyHash);
     void (async () => {
-      setHistory((prev) => [...prev, { role: "system", content: "[💳] Activating your license — one sec…" }]);
+      setHistory((prev) => [...prev, { role: "system", content: "[💳] Retrieving your license — one sec…" }]);
       try {
         let lastData: { licenseKey?: string; allKeys?: string[]; error?: string } = {};
         for (let attempt = 0; attempt < 3; attempt++) {
@@ -231,6 +232,11 @@ function Terminal() {
             if (keys.length > 1) {
               const keyList = keys.map((k, i) => `${i + 1}. \`${k}\``).join("\n");
               setHistory((prev) => [...prev, { role: "system", content: `[✅ TEAM PACK] Your purchase includes **${keys.length} license keys**:\n\n${keyList}\n\nShare these with your team. Each person can activate their key by running \`/sync <KEY>\`.` }]);
+              strip();
+              return;
+            }
+            if (alreadyPro) {
+              setHistory((prev) => [...prev, { role: "system", content: `[✅] License key retrieved: \`${lastData.licenseKey}\`. You're already synced — run \`/sync ${lastData.licenseKey}\` to switch keys.` }]);
               strip();
               return;
             }
