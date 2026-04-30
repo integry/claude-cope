@@ -97,9 +97,19 @@ that the WAF layer cannot enforce.
 | Concept | Implementation |
 |---------|----------------|
 | Global burst protection | Cloudflare WAF rate-limit rule (this section) |
-| Per-user sustained limit | Worker KV limiter (`RATE_LIMIT_KV`) |
+| Per-user sustained limit | Worker KV limiter (`RATE_LIMIT_KV`) with concurrency headroom (see below) |
 | Telemetry / alerting | PostHog server-side capture (`Rate_Limit_Triggered`) |
-| Legacy simple limiter | **Retained for `/api/verify` only** -- the `unsafe.bindings.RATE_LIMITER` block in `wrangler.toml` is kept for `/api/verify` throttling. It is NOT used as a fallback for `/api/chat` when `IP_HASH_PEPPER` is missing; that is a misconfiguration and the middleware will log an error and skip KV rate limiting. The WAF rule still provides hard enforcement. |
+| Legacy simple limiter | **Retained for `/api/verify` only** -- the `unsafe.bindings.RATE_LIMITER` block in `wrangler.toml` is kept for `/api/verify` throttling. It is NOT used as a fallback for `/api/chat`. |
+| Missing `IP_HASH_PEPPER` | **Fail-closed (503)**. If `RATE_LIMIT_KV` is bound but `IP_HASH_PEPPER` is not set, the middleware returns 503 Service Unavailable. This forces operators to fix the misconfiguration before traffic flows. |
+
+### 3.5 KV Concurrency Headroom
+
+KV does not support atomic increments. Concurrent requests can read the
+same counter value and overwrite each other, causing undercounting. To
+compensate, KV thresholds are set to **80% of the nominal limit**
+(`KV_CONCURRENCY_HEADROOM = 0.8`). For example, the burst bucket's
+nominal limit of 10 triggers at 8 in KV, leaving headroom for
+undercounting. The WAF rule enforces the true ceiling atomically.
 
 ---
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { checkRateLimits, BUCKETS, LORE } from "./rateLimitBuckets";
+import { checkRateLimits, BUCKETS, LORE, effectiveLimit } from "./rateLimitBuckets";
 
 function mockKV(store: Record<string, string> = {}) {
   const ttls: Record<string, number> = {};
@@ -85,7 +85,7 @@ describe("checkRateLimits", () => {
       const store: Record<string, string> = {};
       const now = 100_000;
       const burstBucket = BUCKETS.find((b) => b.name === "burst")!;
-      fillBucket(store, "burst", burstBucket.limit, now + 30_000);
+      fillBucket(store, "burst", effectiveLimit(burstBucket), now + 30_000);
 
       const kv = mockKV(store);
       const result = await checkRateLimits(kv, KEYS, now);
@@ -103,7 +103,7 @@ describe("checkRateLimits", () => {
       const store: Record<string, string> = {};
       const now = 100_000;
       const burstBucket = BUCKETS.find((b) => b.name === "burst")!;
-      fillBucket(store, "burst", burstBucket.limit + 1, now + 30_000);
+      fillBucket(store, "burst", effectiveLimit(burstBucket) + 1, now + 30_000);
 
       const kv = mockKV(store);
       const result = await checkRateLimits(kv, KEYS, now);
@@ -118,7 +118,7 @@ describe("checkRateLimits", () => {
       const store: Record<string, string> = {};
       const now = 100_000;
       const burstBucket = BUCKETS.find((b) => b.name === "burst")!;
-      fillBucket(store, "burst", burstBucket.limit, now + 30_000);
+      fillBucket(store, "burst", effectiveLimit(burstBucket), now + 30_000);
 
       const kv = mockKV(store);
 
@@ -137,8 +137,8 @@ describe("checkRateLimits", () => {
 
       const swarmBucket = BUCKETS.find((b) => b.name === "swarm")!;
       const burstBucket = BUCKETS.find((b) => b.name === "burst")!;
-      fillBucket(store, "swarm", swarmBucket.limit, now + 60_000);
-      fillBucket(store, "burst", burstBucket.limit, now + 30_000);
+      fillBucket(store, "swarm", effectiveLimit(swarmBucket), now + 60_000);
+      fillBucket(store, "burst", effectiveLimit(burstBucket), now + 30_000);
 
       const kv = mockKV(store);
       const result = await checkRateLimits(kv, KEYS, now);
@@ -157,8 +157,8 @@ describe("checkRateLimits", () => {
       const swarm = BUCKETS.find((b) => b.name === "swarm")!;
       const ipBurst = BUCKETS.find((b) => b.name === "ip_burst")!;
 
-      fillBucket(store, "swarm", swarm.limit, now + 60_000);
-      fillBucket(store, "ip_burst", ipBurst.limit, now + 60_000);
+      fillBucket(store, "swarm", effectiveLimit(swarm), now + 60_000);
+      fillBucket(store, "ip_burst", effectiveLimit(ipBurst), now + 60_000);
 
       const kv = mockKV(store);
       const result = await checkRateLimits(kv, KEYS, now);
@@ -184,13 +184,13 @@ describe("checkRateLimits", () => {
 
       const ipBurst = BUCKETS.find((b) => b.name === "ip_burst")!;
       store[`${ipBurst.keyPrefix}${KEYS.ip}`] = JSON.stringify({
-        count: ipBurst.limit,
+        count: effectiveLimit(ipBurst),
         expiresAt: now + 60_000,
       });
 
       const burst = BUCKETS.find((b) => b.name === "burst")!;
       store[`${burst.keyPrefix}${KEYS.identity}`] = JSON.stringify({
-        count: burst.limit,
+        count: effectiveLimit(burst),
         expiresAt: now + 60_000,
       });
 
@@ -209,7 +209,7 @@ describe("checkRateLimits", () => {
       const store: Record<string, string> = {};
       const burst = BUCKETS.find((b) => b.name === "burst")!;
       store[`${burst.keyPrefix}${KEYS.identity}`] = JSON.stringify({
-        count: burst.limit,
+        count: effectiveLimit(burst),
         expiresAt,
       });
 
@@ -293,7 +293,7 @@ describe("checkRateLimits", () => {
       const now = 100_000;
       const swarm = BUCKETS.find((b) => b.name === "swarm")!;
       store[`${swarm.keyPrefix}${KEYS.ip}`] = JSON.stringify({
-        count: swarm.limit,
+        count: effectiveLimit(swarm),
         expiresAt: now + 60_000,
       });
 

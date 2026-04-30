@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { BUCKETS, LORE, type BucketName } from "../utils/rateLimitBuckets";
+import { BUCKETS, LORE, type BucketName, effectiveLimit } from "../utils/rateLimitBuckets";
 import app from "../app";
 
 function createMockKV(counters: Map<string, string> = new Map()) {
@@ -54,6 +54,22 @@ describe("rateLimiter middleware (hybrid KV)", () => {
     );
 
     expect(res.status).not.toBe(429);
+  });
+
+  it("returns 503 when RATE_LIMIT_KV is configured but IP_HASH_PEPPER is missing (fail closed)", async () => {
+    const res = await app.request(
+      "/api/chat",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "hello" }),
+      },
+      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMIT_KV: kv },
+    );
+
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("temporarily unavailable");
   });
 
   it("allows requests when under rate limit", async () => {
@@ -231,7 +247,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       const hotKv = createMockKV(counters);
       const burst = BUCKETS.find((b) => b.name === "burst")!;
 
-      const res = await exhaust(hotKv, burst.limit);
+      const res = await exhaust(hotKv, effectiveLimit(burst));
       expect(res.status).toBe(429);
 
       const body = (await res.json()) as { limitType: string };
@@ -244,7 +260,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       const hotKv = createMockKV(counters);
       const burst = BUCKETS.find((b) => b.name === "burst")!;
 
-      const res = await exhaust(hotKv, burst.limit);
+      const res = await exhaust(hotKv, effectiveLimit(burst));
       expect(res.status).toBe(429);
 
       const body = (await res.json()) as { limitType: BucketName; message: string };
@@ -256,7 +272,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       const hotKv = createMockKV(counters);
       const burst = BUCKETS.find((b) => b.name === "burst")!;
 
-      const res = await exhaust(hotKv, burst.limit);
+      const res = await exhaust(hotKv, effectiveLimit(burst));
       expect(res.status).toBe(429);
 
       const body = (await res.json()) as { retryAfterSeconds: number };
@@ -269,7 +285,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
       const hotKv = createMockKV(counters);
       const burst = BUCKETS.find((b) => b.name === "burst")!;
 
-      const res = await exhaust(hotKv, burst.limit);
+      const res = await exhaust(hotKv, effectiveLimit(burst));
       expect(res.status).toBe(429);
 
       const body = (await res.json()) as Record<string, unknown>;
