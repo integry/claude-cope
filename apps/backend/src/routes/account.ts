@@ -99,6 +99,80 @@ async function commitSyncSideEffects(
 
 const account = new Hono<Env>();
 
+type PolarCheckout = {
+  organization_id?: string;
+  status?: string;
+  customer_id?: string | null;
+  customer?: { id?: string };
+};
+
+type PolarLicenseKeyItem = {
+  key: string;
+  created_at: string;
+  status: string;
+};
+
+/**
+ * Look up the license key issued for a completed Polar checkout.
+ *
+ * Used by the post-purchase callback flow: Polar's success_url redirects the
+ * buyer to `claudecope.com/?checkout_id={CHECKOUT_ID}`, the frontend reads the
+ * param and calls this endpoint to retrieve the key, then runs the same /sync
+ * activation flow programmatically. The endpoint validates the checkout
+ * belongs to our org and is succeeded; an attacker who somehow obtains the
+ * checkout_id can read the customer's most recent license, but the license is
+ * already emailed to the buyer and is locked to a username after first
+ * activation, so the practical exposure is small.
+ */
+account.post("/checkout-license", async (c) => {
+  const body = await c.req.json<{ checkoutId?: string }>();
+  if (!body.checkoutId) return c.json({ error: "checkoutId is required" }, 400);
+
+  const accessToken = c.env?.POLAR_ACCESS_TOKEN;
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
+  if (!accessToken || !organizationId) {
+    return c.json({ error: "Polar integration is not configured" }, 500);
+  }
+
+  const checkoutResp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(body.checkoutId)}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!checkoutResp.ok) {
+    return c.json({ error: "Invalid checkout id" }, 400);
+  }
+  const checkout = await checkoutResp.json() as PolarCheckout;
+
+  if (checkout.organization_id !== organizationId) {
+    return c.json({ error: "Checkout belongs to a different organization" }, 403);
+  }
+  if (checkout.status !== "succeeded") {
+    return c.json({ error: "Payment not yet confirmed", status: checkout.status }, 409);
+  }
+
+  const customerId = checkout.customer_id || checkout.customer?.id;
+  if (!customerId) {
+    return c.json({ error: "Checkout has no associated customer" }, 500);
+  }
+
+  const lkResp = await fetch(
+    `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=20`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!lkResp.ok) {
+    return c.json({ error: "Failed to list license keys" }, 502);
+  }
+  const lkData = await lkResp.json() as { items?: PolarLicenseKeyItem[] };
+
+  const granted = (lkData.items ?? []).filter((l) => l.status === "granted");
+  if (!granted.length) {
+    // Webhook may not have propagated yet — frontend should retry.
+    return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
+  }
+
+  granted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return c.json({ licenseKey: granted[0]!.key });
+});
+
 account.post("/sync", async (c) => {
   const validated = await validateSyncRequest(c);
   if ("error" in validated) return validated.error;

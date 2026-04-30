@@ -9,7 +9,7 @@ import { BuddyDisplay } from "./BuddyDisplay";
 import { parseGlitchStyle } from "./parseGlitchStyle";
 import { terminalContainerClassName } from "./terminalClassName";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
-import { BYOK_ENABLED } from "../config";
+import { API_BASE, BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
 import { applyServerProfile } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
@@ -207,6 +207,46 @@ function Terminal() {
 
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
+
+  // Auto-activate license after a successful Polar purchase. Polar's checkout
+  // success_url redirects the buyer to claudecope.com/?checkout_id={CHECKOUT_ID};
+  // we look up the issued license key via the backend and dispatch /sync
+  // automatically. Skipped if the user already has a Pro license active or
+  // booting hasn't finished. Runs at most once per page load — the URL param
+  // is cleared before the lookup to prevent re-fires on re-render.
+  const checkoutHandledRef = useRef(false);
+  useEffect(() => {
+    if (isBooting || checkoutHandledRef.current) return;
+    if (state.proKeyHash) return;
+    const params = new URLSearchParams(window.location.search);
+    const checkoutId = params.get("checkout_id");
+    if (!checkoutId) return;
+    checkoutHandledRef.current = true;
+
+    // Strip the param immediately so we never re-process on the next render.
+    params.delete("checkout_id");
+    const qs = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+
+    void (async () => {
+      setHistory((prev) => [...prev, { role: "system", content: "[💳] Activating your license — one sec…" }]);
+      try {
+        const res = await fetch(`${API_BASE}/api/account/checkout-license`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ checkoutId }),
+        });
+        const data = await res.json() as { licenseKey?: string; error?: string };
+        if (!res.ok || !data.licenseKey) {
+          setHistory((prev) => [...prev, { role: "error", content: `[❌] License activation failed: ${data.error ?? "Unknown error"}. If your license arrived by email, you can run \`/sync <COPE-XXX>\` manually.` }]);
+          return;
+        }
+        runSlashCommandRef.current(`/sync ${data.licenseKey}`);
+      } catch {
+        setHistory((prev) => [...prev, { role: "error", content: "[❌] Network error during license activation. Check your email for the license key and run `/sync <COPE-XXX>` manually." }]);
+      }
+    })();
+  }, [isBooting, state.proKeyHash, setHistory]);
 
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") {
