@@ -104,8 +104,6 @@ function MobileLayout({
     return (
       <a
         href={url}
-        target="_blank"
-        rel="noopener noreferrer"
         className={primary ? "upgrade-btn-primary" : "upgrade-btn-secondary"}
         style={{
           display: "block",
