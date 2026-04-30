@@ -418,7 +418,6 @@ describe("Turnstile verification and protection", () => {
     const res = await requestVerify("POST", env, {}, ipJsonVerifyOriginHeaders);
     expect(res.status).toBe(400);
     expect(rateLimitKv.get).toHaveBeenCalledWith(expect.stringMatching(/^rl:verify-submit:/));
-    const key = rateLimitKv.get.mock.calls[0][0] as string;
-    expect(key).not.toContain("1.2.3.4");
+    expect(rateLimitKv.get.mock.calls[0][0] as string).not.toContain("1.2.3.4");
   });
 });
