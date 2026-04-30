@@ -55,6 +55,16 @@ async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?
   return { body, validation, kv, db, hash } as const;
 }
 
+async function lookupCheckoutCache(kv: KVNamespace | undefined, checkoutId: string, sessionId: string): Promise<{ keys: string[] } | { error: string; status: 403 } | null> {
+  if (!kv) return null;
+  const cached = await kv.get(`checkout_used:${checkoutId}`);
+  if (!cached) return null;
+  const entry = parseCheckoutCache(cached);
+  if (!entry) return null;
+  if (entry.sessionId && entry.sessionId !== sessionId) return { error: "This checkout was already redeemed by another session", status: 403 };
+  return { keys: entry.keys };
+}
+
 const account = new Hono<Env>();
 
 account.post("/checkout-license", async (c) => {
@@ -70,17 +80,10 @@ account.post("/checkout-license", async (c) => {
   if (!accessToken || !organizationId) return c.json({ error: "Polar integration is not configured" }, 500);
 
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  if (kv) {
-    const cached = await kv.get(`checkout_used:${body.checkoutId}`);
-    if (cached) {
-      const entry = parseCheckoutCache(cached);
-      if (entry) {
-        if (entry.sessionId && entry.sessionId !== sessionId) {
-          return c.json({ error: "This checkout was already redeemed by another session" }, 403);
-        }
-        return c.json({ licenseKey: entry.keys[0], allKeys: entry.keys });
-      }
-    }
+  const cacheResult = await lookupCheckoutCache(kv, body.checkoutId, sessionId);
+  if (cacheResult) {
+    if ("error" in cacheResult) return c.json({ error: cacheResult.error }, cacheResult.status);
+    return c.json({ licenseKey: cacheResult.keys[0], allKeys: cacheResult.keys });
   }
 
   const result = await fetchCheckoutCustomerId(body.checkoutId, accessToken, organizationId);

@@ -114,11 +114,7 @@ describe("POST /api/account/buy-generator", () => {
   it("returns 409 when concurrent update causes zero changes", async () => { expect((await postJSON("/api/account/buy-generator", GEN_BODY, { DB: ownedMockDB({ runChanges: 0 }).db })).status).toBe(409); });
 });
 describe("POST /api/account/buy-upgrade", () => {
-  it("returns 400 when required fields are missing", async () => {
-    const { db } = createMockDB();
-    const res = await postJSON("/api/account/buy-upgrade", { username: "alice" }, { DB: db });
-    expect(res.status).toBe(400);
-  });
+  it("returns 400 when required fields are missing", async () => { expect((await postJSON("/api/account/buy-upgrade", { username: "alice" }, { DB: createMockDB().db })).status).toBe(400); });
   it("returns 400 for unknown upgradeId", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/buy-upgrade", {
@@ -129,11 +125,7 @@ describe("POST /api/account/buy-upgrade", () => {
   });
 });
 describe("POST /api/account/buy-theme", () => {
-  it("returns 400 when required fields are missing", async () => {
-    const { db } = createMockDB();
-    const res = await postJSON("/api/account/buy-theme", { username: "alice" }, { DB: db });
-    expect(res.status).toBe(400);
-  });
+  it("returns 400 when required fields are missing", async () => { expect((await postJSON("/api/account/buy-theme", { username: "alice" }, { DB: createMockDB().db })).status).toBe(400); });
   it("returns 400 for unknown themeId", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/buy-theme", {
@@ -144,11 +136,7 @@ describe("POST /api/account/buy-theme", () => {
   });
 });
 describe("POST /api/account/unlock-achievement", () => {
-  it("returns 400 when required fields are missing", async () => {
-    const { db } = createMockDB();
-    const res = await postJSON("/api/account/unlock-achievement", { username: "alice" }, { DB: db });
-    expect(res.status).toBe(400);
-  });
+  it("returns 400 when required fields are missing", async () => { expect((await postJSON("/api/account/unlock-achievement", { username: "alice" }, { DB: createMockDB().db })).status).toBe(400); });
   it("returns 400 for unknown achievementId", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/unlock-achievement", {
@@ -166,11 +154,7 @@ describe("POST /api/account/unlock-achievement", () => {
   });
 });
 describe("POST /api/account/update-buddy", () => {
-  it("returns 400 when required fields are missing", async () => {
-    const { db } = createMockDB();
-    const res = await postJSON("/api/account/update-buddy", { buddyType: null, isShiny: false }, { DB: db });
-    expect(res.status).toBe(400);
-  });
+  it("returns 400 when required fields are missing", async () => { expect((await postJSON("/api/account/update-buddy", { buddyType: null, isShiny: false }, { DB: createMockDB().db })).status).toBe(400); });
   it("returns 400 when isShiny is not a boolean", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-buddy", {
@@ -220,11 +204,7 @@ describe("POST /api/account/update-buddy", () => {
   });
 });
 describe("POST /api/account/update-ticket", () => {
-  it("returns 400 when required fields are missing", async () => {
-    const { db } = createMockDB();
-    const res = await postJSON("/api/account/update-ticket", { activeTicket: null }, { DB: db });
-    expect(res.status).toBe(400);
-  });
+  it("returns 400 when required fields are missing", async () => { expect((await postJSON("/api/account/update-ticket", { activeTicket: null }, { DB: createMockDB().db })).status).toBe(400); });
   it("returns 400 for malformed activeTicket (non-object)", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-ticket", {
