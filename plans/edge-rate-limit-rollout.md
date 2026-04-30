@@ -99,7 +99,7 @@ that the WAF layer cannot enforce.
 | Global burst protection | Cloudflare WAF rate-limit rule (this section) |
 | Per-user sustained limit | Worker KV limiter (`RATE_LIMIT_KV`) |
 | Telemetry / alerting | PostHog server-side capture (`Rate_Limit_Triggered`) |
-| Legacy simple limiter | **Retained as fallback** -- the `unsafe.bindings.RATE_LIMITER` block in `wrangler.toml` is kept as a fallback for `/api/verify` throttling and when `IP_HASH_PEPPER` is not configured |
+| Legacy simple limiter | **Retained for `/api/verify` only** -- the `unsafe.bindings.RATE_LIMITER` block in `wrangler.toml` is kept for `/api/verify` throttling. It is NOT used as a fallback for `/api/chat` when `IP_HASH_PEPPER` is missing; that is a misconfiguration and the middleware will log an error and skip KV rate limiting. The WAF rule still provides hard enforcement. |
 
 ---
 

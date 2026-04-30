@@ -60,11 +60,9 @@ export const rateLimiter: MiddlewareHandler = async (c, next) => {
   const pepper = env.IP_HASH_PEPPER as string | undefined;
   if (!pepper) {
     if (!pepperWarningLogged) {
-      console.warn("IP_HASH_PEPPER not configured – KV rate limiting disabled; falling back to simple limiter");
+      console.error("MISCONFIGURATION: RATE_LIMIT_KV is bound but IP_HASH_PEPPER is missing – KV rate limiting disabled. Set IP_HASH_PEPPER via `wrangler secret put IP_HASH_PEPPER`.");
       pepperWarningLogged = true;
     }
-    const blocked = await enforceRateLimit(c as unknown as RateLimitContext);
-    if (blocked) return blocked;
     return next();
   }
 

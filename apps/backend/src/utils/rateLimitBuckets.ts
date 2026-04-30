@@ -56,6 +56,20 @@ function parseCounter(raw: string | null): CounterState | null {
   }
 }
 
+/**
+ * Advisory rate-limit check backed by Cloudflare KV.
+ *
+ * IMPORTANT: KV does not support atomic increments or compare-and-swap.
+ * The get→compute→put cycle is NOT atomic, so concurrent requests may
+ * read the same counter value and overwrite each other, causing
+ * undercounting. This is an inherent KV limitation.
+ *
+ * This function is therefore a BEST-EFFORT advisory layer. The
+ * Cloudflare WAF rate-limit rule (configured per the rollout runbook)
+ * is the authoritative, atomic enforcement mechanism. KV counters
+ * provide per-identity granularity and user-facing lore that the WAF
+ * cannot, but operators must not rely on them for hard guarantees.
+ */
 export async function checkRateLimits(
   kv: KVNamespace,
   keys: { ip: string; identity: string },
@@ -63,10 +77,6 @@ export async function checkRateLimits(
 ): Promise<RateLimitResult> {
   const ts = now ?? Date.now();
 
-  // Process each bucket sequentially: read → increment → write.
-  // This minimizes the race window between read and write per bucket.
-  // KV is eventually consistent so races are not fully eliminated, but the
-  // WAF rate-limit rule provides hard atomic protection at the edge.
   for (const bucket of BUCKETS) {
     const identifier = bucket.keyType === "ip" ? keys.ip : keys.identity;
     const key = buildKey(bucket, identifier);
