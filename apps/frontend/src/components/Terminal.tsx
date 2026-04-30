@@ -226,13 +226,12 @@ function Terminal() {
             body: JSON.stringify({ checkoutId }),
           });
           lastData = await res.json() as { licenseKey?: string; error?: string };
-          if (res.ok && lastData.licenseKey) { strip(); runSlashCommandRef.current(`/sync ${lastData.licenseKey}`); return; }
+          if (res.ok && lastData.licenseKey) { runSlashCommandRef.current(`/sync ${lastData.licenseKey}`); strip(); return; }
           if (res.status !== 409) break;
         }
         strip();
         setHistory((prev) => [...prev, { role: "error", content: `[❌] License activation failed: ${lastData.error ?? "Unknown error"}. If your license arrived by email, you can run \`/sync <COPE-XXX>\` manually.` }]);
       } catch {
-        strip();
         setHistory((prev) => [...prev, { role: "error", content: "[❌] Network error during license activation. Check your email for the license key and run `/sync <COPE-XXX>` manually." }]);
       }
     })();

@@ -16,7 +16,7 @@ export function clearPendingOffer(): void {
 
 export function extractSender(description: string): { sender: string; body: string } | null {
   const match = description.match(
-    /^([\p{L}\w'-]+(?:\s[\p{L}\w'-]+)*)\s+from\s+([\p{Lu}A-Z][\p{L}\w\s-]*?)(?:\s+(?:here|again))?\s*[,.]\s*([\s\S]+)/u,
+    /^([\p{L}\w'-]+(?:\s[\p{L}\w'-]+)*)\s+from\s+(?!the\s|a\s|an\s)([\p{L}\w][\p{L}\w\s&-]*?)(?:\s+(?:here|again))?\s*[,.:;—–-]\s*([\s\S]+)/u,
   );
   if (!match) return null;
   return {
@@ -53,12 +53,12 @@ export async function fetchRandomTicketPrompt(
         role: "system",
         content:
           `[📋 INCOMING TICKET] Your PM has assigned you a ticket:\n\n` +
-          `===================================\n\n` +
+          `---\n\n` +
           `**${ticket.title}**\n\n` +
           senderLine +
           `> ${body}\n\n` +
           `[✅ REWARD: ${reward} TD]\n\n` +
-          `-----------------------------------\n\n` +
+          `---\n\n` +
           `Type \`/accept\` to start working on it, or \`/backlog\` to browse other tickets.`,
       },
     ]);

@@ -103,4 +103,44 @@ describe("extractSender", () => {
       body: "check the metrics.",
     });
   });
+
+  it("handles colon as delimiter", () => {
+    const result = extractSender(
+      "Greg from Infrastructure here: the CDN cache is stale.",
+    );
+    expect(result).toEqual({
+      sender: "Greg (Infrastructure)",
+      body: "the CDN cache is stale.",
+    });
+  });
+
+  it("handles em dash as delimiter", () => {
+    const result = extractSender(
+      "Lisa from Analytics here — dashboards are down.",
+    );
+    expect(result).toEqual({
+      sender: "Lisa (Analytics)",
+      body: "dashboards are down.",
+    });
+  });
+
+  it("handles lowercase department names", () => {
+    const result = extractSender(
+      "Kevin from devops here, the pipeline is broken.",
+    );
+    expect(result).toEqual({
+      sender: "Kevin (devops)",
+      body: "the pipeline is broken.",
+    });
+  });
+
+  it("handles department names with ampersand", () => {
+    const result = extractSender(
+      "Dana from Research & Development here, prototype is ready.",
+    );
+    expect(result).toEqual({
+      sender: "Dana (Research & Development)",
+      body: "prototype is ready.",
+    });
+  });
 });

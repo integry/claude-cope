@@ -1,5 +1,52 @@
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { getProfile, getProfileByLicenseHash, getProfileRow, resolveRank } from "../utils/profile";
 import { getQuotaLimits } from "../utils/quota";
+
+export type PolarCheckout = {
+  organization_id?: string;
+  status?: string;
+  customer_id?: string | null;
+  customer?: { id?: string };
+  created_at?: string;
+};
+
+export type PolarLicenseKeyItem = {
+  key: string;
+  created_at: string;
+  status: string;
+};
+
+export function pickBestLicenseKey(granted: PolarLicenseKeyItem[], checkoutCreatedAt?: string): PolarLicenseKeyItem {
+  granted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  if (!checkoutCreatedAt || granted.length <= 1) return granted[0]!;
+  const checkoutTime = new Date(checkoutCreatedAt).getTime();
+  return granted.reduce((best, key) => {
+    const t = new Date(key.created_at).getTime();
+    return t >= checkoutTime && t < new Date(best.created_at).getTime() ? key : best;
+  }, granted[0]!);
+}
+
+export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: string, organizationId: string): Promise<{ customerId: string; createdAt?: string } | { error: string; status: ContentfulStatusCode }> {
+  let resp: Response;
+  try {
+    resp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(checkoutId)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch {
+    return { error: "Unable to reach Polar — please try again", status: 502 };
+  }
+  if (!resp.ok) {
+    if (resp.status >= 500) return { error: "Polar is temporarily unavailable — please try again", status: 502 };
+    if (resp.status === 404) return { error: "Invalid checkout id", status: 400 };
+    return { error: `Polar returned an unexpected error (${resp.status})`, status: 502 };
+  }
+  const checkout = await resp.json() as PolarCheckout;
+  if (checkout.organization_id !== organizationId) return { error: "Checkout belongs to a different organization", status: 403 };
+  if (checkout.status !== "succeeded") return { error: "Payment not yet confirmed", status: 409 };
+  const customerId = checkout.customer_id || checkout.customer?.id;
+  if (!customerId) return { error: "Checkout has no associated customer", status: 500 };
+  return { customerId, createdAt: checkout.created_at };
+}
 
 export type SyncBody = {
   licenseKey?: string;

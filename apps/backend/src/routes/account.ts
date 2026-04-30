@@ -1,11 +1,10 @@
 import { Hono } from "hono";
-import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT } from "./accountHelpers";
-import type { SyncBody } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, pickBestLicenseKey, fetchCheckoutCustomerId } from "./accountHelpers";
+import type { SyncBody, PolarLicenseKeyItem } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 
@@ -58,43 +57,6 @@ async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?
 
 const account = new Hono<Env>();
 
-type PolarCheckout = {
-  organization_id?: string;
-  status?: string;
-  customer_id?: string | null;
-  customer?: { id?: string };
-  created_at?: string;
-};
-
-type PolarLicenseKeyItem = {
-  key: string;
-  created_at: string;
-  status: string;
-};
-
-function pickBestLicenseKey(granted: PolarLicenseKeyItem[], checkoutCreatedAt?: string): PolarLicenseKeyItem {
-  granted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  if (!checkoutCreatedAt || granted.length <= 1) return granted[0]!;
-  const checkoutTime = new Date(checkoutCreatedAt).getTime();
-  return granted.reduce((best, key) => {
-    const t = new Date(key.created_at).getTime();
-    return t >= checkoutTime && t < new Date(best.created_at).getTime() ? key : best;
-  }, granted[0]!);
-}
-
-async function fetchCheckoutCustomerId(checkoutId: string, accessToken: string, organizationId: string): Promise<{ customerId: string; createdAt?: string } | { error: string; status: ContentfulStatusCode }> {
-  const resp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(checkoutId)}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!resp.ok) return { error: "Invalid checkout id", status: 400 };
-  const checkout = await resp.json() as PolarCheckout;
-  if (checkout.organization_id !== organizationId) return { error: "Checkout belongs to a different organization", status: 403 };
-  if (checkout.status !== "succeeded") return { error: "Payment not yet confirmed", status: 409 };
-  const customerId = checkout.customer_id || checkout.customer?.id;
-  if (!customerId) return { error: "Checkout has no associated customer", status: 500 };
-  return { customerId, createdAt: checkout.created_at };
-}
-
 account.post("/checkout-license", async (c) => {
   const body = await c.req.json<{ checkoutId?: string }>();
   if (!body.checkoutId) return c.json({ error: "checkoutId is required" }, 400);
@@ -104,15 +66,16 @@ account.post("/checkout-license", async (c) => {
   if (!accessToken || !organizationId) return c.json({ error: "Polar integration is not configured" }, 500);
 
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  if (kv && await kv.get(`checkout_used:${body.checkoutId}`)) {
-    return c.json({ error: "Checkout already processed" }, 410);
+  if (kv) {
+    const cached = await kv.get(`checkout_used:${body.checkoutId}`);
+    if (cached) return c.json({ licenseKey: cached });
   }
 
   const result = await fetchCheckoutCustomerId(body.checkoutId, accessToken, organizationId);
   if ("error" in result) return c.json({ error: result.error }, result.status);
 
   const lkResp = await fetch(
-    `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(result.customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=20`,
+    `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(result.customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=100&sorting=-created_at`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (!lkResp.ok) return c.json({ error: "Failed to list license keys" }, 502);
@@ -122,7 +85,7 @@ account.post("/checkout-license", async (c) => {
   if (!granted.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
 
   const best = pickBestLicenseKey(granted, result.createdAt);
-  if (kv) await kv.put(`checkout_used:${body.checkoutId}`, "1", { expirationTtl: 60 * 60 * 24 });
+  if (kv) await kv.put(`checkout_used:${body.checkoutId}`, best.key, { expirationTtl: 60 * 60 * 24 });
   return c.json({ licenseKey: best.key });
 });
 
