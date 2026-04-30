@@ -519,28 +519,43 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     reply({ role: "error", content: `[❌] Alias can only contain letters, numbers, hyphens, and underscores.` });
     return;
   }
+  if (!ctx.state.proKeyHash) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.PRO_GATED });
+    reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] \`/alias\` is a Max-tier command. Free users may look, but not touch.\n\nUpgrade at \`/upgrade\` to unlock the full command arsenal.` });
+    return;
+  }
+  const oldName = ctx.state.username;
   try {
-    const hashParam = ctx.state.proKeyHash ? `&proKeyHash=${encodeURIComponent(ctx.state.proKeyHash)}` : "";
-    const res = await fetch(`${API_BASE}/api/score/check-alias?username=${encodeURIComponent(newName)}${hashParam}`);
+    const res = await fetch(`${API_BASE}/api/account/update-alias`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: oldName,
+        newAlias: newName,
+        licenseKeyHash: ctx.state.proKeyHash,
+      }),
+    });
     if (res.status === 403) {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.PRO_GATED });
       reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] \`/alias\` is a Max-tier command. Free users may look, but not touch.\n\nUpgrade at \`/upgrade\` to unlock the full command arsenal.` });
       return;
     }
-    if (!res.ok) throw new Error("Failed to check alias");
-    const { taken } = (await res.json()) as { taken: boolean };
-    if (taken) {
+    if (res.status === 409) {
+      const data = (await res.json()) as { error: string };
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.TAKEN });
-      reply({ role: "error", content: `[❌] The alias **${newName}** is already in use by another player. Pick something else.` });
+      reply({ role: "error", content: `[❌] ${data.error}` });
       return;
+    }
+    if (!res.ok) throw new Error("Failed to update alias");
+    const data = (await res.json()) as { success: boolean; profile: ServerProfile };
+    if (data.profile) {
+      ctx.setState((prev) => applyServerProfile(prev, data.profile));
     }
   } catch {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.NETWORK_ERROR });
-    reply({ role: "error", content: `[❌] Could not verify alias availability. Try again later.` });
+    reply({ role: "error", content: `[❌] Could not update alias. Try again later.` });
     return;
   }
-  const oldName = ctx.state.username;
-  ctx.setState((prev) => ({ ...prev, username: newName }));
   identify({ username: newName });
   reply({ role: "system", content: `[✓] Alias updated from **${oldName}** to **${newName}**. The codebase will never know.` });
 }

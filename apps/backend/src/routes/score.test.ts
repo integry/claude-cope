@@ -198,6 +198,19 @@ describe("GET /api/score", () => {
     const json = await res.json() as { corporate_rank: string };
     expect(json.corporate_rank).toBe("Junior Code Monkey");
   });
+
+  it("returns uncapped rank for paid users with license_hash", async () => {
+    const { db } = makeDB({ total_td: 200000, current_td: 150000, corporate_rank: "Mid-Level Googler", license_hash: "pro-hash" } as never);
+    const res = await app.request("/api/score?username=prouser", undefined, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      DB: db,
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { total_td: number; current_td: number; corporate_rank: string };
+    expect(json.total_td).toBe(200000);
+    expect(json.current_td).toBe(150000);
+    expect(json.corporate_rank).toBe("Mid-Level Googler");
+  });
 });
 
 describe("GET /api/score/check-alias", () => {

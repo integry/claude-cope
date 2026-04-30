@@ -486,6 +486,63 @@ account.post("/update-ticket", async (c) => {
   return c.json({ success: true, profile: updated });
 });
 
+account.post("/update-alias", async (c) => {
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: "Database not configured" }, 500);
+
+  const body = await c.req.json<{ username: string; newAlias: string; licenseKeyHash: string }>();
+  if (!body.username || !body.newAlias || !body.licenseKeyHash) {
+    return c.json({ error: "username, newAlias, and licenseKeyHash are required" }, 400);
+  }
+
+  const alias = body.newAlias.trim();
+  if (alias.length < 3 || alias.length > 33) {
+    return c.json({ error: "Alias must be between 3 and 33 characters" }, 400);
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(alias)) {
+    return c.json({ error: "Alias can only contain letters, numbers, hyphens, and underscores" }, 400);
+  }
+
+  const ownership = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  if (ownership.status !== "ok") {
+    return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
+  }
+
+  const taken = await db
+    .prepare("SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?) AND username != ?")
+    .bind(alias, body.username)
+    .first();
+  if (taken) {
+    return c.json({ error: "This alias is already taken" }, 409);
+  }
+
+  const results = await db.batch([
+    db.prepare(
+      `UPDATE user_scores SET username = ?, updated_at = datetime('now')
+       WHERE username = ? AND license_hash = ?
+         AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
+    ).bind(alias, body.username, body.licenseKeyHash),
+    db.prepare("UPDATE completed_tasks SET username = ? WHERE username = ?")
+      .bind(alias, body.username),
+  ]);
+
+  const updateResult = results[0] as D1Result;
+  if (!updateResult.meta.changes) {
+    return c.json({ error: "Update failed — profile not found, license mismatch, or license revoked" }, 409);
+  }
+
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  const sessionId = c.get("sessionId");
+  if (kv && sessionId) {
+    await kv.put(`session_user:${sessionId}`, alias, { expirationTtl: 60 * 60 * 24 * 365 });
+    await kv.put(`username_session:${alias}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 });
+    await kv.delete(`username_session:${body.username}`);
+  }
+
+  const updated = await getProfile(db, alias);
+  return c.json({ success: true, profile: updated });
+});
+
 account.post("/shill", async (c) => {
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
   if (!kv) return c.json({ error: "KV storage is not configured" }, 500);

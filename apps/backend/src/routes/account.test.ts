@@ -333,6 +333,105 @@ describe("POST /api/account/update-ticket", () => {
   });
 });
 
+describe("POST /api/account/update-alias", () => {
+  it("returns 500 when DB is not configured", async () => {
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
+    }, {});
+    expect(res.status).toBe(500);
+  });
+  it("returns 400 when required fields are missing", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/update-alias", { username: "alice" }, { DB: db });
+    expect(res.status).toBe(400);
+  });
+  it("returns 400 when alias is too short", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "ab", licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain("between 3 and 33");
+  });
+  it("returns 400 when alias is too long", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "a".repeat(34), licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain("between 3 and 33");
+  });
+  it("returns 400 when alias contains invalid characters", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "bad name!", licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain("letters, numbers");
+  });
+  it("returns 404 when profile does not exist", async () => {
+    const { db } = createMockDB({ firstResults: undefined });
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(404);
+  });
+  it("returns 403 when license hash does not match", async () => {
+    const { db } = createMockDB({ firstResults: profileWithHash("other-hash") });
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "alice-new", licenseKeyHash: "wrong-hash",
+    }, { DB: db });
+    expect(res.status).toBe(403);
+  });
+  it("returns 403 when license is revoked", async () => {
+    const { db } = createMockDB({
+      firstBySQL: {
+        "SELECT username": BASE_PROFILE,
+        "SELECT status": { status: "revoked" },
+      },
+    });
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(403);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("revoked");
+  });
+  it("succeeds with valid ownership and available alias", async () => {
+    const { db } = createMockDB({
+      firstBySQL: {
+        "SELECT username": BASE_PROFILE,
+        "SELECT status": { status: "active" },
+        "LOWER(username)": null,
+      },
+      runChanges: 1,
+    });
+    db.batch = vi.fn().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 0 } }]);
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    const data = await res.json() as { success: boolean };
+    expect(data.success).toBe(true);
+  });
+  it("returns 409 when alias is already taken", async () => {
+    const { db } = createMockDB({
+      firstBySQL: {
+        "SELECT username": BASE_PROFILE,
+        "SELECT status": { status: "active" },
+        "LOWER(username)": { "1": 1 },
+      },
+    });
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "taken-name", licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(409);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("already taken");
+  });
+});
+
 describe("POST /api/account/shill", () => {
   it("returns 500 when KV is not configured", async () => {
     const res = await postJSON("/api/account/shill", {}, {});
