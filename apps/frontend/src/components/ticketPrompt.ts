@@ -14,9 +14,9 @@ export function clearPendingOffer(): void {
   pendingTicketOffer = null;
 }
 
-function extractSender(description: string): { sender: string; body: string } | null {
+export function extractSender(description: string): { sender: string; body: string } | null {
   const match = description.match(
-    /^([A-Z]\w+)\s+from\s+(.+?)(?:\s+(?:here|again))?\s*[,.]\s*([\s\S]+)/,
+    /^([\p{L}\w'-]+(?:\s[\p{L}\w'-]+)*)\s+from\s+(.+?)(?:\s+(?:here|again))?\s*[,.]\s*([\s\S]+)/u,
   );
   if (!match) return null;
   return {
