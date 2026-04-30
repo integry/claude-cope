@@ -296,7 +296,7 @@ describe("submitChatMessage - achievement parsing", () => {
     const result = updater([]) as Array<{ role: string; content: string }>;
     const warning = result.find((m) => m.role === "warning");
     expect(warning).toBeDefined();
-    expect(warning!.content).toBe("You're sending requests too quickly. Please wait a moment.");
+    expect(warning!.content).toBe("You're sending requests too quickly. Please wait a moment. (retry in 45s)");
     expect(warning!.content).not.toContain("OpenRouter rate-limited");
   });
 

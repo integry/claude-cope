@@ -30,9 +30,13 @@ export async function capturePostHogEvent(
     },
   });
 
-  await fetch(`${host}/capture/`, {
+  const response = await fetch(`${host}/capture/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
   });
+
+  if (!response.ok) {
+    console.warn(`PostHog capture failed: ${response.status} ${response.statusText}`);
+  }
 }

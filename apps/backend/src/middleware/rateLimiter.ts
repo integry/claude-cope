@@ -1,24 +1,17 @@
 import type { MiddlewareHandler } from "hono";
+import { getClientIp } from "../utils/clientIp";
 import { resolveRequestIdentity } from "../utils/identity";
 import { capturePostHogEvent } from "../utils/posthog";
 import { checkRateLimits } from "../utils/rateLimitBuckets";
+import { isLicenseActive } from "../utils/profile";
+
+export { getClientIp } from "../utils/clientIp";
 
 type RateLimitContext = {
   req: { header: (name: string) => string | undefined };
   env: Record<string, unknown>;
   json: (body: unknown, status?: number) => Response;
 };
-
-export function getClientIp(headers: { header: (name: string) => string | undefined }): string {
-  const cfIp = headers.header("cf-connecting-ip");
-  if (cfIp) return cfIp;
-
-  return (
-    headers.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-    headers.header("x-real-ip") ??
-    "unknown"
-  );
-}
 
 export async function enforceRateLimit(
   c: RateLimitContext,
@@ -49,26 +42,35 @@ export const createRateLimiter = (keyPrefix = ""): MiddlewareHandler => async (c
   await next();
 };
 
+let kvWarningLogged = false;
+
 export const rateLimiter: MiddlewareHandler = async (c, next) => {
   const env = c.env as Record<string, unknown>;
   const kv = env.RATE_LIMIT_KV as KVNamespace | undefined;
 
   if (!kv) {
-    console.warn("RATE_LIMIT_KV not configured – rate limiting disabled");
+    if (!kvWarningLogged) {
+      console.warn("RATE_LIMIT_KV not configured – rate limiting disabled");
+      kvWarningLogged = true;
+    }
     return next();
   }
 
   try {
     const body = await c.req.raw.clone().json() as Record<string, unknown>;
-    if (body?.proKeyHash) {
-      return next();
+    if (body?.proKeyHash && typeof body.proKeyHash === "string") {
+      const db = env.DB as D1Database | undefined;
+      if (db && await isLicenseActive(db, body.proKeyHash)) {
+        return next();
+      }
     }
   } catch {
     // Body parsing failed – continue with rate limiting
   }
 
   const sessionId = (c.get("sessionId") as string) || "anonymous";
-  const identity = await resolveRequestIdentity(sessionId, c.req);
+  const pepper = (env.IP_HASH_PEPPER as string) || undefined;
+  const identity = await resolveRequestIdentity(sessionId, c.req, pepper);
 
   const result = await checkRateLimits(kv, {
     ip: identity.ip_hash,

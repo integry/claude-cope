@@ -98,7 +98,7 @@ that the WAF layer cannot enforce.
 |---------|----------------|
 | Global burst protection | Cloudflare WAF rate-limit rule (this section) |
 | Per-user sustained limit | Worker KV limiter (`RATE_LIMIT_KV`) |
-| Telemetry / alerting | PostHog server-side capture (`rate_limit.hit`, `rate_limit.near_quota`) |
+| Telemetry / alerting | PostHog server-side capture (`Rate_Limit_Triggered`) |
 | Legacy simple limiter | **Removed** -- the old `unsafe.bindings.RATE_LIMITER` block has been deleted from `wrangler.toml` |
 
 ---
@@ -127,8 +127,8 @@ npx wrangler kv key list --binding RATE_LIMIT_KV
 
 1. Trigger a rate-limit hit (send requests exceeding the per-user threshold).
 2. Open PostHog > Activity > Live Events.
-3. Confirm `rate_limit.hit` and/or `rate_limit.near_quota` events appear
-   with the expected properties (IP, user/session ID, bucket counts).
+3. Confirm `Rate_Limit_Triggered` events appear with the expected
+   properties (`limit_type`, `asn`, `country`, `distinct_id`).
 
 ### 4.3 WAF Rule
 

@@ -1,4 +1,4 @@
-import { getClientIp } from "../middleware/rateLimiter";
+import { getClientIp } from "./clientIp";
 
 export type RequestIdentity = {
   cope_id: string;
@@ -22,30 +22,32 @@ function getCurrentDateString(): string {
   return `${y}-${m}-${d}`;
 }
 
-/**
- * SHA-256 hash of the raw IP concatenated with the current UTC date.
- * The daily rotation ensures stored hashes cannot be correlated across days.
- */
-export async function hashIpDaily(ip: string, dateStr?: string): Promise<string> {
+const DEFAULT_PEPPER = "claude-cope-default-ip-hash-pepper";
+
+export async function hashIpDaily(ip: string, pepper?: string, dateStr?: string): Promise<string> {
   const date = dateStr ?? getCurrentDateString();
-  const encoded = new TextEncoder().encode(ip + date);
-  const digest = await crypto.subtle.digest("SHA-256", encoded);
-  return Array.from(new Uint8Array(digest))
+  const encoder = new TextEncoder();
+  const secret = pepper || DEFAULT_PEPPER;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(ip + date));
+  return Array.from(new Uint8Array(signature))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
 
-/**
- * Build a normalized identity for the current request. The returned object
- * contains no raw IP — only a daily-rotating SHA-256 hash — so it is safe
- * to persist in limiter state keys, telemetry, and logs.
- */
 export async function resolveRequestIdentity(
   sessionId: string,
   req: { header: (name: string) => string | undefined; raw: unknown },
+  pepper?: string,
 ): Promise<RequestIdentity> {
   const ip = getClientIp(req as HeaderSource);
-  const ip_hash = await hashIpDaily(ip);
+  const ip_hash = await hashIpDaily(ip, pepper);
 
   const cf = (req.raw as { cf?: CfProperties } | undefined)?.cf;
 

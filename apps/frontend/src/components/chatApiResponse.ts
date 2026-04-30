@@ -215,9 +215,13 @@ export async function handleChatErrorResponse(
     onError?.();
     const errorData = await readErrorData();
     if (errorData?.limitType && typeof errorData?.message === "string") {
+      const retryHint =
+        typeof errorData?.retryAfterSeconds === "number" && errorData.retryAfterSeconds > 0
+          ? ` (retry in ${errorData.retryAfterSeconds}s)`
+          : "";
       pushMessage({
         role: "warning",
-        content: errorData.message,
+        content: errorData.message + retryHint,
       });
       return true;
     }

@@ -21,3 +21,9 @@ id = "placeholder-quota-kv-id"
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "placeholder-rate-limit-kv-id"
+
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "0"
+simple = { limit = 100, period = 60 }

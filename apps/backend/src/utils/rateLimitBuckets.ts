@@ -56,28 +56,11 @@ function parseCounter(raw: string | null): CounterState | null {
   }
 }
 
-async function incrementCounter(
-  kv: KVNamespace,
-  key: string,
-  windowSeconds: number,
-  now: number,
-): Promise<CounterState> {
-  const existing = parseCounter(await kv.get(key));
-
-  if (existing && existing.expiresAt > now) {
-    const updated: CounterState = { count: existing.count + 1, expiresAt: existing.expiresAt };
-    const remainingSec = Math.ceil((existing.expiresAt - now) / 1000);
-    await kv.put(key, JSON.stringify(updated), {
-      expirationTtl: Math.max(remainingSec, KV_MIN_TTL),
-    });
-    return updated;
-  }
-
-  const expiresAt = now + windowSeconds * 1000;
-  const state: CounterState = { count: 1, expiresAt };
-  await kv.put(key, JSON.stringify(state), { expirationTtl: windowSeconds });
-  return state;
-}
+type BucketEntry = {
+  bucket: BucketDefinition;
+  key: string;
+  existing: CounterState | null;
+};
 
 export async function checkRateLimits(
   kv: KVNamespace,
@@ -86,20 +69,58 @@ export async function checkRateLimits(
 ): Promise<RateLimitResult> {
   const ts = now ?? Date.now();
 
-  for (const bucket of BUCKETS) {
+  // Phase 1: Read all counters in parallel to reduce latency
+  const bucketReads = BUCKETS.map(async (bucket): Promise<BucketEntry> => {
     const identifier = bucket.keyType === "ip" ? keys.ip : keys.identity;
     const key = buildKey(bucket, identifier);
-    const state = await incrementCounter(kv, key, bucket.windowSeconds, ts);
+    const raw = await kv.get(key);
+    return { bucket, key, existing: parseCounter(raw) };
+  });
+  const entries = await Promise.all(bucketReads);
 
-    if (state.count > bucket.limit) {
-      return {
-        blocked: true,
-        bucket: bucket.name,
-        retryAfterMs: Math.max(0, state.expiresAt - ts),
-        shouldTrack: state.count === bucket.limit + 1,
-        lore: LORE[bucket.name],
-      };
+  // Phase 2: Check each bucket and compute incremented states up to the first block
+  const pendingWrites: { key: string; state: CounterState; ttl: number }[] = [];
+  let blockIndex = -1;
+
+  for (let i = 0; i < entries.length; i++) {
+    const { bucket, key, existing } = entries[i];
+    let newState: CounterState;
+    let ttl: number;
+
+    if (existing && existing.expiresAt > ts) {
+      newState = { count: existing.count + 1, expiresAt: existing.expiresAt };
+      ttl = Math.max(Math.ceil((existing.expiresAt - ts) / 1000), KV_MIN_TTL);
+    } else {
+      const expiresAt = ts + bucket.windowSeconds * 1000;
+      newState = { count: 1, expiresAt };
+      ttl = bucket.windowSeconds;
     }
+
+    pendingWrites.push({ key, state: newState, ttl });
+
+    if (newState.count > bucket.limit) {
+      blockIndex = i;
+      break;
+    }
+  }
+
+  // Phase 3: Write all computed increments in parallel
+  await Promise.all(
+    pendingWrites.map(({ key, state, ttl }) =>
+      kv.put(key, JSON.stringify(state), { expirationTtl: ttl }),
+    ),
+  );
+
+  if (blockIndex !== -1) {
+    const { bucket } = entries[blockIndex];
+    const { state } = pendingWrites[blockIndex];
+    return {
+      blocked: true,
+      bucket: bucket.name,
+      retryAfterMs: Math.max(0, state.expiresAt - ts),
+      shouldTrack: state.count === bucket.limit + 1,
+      lore: LORE[bucket.name],
+    };
   }
 
   return { blocked: false };

@@ -3,33 +3,44 @@ import { hashIpDaily, resolveRequestIdentity } from "./identity";
 
 describe("hashIpDaily", () => {
   it("returns a 64-char hex string", async () => {
-    const hash = await hashIpDaily("1.2.3.4", "2026-04-29");
+    const hash = await hashIpDaily("1.2.3.4", "test-pepper", "2026-04-29");
     expect(hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("produces different hashes for different dates", async () => {
-    const a = await hashIpDaily("1.2.3.4", "2026-04-29");
-    const b = await hashIpDaily("1.2.3.4", "2026-04-30");
+    const a = await hashIpDaily("1.2.3.4", "test-pepper", "2026-04-29");
+    const b = await hashIpDaily("1.2.3.4", "test-pepper", "2026-04-30");
     expect(a).not.toBe(b);
   });
 
   it("produces different hashes for different IPs on the same date", async () => {
-    const a = await hashIpDaily("1.2.3.4", "2026-04-29");
-    const b = await hashIpDaily("5.6.7.8", "2026-04-29");
+    const a = await hashIpDaily("1.2.3.4", "test-pepper", "2026-04-29");
+    const b = await hashIpDaily("5.6.7.8", "test-pepper", "2026-04-29");
     expect(a).not.toBe(b);
   });
 
   it("is deterministic for the same input", async () => {
-    const a = await hashIpDaily("10.0.0.1", "2026-01-01");
-    const b = await hashIpDaily("10.0.0.1", "2026-01-01");
+    const a = await hashIpDaily("10.0.0.1", "test-pepper", "2026-01-01");
+    const b = await hashIpDaily("10.0.0.1", "test-pepper", "2026-01-01");
     expect(a).toBe(b);
   });
 
   it("never contains the raw IP in the output", async () => {
     const ip = "192.168.1.42";
-    const hash = await hashIpDaily(ip, "2026-04-29");
+    const hash = await hashIpDaily(ip, "test-pepper", "2026-04-29");
     expect(hash).not.toContain(ip);
     expect(hash).not.toContain(ip.replace(/\./g, ""));
+  });
+
+  it("produces different hashes for different peppers", async () => {
+    const a = await hashIpDaily("1.2.3.4", "pepper-a", "2026-04-29");
+    const b = await hashIpDaily("1.2.3.4", "pepper-b", "2026-04-29");
+    expect(a).not.toBe(b);
+  });
+
+  it("uses default pepper when none is provided", async () => {
+    const hash = await hashIpDaily("1.2.3.4", undefined, "2026-04-29");
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 
@@ -126,5 +137,18 @@ describe("resolveRequestIdentity", () => {
     const id = await resolveRequestIdentity("sess", makeReq({}));
     const unknownHash = await hashIpDaily("unknown");
     expect(id.ip_hash).toBe(unknownHash);
+  });
+
+  it("passes pepper through to hashIpDaily", async () => {
+    const withPepper = await resolveRequestIdentity(
+      "sess",
+      makeReq({ "cf-connecting-ip": "1.2.3.4" }),
+      "custom-pepper",
+    );
+    const withoutPepper = await resolveRequestIdentity(
+      "sess",
+      makeReq({ "cf-connecting-ip": "1.2.3.4" }),
+    );
+    expect(withPepper.ip_hash).not.toBe(withoutPepper.ip_hash);
   });
 });
