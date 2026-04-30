@@ -14,6 +14,7 @@ import {
   type ChatResponseData,
 } from "./chatHelpers";
 import { getQuotaPercent, getQuotaLimits } from "../utils/quota";
+import { assignCategory, getCategoryConfig } from "../utils/categoryRouting";
 
 type Env = {
   Bindings: {
@@ -357,7 +358,19 @@ chat.post("/", async (c) => {
     return c.json({ error: preCheck.error }, (preCheck.status ?? 500) as ContentfulStatusCode);
   }
 
-  const model = resolveModel(body.modelId);
+  const isProUser = Boolean(preCheck.effectiveProKeyHash);
+  const category = assignCategory({ isProUser, quotaPercent: preCheck.quotaPercent });
+
+  let categoryModel: string | null = null;
+  let categoryApiKey: string | null = null;
+  if (db) {
+    const catConfig = await getCategoryConfig(db, category);
+    categoryModel = catConfig.model;
+    categoryApiKey = catConfig.apiKey;
+  }
+
+  const model = categoryModel ?? resolveModel(body.modelId);
+  const effectiveApiKey = categoryApiKey ?? apiKey!;
 
   const sanitizedMessages = sanitizeChatMessages(body.chatMessages);
   const trimmedMessages = enforceContextTrimming(sanitizedMessages);
@@ -372,9 +385,9 @@ chat.post("/", async (c) => {
   const providerList = resolveProviderList(
     c.env.OPENROUTER_PROVIDERS,
     c.env.OPENROUTER_PROVIDERS_FREE_ONLY,
-    Boolean(preCheck.effectiveProKeyHash),
+    isProUser,
   );
-  const orResponse = await callOpenRouter(apiKey!, model, messages, providerList);
+  const orResponse = await callOpenRouter(effectiveApiKey, model, messages, providerList);
 
   if (!orResponse.ok) {
     const errData = await orResponse.json();
