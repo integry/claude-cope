@@ -5,11 +5,7 @@ const ALLOWED_ORIGINS = "http://localhost:5173";
 const verifyOriginHeaders = { Origin: ALLOWED_ORIGINS };
 const jsonVerifyOriginHeaders = { "Content-Type": "application/json", Origin: ALLOWED_ORIGINS };
 const ipVerifyOriginHeaders = { Origin: ALLOWED_ORIGINS, "cf-connecting-ip": "1.2.3.4" };
-const ipJsonVerifyOriginHeaders = {
-  "Content-Type": "application/json",
-  Origin: ALLOWED_ORIGINS,
-  "cf-connecting-ip": "1.2.3.4",
-};
+const ipJsonVerifyOriginHeaders = { "Content-Type": "application/json", Origin: ALLOWED_ORIGINS, "cf-connecting-ip": "1.2.3.4" };
 
 function requestVerify(method: "GET" | "POST", env: Record<string, unknown>, body?: unknown, headers?: Record<string, string>) {
   return app.request(
@@ -31,40 +27,21 @@ describe("Turnstile verification and protection", () => {
   it("reports verification disabled when TURNSTILE_SECRET_KEY is not set", async () => {
     const res = await requestVerify("GET", {});
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({
-      status: "disabled",
-      enabled: false,
-      bypassed: true,
-      misconfigured: false,
-    });
+    await expect(res.json()).resolves.toEqual({ status: "disabled", enabled: false, bypassed: true, misconfigured: false });
     expect(res.headers.get("cache-control")).toBe("no-store, max-age=0");
   });
-
   it("bypasses verify status rate limiting when TURNSTILE_SECRET_KEY is not set", async () => {
-    const limiter = { limit: vi.fn().mockResolvedValue({ success: false }) };
-    const res = await requestVerify("GET", { RATE_LIMITER: limiter }, undefined, ipVerifyOriginHeaders);
+    const rateLimitKv = { get: vi.fn().mockResolvedValue(null), put: vi.fn() };
+    const res = await requestVerify("GET", { RATE_LIMIT_KV: rateLimitKv }, undefined, ipVerifyOriginHeaders);
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({
-      status: "disabled",
-      enabled: false,
-      bypassed: true,
-      misconfigured: false,
-    });
-    expect(limiter.limit).not.toHaveBeenCalled();
+    await expect(res.json()).resolves.toEqual({ status: "disabled", enabled: false, bypassed: true, misconfigured: false });
+    expect(rateLimitKv.get).not.toHaveBeenCalled();
   });
-
   it("reports verification unavailable when secret is set but verification storage is unavailable", async () => {
     const res = await requestVerify("GET", { TURNSTILE_SECRET_KEY: "secret" });
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({
-      status: "unavailable",
-      enabled: false,
-      bypassed: false,
-      misconfigured: false,
-      reason: "storage_unavailable",
-    });
+    await expect(res.json()).resolves.toEqual({ status: "unavailable", enabled: false, bypassed: false, misconfigured: false, reason: "storage_unavailable" });
   });
-
   it("reports verification misconfigured when TURNSTILE_EXPECTED_HOSTNAME is invalid", async () => {
     const usageKv = { get: vi.fn(), put: vi.fn() };
     const res = await requestVerify("GET", {
@@ -150,10 +127,14 @@ describe("Turnstile verification and protection", () => {
 
   it("rate limits /api/chat before checking bot protection", async () => {
     const usageKv = { get: vi.fn().mockResolvedValue(null) };
-    const limiter = { limit: vi.fn().mockResolvedValue({ success: false }) };
-    const res = await requestChat({ TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv, RATE_LIMITER: limiter });
+    const overLimitCounter = JSON.stringify({ count: 100, expiresAt: Date.now() + 60_000 });
+    const rateLimitKv = {
+      get: vi.fn().mockResolvedValue(overLimitCounter),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+    const res = await requestChat({ TURNSTILE_SECRET_KEY: "secret", USAGE_KV: usageKv, RATE_LIMIT_KV: rateLimitKv, IP_HASH_PEPPER: "test-pepper" });
     expect(res.status).toBe(429);
-    expect(limiter.limit).toHaveBeenCalled();
+    expect(rateLimitKv.get).toHaveBeenCalled();
     expect(usageKv.get).not.toHaveBeenCalled();
   });
 
@@ -355,46 +336,88 @@ describe("Turnstile verification and protection", () => {
       fetchSpy.mockRestore();
     }
   });
-  it("rate limits verify status checks when Turnstile is enabled", async () => {
-    const limiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
-    const res = await requestVerify(
-      "GET",
-      {
-        TURNSTILE_SECRET_KEY: "secret",
-        USAGE_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn() },
-        RATE_LIMITER: limiter,
-      },
-      undefined,
-      ipVerifyOriginHeaders,
-    );
+  it("rate limits verify status checks with IP hash key, never raw IPs", async () => {
+    const rateLimitKv = { get: vi.fn().mockResolvedValue(null), put: vi.fn() };
+    const env = {
+      TURNSTILE_SECRET_KEY: "secret",
+      USAGE_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn() },
+      RATE_LIMIT_KV: rateLimitKv,
+      IP_HASH_PEPPER: "test-pepper",
+    };
+    const res = await requestVerify("GET", env, undefined, ipVerifyOriginHeaders);
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("no-store, max-age=0");
-    expect(limiter.limit).toHaveBeenCalledWith({ key: expect.stringMatching(/^verify-status:[0-9a-f-]{36}$/) });
+    expect(rateLimitKv.get).toHaveBeenCalledWith(expect.stringMatching(/^rl:verify-status:/));
+    const key = rateLimitKv.get.mock.calls[0][0] as string;
+    expect(key).not.toContain("1.2.3.4");
   });
-  it("falls back to IP for verify-status rate limit key when session is unavailable", async () => {
-    const limiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
-    const res = await app.request(
-      "/api/verify",
-      { method: "GET", headers: ipVerifyOriginHeaders },
-      { ALLOWED_ORIGINS, TURNSTILE_SECRET_KEY: "secret", USAGE_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn() }, RATE_LIMITER: limiter },
-    );
-    expect(res.status).toBe(200);
-    expect(limiter.limit).toHaveBeenCalledWith({ key: expect.stringMatching(/^verify-status:/) });
+  it.each([
+    { label: "verify-status", method: "GET" as const, body: undefined, headers: ipVerifyOriginHeaders },
+    { label: "verify-submit", method: "POST" as const, body: {}, headers: ipJsonVerifyOriginHeaders },
+  ])("returns 503 when $label rate-limit KV fails", async ({ method, body, headers }) => {
+    const rateLimitKv = { get: vi.fn().mockRejectedValue(new Error("kv down")), put: vi.fn() };
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const env = {
+        TURNSTILE_SECRET_KEY: "secret",
+        USAGE_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn() },
+        RATE_LIMIT_KV: rateLimitKv,
+        IP_HASH_PEPPER: "test-pepper",
+      };
+      const res = await requestVerify(method, env, body, headers);
+      expect(res.status).toBe(503);
+      const json = await res.json() as { error: string };
+      expect(json.error).toContain("temporarily unavailable");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+  it("uses daily-rotating IP hash keys for verify-status rate limiting", async () => {
+    const rateLimitKv1 = { get: vi.fn().mockResolvedValue(null), put: vi.fn() };
+    const env1 = {
+      TURNSTILE_SECRET_KEY: "secret",
+      USAGE_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn() },
+      RATE_LIMIT_KV: rateLimitKv1,
+      IP_HASH_PEPPER: "test-pepper",
+    };
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-29T12:00:00Z"));
+    const res1 = await requestVerify("GET", env1, undefined, ipVerifyOriginHeaders);
+    expect(res1.status).toBe(200);
+    const keyDay1 = rateLimitKv1.get.mock.calls[0][0] as string;
+
+    const rateLimitKv2 = { get: vi.fn().mockResolvedValue(null), put: vi.fn() };
+    const env2 = {
+      TURNSTILE_SECRET_KEY: "secret",
+      USAGE_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn() },
+      RATE_LIMIT_KV: rateLimitKv2,
+      IP_HASH_PEPPER: "test-pepper",
+    };
+
+    vi.setSystemTime(new Date("2026-04-30T12:00:00Z"));
+    const res2 = await requestVerify("GET", env2, undefined, ipVerifyOriginHeaders);
+    expect(res2.status).toBe(200);
+    const keyDay2 = rateLimitKv2.get.mock.calls[0][0] as string;
+
+    expect(keyDay1).not.toBe(keyDay2);
+    expect(keyDay1).toMatch(/^rl:verify-status:/);
+    expect(keyDay2).toMatch(/^rl:verify-status:/);
+
+    vi.useRealTimers();
   });
 
-  it("uses a separate verify-submit rate limiter key for token submission", async () => {
-    const limiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
-    const res = await requestVerify(
-      "POST",
-      {
-        TURNSTILE_SECRET_KEY: "secret",
-        USAGE_KV: { get: vi.fn(), put: vi.fn() },
-        RATE_LIMITER: limiter,
-      },
-      {},
-      ipJsonVerifyOriginHeaders,
-    );
+  it("uses a separate verify-submit rate limiter key that never contains raw IPs", async () => {
+    const rateLimitKv = { get: vi.fn().mockResolvedValue(null), put: vi.fn() };
+    const env = {
+      TURNSTILE_SECRET_KEY: "secret",
+      USAGE_KV: { get: vi.fn(), put: vi.fn() },
+      RATE_LIMIT_KV: rateLimitKv,
+      IP_HASH_PEPPER: "test-pepper",
+    };
+    const res = await requestVerify("POST", env, {}, ipJsonVerifyOriginHeaders);
     expect(res.status).toBe(400);
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "verify-submit:1.2.3.4" });
+    expect(rateLimitKv.get).toHaveBeenCalledWith(expect.stringMatching(/^rl:verify-submit:/));
+    expect(rateLimitKv.get.mock.calls[0][0] as string).not.toContain("1.2.3.4");
   });
 });

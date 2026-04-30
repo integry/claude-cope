@@ -214,6 +214,17 @@ export async function handleChatErrorResponse(
   const handleRateLimit = async () => {
     onError?.();
     const errorData = await readErrorData();
+    if (typeof errorData?.limitType === "string" && typeof errorData?.message === "string") {
+      const retryHint =
+        typeof errorData?.retryAfterSeconds === "number" && errorData.retryAfterSeconds > 0
+          ? ` (retry in ${errorData.retryAfterSeconds}s)`
+          : "";
+      pushMessage({
+        role: "warning",
+        content: errorData.message + retryHint,
+      });
+      return true;
+    }
     const upstreamRaw = errorData?.error?.metadata?.raw
       ?? errorData?.error?.message
       ?? (typeof errorData?.error === "string" ? errorData.error : "");
