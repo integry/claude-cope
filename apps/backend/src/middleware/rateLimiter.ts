@@ -10,21 +10,27 @@ export const createKvRateLimiter = (
   keyPrefix: string,
   limit = 100,
   windowSeconds = 60,
+  opts?: { keyStrategy?: "ip" | "session" },
 ): MiddlewareHandler => async (c, next) => {
   const env = c.env as Record<string, unknown>;
   const kv = env.RATE_LIMIT_KV as KVNamespace | undefined;
   if (!kv) return next();
 
-  const sessionId = c.get("sessionId") as string | undefined;
   const pepper = env.IP_HASH_PEPPER as string | undefined;
 
   let suffix: string;
-  if (sessionId) {
-    suffix = sessionId;
-  } else if (pepper) {
+  if (opts?.keyStrategy === "ip") {
+    if (!pepper) return next();
     suffix = await hashIpDaily(getClientIp(c.req), pepper);
   } else {
-    return next();
+    const sessionId = c.get("sessionId") as string | undefined;
+    if (sessionId) {
+      suffix = sessionId;
+    } else if (pepper) {
+      suffix = await hashIpDaily(getClientIp(c.req), pepper);
+    } else {
+      return next();
+    }
   }
 
   let check;
@@ -83,12 +89,13 @@ export const rateLimiter: MiddlewareHandler = async (c, next) => {
   try {
     const rawSessionId = c.get("sessionId") as string | undefined;
     const ip = getClientIp(c.req);
-    const sessionId = rawSessionId || `ip:${await hashIpDaily(ip, pepper)}`;
-    identity = await resolveRequestIdentity(sessionId, c.req, pepper);
+    const ipHash = await hashIpDaily(ip, pepper);
+    const sessionId = rawSessionId || `ip:${ipHash}`;
+    identity = await resolveRequestIdentity(sessionId, c.req, pepper, ipHash);
 
     result = await checkRateLimits(kv, {
       ip: identity.ip_hash,
-      identity: identity.cope_id,
+      identity: identity.ip_hash,
     });
   } catch (err) {
     console.error("Rate-limit evaluation failed (fail-closed 503).", err);

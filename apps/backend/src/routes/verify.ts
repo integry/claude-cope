@@ -1,8 +1,6 @@
 import { type Context, Hono } from "hono";
 import { getClientIp } from "../utils/clientIp";
-import { hashIpDaily } from "../utils/identity";
 import { createKvRateLimiter } from "../middleware/rateLimiter";
-import { checkSimpleRateLimit } from "../utils/rateLimitBuckets";
 import { normalizeHostname, getExpectedHostnameConfig } from "../utils/hostname";
 import {
   VERIFY_STATUS,
@@ -103,38 +101,7 @@ verify.get("/", async (c, next) => {
     return c.json(response);
   }
   await next();
-}, async (c, next) => {
-  const kv = c.env?.RATE_LIMIT_KV as KVNamespace | undefined;
-  if (!kv) return next();
-
-  const sessionId = c.get("sessionId");
-  let suffix: string;
-  if (sessionId) {
-    suffix = sessionId;
-  } else {
-    const pepper = c.env?.IP_HASH_PEPPER;
-    if (!pepper) return next();
-    suffix = await hashIpDaily(getClientIp(c.req), pepper);
-  }
-
-  let check;
-  try {
-    check = await checkSimpleRateLimit(kv, `rl:verify-status:${suffix}`, { limit: 100, windowSeconds: 60 });
-  } catch (err) {
-    console.error("Rate-limit check failed for verify-status (fail-closed 503).", err);
-    return c.json(
-      { error: "Service temporarily unavailable. Please try again later." },
-      503,
-    );
-  }
-
-  if (!check.allowed) {
-    const retryAfterSeconds = check.retryAfterSeconds ?? 60;
-    c.header("Retry-After", String(retryAfterSeconds));
-    return c.json({ error: "Too many requests. Please try again later.", retryAfterSeconds }, 429);
-  }
-  return next();
-}, async (c) => {
+}, createKvRateLimiter("verify-status:", 100, 60, { keyStrategy: "ip" }), async (c) => {
   const sessionId = c.get("sessionId");
   const kv = c.env?.USAGE_KV as KVNamespace;
 
@@ -228,7 +195,7 @@ verify.post("/", async (c, next) => {
     return c.json({ verified: true, bypassed: true });
   }
   await next();
-}, createKvRateLimiter("verify-submit:"), async (c) => {
+}, createKvRateLimiter("verify-submit:", 100, 60, { keyStrategy: "ip" }), async (c) => {
   const secret = getTurnstileSecret(c);
   if (!secret) {
     return c.json({ verified: true, bypassed: true });

@@ -38,16 +38,19 @@ Add the preview ID as `preview_id` on the same binding block.
 
 ## 2. Configure PostHog Environment Variables
 
-Set the following in your Worker secrets (not in `wrangler.toml`):
+Set the API key as a Worker secret (not in `wrangler.toml`):
 
 ```bash
 npx wrangler secret put POSTHOG_API_KEY
-npx wrangler secret put POSTHOG_HOST
 ```
 
 - `POSTHOG_API_KEY` -- project API key from PostHog Settings > Project.
-- `POSTHOG_HOST` -- `https://app.posthog.com` for Cloud, or your self-hosted
-  URL (no trailing slash).
+  This is a secret and must not be committed to the repository.
+
+`POSTHOG_HOST` is not sensitive (it is a public ingest URL) and can be set
+as a plain environment variable in `wrangler.toml` or `.env`. It defaults
+to `https://app.posthog.com` for PostHog Cloud. Override it with your
+self-hosted instance URL (no trailing slash) if applicable.
 
 The Worker uses these to call `POST ${POSTHOG_HOST}/capture` with
 server-side events. No client-side JS is involved.

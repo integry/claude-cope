@@ -51,9 +51,9 @@ export async function resolveRequestIdentity(
   sessionId: string,
   req: { header: (name: string) => string | undefined; raw: unknown },
   pepper: string,
+  precomputedIpHash?: string,
 ): Promise<RequestIdentity> {
-  const ip = getClientIp(req as HeaderSource);
-  const ip_hash = await hashIpDaily(ip, pepper);
+  const ip_hash = precomputedIpHash ?? await hashIpDaily(getClientIp(req as HeaderSource), pepper);
 
   const cf = (req.raw as { cf?: CfProperties } | undefined)?.cf;
 
