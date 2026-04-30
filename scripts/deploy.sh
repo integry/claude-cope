@@ -4,12 +4,13 @@
 #
 # Flags:
 #   --migrate        Apply D1 schema before deploying
+#   --seed           Apply community-backlog seed (idempotent INSERT OR REPLACE)
 #   --skip-partykit  Skip PartyKit deployment
 #   --backend-only   Deploy only the Worker
 #   --frontend-only  Deploy only the Pages frontend
 set -euo pipefail
 
-USAGE="Usage: scripts/deploy.sh <staging|production> [--migrate] [--skip-partykit] [--backend-only] [--frontend-only]"
+USAGE="Usage: scripts/deploy.sh <staging|production> [--migrate] [--seed] [--skip-partykit] [--backend-only] [--frontend-only]"
 ENV="${1:?$USAGE}"
 shift
 
@@ -23,6 +24,7 @@ PAGES_BRANCH="main"
 [[ "$ENV" == "production" ]] && PAGES_BRANCH="prod"
 
 MIGRATE=false
+SEED=false
 SKIP_PARTYKIT=false
 BACKEND_ONLY=false
 FRONTEND_ONLY=false
@@ -30,6 +32,7 @@ FRONTEND_ONLY=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --migrate)        MIGRATE=true; shift;;
+    --seed)           SEED=true; shift;;
     --skip-partykit)  SKIP_PARTYKIT=true; shift;;
     --backend-only)   BACKEND_ONLY=true; shift;;
     --frontend-only)  FRONTEND_ONLY=true; shift;;
@@ -120,6 +123,18 @@ if $MIGRATE; then
   (cd "$ROOT/apps/backend" && wrangler d1 execute "$CF_D1_DATABASE_NAME" \
     --remote --yes \
     --file="$ROOT/apps/backend/schema.sql" \
+    --config "$WRANGLER_CFG")
+  echo ""
+fi
+
+# ── D1 seed data (community_backlog) ────────────────
+# Idempotent: seed.sql uses INSERT OR REPLACE. Note: re-running with --seed
+# will overwrite any production-side edits to seeded ticket rows.
+if $SEED; then
+  echo "--- Applying D1 seed data to $CF_D1_DATABASE_NAME ---"
+  (cd "$ROOT/apps/backend" && wrangler d1 execute "$CF_D1_DATABASE_NAME" \
+    --remote --yes \
+    --file="$ROOT/apps/backend/seed.sql" \
     --config "$WRANGLER_CFG")
   echo ""
 fi
