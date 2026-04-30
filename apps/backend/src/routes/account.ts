@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, checkAliasRateLimit } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, checkAliasRateLimit, performAliasDbUpdate } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 
@@ -419,36 +419,9 @@ account.post("/update-alias", async (c) => {
     return c.json({ error: `Alias change limit reached (max ${ALIAS_CHANGES_PER_DAY} per day)` }, 429);
   }
 
-  const taken = await db
-    .prepare("SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?) AND username != ?")
-    .bind(alias, body.username)
-    .first();
-  if (taken) {
-    return c.json({ error: "This alias is already taken" }, 409);
-  }
-
-  let results: D1Result[];
-  try {
-    results = await db.batch([
-      db.prepare(
-        `UPDATE user_scores SET username = ?, updated_at = datetime('now')
-         WHERE username = ? AND license_hash = ?
-           AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
-      ).bind(alias, body.username, body.licenseKeyHash),
-      db.prepare("UPDATE completed_tasks SET username = ? WHERE username = ?")
-        .bind(alias, body.username),
-    ]) as D1Result[];
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("UNIQUE") || msg.includes("unique") || msg.includes("constraint")) {
-      return c.json({ error: "This alias is already taken" }, 409);
-    }
-    return c.json({ error: "Alias update failed — please retry" }, 500);
-  }
-
-  const updateResult = results[0] as D1Result;
-  if (!updateResult.meta.changes) {
-    return c.json({ error: "Update failed — profile not found, license mismatch, or license revoked" }, 409);
+  const dbResult = await performAliasDbUpdate(db, body.username, alias, body.licenseKeyHash);
+  if (!dbResult.success) {
+    return c.json({ error: dbResult.error }, dbResult.status);
   }
 
   await rateLimit.increment();

@@ -204,51 +204,36 @@ describe("POST /api/account/update-ticket", () => {
   });
   it("returns 400 for activeTicket with invalid sprintProgress", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/update-ticket", {
-      username: "alice",
-      activeTicket: { id: "t1", title: "Task", sprintProgress: -1, sprintGoal: 10 },
-      licenseKeyHash: "hash",
-    }, { DB: db });
+    const ticket = { id: "t1", title: "Task", sprintProgress: -1, sprintGoal: 10 };
+    const res = await postJSON("/api/account/update-ticket", { username: "alice", activeTicket: ticket, licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("sprintProgress");
   });
   it("returns 400 when sprintProgress exceeds sprintGoal", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/update-ticket", {
-      username: "alice",
-      activeTicket: { id: "t1", title: "Task", sprintProgress: 15, sprintGoal: 10 },
-      licenseKeyHash: "hash",
-    }, { DB: db });
+    const ticket = { id: "t1", title: "Task", sprintProgress: 15, sprintGoal: 10 };
+    const res = await postJSON("/api/account/update-ticket", { username: "alice", activeTicket: ticket, licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("sprintProgress cannot exceed");
   });
   it("returns 404 when profile does not exist", async () => {
     const { db } = createMockDB({ firstResults: undefined });
-    const res = await postJSON("/api/account/update-ticket", {
-      username: "alice",
-      activeTicket: { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 },
-      licenseKeyHash: "hash",
-    }, { DB: db });
+    const ticket = { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 };
+    const res = await postJSON("/api/account/update-ticket", { username: "alice", activeTicket: ticket, licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(404);
   });
   it("succeeds when ownership is valid and update matches", async () => {
     const { db } = ownedMockDB();
-    const res = await postJSON("/api/account/update-ticket", {
-      username: "alice",
-      activeTicket: { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 },
-      licenseKeyHash: "hash",
-    }, { DB: db });
+    const ticket = { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 };
+    const res = await postJSON("/api/account/update-ticket", { username: "alice", activeTicket: ticket, licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(200);
     const data = await res.json() as { success: boolean };
     expect(data.success).toBe(true);
   });
   it("returns 409 when update matches zero rows (revoked between check and write)", async () => {
     const { db } = ownedMockDB({ runChanges: 0 });
-    const res = await postJSON("/api/account/update-ticket", {
-      username: "alice",
-      activeTicket: { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 },
-      licenseKeyHash: "hash",
-    }, { DB: db });
+    const ticket = { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 };
+    const res = await postJSON("/api/account/update-ticket", { username: "alice", activeTicket: ticket, licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
   });
 });

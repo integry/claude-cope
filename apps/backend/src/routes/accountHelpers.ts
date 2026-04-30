@@ -283,4 +283,42 @@ export async function checkAliasRateLimit(
   };
 }
 
+export async function performAliasDbUpdate(
+  db: D1Database, oldUsername: string, newAlias: string, licenseKeyHash: string,
+): Promise<{ success: true } | { success: false; error: string; status: 409 | 500 }> {
+  const taken = await db
+    .prepare("SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?) AND username != ?")
+    .bind(newAlias, oldUsername)
+    .first();
+  if (taken) {
+    return { success: false, error: "This alias is already taken", status: 409 };
+  }
+
+  let results: D1Result[];
+  try {
+    results = await db.batch([
+      db.prepare(
+        `UPDATE user_scores SET username = ?, updated_at = datetime('now')
+         WHERE username = ? AND license_hash = ?
+           AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
+      ).bind(newAlias, oldUsername, licenseKeyHash),
+      db.prepare("UPDATE completed_tasks SET username = ? WHERE username = ?")
+        .bind(newAlias, oldUsername),
+    ]) as D1Result[];
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE") || msg.includes("unique") || msg.includes("constraint")) {
+      return { success: false, error: "This alias is already taken", status: 409 };
+    }
+    return { success: false, error: "Alias update failed — please retry", status: 500 };
+  }
+
+  const updateResult = results[0] as D1Result;
+  if (!updateResult.meta.changes) {
+    return { success: false, error: "Update failed — profile not found, license mismatch, or license revoked", status: 409 };
+  }
+
+  return { success: true };
+}
+
 export { getQuotaLimits, getQuotaPercent } from "../utils/quota";
