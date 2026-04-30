@@ -106,7 +106,7 @@ verify.get("/", async (c, next) => {
   if (!kv) return next();
   const sessionId = c.get("sessionId");
   const suffix = sessionId || getClientIp(c.req);
-  const check = await checkSimpleRateLimit(kv, `rl:verify-status:${suffix}`, 100, 60);
+  const check = await checkSimpleRateLimit(kv, `rl:verify-status:${suffix}`, { limit: 100, windowSeconds: 60 });
   if (!check.allowed) {
     return c.json({ error: "Too many requests. Please try again later." }, 429);
   }

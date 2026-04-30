@@ -58,11 +58,10 @@ function parseCounter(raw: string | null): CounterState | null {
 export async function checkSimpleRateLimit(
   kv: KVNamespace,
   key: string,
-  limit: number,
-  windowSeconds: number,
-  now?: number,
+  opts: { limit: number; windowSeconds: number; now?: number },
 ): Promise<{ allowed: boolean; retryAfterSeconds?: number }> {
-  const ts = now ?? Date.now();
+  const { limit, windowSeconds } = opts;
+  const ts = opts.now ?? Date.now();
   const existing = parseCounter(await kv.get(key));
 
   let newState: CounterState;

@@ -15,7 +15,7 @@ export const createKvRateLimiter = (
   if (!kv) return next();
 
   const ip = getClientIp(c.req);
-  const check = await checkSimpleRateLimit(kv, `rl:${keyPrefix}${ip}`, limit, windowSeconds);
+  const check = await checkSimpleRateLimit(kv, `rl:${keyPrefix}${ip}`, { limit, windowSeconds });
   if (!check.allowed) {
     return c.json(
       { error: "Too many requests. Please try again later." },

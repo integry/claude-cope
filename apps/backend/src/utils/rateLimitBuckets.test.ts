@@ -351,7 +351,7 @@ describe("checkRateLimits", () => {
 describe("checkSimpleRateLimit", () => {
   it("allows requests under the limit", async () => {
     const kv = mockKV();
-    const result = await checkSimpleRateLimit(kv, "rl:test:key", 5, 60, 1000);
+    const result = await checkSimpleRateLimit(kv, "rl:test:key", { limit: 5, windowSeconds: 60, now: 1000 });
     expect(result.allowed).toBe(true);
     expect(result.retryAfterSeconds).toBeUndefined();
   });
@@ -360,7 +360,7 @@ describe("checkSimpleRateLimit", () => {
     const store: Record<string, string> = {};
     store["rl:test:key"] = JSON.stringify({ count: 5, expiresAt: 61_000 });
     const kv = mockKV(store);
-    const result = await checkSimpleRateLimit(kv, "rl:test:key", 5, 60, 1000);
+    const result = await checkSimpleRateLimit(kv, "rl:test:key", { limit: 5, windowSeconds: 60, now: 1000 });
     expect(result.allowed).toBe(false);
     expect(result.retryAfterSeconds).toBe(60);
   });
@@ -369,14 +369,14 @@ describe("checkSimpleRateLimit", () => {
     const store: Record<string, string> = {};
     store["rl:test:key"] = JSON.stringify({ count: 100, expiresAt: 50_000 });
     const kv = mockKV(store);
-    const result = await checkSimpleRateLimit(kv, "rl:test:key", 5, 60, 60_000);
+    const result = await checkSimpleRateLimit(kv, "rl:test:key", { limit: 5, windowSeconds: 60, now: 60_000 });
     expect(result.allowed).toBe(true);
   });
 
   it("handles corrupted KV values", async () => {
     const store: Record<string, string> = { "rl:test:key": "not-json" };
     const kv = mockKV(store);
-    const result = await checkSimpleRateLimit(kv, "rl:test:key", 5, 60, 1000);
+    const result = await checkSimpleRateLimit(kv, "rl:test:key", { limit: 5, windowSeconds: 60, now: 1000 });
     expect(result.allowed).toBe(true);
   });
 });
