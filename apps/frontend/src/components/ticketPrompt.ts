@@ -14,6 +14,17 @@ export function clearPendingOffer(): void {
   pendingTicketOffer = null;
 }
 
+function extractSender(description: string): { sender: string; body: string } | null {
+  const match = description.match(
+    /^([A-Z]\w+)\s+from\s+(.+?)(?:\s+(?:here|again))?\s*[,.]\s*([\s\S]+)/,
+  );
+  if (!match) return null;
+  return {
+    sender: `${match[1]!} (${match[2]!.trim()})`,
+    body: match[3]!.trim(),
+  };
+}
+
 /**
  * Fetches a random community ticket and displays it as an offer.
  * Only called if no active ticket exists.
@@ -31,14 +42,23 @@ export async function fetchRandomTicketPrompt(
     const ticket = tickets[Math.floor(Math.random() * tickets.length)]!;
     pendingTicketOffer = ticket;
 
+    const reward = (ticket.technical_debt * 10).toLocaleString();
+    const extracted = extractSender(ticket.description);
+    const senderLine = extracted ? `FROM: ${extracted.sender}\n\n` : "";
+    const body = extracted ? extracted.body : ticket.description;
+
     setHistory((prev) => [
       ...prev,
       {
         role: "system",
         content:
           `[📋 INCOMING TICKET] Your PM has assigned you a ticket:\n\n` +
-          `**${ticket.title}** (Reward: ${(ticket.technical_debt * 10).toLocaleString()} TD)\n\n` +
-          `> ${ticket.description}\n\n` +
+          `===================================\n\n` +
+          `**${ticket.title}**\n\n` +
+          senderLine +
+          `> ${body}\n\n` +
+          `[✅ REWARD: ${reward} TD]\n\n` +
+          `-----------------------------------\n\n` +
           `Type \`/accept\` to start working on it, or \`/backlog\` to browse other tickets.`,
       },
     ]);
