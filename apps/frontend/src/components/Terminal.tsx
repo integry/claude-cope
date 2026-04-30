@@ -225,6 +225,7 @@ function Terminal() {
           const res = await fetch(`${API_BASE}/api/account/checkout-license`, {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ checkoutId }),
+            credentials: "include",
           });
           lastData = await res.json() as { licenseKey?: string; allKeys?: string[]; error?: string };
           if (res.ok && lastData.licenseKey) {

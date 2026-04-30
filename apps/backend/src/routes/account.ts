@@ -3,8 +3,8 @@ import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, pickAllLicenseKeys, fetchCheckoutCustomerId } from "./accountHelpers";
-import type { SyncBody, PolarLicenseKeyItem } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, pickAllLicenseKeys, fetchCheckoutCustomerId, parseCheckoutCache } from "./accountHelpers";
+import type { SyncBody, PolarLicenseKeyItem, CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 
@@ -62,6 +62,9 @@ account.post("/checkout-license", async (c) => {
   if (!body.checkoutId) return c.json({ error: "checkoutId is required" }, 400);
   if (!/^[\w-]{4,128}$/.test(body.checkoutId)) return c.json({ error: "Invalid checkoutId format" }, 400);
 
+  const sessionId = c.get("sessionId");
+  if (!sessionId) return c.json({ error: "Session required" }, 401);
+
   const accessToken = c.env?.POLAR_ACCESS_TOKEN;
   const organizationId = c.env?.POLAR_ORGANIZATION_ID;
   if (!accessToken || !organizationId) return c.json({ error: "Polar integration is not configured" }, 500);
@@ -70,11 +73,12 @@ account.post("/checkout-license", async (c) => {
   if (kv) {
     const cached = await kv.get(`checkout_used:${body.checkoutId}`);
     if (cached) {
-      try {
-        const parsed = JSON.parse(cached) as string[];
-        return c.json({ licenseKey: parsed[0], allKeys: parsed });
-      } catch {
-        return c.json({ licenseKey: cached, allKeys: [cached] });
+      const entry = parseCheckoutCache(cached);
+      if (entry) {
+        if (entry.sessionId && entry.sessionId !== sessionId) {
+          return c.json({ error: "This checkout was already redeemed by another session" }, 403);
+        }
+        return c.json({ licenseKey: entry.keys[0], allKeys: entry.keys });
       }
     }
   }
@@ -100,7 +104,10 @@ account.post("/checkout-license", async (c) => {
   const allKeys = pickAllLicenseKeys(granted, result.createdAt);
   if (!allKeys.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
   const allKeyStrings = allKeys.map((k) => k.key);
-  if (kv) await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(allKeyStrings), { expirationTtl: 60 * 60 });
+  if (kv) {
+    const cachePayload: CheckoutCache = { keys: allKeyStrings, sessionId };
+    await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 60 * 60 });
+  }
   return c.json({ licenseKey: allKeyStrings[0], allKeys: allKeyStrings });
 });
 

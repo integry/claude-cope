@@ -341,6 +341,33 @@ describe("POST /api/account/checkout-license", () => {
   it("returns 400 for invalid checkoutId format", async () => {
     expect((await postJSON("/api/account/checkout-license", { checkoutId: ";;;invalid" }, { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org" })).status).toBe(400);
   });
+  it("returns 403 when cached checkout was redeemed by a different session", async () => {
+    const cachePayload = JSON.stringify({ keys: ["COPE-BOUND"], sessionId: "original-session" });
+    const kv = mockKV({ "checkout_used:co_bound": cachePayload });
+    const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_bound" },
+      { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "different-session");
+    expect(res.status).toBe(403);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("already redeemed");
+  });
+  it("returns keys when cached checkout session matches the caller", async () => {
+    const cachePayload = JSON.stringify({ keys: ["COPE-MINE"], sessionId: "my-session" });
+    const kv = mockKV({ "checkout_used:co_mine": cachePayload });
+    const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_mine" },
+      { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "my-session");
+    expect(res.status).toBe(200);
+    const data = await res.json() as { licenseKey: string; allKeys: string[] };
+    expect(data.licenseKey).toBe("COPE-MINE");
+    expect(data.allKeys).toEqual(["COPE-MINE"]);
+  });
+  it("allows legacy cache entries without session binding (backward compat)", async () => {
+    const kv = mockKV({ "checkout_used:co_legacy": JSON.stringify(["COPE-OLD"]) });
+    const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_legacy" },
+      { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "any-session");
+    expect(res.status).toBe(200);
+    const data = await res.json() as { licenseKey: string; allKeys: string[] };
+    expect(data.licenseKey).toBe("COPE-OLD");
+  });
   describe("non-cached Polar fetch path", () => {
     const origFetch = globalThis.fetch;
     afterEach(() => { globalThis.fetch = origFetch; });

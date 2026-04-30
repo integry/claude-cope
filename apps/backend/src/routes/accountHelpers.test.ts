@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pickAllLicenseKeys, validateActiveTicket } from "./accountHelpers";
+import { pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
 
 describe("pickAllLicenseKeys", () => {
@@ -79,6 +79,36 @@ describe("pickAllLicenseKeys", () => {
     const original = keys.map((k) => k.key);
     pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
     expect(keys.map((k) => k.key)).toEqual(original);
+  });
+});
+
+describe("parseCheckoutCache", () => {
+  it("parses session-bound cache format", () => {
+    const raw = JSON.stringify({ keys: ["K1", "K2"], sessionId: "sess-abc" });
+    const result = parseCheckoutCache(raw);
+    expect(result).toEqual({ keys: ["K1", "K2"], sessionId: "sess-abc" });
+  });
+
+  it("parses legacy JSON array format (no session binding)", () => {
+    const raw = JSON.stringify(["COPE-OLD1", "COPE-OLD2"]);
+    const result = parseCheckoutCache(raw);
+    expect(result).toEqual({ keys: ["COPE-OLD1", "COPE-OLD2"], sessionId: "" });
+  });
+
+  it("parses legacy plain string format", () => {
+    const result = parseCheckoutCache("COPE-LEGACY");
+    expect(result).toEqual({ keys: ["COPE-LEGACY"], sessionId: "" });
+  });
+
+  it("returns null for invalid JSON object without keys field", () => {
+    const raw = JSON.stringify({ something: "else" });
+    expect(parseCheckoutCache(raw)).toBeNull();
+  });
+
+  it("treats missing sessionId in object format as empty string", () => {
+    const raw = JSON.stringify({ keys: ["K1"] });
+    const result = parseCheckoutCache(raw);
+    expect(result).toEqual({ keys: ["K1"], sessionId: "" });
   });
 });
 

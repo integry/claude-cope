@@ -19,7 +19,11 @@ export type PolarLicenseKeyItem = {
 const MAX_KEY_MINT_WINDOW_MS = 5 * 60 * 1000;
 
 // Returns ALL keys minted by a checkout, ordered oldest-first.
-// Uses a 5-minute window after checkout creation to avoid returning keys from later purchases.
+// Uses a time window after checkout creation to avoid returning keys from later purchases.
+// NOTE: The Polar API does not expose a direct checkout→license-key mapping, so we
+// cannot cryptographically prove a key was created by a specific checkout. Session
+// binding on the /checkout-license route is the primary security control; this filter
+// is a best-effort heuristic to scope down to the correct keys.
 export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreatedAt?: string): PolarLicenseKeyItem[] {
   const sorted = [...granted].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   if (!checkoutCreatedAt) return sorted.length ? [sorted[0]!] : [];
@@ -51,6 +55,26 @@ export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: s
   const customerId = checkout.customer_id || checkout.customer?.id;
   if (!customerId) return { error: "Checkout has no associated customer", status: 500 };
   return { customerId, createdAt: checkout.created_at };
+}
+
+export type CheckoutCache = {
+  keys: string[];
+  sessionId: string;
+};
+
+export function parseCheckoutCache(raw: string): CheckoutCache | null {
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return { keys: parsed as string[], sessionId: "" };
+    }
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.keys)) {
+      return { keys: parsed.keys as string[], sessionId: parsed.sessionId ?? "" };
+    }
+    return null;
+  } catch {
+    return { keys: [raw], sessionId: "" };
+  }
 }
 
 export type SyncBody = {
