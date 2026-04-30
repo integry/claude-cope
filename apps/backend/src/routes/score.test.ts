@@ -1,150 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import app from "../app";
-
-function makeDB(existing?: { total_td: number; current_td: number; last_sync_time?: string }) {
-  const bound: unknown[] = [];
-  let lastSQL = "";
-  const batchedStatements: unknown[] = [];
-  return {
-    db: {
-      prepare: vi.fn((sql: string) => {
-        // Ignore migration bookkeeping SQL so lastSQL/bound reflect the route's queries.
-        const isMigrationBookkeeping = sql.includes("schema_migrations");
-        if (!isMigrationBookkeeping) lastSQL = sql;
-        const isSelect = sql.trim().toUpperCase().startsWith("SELECT");
-        return {
-          bind: vi.fn((...args: unknown[]) => {
-            if (!isMigrationBookkeeping) bound.push(...args);
-            return {
-              first: vi.fn().mockResolvedValue(isSelect ? (existing ?? null) : null),
-              run: vi.fn().mockResolvedValue({ success: true }),
-            };
-          }),
-          all: vi.fn().mockResolvedValue({ results: [] }),
-          run: vi.fn().mockResolvedValue({ success: true }),
-        };
-      }),
-      batch: vi.fn((stmts: unknown[]) => {
-        batchedStatements.push(...stmts);
-        return Promise.resolve(stmts.map(() => ({ success: true })));
-      }),
-    },
-    bound,
-    batchedStatements,
-    getSQL: () => lastSQL,
-  };
-}
-
-function makeDBWithTasks(
-  existing: { total_td: number; current_td: number; last_sync_time?: string } | undefined,
-  tickets: Record<string, { technical_debt: number }>,
-  claimedTickets: string[] = [],
-  batchShouldFail = false,
-) {
-  const bound: unknown[] = [];
-  let lastSQL = "";
-  const batchedStatements: unknown[] = [];
-  return {
-    db: {
-      prepare: vi.fn((sql: string) => {
-        const isMigrationBookkeeping = sql.includes("schema_migrations");
-        if (!isMigrationBookkeeping) lastSQL = sql;
-        return {
-          bind: vi.fn((...args: unknown[]) => {
-            if (!isMigrationBookkeeping) bound.push(...args);
-            const isUserScoresSelect = sql.includes("user_scores") && sql.trim().toUpperCase().startsWith("SELECT");
-            const isBacklogSelect = sql.includes("community_backlog");
-            const isCompletedSelect = sql.includes("completed_tasks") && sql.trim().toUpperCase().startsWith("SELECT");
-            return {
-              first: vi.fn().mockImplementation(() => {
-                if (isUserScoresSelect) return Promise.resolve(existing ?? null);
-                if (isBacklogSelect) {
-                  const ticketId = args[0] as string;
-                  return Promise.resolve(tickets[ticketId] ?? null);
-                }
-                if (isCompletedSelect) {
-                  const ticketId = args[1] as string;
-                  return Promise.resolve(claimedTickets.includes(ticketId) ? { "1": 1 } : null);
-                }
-                return Promise.resolve(null);
-              }),
-              run: vi.fn().mockResolvedValue({ success: true }),
-            };
-          }),
-          all: vi.fn().mockResolvedValue({ results: [] }),
-          run: vi.fn().mockResolvedValue({ success: true }),
-        };
-      }),
-      batch: vi.fn((stmts: unknown[]) => {
-        batchedStatements.push(...stmts);
-        if (batchShouldFail) return Promise.reject(new Error("D1 batch transaction failed"));
-        return Promise.resolve(stmts.map(() => ({ success: true })));
-      }),
-    },
-    bound,
-    batchedStatements,
-    getSQL: () => lastSQL,
-  };
-}
-
-// Permissive KV stub so the session-ownership check inside POST /api/score
-// resolves cleanly: returns the request's username for any `session_user:*`
-// lookup (existing-row path) and null for `username_session:*` (new-user path).
-function mockKV(boundUsername?: string) {
-  return {
-    get: vi.fn((key: string) => {
-      if (key.startsWith("session_user:")) return Promise.resolve(boundUsername ?? null);
-      return Promise.resolve(null);
-    }),
-    put: vi.fn(() => Promise.resolve()),
-    delete: vi.fn(() => Promise.resolve()),
-  };
-}
-
-function makeCheckAliasDB(opts: {
-  licenseActive?: boolean;
-  usernameTaken?: boolean;
-}) {
-  return {
-    prepare: vi.fn((sql: string) => {
-      const isMigrationBookkeeping = sql.includes("schema_migrations");
-      return {
-        bind: vi.fn((..._args: unknown[]) => ({
-          first: vi.fn().mockImplementation(() => {
-            if (isMigrationBookkeeping) return Promise.resolve(null);
-            if (sql.includes("licenses")) {
-              return Promise.resolve(
-                opts.licenseActive
-                  ? { status: "active", last_activated_at: new Date().toISOString() }
-                  : null,
-              );
-            }
-            if (sql.includes("user_scores")) {
-              return Promise.resolve(opts.usernameTaken ? { "1": 1 } : null);
-            }
-            return Promise.resolve(null);
-          }),
-          run: vi.fn().mockResolvedValue({ success: true }),
-        })),
-        all: vi.fn().mockResolvedValue({ results: [] }),
-        run: vi.fn().mockResolvedValue({ success: true }),
-      };
-    }),
-    batch: vi.fn((stmts: unknown[]) => Promise.resolve(stmts.map(() => ({ success: true })))),
-  };
-}
-
-function postScore(db: unknown, body: Record<string, unknown>, headers?: Record<string, string>) {
-  return app.request(
-    "/api/score",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...headers },
-      body: JSON.stringify(body),
-    },
-    { ALLOWED_ORIGINS: "http://localhost:5173", DB: db, QUOTA_KV: mockKV(body.username as string | undefined) }
-  );
-}
+import { makeDB, makeDBWithTasks, makeCheckAliasDB, postScore } from "./score.test-helpers";
 
 describe("GET /api/score", () => {
   it("returns 400 when username is missing", async () => {
@@ -286,7 +142,6 @@ describe("POST /api/score", () => {
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { total_td: number; current_td: number; corporate_rank: string };
-    // New user has no server-side total, so validatedTotal = min(500, round(0 * 1.1)) = 0
     expect(json.total_td).toBe(0);
     expect(json.current_td).toBe(0);
     expect(json.corporate_rank).toBe("Junior Code Monkey");
@@ -303,7 +158,6 @@ describe("POST /api/score", () => {
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { total_td: number };
-    // Server total is 1000, so validated max is 1100 (110%)
     expect(json.total_td).toBeLessThanOrEqual(1100);
   });
 
@@ -322,7 +176,6 @@ describe("POST /api/score", () => {
   });
 
   it("caps rank to Junior Code Monkey for free users regardless of TD", async () => {
-    // Existing free user with 100k server total, claiming 100k
     const { db } = makeDB({ total_td: 100000, current_td: 90000 });
     const res = await postScore(db, {
       username: "pro",
@@ -347,10 +200,6 @@ describe("POST /api/score", () => {
   });
 
   it("clamps score to time-based generation cap", async () => {
-    // Last sync was 10 seconds ago, multiplier = 1 (no generators)
-    // maxTDPerSecond = max(1, ((1 - 1) * 100 + 20 * 1) * 1.5) = max(1, 30) = 30
-    // maxTDGain = 30 * 10 = 300
-    // timeClampedTotal = 1000 + 300 = 1300
     const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
     const { db } = makeDB({ total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo });
     const res = await postScore(db, {
@@ -362,15 +211,10 @@ describe("POST /api/score", () => {
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { total_td: number };
-    // Should be clamped: min(50000, round(1000*1.1)=1100, round(1300)=1300) = 1100
     expect(json.total_td).toBeLessThanOrEqual(1300);
   });
 
   it("allows legitimate score within time-based cap", async () => {
-    // Last sync was 60 seconds ago, multiplier = 1.5 (10 copy-pasters)
-    // maxTDPerSecond = max(1, ((1.5 - 1) * 100 + 20 * 1.5) * 1.5) = max(1, (50+30)*1.5) = 120
-    // maxTDGain = 120 * 60 = 7200
-    // timeClampedTotal = 5000 + 7200 = 12200
     const sixtySecondsAgo = new Date(Date.now() - 60_000).toISOString().replace("Z", "").replace("T", " ");
     const { db } = makeDB({ total_td: 5000, current_td: 4000, last_sync_time: sixtySecondsAgo });
     const res = await postScore(db, {
@@ -382,7 +226,6 @@ describe("POST /api/score", () => {
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { total_td: number };
-    // 5400 <= min(round(5000*1.1)=5500, round(12200)=12200) = 5500, so allowed
     expect(json.total_td).toBe(5400);
   });
 
@@ -409,14 +252,10 @@ describe("POST /api/score", () => {
       upgrades: [],
     });
     const json = await res.json() as { multiplier: number };
-    // 10 copy-pasters * 5 baseOutput = 50% bonus => multiplier = 1.5
     expect(json.multiplier).toBe(1.5);
   });
 
   it("allows large one-off earnings from completed task bonus", async () => {
-    // Server total is 1000, 10% tolerance would cap at 1100
-    // But player completed a task with technical_debt=500, bonus = 500*10 = 5000
-    // So allowed total = round(1000*1.1) + 5000 = 6100
     const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
     const { db } = makeDBWithTasks(
       { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
@@ -432,7 +271,6 @@ describe("POST /api/score", () => {
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { total_td: number; corporate_rank: string };
-    // Without task bonus: capped to 1100. With task bonus: 6100 allowed.
     expect(json.total_td).toBe(5800);
     expect(json.corporate_rank).not.toBe("🤡 DevTools Hacker");
   });
@@ -442,7 +280,7 @@ describe("POST /api/score", () => {
     const { db } = makeDBWithTasks(
       { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
       { "ticket-abc": { technical_debt: 500 } },
-      ["ticket-abc"], // already claimed
+      ["ticket-abc"],
     );
     const res = await postScore(db, {
       username: "replayer",
@@ -454,7 +292,6 @@ describe("POST /api/score", () => {
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { total_td: number };
-    // No bonus — already claimed. Falls back to normal 10% cap = 1100
     expect(json.total_td).toBeLessThanOrEqual(1100);
   });
 
@@ -473,13 +310,10 @@ describe("POST /api/score", () => {
       totalTDEarned: 4000,
       inventory: {},
       upgrades: [],
-      // Sends duplicates — deduplication should reduce to 2 unique IDs
       completedTaskIds: ["ticket-a", "ticket-a", "ticket-b"],
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { total_td: number };
-    // Both tickets processed: bonus = (100+200)*10 = 3000
-    // Allowed total = round(1000*1.1) + 3000 = 4100
     expect(json.total_td).toBe(4000);
   });
 
@@ -497,7 +331,6 @@ describe("POST /api/score", () => {
       upgrades: [],
       completedTaskIds: ["ticket-abc"],
     });
-    // batch() should have been called with 2 statements (score update + 1 task insert)
     expect(db.batch).toHaveBeenCalledTimes(1);
     expect(batchedStatements.length).toBe(2);
   });
@@ -508,7 +341,7 @@ describe("POST /api/score", () => {
       { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
       { "ticket-abc": { technical_debt: 500 } },
       [],
-      true, // batch will fail
+      true,
     );
     const res = await postScore(db, {
       username: "worker",
@@ -518,7 +351,6 @@ describe("POST /api/score", () => {
       upgrades: [],
       completedTaskIds: ["ticket-abc"],
     });
-    // When batch fails, the entire request should fail — no partial state
     expect(res.status).toBe(500);
   });
 
@@ -526,7 +358,7 @@ describe("POST /api/score", () => {
     const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
     const { db } = makeDBWithTasks(
       { total_td: 1000, current_td: 800, last_sync_time: tenSecondsAgo },
-      {}, // no tickets in backlog
+      {},
     );
     const res = await postScore(db, {
       username: "faker",
@@ -538,7 +370,6 @@ describe("POST /api/score", () => {
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { total_td: number };
-    // No valid task bonus, normal cap applies
     expect(json.total_td).toBeLessThanOrEqual(1100);
   });
 });

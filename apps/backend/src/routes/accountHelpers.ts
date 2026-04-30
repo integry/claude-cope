@@ -1,4 +1,6 @@
 import { getProfile, getProfileByLicenseHash, getProfileRow, resolveRank } from "../utils/profile";
+import { validatePolarKey } from "../utils/polar";
+import { hashKey } from "../utils/quota";
 
 export type SyncBody = {
   licenseKey?: string;
@@ -176,3 +178,85 @@ export function broadcastPurchase(message: string, db: D1Database | undefined, c
     );
   }
 }
+
+async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: number): Promise<void> {
+  const kvKey = `polar:${hash}`;
+  const existingQuota = await kv.get(kvKey);
+  if (existingQuota !== null) return;
+
+  const revokedKey = `polar_revoked:${hash}`;
+  const savedQuota = await kv.get(revokedKey);
+  if (savedQuota !== null) {
+    await kv.put(kvKey, savedQuota);
+    await kv.delete(revokedKey);
+  } else {
+    await kv.put(kvKey, String(proInitialQuota));
+  }
+}
+
+export async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?: { POLAR_ACCESS_TOKEN?: string; POLAR_ORGANIZATION_ID?: string; QUOTA_KV?: KVNamespace; USAGE_KV?: KVNamespace; DB?: D1Database }; json: (data: unknown, status?: number) => Response }) {
+  const body = await c.req.json<SyncBody>();
+  if (!body.licenseKey) {
+    return { error: c.json({ error: "licenseKey is required" }, 400) } as const;
+  }
+
+  const accessToken = c.env?.POLAR_ACCESS_TOKEN;
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
+  if (!accessToken || !organizationId) {
+    return { error: c.json({ error: "Polar integration is not configured" }, 500) } as const;
+  }
+
+  const validation = await validatePolarKey(body.licenseKey, accessToken, organizationId);
+  if (!validation.valid) {
+    return { error: c.json({ error: "Invalid or inactive license key", status: validation.status }, 403) } as const;
+  }
+
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  if (!kv) {
+    return { error: c.json({ error: "KV storage is not configured" }, 500) } as const;
+  }
+
+  const db = c.env?.DB;
+  if (!db) {
+    return { error: c.json({ error: "Database not configured" }, 500) } as const;
+  }
+
+  const hash = await hashKey(body.licenseKey);
+  return { body, validation, kv, db, hash } as const;
+}
+
+export async function commitSyncSideEffects(
+  deps: { db: D1Database; kv: KVNamespace; hash: string },
+  opts: { validationId?: string; proInitialQuota: number; sessionId?: string },
+) {
+  const { db, kv, hash } = deps;
+  await db
+    .prepare(
+      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
+    )
+    .bind(hash)
+    .run();
+
+  await ensureQuota(kv, hash, opts.proInitialQuota);
+
+  if (opts.validationId) {
+    await kv.put(`polar_id:${hash}`, opts.validationId);
+  }
+}
+
+const MAX_TICKET_TITLE_LEN = 200;
+const MAX_TICKET_ID_LEN = 100;
+
+export function validateActiveTicket(ticket: unknown): string | null {
+  if (ticket === null || ticket === undefined) return null;
+  if (typeof ticket !== "object") return "activeTicket must be an object or null";
+  const t = ticket as Record<string, unknown>;
+  if (typeof t.id !== "string" || !t.id || t.id.length > MAX_TICKET_ID_LEN) return "Invalid ticket id";
+  if (typeof t.title !== "string" || !t.title || t.title.length > MAX_TICKET_TITLE_LEN) return "Invalid ticket title";
+  if (!Number.isFinite(t.sprintProgress) || (t.sprintProgress as number) < 0) return "Invalid sprintProgress";
+  if (!Number.isFinite(t.sprintGoal) || (t.sprintGoal as number) <= 0) return "Invalid sprintGoal";
+  if ((t.sprintProgress as number) > (t.sprintGoal as number)) return "sprintProgress cannot exceed sprintGoal";
+  return null;
+}
+
+export { getQuotaLimits, getQuotaPercent } from "../utils/quota";
