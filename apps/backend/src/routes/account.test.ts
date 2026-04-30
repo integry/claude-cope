@@ -2,11 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import app from "../app";
 import { createMockDB, mockKV, postJSON, BASE_PROFILE, profileWithHash, ownedMockDB } from "./account.test-helpers";
 
+const GEN_BODY = { username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash" };
+
 describe("POST /api/account/buy-generator", () => {
   it("returns 500 when DB is not configured", async () => {
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
-    }, {});
+    const res = await postJSON("/api/account/buy-generator", GEN_BODY, {});
     expect(res.status).toBe(500);
   });
   it("returns 400 when required fields are missing", async () => {
@@ -16,64 +16,46 @@ describe("POST /api/account/buy-generator", () => {
   });
   it("returns 400 when amount is not a positive integer", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: -1, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", { ...GEN_BODY, amount: -1 }, { DB: db });
     expect(res.status).toBe(400);
   });
   it("returns 400 when amount exceeds 1000", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1001, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", { ...GEN_BODY, amount: 1001 }, { DB: db });
     expect(res.status).toBe(400);
-    const data = await res.json() as { error: string };
-    expect(data.error).toContain("max 1000");
+    expect(((await res.json()) as { error: string }).error).toContain("max 1000");
   });
   it("returns 400 for unknown generatorId", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "does-not-exist", amount: 1, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", { ...GEN_BODY, generatorId: "does-not-exist" }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("Unknown generator");
   });
   it("returns 404 when profile is not found", async () => {
     const { db } = createMockDB({ firstResults: undefined });
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
     expect(res.status).toBe(404);
   });
   it("returns 403 when license hash does not match", async () => {
     const { db } = createMockDB({ firstResults: profileWithHash("other-hash") });
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "wrong-hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", { ...GEN_BODY, licenseKeyHash: "wrong-hash" }, { DB: db });
     expect(res.status).toBe(403);
   });
   it("returns 403 when license is revoked", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "revoked" } } });
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
     expect(res.status).toBe(403);
     expect(((await res.json()) as { error: string }).error).toContain("revoked");
   });
   it("succeeds with valid ownership and sufficient TD", async () => {
     const { db } = ownedMockDB();
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
     expect(res.status).toBe(200);
-    const data = await res.json() as { success: boolean };
-    expect(data.success).toBe(true);
+    expect(((await res.json()) as { success: boolean }).success).toBe(true);
   });
   it("returns 409 when concurrent update causes zero changes", async () => {
     const { db } = ownedMockDB({ runChanges: 0 });
-    const res = await postJSON("/api/account/buy-generator", {
-      username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
     expect(res.status).toBe(409);
   });
 });
@@ -362,7 +344,7 @@ describe("POST /api/account/update-alias", () => {
     }, { DB: db });
     expect(res.status).toBe(409);
     const rollbackCalls = (db.prepare as ReturnType<typeof vi.fn>).mock.calls.filter(
-      ([sql]: [string]) => sql.includes("alias_rate_limits") && sql.includes("MAX(change_count - 1"),
+      (args: unknown[]) => typeof args[0] === "string" && args[0].includes("alias_rate_limits") && args[0].includes("MAX(change_count - 1"),
     );
     expect(rollbackCalls.length).toBe(1);
   });
