@@ -54,13 +54,18 @@ async function validateTaskBonuses(
   return { validatedTaskBonus, validatedClaims };
 }
 
-/** GET /api/score/check-alias?username=X — check if a username is already taken */
+/** GET /api/score/check-alias?username=X&proKeyHash=Y — check if a username is already taken (pro-only) */
 score.get("/check-alias", async (c) => {
   const username = c.req.query("username");
   if (!username) return c.json({ error: "username required" }, 400);
 
+  const proKeyHash = c.req.query("proKeyHash");
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
+
+  if (!proKeyHash || !(await isLicenseActive(db, proKeyHash))) {
+    return c.json({ error: "Alias changes require an active Max license" }, 403);
+  }
 
   const row = await db
     .prepare("SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?)")
@@ -79,12 +84,13 @@ score.get("/", async (c) => {
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
   const row = await db
-    .prepare("SELECT total_td, current_td, corporate_rank FROM user_scores WHERE username = ?")
+    .prepare("SELECT total_td, current_td, corporate_rank, license_hash FROM user_scores WHERE username = ?")
     .bind(username)
-    .first<{ total_td: number; current_td: number; corporate_rank: string }>();
+    .first<{ total_td: number; current_td: number; corporate_rank: string; license_hash: string | null }>();
 
-  if (!row) return c.json({ total_td: 0, current_td: 0, corporate_rank: "Junior Code Monkey" });
-  return c.json(row);
+  if (!row) return c.json({ total_td: 0, current_td: 0, corporate_rank: FREE_TIER_RANK_CAP });
+  const rank = row.license_hash ? row.corporate_rank : FREE_TIER_RANK_CAP;
+  return c.json({ total_td: row.total_td, current_td: row.current_td, corporate_rank: rank });
 });
 
 type ScoreBody = {

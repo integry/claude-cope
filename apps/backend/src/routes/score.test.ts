@@ -101,6 +101,39 @@ function mockKV(boundUsername?: string) {
   };
 }
 
+function makeCheckAliasDB(opts: {
+  licenseActive?: boolean;
+  usernameTaken?: boolean;
+}) {
+  return {
+    prepare: vi.fn((sql: string) => {
+      const isMigrationBookkeeping = sql.includes("schema_migrations");
+      return {
+        bind: vi.fn((..._args: unknown[]) => ({
+          first: vi.fn().mockImplementation(() => {
+            if (isMigrationBookkeeping) return Promise.resolve(null);
+            if (sql.includes("licenses")) {
+              return Promise.resolve(
+                opts.licenseActive
+                  ? { status: "active", last_activated_at: new Date().toISOString() }
+                  : null,
+              );
+            }
+            if (sql.includes("user_scores")) {
+              return Promise.resolve(opts.usernameTaken ? { "1": 1 } : null);
+            }
+            return Promise.resolve(null);
+          }),
+          run: vi.fn().mockResolvedValue({ success: true }),
+        })),
+        all: vi.fn().mockResolvedValue({ results: [] }),
+        run: vi.fn().mockResolvedValue({ success: true }),
+      };
+    }),
+    batch: vi.fn((stmts: unknown[]) => Promise.resolve(stmts.map(() => ({ success: true })))),
+  };
+}
+
 function postScore(db: unknown, body: Record<string, unknown>, headers?: Record<string, string>) {
   return app.request(
     "/api/score",
@@ -153,6 +186,59 @@ describe("GET /api/score", () => {
     const json = await res.json() as { total_td: number; current_td: number };
     expect(json.total_td).toBe(5000);
     expect(json.current_td).toBe(3000);
+  });
+
+  it("caps rank to Junior Code Monkey for free users in GET response", async () => {
+    const { db } = makeDB({ total_td: 200000, current_td: 150000, corporate_rank: "Mid-Level Googler" } as never);
+    const res = await app.request("/api/score?username=freeuser", undefined, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      DB: db,
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { corporate_rank: string };
+    expect(json.corporate_rank).toBe("Junior Code Monkey");
+  });
+});
+
+describe("GET /api/score/check-alias", () => {
+  it("returns 403 when proKeyHash is missing", async () => {
+    const db = makeCheckAliasDB({ licenseActive: false, usernameTaken: false });
+    const res = await app.request("/api/score/check-alias?username=newname", undefined, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      DB: db,
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 when proKeyHash is invalid", async () => {
+    const db = makeCheckAliasDB({ licenseActive: false, usernameTaken: false });
+    const res = await app.request("/api/score/check-alias?username=newname&proKeyHash=bad-hash", undefined, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      DB: db,
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns taken=false for available username with valid pro key", async () => {
+    const db = makeCheckAliasDB({ licenseActive: true, usernameTaken: false });
+    const res = await app.request("/api/score/check-alias?username=available&proKeyHash=valid-hash", undefined, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      DB: db,
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { taken: boolean };
+    expect(json.taken).toBe(false);
+  });
+
+  it("returns taken=true for existing username with valid pro key", async () => {
+    const db = makeCheckAliasDB({ licenseActive: true, usernameTaken: true });
+    const res = await app.request("/api/score/check-alias?username=existing&proKeyHash=valid-hash", undefined, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      DB: db,
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { taken: boolean };
+    expect(json.taken).toBe(true);
   });
 });
 

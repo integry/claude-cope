@@ -520,7 +520,13 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     return;
   }
   try {
-    const res = await fetch(`${API_BASE}/api/score/check-alias?username=${encodeURIComponent(newName)}`);
+    const hashParam = ctx.state.proKeyHash ? `&proKeyHash=${encodeURIComponent(ctx.state.proKeyHash)}` : "";
+    const res = await fetch(`${API_BASE}/api/score/check-alias?username=${encodeURIComponent(newName)}${hashParam}`);
+    if (res.status === 403) {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.PRO_GATED });
+      reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] \`/alias\` is a Max-tier command. Free users may look, but not touch.\n\nUpgrade at \`/upgrade\` to unlock the full command arsenal.` });
+      return;
+    }
     if (!res.ok) throw new Error("Failed to check alias");
     const { taken } = (await res.json()) as { taken: boolean };
     if (taken) {
