@@ -72,8 +72,22 @@ describe("extractSender", () => {
     });
   });
 
+  it("handles apostrophes in names", () => {
+    const result = extractSender(
+      "O'Brien from QA here, tests are failing.",
+    );
+    expect(result).toEqual({
+      sender: "O'Brien (QA)",
+      body: "tests are failing.",
+    });
+  });
+
   it("returns null for non-matching descriptions", () => {
     expect(extractSender("Please fix the login bug.")).toBeNull();
+  });
+
+  it("returns null for sentences containing 'from' that are not sender patterns", () => {
+    expect(extractSender("Tasks from the backlog, please review.")).toBeNull();
   });
 
   it("returns null for empty string", () => {

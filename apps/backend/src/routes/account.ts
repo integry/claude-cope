@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
@@ -62,6 +63,7 @@ type PolarCheckout = {
   status?: string;
   customer_id?: string | null;
   customer?: { id?: string };
+  created_at?: string;
 };
 
 type PolarLicenseKeyItem = {
@@ -70,65 +72,58 @@ type PolarLicenseKeyItem = {
   status: string;
 };
 
-/**
- * Look up the license key issued for a completed Polar checkout.
- *
- * Used by the post-purchase callback flow: Polar's success_url redirects the
- * buyer to `claudecope.com/?checkout_id={CHECKOUT_ID}`, the frontend reads the
- * param and calls this endpoint to retrieve the key, then runs the same /sync
- * activation flow programmatically. The endpoint validates the checkout
- * belongs to our org and is succeeded; an attacker who somehow obtains the
- * checkout_id can read the customer's most recent license, but the license is
- * already emailed to the buyer and is locked to a username after first
- * activation, so the practical exposure is small.
- */
+function pickBestLicenseKey(granted: PolarLicenseKeyItem[], checkoutCreatedAt?: string): PolarLicenseKeyItem {
+  granted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  if (!checkoutCreatedAt || granted.length <= 1) return granted[0]!;
+  const checkoutTime = new Date(checkoutCreatedAt).getTime();
+  return granted.reduce((best, key) => {
+    const t = new Date(key.created_at).getTime();
+    return t >= checkoutTime && t < new Date(best.created_at).getTime() ? key : best;
+  }, granted[0]!);
+}
+
+async function fetchCheckoutCustomerId(checkoutId: string, accessToken: string, organizationId: string): Promise<{ customerId: string; createdAt?: string } | { error: string; status: ContentfulStatusCode }> {
+  const resp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(checkoutId)}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!resp.ok) return { error: "Invalid checkout id", status: 400 };
+  const checkout = await resp.json() as PolarCheckout;
+  if (checkout.organization_id !== organizationId) return { error: "Checkout belongs to a different organization", status: 403 };
+  if (checkout.status !== "succeeded") return { error: "Payment not yet confirmed", status: 409 };
+  const customerId = checkout.customer_id || checkout.customer?.id;
+  if (!customerId) return { error: "Checkout has no associated customer", status: 500 };
+  return { customerId, createdAt: checkout.created_at };
+}
+
 account.post("/checkout-license", async (c) => {
   const body = await c.req.json<{ checkoutId?: string }>();
   if (!body.checkoutId) return c.json({ error: "checkoutId is required" }, 400);
 
   const accessToken = c.env?.POLAR_ACCESS_TOKEN;
   const organizationId = c.env?.POLAR_ORGANIZATION_ID;
-  if (!accessToken || !organizationId) {
-    return c.json({ error: "Polar integration is not configured" }, 500);
+  if (!accessToken || !organizationId) return c.json({ error: "Polar integration is not configured" }, 500);
+
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  if (kv && await kv.get(`checkout_used:${body.checkoutId}`)) {
+    return c.json({ error: "Checkout already processed" }, 410);
   }
 
-  const checkoutResp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(body.checkoutId)}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!checkoutResp.ok) {
-    return c.json({ error: "Invalid checkout id" }, 400);
-  }
-  const checkout = await checkoutResp.json() as PolarCheckout;
-
-  if (checkout.organization_id !== organizationId) {
-    return c.json({ error: "Checkout belongs to a different organization" }, 403);
-  }
-  if (checkout.status !== "succeeded") {
-    return c.json({ error: "Payment not yet confirmed", status: checkout.status }, 409);
-  }
-
-  const customerId = checkout.customer_id || checkout.customer?.id;
-  if (!customerId) {
-    return c.json({ error: "Checkout has no associated customer" }, 500);
-  }
+  const result = await fetchCheckoutCustomerId(body.checkoutId, accessToken, organizationId);
+  if ("error" in result) return c.json({ error: result.error }, result.status);
 
   const lkResp = await fetch(
-    `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=20`,
+    `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(result.customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=20`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
-  if (!lkResp.ok) {
-    return c.json({ error: "Failed to list license keys" }, 502);
-  }
+  if (!lkResp.ok) return c.json({ error: "Failed to list license keys" }, 502);
   const lkData = await lkResp.json() as { items?: PolarLicenseKeyItem[] };
 
   const granted = (lkData.items ?? []).filter((l) => l.status === "granted");
-  if (!granted.length) {
-    // Webhook may not have propagated yet — frontend should retry.
-    return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
-  }
+  if (!granted.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
 
-  granted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  return c.json({ licenseKey: granted[0]!.key });
+  const best = pickBestLicenseKey(granted, result.createdAt);
+  if (kv) await kv.put(`checkout_used:${body.checkoutId}`, "1", { expirationTtl: 60 * 60 * 24 });
+  return c.json({ licenseKey: best.key });
 });
 
 account.post("/sync", async (c) => {

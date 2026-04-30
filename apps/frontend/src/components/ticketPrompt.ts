@@ -16,7 +16,7 @@ export function clearPendingOffer(): void {
 
 export function extractSender(description: string): { sender: string; body: string } | null {
   const match = description.match(
-    /^([\p{L}\w'-]+(?:\s[\p{L}\w'-]+)*)\s+from\s+(.+?)(?:\s+(?:here|again))?\s*[,.]\s*([\s\S]+)/u,
+    /^([\p{L}\w'-]+(?:\s[\p{L}\w'-]+)*)\s+from\s+([\p{Lu}A-Z][\p{L}\w\s-]*?)(?:\s+(?:here|again))?\s*[,.]\s*([\s\S]+)/u,
   );
   if (!match) return null;
   return {
@@ -42,7 +42,7 @@ export async function fetchRandomTicketPrompt(
     const ticket = tickets[Math.floor(Math.random() * tickets.length)]!;
     pendingTicketOffer = ticket;
 
-    const reward = (ticket.technical_debt * 10).toLocaleString();
+    const reward = (ticket.technical_debt * 10).toLocaleString("en-US");
     const extracted = extractSender(ticket.description);
     const senderLine = extracted ? `FROM: ${extracted.sender}\n\n` : "";
     const body = extracted ? extracted.body : ticket.description;
