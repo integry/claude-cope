@@ -103,7 +103,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
     ]);
     const db = createMockDB(licenses);
 
-    const res = await app.request(
+    await app.request(
       "/api/chat",
       {
         method: "POST",
@@ -122,7 +122,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
   it("does NOT bypass rate limiter when proKeyHash is unknown", async () => {
     const db = createMockDB(new Map());
 
-    const res = await app.request(
+    await app.request(
       "/api/chat",
       {
         method: "POST",
@@ -139,7 +139,7 @@ describe("rateLimiter middleware (hybrid KV)", () => {
   });
 
   it("does NOT bypass rate limiter when proKeyHash is present but DB is unavailable", async () => {
-    const res = await app.request(
+    await app.request(
       "/api/chat",
       {
         method: "POST",
