@@ -150,6 +150,17 @@ export const migrations: Migration[] = [
     sql: "ALTER TABLE licenses RENAME COLUMN activated_at TO last_activated_at",
     ignoreErrorMatching: /no such column.*activated_at/i,
   },
+
+  // ── alias rate limiting (D1-based, replaces raceable KV get/put) ──
+  {
+    name: "020_create_alias_rate_limits",
+    sql: `CREATE TABLE IF NOT EXISTS alias_rate_limits (
+      license_key_hash TEXT NOT NULL,
+      change_date TEXT NOT NULL,
+      change_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (license_key_hash, change_date)
+    )`,
+  },
 ];
 
 /**

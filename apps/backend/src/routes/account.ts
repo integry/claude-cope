@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, checkAliasRateLimit, performAliasDbUpdate } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, checkAliasRateLimit, rollbackAliasRateToken, performAliasDbUpdate } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 
@@ -408,23 +408,28 @@ account.post("/update-alias", async (c) => {
   if (v.error) return c.json({ error: v.error }, 400);
   const alias = v.alias!;
 
+  if (alias.toLowerCase() === body.username.toLowerCase()) {
+    return c.json({ error: "New alias is the same as the current username" }, 400);
+  }
+
   const ownership = await verifyOwnership(db, body.username, body.licenseKeyHash);
   if (ownership.status !== "ok") {
     return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
   }
 
-  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  const rateLimit = await checkAliasRateLimit(kv, body.licenseKeyHash, ALIAS_CHANGES_PER_DAY);
+  const rateLimit = await checkAliasRateLimit(db, body.licenseKeyHash, ALIAS_CHANGES_PER_DAY);
   if (!rateLimit.allowed) {
     return c.json({ error: `Alias change limit reached (max ${ALIAS_CHANGES_PER_DAY} per day)` }, 429);
   }
 
   const dbResult = await performAliasDbUpdate(db, body.username, alias, body.licenseKeyHash);
   if (!dbResult.success) {
+    await rollbackAliasRateToken(db, body.licenseKeyHash);
     return c.json({ error: dbResult.error }, dbResult.status);
   }
 
   const sessionId = c.get("sessionId");
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
   if (kv && sessionId) {
     await kv.put(`session_user:${sessionId}`, alias, { expirationTtl: 60 * 60 * 24 * 365 });
     await kv.put(`username_session:${alias}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 });

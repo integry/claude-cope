@@ -271,21 +271,35 @@ export function validateAlias(raw: string): { alias: string; error?: undefined }
 }
 
 export async function checkAliasRateLimit(
-  kv: KVNamespace | undefined, licenseKeyHash: string, limit: number,
+  db: D1Database, licenseKeyHash: string, limit: number,
 ): Promise<{ allowed: boolean }> {
-  if (!kv) {
-    return { allowed: false };
-  }
-  const today = new Date().toISOString().slice(0, 10);
-  const changeKey = `alias_changes:${licenseKeyHash}:${today}`;
-  const count = parseInt(await kv.get(changeKey) ?? "0", 10);
-  if (count >= limit) {
-    return { allowed: false };
-  }
-  // Eagerly claim the slot before the DB write to minimize the race window.
-  // If the DB write fails afterward we lose one token but never allow an extra change.
-  await kv.put(changeKey, String(count + 1), { expirationTtl: 86400 });
-  return { allowed: true };
+  // Atomic check-and-claim via D1's ACID guarantees.
+  // INSERT creates count=1 on first change of the day; ON CONFLICT atomically
+  // increments only while the count is below the limit. Two concurrent requests
+  // are serialized by SQLite's write lock, so the KV get/put race is eliminated.
+  const result = await db
+    .prepare(
+      `INSERT INTO alias_rate_limits (license_key_hash, change_date, change_count)
+       VALUES (?, date('now'), 1)
+       ON CONFLICT(license_key_hash, change_date)
+       DO UPDATE SET change_count = change_count + 1
+       WHERE change_count < ?`,
+    )
+    .bind(licenseKeyHash, limit)
+    .run();
+  return { allowed: Boolean(result.meta.changes) };
+}
+
+export async function rollbackAliasRateToken(
+  db: D1Database, licenseKeyHash: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE alias_rate_limits SET change_count = MAX(change_count - 1, 0)
+       WHERE license_key_hash = ? AND change_date = date('now')`,
+    )
+    .bind(licenseKeyHash)
+    .run();
 }
 
 export async function performAliasDbUpdate(

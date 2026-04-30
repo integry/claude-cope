@@ -310,6 +310,14 @@ describe("POST /api/account/update-alias", () => {
     expect(res.status).toBe(403);
     expect(((await res.json()) as { error: string }).error).toContain("revoked");
   });
+  it("returns 400 when new alias matches current username", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "Alice", licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain("same as the current username");
+  });
   it("succeeds with valid ownership and available alias", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });
     db.batch = vi.fn().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 0 } }]);
@@ -322,11 +330,10 @@ describe("POST /api/account/update-alias", () => {
     expect(data.success).toBe(true);
   });
   it("returns 409 when alias is already taken", async () => {
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": { "1": 1 } } });
-    const kv = mockKV({});
+    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": { "1": 1 } }, runChanges: 1 });
     const res = await postJSON("/api/account/update-alias", {
       username: "alice", newAlias: "taken-name", licenseKeyHash: "hash",
-    }, { DB: db, QUOTA_KV: kv });
+    }, { DB: db });
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toContain("already taken");
   });
@@ -340,23 +347,24 @@ describe("POST /api/account/update-alias", () => {
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toContain("already taken");
   });
-  it("returns 429 when KV is unavailable (fail-closed)", async () => {
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });
+  it("returns 429 when alias change limit is reached (D1 atomic claim returns 0 changes)", async () => {
+    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" } }, runChanges: 0 });
     const res = await postJSON("/api/account/update-alias", {
       username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
     }, { DB: db });
     expect(res.status).toBe(429);
     expect(((await res.json()) as { error: string }).error).toContain("limit reached");
   });
-  it("returns 429 when alias change limit is reached", async () => {
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });
-    const today = new Date().toISOString().slice(0, 10);
-    const kv = mockKV({ [`alias_changes:hash:${today}`]: "3" });
+  it("rolls back rate-limit token when alias DB update fails", async () => {
+    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": { "1": 1 } }, runChanges: 1 });
     const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
-    }, { DB: db, QUOTA_KV: kv });
-    expect(res.status).toBe(429);
-    expect(((await res.json()) as { error: string }).error).toContain("limit reached");
+      username: "alice", newAlias: "taken-name", licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(409);
+    const rollbackCalls = (db.prepare as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([sql]: [string]) => sql.includes("alias_rate_limits") && sql.includes("MAX(change_count - 1"),
+    );
+    expect(rollbackCalls.length).toBe(1);
   });
 });
 

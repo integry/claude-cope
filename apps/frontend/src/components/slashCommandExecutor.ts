@@ -523,6 +523,10 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     reply({ role: "error", content: `[❌] Alias can only contain letters, numbers, hyphens, and underscores.` });
     return;
   }
+  if (newName.toLowerCase() === ctx.state.username.toLowerCase()) {
+    reply({ role: "system", content: `[👤] Your alias is already **${ctx.state.username}**. Nothing to change.` });
+    return;
+  }
   const oldName = ctx.state.username;
   try {
     const res = await fetch(`${API_BASE}/api/account/update-alias`, {
@@ -889,8 +893,11 @@ export function executeSlashCommand(
   // Pro-gated commands: block free users with a 403-style error.
   // BYOK users are exempted for client-side commands but /alias requires a
   // real Max license key because it hits the backend.
-  // TODO(byok): This gating is enforced client-side only. The backend does not
-  // gate these commands for BYOK users — strengthen once BYOK is first-class.
+  // Note: /brrrrrr, /blame, and /synergize are purely client-side (no backend
+  // API calls), so client-side gating is the only enforcement point. /alias is
+  // the only gated command with a backend endpoint, and it enforces Pro-gating
+  // server-side via the licenseKeyHash requirement.
+  // TODO(byok): Strengthen BYOK gating once BYOK is a first-class feature.
   if (PRO_GATED_COMMANDS.has(baseCommand)) {
     const isPro = Boolean(ctx.state.proKey);
     const isBYOK = BYOK_ENABLED && Boolean(ctx.state.apiKey);

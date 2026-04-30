@@ -119,3 +119,11 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_user_hour
 -- Index on model for per-model aggregation
 CREATE INDEX IF NOT EXISTS idx_usage_logs_model
     ON usage_logs (model, hour DESC);
+
+-- Atomic alias-change rate limiting (replaces KV-based get/put which was raceable)
+CREATE TABLE IF NOT EXISTS alias_rate_limits (
+    license_key_hash TEXT NOT NULL,
+    change_date TEXT NOT NULL,
+    change_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (license_key_hash, change_date)
+);
