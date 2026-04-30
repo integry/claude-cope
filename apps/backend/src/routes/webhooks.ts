@@ -40,17 +40,6 @@ async function handleBenefitGrantCreated(
       await kv.put(kvKey, String(limits.proInitialQuota));
     }
   }
-  // Record the license in DB so admin views see all purchases, not just
-  // those that were activated via /sync.
-  const db = env?.DB;
-  if (db) {
-    await db
-      .prepare(
-        "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
-      )
-      .bind(hash)
-      .run();
-  }
 }
 
 async function handleBenefitGrantRevoked(
