@@ -259,4 +259,24 @@ export function validateActiveTicket(ticket: unknown): string | null {
   return null;
 }
 
+export function validateAlias(raw: string): { alias: string; error?: undefined } | { alias?: undefined; error: string } {
+  const alias = raw.trim();
+  if (alias.length < 3 || alias.length > 33) return { error: "Alias must be between 3 and 33 characters" };
+  if (!/^[a-zA-Z0-9_-]+$/.test(alias)) return { error: "Alias can only contain letters, numbers, hyphens, and underscores" };
+  return { alias };
+}
+
+export async function checkAliasRateLimit(
+  kv: KVNamespace | undefined, licenseKeyHash: string, limit: number,
+): Promise<{ allowed: boolean; increment: () => Promise<void> }> {
+  if (!kv) return { allowed: true, increment: async () => {} };
+  const today = new Date().toISOString().slice(0, 10);
+  const changeKey = `alias_changes:${licenseKeyHash}:${today}`;
+  const count = parseInt(await kv.get(changeKey) ?? "0", 10);
+  return {
+    allowed: count < limit,
+    increment: () => kv.put(changeKey, String(count + 1), { expirationTtl: 86400 }),
+  };
+}
+
 export { getQuotaLimits, getQuotaPercent } from "../utils/quota";

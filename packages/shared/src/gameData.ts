@@ -234,6 +234,8 @@ export const CORPORATE_RANKS: CorporateRank[] = [
 
 export const FREE_TIER_RANK_CAP = CORPORATE_RANKS[0]!.title;
 
+export const ALIAS_CHANGES_PER_DAY = 3;
+
 export const PRO_GATED_COMMANDS: ReadonlySet<string> = new Set([
   "/brrrrrr",
   "/blame",

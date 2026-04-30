@@ -540,6 +540,12 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
       reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] \`/alias\` is a Max-tier command. Free users may look, but not touch.\n\nUpgrade at \`/upgrade\` to unlock the full command arsenal.` });
       return;
     }
+    if (res.status === 429) {
+      const data = (await res.json()) as { error: string };
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.RATE_LIMITED });
+      reply({ role: "error", content: `[⏳] ${data.error}` });
+      return;
+    }
     if (res.status === 409) {
       const data = (await res.json()) as { error: string };
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.TAKEN });

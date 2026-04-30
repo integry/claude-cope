@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
-import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket } from "./accountHelpers";
+import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost } from "../gameConstants";
+import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, checkAliasRateLimit } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 
@@ -401,17 +401,19 @@ account.post("/update-alias", async (c) => {
     return c.json({ error: "username, newAlias, and licenseKeyHash are required" }, 400);
   }
 
-  const alias = body.newAlias.trim();
-  if (alias.length < 3 || alias.length > 33) {
-    return c.json({ error: "Alias must be between 3 and 33 characters" }, 400);
-  }
-  if (!/^[a-zA-Z0-9_-]+$/.test(alias)) {
-    return c.json({ error: "Alias can only contain letters, numbers, hyphens, and underscores" }, 400);
-  }
+  const v = validateAlias(body.newAlias);
+  if (v.error) return c.json({ error: v.error }, 400);
+  const alias = v.alias!;
 
   const ownership = await verifyOwnership(db, body.username, body.licenseKeyHash);
   if (ownership.status !== "ok") {
     return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
+  }
+
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  const rateLimit = await checkAliasRateLimit(kv, body.licenseKeyHash, ALIAS_CHANGES_PER_DAY);
+  if (!rateLimit.allowed) {
+    return c.json({ error: `Alias change limit reached (max ${ALIAS_CHANGES_PER_DAY} per day)` }, 429);
   }
 
   const taken = await db
@@ -437,7 +439,8 @@ account.post("/update-alias", async (c) => {
     return c.json({ error: "Update failed — profile not found, license mismatch, or license revoked" }, 409);
   }
 
-  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  await rateLimit.increment();
+
   const sessionId = c.get("sessionId");
   if (kv && sessionId) {
     await kv.put(`session_user:${sessionId}`, alias, { expirationTtl: 60 * 60 * 24 * 365 });

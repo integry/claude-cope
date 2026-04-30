@@ -21,6 +21,7 @@ export const SlashCommandFailureReasons = {
   NO_ARGUMENT: "no_argument",
   NO_BUDDY: "no_buddy",
   PRO_GATED: "pro_gated",
+  RATE_LIMITED: "rate_limited",
   NO_KEY: "no_key",
   NO_OFFER: "no_offer",
   NO_TICKET: "no_ticket",
