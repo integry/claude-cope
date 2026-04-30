@@ -269,18 +269,20 @@ export function validateAlias(raw: string): { alias: string; error?: undefined }
 
 export async function checkAliasRateLimit(
   kv: KVNamespace | undefined, licenseKeyHash: string, limit: number,
-): Promise<{ allowed: boolean; increment: () => Promise<void> }> {
+): Promise<{ allowed: boolean }> {
   if (!kv) {
-    console.warn("checkAliasRateLimit: KV namespace unavailable — rate limiting bypassed");
-    return { allowed: true, increment: async () => {} };
+    return { allowed: false };
   }
   const today = new Date().toISOString().slice(0, 10);
   const changeKey = `alias_changes:${licenseKeyHash}:${today}`;
   const count = parseInt(await kv.get(changeKey) ?? "0", 10);
-  return {
-    allowed: count < limit,
-    increment: () => kv.put(changeKey, String(count + 1), { expirationTtl: 86400 }),
-  };
+  if (count >= limit) {
+    return { allowed: false };
+  }
+  // Eagerly claim the slot before the DB write to minimize the race window.
+  // If the DB write fails afterward we lose one token but never allow an extra change.
+  await kv.put(changeKey, String(count + 1), { expirationTtl: 86400 });
+  return { allowed: true };
 }
 
 export async function performAliasDbUpdate(

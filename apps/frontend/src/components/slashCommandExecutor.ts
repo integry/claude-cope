@@ -886,11 +886,14 @@ export function executeSlashCommand(
 
   track(AnalyticsEvents.SLASH_COMMAND_ATTEMPTED, { command: baseCommand });
 
-  // Pro-gated commands: block free users with a 403-style error
+  // Pro-gated commands: block free users with a 403-style error.
+  // BYOK users are exempted for client-side commands but /alias requires a
+  // real Max license key because it hits the backend.
   if (PRO_GATED_COMMANDS.has(baseCommand)) {
     const isPro = Boolean(ctx.state.proKey);
     const isBYOK = BYOK_ENABLED && Boolean(ctx.state.apiKey);
-    if (!isPro && !isBYOK) {
+    const needsLicense = baseCommand === "/alias";
+    if (!isPro && (!isBYOK || needsLicense)) {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: baseCommand, reason: SlashCommandFailureReasons.PRO_GATED });
       reply({ role: "error", content: proGatedMessage(baseCommand) });
       ctx.setIsProcessing(false);

@@ -424,8 +424,6 @@ account.post("/update-alias", async (c) => {
     return c.json({ error: dbResult.error }, dbResult.status);
   }
 
-  await rateLimit.increment();
-
   const sessionId = c.get("sessionId");
   if (kv && sessionId) {
     await kv.put(`session_user:${sessionId}`, alias, { expirationTtl: 60 * 60 * 24 * 365 });

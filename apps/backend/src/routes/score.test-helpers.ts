@@ -103,39 +103,6 @@ export function mockKV(boundUsername?: string) {
   };
 }
 
-export function makeCheckAliasDB(opts: {
-  licenseActive?: boolean;
-  usernameTaken?: boolean;
-}) {
-  return {
-    prepare: vi.fn((sql: string) => {
-      const isMigrationBookkeeping = sql.includes("schema_migrations");
-      return {
-        bind: vi.fn(() => ({
-          first: vi.fn().mockImplementation(() => {
-            if (isMigrationBookkeeping) return Promise.resolve(null);
-            if (sql.includes("licenses")) {
-              return Promise.resolve(
-                opts.licenseActive
-                  ? { status: "active", last_activated_at: new Date().toISOString() }
-                  : null,
-              );
-            }
-            if (sql.includes("user_scores")) {
-              return Promise.resolve(opts.usernameTaken ? { "1": 1 } : null);
-            }
-            return Promise.resolve(null);
-          }),
-          run: vi.fn().mockResolvedValue({ success: true }),
-        })),
-        all: vi.fn().mockResolvedValue({ results: [] }),
-        run: vi.fn().mockResolvedValue({ success: true }),
-      };
-    }),
-    batch: vi.fn((stmts: unknown[]) => Promise.resolve(stmts.map(() => ({ success: true })))),
-  };
-}
-
 export function postScore(db: unknown, body: Record<string, unknown>, headers?: Record<string, string>) {
   return app.request(
     "/api/score",

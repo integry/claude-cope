@@ -323,9 +323,10 @@ describe("POST /api/account/update-alias", () => {
   });
   it("returns 409 when alias is already taken", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": { "1": 1 } } });
+    const kv = mockKV({});
     const res = await postJSON("/api/account/update-alias", {
       username: "alice", newAlias: "taken-name", licenseKeyHash: "hash",
-    }, { DB: db });
+    }, { DB: db, QUOTA_KV: kv });
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toContain("already taken");
   });
@@ -338,6 +339,14 @@ describe("POST /api/account/update-alias", () => {
     }, { DB: db, QUOTA_KV: kv });
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toContain("already taken");
+  });
+  it("returns 429 when KV is unavailable (fail-closed)", async () => {
+    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(429);
+    expect(((await res.json()) as { error: string }).error).toContain("limit reached");
   });
   it("returns 429 when alias change limit is reached", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });

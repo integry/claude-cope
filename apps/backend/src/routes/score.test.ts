@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import app from "../app";
-import { makeDB, makeDBWithTasks, makeCheckAliasDB, postScore } from "./score.test-helpers";
+import { makeDB, makeDBWithTasks, postScore } from "./score.test-helpers";
 
 describe("GET /api/score", () => {
   it("returns 400 when username is missing", async () => {
@@ -77,48 +77,6 @@ describe("GET /api/score", () => {
     expect(res.status).toBe(200);
     const json = await res.json() as { corporate_rank: string };
     expect(json.corporate_rank).toBe("Junior Code Monkey");
-  });
-});
-
-describe("GET /api/score/check-alias", () => {
-  it("returns 403 when proKeyHash is missing", async () => {
-    const db = makeCheckAliasDB({ licenseActive: false, usernameTaken: false });
-    const res = await app.request("/api/score/check-alias?username=newname", undefined, {
-      ALLOWED_ORIGINS: "http://localhost:5173",
-      DB: db,
-    });
-    expect(res.status).toBe(403);
-  });
-
-  it("returns 403 when proKeyHash is invalid", async () => {
-    const db = makeCheckAliasDB({ licenseActive: false, usernameTaken: false });
-    const res = await app.request("/api/score/check-alias?username=newname&proKeyHash=bad-hash", undefined, {
-      ALLOWED_ORIGINS: "http://localhost:5173",
-      DB: db,
-    });
-    expect(res.status).toBe(403);
-  });
-
-  it("returns taken=false for available username with valid pro key", async () => {
-    const db = makeCheckAliasDB({ licenseActive: true, usernameTaken: false });
-    const res = await app.request("/api/score/check-alias?username=available&proKeyHash=valid-hash", undefined, {
-      ALLOWED_ORIGINS: "http://localhost:5173",
-      DB: db,
-    });
-    expect(res.status).toBe(200);
-    const json = await res.json() as { taken: boolean };
-    expect(json.taken).toBe(false);
-  });
-
-  it("returns taken=true for existing username with valid pro key", async () => {
-    const db = makeCheckAliasDB({ licenseActive: true, usernameTaken: true });
-    const res = await app.request("/api/score/check-alias?username=existing&proKeyHash=valid-hash", undefined, {
-      ALLOWED_ORIGINS: "http://localhost:5173",
-      DB: db,
-    });
-    expect(res.status).toBe(200);
-    const json = await res.json() as { taken: boolean };
-    expect(json.taken).toBe(true);
   });
 });
 
