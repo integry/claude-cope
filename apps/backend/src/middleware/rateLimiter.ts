@@ -11,14 +11,38 @@ export const createKvRateLimiter = (
   limit = 100,
   windowSeconds = 60,
 ): MiddlewareHandler => async (c, next) => {
-  const kv = (c.env as Record<string, unknown>).RATE_LIMIT_KV as KVNamespace | undefined;
+  const env = c.env as Record<string, unknown>;
+  const kv = env.RATE_LIMIT_KV as KVNamespace | undefined;
   if (!kv) return next();
 
-  const ip = getClientIp(c.req);
-  const check = await checkSimpleRateLimit(kv, `rl:${keyPrefix}${ip}`, { limit, windowSeconds });
-  if (!check.allowed) {
+  const sessionId = c.get("sessionId") as string | undefined;
+  const pepper = env.IP_HASH_PEPPER as string | undefined;
+
+  let suffix: string;
+  if (sessionId) {
+    suffix = sessionId;
+  } else if (pepper) {
+    suffix = await hashIpDaily(getClientIp(c.req), pepper);
+  } else {
+    return next();
+  }
+
+  let check;
+  try {
+    check = await checkSimpleRateLimit(kv, `rl:${keyPrefix}${suffix}`, { limit, windowSeconds });
+  } catch (err) {
+    console.error(`Rate-limit check failed for ${keyPrefix} (fail-closed 503).`, err);
     return c.json(
-      { error: "Too many requests. Please try again later." },
+      { error: "Service temporarily unavailable. Please try again later." },
+      503,
+    );
+  }
+
+  if (!check.allowed) {
+    const retryAfterSeconds = check.retryAfterSeconds ?? windowSeconds;
+    c.header("Retry-After", String(retryAfterSeconds));
+    return c.json(
+      { error: "Too many requests. Please try again later.", retryAfterSeconds },
       429,
     );
   }
