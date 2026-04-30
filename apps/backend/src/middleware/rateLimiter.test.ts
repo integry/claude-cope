@@ -190,8 +190,6 @@ describe("rateLimiter middleware (hybrid KV)", () => {
         makeEnv({ RATE_LIMIT_KV: hotKv }),
       );
 
-      const keysAfterFirst = new Set(hotKv.put.mock.calls.map((call: unknown[]) => call[0] as string));
-
       await app.request(
         "/api/chat",
         {
