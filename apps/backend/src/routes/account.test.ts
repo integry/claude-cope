@@ -260,10 +260,16 @@ describe("POST /api/account/update-alias", () => {
     }, {});
     expect(res.status).toBe(500);
   });
-  it("returns 400 when required fields are missing", async () => {
+  it("returns 400 when username or newAlias is missing", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-alias", { username: "alice" }, { DB: db });
     expect(res.status).toBe(400);
+  });
+  it("returns 403 when licenseKeyHash is missing (free user)", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new" }, { DB: db });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toContain("Max license");
   });
   it("returns 400 when alias is too short", async () => {
     const { db } = createMockDB();
@@ -288,6 +294,14 @@ describe("POST /api/account/update-alias", () => {
     }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("letters, numbers");
+  });
+  it("returns 400 when alias has no letters", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "123", licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain("at least one letter");
   });
   it("returns 404 when profile does not exist", async () => {
     const { db } = createMockDB({ firstResults: undefined });
@@ -327,6 +341,16 @@ describe("POST /api/account/update-alias", () => {
     const res = await postJSON("/api/account/update-alias", {
       username: "alice", newAlias: "taken-name", licenseKeyHash: "hash",
     }, { DB: db });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toContain("already taken");
+  });
+  it("returns 409 when UNIQUE constraint violation occurs during batch", async () => {
+    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });
+    db.batch = vi.fn().mockRejectedValue(new Error("UNIQUE constraint failed: user_scores.username"));
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
+    }, { DB: db, QUOTA_KV: kv });
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toContain("already taken");
   });

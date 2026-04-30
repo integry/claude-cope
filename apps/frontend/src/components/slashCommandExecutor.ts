@@ -62,6 +62,10 @@ export interface SlashCommandContext {
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.role !== "loading");
 
+function proGatedMessage(baseCommand: string): string {
+  return `[🔒 **403 FORBIDDEN**] \`${baseCommand}\` is a Max-tier command. Free users may look, but not touch.\n\nUpgrade at \`/upgrade\` to unlock the full command arsenal.`;
+}
+
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
 }
@@ -519,11 +523,6 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     reply({ role: "error", content: `[❌] Alias can only contain letters, numbers, hyphens, and underscores.` });
     return;
   }
-  if (!ctx.state.proKeyHash) {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.PRO_GATED });
-    reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] \`/alias\` is a Max-tier command. Free users may look, but not touch.\n\nUpgrade at \`/upgrade\` to unlock the full command arsenal.` });
-    return;
-  }
   const oldName = ctx.state.username;
   try {
     const res = await fetch(`${API_BASE}/api/account/update-alias`, {
@@ -537,7 +536,7 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     });
     if (res.status === 403) {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.PRO_GATED });
-      reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] \`/alias\` is a Max-tier command. Free users may look, but not touch.\n\nUpgrade at \`/upgrade\` to unlock the full command arsenal.` });
+      reply({ role: "error", content: proGatedMessage("/alias") });
       return;
     }
     if (res.status === 429) {
@@ -893,7 +892,7 @@ export function executeSlashCommand(
     const isBYOK = BYOK_ENABLED && Boolean(ctx.state.apiKey);
     if (!isPro && !isBYOK) {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: baseCommand, reason: SlashCommandFailureReasons.PRO_GATED });
-      reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] \`${baseCommand}\` is a Max-tier command. Free users may look, but not touch.\n\nUpgrade at \`/upgrade\` to unlock the full command arsenal.` });
+      reply({ role: "error", content: proGatedMessage(baseCommand) });
       ctx.setIsProcessing(false);
       return;
     }

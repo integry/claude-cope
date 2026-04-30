@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 import app from "../app";
 
-export function makeDB(existing?: { total_td: number; current_td: number; last_sync_time?: string }) {
+export function makeDB(existing?: { total_td: number; current_td: number; last_sync_time?: string; license_hash?: string | null; corporate_rank?: string }, opts?: { licenseActive?: boolean }) {
   const bound: unknown[] = [];
   let lastSQL = "";
   const batchedStatements: unknown[] = [];
@@ -11,11 +11,17 @@ export function makeDB(existing?: { total_td: number; current_td: number; last_s
         const isMigrationBookkeeping = sql.includes("schema_migrations");
         if (!isMigrationBookkeeping) lastSQL = sql;
         const isSelect = sql.trim().toUpperCase().startsWith("SELECT");
+        const isLicenseCheck = sql.includes("licenses");
         return {
           bind: vi.fn((...args: unknown[]) => {
             if (!isMigrationBookkeeping) bound.push(...args);
             return {
-              first: vi.fn().mockResolvedValue(isSelect ? (existing ?? null) : null),
+              first: vi.fn().mockImplementation(() => {
+                if (isLicenseCheck) {
+                  return Promise.resolve(opts?.licenseActive ? { status: "active", last_activated_at: new Date().toISOString() } : null);
+                }
+                return Promise.resolve(isSelect ? (existing ?? null) : null);
+              }),
               run: vi.fn().mockResolvedValue({ success: true }),
             };
           }),

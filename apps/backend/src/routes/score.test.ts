@@ -55,8 +55,8 @@ describe("GET /api/score", () => {
     expect(json.corporate_rank).toBe("Junior Code Monkey");
   });
 
-  it("returns uncapped rank for paid users with license_hash", async () => {
-    const { db } = makeDB({ total_td: 200000, current_td: 150000, corporate_rank: "Mid-Level Googler", license_hash: "pro-hash" } as never);
+  it("returns uncapped rank for paid users with active license", async () => {
+    const { db } = makeDB({ total_td: 200000, current_td: 150000, corporate_rank: "Mid-Level Googler", license_hash: "pro-hash" } as never, { licenseActive: true });
     const res = await app.request("/api/score?username=prouser", undefined, {
       ALLOWED_ORIGINS: "http://localhost:5173",
       DB: db,
@@ -66,6 +66,17 @@ describe("GET /api/score", () => {
     expect(json.total_td).toBe(200000);
     expect(json.current_td).toBe(150000);
     expect(json.corporate_rank).toBe("Mid-Level Googler");
+  });
+
+  it("caps rank for users with revoked license", async () => {
+    const { db } = makeDB({ total_td: 200000, current_td: 150000, corporate_rank: "Mid-Level Googler", license_hash: "revoked-hash" } as never, { licenseActive: false });
+    const res = await app.request("/api/score?username=revokeduser", undefined, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      DB: db,
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { corporate_rank: string };
+    expect(json.corporate_rank).toBe("Junior Code Monkey");
   });
 });
 

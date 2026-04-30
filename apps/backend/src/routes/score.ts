@@ -89,7 +89,8 @@ score.get("/", async (c) => {
     .first<{ total_td: number; current_td: number; corporate_rank: string; license_hash: string | null }>();
 
   if (!row) return c.json({ total_td: 0, current_td: 0, corporate_rank: FREE_TIER_RANK_CAP });
-  const rank = row.license_hash ? row.corporate_rank : FREE_TIER_RANK_CAP;
+  const licenseActive = row.license_hash ? await isLicenseActive(db, row.license_hash) : false;
+  const rank = licenseActive ? row.corporate_rank : FREE_TIER_RANK_CAP;
   return c.json({ total_td: row.total_td, current_td: row.current_td, corporate_rank: rank });
 });
 
@@ -154,7 +155,7 @@ function computeTimeCap(existing: { last_sync_time: string } | null, serverTotal
   return serverTotal + maxTDPerSecond * elapsedSeconds + validatedTaskBonus;
 }
 
-function resolveRankAndFlags(validatedTotal: number, claimedTotal: number, serverTotal: number): string {
+function resolveRankAndFlags(claimedTotal: number, serverTotal: number): string {
   if (claimedTotal > serverTotal * 2 && serverTotal > 1000) return "🤡 DevTools Hacker";
   return FREE_TIER_RANK_CAP;
 }
@@ -306,7 +307,7 @@ score.post("/", async (c) => {
   const validatedTotal = Math.min(body.totalTDEarned, Math.round(serverTotal * 1.1) + validatedTaskBonus, Math.round(timeClampedTotal));
   const validatedCurrent = Math.min(body.currentTD, validatedTotal);
 
-  const rank = resolveRankAndFlags(validatedTotal, body.totalTDEarned, serverTotal);
+  const rank = resolveRankAndFlags(body.totalTDEarned, serverTotal);
   const batchStatements = buildScoreBatch(db, {
     existing, serverTotal, validatedTotal, validatedCurrent,
     rank, country, username: body.username, validatedClaims,

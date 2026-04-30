@@ -397,8 +397,11 @@ account.post("/update-alias", async (c) => {
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
   const body = await c.req.json<{ username: string; newAlias: string; licenseKeyHash: string }>();
-  if (!body.username || !body.newAlias || !body.licenseKeyHash) {
-    return c.json({ error: "username, newAlias, and licenseKeyHash are required" }, 400);
+  if (!body.username || !body.newAlias) {
+    return c.json({ error: "username and newAlias are required" }, 400);
+  }
+  if (!body.licenseKeyHash) {
+    return c.json({ error: "Alias changes require an active Max license" }, 403);
   }
 
   const v = validateAlias(body.newAlias);
@@ -424,15 +427,24 @@ account.post("/update-alias", async (c) => {
     return c.json({ error: "This alias is already taken" }, 409);
   }
 
-  const results = await db.batch([
-    db.prepare(
-      `UPDATE user_scores SET username = ?, updated_at = datetime('now')
-       WHERE username = ? AND license_hash = ?
-         AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
-    ).bind(alias, body.username, body.licenseKeyHash),
-    db.prepare("UPDATE completed_tasks SET username = ? WHERE username = ?")
-      .bind(alias, body.username),
-  ]);
+  let results: D1Result[];
+  try {
+    results = await db.batch([
+      db.prepare(
+        `UPDATE user_scores SET username = ?, updated_at = datetime('now')
+         WHERE username = ? AND license_hash = ?
+           AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
+      ).bind(alias, body.username, body.licenseKeyHash),
+      db.prepare("UPDATE completed_tasks SET username = ? WHERE username = ?")
+        .bind(alias, body.username),
+    ]) as D1Result[];
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE") || msg.includes("unique") || msg.includes("constraint")) {
+      return c.json({ error: "This alias is already taken" }, 409);
+    }
+    return c.json({ error: "Alias update failed — please retry" }, 500);
+  }
 
   const updateResult = results[0] as D1Result;
   if (!updateResult.meta.changes) {

@@ -263,13 +263,17 @@ export function validateAlias(raw: string): { alias: string; error?: undefined }
   const alias = raw.trim();
   if (alias.length < 3 || alias.length > 33) return { error: "Alias must be between 3 and 33 characters" };
   if (!/^[a-zA-Z0-9_-]+$/.test(alias)) return { error: "Alias can only contain letters, numbers, hyphens, and underscores" };
+  if (!/[a-zA-Z]/.test(alias)) return { error: "Alias must contain at least one letter" };
   return { alias };
 }
 
 export async function checkAliasRateLimit(
   kv: KVNamespace | undefined, licenseKeyHash: string, limit: number,
 ): Promise<{ allowed: boolean; increment: () => Promise<void> }> {
-  if (!kv) return { allowed: true, increment: async () => {} };
+  if (!kv) {
+    console.warn("checkAliasRateLimit: KV namespace unavailable — rate limiting bypassed");
+    return { allowed: true, increment: async () => {} };
+  }
   const today = new Date().toISOString().slice(0, 10);
   const changeKey = `alias_changes:${licenseKeyHash}:${today}`;
   const count = parseInt(await kv.get(changeKey) ?? "0", 10);
