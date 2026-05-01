@@ -1,11 +1,10 @@
 import { Hono } from "hono";
-import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, pickAllLicenseKeys, fetchCheckoutCustomerId, parseCheckoutCache, claimCheckoutForSession } from "./accountHelpers";
-import type { SyncBody, PolarLicenseKeyItem, CheckoutCache } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, fetchLicenseKeys, fetchCheckoutCustomerId, parseCheckoutCache, claimCheckoutForSession } from "./accountHelpers";
+import type { SyncBody, CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 
@@ -56,30 +55,6 @@ async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?
   return { body, validation, kv, db, hash } as const;
 }
 
-async function fetchLicenseKeys(
-  customerId: string,
-  organizationId: string,
-  accessToken: string,
-  createdAt: string,
-): Promise<{ keys: string[] } | { error: string; status: ContentfulStatusCode }> {
-  let lkResp: Response;
-  try {
-    lkResp = await fetch(
-      `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=100&sorting=-created_at`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-  } catch {
-    return { error: "Unable to reach Polar — please try again", status: 502 };
-  }
-  if (!lkResp.ok) return { error: "Failed to list license keys", status: 502 };
-  const lkData = await lkResp.json() as { items?: PolarLicenseKeyItem[] };
-  const granted = (lkData.items ?? []).filter((l) => l.status === "granted");
-  if (!granted.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
-  const allKeys = pickAllLicenseKeys(granted, createdAt);
-  if (!allKeys.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
-  return { keys: allKeys.map((k) => k.key) };
-}
-
 async function lookupCheckoutCache(kv: KVNamespace, checkoutId: string, sessionId: string): Promise<{ keys: string[] } | { error: string; status: 403 } | null> {
   const cached = await kv.get(`checkout_used:${checkoutId}`);
   if (!cached) return null;
@@ -112,6 +87,14 @@ account.post("/checkout-license", async (c) => {
     return c.json({ licenseKey: cacheResult.keys[0], allKeys: cacheResult.keys });
   }
 
+  // Verify the checkout exists, belongs to this org, and payment succeeded
+  // BEFORE claiming it for this session — this prevents callers from poisoning
+  // arbitrary checkout IDs without proof of a valid purchase.
+  const result = await fetchCheckoutCustomerId(body.checkoutId, accessToken, organizationId);
+  if ("error" in result) return c.json({ error: result.error }, result.status);
+
+  if (!result.createdAt) return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
+
   // Atomically bind this checkout to the current session via D1. If another
   // session already claimed this checkout_id, reject the request — this
   // prevents a stolen checkout_id from being redeemed by an attacker.
@@ -121,16 +104,11 @@ account.post("/checkout-license", async (c) => {
     if (!claim.ok) return c.json({ error: claim.error }, 403);
   }
 
-  const result = await fetchCheckoutCustomerId(body.checkoutId, accessToken, organizationId);
-  if ("error" in result) return c.json({ error: result.error }, result.status);
-
-  if (!result.createdAt) return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
-
   const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, result.createdAt);
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
   const allKeyStrings = lkResult.keys;
   const cachePayload: CheckoutCache = { keys: allKeyStrings, sessionId };
-  await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 60 * 60 });
+  await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 7 * 24 * 60 * 60 });
   return c.json({ licenseKey: allKeyStrings[0], allKeys: allKeyStrings });
 });
 

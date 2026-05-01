@@ -196,6 +196,7 @@ function Terminal() {
       setHistory((prev) => [...prev, { role: "system", content: "[💳] Retrieving your license — one sec…" }]);
       try {
         let lastData: { licenseKey?: string; allKeys?: string[]; error?: string } = {};
+        let lastStatus = 0;
         for (let attempt = 0; attempt < 5; attempt++) {
           if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
           let res: Response;
@@ -210,6 +211,7 @@ function Terminal() {
             throw new Error("Network error");
           }
           if (res.status >= 500 && attempt < 4) continue;
+          lastStatus = res.status;
           lastData = await res.json() as { licenseKey?: string; allKeys?: string[]; error?: string };
           if (res.ok && lastData.licenseKey) {
             const keys = lastData.allKeys ?? [lastData.licenseKey];
@@ -230,8 +232,8 @@ function Terminal() {
           }
           if (res.status !== 409) break;
         }
-        strip();
-        const manualHint = lastData.licenseKey ? ` Your key: \`${lastData.licenseKey}\` — run \`/sync ${lastData.licenseKey}\` manually.` : " If your license arrived by email, you can run `/sync <COPE-XXX>` manually.";
+        if (lastStatus !== 409) strip();
+        const manualHint = lastData.licenseKey ? ` Your key: \`${lastData.licenseKey}\` — run \`/sync ${lastData.licenseKey}\` manually.` : lastStatus === 409 ? " Refresh the page to retry automatically." : " If your license arrived by email, you can run `/sync <COPE-XXX>` manually.";
         setHistory((prev) => [...prev, { role: "error", content: `[❌] License activation failed: ${lastData.error ?? "Unknown error"}.${manualHint}` }]);
       } catch {
         setHistory((prev) => [...prev, { role: "error", content: "[❌] Network error during license activation. Check your email for the license key and run `/sync <COPE-XXX>` manually." }]);

@@ -147,6 +147,12 @@ describe("parseCheckoutCache", () => {
     expect(parseCheckoutCache(JSON.stringify([null, "K1"]))).toBeNull();
   });
 
+  it("returns null when sessionId is not a string", () => {
+    expect(parseCheckoutCache(JSON.stringify({ keys: ["K1"], sessionId: {} }))).toBeNull();
+    expect(parseCheckoutCache(JSON.stringify({ keys: ["K1"], sessionId: 123 }))).toBeNull();
+    expect(parseCheckoutCache(JSON.stringify({ keys: ["K1"], sessionId: [] }))).toBeNull();
+  });
+
   it("returns null for empty string input", () => {
     expect(parseCheckoutCache("")).toBeNull();
   });

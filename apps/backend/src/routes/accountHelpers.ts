@@ -44,6 +44,30 @@ export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreat
   return sorted.filter((k) => new Date(k.created_at).getTime() >= checkoutTime);
 }
 
+export async function fetchLicenseKeys(
+  customerId: string,
+  organizationId: string,
+  accessToken: string,
+  createdAt: string,
+): Promise<{ keys: string[] } | { error: string; status: ContentfulStatusCode }> {
+  let lkResp: Response;
+  try {
+    lkResp = await fetch(
+      `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=100&sorting=-created_at`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+  } catch {
+    return { error: "Unable to reach Polar — please try again", status: 502 };
+  }
+  if (!lkResp.ok) return { error: "Failed to list license keys", status: 502 };
+  const lkData = await lkResp.json() as { items?: PolarLicenseKeyItem[] };
+  const granted = (lkData.items ?? []).filter((l) => l.status === "granted");
+  if (!granted.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
+  const allKeys = pickAllLicenseKeys(granted, createdAt);
+  if (!allKeys.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
+  return { keys: allKeys.map((k) => k.key) };
+}
+
 export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: string, organizationId: string): Promise<{ customerId: string; createdAt?: string } | { error: string; status: ContentfulStatusCode }> {
   let resp: Response;
   try {
@@ -84,7 +108,9 @@ export function parseCheckoutCache(raw: string): CheckoutCache | null {
     }
     if (parsed && typeof parsed === "object" && Array.isArray(parsed.keys)) {
       if (!isNonEmptyStringArray(parsed.keys)) return null;
-      return { keys: parsed.keys, sessionId: parsed.sessionId ?? "" };
+      const sid = parsed.sessionId;
+      if (sid !== undefined && sid !== null && typeof sid !== "string") return null;
+      return { keys: parsed.keys, sessionId: typeof sid === "string" ? sid : "" };
     }
     return null;
   } catch {
@@ -333,10 +359,12 @@ export async function claimCheckoutForSession(
     }
 
     return { ok: false, error: "This checkout was already claimed by another session" };
-  } catch {
-    // Table may not exist yet (migration pending); fail open to avoid
-    // blocking legitimate purchases during rollout.
-    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("no such table") || msg.includes("checkout_claims")) {
+      return { ok: true };
+    }
+    return { ok: false, error: "Unable to verify checkout claim — please try again" };
   }
 }
 
