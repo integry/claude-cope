@@ -63,8 +63,8 @@ function createMockDB(rows: ConfigRow[] = []) {
   };
 }
 
-function makeEnv(db: ReturnType<typeof createMockDB>) {
-  return { DB: db, ALLOWED_ORIGINS: "http://localhost:5174" };
+function makeEnv(db: ReturnType<typeof createMockDB>, apiKey?: string) {
+  return { DB: db, ALLOWED_ORIGINS: "http://localhost:5174", ...(apiKey ? { ADMIN_API_KEY: apiKey } : {}) };
 }
 
 describe("GET /api/config", () => {
@@ -126,14 +126,14 @@ describe("PUT /api/config/:key/:tier", () => {
     expect(body.error).toContain("empty");
   });
 
-  it("preserves existing value when masked placeholder is sent for sensitive key", async () => {
+  it("preserves existing value when explicit sentinel is sent for sensitive key", async () => {
     const db = createMockDB([
       { key: "openrouter_api_key", tier: "*", value: "sk-real-secret-key", description: null, updated_at: "2026-01-01" },
     ]);
     const res = await app.request("/api/config/openrouter_api_key/*", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value: "••••" }),
+      body: JSON.stringify({ value: "__PRESERVE_EXISTING__" }),
     }, makeEnv(db));
     expect(res.status).toBe(200);
   });
@@ -225,5 +225,57 @@ describe("DELETE /api/config/:key/:tier", () => {
       method: "DELETE",
     }, { ALLOWED_ORIGINS: "http://localhost:5174" });
     expect(res.status).toBe(500);
+  });
+});
+
+describe("Auth guard for /api/config", () => {
+  it("allows access when ADMIN_API_KEY is not set", async () => {
+    const db = createMockDB([
+      { key: "free_quota_limit", tier: "*", value: "100", description: null, updated_at: "2026-01-01" },
+    ]);
+    const res = await app.request("/api/config", {}, makeEnv(db));
+    expect(res.status).toBe(200);
+  });
+
+  it("returns 401 when ADMIN_API_KEY is set but no Authorization header provided", async () => {
+    const db = createMockDB([]);
+    const res = await app.request("/api/config", {}, makeEnv(db, "secret-admin-key"));
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 when Authorization header has wrong token", async () => {
+    const db = createMockDB([]);
+    const res = await app.request("/api/config", {
+      headers: { Authorization: "Bearer wrong-key" },
+    }, makeEnv(db, "secret-admin-key"));
+    expect(res.status).toBe(401);
+  });
+
+  it("allows access with correct Bearer token", async () => {
+    const db = createMockDB([
+      { key: "free_quota_limit", tier: "*", value: "100", description: null, updated_at: "2026-01-01" },
+    ]);
+    const res = await app.request("/api/config", {
+      headers: { Authorization: "Bearer secret-admin-key" },
+    }, makeEnv(db, "secret-admin-key"));
+    expect(res.status).toBe(200);
+  });
+
+  it("protects PUT endpoints with auth", async () => {
+    const db = createMockDB([]);
+    const res = await app.request("/api/config/free_quota_limit/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: "200" }),
+    }, makeEnv(db, "secret-admin-key"));
+    expect(res.status).toBe(401);
+  });
+
+  it("protects DELETE endpoints with auth", async () => {
+    const db = createMockDB([]);
+    const res = await app.request("/api/config/free_quota_limit/*", {
+      method: "DELETE",
+    }, makeEnv(db, "secret-admin-key"));
+    expect(res.status).toBe(401);
   });
 });

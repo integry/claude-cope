@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { useAdminApi } from "../hooks/useAdminApi";
+import { useAdminApi, authHeaders } from "../hooks/useAdminApi";
 import { API_BASE } from "../config";
 import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS, GLOBAL_ONLY_KEYS } from "@claude-cope/shared/config";
+
+const PRESERVE_VALUE_SENTINEL = "__PRESERVE_EXISTING__";
 
 interface ConfigEntry {
   key: string;
@@ -46,7 +48,10 @@ export default function Configuration() {
   const [editingEntry, setEditingEntry] = useState<{ key: string; tier: string } | null>(null);
   const [form, setForm] = useState<ConfigForm>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [deletingEntry, setDeletingEntry] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<ConfigEntry | null>(null);
   const [filter, setFilter] = useState("");
 
   function openCreate() {
@@ -70,6 +75,7 @@ export default function Configuration() {
     setShowForm(false);
     setEditingEntry(null);
     setForm(emptyForm);
+    setSaveError(null);
   }
 
   function selectWellKnownKey(key: string) {
@@ -84,23 +90,25 @@ export default function Configuration() {
 
   async function handleSave() {
     if (!form.key.trim()) {
-      alert("Key is required.");
+      setSaveError("Key is required.");
       return;
     }
     const isSensitiveEdit = editingEntry && SENSITIVE_KEYS.has(form.key);
     if (!isSensitiveEdit && !form.value.trim()) {
-      alert("Value is required.");
+      setSaveError("Value is required.");
       return;
     }
     setSaving(true);
+    setSaveError(null);
     try {
       const key = encodeURIComponent(form.key.trim());
       const tier = encodeURIComponent(form.tier.trim() || "*");
+      const effectiveValue = isSensitiveEdit && !form.value.trim() ? PRESERVE_VALUE_SENTINEL : form.value;
       const res = await fetch(`${API_BASE}/api/config/${key}/${tier}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
-          value: form.value,
+          value: effectiveValue,
           description: form.description || undefined,
         }),
       });
@@ -111,30 +119,38 @@ export default function Configuration() {
       await mutate();
       closeForm();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to save configuration.");
+      setSaveError(err instanceof Error ? err.message : "Failed to save configuration.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleDelete(entry: ConfigEntry) {
-    if (!confirm(`Delete "${entry.key}" (tier: ${entry.tier})?`)) return;
+  function requestDelete(entry: ConfigEntry) {
+    setDeleteError(null);
+    setConfirmDelete(entry);
+  }
 
+  async function executeDelete() {
+    if (!confirmDelete) return;
+    const entry = confirmDelete;
     const entryId = `${entry.key}:${entry.tier}`;
     setDeletingEntry(entryId);
+    setDeleteError(null);
     try {
       const key = encodeURIComponent(entry.key);
       const tier = encodeURIComponent(entry.tier);
       const res = await fetch(`${API_BASE}/api/config/${key}/${tier}`, {
         method: "DELETE",
+        headers: authHeaders(),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.error || `Delete failed: ${res.statusText}`);
       }
       await mutate();
+      setConfirmDelete(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete configuration.");
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete configuration.");
     } finally {
       setDeletingEntry(null);
     }
@@ -281,6 +297,9 @@ export default function Configuration() {
               />
             </div>
           </div>
+          {saveError && (
+            <p className="mt-2 text-sm text-red-600">{saveError}</p>
+          )}
           <div className="mt-4 flex gap-2">
             <button
               onClick={handleSave}
@@ -377,7 +396,7 @@ export default function Configuration() {
                           Edit
                         </button>
                         <button
-                          onClick={() => handleDelete(entry)}
+                          onClick={() => requestDelete(entry)}
                           disabled={deletingEntry === entryId}
                           className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                         >
@@ -401,6 +420,35 @@ export default function Configuration() {
           </tbody>
         </table>
       </div>
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Confirm Delete</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Delete &quot;{confirmDelete.key}&quot; (tier: {confirmDelete.tier})?
+            </p>
+            {deleteError && (
+              <p className="mt-2 text-sm text-red-600">{deleteError}</p>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => { setConfirmDelete(null); setDeleteError(null); }}
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeDelete}
+                disabled={deletingEntry !== null}
+                className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deletingEntry ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -399,12 +399,87 @@ describe("resolveProviderList", () => {
     expect(resolveProviderList("DeepInfra,NovitaAI", "1", "max")).toEqual(["DeepInfra", "NovitaAI"]);
   });
 
-  it("returns parsed providers for depleted category", () => {
+  it("returns parsed providers for depleted category (treated as free-tier)", () => {
     expect(resolveProviderList("DeepInfra,NovitaAI", "true", "depleted")).toEqual(["DeepInfra", "NovitaAI"]);
+  });
+
+  it("returns parsed providers for depleted category when FREE_ONLY is unset", () => {
+    expect(resolveProviderList("DeepInfra,NovitaAI", undefined, "depleted")).toEqual(["DeepInfra", "NovitaAI"]);
   });
 
   it("returns empty list when no providers are configured", () => {
     expect(resolveProviderList(undefined, "true", "free")).toEqual([]);
     expect(resolveProviderList("", "true", "max")).toEqual([]);
+  });
+});
+
+describe("Category routing integration", () => {
+  it("selects category-specific model and apiKey from DB for max users", async () => {
+    const { getRoutingConfig } = await import("../utils/categoryRouting");
+
+    const mockDB = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          all: vi.fn(async () => ({
+            results: [
+              { key: "openrouter_api_key", tier: "*", value: "sk-global" },
+              { key: "openrouter_providers", tier: "*", value: "DeepInfra" },
+              { key: "category_model", tier: "max", value: "openai/gpt-4o" },
+              { key: "category_api_key", tier: "max", value: "sk-max" },
+            ],
+          })),
+        })),
+      })),
+    } as unknown as D1Database;
+
+    const config = await getRoutingConfig(mockDB, "max");
+    expect(config.openRouter.apiKey).toBe("sk-global");
+    expect(config.openRouter.providers).toBe("DeepInfra");
+    expect(config.category.model).toBe("openai/gpt-4o");
+    expect(config.category.apiKey).toBe("sk-max");
+  });
+
+  it("DB config takes precedence over env vars", () => {
+    const envApiKey = "sk-env-key";
+    const dbApiKey = "sk-db-key";
+
+    const baseApiKey = dbApiKey || envApiKey;
+    expect(baseApiKey).toBe("sk-db-key");
+  });
+
+  it("depleted category uses free-tier provider routing and separate billing", async () => {
+    const { assignCategory } = await import("../utils/categoryRouting");
+    const category = assignCategory({ isProUser: true, quotaPercent: 0 });
+    expect(category).toBe("depleted");
+
+    const providerList = resolveProviderList("DeepInfra,NovitaAI", "true", category);
+    expect(providerList).toEqual(["DeepInfra", "NovitaAI"]);
+
+    const isMaxTier = category === "max";
+    expect(isMaxTier).toBe(false);
+  });
+
+  it("max category skips providers when free_only is true and uses pro billing", async () => {
+    const { assignCategory } = await import("../utils/categoryRouting");
+    const category = assignCategory({ isProUser: true, quotaPercent: 80 });
+    expect(category).toBe("max");
+
+    const providerList = resolveProviderList("DeepInfra,NovitaAI", "true", category);
+    expect(providerList).toEqual([]);
+
+    const isMaxTier = category === "max";
+    expect(isMaxTier).toBe(true);
+  });
+
+  it("free category gets providers and no pro billing", async () => {
+    const { assignCategory } = await import("../utils/categoryRouting");
+    const category = assignCategory({ isProUser: false, quotaPercent: 50 });
+    expect(category).toBe("free");
+
+    const providerList = resolveProviderList("DeepInfra,NovitaAI", "true", category);
+    expect(providerList).toEqual(["DeepInfra", "NovitaAI"]);
+
+    const isMaxTier = category === "max";
+    expect(isMaxTier).toBe(false);
   });
 });

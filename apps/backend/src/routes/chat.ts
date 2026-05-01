@@ -13,7 +13,7 @@ import {
   type ChatResponseData,
 } from "./chatHelpers";
 import { getQuotaPercent, getQuotaLimits } from "../utils/quota";
-import { assignCategory, getCategoryConfig, getOpenRouterConfig, type RequestCategory } from "../utils/categoryRouting";
+import { assignCategory, getCategoryConfig, getOpenRouterConfig, getRoutingConfig, type RequestCategory } from "../utils/categoryRouting";
 
 type Env = {
   Bindings: {
@@ -152,21 +152,35 @@ async function tryCacheSessionMapping(
   return { profileLicenseHash: profileHash, hasRow: Boolean(row), deferredKvWrites: null };
 }
 
-async function loadOpenRouterKeys(
+interface RoutingConfigResult {
+  baseApiKey: string | undefined;
+  baseProviders: string | undefined;
+  baseProvidersFreeOnly: string | undefined;
+  categoryModel: string | null;
+  categoryApiKey: string | null;
+}
+
+async function loadRoutingConfig(
   db: D1Database | undefined,
   env: Env["Bindings"],
-): Promise<{ apiKey: string | undefined; providers: string | undefined; providersFreeOnly: string | undefined }> {
-  let apiKey: string | undefined = env.OPENROUTER_API_KEY;
-  let providers: string | undefined = env.OPENROUTER_PROVIDERS;
-  let providersFreeOnly: string | undefined = env.OPENROUTER_PROVIDERS_FREE_ONLY;
+  category: RequestCategory,
+): Promise<RoutingConfigResult> {
+  let baseApiKey: string | undefined = env.OPENROUTER_API_KEY;
+  let baseProviders: string | undefined = env.OPENROUTER_PROVIDERS;
+  let baseProvidersFreeOnly: string | undefined = env.OPENROUTER_PROVIDERS_FREE_ONLY;
+  let categoryModel: string | null = null;
+  let categoryApiKey: string | null = null;
+
   if (db) {
-    const adminConfig = await getOpenRouterConfig(db);
-    // DB takes full precedence over env when a row exists (non-null means a row was found)
-    if (adminConfig.apiKey !== null) apiKey = adminConfig.apiKey || undefined;
-    if (adminConfig.providers !== null) providers = adminConfig.providers || undefined;
-    if (adminConfig.providersFreeOnly !== null) providersFreeOnly = adminConfig.providersFreeOnly || undefined;
+    const config = await getRoutingConfig(db, category);
+    if (config.openRouter.apiKey !== null) baseApiKey = config.openRouter.apiKey || undefined;
+    if (config.openRouter.providers !== null) baseProviders = config.openRouter.providers || undefined;
+    if (config.openRouter.providersFreeOnly !== null) baseProvidersFreeOnly = config.openRouter.providersFreeOnly || undefined;
+    categoryModel = config.category.model;
+    categoryApiKey = config.category.apiKey;
   }
-  return { apiKey, providers, providersFreeOnly };
+
+  return { baseApiKey, baseProviders, baseProvidersFreeOnly, categoryModel, categoryApiKey };
 }
 
 function resolveCountry(body: ChatBody, req: { raw: unknown; header: (name: string) => string | undefined }): string {
@@ -186,7 +200,12 @@ export function resolveProviderList(
   freeOnlyEnv: string | undefined,
   category: RequestCategory,
 ): string[] {
-  if (category === "max" && freeOnlyEnv === "true") return [];
+  // When free-only mode is active, only free-tier categories get the provider list.
+  // Depleted users are demoted to free-tier status per spec.
+  if (freeOnlyEnv === "true") {
+    const isFreeTier = category === "free" || category === "depleted";
+    if (!isFreeTier) return [];
+  }
   return parseProviderList(providersEnv);
 }
 
@@ -362,15 +381,8 @@ chat.post("/", async (c) => {
   const isProUser = Boolean(preCheck.effectiveProKeyHash);
   const category = assignCategory({ isProUser, quotaPercent: preCheck.quotaPercent });
 
-  const { apiKey: baseApiKey, providers: baseProviders, providersFreeOnly: baseProvidersFreeOnly } = await loadOpenRouterKeys(db, c.env);
-
-  let categoryModel: string | null = null;
-  let categoryApiKey: string | null = null;
-  if (db) {
-    const catConfig = await getCategoryConfig(db, category);
-    categoryModel = catConfig.model;
-    categoryApiKey = catConfig.apiKey;
-  }
+  const { baseApiKey, baseProviders, baseProvidersFreeOnly, categoryModel, categoryApiKey } =
+    await loadRoutingConfig(db, c.env, category);
 
   const model = categoryModel ?? resolveModel(body.modelId);
   const effectiveApiKey = categoryApiKey ?? baseApiKey;

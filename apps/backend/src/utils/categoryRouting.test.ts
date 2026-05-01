@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { assignCategory, getCategoryConfig, getOpenRouterConfig } from "./categoryRouting";
+import { assignCategory, getCategoryConfig, getOpenRouterConfig, getRoutingConfig } from "./categoryRouting";
 
 describe("assignCategory", () => {
   it("returns 'max' for pro users with available quota", () => {
@@ -132,5 +132,39 @@ describe("getOpenRouterConfig", () => {
     expect(result.apiKey).toBe("sk-admin-key");
     expect(result.providers).toBe("openai,anthropic");
     expect(result.providersFreeOnly).toBe("true");
+  });
+});
+
+describe("getRoutingConfig", () => {
+  it("returns combined openRouter and category config in a single query", async () => {
+    const db = mockDB([
+      { key: "openrouter_api_key", tier: "*", value: "sk-combined" },
+      { key: "openrouter_providers", tier: "*", value: "DeepInfra" },
+      { key: "openrouter_providers_free_only", tier: "*", value: "true" },
+      { key: "category_model", tier: "max", value: "openai/gpt-4o" },
+      { key: "category_api_key", tier: "max", value: "sk-max-key" },
+    ]);
+    const result = await getRoutingConfig(db, "max");
+    expect(result.openRouter.apiKey).toBe("sk-combined");
+    expect(result.openRouter.providers).toBe("DeepInfra");
+    expect(result.openRouter.providersFreeOnly).toBe("true");
+    expect(result.category.model).toBe("openai/gpt-4o");
+    expect(result.category.apiKey).toBe("sk-max-key");
+  });
+
+  it("returns nulls for missing config", async () => {
+    const db = mockDB([]);
+    const result = await getRoutingConfig(db, "free");
+    expect(result.openRouter).toEqual({ apiKey: null, providers: null, providersFreeOnly: null });
+    expect(result.category).toEqual({ model: null, apiKey: null });
+  });
+
+  it("prefers category-specific tier over global for category keys", async () => {
+    const db = mockDB([
+      { key: "category_model", tier: "depleted", value: "cheap-model" },
+      { key: "category_model", tier: "*", value: "default-model" },
+    ]);
+    const result = await getRoutingConfig(db, "depleted");
+    expect(result.category.model).toBe("cheap-model");
   });
 });

@@ -16,7 +16,7 @@ interface ConfigRow {
 }
 
 const MASKED_PLACEHOLDER = "••••";
-const PRESERVE_VALUE_SENTINEL = "__PRESERVE_EXISTING__";
+export const PRESERVE_VALUE_SENTINEL = "__PRESERVE_EXISTING__";
 
 function maskSensitiveValue(key: string, value: string): string {
   if (!SENSITIVE_KEYS.has(key)) return value;
@@ -25,7 +25,7 @@ function maskSensitiveValue(key: string, value: string): string {
 }
 
 function shouldPreserveValue(value: string): boolean {
-  return value === PRESERVE_VALUE_SENTINEL || value === MASKED_PLACEHOLDER || /^••••.{0,4}$/.test(value);
+  return value === PRESERVE_VALUE_SENTINEL;
 }
 
 const config = new Hono<Env>();

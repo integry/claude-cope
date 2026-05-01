@@ -45,6 +45,17 @@ app.route("/api/stats", stats);
 app.route("/api/users", users);
 app.route("/api/backlog", backlog);
 app.route("/api/licenses", licenses);
+
+app.use("/api/config/*", async (c, next) => {
+  const env = c.env as Record<string, string | undefined>;
+  const secret = env.ADMIN_API_KEY;
+  if (!secret) return next();
+  const auth = c.req.header("Authorization");
+  if (!auth || auth !== `Bearer ${secret}`) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  return next();
+});
 app.route("/api/config", config);
 
 export default app;
