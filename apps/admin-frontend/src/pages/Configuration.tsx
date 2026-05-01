@@ -19,6 +19,8 @@ interface ConfigForm {
 
 const emptyForm: ConfigForm = { key: "", tier: "*", value: "", description: "" };
 
+const CATEGORY_KEYS = new Set(["category_model", "category_api_key"]);
+
 const WELL_KNOWN_KEYS = [
   { key: "openrouter_api_key", description: "OpenRouter API key for LLM requests" },
   { key: "openrouter_providers", description: "Preferred OpenRouter providers (comma-separated)" },
@@ -36,10 +38,9 @@ const WELL_KNOWN_KEYS = [
 const SENSITIVE_KEYS = new Set(["openrouter_api_key", "turnstile_secret_key", "category_api_key"]);
 
 function maskValue(key: string, value: string): string {
-  if (SENSITIVE_KEYS.has(key) && value.length > 8) {
-    return value.slice(0, 4) + "••••" + value.slice(-4);
-  }
-  return value;
+  if (!SENSITIVE_KEYS.has(key)) return value;
+  if (value.length <= 4) return "••••";
+  return value.slice(0, 4) + "••••" + value.slice(-4);
 }
 
 export default function Configuration() {
@@ -227,7 +228,7 @@ export default function Configuration() {
                   value={form.tier}
                   onChange={(e) => setForm({ ...form, tier: e.target.value })}
                   disabled={!!editingEntry}
-                  placeholder="* (global), free, pro, or model ID"
+                  placeholder={CATEGORY_KEYS.has(form.key) ? "* (global), max, free, or depleted" : "* (global), free, pro, or model ID"}
                   className={`mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none ${
                     editingEntry ? "bg-gray-100" : ""
                   }`}

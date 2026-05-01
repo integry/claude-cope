@@ -14,6 +14,14 @@ interface ConfigRow {
   updated_at: string;
 }
 
+const SENSITIVE_KEYS = new Set(["openrouter_api_key", "turnstile_secret_key", "category_api_key"]);
+
+function maskSensitiveValue(key: string, value: string): string {
+  if (!SENSITIVE_KEYS.has(key)) return value;
+  if (value.length <= 4) return "••••";
+  return value.slice(0, 4) + "••••" + value.slice(-4);
+}
+
 const config = new Hono<Env>();
 
 config.get("/", async (c) => {
@@ -40,7 +48,7 @@ config.get("/", async (c) => {
     results = res.results ?? [];
   }
 
-  return c.json(results);
+  return c.json(results.map((r) => ({ ...r, value: maskSensitiveValue(r.key, r.value) })));
 });
 
 config.get("/:key", async (c) => {
@@ -56,15 +64,20 @@ config.get("/:key", async (c) => {
     .bind(key)
     .all<ConfigRow>();
 
-  return c.json(results ?? []);
+  const rows = results ?? [];
+  return c.json(rows.map((r) => ({ ...r, value: maskSensitiveValue(r.key, r.value) })));
 });
 
 config.put("/:key/:tier", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const key = c.req.param("key");
-  const tier = c.req.param("tier");
+  const key = c.req.param("key").trim();
+  const tier = c.req.param("tier").trim();
+
+  if (!key) return c.json({ error: "key must not be empty" }, 400);
+  if (!tier) return c.json({ error: "tier must not be empty" }, 400);
+
   const body = await c.req.json<{
     value: string;
     description?: string;
@@ -93,8 +106,11 @@ config.delete("/:key/:tier", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const key = c.req.param("key");
-  const tier = c.req.param("tier");
+  const key = c.req.param("key").trim();
+  const tier = c.req.param("tier").trim();
+
+  if (!key) return c.json({ error: "key must not be empty" }, 400);
+  if (!tier) return c.json({ error: "tier must not be empty" }, 400);
 
   await db
     .prepare("DELETE FROM system_config WHERE key = ? AND tier = ?")

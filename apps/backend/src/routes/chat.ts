@@ -6,7 +6,6 @@ import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { parseProviderList } from "@claude-cope/shared/openrouter";
 import { getProfileRow, isLicenseActive, resolveProUser } from "../utils/profile";
 import {
-  checkQuotaAvailable,
   consumeQuotaPostSuccess,
   mirrorPolarUsage,
   handleProUserScoring,
@@ -14,7 +13,7 @@ import {
   type ChatResponseData,
 } from "./chatHelpers";
 import { getQuotaPercent, getQuotaLimits } from "../utils/quota";
-import { assignCategory, getCategoryConfig } from "../utils/categoryRouting";
+import { assignCategory, getCategoryConfig, type RequestCategory } from "../utils/categoryRouting";
 
 type Env = {
   Bindings: {
@@ -174,9 +173,9 @@ type OpenRouterRequestBody = {
 export function resolveProviderList(
   providersEnv: string | undefined,
   freeOnlyEnv: string | undefined,
-  isProUser: boolean,
+  category: RequestCategory,
 ): string[] {
-  if (isProUser && freeOnlyEnv === "true") return [];
+  if (category === "max" && freeOnlyEnv === "true") return [];
   return parseProviderList(providersEnv);
 }
 
@@ -314,23 +313,15 @@ async function preChatChecks(
     revokedProfileLicenseHash = freeAccess.revokedProfileLicenseHash;
   }
 
-  // WinRAR nag (issue #736): free-tier quota enforcement is handled entirely
-  // on the frontend — the nag overlay is shown before every command, but the
-  // command still executes after dismissal.  Only pro-tier users get a hard
-  // server-side block when their quota is exhausted.
-  if (effectiveProKeyHash) {
-    const quotaCheck = await checkQuotaAvailable(env, sessionId, effectiveProKeyHash);
-    if (quotaCheck.exhaustedMessage) {
-      return rejectPreChat(quotaCheck.exhaustedMessage, 402, { effectiveProKeyHash, profileLicenseHash });
-    }
-  }
-
-  // For free-tier users we still fetch the current percentage so the frontend
-  // can update its nag state, but we never block the request.
   let quotaPercent = 100;
   const quotaKv = env.QUOTA_KV ?? env.USAGE_KV;
-  if (!effectiveProKeyHash && quotaKv) {
-    quotaPercent = await getQuotaPercent(quotaKv, { tier: "free", sessionId, limits: getQuotaLimits(env) });
+  if (quotaKv) {
+    quotaPercent = await getQuotaPercent(quotaKv, {
+      tier: effectiveProKeyHash ? "pro" : "free",
+      sessionId,
+      licenseKeyHash: effectiveProKeyHash,
+      limits: getQuotaLimits(env),
+    });
   }
 
   return { effectiveProKeyHash, profileLicenseHash, revokedProfileLicenseHash, quotaPercent, ownsUsername: true, deferredKvWrites };
@@ -385,7 +376,7 @@ chat.post("/", async (c) => {
   const providerList = resolveProviderList(
     c.env.OPENROUTER_PROVIDERS,
     c.env.OPENROUTER_PROVIDERS_FREE_ONLY,
-    isProUser,
+    category,
   );
   const orResponse = await callOpenRouter(effectiveApiKey, model, messages, providerList);
 

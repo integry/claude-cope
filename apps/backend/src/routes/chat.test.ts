@@ -382,25 +382,29 @@ describe("Provider configuration in OpenRouter requests", () => {
 });
 
 describe("resolveProviderList", () => {
-  it("returns parsed providers for a free user", () => {
-    expect(resolveProviderList("DeepInfra,NovitaAI", "true", false)).toEqual(["DeepInfra", "NovitaAI"]);
+  it("returns parsed providers for a free category", () => {
+    expect(resolveProviderList("DeepInfra,NovitaAI", "true", "free")).toEqual(["DeepInfra", "NovitaAI"]);
   });
 
-  it("returns empty list for a Pro user when FREE_ONLY is enabled", () => {
-    expect(resolveProviderList("DeepInfra,NovitaAI", "true", true)).toEqual([]);
+  it("returns empty list for max category when FREE_ONLY is enabled", () => {
+    expect(resolveProviderList("DeepInfra,NovitaAI", "true", "max")).toEqual([]);
   });
 
-  it("returns parsed providers for a Pro user when FREE_ONLY is unset", () => {
-    expect(resolveProviderList("DeepInfra,NovitaAI", undefined, true)).toEqual(["DeepInfra", "NovitaAI"]);
+  it("returns parsed providers for max category when FREE_ONLY is unset", () => {
+    expect(resolveProviderList("DeepInfra,NovitaAI", undefined, "max")).toEqual(["DeepInfra", "NovitaAI"]);
   });
 
-  it("returns parsed providers for a Pro user when FREE_ONLY is any non-'true' value", () => {
-    expect(resolveProviderList("DeepInfra,NovitaAI", "false", true)).toEqual(["DeepInfra", "NovitaAI"]);
-    expect(resolveProviderList("DeepInfra,NovitaAI", "1", true)).toEqual(["DeepInfra", "NovitaAI"]);
+  it("returns parsed providers for max category when FREE_ONLY is any non-'true' value", () => {
+    expect(resolveProviderList("DeepInfra,NovitaAI", "false", "max")).toEqual(["DeepInfra", "NovitaAI"]);
+    expect(resolveProviderList("DeepInfra,NovitaAI", "1", "max")).toEqual(["DeepInfra", "NovitaAI"]);
+  });
+
+  it("returns parsed providers for depleted category", () => {
+    expect(resolveProviderList("DeepInfra,NovitaAI", "true", "depleted")).toEqual(["DeepInfra", "NovitaAI"]);
   });
 
   it("returns empty list when no providers are configured", () => {
-    expect(resolveProviderList(undefined, "true", false)).toEqual([]);
-    expect(resolveProviderList("", "true", true)).toEqual([]);
+    expect(resolveProviderList(undefined, "true", "free")).toEqual([]);
+    expect(resolveProviderList("", "true", "max")).toEqual([]);
   });
 });
