@@ -171,6 +171,40 @@ describe("PUT /api/config/:key/:tier", () => {
     }, makeEnv(db));
     expect(res.status).toBe(400);
   });
+
+  it("rejects non-* tier for global-only keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/openrouter_api_key/free", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: "sk-test-123" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("only supports tier");
+  });
+
+  it("accepts * tier for global-only keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/openrouter_providers/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: "Together,Fireworks" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(200);
+  });
+
+  it("returns 400 for malformed JSON body", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/some_key/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: "not valid json{{{",
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("Invalid JSON");
+  });
 });
 
 describe("DELETE /api/config/:key/:tier", () => {

@@ -161,9 +161,10 @@ async function loadOpenRouterKeys(
   let providersFreeOnly: string | undefined = env.OPENROUTER_PROVIDERS_FREE_ONLY;
   if (db) {
     const adminConfig = await getOpenRouterConfig(db);
-    if (adminConfig.apiKey) apiKey = adminConfig.apiKey;
-    if (adminConfig.providers) providers = adminConfig.providers;
-    if (adminConfig.providersFreeOnly) providersFreeOnly = adminConfig.providersFreeOnly;
+    // DB takes full precedence over env when a row exists (non-null means a row was found)
+    if (adminConfig.apiKey !== null) apiKey = adminConfig.apiKey || undefined;
+    if (adminConfig.providers !== null) providers = adminConfig.providers || undefined;
+    if (adminConfig.providersFreeOnly !== null) providersFreeOnly = adminConfig.providersFreeOnly || undefined;
   }
   return { apiKey, providers, providersFreeOnly };
 }

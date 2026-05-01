@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAdminApi } from "../hooks/useAdminApi";
 import { API_BASE } from "../config";
+import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS, GLOBAL_ONLY_KEYS } from "@claude-cope/shared/config";
 
 interface ConfigEntry {
   key: string;
@@ -19,8 +20,6 @@ interface ConfigForm {
 
 const emptyForm: ConfigForm = { key: "", tier: "*", value: "", description: "" };
 
-const CATEGORY_KEYS = new Set(["category_model", "category_api_key"]);
-
 const WELL_KNOWN_KEYS = [
   { key: "openrouter_api_key", description: "OpenRouter API key for LLM requests" },
   { key: "openrouter_providers", description: "Preferred OpenRouter providers (comma-separated)" },
@@ -34,10 +33,6 @@ const WELL_KNOWN_KEYS = [
   { key: "category_model", description: "OpenRouter model ID for a request category (tier = max/free/depleted)" },
   { key: "category_api_key", description: "OpenRouter API key for a request category (tier = max/free/depleted)" },
 ];
-
-const SENSITIVE_KEYS = new Set(["openrouter_api_key", "turnstile_secret_key", "category_api_key"]);
-
-const VALID_CATEGORY_TIERS = ["*", "max", "free", "depleted"];
 
 function maskValue(key: string, value: string): string {
   if (!SENSITIVE_KEYS.has(key)) return value;
@@ -82,6 +77,7 @@ export default function Configuration() {
     setForm({
       ...form,
       key,
+      tier: GLOBAL_ONLY_KEYS.has(key) ? "*" : form.tier,
       description: known?.description ?? form.description,
     });
   }
@@ -244,6 +240,13 @@ export default function Configuration() {
                       </option>
                     ))}
                   </select>
+                ) : GLOBAL_ONLY_KEYS.has(form.key) ? (
+                  <input
+                    type="text"
+                    value="*"
+                    disabled
+                    className="mt-1 block w-full rounded border border-gray-300 bg-gray-100 px-3 py-2 text-sm shadow-sm"
+                  />
                 ) : (
                   <input
                     type="text"

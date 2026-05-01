@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS } from "@claude-cope/shared/config";
 
 type Env = {
   Bindings: {
@@ -14,11 +15,8 @@ interface ConfigRow {
   updated_at: string;
 }
 
-const SENSITIVE_KEYS = new Set(["openrouter_api_key", "turnstile_secret_key", "category_api_key"]);
-const CATEGORY_KEYS = new Set(["category_model", "category_api_key"]);
-const VALID_CATEGORY_TIERS = new Set(["*", "max", "free", "depleted"]);
-
 const MASKED_PLACEHOLDER = "••••";
+const PRESERVE_VALUE_SENTINEL = "__PRESERVE_EXISTING__";
 
 function maskSensitiveValue(key: string, value: string): string {
   if (!SENSITIVE_KEYS.has(key)) return value;
@@ -26,8 +24,8 @@ function maskSensitiveValue(key: string, value: string): string {
   return MASKED_PLACEHOLDER + value.slice(-4);
 }
 
-function isMaskedValue(value: string): boolean {
-  return value === MASKED_PLACEHOLDER || /^••••.{0,4}$/.test(value);
+function shouldPreserveValue(value: string): boolean {
+  return value === PRESERVE_VALUE_SENTINEL || value === MASKED_PLACEHOLDER || /^••••.{0,4}$/.test(value);
 }
 
 const config = new Hono<Env>();
@@ -86,14 +84,20 @@ config.put("/:key/:tier", async (c) => {
   if (!key) return c.json({ error: "key must not be empty" }, 400);
   if (!tier) return c.json({ error: "tier must not be empty" }, 400);
 
-  if (CATEGORY_KEYS.has(key) && !VALID_CATEGORY_TIERS.has(tier)) {
+  if (CATEGORY_KEYS.has(key) && !VALID_CATEGORY_TIERS_SET.has(tier)) {
     return c.json({ error: `Invalid tier "${tier}" for ${key}. Valid tiers: *, max, free, depleted` }, 400);
   }
 
-  const body = await c.req.json<{
-    value: string;
-    description?: string;
-  }>();
+  if (GLOBAL_ONLY_KEYS.has(key) && tier !== "*") {
+    return c.json({ error: `Key "${key}" only supports tier "*". This key is not category-specific.` }, 400);
+  }
+
+  let body: { value: string; description?: string };
+  try {
+    body = await c.req.json<{ value: string; description?: string }>();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
 
   if (body.value === undefined || body.value === null) {
     return c.json({ error: "value is required" }, 400);
@@ -101,7 +105,7 @@ config.put("/:key/:tier", async (c) => {
 
   let value = String(body.value);
 
-  if (SENSITIVE_KEYS.has(key) && (!value.trim() || isMaskedValue(value))) {
+  if (SENSITIVE_KEYS.has(key) && (!value.trim() || shouldPreserveValue(value))) {
     const existing = await db
       .prepare("SELECT value FROM system_config WHERE key = ? AND tier = ?")
       .bind(key, tier)
