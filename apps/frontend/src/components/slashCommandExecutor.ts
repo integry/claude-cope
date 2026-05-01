@@ -67,6 +67,22 @@ function proGatedMessage(baseCommand: string): string {
   return `[🔒 **403 FORBIDDEN**] \`${baseCommand}\` is a Max-tier command. Free users may look, but not touch.\n\nUpgrade at \`/upgrade\` to unlock the full command arsenal.`;
 }
 
+function handlePaidRoute403(
+  command: string,
+  errorMessage: string | undefined,
+  ctx: SlashCommandContext,
+  reply: Reply,
+): void {
+  const isRevoked = errorMessage?.toLowerCase().includes("revoked") || errorMessage?.toLowerCase().includes("no longer active");
+  if (isRevoked) {
+    ctx.setState((prev) => ({ ...prev, proKey: undefined, proKeyHash: undefined, isPro: undefined }));
+    reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] Your Max license has been revoked or is no longer active. Re-activate with \`/sync <key>\` or upgrade at \`/upgrade\`.` });
+  } else {
+    reply({ role: "error", content: proGatedMessage(command) });
+  }
+  track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command, reason: SlashCommandFailureReasons.PRO_GATED });
+}
+
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
 }
@@ -541,15 +557,7 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     });
     if (res.status === 403) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      const isRevoked = data.error?.toLowerCase().includes("revoked") || data.error?.toLowerCase().includes("no longer active");
-      if (isRevoked) {
-        track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.PRO_GATED });
-        ctx.setState((prev) => ({ ...prev, proKey: undefined, proKeyHash: undefined, isPro: undefined }));
-        reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] Your Max license has been revoked or is no longer active. Re-activate with \`/sync <key>\` or upgrade at \`/upgrade\`.` });
-      } else {
-        track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.PRO_GATED });
-        reply({ role: "error", content: proGatedMessage("/alias") });
-      }
+      handlePaidRoute403("/alias", data.error, ctx, reply);
       return;
     }
     if (res.status === 429) {

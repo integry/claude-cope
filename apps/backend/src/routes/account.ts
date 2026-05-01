@@ -99,6 +99,11 @@ account.get("/me", async (c) => {
   // If no DB row exists, check if the username was renamed by an alias change
   // in another session. Follow the redirect chain (up to 5 hops to handle
   // multiple renames like alice->bob->carol) and repair this session's mapping.
+  // The 5-hop cap is a deliberate functional bound: alias changes are
+  // rate-limited per day, so exceeding 5 lifetime renames is possible for
+  // long-lived accounts. Sessions stranded beyond this depth must re-login or
+  // /sync to recover. A canonical mapping would remove the limit but adds
+  // write-amplification on every rename; this is an acceptable tradeoff for now.
   if (!row && db) {
     let current = username;
     for (let i = 0; i < 5 && !row; i++) {

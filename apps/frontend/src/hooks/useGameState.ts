@@ -88,17 +88,18 @@ export function useGameState() {
   }, []);
 
   // Pro license validation: if local state claims paid status, verify against
-  // the server and clear pro fields when the license has been revoked. Without
-  // this, a revoked user's stale localStorage would keep isPaidUser() returning
-  // true, bypassing client-side feature gating indefinitely.
+  // the server and clear pro fields when the license has been revoked or the
+  // session no longer exists. Without this, a revoked user's stale localStorage
+  // would keep isPaidUser() returning true, bypassing client-side feature gating
+  // indefinitely.
   useEffect(() => {
     const initial = stateRef.current;
     if (!isPaidUser(initial)) return;
 
     let cancelled = false;
     fetchSessionProfile().then((result) => {
-      if (cancelled || !result.found) return;
-      if (!result.isPro) {
+      if (cancelled) return;
+      if (!result.found || !result.isPro) {
         setState((prev) => ({
           ...prev,
           proKey: undefined,

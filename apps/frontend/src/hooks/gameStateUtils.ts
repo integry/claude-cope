@@ -126,7 +126,11 @@ export function resolveRank(totalTDEarned: number, currentRankTitle: string): st
   return rankTitleFromIndex(rankIndex);
 }
 
-export function isPaidUser(state: Pick<GameState, "proKey" | "proKeyHash" | "isPro" | "apiKey">): boolean {
+// TODO(byok): This intentionally ignores apiKey (BYOK) — BYOK is not a
+// first-class feature yet and only applies to standalone installations.
+// Once BYOK is promoted, consider whether BYOK users should be treated as
+// "paid" for gating purposes or need a separate check.
+export function isPaidUser(state: Pick<GameState, "proKey" | "proKeyHash" | "isPro">): boolean {
   return Boolean(state.proKey) || Boolean(state.proKeyHash) || Boolean(state.isPro);
 }
 

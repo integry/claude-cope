@@ -319,13 +319,27 @@ describe("POST /api/account/update-alias", () => {
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toContain("already taken");
   });
-  it("returns 409 when UNIQUE constraint violation occurs during batch", async () => {
+  it("returns 409 when UNIQUE constraint violation occurs on user_scores update", async () => {
+    // The primary user_scores UPDATE now runs via .run() (not db.batch), so we
+    // simulate a UNIQUE constraint error by making .run() throw for the UPDATE.
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });
-    db.batch = vi.fn().mockRejectedValue(new Error("UNIQUE constraint failed: user_scores.username"));
-    const kv = mockKV({ "session_user:test-session": "alice" });
+    // Override prepare to make the user_scores UPDATE throw a UNIQUE error
+    const origPrepare = db.prepare as ReturnType<typeof vi.fn>;
+    db.prepare = vi.fn((sql: string) => {
+      const base = origPrepare(sql);
+      if (sql.includes("UPDATE user_scores SET username")) {
+        const origBind = base.bind;
+        base.bind = vi.fn((...args: unknown[]) => {
+          const bound = origBind(...args);
+          bound.run = vi.fn().mockRejectedValue(new Error("UNIQUE constraint failed: user_scores.username"));
+          return bound;
+        });
+      }
+      return base;
+    }) as unknown as typeof db.prepare;
     const res = await postJSON("/api/account/update-alias", {
       username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
-    }, { DB: db, QUOTA_KV: kv });
+    }, { DB: db });
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toContain("already taken");
   });
@@ -347,6 +361,46 @@ describe("POST /api/account/update-alias", () => {
       (args: unknown[]) => typeof args[0] === "string" && args[0].includes("alias_rate_limits") && args[0].includes("MAX(change_count - 1"),
     );
     expect(rollbackCalls.length).toBe(1);
+  });
+  it("does not update secondary tables when user_scores update returns 0 rows (revoked license)", async () => {
+    // Simulate: ownership check passes, rate limit passes, but the actual
+    // UPDATE user_scores returns 0 changes (e.g., license was revoked between
+    // verifyOwnership and the write, or concurrent rename).
+    const { db } = createMockDB({
+      firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null },
+      runChanges: 0,
+    });
+    // Override run to return 1 change for the rate-limit INSERT but 0 for the
+    // user_scores UPDATE. The mock uses runChanges for all .run() calls, so we
+    // need a custom sequence: rate limit claim succeeds (1), user_scores fails (0).
+    let runCallCount = 0;
+    const originalPrepare = db.prepare as ReturnType<typeof vi.fn>;
+    db.prepare = vi.fn((sql: string) => {
+      const base = originalPrepare(sql);
+      const originalBind = base.bind;
+      base.bind = vi.fn((...args: unknown[]) => {
+        const bound = originalBind(...args);
+        const origRun = bound.run;
+        bound.run = vi.fn(async () => {
+          runCallCount++;
+          // Call 1: alias_rate_limits INSERT (allow)
+          // Call 2: user_scores UPDATE (deny — 0 changes)
+          // Call 3+: rollback etc
+          if (sql.includes("alias_rate_limits") && sql.includes("INSERT")) {
+            return { meta: { changes: 1 } };
+          }
+          return origRun();
+        });
+        return bound;
+      });
+      return base;
+    }) as unknown as typeof db.prepare;
+    const res = await postJSON("/api/account/update-alias", {
+      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(409);
+    // db.batch should NOT have been called — secondary tables must not be touched
+    expect(db.batch).not.toHaveBeenCalled();
   });
 });
 
