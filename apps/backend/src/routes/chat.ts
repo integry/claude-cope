@@ -348,8 +348,6 @@ chat.post("/", async (c) => {
 
   const db = c.env?.DB;
 
-  const { apiKey: baseApiKey, providers: baseProviders, providersFreeOnly: baseProvidersFreeOnly } = await loadOpenRouterKeys(db, c.env);
-
   const effectiveProKeyHash = await verifyProKeyHash(db, body.proKeyHash);
 
   const sessionId = c.get("sessionId");
@@ -362,6 +360,8 @@ chat.post("/", async (c) => {
 
   const isProUser = Boolean(preCheck.effectiveProKeyHash);
   const category = assignCategory({ isProUser, quotaPercent: preCheck.quotaPercent });
+
+  const { apiKey: baseApiKey, providers: baseProviders, providersFreeOnly: baseProvidersFreeOnly } = await loadOpenRouterKeys(db, c.env);
 
   let categoryModel: string | null = null;
   let categoryApiKey: string | null = null;

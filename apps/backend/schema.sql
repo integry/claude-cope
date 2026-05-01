@@ -123,7 +123,7 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_model
 -- System-wide configuration (OpenRouter keys, model definitions, quota limits)
 -- scoped by tier. Tier '*' is the global default. For category keys
 -- (category_model, category_api_key), tiers are 'max', 'free', 'depleted'.
--- For general keys, tiers are '*', 'free', 'pro', or specific model IDs.
+-- General keys currently only use tier '*'.
 -- The composite PK (key, tier) lets the same config key carry different
 -- values for different tiers.
 CREATE TABLE IF NOT EXISTS system_config (

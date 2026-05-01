@@ -37,10 +37,12 @@ const WELL_KNOWN_KEYS = [
 
 const SENSITIVE_KEYS = new Set(["openrouter_api_key", "turnstile_secret_key", "category_api_key"]);
 
+const VALID_CATEGORY_TIERS = ["*", "max", "free", "depleted"];
+
 function maskValue(key: string, value: string): string {
   if (!SENSITIVE_KEYS.has(key)) return value;
   if (value.length <= 4) return "••••";
-  return value.slice(0, 4) + "••••" + value.slice(-4);
+  return "••••" + value.slice(-4);
 }
 
 export default function Configuration() {
@@ -106,7 +108,10 @@ export default function Configuration() {
           description: form.description || undefined,
         }),
       });
-      if (!res.ok) throw new Error(`Save failed: ${res.statusText}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || `Save failed: ${res.statusText}`);
+      }
       await mutate();
       closeForm();
     } catch (err) {
@@ -127,7 +132,10 @@ export default function Configuration() {
       const res = await fetch(`${API_BASE}/api/config/${key}/${tier}`, {
         method: "DELETE",
       });
-      if (!res.ok) throw new Error(`Delete failed: ${res.statusText}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || `Delete failed: ${res.statusText}`);
+      }
       await mutate();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete configuration.");
@@ -224,16 +232,30 @@ export default function Configuration() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Tier</label>
-                <input
-                  type="text"
-                  value={form.tier}
-                  onChange={(e) => setForm({ ...form, tier: e.target.value })}
-                  disabled={!!editingEntry}
-                  placeholder={CATEGORY_KEYS.has(form.key) ? "* (global), max, free, or depleted" : "* (global), free, pro, or model ID"}
-                  className={`mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none ${
-                    editingEntry ? "bg-gray-100" : ""
-                  }`}
-                />
+                {CATEGORY_KEYS.has(form.key) && !editingEntry ? (
+                  <select
+                    value={form.tier}
+                    onChange={(e) => setForm({ ...form, tier: e.target.value })}
+                    className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+                  >
+                    {VALID_CATEGORY_TIERS.map((t) => (
+                      <option key={t} value={t}>
+                        {t === "*" ? "* (global)" : t}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={form.tier}
+                    onChange={(e) => setForm({ ...form, tier: e.target.value })}
+                    disabled={!!editingEntry}
+                    placeholder="* (global)"
+                    className={`mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none ${
+                      editingEntry ? "bg-gray-100" : ""
+                    }`}
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Value</label>

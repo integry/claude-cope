@@ -18,14 +18,16 @@ const SENSITIVE_KEYS = new Set(["openrouter_api_key", "turnstile_secret_key", "c
 const CATEGORY_KEYS = new Set(["category_model", "category_api_key"]);
 const VALID_CATEGORY_TIERS = new Set(["*", "max", "free", "depleted"]);
 
+const MASKED_PLACEHOLDER = "••••";
+
 function maskSensitiveValue(key: string, value: string): string {
   if (!SENSITIVE_KEYS.has(key)) return value;
-  if (value.length <= 4) return "••••";
-  return value.slice(0, 4) + "••••" + value.slice(-4);
+  if (value.length <= 4) return MASKED_PLACEHOLDER;
+  return MASKED_PLACEHOLDER + value.slice(-4);
 }
 
 function isMaskedValue(value: string): boolean {
-  return value.includes("••••");
+  return value === MASKED_PLACEHOLDER || /^••••.{0,4}$/.test(value);
 }
 
 const config = new Hono<Env>();
