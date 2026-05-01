@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
@@ -60,7 +61,7 @@ async function fetchLicenseKeys(
   organizationId: string,
   accessToken: string,
   createdAt: string,
-): Promise<{ keys: string[] } | { error: string; status: number }> {
+): Promise<{ keys: string[] } | { error: string; status: ContentfulStatusCode }> {
   let lkResp: Response;
   try {
     lkResp = await fetch(
