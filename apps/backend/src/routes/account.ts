@@ -24,6 +24,30 @@ const SHILL_CREDIT = 5;
 
 const account = new Hono<Env>();
 
+async function buildMePayload(opts: {
+  row: unknown;
+  db: D1Database | undefined;
+  kv: KVNamespace;
+  env: Env["Bindings"];
+  sessionId: string;
+  username: string;
+}) {
+  const { row, db, kv, env, sessionId, username } = opts;
+  const rawLicenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
+  const licenseActive = rawLicenseHash && db ? await isLicenseActive(db, rawLicenseHash) : false;
+  const isPro = Boolean(rawLicenseHash && licenseActive);
+  const limits = getQuotaLimits(env);
+  const quotaPercent = isPro
+    ? await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: rawLicenseHash!, limits })
+    : await getQuotaPercent(kv, { tier: "free", sessionId, limits });
+  const fullProfile = db ? await getProfile(db, username) : null;
+  const profile = fullProfile
+    ? { ...fullProfile, quota_percent: quotaPercent, ...(!isPro ? { corporate_rank: FREE_TIER_RANK_CAP } : {}) }
+    : null;
+  const revoked = Boolean(rawLicenseHash && !licenseActive);
+  return { isPro, quotaPercent, profile, revoked };
+}
+
 account.post("/sync", async (c) => {
   const validated = await validateSyncRequest(c);
   if ("error" in validated) return validated.error;
@@ -87,43 +111,12 @@ account.get("/me", async (c) => {
     }
   }
 
-  // A session_user mapping with no backing row is the username-only restore
-  // case: the user's first chat 402'd before recordUsage could create a row,
-  // so we have a session-bound username but no progress yet. Return found:
-  // true with profile: null so the frontend can restore the username and
-  // show truthful quota instead of inventing a fresh identity.
-  const rawLicenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
+  const { isPro, quotaPercent, profile, revoked } = await buildMePayload({ row, db, kv, env: c.env, sessionId, username });
 
-  // Verify the license is still active — a revoked license should be treated as free.
-  // This prevents the UI from showing isPro: true with quotaPercent: 0 for revoked users.
-  const licenseActive = rawLicenseHash && db ? await isLicenseActive(db, rawLicenseHash) : false;
-  const isPro = Boolean(rawLicenseHash && licenseActive);
-
-  const limits = getQuotaLimits(c.env);
-  const quotaPercent = isPro
-    ? await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: rawLicenseHash!, limits })
-    : await getQuotaPercent(kv, { tier: "free", sessionId, limits });
-
-  const profile = db ? await getProfile(db, username) : null;
-
-  // Cap rank for free/revoked users so the uncapped DB value isn't leaked back
-  // to the frontend, which would undermine the "free users are capped at Junior
-  // Code Monkey" requirement.
-  const cappedProfile = profile
-    ? { ...profile, quota_percent: quotaPercent, ...(!isPro ? { corporate_rank: FREE_TIER_RANK_CAP } : {}) }
-    : null;
-
-  // Never expose the raw license hash — it's a credential that grants write
-  // access to the account.  Return a boolean flag instead so the frontend
-  // knows this is a Pro user and can prompt them to re-sync.
-  // A revoked user has a license_hash but is no longer active — surface this
-  // so the frontend can show "license revoked" instead of treating them as
-  // a vanilla free user.
-  const revoked = Boolean(rawLicenseHash && !licenseActive);
   return c.json({
     found: true,
     username,
-    profile: cappedProfile,
+    profile,
     quotaPercent,
     isPro,
     ...(revoked ? { revoked: true } : {}),
