@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
-import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost } from "../gameConstants";
+import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
 import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, checkAliasRateLimit, rollbackAliasRateToken, performAliasDbUpdate } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -68,11 +68,24 @@ account.get("/me", async (c) => {
   const sessionId = c.get("sessionId");
   if (!kv || !sessionId) return c.json({ found: false });
 
-  const username = await kv.get(`session_user:${sessionId}`);
+  let username = await kv.get(`session_user:${sessionId}`);
   if (!username) return c.json({ found: false });
 
   const db = c.env?.DB;
-  const row = db ? await getProfileRow(db, username) : null;
+  let row = db ? await getProfileRow(db, username) : null;
+
+  // If no DB row exists, check if the username was renamed by an alias change
+  // in another session. Follow the redirect and repair this session's mapping.
+  if (!row && db) {
+    const renamedTo = await kv.get(`renamed:${username}`);
+    if (renamedTo) {
+      row = await getProfileRow(db, renamedTo);
+      if (row) {
+        username = renamedTo;
+        await kv.put(`session_user:${sessionId}`, renamedTo, { expirationTtl: 60 * 60 * 24 * 365 });
+      }
+    }
+  }
 
   // A session_user mapping with no backing row is the username-only restore
   // case: the user's first chat 402'd before recordUsage could create a row,
@@ -93,6 +106,13 @@ account.get("/me", async (c) => {
 
   const profile = db ? await getProfile(db, username) : null;
 
+  // Cap rank for free/revoked users so the uncapped DB value isn't leaked back
+  // to the frontend, which would undermine the "free users are capped at Junior
+  // Code Monkey" requirement.
+  const cappedProfile = profile
+    ? { ...profile, quota_percent: quotaPercent, ...(!isPro ? { corporate_rank: FREE_TIER_RANK_CAP } : {}) }
+    : null;
+
   // Never expose the raw license hash — it's a credential that grants write
   // access to the account.  Return a boolean flag instead so the frontend
   // knows this is a Pro user and can prompt them to re-sync.
@@ -103,7 +123,7 @@ account.get("/me", async (c) => {
   return c.json({
     found: true,
     username,
-    profile: profile ? { ...profile, quota_percent: quotaPercent } : null,
+    profile: cappedProfile,
     quotaPercent,
     isPro,
     ...(revoked ? { revoked: true } : {}),
@@ -428,15 +448,26 @@ account.post("/update-alias", async (c) => {
     return c.json({ error: dbResult.error }, dbResult.status);
   }
 
+  // The DB rename succeeded — KV session updates and profile fetch are
+  // best-effort. If they fail the alias is already changed, so return
+  // success with whatever profile data we can gather.
   const sessionId = c.get("sessionId");
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  if (kv && sessionId) {
-    await kv.put(`session_user:${sessionId}`, alias, { expirationTtl: 60 * 60 * 24 * 365 });
-    await kv.put(`username_session:${alias}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 });
-    await kv.delete(`username_session:${body.username}`);
+  let updated: Awaited<ReturnType<typeof getProfile>> = null;
+  try {
+    if (kv && sessionId) {
+      await kv.put(`session_user:${sessionId}`, alias, { expirationTtl: 60 * 60 * 24 * 365 });
+      await kv.put(`username_session:${alias}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 });
+      await kv.delete(`username_session:${body.username}`);
+      // Store a redirect so other active sessions following the old username
+      // can discover the rename via /me and repair their own session mapping.
+      await kv.put(`renamed:${body.username}`, alias, { expirationTtl: 60 * 60 * 24 * 30 });
+    }
+    updated = await getProfile(db, alias);
+  } catch {
+    // KV or profile fetch failed after a successful DB rename.
+    // Return success so the client knows the alias changed.
   }
-
-  const updated = await getProfile(db, alias);
   return c.json({ success: true, profile: updated });
 });
 

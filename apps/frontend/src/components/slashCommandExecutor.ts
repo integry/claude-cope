@@ -557,16 +557,16 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     }
     if (!res.ok) throw new Error("Failed to update alias");
     const data = (await res.json()) as { success: boolean; profile: ServerProfile };
+    const canonicalAlias = data.profile?.username ?? newName;
     if (data.profile) {
       ctx.setState((prev) => applyServerProfile(prev, data.profile));
     }
+    identify({ username: canonicalAlias });
+    reply({ role: "system", content: `[✓] Alias updated from **${oldName}** to **${canonicalAlias}**. The codebase will never know.` });
   } catch {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.NETWORK_ERROR });
     reply({ role: "error", content: `[❌] Could not update alias. Try again later.` });
-    return;
   }
-  identify({ username: newName });
-  reply({ role: "system", content: `[✓] Alias updated from **${oldName}** to **${newName}**. The codebase will never know.` });
 }
 
 function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
