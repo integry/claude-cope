@@ -152,6 +152,26 @@ async function tryCacheSessionMapping(
   return { profileLicenseHash: profileHash, hasRow: Boolean(row), deferredKvWrites: null };
 }
 
+async function loadOpenRouterKeys(
+  db: D1Database | undefined,
+  env: Env["Bindings"],
+): Promise<{ apiKey: string | undefined; providers: string | undefined; providersFreeOnly: string | undefined }> {
+  let apiKey: string | undefined = env.OPENROUTER_API_KEY;
+  let providers: string | undefined = env.OPENROUTER_PROVIDERS;
+  let providersFreeOnly: string | undefined = env.OPENROUTER_PROVIDERS_FREE_ONLY;
+  if (db) {
+    const adminConfig = await getOpenRouterConfig(db);
+    if (adminConfig.apiKey) apiKey = adminConfig.apiKey;
+    if (adminConfig.providers) providers = adminConfig.providers;
+    if (adminConfig.providersFreeOnly) providersFreeOnly = adminConfig.providersFreeOnly;
+  }
+  return { apiKey, providers, providersFreeOnly };
+}
+
+function resolveCountry(body: ChatBody, req: { raw: unknown; header: (name: string) => string | undefined }): string {
+  return body.country || (req.raw as unknown as { cf?: { country?: string } }).cf?.country || req.header("cf-ipcountry") || "Unknown";
+}
+
 type OpenRouterRequestBody = {
   model: string;
   messages: { role: string; content: string }[];
@@ -328,16 +348,7 @@ chat.post("/", async (c) => {
 
   const db = c.env?.DB;
 
-  // Admin-configured settings (system_config) override env vars
-  let baseApiKey: string | undefined = c.env.OPENROUTER_API_KEY;
-  let baseProviders: string | undefined = c.env.OPENROUTER_PROVIDERS;
-  let baseProvidersFreeOnly: string | undefined = c.env.OPENROUTER_PROVIDERS_FREE_ONLY;
-  if (db) {
-    const adminConfig = await getOpenRouterConfig(db);
-    if (adminConfig.apiKey) baseApiKey = adminConfig.apiKey;
-    if (adminConfig.providers) baseProviders = adminConfig.providers;
-    if (adminConfig.providersFreeOnly) baseProvidersFreeOnly = adminConfig.providersFreeOnly;
-  }
+  const { apiKey: baseApiKey, providers: baseProviders, providersFreeOnly: baseProvidersFreeOnly } = await loadOpenRouterKeys(db, c.env);
 
   const effectiveProKeyHash = await verifyProKeyHash(db, body.proKeyHash);
 
@@ -398,7 +409,7 @@ chat.post("/", async (c) => {
     c.executionCtx.waitUntil(mirrorPolarUsage(c.env, billingProKeyHash, quotaResult.remaining));
   }
 
-  const country = body.country || (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country || c.req.header("cf-ipcountry") || "Unknown";
+  const country = resolveCountry(body, c.req);
   const hour = new Date().toISOString().slice(0, 13);
 
   if (billingProKeyHash && db) {
