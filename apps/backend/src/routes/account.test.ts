@@ -300,19 +300,7 @@ describe("POST /api/account/update-alias", () => {
   });
   it("returns 409 when UNIQUE constraint violation occurs on user_scores update", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });
-    const origPrepare = db.prepare as ReturnType<typeof vi.fn>;
-    db.prepare = vi.fn((sql: string) => {
-      const base = origPrepare(sql);
-      if (sql.includes("UPDATE user_scores SET username")) {
-        const origBind = base.bind;
-        base.bind = vi.fn((...args: unknown[]) => {
-          const bound = origBind(...args);
-          bound.run = vi.fn().mockRejectedValue(new Error("UNIQUE constraint failed: user_scores.username"));
-          return bound;
-        });
-      }
-      return base;
-    }) as unknown as typeof db.prepare;
+    db.batch = vi.fn().mockRejectedValue(new Error("UNIQUE constraint failed: user_scores.username"));
     const res = await postJSON("/api/account/update-alias", {
       username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
     }, { DB: db });
@@ -334,7 +322,7 @@ describe("POST /api/account/update-alias", () => {
     );
     expect(rollbackCalls.length).toBe(1);
   });
-  it("does not update secondary tables when user_scores update returns 0 rows (revoked license)", async () => {
+  it("returns 409 and guards secondary tables when user_scores update returns 0 rows (revoked license)", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 0 });
     const originalPrepare = db.prepare as ReturnType<typeof vi.fn>;
     db.prepare = vi.fn((sql: string) => {
@@ -353,9 +341,10 @@ describe("POST /api/account/update-alias", () => {
       });
       return base;
     }) as unknown as typeof db.prepare;
+    db.batch = vi.fn().mockResolvedValue([{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]);
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
-    expect(db.batch).not.toHaveBeenCalled();
+    expect(db.batch).toHaveBeenCalled();
   });
 });
 

@@ -99,12 +99,12 @@ account.get("/me", async (c) => {
   // If no DB row exists, check if the username was renamed by an alias change
   // in another session. Follow the redirect chain (up to 5 hops to handle
   // multiple renames like alice->bob->carol) and repair this session's mapping.
-  // The 5-hop cap is a deliberate functional bound: alias changes are
-  // rate-limited per day, so exceeding 5 lifetime renames is possible for
-  // long-lived accounts. Sessions stranded beyond this depth must re-login or
-  // /sync to recover. A canonical mapping would remove the limit but adds
-  // write-amplification on every rename; this is an acceptable tradeoff for now.
+  // When we resolve the chain, we also write a shortcut redirect from the
+  // original stale username directly to the final destination. This collapses
+  // the chain so future lookups from other sessions only need 1 hop,
+  // regardless of how many lifetime renames have occurred.
   if (!row && db) {
+    const originalUsername = username;
     let current = username;
     for (let i = 0; i < 5 && !row; i++) {
       const renamedTo = await kv.get(`renamed:${current}`);
@@ -113,6 +113,12 @@ account.get("/me", async (c) => {
       if (row) {
         username = renamedTo;
         await kv.put(`session_user:${sessionId}`, renamedTo, { expirationTtl: 60 * 60 * 24 * 365 });
+        // Collapse multi-hop chains: write a direct shortcut from the
+        // original stale username to the final target so that other sessions
+        // (or this one after cookie reset) resolve in a single KV lookup.
+        if (originalUsername !== current) {
+          await kv.put(`renamed:${originalUsername}`, renamedTo, { expirationTtl: 60 * 60 * 24 * 30 });
+        }
       }
       current = renamedTo;
     }

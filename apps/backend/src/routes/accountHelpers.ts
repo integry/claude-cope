@@ -313,20 +313,33 @@ export async function performAliasDbUpdate(
     return { success: false, error: "This alias is already taken", status: 409 };
   }
 
-  // Step 1: rename the primary profile row. This must succeed before we touch
-  // secondary tables, otherwise a revoked license or ownership mismatch would
-  // leave completed_tasks/hall_of_blame/usage_logs pointing at the new alias
-  // while user_scores still has the old username.
-  let primaryResult: D1Result;
+  // All updates run in a single db.batch() transaction so that primary
+  // (user_scores) and secondary (completed_tasks, hall_of_blame, usage_logs)
+  // renames are atomic. If the primary rename fails, the secondary updates
+  // are guarded by an EXISTS subquery that checks for the new alias in
+  // user_scores, so they no-op. If any statement throws (e.g. UNIQUE
+  // constraint), the entire transaction is rolled back — no partial state.
+  let results: D1Result[];
   try {
-    primaryResult = await db
-      .prepare(
+    results = await db.batch([
+      db.prepare(
         `UPDATE user_scores SET username = ?, updated_at = datetime('now')
          WHERE username = ? AND license_hash = ?
            AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
-      )
-      .bind(newAlias, oldUsername, licenseKeyHash)
-      .run();
+      ).bind(newAlias, oldUsername, licenseKeyHash),
+      db.prepare(
+        `UPDATE completed_tasks SET username = ? WHERE username = ?
+           AND EXISTS (SELECT 1 FROM user_scores WHERE username = ? AND license_hash = ?)`,
+      ).bind(newAlias, oldUsername, newAlias, licenseKeyHash),
+      db.prepare(
+        `UPDATE hall_of_blame SET username = ? WHERE username = ?
+           AND EXISTS (SELECT 1 FROM user_scores WHERE username = ? AND license_hash = ?)`,
+      ).bind(newAlias, oldUsername, newAlias, licenseKeyHash),
+      db.prepare(
+        `UPDATE usage_logs SET username = ? WHERE username = ?
+           AND EXISTS (SELECT 1 FROM user_scores WHERE username = ? AND license_hash = ?)`,
+      ).bind(newAlias, oldUsername, newAlias, licenseKeyHash),
+    ]);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("UNIQUE") || msg.includes("unique") || msg.includes("constraint")) {
@@ -335,25 +348,8 @@ export async function performAliasDbUpdate(
     return { success: false, error: "Alias update failed — please retry", status: 500 };
   }
 
-  if (!primaryResult.meta.changes) {
+  if (!results[0].meta.changes) {
     return { success: false, error: "Update failed — profile not found, license mismatch, or license revoked", status: 409 };
-  }
-
-  // Step 2: propagate the rename to secondary tables. The primary row is
-  // already renamed, so these are best-effort consistency updates.
-  try {
-    await db.batch([
-      db.prepare("UPDATE completed_tasks SET username = ? WHERE username = ?")
-        .bind(newAlias, oldUsername),
-      db.prepare("UPDATE hall_of_blame SET username = ? WHERE username = ?")
-        .bind(newAlias, oldUsername),
-      db.prepare("UPDATE usage_logs SET username = ? WHERE username = ?")
-        .bind(newAlias, oldUsername),
-    ]);
-  } catch {
-    // Secondary table updates failed after user_scores was already renamed.
-    // The alias change is committed; secondary tables will have stale references
-    // but no data corruption. Log-worthy in production, but not a user-facing error.
   }
 
   return { success: true };
