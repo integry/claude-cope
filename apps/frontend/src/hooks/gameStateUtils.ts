@@ -1,4 +1,5 @@
 import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE, UPGRADES } from "../game/constants";
+import { BYOK_ENABLED } from "../config";
 import { STORAGE_KEY } from "./storageKey";
 const STATE_VERSION = "1.0";
 
@@ -100,6 +101,7 @@ export interface GameState {
   selectedModel?: string;
   proKey?: string;
   proKeyHash?: string;
+  isPro?: boolean;
   byokTotalCost?: number;
   byokUsage?: Record<string, ByokUsage>;
 }
@@ -122,6 +124,14 @@ export function resolveRank(totalTDEarned: number, currentRankTitle: string): st
     rankIndex++;
   }
   return rankTitleFromIndex(rankIndex);
+}
+
+export function isPaidUser(state: Pick<GameState, "proKey" | "proKeyHash" | "isPro" | "apiKey">): boolean {
+  return Boolean(state.proKey) || Boolean(state.proKeyHash) || Boolean(state.isPro);
+}
+
+export function isFreeUser(state: Pick<GameState, "proKey" | "proKeyHash" | "isPro" | "apiKey">): boolean {
+  return !isPaidUser(state) && !(BYOK_ENABLED && state.apiKey);
 }
 
 function createDefaultState(): GameState {

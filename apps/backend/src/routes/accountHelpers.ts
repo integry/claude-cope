@@ -323,6 +323,10 @@ export async function performAliasDbUpdate(
       ).bind(newAlias, oldUsername, licenseKeyHash),
       db.prepare("UPDATE completed_tasks SET username = ? WHERE username = ?")
         .bind(newAlias, oldUsername),
+      db.prepare("UPDATE hall_of_blame SET username = ? WHERE username = ?")
+        .bind(newAlias, oldUsername),
+      db.prepare("UPDATE usage_logs SET username = ? WHERE username = ?")
+        .bind(newAlias, oldUsername),
     ]) as D1Result[];
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

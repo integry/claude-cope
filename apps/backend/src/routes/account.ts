@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
-import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
+import { getProfile, getProfileRow, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
 import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, checkAliasRateLimit, rollbackAliasRateToken, performAliasDbUpdate } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
@@ -30,9 +30,8 @@ async function buildMePayload(opts: {
   kv: KVNamespace;
   env: Env["Bindings"];
   sessionId: string;
-  username: string;
 }) {
-  const { row, db, kv, env, sessionId, username } = opts;
+  const { row, db, kv, env, sessionId } = opts;
   const rawLicenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
   const licenseActive = rawLicenseHash && db ? await isLicenseActive(db, rawLicenseHash) : false;
   const isPro = Boolean(rawLicenseHash && licenseActive);
@@ -40,9 +39,8 @@ async function buildMePayload(opts: {
   const quotaPercent = isPro
     ? await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: rawLicenseHash!, limits })
     : await getQuotaPercent(kv, { tier: "free", sessionId, limits });
-  const fullProfile = db ? await getProfile(db, username) : null;
-  const profile = fullProfile
-    ? { ...fullProfile, quota_percent: quotaPercent, ...(!isPro ? { corporate_rank: FREE_TIER_RANK_CAP } : {}) }
+  const profile = row
+    ? { ...rowToProfile(row as Parameters<typeof rowToProfile>[0]), quota_percent: quotaPercent, ...(!isPro ? { corporate_rank: FREE_TIER_RANK_CAP } : {}) }
     : null;
   const revoked = Boolean(rawLicenseHash && !licenseActive);
   return { isPro, quotaPercent, profile, revoked };
@@ -99,19 +97,23 @@ account.get("/me", async (c) => {
   let row = db ? await getProfileRow(db, username) : null;
 
   // If no DB row exists, check if the username was renamed by an alias change
-  // in another session. Follow the redirect and repair this session's mapping.
+  // in another session. Follow the redirect chain (up to 5 hops to handle
+  // multiple renames like alice->bob->carol) and repair this session's mapping.
   if (!row && db) {
-    const renamedTo = await kv.get(`renamed:${username}`);
-    if (renamedTo) {
+    let current = username;
+    for (let i = 0; i < 5 && !row; i++) {
+      const renamedTo = await kv.get(`renamed:${current}`);
+      if (!renamedTo) break;
       row = await getProfileRow(db, renamedTo);
       if (row) {
         username = renamedTo;
         await kv.put(`session_user:${sessionId}`, renamedTo, { expirationTtl: 60 * 60 * 24 * 365 });
       }
+      current = renamedTo;
     }
   }
 
-  const { isPro, quotaPercent, profile, revoked } = await buildMePayload({ row, db, kv, env: c.env, sessionId, username });
+  const { isPro, quotaPercent, profile, revoked } = await buildMePayload({ row, db, kv, env: c.env, sessionId });
 
   return c.json({
     found: true,

@@ -7,6 +7,7 @@ import { COPE_MODELS } from "@claude-cope/shared/models";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE, BYOK_ENABLED, PRO_QUOTA_LIMIT } from "../config";
 import { applyServerProfile } from "../hooks/profileSync";
+import { isPaidUser } from "../hooks/gameStateUtils";
 import { updateTicketServer } from "../api/profileApi";
 
 import type { GameState } from "../hooks/useGameState";
@@ -556,10 +557,12 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
       return;
     }
     if (!res.ok) throw new Error("Failed to update alias");
-    const data = (await res.json()) as { success: boolean; profile: ServerProfile };
+    const data = (await res.json()) as { success: boolean; profile: ServerProfile | null };
     const canonicalAlias = data.profile?.username ?? newName;
     if (data.profile) {
-      ctx.setState((prev) => applyServerProfile(prev, data.profile));
+      ctx.setState((prev) => applyServerProfile(prev, data.profile!));
+    } else {
+      ctx.setState((prev) => ({ ...prev, username: canonicalAlias }));
     }
     identify({ username: canonicalAlias });
     reply({ role: "system", content: `[✓] Alias updated from **${oldName}** to **${canonicalAlias}**. The codebase will never know.` });
@@ -572,7 +575,7 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
 function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
   const modelName = command.slice(6).trim();
   const isBYOK = BYOK_ENABLED && Boolean(ctx.state.apiKey);
-  const isPro = Boolean(ctx.state.proKey);
+  const isPro = isPaidUser(ctx.state);
 
   if (!modelName) {
     const current = ctx.state.selectedModel ?? "default";
@@ -693,7 +696,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
     const data = await res.json() as { success?: boolean; hash?: string; restored?: boolean; profile?: ServerProfile; error?: string };
     if (res.ok && data.success) {
       ctx.setState((prev) => {
-        const withKey: GameState = { ...prev, proKey: licenseKey, proKeyHash: data.hash };
+        const withKey: GameState = { ...prev, proKey: licenseKey, proKeyHash: data.hash, isPro: true };
         if (data.profile) {
           return applyServerProfile(withKey, data.profile, { includeActiveTicket: true });
         }
@@ -899,10 +902,10 @@ export function executeSlashCommand(
   // server-side via the licenseKeyHash requirement.
   // TODO(byok): Strengthen BYOK gating once BYOK is a first-class feature.
   if (PRO_GATED_COMMANDS.has(baseCommand)) {
-    const isPro = Boolean(ctx.state.proKey);
+    const hasPro = isPaidUser(ctx.state);
     const isBYOK = BYOK_ENABLED && Boolean(ctx.state.apiKey);
     const needsLicense = baseCommand === "/alias";
-    if (!isPro && (!isBYOK || needsLicense)) {
+    if (!hasPro && (!isBYOK || needsLicense)) {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: baseCommand, reason: SlashCommandFailureReasons.PRO_GATED });
       reply({ role: "error", content: proGatedMessage(baseCommand) });
       ctx.setIsProcessing(false);

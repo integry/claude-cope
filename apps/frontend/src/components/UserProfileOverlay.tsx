@@ -1,7 +1,7 @@
 import { GENERATORS, CORPORATE_RANKS, UPGRADES, FREE_TIER_RANK_CAP } from "../game/constants";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
 import AsciiBox from "./AsciiBox";
-import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
+import { calculateActiveMultiplier, isFreeUser as checkIsFreeUser } from "../hooks/gameStateUtils";
 import { BYOK_ENABLED } from "../config";
 import type { GameState } from "../hooks/useGameState";
 
@@ -19,7 +19,7 @@ function formatTD(n: number): string {
 
 function UserProfileOverlay({ state, onClose }: UserProfileOverlayProps) {
   const { economy, inventory, upgrades, achievements, username, buddy } = state;
-  const isFreeUser = !state.proKey && !(BYOK_ENABLED && state.apiKey);
+  const isFreeUser = checkIsFreeUser(state);
   const activeMultiplier = calculateActiveMultiplier(inventory, upgrades) * economy.tdMultiplier;
   const unlockedAchievements = ALL_ACHIEVEMENTS.filter((a) => achievements.includes(a.id)).length;
   const totalGenerators = Object.values(inventory).reduce((sum, count) => sum + count, 0);
