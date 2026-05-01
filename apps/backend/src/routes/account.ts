@@ -64,24 +64,38 @@ async function lookupCheckoutCache(kv: KVNamespace, checkoutId: string, sessionI
   return { keys: entry.keys };
 }
 
-const account = new Hono<Env>();
-
-account.post("/checkout-license", async (c) => {
+async function validateCheckoutRequest(c: { req: { json: <T>() => Promise<T> }; get: (key: string) => string; env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response }) {
   const body = await c.req.json<{ checkoutId?: string }>();
-  if (!body.checkoutId) return c.json({ error: "checkoutId is required" }, 400);
-  if (!/^[\w-]{4,128}$/.test(body.checkoutId)) return c.json({ error: "Invalid checkoutId format" }, 400);
+  if (!body.checkoutId) return { error: c.json({ error: "checkoutId is required" }, 400) } as const;
+  if (!/^[\w-]{4,128}$/.test(body.checkoutId)) return { error: c.json({ error: "Invalid checkoutId format" }, 400) } as const;
 
   const sessionId = c.get("sessionId");
-  if (!sessionId) return c.json({ error: "Session required" }, 401);
+  if (!sessionId) return { error: c.json({ error: "Session required" }, 401) } as const;
 
   const accessToken = c.env?.POLAR_ACCESS_TOKEN;
   const organizationId = c.env?.POLAR_ORGANIZATION_ID;
-  if (!accessToken || !organizationId) return c.json({ error: "Polar integration is not configured" }, 500);
+  if (!accessToken || !organizationId) return { error: c.json({ error: "Polar integration is not configured" }, 500) } as const;
 
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  if (!kv) return c.json({ error: "KV storage is not configured" }, 500);
+  if (!kv) return { error: c.json({ error: "KV storage is not configured" }, 500) } as const;
 
-  const cacheResult = await lookupCheckoutCache(kv, body.checkoutId, sessionId);
+  return { checkoutId: body.checkoutId, sessionId, accessToken, organizationId, kv } as const;
+}
+
+function filterCheckoutKeys(allKeys: string[], alreadyClaimed: Set<string>): string[] {
+  let keys = alreadyClaimed.size > 0 ? allKeys.filter((k) => !alreadyClaimed.has(k)) : allKeys;
+  if (!keys.length && allKeys.length > 0) keys = allKeys;
+  return keys;
+}
+
+const account = new Hono<Env>();
+
+account.post("/checkout-license", async (c) => {
+  const validated = await validateCheckoutRequest(c);
+  if ("error" in validated) return validated.error;
+  const { checkoutId, sessionId, accessToken, organizationId, kv } = validated;
+
+  const cacheResult = await lookupCheckoutCache(kv, checkoutId, sessionId);
   if (cacheResult) {
     if (cacheResult.sessionMismatch) {
       return c.json({ error: "This checkout was already redeemed by another session" }, 403);
@@ -89,51 +103,27 @@ account.post("/checkout-license", async (c) => {
     return c.json({ licenseKey: cacheResult.keys[0], allKeys: cacheResult.keys });
   }
 
-  // Verify the checkout exists, belongs to this org, and payment succeeded
-  // BEFORE claiming it for this session — this prevents callers from poisoning
-  // arbitrary checkout IDs without proof of a valid purchase.
-  const result = await fetchCheckoutCustomerId(body.checkoutId, accessToken, organizationId);
+  const result = await fetchCheckoutCustomerId(checkoutId, accessToken, organizationId);
   if ("error" in result) return c.json({ error: result.error }, result.status);
-
   if (!result.createdAt) return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
 
-  // Atomically bind this checkout to the current session via D1. If another
-  // session already claimed this checkout_id, reject the request — this
-  // prevents a stolen checkout_id from being redeemed by an attacker.
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
   const customerHash = await hashKey(result.customerId);
-  const claim = await claimCheckoutForSession(db, body.checkoutId, sessionId, result.createdAt, customerHash);
+  const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt: result.createdAt, customerHash });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
 
-  // Narrow the key time window if another checkout by the same customer
-  // exists — prevents this checkout from claiming keys that belong to the
-  // next purchase.
-  const nextCheckoutAt = await getNextCheckoutTime(db, body.checkoutId, result.createdAt, customerHash);
-
-  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, result.createdAt, nextCheckoutAt ?? undefined);
+  const nextCheckoutAt = await getNextCheckoutTime(db, checkoutId, result.createdAt, customerHash);
+  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: result.createdAt, nextCheckoutCreatedAt: nextCheckoutAt ?? undefined });
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
 
-  // Exclude keys already claimed by other checkouts to prevent cross-purchase
-  // leakage when the same customer makes multiple purchases within the time window.
-  const alreadyClaimed = await getAlreadyClaimedKeys(db, body.checkoutId);
-  let allKeyStrings = alreadyClaimed.size > 0
-    ? lkResult.keys.filter((k) => !alreadyClaimed.has(k))
-    : lkResult.keys;
-
-  // If dedup filtered ALL keys but pickAllLicenseKeys found keys within this
-  // checkout's time window, the earlier checkout likely claimed keys that
-  // belong to this purchase. Fall back to the time-windowed set — the
-  // primary correctness control — rather than rejecting the purchase.
-  if (!allKeyStrings.length && lkResult.keys.length > 0) {
-    allKeyStrings = lkResult.keys;
-  }
-
+  const alreadyClaimedKeys = await getAlreadyClaimedKeys(db, checkoutId);
+  const allKeyStrings = filterCheckoutKeys(lkResult.keys, alreadyClaimedKeys);
   if (!allKeyStrings.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
 
-  await storeClaimedKeys(db, body.checkoutId, allKeyStrings);
+  await storeClaimedKeys(db, checkoutId, allKeyStrings);
   const cachePayload: CheckoutCache = { keys: allKeyStrings, sessionId };
-  await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 7 * 24 * 60 * 60 });
+  await kv.put(`checkout_used:${checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 7 * 24 * 60 * 60 });
   return c.json({ licenseKey: allKeyStrings[0], allKeys: allKeyStrings });
 });
 

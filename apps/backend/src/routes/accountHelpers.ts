@@ -62,9 +62,9 @@ export async function fetchLicenseKeys(
   customerId: string,
   organizationId: string,
   accessToken: string,
-  createdAt: string,
-  nextCheckoutCreatedAt?: string,
+  opts: { createdAt: string; nextCheckoutCreatedAt?: string },
 ): Promise<{ keys: string[] } | { error: string; status: ContentfulStatusCode }> {
+  const { createdAt, nextCheckoutCreatedAt } = opts;
   const allItems: PolarLicenseKeyItem[] = [];
   for (let page = 1; page <= MAX_LICENSE_KEY_PAGES; page++) {
     let lkResp: Response;
@@ -357,9 +357,9 @@ export async function claimCheckoutForSession(
   db: D1Database,
   checkoutId: string,
   sessionId: string,
-  checkoutCreatedAt?: string,
-  customerHash?: string,
+  opts: { checkoutCreatedAt?: string; customerHash?: string } = {},
 ): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
+  const { checkoutCreatedAt, customerHash } = opts;
   try {
     const result = await db
       .prepare(
