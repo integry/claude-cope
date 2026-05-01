@@ -50,7 +50,7 @@ describe("pickAllLicenseKeys", () => {
     expect(result[0]!.key).toBe("AFTER");
   });
 
-  it("excludes keys created more than 5 minutes after checkout (later purchase)", () => {
+  it("excludes keys created more than 15 minutes after checkout (later purchase)", () => {
     const keys = [
       key("THIS_CHECKOUT", "2026-01-02T00:00:10Z"),
       key("LATER_PURCHASE", "2026-01-02T01:00:00Z"),
@@ -60,13 +60,39 @@ describe("pickAllLicenseKeys", () => {
     expect(result[0]!.key).toBe("THIS_CHECKOUT");
   });
 
-  it("includes keys within the 5-minute window", () => {
+  it("includes keys within the 15-minute window", () => {
     const keys = [
       key("K1", "2026-01-02T00:00:01Z"),
-      key("K2", "2026-01-02T00:04:59Z"),
+      key("K2", "2026-01-02T00:14:59Z"),
     ];
     const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
     expect(result).toHaveLength(2);
+  });
+
+  it("includes keys between 5 and 15 minutes (widened window)", () => {
+    const keys = [
+      key("K1", "2026-01-02T00:00:01Z"),
+      key("K2", "2026-01-02T00:07:00Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
+    expect(result).toHaveLength(2);
+  });
+
+  it("falls back to post-checkout keys when none match the time window", () => {
+    const keys = [
+      key("DELAYED", "2026-01-02T00:20:00Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.key).toBe("DELAYED");
+  });
+
+  it("does not fall back to keys created before checkout", () => {
+    const keys = [
+      key("OLD", "2026-01-01T00:00:00Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
+    expect(result).toHaveLength(0);
   });
 
   it("does not mutate the input array", () => {

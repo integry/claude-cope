@@ -150,6 +150,16 @@ export const migrations: Migration[] = [
     sql: "ALTER TABLE licenses RENAME COLUMN activated_at TO last_activated_at",
     ignoreErrorMatching: /no such column.*activated_at/i,
   },
+
+  // ── checkout session binding ──────────────────────────────────────
+  {
+    name: "020_create_checkout_claims",
+    sql: `CREATE TABLE IF NOT EXISTS checkout_claims (
+      checkout_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+  },
 ];
 
 /**

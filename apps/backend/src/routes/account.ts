@@ -4,7 +4,7 @@ import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, pickAllLicenseKeys, fetchCheckoutCustomerId, parseCheckoutCache } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, pickAllLicenseKeys, fetchCheckoutCustomerId, parseCheckoutCache, claimCheckoutForSession } from "./accountHelpers";
 import type { SyncBody, PolarLicenseKeyItem, CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -110,6 +110,15 @@ account.post("/checkout-license", async (c) => {
   if (cacheResult) {
     if ("error" in cacheResult) return c.json({ error: cacheResult.error }, cacheResult.status);
     return c.json({ licenseKey: cacheResult.keys[0], allKeys: cacheResult.keys });
+  }
+
+  // Atomically bind this checkout to the current session via D1. If another
+  // session already claimed this checkout_id, reject the request — this
+  // prevents a stolen checkout_id from being redeemed by an attacker.
+  const db = c.env?.DB;
+  if (db) {
+    const claim = await claimCheckoutForSession(db, body.checkoutId, sessionId);
+    if (!claim.ok) return c.json({ error: claim.error }, 403);
   }
 
   const result = await fetchCheckoutCustomerId(body.checkoutId, accessToken, organizationId);

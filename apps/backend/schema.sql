@@ -119,3 +119,11 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_user_hour
 -- Index on model for per-model aggregation
 CREATE INDEX IF NOT EXISTS idx_usage_logs_model
     ON usage_logs (model, hour DESC);
+
+-- Atomic checkout-to-session binding: prevents a different session from
+-- claiming a Polar checkout that was initiated by another user.
+CREATE TABLE IF NOT EXISTS checkout_claims (
+    checkout_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

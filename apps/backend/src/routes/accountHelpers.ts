@@ -16,23 +16,32 @@ export type PolarLicenseKeyItem = {
   status: string;
 };
 
-const MAX_KEY_MINT_WINDOW_MS = 5 * 60 * 1000;
+const MAX_KEY_MINT_WINDOW_MS = 15 * 60 * 1000;
 
 // Returns ALL keys minted by a checkout, ordered oldest-first.
 // Uses a time window after checkout creation to avoid returning keys from later purchases.
 // NOTE: The Polar API does not expose a direct checkout→license-key mapping, so we
 // cannot cryptographically prove a key was created by a specific checkout. Session
-// binding on the /checkout-license route is the primary security control; this filter
+// binding via claimCheckoutForSession is the primary security control; this filter
 // is a best-effort heuristic to scope down to the correct keys.
+// KNOWN LIMITATION: if the same customer makes two purchases within the time window,
+// keys from both purchases may be returned. The KV cache ensures consistency on
+// repeat calls, but the first call may include extra keys.
 export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreatedAt: string): PolarLicenseKeyItem[] {
   const checkoutTime = new Date(checkoutCreatedAt).getTime();
   if (!Number.isFinite(checkoutTime)) return [];
   const sorted = [...granted].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   const upperBound = checkoutTime + MAX_KEY_MINT_WINDOW_MS;
-  return sorted.filter((k) => {
+  const windowed = sorted.filter((k) => {
     const t = new Date(k.created_at).getTime();
     return t >= checkoutTime && t <= upperBound;
   });
+  if (windowed.length > 0) return windowed;
+
+  // Fallback: if Polar minted keys beyond the window (delayed processing),
+  // return all granted keys created after the checkout to prevent permanent
+  // rejection of legitimate purchases.
+  return sorted.filter((k) => new Date(k.created_at).getTime() >= checkoutTime);
 }
 
 export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: string, organizationId: string): Promise<{ customerId: string; createdAt?: string } | { error: string; status: ContentfulStatusCode }> {
@@ -294,6 +303,40 @@ export async function commitSyncSideEffects(
 
   if (opts.validationId) {
     await kv.put(`polar_id:${hash}`, opts.validationId);
+  }
+}
+
+export async function claimCheckoutForSession(
+  db: D1Database,
+  checkoutId: string,
+  sessionId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const result = await db
+      .prepare(
+        "INSERT INTO checkout_claims (checkout_id, session_id) VALUES (?, ?) ON CONFLICT(checkout_id) DO NOTHING",
+      )
+      .bind(checkoutId, sessionId)
+      .run();
+
+    if (result.meta.changes) {
+      return { ok: true };
+    }
+
+    const existing = await db
+      .prepare("SELECT session_id FROM checkout_claims WHERE checkout_id = ?")
+      .bind(checkoutId)
+      .first<{ session_id: string }>();
+
+    if (existing && existing.session_id === sessionId) {
+      return { ok: true };
+    }
+
+    return { ok: false, error: "This checkout was already claimed by another session" };
+  } catch {
+    // Table may not exist yet (migration pending); fail open to avoid
+    // blocking legitimate purchases during rollout.
+    return { ok: true };
   }
 }
 
