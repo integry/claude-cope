@@ -13,7 +13,7 @@ import {
   type ChatResponseData,
 } from "./chatHelpers";
 import { getQuotaPercent, getQuotaLimits } from "../utils/quota";
-import { assignCategory, getCategoryConfig, type RequestCategory } from "../utils/categoryRouting";
+import { assignCategory, getCategoryConfig, getOpenRouterConfig, type RequestCategory } from "../utils/categoryRouting";
 
 type Env = {
   Bindings: {
@@ -150,16 +150,6 @@ async function tryCacheSessionMapping(
     };
   }
   return { profileLicenseHash: profileHash, hasRow: Boolean(row), deferredKvWrites: null };
-}
-
-function validateChatRequest(body: ChatBody, apiKey: string | undefined): { error: string; status: 400 | 500 } | null {
-  if (!body.chatMessages || !Array.isArray(body.chatMessages)) {
-    return { error: "chatMessages array is required", status: 400 };
-  }
-  if (!apiKey) {
-    return { error: "OPENROUTER_API_KEY is not configured", status: 500 };
-  }
-  return null;
 }
 
 type OpenRouterRequestBody = {
@@ -332,13 +322,23 @@ const chat = new Hono<Env>();
 chat.post("/", async (c) => {
   const body = await c.req.json<ChatBody>();
 
-  const apiKey = c.env.OPENROUTER_API_KEY;
-  const validation = validateChatRequest(body, apiKey);
-  if (validation) {
-    return c.json({ error: validation.error }, validation.status);
+  if (!body.chatMessages || !Array.isArray(body.chatMessages)) {
+    return c.json({ error: "chatMessages array is required" }, 400);
   }
 
   const db = c.env?.DB;
+
+  // Admin-configured settings (system_config) override env vars
+  let baseApiKey: string | undefined = c.env.OPENROUTER_API_KEY;
+  let baseProviders: string | undefined = c.env.OPENROUTER_PROVIDERS;
+  let baseProvidersFreeOnly: string | undefined = c.env.OPENROUTER_PROVIDERS_FREE_ONLY;
+  if (db) {
+    const adminConfig = await getOpenRouterConfig(db);
+    if (adminConfig.apiKey) baseApiKey = adminConfig.apiKey;
+    if (adminConfig.providers) baseProviders = adminConfig.providers;
+    if (adminConfig.providersFreeOnly) baseProvidersFreeOnly = adminConfig.providersFreeOnly;
+  }
+
   const effectiveProKeyHash = await verifyProKeyHash(db, body.proKeyHash);
 
   const sessionId = c.get("sessionId");
@@ -361,7 +361,10 @@ chat.post("/", async (c) => {
   }
 
   const model = categoryModel ?? resolveModel(body.modelId);
-  const effectiveApiKey = categoryApiKey ?? apiKey!;
+  const effectiveApiKey = categoryApiKey ?? baseApiKey;
+  if (!effectiveApiKey) {
+    return c.json({ error: "No OpenRouter API key configured" }, 500);
+  }
 
   const sanitizedMessages = sanitizeChatMessages(body.chatMessages);
   const trimmedMessages = enforceContextTrimming(sanitizedMessages);
@@ -373,11 +376,7 @@ chat.post("/", async (c) => {
     buddyType: body.buddyType,
   });
 
-  const providerList = resolveProviderList(
-    c.env.OPENROUTER_PROVIDERS,
-    c.env.OPENROUTER_PROVIDERS_FREE_ONLY,
-    category,
-  );
+  const providerList = resolveProviderList(baseProviders, baseProvidersFreeOnly, category);
   const orResponse = await callOpenRouter(effectiveApiKey, model, messages, providerList);
 
   if (!orResponse.ok) {
@@ -389,17 +388,21 @@ chat.post("/", async (c) => {
   const data = await orResponse.json() as ChatResponseData;
   logChatDiagnostics(messages, data);
 
-  const quotaResult = await consumeQuotaPostSuccess(c.env, sessionId, preCheck.effectiveProKeyHash);
+  // Depleted pro users are demoted to free for billing/scoring
+  const isMaxTier = category === "max";
+  const billingProKeyHash = isMaxTier ? preCheck.effectiveProKeyHash : undefined;
+
+  const quotaResult = await consumeQuotaPostSuccess(c.env, sessionId, billingProKeyHash);
   const quotaPercent = quotaResult.quotaPercent;
-  if (preCheck.effectiveProKeyHash && quotaResult.remaining != null) {
-    c.executionCtx.waitUntil(mirrorPolarUsage(c.env, preCheck.effectiveProKeyHash, quotaResult.remaining));
+  if (billingProKeyHash && quotaResult.remaining != null) {
+    c.executionCtx.waitUntil(mirrorPolarUsage(c.env, billingProKeyHash, quotaResult.remaining));
   }
 
   const country = body.country || (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country || c.req.header("cf-ipcountry") || "Unknown";
   const hour = new Date().toISOString().slice(0, 13);
 
-  if (preCheck.effectiveProKeyHash && db) {
-    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: preCheck.effectiveProKeyHash, model, hour, data, quotaPercent });
+  if (billingProKeyHash && db) {
+    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: billingProKeyHash, model, hour, data, quotaPercent });
     if (proResponse) return proResponse;
     return c.json({ error: "Pro scoring failed — please retry" }, 500);
   }

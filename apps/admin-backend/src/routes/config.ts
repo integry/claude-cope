@@ -15,11 +15,17 @@ interface ConfigRow {
 }
 
 const SENSITIVE_KEYS = new Set(["openrouter_api_key", "turnstile_secret_key", "category_api_key"]);
+const CATEGORY_KEYS = new Set(["category_model", "category_api_key"]);
+const VALID_CATEGORY_TIERS = new Set(["*", "max", "free", "depleted"]);
 
 function maskSensitiveValue(key: string, value: string): string {
   if (!SENSITIVE_KEYS.has(key)) return value;
   if (value.length <= 4) return "••••";
   return value.slice(0, 4) + "••••" + value.slice(-4);
+}
+
+function isMaskedValue(value: string): boolean {
+  return value.includes("••••");
 }
 
 const config = new Hono<Env>();
@@ -78,6 +84,10 @@ config.put("/:key/:tier", async (c) => {
   if (!key) return c.json({ error: "key must not be empty" }, 400);
   if (!tier) return c.json({ error: "tier must not be empty" }, 400);
 
+  if (CATEGORY_KEYS.has(key) && !VALID_CATEGORY_TIERS.has(tier)) {
+    return c.json({ error: `Invalid tier "${tier}" for ${key}. Valid tiers: *, max, free, depleted` }, 400);
+  }
+
   const body = await c.req.json<{
     value: string;
     description?: string;
@@ -85,6 +95,22 @@ config.put("/:key/:tier", async (c) => {
 
   if (body.value === undefined || body.value === null) {
     return c.json({ error: "value is required" }, 400);
+  }
+
+  let value = String(body.value);
+
+  if (SENSITIVE_KEYS.has(key) && (!value.trim() || isMaskedValue(value))) {
+    const existing = await db
+      .prepare("SELECT value FROM system_config WHERE key = ? AND tier = ?")
+      .bind(key, tier)
+      .first<{ value: string }>();
+    if (existing) {
+      value = existing.value;
+    } else {
+      return c.json({ error: "Value is required for new sensitive key entries" }, 400);
+    }
+  } else if (!value.trim()) {
+    return c.json({ error: "value must not be empty or whitespace-only" }, 400);
   }
 
   await db
@@ -96,7 +122,7 @@ config.put("/:key/:tier", async (c) => {
          description = excluded.description,
          updated_at = datetime('now')`
     )
-    .bind(key, tier, String(body.value), body.description ?? null)
+    .bind(key, tier, value, body.description ?? null)
     .run();
 
   return c.json({ success: true, key, tier });

@@ -63,7 +63,7 @@ export default function Configuration() {
     setForm({
       key: entry.key,
       tier: entry.tier,
-      value: entry.value,
+      value: SENSITIVE_KEYS.has(entry.key) ? "" : entry.value,
       description: entry.description ?? "",
     });
     setShowForm(true);
@@ -89,7 +89,8 @@ export default function Configuration() {
       alert("Key is required.");
       return;
     }
-    if (!form.value.trim()) {
+    const isSensitiveEdit = editingEntry && SENSITIVE_KEYS.has(form.key);
+    if (!isSensitiveEdit && !form.value.trim()) {
       alert("Value is required.");
       return;
     }
@@ -240,6 +241,7 @@ export default function Configuration() {
                   type="text"
                   value={form.value}
                   onChange={(e) => setForm({ ...form, value: e.target.value })}
+                  placeholder={editingEntry && SENSITIVE_KEYS.has(form.key) ? "Leave empty to keep current value" : ""}
                   className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -322,9 +324,11 @@ export default function Configuration() {
                             ? "bg-gray-100 text-gray-800"
                             : entry.tier === "free"
                               ? "bg-green-100 text-green-800"
-                              : entry.tier === "pro"
+                              : entry.tier === "pro" || entry.tier === "max"
                                 ? "bg-blue-100 text-blue-800"
-                                : "bg-purple-100 text-purple-800"
+                                : entry.tier === "depleted"
+                                  ? "bg-orange-100 text-orange-800"
+                                  : "bg-purple-100 text-purple-800"
                         }`}
                       >
                         {entry.tier}

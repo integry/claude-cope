@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { assignCategory, getCategoryConfig } from "./categoryRouting";
+import { assignCategory, getCategoryConfig, getOpenRouterConfig } from "./categoryRouting";
 
 describe("assignCategory", () => {
   it("returns 'max' for pro users with available quota", () => {
@@ -29,11 +29,13 @@ describe("assignCategory", () => {
 });
 
 function mockDB(rows: Array<{ key: string; tier: string; value: string }> = []) {
+  const allFn = vi.fn(async () => ({ results: rows }));
   return {
     prepare: vi.fn(() => ({
       bind: vi.fn(() => ({
-        all: vi.fn(async () => ({ results: rows })),
+        all: allFn,
       })),
+      all: allFn,
     })),
   } as unknown as D1Database;
 }
@@ -100,5 +102,35 @@ describe("getCategoryConfig", () => {
     const db = { prepare: prepareSpy } as unknown as D1Database;
     await getCategoryConfig(db, "max");
     expect(prepareSpy).toHaveBeenCalledOnce();
+  });
+});
+
+describe("getOpenRouterConfig", () => {
+  it("returns all nulls when no config exists", async () => {
+    const db = mockDB([]);
+    const result = await getOpenRouterConfig(db);
+    expect(result).toEqual({ apiKey: null, providers: null, providersFreeOnly: null });
+  });
+
+  it("returns apiKey from system_config", async () => {
+    const db = mockDB([
+      { key: "openrouter_api_key", tier: "*", value: "sk-admin-key" },
+    ]);
+    const result = await getOpenRouterConfig(db);
+    expect(result.apiKey).toBe("sk-admin-key");
+    expect(result.providers).toBeNull();
+    expect(result.providersFreeOnly).toBeNull();
+  });
+
+  it("returns all three settings when configured", async () => {
+    const db = mockDB([
+      { key: "openrouter_api_key", tier: "*", value: "sk-admin-key" },
+      { key: "openrouter_providers", tier: "*", value: "openai,anthropic" },
+      { key: "openrouter_providers_free_only", tier: "*", value: "true" },
+    ]);
+    const result = await getOpenRouterConfig(db);
+    expect(result.apiKey).toBe("sk-admin-key");
+    expect(result.providers).toBe("openai,anthropic");
+    expect(result.providersFreeOnly).toBe("true");
   });
 });

@@ -14,6 +14,34 @@ export interface CategoryConfig {
   apiKey: string | null;
 }
 
+export interface OpenRouterConfig {
+  apiKey: string | null;
+  providers: string | null;
+  providersFreeOnly: string | null;
+}
+
+export async function getOpenRouterConfig(db: D1Database): Promise<OpenRouterConfig> {
+  const { results } = await db
+    .prepare(
+      `SELECT key, value FROM system_config
+       WHERE key IN ('openrouter_api_key', 'openrouter_providers', 'openrouter_providers_free_only')
+       AND tier = '*'`,
+    )
+    .all<{ key: string; value: string }>();
+
+  let apiKey: string | null = null;
+  let providers: string | null = null;
+  let providersFreeOnly: string | null = null;
+
+  for (const row of results ?? []) {
+    if (row.key === "openrouter_api_key") apiKey = row.value;
+    if (row.key === "openrouter_providers") providers = row.value;
+    if (row.key === "openrouter_providers_free_only") providersFreeOnly = row.value;
+  }
+
+  return { apiKey, providers, providersFreeOnly };
+}
+
 export async function getCategoryConfig(
   db: D1Database,
   category: RequestCategory,
