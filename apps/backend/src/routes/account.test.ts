@@ -240,63 +240,47 @@ describe("POST /api/account/update-alias", () => {
   });
   it("returns 400 when alias is too short", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "ab", licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "ab", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("between 3 and 33");
   });
   it("returns 400 when alias is too long", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "a".repeat(34), licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "a".repeat(34), licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("between 3 and 33");
   });
   it("returns 400 when alias contains invalid characters", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "bad name!", licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "bad name!", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("letters, numbers");
   });
   it("returns 400 when alias has no letters", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "123", licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "123", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("at least one letter");
   });
   it("returns 404 when profile does not exist", async () => {
     const { db } = createMockDB({ firstResults: undefined });
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(404);
   });
   it("returns 403 when license hash does not match", async () => {
     const { db } = createMockDB({ firstResults: profileWithHash("other-hash") });
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "alice-new", licenseKeyHash: "wrong-hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "wrong-hash" }, { DB: db });
     expect(res.status).toBe(403);
   });
   it("returns 403 when license is revoked", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "revoked" } } });
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(403);
     expect(((await res.json()) as { error: string }).error).toContain("revoked");
   });
   it("returns 400 when new alias matches current username", async () => {
     const { db } = createMockDB();
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "Alice", licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "Alice", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("same as the current username");
   });
@@ -304,26 +288,18 @@ describe("POST /api/account/update-alias", () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });
     db.batch = vi.fn().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 0 } }]);
     const kv = mockKV({ "session_user:test-session": "alice" });
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
-    }, { DB: db, QUOTA_KV: kv });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db, QUOTA_KV: kv });
     expect(res.status).toBe(200);
-    const data = await res.json() as { success: boolean };
-    expect(data.success).toBe(true);
+    expect((await res.json() as { success: boolean }).success).toBe(true);
   });
   it("returns 409 when alias is already taken", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": { "1": 1 } }, runChanges: 1 });
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "taken-name", licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "taken-name", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toContain("already taken");
   });
   it("returns 409 when UNIQUE constraint violation occurs on user_scores update", async () => {
-    // The primary user_scores UPDATE now runs via .run() (not db.batch), so we
-    // simulate a UNIQUE constraint error by making .run() throw for the UPDATE.
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });
-    // Override prepare to make the user_scores UPDATE throw a UNIQUE error
     const origPrepare = db.prepare as ReturnType<typeof vi.fn>;
     db.prepare = vi.fn((sql: string) => {
       const base = origPrepare(sql);
@@ -345,17 +321,13 @@ describe("POST /api/account/update-alias", () => {
   });
   it("returns 429 when alias change limit is reached (D1 atomic claim returns 0 changes)", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" } }, runChanges: 0 });
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(429);
     expect(((await res.json()) as { error: string }).error).toContain("limit reached");
   });
   it("rolls back rate-limit token when alias DB update fails", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": { "1": 1 } }, runChanges: 1 });
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "taken-name", licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "taken-name", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
     const rollbackCalls = (db.prepare as ReturnType<typeof vi.fn>).mock.calls.filter(
       (args: unknown[]) => typeof args[0] === "string" && args[0].includes("alias_rate_limits") && args[0].includes("MAX(change_count - 1"),
@@ -363,17 +335,7 @@ describe("POST /api/account/update-alias", () => {
     expect(rollbackCalls.length).toBe(1);
   });
   it("does not update secondary tables when user_scores update returns 0 rows (revoked license)", async () => {
-    // Simulate: ownership check passes, rate limit passes, but the actual
-    // UPDATE user_scores returns 0 changes (e.g., license was revoked between
-    // verifyOwnership and the write, or concurrent rename).
-    const { db } = createMockDB({
-      firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null },
-      runChanges: 0,
-    });
-    // Override run to return 1 change for the rate-limit INSERT but 0 for the
-    // user_scores UPDATE. The mock uses runChanges for all .run() calls, so we
-    // need a custom sequence: rate limit claim succeeds (1), user_scores fails (0).
-    let runCallCount = 0;
+    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 0 });
     const originalPrepare = db.prepare as ReturnType<typeof vi.fn>;
     db.prepare = vi.fn((sql: string) => {
       const base = originalPrepare(sql);
@@ -382,10 +344,6 @@ describe("POST /api/account/update-alias", () => {
         const bound = originalBind(...args);
         const origRun = bound.run;
         bound.run = vi.fn(async () => {
-          runCallCount++;
-          // Call 1: alias_rate_limits INSERT (allow)
-          // Call 2: user_scores UPDATE (deny — 0 changes)
-          // Call 3+: rollback etc
           if (sql.includes("alias_rate_limits") && sql.includes("INSERT")) {
             return { meta: { changes: 1 } };
           }
@@ -395,36 +353,28 @@ describe("POST /api/account/update-alias", () => {
       });
       return base;
     }) as unknown as typeof db.prepare;
-    const res = await postJSON("/api/account/update-alias", {
-      username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
-    }, { DB: db });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
-    // db.batch should NOT have been called — secondary tables must not be touched
     expect(db.batch).not.toHaveBeenCalled();
   });
 });
 
 describe("POST /api/account/shill", () => {
+  const shillReq = (env: Record<string, unknown>) => app.request("/api/account/shill", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: "cope_session_id=test-session" },
+    body: "{}",
+  }, { ALLOWED_ORIGINS: "http://localhost:5173", ...env });
+
   it("returns 500 when KV is not configured", async () => {
     const res = await postJSON("/api/account/shill", {}, {});
     expect(res.status).toBe(500);
   });
   it("returns 409 when shill credit was already claimed", async () => {
-    const kv = mockKV({ "shill:test-session": "1" });
-    const res = await app.request("/api/account/shill", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: "cope_session_id=test-session" },
-      body: "{}",
-    }, { ALLOWED_ORIGINS: "http://localhost:5173", QUOTA_KV: kv });
-    expect(res.status).toBe(409);
+    expect((await shillReq({ QUOTA_KV: mockKV({ "shill:test-session": "1" }) })).status).toBe(409);
   });
   it("grants shill credit on first claim", async () => {
-    const kv = mockKV({});
-    const res = await app.request("/api/account/shill", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: "cope_session_id=test-session" },
-      body: "{}",
-    }, { ALLOWED_ORIGINS: "http://localhost:5173", QUOTA_KV: kv });
+    const res = await shillReq({ QUOTA_KV: mockKV({}) });
     expect(res.status).toBe(200);
     const data = await res.json() as { success: boolean; creditsGranted: number };
     expect(data.success).toBe(true);
@@ -433,18 +383,17 @@ describe("POST /api/account/shill", () => {
 });
 
 describe("GET /api/account/me", () => {
+  const meReq = (env: Record<string, unknown>) => app.request("/api/account/me", {
+    headers: { Cookie: "cope_session_id=test-session" },
+  }, { ALLOWED_ORIGINS: "http://localhost:5173", ...env });
+
   it("returns found: false when KV is not configured", async () => {
-    const res = await app.request("/api/account/me", {
-      headers: { Cookie: "cope_session_id=test-session" },
-    }, { ALLOWED_ORIGINS: "http://localhost:5173" });
+    const res = await meReq({});
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ found: false });
   });
   it("returns found: false when session has no mapped username", async () => {
-    const kv = mockKV({});
-    const res = await app.request("/api/account/me", {
-      headers: { Cookie: "cope_session_id=test-session" },
-    }, { ALLOWED_ORIGINS: "http://localhost:5173", QUOTA_KV: kv });
+    const res = await meReq({ QUOTA_KV: mockKV({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ found: false });
   });
