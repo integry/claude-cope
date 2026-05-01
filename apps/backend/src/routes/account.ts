@@ -55,6 +55,30 @@ async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?
   return { body, validation, kv, db, hash } as const;
 }
 
+async function fetchLicenseKeys(
+  customerId: string,
+  organizationId: string,
+  accessToken: string,
+  createdAt: string,
+): Promise<{ keys: string[] } | { error: string; status: number }> {
+  let lkResp: Response;
+  try {
+    lkResp = await fetch(
+      `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=100&sorting=-created_at`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+  } catch {
+    return { error: "Unable to reach Polar — please try again", status: 502 };
+  }
+  if (!lkResp.ok) return { error: "Failed to list license keys", status: 502 };
+  const lkData = await lkResp.json() as { items?: PolarLicenseKeyItem[] };
+  const granted = (lkData.items ?? []).filter((l) => l.status === "granted");
+  if (!granted.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
+  const allKeys = pickAllLicenseKeys(granted, createdAt);
+  if (!allKeys.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
+  return { keys: allKeys.map((k) => k.key) };
+}
+
 async function lookupCheckoutCache(kv: KVNamespace, checkoutId: string, sessionId: string): Promise<{ keys: string[] } | { error: string; status: 403 } | null> {
   const cached = await kv.get(`checkout_used:${checkoutId}`);
   if (!cached) return null;
@@ -92,24 +116,9 @@ account.post("/checkout-license", async (c) => {
 
   if (!result.createdAt) return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
 
-  let lkResp: Response;
-  try {
-    lkResp = await fetch(
-      `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(result.customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=100&sorting=-created_at`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-  } catch {
-    return c.json({ error: "Unable to reach Polar — please try again" }, 502);
-  }
-  if (!lkResp.ok) return c.json({ error: "Failed to list license keys" }, 502);
-  const lkData = await lkResp.json() as { items?: PolarLicenseKeyItem[] };
-
-  const granted = (lkData.items ?? []).filter((l) => l.status === "granted");
-  if (!granted.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
-
-  const allKeys = pickAllLicenseKeys(granted, result.createdAt);
-  if (!allKeys.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
-  const allKeyStrings = allKeys.map((k) => k.key);
+  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, result.createdAt);
+  if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
+  const allKeyStrings = lkResult.keys;
   const cachePayload: CheckoutCache = { keys: allKeyStrings, sessionId };
   await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 60 * 60 });
   return c.json({ licenseKey: allKeyStrings[0], allKeys: allKeyStrings });
