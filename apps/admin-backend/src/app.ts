@@ -46,7 +46,7 @@ app.route("/api/users", users);
 app.route("/api/backlog", backlog);
 app.route("/api/licenses", licenses);
 
-app.use("/api/config/*", async (c, next) => {
+const configAuthGuard = async (c: { env: unknown; req: { header: (name: string) => string | undefined }; json: (data: unknown, status: number) => Response }, next: () => Promise<void | Response>) => {
   const env = c.env as Record<string, string | undefined>;
   const secret = env.ADMIN_API_KEY;
   if (!secret) return next();
@@ -55,7 +55,9 @@ app.use("/api/config/*", async (c, next) => {
     return c.json({ error: "Unauthorized" }, 401);
   }
   return next();
-});
+};
+app.use("/api/config", configAuthGuard);
+app.use("/api/config/*", configAuthGuard);
 app.route("/api/config", config);
 
 export default app;

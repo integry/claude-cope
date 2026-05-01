@@ -7,12 +7,6 @@ import { emptyForm, type ConfigEntry, type ConfigForm } from "./configurationSha
 
 const PRESERVE_VALUE_SENTINEL = "__PRESERVE_EXISTING__";
 
-function maskValue(key: string, value: string): string {
-  if (!SENSITIVE_KEYS.has(key)) return value;
-  if (value.length <= 4) return "••••";
-  return "••••" + value.slice(-4);
-}
-
 export default function Configuration() {
   const { data, isLoading, isError, mutate } = useAdminApi<ConfigEntry[]>("/api/config");
   const [showForm, setShowForm] = useState(false);
@@ -208,7 +202,7 @@ export default function Configuration() {
                       <TierBadge tier={entry.tier} />
                     </td>
                     <td className="max-w-xs truncate px-6 py-4 text-sm font-mono text-gray-700">
-                      {maskValue(entry.key, entry.value)}
+                      {entry.value}
                     </td>
                     <td className="max-w-xs truncate px-6 py-4 text-sm text-gray-500">
                       {entry.description ?? ""}

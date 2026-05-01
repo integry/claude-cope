@@ -1,13 +1,49 @@
 import useSWR from "swr";
-import { API_BASE, ADMIN_API_KEY } from "../config";
+import { API_BASE } from "../config";
 
-export function authHeaders(): HeadersInit {
-  if (!ADMIN_API_KEY) return {};
-  return { Authorization: `Bearer ${ADMIN_API_KEY}` };
+const SESSION_KEY = "admin_api_key";
+
+let onAuthRequired: (() => void) | null = null;
+
+export function setAuthRequiredCallback(cb: () => void) {
+  onAuthRequired = cb;
 }
 
-const fetcher = (url: string) =>
-  fetch(url, { headers: authHeaders() }).then((res) => res.json());
+export function getAdminApiKey(): string {
+  return sessionStorage.getItem(SESSION_KEY) || "";
+}
+
+export function setAdminApiKey(key: string): void {
+  sessionStorage.setItem(SESSION_KEY, key);
+}
+
+export function clearAdminApiKey(): void {
+  sessionStorage.removeItem(SESSION_KEY);
+}
+
+export function authHeaders(): HeadersInit {
+  const key = getAdminApiKey();
+  if (!key) return {};
+  return { Authorization: `Bearer ${key}` };
+}
+
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+const fetcher = async (url: string) => {
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) {
+    if (res.status === 401 && onAuthRequired) onAuthRequired();
+    const body = await res.json().catch(() => null);
+    throw new ApiError(body?.error || res.statusText, res.status);
+  }
+  return res.json();
+};
 
 export function useAdminApi<T>(path: string) {
   const { data, error, isLoading, mutate } = useSWR<T>(
@@ -22,6 +58,7 @@ export function useAdminApi<T>(path: string) {
     data,
     isLoading,
     isError: error,
+    isUnauthorized: error instanceof ApiError && error.status === 401,
     mutate,
   };
 }

@@ -5,7 +5,7 @@ export function TierBadge({ tier }: { tier: string }) {
   const colorClass =
     tier === "*" ? "bg-gray-100 text-gray-800"
     : tier === "free" ? "bg-green-100 text-green-800"
-    : tier === "pro" || tier === "max" ? "bg-blue-100 text-blue-800"
+    : tier === "max" ? "bg-blue-100 text-blue-800"
     : tier === "depleted" ? "bg-orange-100 text-orange-800"
     : "bg-purple-100 text-purple-800";
 

@@ -1,9 +1,16 @@
+import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
 import Licenses from "./pages/Licenses";
 import Backlog from "./pages/Backlog";
 import Configuration from "./pages/Configuration";
+import {
+  setAuthRequiredCallback,
+  setAdminApiKey,
+  getAdminApiKey,
+  clearAdminApiKey,
+} from "./hooks/useAdminApi";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
@@ -45,7 +52,64 @@ function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function AuthPrompt({ error, onSubmit }: { error: boolean; onSubmit: (key: string) => void }) {
+  const [key, setKey] = useState("");
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (key.trim()) onSubmit(key.trim());
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
+        <h2 className="text-lg font-semibold text-gray-900">Admin Authentication</h2>
+        <p className="mt-2 text-sm text-gray-600">Enter the admin API key to access the panel.</p>
+        {error && <p className="mt-2 text-sm text-red-600">Invalid API key. Please try again.</p>}
+        <input
+          type="password"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          placeholder="API Key"
+          className="mt-4 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+          autoFocus
+        />
+        <button
+          type="submit"
+          className="mt-4 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Sign In
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function App() {
+  const [authRequired, setAuthRequired] = useState(false);
+  const [authError, setAuthError] = useState(false);
+
+  useEffect(() => {
+    setAuthRequiredCallback(() => {
+      setAuthError(!!getAdminApiKey());
+      clearAdminApiKey();
+      setAuthRequired(true);
+    });
+  }, []);
+
+  if (authRequired) {
+    return (
+      <AuthPrompt
+        error={authError}
+        onSubmit={(key) => {
+          setAdminApiKey(key);
+          setAuthRequired(false);
+          setAuthError(false);
+        }}
+      />
+    );
+  }
+
   return (
     <BrowserRouter>
       <Layout>

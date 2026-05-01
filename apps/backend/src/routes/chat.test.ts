@@ -439,12 +439,23 @@ describe("Category routing integration", () => {
     expect(config.category.apiKey).toBe("sk-max");
   });
 
-  it("DB config takes precedence over env vars", () => {
-    const envApiKey = "sk-env-key";
-    const dbApiKey = "sk-db-key";
+  it("DB config takes precedence over env vars", async () => {
+    const { getRoutingConfig } = await import("../utils/categoryRouting");
 
-    const baseApiKey = dbApiKey || envApiKey;
-    expect(baseApiKey).toBe("sk-db-key");
+    const mockDB = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          all: vi.fn(async () => ({
+            results: [
+              { key: "openrouter_api_key", tier: "*", value: "sk-db-key" },
+            ],
+          })),
+        })),
+      })),
+    } as unknown as D1Database;
+
+    const config = await getRoutingConfig(mockDB, "max");
+    expect(config.openRouter.apiKey).toBe("sk-db-key");
   });
 
   it("depleted category uses free-tier provider routing and separate billing", async () => {
