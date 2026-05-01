@@ -166,6 +166,17 @@ export const migrations: Migration[] = [
     name: "021_add_checkout_claims_keys",
     sql: "ALTER TABLE checkout_claims ADD COLUMN claimed_keys TEXT",
   },
+
+  // ── purchase-to-key correctness: store checkout metadata for
+  //    time-window partitioning across concurrent purchases ────────
+  {
+    name: "022_add_checkout_created_at",
+    sql: "ALTER TABLE checkout_claims ADD COLUMN checkout_created_at TEXT",
+  },
+  {
+    name: "023_add_checkout_customer_hash",
+    sql: "ALTER TABLE checkout_claims ADD COLUMN customer_hash TEXT",
+  },
 ];
 
 /**

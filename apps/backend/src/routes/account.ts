@@ -3,7 +3,7 @@ import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, fetchLicenseKeys, fetchCheckoutCustomerId, parseCheckoutCache, claimCheckoutForSession, storeClaimedKeys, getAlreadyClaimedKeys } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, fetchLicenseKeys, fetchCheckoutCustomerId, parseCheckoutCache, claimCheckoutForSession, storeClaimedKeys, getAlreadyClaimedKeys, getNextCheckoutTime } from "./accountHelpers";
 import type { SyncBody, CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -84,17 +84,6 @@ account.post("/checkout-license", async (c) => {
   const cacheResult = await lookupCheckoutCache(kv, body.checkoutId, sessionId);
   if (cacheResult) {
     if (cacheResult.sessionMismatch) {
-      // Session mismatch — attempt D1 stale claim recovery before rejecting.
-      // This handles users who lost cookies/session between checkout and return.
-      const db = c.env?.DB;
-      if (db) {
-        const claim = await claimCheckoutForSession(db, body.checkoutId, sessionId);
-        if (claim.ok) {
-          const updated: CheckoutCache = { keys: cacheResult.keys, sessionId };
-          await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(updated), { expirationTtl: 7 * 24 * 60 * 60 });
-          return c.json({ licenseKey: cacheResult.keys[0], allKeys: cacheResult.keys });
-        }
-      }
       return c.json({ error: "This checkout was already redeemed by another session" }, 403);
     }
     return c.json({ licenseKey: cacheResult.keys[0], allKeys: cacheResult.keys });
@@ -113,18 +102,33 @@ account.post("/checkout-license", async (c) => {
   // prevents a stolen checkout_id from being redeemed by an attacker.
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
-  const claim = await claimCheckoutForSession(db, body.checkoutId, sessionId);
+  const customerHash = await hashKey(result.customerId);
+  const claim = await claimCheckoutForSession(db, body.checkoutId, sessionId, result.createdAt, customerHash);
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
 
-  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, result.createdAt);
+  // Narrow the key time window if another checkout by the same customer
+  // exists — prevents this checkout from claiming keys that belong to the
+  // next purchase.
+  const nextCheckoutAt = await getNextCheckoutTime(db, body.checkoutId, result.createdAt, customerHash);
+
+  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, result.createdAt, nextCheckoutAt ?? undefined);
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
 
   // Exclude keys already claimed by other checkouts to prevent cross-purchase
   // leakage when the same customer makes multiple purchases within the time window.
   const alreadyClaimed = await getAlreadyClaimedKeys(db, body.checkoutId);
-  const allKeyStrings = alreadyClaimed.size > 0
+  let allKeyStrings = alreadyClaimed.size > 0
     ? lkResult.keys.filter((k) => !alreadyClaimed.has(k))
     : lkResult.keys;
+
+  // If dedup filtered ALL keys but pickAllLicenseKeys found keys within this
+  // checkout's time window, the earlier checkout likely claimed keys that
+  // belong to this purchase. Fall back to the time-windowed set — the
+  // primary correctness control — rather than rejecting the purchase.
+  if (!allKeyStrings.length && lkResult.keys.length > 0) {
+    allKeyStrings = lkResult.keys;
+  }
+
   if (!allKeyStrings.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
 
   await storeClaimedKeys(db, body.checkoutId, allKeyStrings);

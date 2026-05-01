@@ -413,6 +413,39 @@ describe("POST /api/account/checkout-license", () => {
       const data = await res.json() as { error: string };
       expect(data.error).toContain("try again");
     });
+    it("returns 503 for generic DB runtime error during claim", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T });
+      const failDB = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockResolvedValue(null),
+            run: sql.includes("INSERT INTO checkout_claims")
+              ? vi.fn().mockRejectedValue(new Error("D1_ERROR: internal error"))
+              : vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_dberr" },
+        { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: failDB }, "s");
+      expect(res.status).toBe(503);
+      const data = await res.json() as { error: string };
+      expect(data.error).toContain("try again");
+    });
+    it("rejects session mismatch from cache without attempting recovery", async () => {
+      const cachePayload = JSON.stringify({ keys: ["COPE-BOUND"], sessionId: "original-session" });
+      const kv = mockKV({ "checkout_used:co_nomatch": cachePayload });
+      const dbSpy = createMockDB({ runChanges: 1 });
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_nomatch" },
+        { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv, DB: dbSpy.db }, "attacker-session");
+      expect(res.status).toBe(403);
+      expect(dbSpy.calls.filter((c) => c.sql.includes("checkout_claims"))).toHaveLength(0);
+    });
   });
 });
 describe("GET /api/account/me", () => {

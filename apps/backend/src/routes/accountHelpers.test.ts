@@ -113,6 +113,44 @@ describe("pickAllLicenseKeys", () => {
     pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
     expect(keys.map((k) => k.key)).toEqual(original);
   });
+
+  it("narrows window when nextCheckoutCreatedAt is provided", () => {
+    const keys = [
+      key("K1", "2026-01-02T00:00:10Z"),
+      key("K2", "2026-01-02T00:05:10Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z", "2026-01-02T00:05:00Z");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.key).toBe("K1");
+  });
+
+  it("uses default window when nextCheckoutCreatedAt is undefined", () => {
+    const keys = [
+      key("K1", "2026-01-02T00:00:10Z"),
+      key("K2", "2026-01-02T00:05:10Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z", undefined);
+    expect(result).toHaveLength(2);
+  });
+
+  it("narrows fallback window with nextCheckoutCreatedAt", () => {
+    const keys = [
+      key("DELAYED", "2026-01-02T00:20:00Z"),
+      key("NEXT_PURCHASE", "2026-01-02T00:35:00Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z", "2026-01-02T00:30:00Z");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.key).toBe("DELAYED");
+  });
+
+  it("ignores invalid nextCheckoutCreatedAt", () => {
+    const keys = [
+      key("K1", "2026-01-02T00:00:10Z"),
+      key("K2", "2026-01-02T00:05:10Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z", "not-a-date");
+    expect(result).toHaveLength(2);
+  });
 });
 
 describe("parseCheckoutCache", () => {

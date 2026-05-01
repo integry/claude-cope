@@ -21,18 +21,20 @@ const MAX_KEY_FALLBACK_WINDOW_MS = 60 * 60 * 1000;
 
 // Returns ALL keys minted by a checkout, ordered oldest-first.
 // Uses a time window after checkout creation to avoid returning keys from later purchases.
-// NOTE: The Polar API does not expose a direct checkout→license-key mapping, so we
-// cannot cryptographically prove a key was created by a specific checkout. Session
-// binding via claimCheckoutForSession is the primary security control; this filter
-// is a best-effort heuristic to scope down to the correct keys.
-// KNOWN LIMITATION: if the same customer makes two purchases within the time window,
-// keys from both purchases may be returned. The KV cache ensures consistency on
-// repeat calls, but the first call may include extra keys.
-export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreatedAt: string): PolarLicenseKeyItem[] {
+// When nextCheckoutCreatedAt is provided (from a subsequent purchase by the same
+// customer), the window is narrowed to end before that checkout's creation time,
+// preventing this checkout from claiming keys that belong to the next purchase.
+export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreatedAt: string, nextCheckoutCreatedAt?: string): PolarLicenseKeyItem[] {
   const checkoutTime = new Date(checkoutCreatedAt).getTime();
   if (!Number.isFinite(checkoutTime)) return [];
+
+  const nextCheckoutTime = nextCheckoutCreatedAt ? new Date(nextCheckoutCreatedAt).getTime() : NaN;
+  const hasNextCheckout = Number.isFinite(nextCheckoutTime) && nextCheckoutTime > checkoutTime;
+
   const sorted = [...granted].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  const upperBound = checkoutTime + MAX_KEY_MINT_WINDOW_MS;
+  const upperBound = hasNextCheckout
+    ? Math.min(checkoutTime + MAX_KEY_MINT_WINDOW_MS, nextCheckoutTime)
+    : checkoutTime + MAX_KEY_MINT_WINDOW_MS;
   const windowed = sorted.filter((k) => {
     const t = new Date(k.created_at).getTime();
     return t >= checkoutTime && t <= upperBound;
@@ -42,7 +44,11 @@ export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreat
   // Fallback: if Polar minted keys beyond the primary window (delayed
   // processing), extend to 1 hour. This prevents permanent rejection of
   // legitimate purchases without returning keys from unrelated later orders.
-  const fallbackBound = checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS;
+  // The next-checkout bound still applies to avoid grabbing keys from a
+  // subsequent purchase by the same customer.
+  const fallbackBound = hasNextCheckout
+    ? Math.min(checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS, nextCheckoutTime)
+    : checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS;
   return sorted.filter((k) => {
     const t = new Date(k.created_at).getTime();
     return t >= checkoutTime && t <= fallbackBound;
@@ -57,6 +63,7 @@ export async function fetchLicenseKeys(
   organizationId: string,
   accessToken: string,
   createdAt: string,
+  nextCheckoutCreatedAt?: string,
 ): Promise<{ keys: string[] } | { error: string; status: ContentfulStatusCode }> {
   const allItems: PolarLicenseKeyItem[] = [];
   for (let page = 1; page <= MAX_LICENSE_KEY_PAGES; page++) {
@@ -77,7 +84,7 @@ export async function fetchLicenseKeys(
   }
   const granted = allItems.filter((l) => l.status === "granted");
   if (!granted.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
-  const allKeys = pickAllLicenseKeys(granted, createdAt);
+  const allKeys = pickAllLicenseKeys(granted, createdAt, nextCheckoutCreatedAt);
   if (!allKeys.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
   return { keys: allKeys.map((k) => k.key) };
 }
@@ -350,13 +357,15 @@ export async function claimCheckoutForSession(
   db: D1Database,
   checkoutId: string,
   sessionId: string,
+  checkoutCreatedAt?: string,
+  customerHash?: string,
 ): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
   try {
     const result = await db
       .prepare(
-        "INSERT INTO checkout_claims (checkout_id, session_id) VALUES (?, ?) ON CONFLICT(checkout_id) DO NOTHING",
+        "INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at, customer_hash) VALUES (?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING",
       )
-      .bind(checkoutId, sessionId)
+      .bind(checkoutId, sessionId, checkoutCreatedAt ?? null, customerHash ?? null)
       .run();
 
     if (result.meta.changes) {
@@ -377,21 +386,6 @@ export async function claimCheckoutForSession(
 
     if (existing && existing.session_id === sessionId) {
       return { ok: true };
-    }
-
-    // Allow re-claiming if the original claim is stale (> 1 hour old).
-    // This handles users who lose their session/cookies between checkout
-    // and return — without this, they'd be permanently locked out.
-    if (existing) {
-      const claimedAt = new Date(existing.claimed_at.replace(" ", "T") + (existing.claimed_at.endsWith("Z") ? "" : "Z")).getTime();
-      const oneHourAgo = Date.now() - 60 * 60 * 1000;
-      if (Number.isFinite(claimedAt) && claimedAt < oneHourAgo) {
-        const update = await db
-          .prepare("UPDATE checkout_claims SET session_id = ?, claimed_at = datetime('now'), claimed_keys = NULL WHERE checkout_id = ? AND session_id = ?")
-          .bind(sessionId, checkoutId, existing.session_id)
-          .run();
-        if (update.meta.changes) return { ok: true };
-      }
     }
 
     return { ok: false, error: "This checkout was already claimed by another session", retriable: false };
@@ -434,6 +428,25 @@ export async function getAlreadyClaimedKeys(db: D1Database, excludeCheckoutId: s
     // If the table/column doesn't exist, return empty — dedup is best-effort.
   }
   return result;
+}
+
+export async function getNextCheckoutTime(
+  db: D1Database,
+  excludeCheckoutId: string,
+  checkoutCreatedAt: string,
+  customerHash: string,
+): Promise<string | null> {
+  try {
+    const row = await db
+      .prepare(
+        "SELECT checkout_created_at FROM checkout_claims WHERE checkout_id != ? AND customer_hash = ? AND checkout_created_at > ? AND checkout_created_at IS NOT NULL ORDER BY checkout_created_at ASC LIMIT 1",
+      )
+      .bind(excludeCheckoutId, customerHash, checkoutCreatedAt)
+      .first<{ checkout_created_at: string }>();
+    return row?.checkout_created_at ?? null;
+  } catch {
+    return null;
+  }
 }
 
 const MAX_TICKET_TITLE_LEN = 200;

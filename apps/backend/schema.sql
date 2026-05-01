@@ -126,5 +126,7 @@ CREATE TABLE IF NOT EXISTS checkout_claims (
     checkout_id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
     claimed_at TEXT NOT NULL DEFAULT (datetime('now')),
-    claimed_keys TEXT
+    claimed_keys TEXT,
+    checkout_created_at TEXT,
+    customer_hash TEXT
 );
