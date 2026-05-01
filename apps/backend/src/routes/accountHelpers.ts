@@ -350,7 +350,7 @@ export async function claimCheckoutForSession(
   db: D1Database,
   checkoutId: string,
   sessionId: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
   try {
     const result = await db
       .prepare(
@@ -360,26 +360,80 @@ export async function claimCheckoutForSession(
       .run();
 
     if (result.meta.changes) {
+      // Opportunistic cleanup: remove claims older than 30 days to prevent
+      // unbounded table growth. Best-effort — failures are silently ignored.
+      try {
+        await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run();
+      } catch {
+        // Cleanup is best-effort
+      }
       return { ok: true };
     }
 
     const existing = await db
-      .prepare("SELECT session_id FROM checkout_claims WHERE checkout_id = ?")
+      .prepare("SELECT session_id, claimed_at FROM checkout_claims WHERE checkout_id = ?")
       .bind(checkoutId)
-      .first<{ session_id: string }>();
+      .first<{ session_id: string; claimed_at: string }>();
 
     if (existing && existing.session_id === sessionId) {
       return { ok: true };
     }
 
-    return { ok: false, error: "This checkout was already claimed by another session" };
+    // Allow re-claiming if the original claim is stale (> 1 hour old).
+    // This handles users who lose their session/cookies between checkout
+    // and return — without this, they'd be permanently locked out.
+    if (existing) {
+      const claimedAt = new Date(existing.claimed_at.replace(" ", "T") + (existing.claimed_at.endsWith("Z") ? "" : "Z")).getTime();
+      const oneHourAgo = Date.now() - 60 * 60 * 1000;
+      if (Number.isFinite(claimedAt) && claimedAt < oneHourAgo) {
+        const update = await db
+          .prepare("UPDATE checkout_claims SET session_id = ?, claimed_at = datetime('now'), claimed_keys = NULL WHERE checkout_id = ? AND session_id = ?")
+          .bind(sessionId, checkoutId, existing.session_id)
+          .run();
+        if (update.meta.changes) return { ok: true };
+      }
+    }
+
+    return { ok: false, error: "This checkout was already claimed by another session", retriable: false };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("no such table") || msg.includes("checkout_claims")) {
-      return { ok: false, error: "Checkout claim table is not available — please try again later" };
+      return { ok: false, error: "Checkout claim table is not available — please try again later", retriable: true };
     }
-    return { ok: false, error: "Unable to verify checkout claim — please try again" };
+    return { ok: false, error: "Unable to verify checkout claim — please try again", retriable: true };
   }
+}
+
+export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys: string[]): Promise<void> {
+  try {
+    await db.prepare("UPDATE checkout_claims SET claimed_keys = ? WHERE checkout_id = ?")
+      .bind(JSON.stringify(keys), checkoutId)
+      .run();
+  } catch {
+    // Best-effort: claim succeeded, keys were fetched — a failure to record
+    // them only affects future cross-checkout dedup, not this request.
+  }
+}
+
+export async function getAlreadyClaimedKeys(db: D1Database, excludeCheckoutId: string): Promise<Set<string>> {
+  const result = new Set<string>();
+  try {
+    const rows = await db
+      .prepare("SELECT claimed_keys FROM checkout_claims WHERE checkout_id != ? AND claimed_keys IS NOT NULL AND claimed_at > datetime('now', '-1 hour')")
+      .bind(excludeCheckoutId)
+      .all<{ claimed_keys: string }>();
+    for (const row of rows.results ?? []) {
+      try {
+        const keys = JSON.parse(row.claimed_keys) as string[];
+        for (const k of keys) result.add(k);
+      } catch {
+        // Skip malformed entries
+      }
+    }
+  } catch {
+    // If the table/column doesn't exist, return empty — dedup is best-effort.
+  }
+  return result;
 }
 
 const MAX_TICKET_TITLE_LEN = 200;

@@ -389,6 +389,30 @@ describe("POST /api/account/checkout-license", () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "THIS", created_at: "2026-01-02T00:00:10Z", status: "granted" }, { key: "LATER", created_at: "2026-01-02T01:00:00Z", status: "granted" }] });
       expect(((await (await co("co_w")).json()) as { allKeys: string[] }).allKeys).toEqual(["THIS"]);
     });
+    it("returns 503 when checkout claim table is missing (infrastructure failure)", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T });
+      const failDB = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockResolvedValue(null),
+            run: sql.includes("checkout_claims")
+              ? vi.fn().mockRejectedValue(new Error("no such table: checkout_claims"))
+              : vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_infra" },
+        { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: failDB }, "s");
+      expect(res.status).toBe(503);
+      const data = await res.json() as { error: string };
+      expect(data.error).toContain("try again");
+    });
   });
 });
 describe("GET /api/account/me", () => {

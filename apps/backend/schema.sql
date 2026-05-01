@@ -125,5 +125,6 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_model
 CREATE TABLE IF NOT EXISTS checkout_claims (
     checkout_id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
-    claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    claimed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    claimed_keys TEXT
 );

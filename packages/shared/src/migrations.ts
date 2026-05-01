@@ -160,6 +160,12 @@ export const migrations: Migration[] = [
       claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`,
   },
+
+  // ── cross-checkout key dedup ─────────────────────────────────────
+  {
+    name: "021_add_checkout_claims_keys",
+    sql: "ALTER TABLE checkout_claims ADD COLUMN claimed_keys TEXT",
+  },
 ];
 
 /**

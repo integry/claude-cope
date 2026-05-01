@@ -3,7 +3,7 @@ import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, fetchLicenseKeys, fetchCheckoutCustomerId, parseCheckoutCache, claimCheckoutForSession } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, fetchLicenseKeys, fetchCheckoutCustomerId, parseCheckoutCache, claimCheckoutForSession, storeClaimedKeys, getAlreadyClaimedKeys } from "./accountHelpers";
 import type { SyncBody, CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -55,12 +55,12 @@ async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?
   return { body, validation, kv, db, hash } as const;
 }
 
-async function lookupCheckoutCache(kv: KVNamespace, checkoutId: string, sessionId: string): Promise<{ keys: string[] } | { error: string; status: 403 } | null> {
+async function lookupCheckoutCache(kv: KVNamespace, checkoutId: string, sessionId: string): Promise<{ keys: string[]; sessionMismatch?: boolean } | null> {
   const cached = await kv.get(`checkout_used:${checkoutId}`);
   if (!cached) return null;
   const entry = parseCheckoutCache(cached);
   if (!entry) return null;
-  if (entry.sessionId && entry.sessionId !== sessionId) return { error: "This checkout was already redeemed by another session", status: 403 };
+  if (entry.sessionId && entry.sessionId !== sessionId) return { keys: entry.keys, sessionMismatch: true };
   return { keys: entry.keys };
 }
 
@@ -83,7 +83,20 @@ account.post("/checkout-license", async (c) => {
 
   const cacheResult = await lookupCheckoutCache(kv, body.checkoutId, sessionId);
   if (cacheResult) {
-    if ("error" in cacheResult) return c.json({ error: cacheResult.error }, cacheResult.status);
+    if (cacheResult.sessionMismatch) {
+      // Session mismatch — attempt D1 stale claim recovery before rejecting.
+      // This handles users who lost cookies/session between checkout and return.
+      const db = c.env?.DB;
+      if (db) {
+        const claim = await claimCheckoutForSession(db, body.checkoutId, sessionId);
+        if (claim.ok) {
+          const updated: CheckoutCache = { keys: cacheResult.keys, sessionId };
+          await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(updated), { expirationTtl: 7 * 24 * 60 * 60 });
+          return c.json({ licenseKey: cacheResult.keys[0], allKeys: cacheResult.keys });
+        }
+      }
+      return c.json({ error: "This checkout was already redeemed by another session" }, 403);
+    }
     return c.json({ licenseKey: cacheResult.keys[0], allKeys: cacheResult.keys });
   }
 
@@ -101,11 +114,20 @@ account.post("/checkout-license", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
   const claim = await claimCheckoutForSession(db, body.checkoutId, sessionId);
-  if (!claim.ok) return c.json({ error: claim.error }, 403);
+  if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
 
   const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, result.createdAt);
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
-  const allKeyStrings = lkResult.keys;
+
+  // Exclude keys already claimed by other checkouts to prevent cross-purchase
+  // leakage when the same customer makes multiple purchases within the time window.
+  const alreadyClaimed = await getAlreadyClaimedKeys(db, body.checkoutId);
+  const allKeyStrings = alreadyClaimed.size > 0
+    ? lkResult.keys.filter((k) => !alreadyClaimed.has(k))
+    : lkResult.keys;
+  if (!allKeyStrings.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
+
+  await storeClaimedKeys(db, body.checkoutId, allKeyStrings);
   const cachePayload: CheckoutCache = { keys: allKeyStrings, sessionId };
   await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 7 * 24 * 60 * 60 });
   return c.json({ licenseKey: allKeyStrings[0], allKeys: allKeyStrings });
