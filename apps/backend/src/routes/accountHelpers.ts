@@ -17,6 +17,7 @@ export type PolarLicenseKeyItem = {
 };
 
 const MAX_KEY_MINT_WINDOW_MS = 15 * 60 * 1000;
+const MAX_KEY_FALLBACK_WINDOW_MS = 60 * 60 * 1000;
 
 // Returns ALL keys minted by a checkout, ordered oldest-first.
 // Uses a time window after checkout creation to avoid returning keys from later purchases.
@@ -38,11 +39,18 @@ export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreat
   });
   if (windowed.length > 0) return windowed;
 
-  // Fallback: if Polar minted keys beyond the window (delayed processing),
-  // return all granted keys created after the checkout to prevent permanent
-  // rejection of legitimate purchases.
-  return sorted.filter((k) => new Date(k.created_at).getTime() >= checkoutTime);
+  // Fallback: if Polar minted keys beyond the primary window (delayed
+  // processing), extend to 1 hour. This prevents permanent rejection of
+  // legitimate purchases without returning keys from unrelated later orders.
+  const fallbackBound = checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS;
+  return sorted.filter((k) => {
+    const t = new Date(k.created_at).getTime();
+    return t >= checkoutTime && t <= fallbackBound;
+  });
 }
+
+const MAX_LICENSE_KEY_PAGES = 3;
+const LICENSE_KEY_PAGE_SIZE = 100;
 
 export async function fetchLicenseKeys(
   customerId: string,
@@ -50,18 +58,24 @@ export async function fetchLicenseKeys(
   accessToken: string,
   createdAt: string,
 ): Promise<{ keys: string[] } | { error: string; status: ContentfulStatusCode }> {
-  let lkResp: Response;
-  try {
-    lkResp = await fetch(
-      `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=100&sorting=-created_at`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-  } catch {
-    return { error: "Unable to reach Polar — please try again", status: 502 };
+  const allItems: PolarLicenseKeyItem[] = [];
+  for (let page = 1; page <= MAX_LICENSE_KEY_PAGES; page++) {
+    let lkResp: Response;
+    try {
+      lkResp = await fetch(
+        `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=${LICENSE_KEY_PAGE_SIZE}&page=${page}&sorting=-created_at`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+    } catch {
+      return { error: "Unable to reach Polar — please try again", status: 502 };
+    }
+    if (!lkResp.ok) return { error: "Failed to list license keys", status: 502 };
+    const lkData = await lkResp.json() as { items?: PolarLicenseKeyItem[] };
+    const items = lkData.items ?? [];
+    allItems.push(...items);
+    if (items.length < LICENSE_KEY_PAGE_SIZE) break;
   }
-  if (!lkResp.ok) return { error: "Failed to list license keys", status: 502 };
-  const lkData = await lkResp.json() as { items?: PolarLicenseKeyItem[] };
-  const granted = (lkData.items ?? []).filter((l) => l.status === "granted");
+  const granted = allItems.filter((l) => l.status === "granted");
   if (!granted.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
   const allKeys = pickAllLicenseKeys(granted, createdAt);
   if (!allKeys.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
@@ -114,7 +128,7 @@ export function parseCheckoutCache(raw: string): CheckoutCache | null {
     }
     return null;
   } catch {
-    if (typeof raw === "string" && raw.length > 0) return { keys: [raw], sessionId: "" };
+    if (typeof raw === "string" && raw.length > 0 && /^[A-Za-z0-9_-]+$/.test(raw)) return { keys: [raw], sessionId: "" };
     return null;
   }
 }
@@ -362,7 +376,7 @@ export async function claimCheckoutForSession(
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("no such table") || msg.includes("checkout_claims")) {
-      return { ok: true };
+      return { ok: false, error: "Checkout claim table is not available — please try again later" };
     }
     return { ok: false, error: "Unable to verify checkout claim — please try again" };
   }

@@ -99,10 +99,9 @@ account.post("/checkout-license", async (c) => {
   // session already claimed this checkout_id, reject the request — this
   // prevents a stolen checkout_id from being redeemed by an attacker.
   const db = c.env?.DB;
-  if (db) {
-    const claim = await claimCheckoutForSession(db, body.checkoutId, sessionId);
-    if (!claim.ok) return c.json({ error: claim.error }, 403);
-  }
+  if (!db) return c.json({ error: "Database not configured" }, 500);
+  const claim = await claimCheckoutForSession(db, body.checkoutId, sessionId);
+  if (!claim.ok) return c.json({ error: claim.error }, 403);
 
   const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, result.createdAt);
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);

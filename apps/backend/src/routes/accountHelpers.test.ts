@@ -78,13 +78,21 @@ describe("pickAllLicenseKeys", () => {
     expect(result).toHaveLength(2);
   });
 
-  it("falls back to post-checkout keys when none match the time window", () => {
+  it("falls back to post-checkout keys within 1 hour when none match the primary window", () => {
     const keys = [
       key("DELAYED", "2026-01-02T00:20:00Z"),
     ];
     const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
     expect(result).toHaveLength(1);
     expect(result[0]!.key).toBe("DELAYED");
+  });
+
+  it("does not fall back to keys created more than 1 hour after checkout", () => {
+    const keys = [
+      key("MUCH_LATER", "2026-01-02T02:00:00Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
+    expect(result).toHaveLength(0);
   });
 
   it("does not fall back to keys created before checkout", () => {
@@ -155,6 +163,19 @@ describe("parseCheckoutCache", () => {
 
   it("returns null for empty string input", () => {
     expect(parseCheckoutCache("")).toBeNull();
+  });
+
+  it("returns null for corrupted JSON-like strings", () => {
+    expect(parseCheckoutCache("{")).toBeNull();
+    expect(parseCheckoutCache('{"')).toBeNull();
+    expect(parseCheckoutCache("[broken")).toBeNull();
+    expect(parseCheckoutCache("not a key!")).toBeNull();
+    expect(parseCheckoutCache("has spaces")).toBeNull();
+  });
+
+  it("accepts legacy plain key strings with valid characters", () => {
+    expect(parseCheckoutCache("COPE-ABC-123")).toEqual({ keys: ["COPE-ABC-123"], sessionId: "" });
+    expect(parseCheckoutCache("key_with_underscores")).toEqual({ keys: ["key_with_underscores"], sessionId: "" });
   });
 });
 

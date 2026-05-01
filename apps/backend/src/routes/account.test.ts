@@ -351,7 +351,8 @@ describe("POST /api/account/checkout-license", () => {
   describe("non-cached Polar fetch path", () => {
     const origFetch = globalThis.fetch;
     afterEach(() => { globalThis.fetch = origFetch; });
-    const penv = { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}) };
+    const claimDB = createMockDB({ runChanges: 1 }).db;
+    const penv = { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: claimDB };
     const T = "2026-01-02T00:00:00Z";
     const co = (id: string) => postWithSession("/api/account/checkout-license", { checkoutId: id }, { ...penv, QUOTA_KV: mockKV({}) }, "s");
     function stubPolar(checkout: object, lk?: object) {
@@ -384,7 +385,7 @@ describe("POST /api/account/checkout-license", () => {
       globalThis.fetch = vi.fn(async () => new Response("{}", { status: 404 })) as typeof fetch;
       expect((await co("co_inv")).status).toBe(400);
     });
-    it("excludes keys outside 5-minute window", async () => {
+    it("excludes keys outside 15-minute window", async () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "THIS", created_at: "2026-01-02T00:00:10Z", status: "granted" }, { key: "LATER", created_at: "2026-01-02T01:00:00Z", status: "granted" }] });
       expect(((await (await co("co_w")).json()) as { allKeys: string[] }).allKeys).toEqual(["THIS"]);
     });
