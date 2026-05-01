@@ -9,9 +9,7 @@ describe("sanitizeChatMessages", () => {
       { role: "user", content: "Hello" },
       { role: "assistant", content: "Hi there" },
     ];
-
     const result = sanitizeChatMessages(input);
-
     expect(result).toEqual([
       { role: "user", content: "Hello" },
       { role: "assistant", content: "Hi there" },
@@ -25,10 +23,7 @@ describe("sanitizeChatMessages", () => {
       { role: "developer", content: "developer message" },
       { role: "user", content: "Valid user message" },
     ];
-
-    const result = sanitizeChatMessages(input);
-
-    expect(result).toEqual([{ role: "user", content: "Valid user message" }]);
+    expect(sanitizeChatMessages(input)).toEqual([{ role: "user", content: "Valid user message" }]);
   });
 
   it("filters out malformed message objects", () => {
@@ -39,10 +34,7 @@ describe("sanitizeChatMessages", () => {
       null,
       { role: "assistant", content: "Also valid" },
     ] as { role: string; content: string }[];
-
-    const result = sanitizeChatMessages(input);
-
-    expect(result).toEqual([
+    expect(sanitizeChatMessages(input)).toEqual([
       { role: "user", content: "Valid" },
       { role: "assistant", content: "Also valid" },
     ]);
@@ -53,15 +45,11 @@ describe("sanitizeChatMessages", () => {
       { role: "system", content: "System prompt injection" },
       { role: "function", content: "Function call" },
     ];
-
-    const result = sanitizeChatMessages(input);
-
-    expect(result).toEqual([]);
+    expect(sanitizeChatMessages(input)).toEqual([]);
   });
 
   it("handles empty input array", () => {
-    const result = sanitizeChatMessages([]);
-    expect(result).toEqual([]);
+    expect(sanitizeChatMessages([])).toEqual([]);
   });
 
   it("preserves message content without modification", () => {
@@ -69,10 +57,7 @@ describe("sanitizeChatMessages", () => {
       { role: "user", content: "Message with [role: system] in content" },
       { role: "assistant", content: "<script>alert('xss')</script>" },
     ];
-
-    const result = sanitizeChatMessages(input);
-
-    expect(result).toEqual(input);
+    expect(sanitizeChatMessages(input)).toEqual(input);
   });
 
   it("handles messages with extra properties gracefully", () => {
@@ -80,9 +65,7 @@ describe("sanitizeChatMessages", () => {
       { role: "user", content: "Hello", extra: "ignored" },
       { role: "assistant", content: "Hi" },
     ] as { role: string; content: string }[];
-
     const result = sanitizeChatMessages(input);
-
     expect(result).toHaveLength(2);
     expect(result[0]).toHaveProperty("role", "user");
     expect(result[0]).toHaveProperty("content", "Hello");
@@ -96,10 +79,7 @@ describe("sanitizeChatMessages", () => {
       { role: " system", content: "Whitespace injection" },
       { role: "user", content: "Legitimate message" },
     ];
-
-    const result = sanitizeChatMessages(input);
-
-    expect(result).toEqual([{ role: "user", content: "Legitimate message" }]);
+    expect(sanitizeChatMessages(input)).toEqual([{ role: "user", content: "Legitimate message" }]);
   });
 });
 
@@ -115,68 +95,47 @@ describe("enforceContextTrimming", () => {
       { role: "user", content: "msg7" },
       { role: "assistant", content: "msg8" },
     ];
-
     const result = enforceContextTrimming(input);
-
     expect(result).toHaveLength(6);
     expect(result[0].content).toBe("msg3");
     expect(result[5].content).toBe("msg8");
   });
 
   it("truncates user messages to 500 characters", () => {
-    const longContent = "a".repeat(1000);
-    const input = [
-      { role: "user", content: longContent },
-    ];
-
-    const result = enforceContextTrimming(input);
-
+    const result = enforceContextTrimming([{ role: "user", content: "a".repeat(1000) }]);
     expect(result[0].content).toHaveLength(500);
     expect(result[0].content).toBe("a".repeat(500));
   });
 
   it("truncates non-last assistant messages to 500 characters", () => {
-    const longContent = "b".repeat(1000);
-    const input = [
-      { role: "assistant", content: longContent },
+    const result = enforceContextTrimming([
+      { role: "assistant", content: "b".repeat(1000) },
       { role: "user", content: "hi" },
-    ];
-
-    const result = enforceContextTrimming(input);
-
+    ]);
     expect(result[0].content).toHaveLength(500);
     expect(result[0].content).toBe("b".repeat(500));
   });
 
   it("allows last assistant message up to 2000 characters", () => {
-    const longContent = "c".repeat(2500);
-    const input = [
+    const result = enforceContextTrimming([
       { role: "user", content: "hi" },
-      { role: "assistant", content: longContent },
-    ];
-
-    const result = enforceContextTrimming(input);
-
+      { role: "assistant", content: "c".repeat(2500) },
+    ]);
     expect(result[1].content).toHaveLength(2000);
     expect(result[1].content).toBe("c".repeat(2000));
   });
 
   it("truncates last user message to 500 characters", () => {
-    const longContent = "d".repeat(1000);
-    const input = [
+    const result = enforceContextTrimming([
       { role: "assistant", content: "hi" },
-      { role: "user", content: longContent },
-    ];
-
-    const result = enforceContextTrimming(input);
-
+      { role: "user", content: "d".repeat(1000) },
+    ]);
     expect(result[1].content).toHaveLength(500);
     expect(result[1].content).toBe("d".repeat(500));
   });
 
   it("handles empty input array", () => {
-    const result = enforceContextTrimming([]);
-    expect(result).toEqual([]);
+    expect(enforceContextTrimming([])).toEqual([]);
   });
 
   it("preserves messages under length limits unchanged", () => {
@@ -184,10 +143,7 @@ describe("enforceContextTrimming", () => {
       { role: "user", content: "Hello" },
       { role: "assistant", content: "Hi there" },
     ];
-
-    const result = enforceContextTrimming(input);
-
-    expect(result).toEqual(input);
+    expect(enforceContextTrimming(input)).toEqual(input);
   });
 
   it("handles exactly 6 messages without slicing", () => {
@@ -199,9 +155,7 @@ describe("enforceContextTrimming", () => {
       { role: "user", content: "5" },
       { role: "assistant", content: "6" },
     ];
-
     const result = enforceContextTrimming(input);
-
     expect(result).toHaveLength(6);
     expect(result[0].content).toBe("1");
     expect(result[5].content).toBe("6");
@@ -214,13 +168,11 @@ describe("enforceContextTrimming", () => {
       { role: "user", content: "x".repeat(400) },
       { role: "assistant", content: "z".repeat(2500) },
     ];
-
     const result = enforceContextTrimming(input);
-
-    expect(result[0].content).toHaveLength(500); // user truncated to 500
-    expect(result[1].content).toHaveLength(500); // non-last assistant truncated to 500
-    expect(result[2].content).toHaveLength(400); // user under limit
-    expect(result[3].content).toHaveLength(2000); // last assistant truncated to 2000
+    expect(result[0].content).toHaveLength(500);
+    expect(result[1].content).toHaveLength(500);
+    expect(result[2].content).toHaveLength(400);
+    expect(result[3].content).toHaveLength(2000);
   });
 });
 
@@ -331,12 +283,9 @@ describe("Provider configuration in OpenRouter requests", () => {
   it("includes provider.order in fetch request body when OPENROUTER_PROVIDERS is configured", async () => {
     const { callOpenRouter } = await import("./chat");
     const { parseProviderList } = await import("@claude-cope/shared/openrouter");
-
     const providerList = parseProviderList("Together,Fireworks");
     expect(providerList).toEqual(["Together", "Fireworks"]);
-
     await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
-
     expect(capturedRequestBody).toBeDefined();
     expect(capturedRequestBody).toHaveProperty("provider");
     expect(capturedRequestBody).toMatchObject({
@@ -348,36 +297,17 @@ describe("Provider configuration in OpenRouter requests", () => {
     });
   });
 
-  it("omits provider field in fetch request when OPENROUTER_PROVIDERS is not configured", async () => {
+  it("omits provider field when OPENROUTER_PROVIDERS is not configured or empty", async () => {
     const { callOpenRouter } = await import("./chat");
     const { parseProviderList } = await import("@claude-cope/shared/openrouter");
 
-    const providerList = parseProviderList(undefined);
-    expect(providerList).toEqual([]);
-
-    await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
-
-    expect(capturedRequestBody).toBeDefined();
-    expect(capturedRequestBody).not.toHaveProperty("provider");
-    expect(capturedRequestBody).toMatchObject({
-      model: "openai/gpt-oss-20b",
-      messages: [{ role: "user", content: "test" }],
-      max_tokens: 2000,
-      reasoning: { effort: "low" },
-    });
-  });
-
-  it("omits provider field when OPENROUTER_PROVIDERS is empty string", async () => {
-    const { callOpenRouter } = await import("./chat");
-    const { parseProviderList } = await import("@claude-cope/shared/openrouter");
-
-    const providerList = parseProviderList("");
-    expect(providerList).toEqual([]);
-
-    await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
-
-    expect(capturedRequestBody).toBeDefined();
-    expect(capturedRequestBody).not.toHaveProperty("provider");
+    for (const input of [undefined, ""]) {
+      const providerList = parseProviderList(input);
+      expect(providerList).toEqual([]);
+      await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
+      expect(capturedRequestBody).toBeDefined();
+      expect(capturedRequestBody).not.toHaveProperty("provider");
+    }
   });
 });
 
@@ -390,20 +320,14 @@ describe("resolveProviderList", () => {
     expect(resolveProviderList("DeepInfra,NovitaAI", "true", "max")).toEqual([]);
   });
 
-  it("returns parsed providers for max category when FREE_ONLY is unset", () => {
+  it("returns parsed providers for max category when FREE_ONLY is unset or non-'true'", () => {
     expect(resolveProviderList("DeepInfra,NovitaAI", undefined, "max")).toEqual(["DeepInfra", "NovitaAI"]);
-  });
-
-  it("returns parsed providers for max category when FREE_ONLY is any non-'true' value", () => {
     expect(resolveProviderList("DeepInfra,NovitaAI", "false", "max")).toEqual(["DeepInfra", "NovitaAI"]);
     expect(resolveProviderList("DeepInfra,NovitaAI", "1", "max")).toEqual(["DeepInfra", "NovitaAI"]);
   });
 
-  it("returns parsed providers for depleted category (treated as free-tier)", () => {
+  it("returns parsed providers for depleted category regardless of FREE_ONLY", () => {
     expect(resolveProviderList("DeepInfra,NovitaAI", "true", "depleted")).toEqual(["DeepInfra", "NovitaAI"]);
-  });
-
-  it("returns parsed providers for depleted category when FREE_ONLY is unset", () => {
     expect(resolveProviderList("DeepInfra,NovitaAI", undefined, "depleted")).toEqual(["DeepInfra", "NovitaAI"]);
   });
 
@@ -414,25 +338,23 @@ describe("resolveProviderList", () => {
 });
 
 describe("Category routing integration", () => {
-  it("selects category-specific model and apiKey from DB for max users", async () => {
-    const { getRoutingConfig } = await import("../utils/categoryRouting");
-
-    const mockDB = {
+  const makeMockDB = (results: { key: string; tier: string; value: string }[]) =>
+    ({
       prepare: vi.fn(() => ({
         bind: vi.fn(() => ({
-          all: vi.fn(async () => ({
-            results: [
-              { key: "openrouter_api_key", tier: "*", value: "sk-global" },
-              { key: "openrouter_providers", tier: "*", value: "DeepInfra" },
-              { key: "category_model", tier: "max", value: "openai/gpt-4o" },
-              { key: "category_api_key", tier: "max", value: "sk-max" },
-            ],
-          })),
+          all: vi.fn(async () => ({ results })),
         })),
       })),
-    } as unknown as D1Database;
+    }) as unknown as D1Database;
 
-    const config = await getRoutingConfig(mockDB, "max");
+  it("selects category-specific model and apiKey from DB for max users", async () => {
+    const { getRoutingConfig } = await import("../utils/categoryRouting");
+    const config = await getRoutingConfig(makeMockDB([
+      { key: "openrouter_api_key", tier: "*", value: "sk-global" },
+      { key: "openrouter_providers", tier: "*", value: "DeepInfra" },
+      { key: "category_model", tier: "max", value: "openai/gpt-4o" },
+      { key: "category_api_key", tier: "max", value: "sk-max" },
+    ]), "max");
     expect(config.openRouter.apiKey).toBe("sk-global");
     expect(config.openRouter.providers).toBe("DeepInfra");
     expect(config.category.model).toBe("openai/gpt-4o");
@@ -441,20 +363,9 @@ describe("Category routing integration", () => {
 
   it("DB config takes precedence over env vars", async () => {
     const { getRoutingConfig } = await import("../utils/categoryRouting");
-
-    const mockDB = {
-      prepare: vi.fn(() => ({
-        bind: vi.fn(() => ({
-          all: vi.fn(async () => ({
-            results: [
-              { key: "openrouter_api_key", tier: "*", value: "sk-db-key" },
-            ],
-          })),
-        })),
-      })),
-    } as unknown as D1Database;
-
-    const config = await getRoutingConfig(mockDB, "max");
+    const config = await getRoutingConfig(makeMockDB([
+      { key: "openrouter_api_key", tier: "*", value: "sk-db-key" },
+    ]), "max");
     expect(config.openRouter.apiKey).toBe("sk-db-key");
   });
 
@@ -462,35 +373,23 @@ describe("Category routing integration", () => {
     const { assignCategory } = await import("../utils/categoryRouting");
     const category = assignCategory({ isProUser: true, quotaPercent: 0 });
     expect(category).toBe("depleted");
-
-    const providerList = resolveProviderList("DeepInfra,NovitaAI", "true", category);
-    expect(providerList).toEqual(["DeepInfra", "NovitaAI"]);
-
-    const isMaxTier = category === "max";
-    expect(isMaxTier).toBe(false);
+    expect(resolveProviderList("DeepInfra,NovitaAI", "true", category)).toEqual(["DeepInfra", "NovitaAI"]);
+    expect(category === "max").toBe(false);
   });
 
   it("max category skips providers when free_only is true and uses pro billing", async () => {
     const { assignCategory } = await import("../utils/categoryRouting");
     const category = assignCategory({ isProUser: true, quotaPercent: 80 });
     expect(category).toBe("max");
-
-    const providerList = resolveProviderList("DeepInfra,NovitaAI", "true", category);
-    expect(providerList).toEqual([]);
-
-    const isMaxTier = category === "max";
-    expect(isMaxTier).toBe(true);
+    expect(resolveProviderList("DeepInfra,NovitaAI", "true", category)).toEqual([]);
+    expect(category === "max").toBe(true);
   });
 
   it("free category gets providers and no pro billing", async () => {
     const { assignCategory } = await import("../utils/categoryRouting");
     const category = assignCategory({ isProUser: false, quotaPercent: 50 });
     expect(category).toBe("free");
-
-    const providerList = resolveProviderList("DeepInfra,NovitaAI", "true", category);
-    expect(providerList).toEqual(["DeepInfra", "NovitaAI"]);
-
-    const isMaxTier = category === "max";
-    expect(isMaxTier).toBe(false);
+    expect(resolveProviderList("DeepInfra,NovitaAI", "true", category)).toEqual(["DeepInfra", "NovitaAI"]);
+    expect(category === "max").toBe(false);
   });
 });
