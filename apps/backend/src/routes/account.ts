@@ -71,7 +71,7 @@ account.post("/sync", async (c) => {
   // licenses or quota entries.
   await commitSyncSideEffects(
     { db, kv, hash },
-    { validationId: validation.id, proInitialQuota: limits.proInitialQuota, sessionId },
+    { validationId: validation.id, proInitialQuota: limits.proInitialQuota },
   );
 
   // Bind the session to the resolved username so /me can look it up.

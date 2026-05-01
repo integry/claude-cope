@@ -540,8 +540,16 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
       }),
     });
     if (res.status === 403) {
-      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.PRO_GATED });
-      reply({ role: "error", content: proGatedMessage("/alias") });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const isRevoked = data.error?.toLowerCase().includes("revoked") || data.error?.toLowerCase().includes("no longer active");
+      if (isRevoked) {
+        track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.PRO_GATED });
+        ctx.setState((prev) => ({ ...prev, proKey: undefined, proKeyHash: undefined, isPro: undefined }));
+        reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] Your Max license has been revoked or is no longer active. Re-activate with \`/sync <key>\` or upgrade at \`/upgrade\`.` });
+      } else {
+        track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.PRO_GATED });
+        reply({ role: "error", content: proGatedMessage("/alias") });
+      }
       return;
     }
     if (res.status === 429) {
@@ -896,10 +904,12 @@ export function executeSlashCommand(
   // Pro-gated commands: block free users with a 403-style error.
   // BYOK users are exempted for client-side commands but /alias requires a
   // real Max license key because it hits the backend.
-  // Note: /brrrrrr, /blame, and /synergize are purely client-side (no backend
-  // API calls), so client-side gating is the only enforcement point. /alias is
-  // the only gated command with a backend endpoint, and it enforces Pro-gating
-  // server-side via the licenseKeyHash requirement.
+  // Limitation: /brrrrrr, /blame, and /synergize are purely client-side — a
+  // user who tampers with localStorage (setting proKeyHash or isPro) can bypass
+  // this gate. This is a deliberate tradeoff: these commands have no server-side
+  // effects, so the impact is cosmetic. /alias is server-enforced via
+  // licenseKeyHash. The pro-validation effect in useGameState clears stale pro
+  // state on page load, which limits the window for revoked-license bypass.
   // TODO(byok): Strengthen BYOK gating once BYOK is a first-class feature.
   if (PRO_GATED_COMMANDS.has(baseCommand)) {
     const hasPro = isPaidUser(ctx.state);

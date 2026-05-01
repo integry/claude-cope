@@ -230,7 +230,7 @@ export async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> 
 
 export async function commitSyncSideEffects(
   deps: { db: D1Database; kv: KVNamespace; hash: string },
-  opts: { validationId?: string; proInitialQuota: number; sessionId?: string },
+  opts: { validationId?: string; proInitialQuota: number },
 ) {
   const { db, kv, hash } = deps;
   await db
