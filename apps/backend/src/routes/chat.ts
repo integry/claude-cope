@@ -160,6 +160,9 @@ interface RoutingConfigResult {
   categoryApiKey: string | null;
 }
 
+const ROUTING_CACHE_TTL_MS = 60_000;
+let routingCache: { data: Awaited<ReturnType<typeof getRoutingConfig>>; category: RequestCategory; ts: number } | null = null;
+
 async function loadRoutingConfig(
   db: D1Database | undefined,
   env: Env["Bindings"],
@@ -172,12 +175,23 @@ async function loadRoutingConfig(
   let categoryApiKey: string | null = null;
 
   if (db) {
-    const config = await getRoutingConfig(db, category);
-    if (config.openRouter.apiKey !== null) baseApiKey = config.openRouter.apiKey || undefined;
-    if (config.openRouter.providers !== null) baseProviders = config.openRouter.providers || undefined;
-    if (config.openRouter.providersFreeOnly !== null) baseProvidersFreeOnly = config.openRouter.providersFreeOnly || undefined;
-    categoryModel = config.category.model;
-    categoryApiKey = config.category.apiKey;
+    try {
+      const now = Date.now();
+      let config: Awaited<ReturnType<typeof getRoutingConfig>>;
+      if (routingCache && routingCache.category === category && now - routingCache.ts < ROUTING_CACHE_TTL_MS) {
+        config = routingCache.data;
+      } else {
+        config = await getRoutingConfig(db, category);
+        routingCache = { data: config, category, ts: now };
+      }
+      if (config.openRouter.apiKey !== null) baseApiKey = config.openRouter.apiKey || undefined;
+      if (config.openRouter.providers !== null) baseProviders = config.openRouter.providers || undefined;
+      if (config.openRouter.providersFreeOnly !== null) baseProvidersFreeOnly = config.openRouter.providersFreeOnly || undefined;
+      categoryModel = config.category.model;
+      categoryApiKey = config.category.apiKey;
+    } catch (err) {
+      console.log(`[ROUTING] D1 config lookup failed, falling back to env: ${err}`);
+    }
   }
 
   return { baseApiKey, baseProviders, baseProvidersFreeOnly, categoryModel, categoryApiKey };

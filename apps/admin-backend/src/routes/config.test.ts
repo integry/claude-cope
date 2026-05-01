@@ -63,13 +63,21 @@ function createMockDB(rows: ConfigRow[] = []) {
   };
 }
 
-function makeEnv(db: ReturnType<typeof createMockDB>, apiKey?: string) {
-  return { DB: db, ALLOWED_ORIGINS: "http://localhost:5174", ...(apiKey ? { ADMIN_API_KEY: apiKey } : {}) };
+const TEST_ADMIN_KEY = "test-admin-key";
+
+function makeEnv(db: ReturnType<typeof createMockDB> | null, apiKey: string | false = TEST_ADMIN_KEY) {
+  return { ...(db ? { DB: db } : {}), ALLOWED_ORIGINS: "http://localhost:5174", ...(apiKey ? { ADMIN_API_KEY: apiKey } : {}) };
+}
+
+function authHeaders(key: string = TEST_ADMIN_KEY): Record<string, string> {
+  return { Authorization: `Bearer ${key}` };
 }
 
 describe("GET /api/config", () => {
   it("returns 500 when DB is not configured", async () => {
-    const res = await app.request("/api/config", {}, { ALLOWED_ORIGINS: "http://localhost:5174" });
+    const res = await app.request("/api/config", {
+      headers: authHeaders(),
+    }, makeEnv(null));
     expect(res.status).toBe(500);
   });
 
@@ -78,7 +86,9 @@ describe("GET /api/config", () => {
       { key: "openrouter_api_key", tier: "*", value: "sk-or-v1-abc123xyz789", description: null, updated_at: "2026-01-01" },
       { key: "free_quota_limit", tier: "*", value: "100", description: "Quota", updated_at: "2026-01-01" },
     ]);
-    const res = await app.request("/api/config", {}, makeEnv(db));
+    const res = await app.request("/api/config", {
+      headers: authHeaders(),
+    }, makeEnv(db));
     expect(res.status).toBe(200);
     const data = await res.json() as ConfigRow[];
     const apiKeyEntry = data.find((r) => r.key === "openrouter_api_key");
@@ -94,7 +104,7 @@ describe("PUT /api/config/:key/:tier", () => {
     const db = createMockDB();
     const res = await app.request("/api/config/category_model/pro", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ value: "openai/gpt-4o" }),
     }, makeEnv(db));
     expect(res.status).toBe(400);
@@ -107,7 +117,7 @@ describe("PUT /api/config/:key/:tier", () => {
       const db = createMockDB();
       const res = await app.request(`/api/config/category_model/${tier}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ value: "openai/gpt-4o" }),
       }, makeEnv(db));
       expect(res.status).toBe(200);
@@ -118,7 +128,7 @@ describe("PUT /api/config/:key/:tier", () => {
     const db = createMockDB();
     const res = await app.request("/api/config/free_quota_limit/*", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ value: "   " }),
     }, makeEnv(db));
     expect(res.status).toBe(400);
@@ -132,7 +142,7 @@ describe("PUT /api/config/:key/:tier", () => {
     ]);
     const res = await app.request("/api/config/openrouter_api_key/*", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ value: "__PRESERVE_EXISTING__" }),
     }, makeEnv(db));
     expect(res.status).toBe(200);
@@ -144,7 +154,7 @@ describe("PUT /api/config/:key/:tier", () => {
     ]);
     const res = await app.request("/api/config/category_api_key/max", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ value: "" }),
     }, makeEnv(db));
     expect(res.status).toBe(200);
@@ -154,7 +164,7 @@ describe("PUT /api/config/:key/:tier", () => {
     const db = createMockDB();
     const res = await app.request("/api/config/openrouter_api_key/*", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ value: "" }),
     }, makeEnv(db));
     expect(res.status).toBe(400);
@@ -166,7 +176,7 @@ describe("PUT /api/config/:key/:tier", () => {
     const db = createMockDB();
     const res = await app.request("/api/config/some_key/*", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({}),
     }, makeEnv(db));
     expect(res.status).toBe(400);
@@ -176,7 +186,7 @@ describe("PUT /api/config/:key/:tier", () => {
     const db = createMockDB();
     const res = await app.request("/api/config/openrouter_api_key/free", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ value: "sk-test-123" }),
     }, makeEnv(db));
     expect(res.status).toBe(400);
@@ -188,7 +198,7 @@ describe("PUT /api/config/:key/:tier", () => {
     const db = createMockDB();
     const res = await app.request("/api/config/openrouter_providers/*", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ value: "Together,Fireworks" }),
     }, makeEnv(db));
     expect(res.status).toBe(200);
@@ -198,7 +208,7 @@ describe("PUT /api/config/:key/:tier", () => {
     const db = createMockDB();
     const res = await app.request("/api/config/some_key/*", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: "not valid json{{{",
     }, makeEnv(db));
     expect(res.status).toBe(400);
@@ -214,6 +224,7 @@ describe("DELETE /api/config/:key/:tier", () => {
     ]);
     const res = await app.request("/api/config/free_quota_limit/*", {
       method: "DELETE",
+      headers: authHeaders(),
     }, makeEnv(db));
     expect(res.status).toBe(200);
     const body = await res.json() as { success: boolean };
@@ -223,18 +234,19 @@ describe("DELETE /api/config/:key/:tier", () => {
   it("returns 500 when DB is not configured", async () => {
     const res = await app.request("/api/config/some_key/*", {
       method: "DELETE",
-    }, { ALLOWED_ORIGINS: "http://localhost:5174" });
+      headers: authHeaders(),
+    }, makeEnv(null));
     expect(res.status).toBe(500);
   });
 });
 
 describe("Auth guard for /api/config", () => {
-  it("allows access when ADMIN_API_KEY is not set", async () => {
+  it("returns 403 when ADMIN_API_KEY is not set (fail closed)", async () => {
     const db = createMockDB([
       { key: "free_quota_limit", tier: "*", value: "100", description: null, updated_at: "2026-01-01" },
     ]);
-    const res = await app.request("/api/config", {}, makeEnv(db));
-    expect(res.status).toBe(200);
+    const res = await app.request("/api/config", {}, makeEnv(db, false));
+    expect(res.status).toBe(403);
   });
 
   it("returns 401 when ADMIN_API_KEY is set but no Authorization header provided", async () => {

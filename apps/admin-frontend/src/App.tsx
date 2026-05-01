@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
@@ -89,15 +89,14 @@ function App() {
   const [authRequired, setAuthRequired] = useState(false);
   const [authError, setAuthError] = useState(false);
 
-  const callbackRegistered = useRef(false);
-  if (!callbackRegistered.current) {
-    callbackRegistered.current = true;
+  useEffect(() => {
     setAuthRequiredCallback(() => {
       setAuthError(!!getAdminApiKey());
       clearAdminApiKey();
       setAuthRequired(true);
     });
-  }
+    return () => setAuthRequiredCallback(null);
+  }, []);
 
   if (authRequired) {
     return (

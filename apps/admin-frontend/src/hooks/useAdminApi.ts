@@ -5,7 +5,7 @@ const SESSION_KEY = "admin_api_key";
 
 let onAuthRequired: (() => void) | null = null;
 
-export function setAuthRequiredCallback(cb: () => void) {
+export function setAuthRequiredCallback(cb: (() => void) | null) {
   onAuthRequired = cb;
 }
 
