@@ -13,7 +13,7 @@ import {
   type ChatResponseData,
 } from "./chatHelpers";
 import { getQuotaPercent, getQuotaLimits } from "../utils/quota";
-import { assignCategory, getCategoryConfig, getOpenRouterConfig, getRoutingConfig, type RequestCategory } from "../utils/categoryRouting";
+import { assignCategory, getRoutingConfig, type RequestCategory } from "../utils/categoryRouting";
 
 type Env = {
   Bindings: {
