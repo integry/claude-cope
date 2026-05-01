@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import stats from "./routes/stats";
 import users from "./routes/users";
@@ -41,12 +42,7 @@ app.use("*", (c, next) => {
 
 app.get("/", (c) => c.json({ status: "ok", service: "admin-backend" }));
 
-app.route("/api/stats", stats);
-app.route("/api/users", users);
-app.route("/api/backlog", backlog);
-app.route("/api/licenses", licenses);
-
-const configAuthGuard = async (c: { env: unknown; req: { header: (name: string) => string | undefined }; json: (data: unknown, status: number) => Response }, next: () => Promise<void | Response>) => {
+const adminAuthGuard: MiddlewareHandler = async (c, next) => {
   const env = c.env as Record<string, string | undefined>;
   const secret = env.ADMIN_API_KEY;
   if (!secret) return next();
@@ -56,8 +52,12 @@ const configAuthGuard = async (c: { env: unknown; req: { header: (name: string) 
   }
   return next();
 };
-app.use("/api/config", configAuthGuard);
-app.use("/api/config/*", configAuthGuard);
+app.use("/api/*", adminAuthGuard);
+
+app.route("/api/stats", stats);
+app.route("/api/users", users);
+app.route("/api/backlog", backlog);
+app.route("/api/licenses", licenses);
 app.route("/api/config", config);
 
 export default app;

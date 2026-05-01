@@ -35,15 +35,25 @@ export class ApiError extends Error {
   }
 }
 
-const fetcher = async (url: string) => {
-  const res = await fetch(url, { headers: authHeaders() });
+async function handleResponse(res: Response) {
   if (!res.ok) {
     if (res.status === 401 && onAuthRequired) onAuthRequired();
     const body = await res.json().catch(() => null);
     throw new ApiError(body?.error || res.statusText, res.status);
   }
   return res.json();
+}
+
+const fetcher = async (url: string) => {
+  const res = await fetch(url, { headers: authHeaders() });
+  return handleResponse(res);
 };
+
+export async function adminFetch(url: string, init?: RequestInit): Promise<unknown> {
+  const headers: HeadersInit = { ...authHeaders(), ...init?.headers };
+  const res = await fetch(url, { ...init, headers });
+  return handleResponse(res);
+}
 
 export function useAdminApi<T>(path: string) {
   const { data, error, isLoading, mutate } = useSWR<T>(

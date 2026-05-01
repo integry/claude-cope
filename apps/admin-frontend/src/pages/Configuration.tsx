@@ -1,11 +1,9 @@
 import { useState } from "react";
-import { useAdminApi, authHeaders } from "../hooks/useAdminApi";
+import { useAdminApi, adminFetch } from "../hooks/useAdminApi";
 import { API_BASE } from "../config";
-import { SENSITIVE_KEYS } from "@claude-cope/shared/config";
+import { SENSITIVE_KEYS, PRESERVE_VALUE_SENTINEL } from "@claude-cope/shared/config";
 import { ConfigFormPanel, ConfirmDeleteModal, TierBadge } from "./ConfigurationParts";
 import { emptyForm, type ConfigEntry, type ConfigForm } from "./configurationShared";
-
-const PRESERVE_VALUE_SENTINEL = "__PRESERVE_EXISTING__";
 
 export default function Configuration() {
   const { data, isLoading, isError, mutate } = useAdminApi<ConfigEntry[]>("/api/config");
@@ -59,18 +57,14 @@ export default function Configuration() {
       const key = encodeURIComponent(form.key.trim());
       const tier = encodeURIComponent(form.tier.trim() || "*");
       const effectiveValue = isSensitiveEdit && !form.value.trim() ? PRESERVE_VALUE_SENTINEL : form.value;
-      const res = await fetch(`${API_BASE}/api/config/${key}/${tier}`, {
+      await adminFetch(`${API_BASE}/api/config/${key}/${tier}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           value: effectiveValue,
           description: form.description || undefined,
         }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error || `Save failed: ${res.statusText}`);
-      }
       await mutate();
       closeForm();
     } catch (err) {
@@ -94,14 +88,9 @@ export default function Configuration() {
     try {
       const key = encodeURIComponent(entry.key);
       const tier = encodeURIComponent(entry.tier);
-      const res = await fetch(`${API_BASE}/api/config/${key}/${tier}`, {
+      await adminFetch(`${API_BASE}/api/config/${key}/${tier}`, {
         method: "DELETE",
-        headers: authHeaders(),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error || `Delete failed: ${res.statusText}`);
-      }
       await mutate();
       setConfirmDelete(null);
     } catch (err) {

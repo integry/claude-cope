@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS } from "@claude-cope/shared/config";
+import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS, PRESERVE_VALUE_SENTINEL } from "@claude-cope/shared/config";
 
 type Env = {
   Bindings: {
@@ -16,7 +16,6 @@ interface ConfigRow {
 }
 
 const MASKED_PLACEHOLDER = "••••";
-export const PRESERVE_VALUE_SENTINEL = "__PRESERVE_EXISTING__";
 
 function maskSensitiveValue(key: string, value: string): string {
   if (!SENSITIVE_KEYS.has(key)) return value;
@@ -101,6 +100,10 @@ config.put("/:key/:tier", async (c) => {
 
   if (body.value === undefined || body.value === null) {
     return c.json({ error: "value is required" }, 400);
+  }
+
+  if (body.description !== undefined && body.description !== null && typeof body.description !== "string") {
+    return c.json({ error: "description must be a string" }, 400);
   }
 
   let value = String(body.value);
