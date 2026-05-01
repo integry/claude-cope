@@ -24,10 +24,10 @@ const MAX_KEY_MINT_WINDOW_MS = 5 * 60 * 1000;
 // cannot cryptographically prove a key was created by a specific checkout. Session
 // binding on the /checkout-license route is the primary security control; this filter
 // is a best-effort heuristic to scope down to the correct keys.
-export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreatedAt?: string): PolarLicenseKeyItem[] {
-  const sorted = [...granted].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  if (!checkoutCreatedAt) return sorted.length ? [sorted[0]!] : [];
+export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreatedAt: string): PolarLicenseKeyItem[] {
   const checkoutTime = new Date(checkoutCreatedAt).getTime();
+  if (!Number.isFinite(checkoutTime)) return [];
+  const sorted = [...granted].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   const upperBound = checkoutTime + MAX_KEY_MINT_WINDOW_MS;
   return sorted.filter((k) => {
     const t = new Date(k.created_at).getTime();
@@ -62,18 +62,25 @@ export type CheckoutCache = {
   sessionId: string;
 };
 
+function isNonEmptyStringArray(arr: unknown[]): arr is string[] {
+  return arr.length > 0 && arr.every((v) => typeof v === "string" && v.length > 0);
+}
+
 export function parseCheckoutCache(raw: string): CheckoutCache | null {
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return { keys: parsed as string[], sessionId: "" };
+      if (!isNonEmptyStringArray(parsed)) return null;
+      return { keys: parsed, sessionId: "" };
     }
     if (parsed && typeof parsed === "object" && Array.isArray(parsed.keys)) {
-      return { keys: parsed.keys as string[], sessionId: parsed.sessionId ?? "" };
+      if (!isNonEmptyStringArray(parsed.keys)) return null;
+      return { keys: parsed.keys, sessionId: parsed.sessionId ?? "" };
     }
     return null;
   } catch {
-    return { keys: [raw], sessionId: "" };
+    if (typeof raw === "string" && raw.length > 0) return { keys: [raw], sessionId: "" };
+    return null;
   }
 }
 

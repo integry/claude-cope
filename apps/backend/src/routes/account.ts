@@ -55,8 +55,7 @@ async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?
   return { body, validation, kv, db, hash } as const;
 }
 
-async function lookupCheckoutCache(kv: KVNamespace | undefined, checkoutId: string, sessionId: string): Promise<{ keys: string[] } | { error: string; status: 403 } | null> {
-  if (!kv) return null;
+async function lookupCheckoutCache(kv: KVNamespace, checkoutId: string, sessionId: string): Promise<{ keys: string[] } | { error: string; status: 403 } | null> {
   const cached = await kv.get(`checkout_used:${checkoutId}`);
   if (!cached) return null;
   const entry = parseCheckoutCache(cached);
@@ -80,6 +79,8 @@ account.post("/checkout-license", async (c) => {
   if (!accessToken || !organizationId) return c.json({ error: "Polar integration is not configured" }, 500);
 
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  if (!kv) return c.json({ error: "KV storage is not configured" }, 500);
+
   const cacheResult = await lookupCheckoutCache(kv, body.checkoutId, sessionId);
   if (cacheResult) {
     if ("error" in cacheResult) return c.json({ error: cacheResult.error }, cacheResult.status);
@@ -88,6 +89,8 @@ account.post("/checkout-license", async (c) => {
 
   const result = await fetchCheckoutCustomerId(body.checkoutId, accessToken, organizationId);
   if ("error" in result) return c.json({ error: result.error }, result.status);
+
+  if (!result.createdAt) return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
 
   let lkResp: Response;
   try {
@@ -107,10 +110,8 @@ account.post("/checkout-license", async (c) => {
   const allKeys = pickAllLicenseKeys(granted, result.createdAt);
   if (!allKeys.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
   const allKeyStrings = allKeys.map((k) => k.key);
-  if (kv) {
-    const cachePayload: CheckoutCache = { keys: allKeyStrings, sessionId };
-    await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 60 * 60 });
-  }
+  const cachePayload: CheckoutCache = { keys: allKeyStrings, sessionId };
+  await kv.put(`checkout_used:${body.checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 60 * 60 });
   return c.json({ licenseKey: allKeyStrings[0], allKeys: allKeyStrings });
 });
 

@@ -184,25 +184,32 @@ function Terminal() {
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
 
-  const checkoutHandledRef = useRef(false);
+  const checkoutHandledRef = useRef<string | null>(null);
   useEffect(() => {
-    if (isBooting || checkoutHandledRef.current) return;
+    if (isBooting) return;
     const checkoutId = new URLSearchParams(window.location.search).get("checkout_id");
-    if (!checkoutId) return;
-    checkoutHandledRef.current = true;
+    if (!checkoutId || checkoutHandledRef.current === checkoutId) return;
+    checkoutHandledRef.current = checkoutId;
     const strip = () => { const p = new URLSearchParams(window.location.search); p.delete("checkout_id"); const qs = p.toString(); window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "")); };
     const alreadyPro = Boolean(state.proKeyHash);
     void (async () => {
       setHistory((prev) => [...prev, { role: "system", content: "[💳] Retrieving your license — one sec…" }]);
       try {
         let lastData: { licenseKey?: string; allKeys?: string[]; error?: string } = {};
-        for (let attempt = 0; attempt < 3; attempt++) {
+        for (let attempt = 0; attempt < 5; attempt++) {
           if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
-          const res = await fetch(`${API_BASE}/api/account/checkout-license`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ checkoutId }),
-            credentials: "include",
-          });
+          let res: Response;
+          try {
+            res = await fetch(`${API_BASE}/api/account/checkout-license`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ checkoutId }),
+              credentials: "include",
+            });
+          } catch {
+            if (attempt < 4) continue;
+            throw new Error("Network error");
+          }
+          if (res.status >= 500 && attempt < 4) continue;
           lastData = await res.json() as { licenseKey?: string; allKeys?: string[]; error?: string };
           if (res.ok && lastData.licenseKey) {
             const keys = lastData.allKeys ?? [lastData.licenseKey];

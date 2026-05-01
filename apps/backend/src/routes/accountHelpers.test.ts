@@ -34,11 +34,10 @@ describe("pickAllLicenseKeys", () => {
     expect(result.map((k) => k.key)).toEqual(["A", "B", "C"]);
   });
 
-  it("returns only first key when no checkoutCreatedAt", () => {
+  it("returns empty array for invalid checkoutCreatedAt", () => {
     const keys = [key("A", "2026-01-02T00:00:00Z"), key("B", "2026-01-01T00:00:00Z")];
-    const result = pickAllLicenseKeys(keys);
-    expect(result).toHaveLength(1);
-    expect(result[0]!.key).toBe("B");
+    const result = pickAllLicenseKeys(keys, "not-a-date");
+    expect(result).toHaveLength(0);
   });
 
   it("excludes keys created before checkout", () => {
@@ -109,6 +108,21 @@ describe("parseCheckoutCache", () => {
     const raw = JSON.stringify({ keys: ["K1"] });
     const result = parseCheckoutCache(raw);
     expect(result).toEqual({ keys: ["K1"], sessionId: "" });
+  });
+
+  it("returns null for empty keys array", () => {
+    expect(parseCheckoutCache(JSON.stringify({ keys: [] }))).toBeNull();
+    expect(parseCheckoutCache(JSON.stringify([]))).toBeNull();
+  });
+
+  it("returns null when keys contain non-string or empty values", () => {
+    expect(parseCheckoutCache(JSON.stringify({ keys: [123, "K1"] }))).toBeNull();
+    expect(parseCheckoutCache(JSON.stringify({ keys: ["", "K1"] }))).toBeNull();
+    expect(parseCheckoutCache(JSON.stringify([null, "K1"]))).toBeNull();
+  });
+
+  it("returns null for empty string input", () => {
+    expect(parseCheckoutCache("")).toBeNull();
   });
 });
 
