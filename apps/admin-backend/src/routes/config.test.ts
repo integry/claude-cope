@@ -81,7 +81,7 @@ describe("GET /api/config", () => {
     expect(res.status).toBe(500);
   });
 
-  it("returns config entries with sensitive values masked", async () => {
+  it("returns config entries with sensitive values fully masked (no suffix leak)", async () => {
     const db = createMockDB([
       { key: "openrouter_api_key", tier: "*", value: "sk-or-v1-abc123xyz789", description: null, updated_at: "2026-01-01" },
       { key: "free_quota_limit", tier: "*", value: "100", description: "Quota", updated_at: "2026-01-01" },
@@ -92,8 +92,7 @@ describe("GET /api/config", () => {
     expect(res.status).toBe(200);
     const data = await res.json() as ConfigRow[];
     const apiKeyEntry = data.find((r) => r.key === "openrouter_api_key");
-    expect(apiKeyEntry?.value).not.toContain("sk-or-v1");
-    expect(apiKeyEntry?.value).toMatch(/^••••/);
+    expect(apiKeyEntry?.value).toBe("••••");
     const quotaEntry = data.find((r) => r.key === "free_quota_limit");
     expect(quotaEntry?.value).toBe("100");
   });
@@ -250,6 +249,58 @@ describe("DELETE /api/config/:key/:tier", () => {
   });
 });
 
+describe("PUT /api/config boolean normalization", () => {
+  it("normalizes 'TRUE' to 'true' for boolean keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/enable_byok/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "TRUE" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(200);
+  });
+
+  it("normalizes ' true ' to 'true' for boolean keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/openrouter_providers_free_only/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: " true " }),
+    }, makeEnv(db));
+    expect(res.status).toBe(200);
+  });
+
+  it("normalizes '1' to 'true' for boolean keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/enable_ticket_refine/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "1" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(200);
+  });
+
+  it("normalizes '0' to 'false' for boolean keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/enable_byok/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "0" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(200);
+  });
+
+  it("does not normalize non-boolean keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/free_quota_limit/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "TRUE" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(200);
+  });
+});
+
 describe("Auth guard for /api/config", () => {
   it("returns 403 when ADMIN_API_KEY is not set (fail closed)", async () => {
     const db = createMockDB([
@@ -299,5 +350,14 @@ describe("Auth guard for /api/config", () => {
       method: "DELETE",
     }, makeEnv(db, "secret-admin-key"));
     expect(res.status).toBe(401);
+  });
+
+  it("allows OPTIONS preflight requests without auth (CORS)", async () => {
+    const db = createMockDB([]);
+    const res = await app.request("/api/config", {
+      method: "OPTIONS",
+    }, makeEnv(db, "secret-admin-key"));
+    expect(res.status).not.toBe(401);
+    expect(res.status).not.toBe(403);
   });
 });

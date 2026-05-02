@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS, PRESERVE_VALUE_SENTINEL, WELL_KNOWN_KEYS } from "@claude-cope/shared/config";
+import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS, PRESERVE_VALUE_SENTINEL, WELL_KNOWN_KEYS, BOOLEAN_KEYS } from "@claude-cope/shared/config";
 
 type Env = {
   Bindings: {
@@ -21,8 +21,14 @@ const MASKED_PLACEHOLDER = "••••";
 
 function maskSensitiveValue(key: string, value: string): string {
   if (!SENSITIVE_KEYS.has(key)) return value;
-  if (value.length <= 4) return MASKED_PLACEHOLDER;
-  return MASKED_PLACEHOLDER + value.slice(-4);
+  return MASKED_PLACEHOLDER;
+}
+
+function normalizeBooleanValue(value: string): string {
+  const lower = value.trim().toLowerCase();
+  if (lower === "true" || lower === "1" || lower === "yes") return "true";
+  if (lower === "false" || lower === "0" || lower === "no") return "false";
+  return value;
 }
 
 function shouldPreserveValue(value: string): boolean {
@@ -124,6 +130,10 @@ config.put("/:key/:tier", async (c) => {
     } else {
       return c.json({ error: "Value is required for new sensitive key entries" }, 400);
     }
+  }
+
+  if (BOOLEAN_KEYS.has(key)) {
+    value = normalizeBooleanValue(value);
   }
 
   await db

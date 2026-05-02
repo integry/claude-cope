@@ -92,6 +92,30 @@ describe("getCategoryConfig", () => {
     expect(result.model).toBe("openai/gpt-oss-20b");
   });
 
+  it("treats empty string category_model as null", async () => {
+    const db = mockDB([
+      { key: "category_model", tier: "max", value: "" },
+    ]);
+    const result = await getCategoryConfig(db, "max");
+    expect(result.model).toBeNull();
+  });
+
+  it("treats whitespace-only category_model as null", async () => {
+    const db = mockDB([
+      { key: "category_model", tier: "free", value: "   " },
+    ]);
+    const result = await getCategoryConfig(db, "free");
+    expect(result.model).toBeNull();
+  });
+
+  it("treats empty category_api_key as null", async () => {
+    const db = mockDB([
+      { key: "category_api_key", tier: "depleted", value: "" },
+    ]);
+    const result = await getCategoryConfig(db, "depleted");
+    expect(result.apiKey).toBeNull();
+  });
+
   it("passes the correct category to the query", async () => {
     const prepareSpy = vi.fn(() => ({
       bind: vi.fn((...args: unknown[]) => {

@@ -3,6 +3,12 @@ export const CATEGORY_KEYS = new Set(["category_model", "category_api_key"]);
 export const VALID_CATEGORY_TIERS = ["*", "max", "free", "depleted"] as const;
 export const VALID_CATEGORY_TIERS_SET = new Set<string>(VALID_CATEGORY_TIERS);
 
+export const BOOLEAN_KEYS = new Set([
+  "openrouter_providers_free_only",
+  "enable_ticket_refine",
+  "enable_byok",
+]);
+
 export const GLOBAL_ONLY_KEYS = new Set([
   "openrouter_api_key",
   "openrouter_providers",

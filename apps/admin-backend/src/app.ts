@@ -25,6 +25,7 @@ app.use("*", (c, next) => {
 app.get("/", (c) => c.json({ status: "ok", service: "admin-backend" }));
 
 const adminAuthGuard: MiddlewareHandler = async (c, next) => {
+  if (c.req.method === "OPTIONS") return next();
   const env = c.env as Record<string, string | undefined>;
   const secret = env.ADMIN_API_KEY;
   if (!secret) {

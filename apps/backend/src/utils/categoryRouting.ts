@@ -47,6 +47,11 @@ export async function getOpenRouterConfig(db: D1Database): Promise<OpenRouterCon
   return { apiKey, providers, providersFreeOnly };
 }
 
+function emptyToNull(v: string): string | null {
+  const trimmed = v.trim();
+  return trimmed || null;
+}
+
 export async function getCategoryConfig(
   db: D1Database,
   category: RequestCategory,
@@ -65,8 +70,8 @@ export async function getCategoryConfig(
   let apiKey: string | null = null;
 
   for (const row of results ?? []) {
-    if (row.key === "category_model" && model === null) model = row.value;
-    if (row.key === "category_api_key" && apiKey === null) apiKey = row.value;
+    if (row.key === "category_model" && model === null) model = emptyToNull(row.value);
+    if (row.key === "category_api_key" && apiKey === null) apiKey = emptyToNull(row.value);
   }
 
   return { model, apiKey };
@@ -96,8 +101,8 @@ export async function getRoutingConfig(
     if (row.key === "openrouter_api_key") orApiKey = row.value;
     if (row.key === "openrouter_providers") providers = row.value;
     if (row.key === "openrouter_providers_free_only") providersFreeOnly = row.value;
-    if (row.key === "category_model" && categoryModel === null) categoryModel = row.value;
-    if (row.key === "category_api_key" && categoryApiKey === null) categoryApiKey = row.value;
+    if (row.key === "category_model" && categoryModel === null) categoryModel = emptyToNull(row.value);
+    if (row.key === "category_api_key" && categoryApiKey === null) categoryApiKey = emptyToNull(row.value);
   }
 
   return {
