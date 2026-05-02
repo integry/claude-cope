@@ -104,11 +104,15 @@ config.put("/:key/:tier", async (c) => {
     return c.json({ error: "value is required" }, 400);
   }
 
+  if (typeof body.value !== "string") {
+    return c.json({ error: "value must be a string" }, 400);
+  }
+
   if (body.description != null && typeof body.description !== "string") {
     return c.json({ error: "description must be a string" }, 400);
   }
 
-  let value = String(body.value);
+  let value = body.value;
 
   if (SENSITIVE_KEYS.has(key) && (!value.trim() || shouldPreserveValue(value))) {
     const existing = await db
@@ -120,8 +124,6 @@ config.put("/:key/:tier", async (c) => {
     } else {
       return c.json({ error: "Value is required for new sensitive key entries" }, 400);
     }
-  } else if (!value.trim()) {
-    return c.json({ error: "value must not be empty or whitespace-only" }, 400);
   }
 
   await db

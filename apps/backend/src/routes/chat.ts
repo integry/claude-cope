@@ -160,6 +160,9 @@ interface RoutingConfigResult {
   categoryApiKey: string | null;
 }
 
+// Config is cached per-worker for up to 5s. Admin writes land in D1 immediately
+// but may take up to ROUTING_CACHE_TTL_MS to propagate to chat workers since the
+// admin-backend and chat backend are separate Workers without service bindings.
 const ROUTING_CACHE_TTL_MS = 5_000;
 let routingCache: { data: Awaited<ReturnType<typeof getRoutingConfig>>; category: RequestCategory; ts: number } | null = null;
 
@@ -188,9 +191,11 @@ async function loadRoutingConfig(
         config = await getRoutingConfig(db, category);
         routingCache = { data: config, category, ts: now };
       }
+      // DB values override env: null means "not set in DB, keep env default";
+      // empty string means "admin explicitly cleared this setting".
       if (config.openRouter.apiKey !== null) baseApiKey = config.openRouter.apiKey || undefined;
-      if (config.openRouter.providers !== null) baseProviders = config.openRouter.providers || undefined;
-      if (config.openRouter.providersFreeOnly !== null) baseProvidersFreeOnly = config.openRouter.providersFreeOnly || undefined;
+      if (config.openRouter.providers !== null) baseProviders = config.openRouter.providers === "" ? undefined : config.openRouter.providers;
+      if (config.openRouter.providersFreeOnly !== null) baseProvidersFreeOnly = config.openRouter.providersFreeOnly === "" ? undefined : config.openRouter.providersFreeOnly;
       categoryModel = config.category.model;
       categoryApiKey = config.category.apiKey;
     } catch (err) {

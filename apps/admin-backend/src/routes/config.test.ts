@@ -124,16 +124,26 @@ describe("PUT /api/config/:key/:tier", () => {
     }
   });
 
-  it("rejects empty value for non-sensitive keys", async () => {
+  it("accepts empty value for non-sensitive keys (allows clearing env overrides)", async () => {
     const db = createMockDB();
     const res = await app.request("/api/config/free_quota_limit/*", {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ value: "   " }),
     }, makeEnv(db));
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects non-string value payloads", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/free_quota_limit/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: 123 }),
+    }, makeEnv(db));
     expect(res.status).toBe(400);
     const body = await res.json() as { error: string };
-    expect(body.error).toContain("empty");
+    expect(body.error).toContain("string");
   });
 
   it("preserves existing value when explicit sentinel is sent for sensitive key", async () => {

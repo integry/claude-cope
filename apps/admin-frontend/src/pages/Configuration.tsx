@@ -12,6 +12,7 @@ export default function Configuration() {
   const [form, setForm] = useState<ConfigForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [deletingEntry, setDeletingEntry] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ConfigEntry | null>(null);
@@ -20,10 +21,12 @@ export default function Configuration() {
   function openCreate() {
     setEditingEntry(null);
     setForm(emptyForm);
+    setSaveWarning(null);
     setShowForm(true);
   }
 
   function openEdit(entry: ConfigEntry) {
+    setSaveWarning(null);
     setEditingEntry({ key: entry.key, tier: entry.tier });
     setForm({
       key: entry.key,
@@ -47,7 +50,7 @@ export default function Configuration() {
       return;
     }
     const isSensitiveEdit = editingEntry && SENSITIVE_KEYS.has(form.key);
-    if (!isSensitiveEdit && !form.value.trim()) {
+    if (!isSensitiveEdit && !editingEntry && !form.value.trim()) {
       setSaveError("Value is required.");
       return;
     }
@@ -66,10 +69,9 @@ export default function Configuration() {
         }),
       }) as { warning?: string };
       await mutate();
+      closeForm();
       if (result?.warning) {
-        setSaveError(result.warning);
-      } else {
-        closeForm();
+        setSaveWarning(result.warning);
       }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save configuration.");
@@ -158,6 +160,13 @@ export default function Configuration() {
           onSave={handleSave}
           onClose={closeForm}
         />
+      )}
+
+      {saveWarning && (
+        <div className="mt-4 flex items-center justify-between rounded border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+          <span>{saveWarning}</span>
+          <button onClick={() => setSaveWarning(null)} className="ml-4 text-yellow-600 hover:text-yellow-800">&times;</button>
+        </div>
       )}
 
       <div className="mt-4">

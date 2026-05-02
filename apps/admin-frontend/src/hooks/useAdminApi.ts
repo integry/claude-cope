@@ -1,6 +1,10 @@
 import useSWR from "swr";
 import { API_BASE } from "../config";
 
+// sessionStorage is preferred over localStorage: the token is scoped to the tab
+// lifetime and is not persisted across sessions. It is still readable by any XSS
+// in the admin frontend — acceptable here because the admin surface is internal
+// and already protected by the bearer-token auth gate.
 const SESSION_KEY = "admin_api_key";
 
 let onAuthRequired: (() => void) | null = null;
