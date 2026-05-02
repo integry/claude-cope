@@ -7,8 +7,10 @@ import Backlog from "./pages/Backlog";
 import Configuration from "./pages/Configuration";
 import {
   setAuthRequiredCallback,
+  setServerMisconfiguredCallback,
   setAdminApiKey,
   getAdminApiKey,
+  hasStoredApiKey,
   clearAdminApiKey,
 } from "./hooks/useAdminApi";
 
@@ -52,7 +54,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AuthPrompt({ error, onSubmit }: { error: boolean; onSubmit: (key: string) => void }) {
+function AuthPrompt({ error, serverError, onSubmit }: { error: boolean; serverError: string | null; onSubmit: (key: string) => void }) {
   const [key, setKey] = useState("");
 
   function handleSubmit(e: React.FormEvent) {
@@ -66,6 +68,7 @@ function AuthPrompt({ error, onSubmit }: { error: boolean; onSubmit: (key: strin
         <h2 className="text-lg font-semibold text-gray-900">Admin Authentication</h2>
         <p className="mt-2 text-sm text-gray-600">Enter the admin API key to access the panel.</p>
         {error && <p className="mt-2 text-sm text-red-600">Invalid API key. Please try again.</p>}
+        {serverError && <p className="mt-2 text-sm text-red-600">{serverError}</p>}
         <input
           type="password"
           value={key}
@@ -86,26 +89,38 @@ function AuthPrompt({ error, onSubmit }: { error: boolean; onSubmit: (key: strin
 }
 
 function App() {
-  const [authRequired, setAuthRequired] = useState(false);
+  const [authRequired, setAuthRequired] = useState(!hasStoredApiKey());
   const [authError, setAuthError] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   useEffect(() => {
     setAuthRequiredCallback(() => {
       setAuthError(!!getAdminApiKey());
+      setServerError(null);
       clearAdminApiKey();
       setAuthRequired(true);
     });
-    return () => setAuthRequiredCallback(null);
+    setServerMisconfiguredCallback((message) => {
+      setServerError(message);
+      clearAdminApiKey();
+      setAuthRequired(true);
+    });
+    return () => {
+      setAuthRequiredCallback(null);
+      setServerMisconfiguredCallback(null);
+    };
   }, []);
 
   if (authRequired) {
     return (
       <AuthPrompt
         error={authError}
+        serverError={serverError}
         onSubmit={(key) => {
           setAdminApiKey(key);
           setAuthRequired(false);
           setAuthError(false);
+          setServerError(null);
         }}
       />
     );

@@ -57,16 +57,20 @@ export default function Configuration() {
       const key = encodeURIComponent(form.key.trim());
       const tier = encodeURIComponent(form.tier.trim() || "*");
       const effectiveValue = isSensitiveEdit && !form.value.trim() ? PRESERVE_VALUE_SENTINEL : form.value;
-      await adminFetch(`${API_BASE}/api/config/${key}/${tier}`, {
+      const result = await adminFetch(`${API_BASE}/api/config/${key}/${tier}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           value: effectiveValue,
           description: form.description || undefined,
         }),
-      });
+      }) as { warning?: string };
       await mutate();
-      closeForm();
+      if (result?.warning) {
+        setSaveError(result.warning);
+      } else {
+        closeForm();
+      }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save configuration.");
     } finally {

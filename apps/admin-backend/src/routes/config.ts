@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS, PRESERVE_VALUE_SENTINEL } from "@claude-cope/shared/config";
+import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS, PRESERVE_VALUE_SENTINEL, WELL_KNOWN_KEYS } from "@claude-cope/shared/config";
 
 type Env = {
   Bindings: {
@@ -14,6 +14,8 @@ interface ConfigRow {
   description: string | null;
   updated_at: string;
 }
+
+const KNOWN_KEYS_SET = new Set<string>(WELL_KNOWN_KEYS.map((k) => k.key));
 
 const MASKED_PLACEHOLDER = "••••";
 
@@ -134,7 +136,8 @@ config.put("/:key/:tier", async (c) => {
     .bind(key, tier, value, body.description ?? null)
     .run();
 
-  return c.json({ success: true, key, tier });
+  const warning = !KNOWN_KEYS_SET.has(key) ? `Unknown key "${key}" — check for typos` : undefined;
+  return c.json({ success: true, key, tier, warning });
 });
 
 config.delete("/:key/:tier", async (c) => {

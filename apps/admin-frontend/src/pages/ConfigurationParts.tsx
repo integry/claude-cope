@@ -116,11 +116,12 @@ export function ConfigFormPanel({ editingEntry, form, setForm, saving, saveError
           <div>
             <label className="block text-sm font-medium text-gray-700">Value</label>
             <input
-              type="text"
+              type={SENSITIVE_KEYS.has(form.key) ? "password" : "text"}
               value={form.value}
               onChange={(e) => setForm({ ...form, value: e.target.value })}
               placeholder={editingEntry && SENSITIVE_KEYS.has(form.key) ? "Leave empty to keep current value" : ""}
               className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+              autoComplete={SENSITIVE_KEYS.has(form.key) ? "off" : undefined}
             />
           </div>
         </div>

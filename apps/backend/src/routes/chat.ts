@@ -160,8 +160,12 @@ interface RoutingConfigResult {
   categoryApiKey: string | null;
 }
 
-const ROUTING_CACHE_TTL_MS = 60_000;
+const ROUTING_CACHE_TTL_MS = 5_000;
 let routingCache: { data: Awaited<ReturnType<typeof getRoutingConfig>>; category: RequestCategory; ts: number } | null = null;
+
+export function invalidateRoutingCache(): void {
+  routingCache = null;
+}
 
 async function loadRoutingConfig(
   db: D1Database | undefined,
@@ -190,7 +194,7 @@ async function loadRoutingConfig(
       categoryModel = config.category.model;
       categoryApiKey = config.category.apiKey;
     } catch (err) {
-      console.log(`[ROUTING] D1 config lookup failed, falling back to env: ${err}`);
+      console.log(`[ROUTING] D1 config lookup failed (table may not exist yet), falling back to env vars: ${err}`);
     }
   }
 
