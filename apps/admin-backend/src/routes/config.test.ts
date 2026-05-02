@@ -183,12 +183,24 @@ describe("PUT /api/config/:key/:tier", () => {
 
   it("rejects missing value field", async () => {
     const db = createMockDB();
-    const res = await app.request("/api/config/some_key/*", {
+    const res = await app.request("/api/config/free_quota_limit/*", {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({}),
     }, makeEnv(db));
     expect(res.status).toBe(400);
+  });
+
+  it("rejects unknown configuration keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/category_modle/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "openai/gpt-4o" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("Unknown configuration key");
   });
 
   it("rejects non-* tier for global-only keys", async () => {
@@ -215,7 +227,7 @@ describe("PUT /api/config/:key/:tier", () => {
 
   it("returns 400 for malformed JSON body", async () => {
     const db = createMockDB();
-    const res = await app.request("/api/config/some_key/*", {
+    const res = await app.request("/api/config/free_quota_limit/*", {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: "not valid json{{{",
@@ -241,11 +253,33 @@ describe("DELETE /api/config/:key/:tier", () => {
   });
 
   it("returns 500 when DB is not configured", async () => {
-    const res = await app.request("/api/config/some_key/*", {
+    const res = await app.request("/api/config/free_quota_limit/*", {
       method: "DELETE",
       headers: authHeaders(),
     }, makeEnv(null));
     expect(res.status).toBe(500);
+  });
+
+  it("rejects invalid tier for category keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/category_model/pro", {
+      method: "DELETE",
+      headers: authHeaders(),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("Invalid tier");
+  });
+
+  it("rejects non-* tier for global-only keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/openrouter_api_key/free", {
+      method: "DELETE",
+      headers: authHeaders(),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("only supports tier");
   });
 });
 

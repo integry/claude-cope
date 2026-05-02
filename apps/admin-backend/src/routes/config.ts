@@ -99,6 +99,10 @@ config.put("/:key/:tier", async (c) => {
     return c.json({ error: `Key "${key}" only supports tier "*". This key is not category-specific.` }, 400);
   }
 
+  if (!KNOWN_KEYS_SET.has(key)) {
+    return c.json({ error: `Unknown configuration key "${key}". Check for typos.` }, 400);
+  }
+
   let body: { value: string; description?: string };
   try {
     body = await c.req.json<{ value: string; description?: string }>();
@@ -144,8 +148,7 @@ config.put("/:key/:tier", async (c) => {
     .bind(key, tier, value, body.description ?? null)
     .run();
 
-  const warning = !KNOWN_KEYS_SET.has(key) ? `Unknown key "${key}" — check for typos` : undefined;
-  return c.json({ success: true, key, tier, warning });
+  return c.json({ success: true, key, tier });
 });
 
 config.delete("/:key/:tier", async (c) => {
@@ -157,6 +160,14 @@ config.delete("/:key/:tier", async (c) => {
 
   if (!key) return c.json({ error: "key must not be empty" }, 400);
   if (!tier) return c.json({ error: "tier must not be empty" }, 400);
+
+  if (CATEGORY_KEYS.has(key) && !VALID_CATEGORY_TIERS_SET.has(tier)) {
+    return c.json({ error: `Invalid tier "${tier}" for ${key}. Valid tiers: *, max, free, depleted` }, 400);
+  }
+
+  if (GLOBAL_ONLY_KEYS.has(key) && tier !== "*") {
+    return c.json({ error: `Key "${key}" only supports tier "*". This key is not category-specific.` }, 400);
+  }
 
   await db
     .prepare("DELETE FROM system_config WHERE key = ? AND tier = ?")

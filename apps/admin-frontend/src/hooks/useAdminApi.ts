@@ -18,19 +18,36 @@ export function setServerMisconfiguredCallback(cb: ((message: string) => void) |
   onServerMisconfigured = cb;
 }
 
+function isStorageAvailable(): boolean {
+  try {
+    const testKey = "__storage_test__";
+    sessionStorage.setItem(testKey, "1");
+    sessionStorage.removeItem(testKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let memoryFallback = "";
+
 export function getAdminApiKey(): string {
+  if (!isStorageAvailable()) return memoryFallback;
   return sessionStorage.getItem(SESSION_KEY) || "";
 }
 
 export function hasStoredApiKey(): boolean {
+  if (!isStorageAvailable()) return !!memoryFallback;
   return !!sessionStorage.getItem(SESSION_KEY);
 }
 
 export function setAdminApiKey(key: string): void {
+  if (!isStorageAvailable()) { memoryFallback = key; return; }
   sessionStorage.setItem(SESSION_KEY, key);
 }
 
 export function clearAdminApiKey(): void {
+  if (!isStorageAvailable()) { memoryFallback = ""; return; }
   sessionStorage.removeItem(SESSION_KEY);
 }
 

@@ -166,10 +166,6 @@ interface RoutingConfigResult {
 const ROUTING_CACHE_TTL_MS = 5_000;
 let routingCache: { data: Awaited<ReturnType<typeof getRoutingConfig>>; category: RequestCategory; ts: number } | null = null;
 
-export function invalidateRoutingCache(): void {
-  routingCache = null;
-}
-
 async function loadRoutingConfig(
   db: D1Database | undefined,
   env: Env["Bindings"],

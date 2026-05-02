@@ -101,6 +101,7 @@ function App() {
       setAuthRequired(true);
     });
     setServerMisconfiguredCallback((message) => {
+      setAuthError(false);
       setServerError(message);
       clearAdminApiKey();
       setAuthRequired(true);
