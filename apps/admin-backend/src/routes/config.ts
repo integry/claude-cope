@@ -106,12 +106,8 @@ config.put("/:key/:tier", async (c) => {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
-  if (body.value == null) {
-    return c.json({ error: "value is required" }, 400);
-  }
-
   if (typeof body.value !== "string") {
-    return c.json({ error: "value must be a string" }, 400);
+    return c.json({ error: "value is required and must be a string" }, 400);
   }
 
   if (body.description != null && typeof body.description !== "string") {
