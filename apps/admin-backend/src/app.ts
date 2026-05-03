@@ -42,6 +42,7 @@ app.use("/api/*", adminAuthGuard);
 // Run schema migrations on the first authenticated request that hits the DB.
 let migrationPromise: Promise<void> | null = null;
 app.use("/api/*", async (c, next) => {
+  if (c.req.method === "OPTIONS") return next();
   if (!migrationPromise) {
     const db = (c.env as Record<string, unknown>).DB as D1Database | undefined;
     if (db) {

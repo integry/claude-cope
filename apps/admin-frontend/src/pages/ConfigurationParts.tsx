@@ -53,29 +53,25 @@ export function ConfigFormPanel({ editingEntry, form, setForm, saving, saveError
               className="mt-1 block w-full rounded border border-gray-300 bg-gray-100 px-3 py-2 text-sm shadow-sm"
             />
           ) : (
-            <div className="mt-1 flex gap-2">
+            <>
               <select
                 value={WELL_KNOWN_KEYS.some((k) => k.key === form.key) ? form.key : ""}
                 onChange={(e) => {
                   if (e.target.value) selectWellKnownKey(e.target.value);
                 }}
-                className="block rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+                className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               >
-                <option value="">-- Select preset --</option>
+                <option value="">-- Select configuration key --</option>
                 {WELL_KNOWN_KEYS.map((k) => (
                   <option key={k.key} value={k.key}>
                     {k.key}
                   </option>
                 ))}
               </select>
-              <input
-                type="text"
-                value={form.key}
-                onChange={(e) => setForm({ ...form, key: e.target.value })}
-                placeholder="or type a custom key"
-                className="block flex-1 rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
-              />
-            </div>
+              <p className="mt-2 text-sm text-gray-500">
+                Only supported configuration keys can be created here.
+              </p>
+            </>
           )}
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -116,10 +116,11 @@ export default function Configuration() {
   }
 
   if (isError) {
+    const loadError = isError instanceof Error ? isError.message : "Failed to load configuration.";
     return (
       <div>
         <h1 className="text-2xl font-bold">Configuration</h1>
-        <p className="mt-4 text-red-600">Failed to load configuration.</p>
+        <p className="mt-4 text-red-600">{loadError}</p>
       </div>
     );
   }
@@ -148,6 +149,9 @@ export default function Configuration() {
       <p className="mt-2 text-sm text-gray-500">
         Manage API keys, model settings, and feature flags. Settings use a composite key of name + tier,
         where tier &quot;*&quot; applies globally.
+      </p>
+      <p className="mt-1 text-sm text-gray-500">
+        Routing changes are written immediately, but chat workers may take up to 5 seconds to pick them up.
       </p>
 
       {showForm && (

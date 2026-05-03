@@ -26,6 +26,10 @@ interface ConfigMutationBody {
   preserveExisting?: boolean;
 }
 
+interface StoredDescriptionRow {
+  description: string | null;
+}
+
 function maskSensitiveValue(key: string, value: string): string {
   if (!SENSITIVE_KEYS.has(key)) return value;
   return MASKED_PLACEHOLDER;
@@ -47,6 +51,14 @@ function validateKeyAndTier(key: string, tier: string): string | null {
   if (GLOBAL_ONLY_KEYS.has(key) && tier !== "*") {
     return `Key "${key}" only supports tier "*". This key is not category-specific.`;
   }
+  if (!KNOWN_KEYS_SET.has(key)) {
+    return `Unknown configuration key "${key}". Check for typos.`;
+  }
+  return null;
+}
+
+function validateKnownKey(key: string): string | null {
+  if (!key) return "key must not be empty";
   if (!KNOWN_KEYS_SET.has(key)) {
     return `Unknown configuration key "${key}". Check for typos.`;
   }
@@ -107,6 +119,24 @@ async function resolveStoredValue(
   return value;
 }
 
+async function resolveStoredDescription(
+  db: D1Database,
+  key: string,
+  tier: string,
+  body: ConfigMutationBody,
+): Promise<string | null> {
+  if (body.description !== undefined) {
+    return body.description;
+  }
+
+  const existing = await db
+    .prepare("SELECT description FROM system_config WHERE key = ? AND tier = ?")
+    .bind(key, tier)
+    .first<StoredDescriptionRow>();
+
+  return existing?.description ?? null;
+}
+
 const config = new Hono<Env>();
 
 config.get("/", async (c) => {
@@ -133,14 +163,20 @@ config.get("/", async (c) => {
     results = res.results ?? [];
   }
 
-  return c.json(results.map((r) => ({ ...r, value: maskSensitiveValue(r.key, r.value) })));
+  return c.json(
+    results
+      .filter((r) => KNOWN_KEYS_SET.has(r.key))
+      .map((r) => ({ ...r, value: maskSensitiveValue(r.key, r.value) }))
+  );
 });
 
 config.get("/:key", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const key = c.req.param("key");
+  const key = c.req.param("key").trim();
+  const validationError = validateKnownKey(key);
+  if (validationError) return c.json({ error: validationError }, 400);
 
   const { results } = await db
     .prepare(
@@ -167,6 +203,7 @@ config.put("/:key/:tier", async (c) => {
 
   const value = await resolveStoredValue(db, key, tier, parsedBody);
   if (value instanceof Response) return value;
+  const description = await resolveStoredDescription(db, key, tier, parsedBody);
 
   await db
     .prepare(
@@ -177,7 +214,7 @@ config.put("/:key/:tier", async (c) => {
          description = excluded.description,
          updated_at = datetime('now')`
     )
-    .bind(key, tier, value, parsedBody.description ?? null)
+    .bind(key, tier, value, description)
     .run();
 
   return c.json({ success: true, key, tier });

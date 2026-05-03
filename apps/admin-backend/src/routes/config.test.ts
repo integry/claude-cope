@@ -102,6 +102,34 @@ describe("GET /api/config", () => {
     const quotaEntry = data.find((r) => r.key === "free_quota_limit");
     expect(quotaEntry?.value).toBe("100");
   });
+
+  it("filters unmanaged keys from the config list", async () => {
+    const db = createMockDB([
+      { key: "free_quota_limit", tier: "*", value: "100", description: "Quota", updated_at: "2026-01-01" },
+      { key: "future_secret", tier: "*", value: "should-not-leak", description: null, updated_at: "2026-01-01" },
+    ]);
+    const res = await app.request("/api/config", {
+      headers: authHeaders(),
+    }, makeEnv(db));
+    expect(res.status).toBe(200);
+    const data = await res.json() as ConfigRow[];
+    expect(data).toHaveLength(1);
+    expect(data[0]?.key).toBe("free_quota_limit");
+  });
+});
+
+describe("GET /api/config/:key", () => {
+  it("rejects unknown configuration keys", async () => {
+    const db = createMockDB([
+      { key: "future_secret", tier: "*", value: "should-not-leak", description: null, updated_at: "2026-01-01" },
+    ]);
+    const res = await app.request("/api/config/future_secret", {
+      headers: authHeaders(),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("Unknown configuration key");
+  });
 });
 
 describe("PUT /api/config/:key/:tier", () => {
@@ -263,6 +291,24 @@ describe("PUT /api/config/:key/:tier", () => {
     expect(res.status).toBe(400);
     const body = await res.json() as { error: string };
     expect(body.error).toContain("Invalid boolean value");
+  });
+
+  it("preserves the existing description when omitted from an update", async () => {
+    const db = createMockDB([
+      { key: "free_quota_limit", tier: "*", value: "100", description: "Existing description", updated_at: "2026-01-01" },
+    ]);
+    const res = await app.request("/api/config/free_quota_limit/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "200" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(200);
+
+    const listRes = await app.request("/api/config", {
+      headers: authHeaders(),
+    }, makeEnv(db));
+    const data = await listRes.json() as ConfigRow[];
+    expect(data[0]?.description).toBe("Existing description");
   });
 });
 
@@ -443,5 +489,7 @@ describe("Auth guard for /api/config", () => {
     }, makeEnv(db, "secret-admin-key"));
     expect(res.status).not.toBe(401);
     expect(res.status).not.toBe(403);
+    expect(db.exec).not.toHaveBeenCalled();
+    expect(db.prepare).not.toHaveBeenCalled();
   });
 });
