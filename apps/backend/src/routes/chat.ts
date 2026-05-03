@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { COPE_MODELS } from "@claude-cope/shared/models";

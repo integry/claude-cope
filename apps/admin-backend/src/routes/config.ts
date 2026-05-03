@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS, WELL_KNOWN_KEYS, BOOLEAN_KEYS } from "@claude-cope/shared/config";
 
 type Env = {
@@ -19,6 +20,12 @@ const KNOWN_KEYS_SET = new Set<string>(WELL_KNOWN_KEYS.map((k) => k.key));
 
 const MASKED_PLACEHOLDER = "••••";
 
+interface ConfigMutationBody {
+  value: string;
+  description?: string;
+  preserveExisting?: boolean;
+}
+
 function maskSensitiveValue(key: string, value: string): string {
   if (!SENSITIVE_KEYS.has(key)) return value;
   return MASKED_PLACEHOLDER;
@@ -29,6 +36,75 @@ function normalizeBooleanValue(value: string): string | null {
   if (lower === "true" || lower === "1" || lower === "yes") return "true";
   if (lower === "false" || lower === "0" || lower === "no") return "false";
   return null;
+}
+
+function validateKeyAndTier(key: string, tier: string): string | null {
+  if (!key) return "key must not be empty";
+  if (!tier) return "tier must not be empty";
+  if (CATEGORY_KEYS.has(key) && !VALID_CATEGORY_TIERS_SET.has(tier)) {
+    return `Invalid tier "${tier}" for ${key}. Valid tiers: *, max, free, depleted`;
+  }
+  if (GLOBAL_ONLY_KEYS.has(key) && tier !== "*") {
+    return `Key "${key}" only supports tier "*". This key is not category-specific.`;
+  }
+  if (!KNOWN_KEYS_SET.has(key)) {
+    return `Unknown configuration key "${key}". Check for typos.`;
+  }
+  return null;
+}
+
+async function parseMutationBody(c: Context<Env>): Promise<ConfigMutationBody | Response> {
+  try {
+    const body = await c.req.json<ConfigMutationBody>();
+    if (typeof body.value !== "string") {
+      return c.json({ error: "value is required and must be a string" }, 400);
+    }
+    if (body.description != null && typeof body.description !== "string") {
+      return c.json({ error: "description must be a string" }, 400);
+    }
+    if (body.preserveExisting != null && typeof body.preserveExisting !== "boolean") {
+      return c.json({ error: "preserveExisting must be a boolean" }, 400);
+    }
+    return body;
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+}
+
+async function resolveStoredValue(
+  db: D1Database,
+  key: string,
+  tier: string,
+  body: ConfigMutationBody,
+): Promise<string | Response> {
+  let value = body.value;
+
+  if (SENSITIVE_KEYS.has(key) && (body.preserveExisting === true || !value.trim())) {
+    const existing = await db
+      .prepare("SELECT value FROM system_config WHERE key = ? AND tier = ?")
+      .bind(key, tier)
+      .first<{ value: string }>();
+    if (!existing) {
+      return new Response(JSON.stringify({ error: "Value is required for new sensitive key entries" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    value = existing.value;
+  }
+
+  if (BOOLEAN_KEYS.has(key)) {
+    const normalized = normalizeBooleanValue(value);
+    if (normalized === null) {
+      return new Response(JSON.stringify({ error: `Invalid boolean value for "${key}". Use true/false, 1/0, or yes/no.` }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    value = normalized;
+  }
+
+  return value;
 }
 
 const config = new Hono<Env>();
@@ -83,62 +159,14 @@ config.put("/:key/:tier", async (c) => {
 
   const key = c.req.param("key").trim();
   const tier = c.req.param("tier").trim();
+  const validationError = validateKeyAndTier(key, tier);
+  if (validationError) return c.json({ error: validationError }, 400);
 
-  if (!key) return c.json({ error: "key must not be empty" }, 400);
-  if (!tier) return c.json({ error: "tier must not be empty" }, 400);
+  const parsedBody = await parseMutationBody(c);
+  if (parsedBody instanceof Response) return parsedBody;
 
-  if (CATEGORY_KEYS.has(key) && !VALID_CATEGORY_TIERS_SET.has(tier)) {
-    return c.json({ error: `Invalid tier "${tier}" for ${key}. Valid tiers: *, max, free, depleted` }, 400);
-  }
-
-  if (GLOBAL_ONLY_KEYS.has(key) && tier !== "*") {
-    return c.json({ error: `Key "${key}" only supports tier "*". This key is not category-specific.` }, 400);
-  }
-
-  if (!KNOWN_KEYS_SET.has(key)) {
-    return c.json({ error: `Unknown configuration key "${key}". Check for typos.` }, 400);
-  }
-
-  let body: { value: string; description?: string; preserveExisting?: boolean };
-  try {
-    body = await c.req.json<{ value: string; description?: string }>();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-
-  if (typeof body.value !== "string") {
-    return c.json({ error: "value is required and must be a string" }, 400);
-  }
-
-  if (body.description != null && typeof body.description !== "string") {
-    return c.json({ error: "description must be a string" }, 400);
-  }
-
-  if (body.preserveExisting != null && typeof body.preserveExisting !== "boolean") {
-    return c.json({ error: "preserveExisting must be a boolean" }, 400);
-  }
-
-  let value = body.value;
-
-  if (SENSITIVE_KEYS.has(key) && (body.preserveExisting === true || !value.trim())) {
-    const existing = await db
-      .prepare("SELECT value FROM system_config WHERE key = ? AND tier = ?")
-      .bind(key, tier)
-      .first<{ value: string }>();
-    if (existing) {
-      value = existing.value;
-    } else {
-      return c.json({ error: "Value is required for new sensitive key entries" }, 400);
-    }
-  }
-
-  if (BOOLEAN_KEYS.has(key)) {
-    const normalized = normalizeBooleanValue(value);
-    if (normalized === null) {
-      return c.json({ error: `Invalid boolean value for "${key}". Use true/false, 1/0, or yes/no.` }, 400);
-    }
-    value = normalized;
-  }
+  const value = await resolveStoredValue(db, key, tier, parsedBody);
+  if (value instanceof Response) return value;
 
   await db
     .prepare(
@@ -149,7 +177,7 @@ config.put("/:key/:tier", async (c) => {
          description = excluded.description,
          updated_at = datetime('now')`
     )
-    .bind(key, tier, value, body.description ?? null)
+    .bind(key, tier, value, parsedBody.description ?? null)
     .run();
 
   return c.json({ success: true, key, tier });
@@ -161,21 +189,8 @@ config.delete("/:key/:tier", async (c) => {
 
   const key = c.req.param("key").trim();
   const tier = c.req.param("tier").trim();
-
-  if (!key) return c.json({ error: "key must not be empty" }, 400);
-  if (!tier) return c.json({ error: "tier must not be empty" }, 400);
-
-  if (CATEGORY_KEYS.has(key) && !VALID_CATEGORY_TIERS_SET.has(tier)) {
-    return c.json({ error: `Invalid tier "${tier}" for ${key}. Valid tiers: *, max, free, depleted` }, 400);
-  }
-
-  if (GLOBAL_ONLY_KEYS.has(key) && tier !== "*") {
-    return c.json({ error: `Key "${key}" only supports tier "*". This key is not category-specific.` }, 400);
-  }
-
-  if (!KNOWN_KEYS_SET.has(key)) {
-    return c.json({ error: `Unknown configuration key "${key}". Check for typos.` }, 400);
-  }
+  const validationError = validateKeyAndTier(key, tier);
+  if (validationError) return c.json({ error: validationError }, 400);
 
   const result = await db
     .prepare("DELETE FROM system_config WHERE key = ? AND tier = ?")
