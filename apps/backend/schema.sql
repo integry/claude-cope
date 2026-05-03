@@ -120,6 +120,24 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_user_hour
 CREATE INDEX IF NOT EXISTS idx_usage_logs_model
     ON usage_logs (model, hour DESC);
 
+-- System-wide configuration (OpenRouter keys, model definitions, quota limits)
+-- scoped by tier. Tier '*' is the global default. For category keys
+-- (category_model, category_api_key), tiers are 'max', 'free', 'depleted'.
+-- General keys currently only use tier '*'.
+-- The composite PK (key, tier) lets the same config key carry different
+-- values for different tiers.
+CREATE TABLE IF NOT EXISTS system_config (
+    key TEXT NOT NULL,
+    tier TEXT NOT NULL DEFAULT '*',
+    value TEXT NOT NULL,
+    description TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (key, tier)
+);
+
+CREATE INDEX IF NOT EXISTS idx_system_config_tier
+    ON system_config (tier);
+
 -- Atomic checkout-to-session binding: prevents a different session from
 -- claiming a Polar checkout that was initiated by another user.
 CREATE TABLE IF NOT EXISTS checkout_claims (

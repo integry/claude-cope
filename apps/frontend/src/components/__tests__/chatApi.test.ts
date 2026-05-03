@@ -266,6 +266,40 @@ describe("submitChatMessage - achievement parsing", () => {
     expect(warning!.content).toContain("OpenRouter rate-limited");
   });
 
+  it("renders backend lore message directly for proxy 429 responses", async () => {
+    const setHistory = vi.fn();
+    const setIsProcessing = vi.fn();
+
+    const mockResponse = {
+      ok: false,
+      status: 429,
+      json: () => Promise.resolve({
+        limitType: "burst",
+        message: "You're sending requests too quickly. Please wait a moment.",
+        retryAfterSeconds: 45,
+      }),
+    };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(mockResponse as Response);
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    const updater = setHistory.mock.calls[0]![0] as (prev: unknown[]) => unknown[];
+    const result = updater([]) as Array<{ role: string; content: string }>;
+    const warning = result.find((m) => m.role === "warning");
+    expect(warning).toBeDefined();
+    expect(warning!.content).toBe("You're sending requests too quickly. Please wait a moment. (retry in 45s)");
+    expect(warning!.content).not.toContain("OpenRouter rate-limited");
+  });
+
   it("includes upstream details on 429 from OpenRouter", async () => {
     const setHistory = vi.fn();
     const setIsProcessing = vi.fn();

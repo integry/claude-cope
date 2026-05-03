@@ -1,34 +1,69 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { capturePostHogEvent } from "../utils/posthog";
+import { BUCKETS, LORE, type BucketName } from "../utils/rateLimitBuckets";
 import app from "../app";
 
-function createMockLimiter(success: boolean) {
+vi.mock("../utils/posthog", () => ({
+  capturePostHogEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
+function createMockKV(counters: Map<string, string> = new Map()) {
   return {
-    limit: vi.fn().mockResolvedValue({ success }),
+    get: vi.fn(async (key: string) => counters.get(key) ?? null),
+    put: vi.fn(async (key: string, value: string) => {
+      counters.set(key, value);
+    }),
   };
 }
 
-describe("rateLimiter middleware", () => {
-  it("returns 200 when rate limit is not exceeded", async () => {
-    const limiter = createMockLimiter(true);
+const TEST_PEPPER = "test-pepper-for-rate-limiter";
+
+function makeEnv(overrides: Record<string, unknown> = {}) {
+  const env: Record<string, unknown> = { ALLOWED_ORIGINS: "http://localhost:5173", ...overrides };
+  if (env.RATE_LIMIT_KV && !env.IP_HASH_PEPPER) {
+    env.IP_HASH_PEPPER = TEST_PEPPER;
+  }
+  return env;
+}
+
+describe("rateLimiter middleware (hybrid KV)", () => {
+  let kv: ReturnType<typeof createMockKV>;
+
+  beforeEach(() => {
+    kv = createMockKV();
+  });
+
+  it("allows requests through when RATE_LIMIT_KV is not configured (fail open)", async () => {
     const res = await app.request(
       "/api/chat",
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-forwarded-for": "1.2.3.4",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: "hello" }),
       },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
+      makeEnv(),
     );
 
     expect(res.status).not.toBe(429);
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "1.2.3.4" });
   });
 
-  it("returns 429 when rate limit is exceeded", async () => {
-    const limiter = createMockLimiter(false);
+  it("returns 503 when RATE_LIMIT_KV is configured but IP_HASH_PEPPER is missing (fail closed)", async () => {
+    const res = await app.request(
+      "/api/chat",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "hello" }),
+      },
+      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMIT_KV: kv },
+    );
+
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("temporarily unavailable");
+  });
+
+  it("allows requests when under rate limit", async () => {
     const res = await app.request(
       "/api/chat",
       {
@@ -39,97 +74,335 @@ describe("rateLimiter middleware", () => {
         },
         body: JSON.stringify({ message: "hello" }),
       },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
+      makeEnv({ RATE_LIMIT_KV: kv }),
+    );
+
+    expect(res.status).not.toBe(429);
+    expect(kv.put).toHaveBeenCalled();
+  });
+
+  it("applies rate limits regardless of proKeyHash in body", async () => {
+    const counters = new Map<string, string>();
+    const hotKv = createMockKV(counters);
+
+    const headers = {
+      "Content-Type": "application/json",
+      "x-forwarded-for": "1.2.3.4",
+      Cookie: "cope_session_id=fixed-session",
+    };
+
+    const burst = BUCKETS.find((b) => b.name === "burst")!;
+    for (let i = 0; i < burst.limit; i++) {
+      await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ message: "hello", proKeyHash: "some-key" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+    }
+
+    const res = await app.request(
+      "/api/chat",
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ message: "hello", proKeyHash: "some-key" }),
+      },
+      makeEnv({ RATE_LIMIT_KV: hotKv }),
     );
 
     expect(res.status).toBe(429);
-    const body = await res.json();
-    expect(body).toEqual({ error: "Too many requests. Please try again later." });
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "1.2.3.4" });
   });
 
-  it("prioritizes cf-connecting-ip over x-forwarded-for", async () => {
-    const limiter = createMockLimiter(true);
-    await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "cf-connecting-ip": "9.9.9.9",
-          "x-forwarded-for": "1.2.3.4",
-          "x-real-ip": "5.6.7.8",
+  describe("per-session identity buckets", () => {
+    it("does not share burst/hourly/daily buckets between two sessions on the same IP", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+
+      const sessionAHeaders = {
+        "Content-Type": "application/json",
+        "x-forwarded-for": "1.2.3.4",
+        Cookie: "cope_session_id=session-AAA",
+      };
+
+      const sessionBHeaders = {
+        "Content-Type": "application/json",
+        "x-forwarded-for": "1.2.3.4",
+        Cookie: "cope_session_id=session-BBB",
+      };
+
+      for (let i = 0; i < burst.limit; i++) {
+        await app.request(
+          "/api/chat",
+          {
+            method: "POST",
+            headers: sessionAHeaders,
+            body: JSON.stringify({ message: "hello" }),
+          },
+          makeEnv({ RATE_LIMIT_KV: hotKv }),
+        );
+      }
+
+      const resA = await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: sessionAHeaders,
+          body: JSON.stringify({ message: "hello" }),
         },
-        body: JSON.stringify({ message: "hello" }),
-      },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
-    );
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+      expect(resA.status).toBe(429);
 
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "9.9.9.9" });
-  });
-
-  it("uses x-real-ip when x-forwarded-for is absent", async () => {
-    const limiter = createMockLimiter(true);
-    await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-real-ip": "5.6.7.8",
+      const resB = await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: sessionBHeaders,
+          body: JSON.stringify({ message: "hello" }),
         },
-        body: JSON.stringify({ message: "hello" }),
-      },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
-    );
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+      expect(resB.status).not.toBe(429);
+    });
 
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "5.6.7.8" });
-  });
+    it("uses different KV keys for identity-scoped buckets across sessions on the same IP", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
 
-  it("uses first IP from x-forwarded-for when multiple are present", async () => {
-    const limiter = createMockLimiter(true);
-    await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-forwarded-for": "10.0.0.1, 10.0.0.2, 10.0.0.3",
+      const identityBuckets = BUCKETS.filter((b) => b.keyType === "identity");
+
+      await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-forwarded-for": "1.2.3.4",
+            Cookie: "cope_session_id=session-X",
+          },
+          body: JSON.stringify({ message: "hello" }),
         },
-        body: JSON.stringify({ message: "hello" }),
-      },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
-    );
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
 
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "10.0.0.1" });
+      await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-forwarded-for": "1.2.3.4",
+            Cookie: "cope_session_id=session-Y",
+          },
+          body: JSON.stringify({ message: "hello" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+
+      const allKeys = hotKv.put.mock.calls.map((call: unknown[]) => call[0] as string);
+
+      for (const bucket of identityBuckets) {
+        const bucketKeys = allKeys.filter((k: string) => k.startsWith(bucket.keyPrefix));
+        const uniqueKeys = new Set(bucketKeys);
+        expect(uniqueKeys.size).toBeGreaterThanOrEqual(2);
+      }
+    });
   });
 
-  it("falls back to 'unknown' when no IP headers are present", async () => {
-    const limiter = createMockLimiter(true);
-    await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "hello" }),
-      },
-      { ALLOWED_ORIGINS: "http://localhost:5173", RATE_LIMITER: limiter },
-    );
+  describe("no-session (anonymous) fallback", () => {
+    it("does not store raw IP in KV keys", async () => {
+      const rawIp = "203.0.113.42";
 
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "unknown" });
+      await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-forwarded-for": rawIp,
+          },
+          body: JSON.stringify({ message: "hello" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: kv }),
+      );
+
+      const allKeys = kv.put.mock.calls.map((call: unknown[]) => call[0] as string);
+      for (const key of allKeys) {
+        expect(key).not.toContain(rawIp);
+        expect(key).not.toContain(rawIp.replace(/\./g, ""));
+      }
+    });
+
+    it("does not store raw IP in KV values", async () => {
+      const rawIp = "203.0.113.42";
+
+      await app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-forwarded-for": rawIp,
+          },
+          body: JSON.stringify({ message: "hello" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: kv }),
+      );
+
+      const allValues = kv.put.mock.calls.map((call: unknown[]) => call[1] as string);
+      for (const value of allValues) {
+        expect(value).not.toContain(rawIp);
+      }
+    });
   });
 
-  it("allows requests through when RATE_LIMITER binding is not configured", async () => {
-    const res = await app.request(
-      "/api/chat",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "hello" }),
-      },
-      { ALLOWED_ORIGINS: "http://localhost:5173" },
-    );
+  describe("lore 429 response shape", () => {
+    async function exhaust(
+      hotKv: ReturnType<typeof createMockKV>,
+      count: number,
+    ) {
+      const headers = {
+        "Content-Type": "application/json",
+        "x-forwarded-for": "1.2.3.4",
+        Cookie: "cope_session_id=fixed-session",
+      };
+      for (let i = 0; i < count; i++) {
+        await app.request(
+          "/api/chat",
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ message: "hello" }),
+          },
+          makeEnv({ RATE_LIMIT_KV: hotKv }),
+        );
+      }
+      return app.request(
+        "/api/chat",
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ message: "hello" }),
+        },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+    }
 
-    expect(res.status).not.toBe(429);
+    it("returns limitType matching a valid bucket name", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+
+      const res = await exhaust(hotKv, burst.limit);
+      expect(res.status).toBe(429);
+
+      const body = (await res.json()) as { limitType: string };
+      const validBucketNames = BUCKETS.map((b) => b.name);
+      expect(validBucketNames).toContain(body.limitType);
+    });
+
+    it("returns message matching the LORE entry for the triggered bucket", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+
+      const res = await exhaust(hotKv, burst.limit);
+      expect(res.status).toBe(429);
+
+      const body = (await res.json()) as { limitType: BucketName; message: string };
+      expect(body.message).toBe(LORE[body.limitType]);
+    });
+
+    it("sets Retry-After header matching retryAfterSeconds in body", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+
+      const res = await exhaust(hotKv, burst.limit);
+      expect(res.status).toBe(429);
+
+      const body = (await res.json()) as { retryAfterSeconds: number };
+      const headerVal = res.headers.get("Retry-After");
+      expect(headerVal).toBe(String(body.retryAfterSeconds));
+    });
+
+    it("does not include the old generic error field", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+
+      const res = await exhaust(hotKv, burst.limit);
+      expect(res.status).toBe(429);
+
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.error).toBeUndefined();
+      expect(body).toHaveProperty("limitType");
+      expect(body).toHaveProperty("message");
+      expect(body).toHaveProperty("retryAfterSeconds");
+    });
   });
+
+  describe("telemetry", () => {
+    beforeEach(() => {
+      vi.mocked(capturePostHogEvent).mockClear();
+    });
+
+    it("fires Rate_Limit_Triggered on the threshold-crossing request only", async () => {
+      const counters = new Map<string, string>();
+      const hotKv = createMockKV(counters);
+      const burst = BUCKETS.find((b) => b.name === "burst")!;
+
+      const headers = {
+        "Content-Type": "application/json",
+        "x-forwarded-for": "1.2.3.4",
+        Cookie: "cope_session_id=fixed-session",
+      };
+
+      for (let i = 0; i < burst.limit; i++) {
+        await app.request(
+          "/api/chat",
+          { method: "POST", headers, body: JSON.stringify({ message: "hello" }) },
+          makeEnv({ RATE_LIMIT_KV: hotKv }),
+        );
+      }
+
+      vi.mocked(capturePostHogEvent).mockClear();
+
+      const thresholdRes = await app.request(
+        "/api/chat",
+        { method: "POST", headers, body: JSON.stringify({ message: "hello" }) },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+      expect(thresholdRes.status).toBe(429);
+      expect(capturePostHogEvent).toHaveBeenCalledOnce();
+      expect(capturePostHogEvent).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          event: "Rate_Limit_Triggered",
+          properties: expect.objectContaining({ limit_type: "burst" }),
+        }),
+      );
+
+      const posthogCall = vi.mocked(capturePostHogEvent).mock.calls[0];
+      const sentDistinctId = (posthogCall[1] as { distinct_id: string }).distinct_id;
+      expect(sentDistinctId).toMatch(/^[0-9a-f]{64}$/);
+      expect(sentDistinctId).not.toBe("fixed-session");
+
+      vi.mocked(capturePostHogEvent).mockClear();
+
+      const subsequentRes = await app.request(
+        "/api/chat",
+        { method: "POST", headers, body: JSON.stringify({ message: "hello" }) },
+        makeEnv({ RATE_LIMIT_KV: hotKv }),
+      );
+      expect(subsequentRes.status).toBe(429);
+      expect(capturePostHogEvent).not.toHaveBeenCalled();
+    });
+  });
+
 });

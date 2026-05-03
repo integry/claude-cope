@@ -151,9 +151,26 @@ export const migrations: Migration[] = [
     ignoreErrorMatching: /no such column.*activated_at/i,
   },
 
+  // ── system_config table ────────────────────────────────────────────
+  {
+    name: "020_create_system_config",
+    sql: `CREATE TABLE IF NOT EXISTS system_config (
+      key TEXT NOT NULL,
+      tier TEXT NOT NULL DEFAULT '*',
+      value TEXT NOT NULL,
+      description TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (key, tier)
+    )`,
+  },
+  {
+    name: "021_idx_system_config_tier",
+    sql: "CREATE INDEX IF NOT EXISTS idx_system_config_tier ON system_config (tier)",
+  },
+
   // ── checkout session binding ──────────────────────────────────────
   {
-    name: "020_create_checkout_claims",
+    name: "022_create_checkout_claims",
     sql: `CREATE TABLE IF NOT EXISTS checkout_claims (
       checkout_id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,
@@ -161,21 +178,24 @@ export const migrations: Migration[] = [
     )`,
   },
 
-  // ── cross-checkout key dedup ─────────────────────────────────────
+  // ── cross-checkout key dedup ──────────────────────────────────────
   {
-    name: "021_add_checkout_claims_keys",
+    name: "023_add_checkout_claims_keys",
     sql: "ALTER TABLE checkout_claims ADD COLUMN claimed_keys TEXT",
+    ignoreErrorMatching: /duplicate column name.*claimed_keys/i,
   },
 
   // ── purchase-to-key correctness: store checkout metadata for
-  //    time-window partitioning across concurrent purchases ────────
+  //    time-window partitioning across concurrent purchases ─────────
   {
-    name: "022_add_checkout_created_at",
+    name: "024_add_checkout_created_at",
     sql: "ALTER TABLE checkout_claims ADD COLUMN checkout_created_at TEXT",
+    ignoreErrorMatching: /duplicate column name.*checkout_created_at/i,
   },
   {
-    name: "023_add_checkout_customer_hash",
+    name: "025_add_checkout_customer_hash",
     sql: "ALTER TABLE checkout_claims ADD COLUMN customer_hash TEXT",
+    ignoreErrorMatching: /duplicate column name.*customer_hash/i,
   },
 ];
 
