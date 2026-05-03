@@ -139,6 +139,14 @@ describe("GET /api/config", () => {
     expect(data).toHaveLength(1);
     expect(data[0]?.tier).toBe("openai/gpt-4o");
   });
+
+  it("rejects malformed model-id tier filters", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config?tier=openai%2Fgpt-4o%2Fmini", {
+      headers: authHeaders(),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+  });
 });
 
 describe("GET /api/config/:key", () => {
@@ -212,6 +220,30 @@ describe("PUT /api/config/:key/:tier", () => {
       body: JSON.stringify({ value: "   " }),
     }, makeEnv(db));
     expect(res.status).toBe(200);
+  });
+
+  it("rejects non-model tiers for model_multiplier", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/model_multiplier/free", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "2" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("requires a model ID tier");
+  });
+
+  it("rejects category_model stored under a model tier", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/category_model/openai%2Fgpt-4o", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "openai/gpt-4o" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("Invalid tier");
   });
 
   it("rejects non-string value payloads", async () => {
@@ -340,6 +372,16 @@ describe("PUT /api/config/:key/:tier", () => {
     expect(body.error).toContain("Invalid boolean value");
   });
 
+  it("accepts normalized boolean aliases for boolean keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/enable_byok/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "yes" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(200);
+  });
+
   it("rejects provider lists with empty entries", async () => {
     const db = createMockDB();
     const res = await app.request("/api/config/openrouter_providers/*", {
@@ -402,6 +444,17 @@ describe("DELETE /api/config/:key/:tier", () => {
     expect(res.status).toBe(400);
     const body = await res.json() as { error: string };
     expect(body.error).toContain("Invalid tier");
+  });
+
+  it("rejects non-model tiers for model_multiplier", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/model_multiplier/free", {
+      method: "DELETE",
+      headers: authHeaders(),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("requires a model ID tier");
   });
 
   it("rejects non-* tier for global-only keys", async () => {

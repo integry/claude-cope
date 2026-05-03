@@ -1,8 +1,14 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS, WELL_KNOWN_KEYS, BOOLEAN_KEYS } from "@claude-cope/shared/config";
-import { parseProviderList } from "@claude-cope/shared/openrouter";
+import {
+  SENSITIVE_KEYS,
+  BOOLEAN_KEYS,
+  validateConfigValue,
+  validateConfigKey,
+  validateConfigKeyAndTier,
+  isValidTierQuery,
+} from "@claude-cope/shared/config";
 
 type Env = {
   Bindings: {
@@ -17,8 +23,6 @@ interface ConfigRow {
   description: string | null;
   updated_at: string;
 }
-
-const KNOWN_KEYS_SET = new Set<string>(WELL_KNOWN_KEYS.map((k) => k.key));
 
 const MASKED_PLACEHOLDER = "••••";
 
@@ -46,60 +50,6 @@ function normalizeBooleanValue(value: string): string | null {
 
 function jsonError(c: Context<Env>, error: string, status: ContentfulStatusCode): Response {
   return c.json({ error }, status);
-}
-
-function isValidTierQuery(tier: string): boolean {
-  return VALID_CATEGORY_TIERS_SET.has(tier) || tier.includes("/");
-}
-
-function validateConfigValue(key: string, value: string): string | null {
-  if (key === "category_model") {
-    const trimmed = value.trim();
-    if (!trimmed) return 'Value for "category_model" must not be empty.';
-    if (!trimmed.includes("/")) {
-      return 'Value for "category_model" must look like an OpenRouter model ID such as "openai/gpt-4o".';
-    }
-  }
-
-  if (key === "openrouter_providers") {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-
-    const rawParts = trimmed.split(",");
-    if (rawParts.some((part) => part.trim().length === 0)) {
-      return 'Value for "openrouter_providers" must be a comma-separated list of provider names without empty entries.';
-    }
-
-    const providers = parseProviderList(trimmed);
-    if (providers.length === 0) {
-      return 'Value for "openrouter_providers" must contain at least one provider name.';
-    }
-  }
-
-  return null;
-}
-
-function validateKeyAndTier(key: string, tier: string): string | null {
-  if (!key) return "key must not be empty";
-  if (!tier) return "tier must not be empty";
-  if (CATEGORY_KEYS.has(key) && !VALID_CATEGORY_TIERS_SET.has(tier)) {
-    return `Invalid tier "${tier}" for ${key}. Valid tiers: *, max, free, depleted`;
-  }
-  if (GLOBAL_ONLY_KEYS.has(key) && tier !== "*") {
-    return `Key "${key}" only supports tier "*". This key is not category-specific.`;
-  }
-  if (!KNOWN_KEYS_SET.has(key)) {
-    return `Unknown configuration key "${key}". Check for typos.`;
-  }
-  return null;
-}
-
-function validateKnownKey(key: string): string | null {
-  if (!key) return "key must not be empty";
-  if (!KNOWN_KEYS_SET.has(key)) {
-    return `Unknown configuration key "${key}". Check for typos.`;
-  }
-  return null;
 }
 
 async function parseMutationBody(c: Context<Env>): Promise<ConfigMutationBody | Response> {
@@ -204,7 +154,7 @@ config.get("/", async (c) => {
 
   return c.json(
     results
-      .filter((r) => KNOWN_KEYS_SET.has(r.key))
+      .filter((r) => validateConfigKey(r.key) === null)
       .map((r) => ({ ...r, value: maskSensitiveValue(r.key, r.value) }))
   );
 });
@@ -214,7 +164,7 @@ config.get("/:key", async (c) => {
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
   const key = c.req.param("key").trim();
-  const validationError = validateKnownKey(key);
+  const validationError = validateConfigKey(key);
   if (validationError) return c.json({ error: validationError }, 400);
 
   const { results } = await db
@@ -234,7 +184,7 @@ config.put("/:key/:tier", async (c) => {
 
   const key = c.req.param("key").trim();
   const tier = c.req.param("tier").trim();
-  const validationError = validateKeyAndTier(key, tier);
+  const validationError = validateConfigKeyAndTier(key, tier);
   if (validationError) return c.json({ error: validationError }, 400);
 
   const parsedBody = await parseMutationBody(c);
@@ -265,7 +215,7 @@ config.delete("/:key/:tier", async (c) => {
 
   const key = c.req.param("key").trim();
   const tier = c.req.param("tier").trim();
-  const validationError = validateKeyAndTier(key, tier);
+  const validationError = validateConfigKeyAndTier(key, tier);
   if (validationError) return c.json({ error: validationError }, 400);
 
   const result = await db

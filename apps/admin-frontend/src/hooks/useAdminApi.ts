@@ -1,22 +1,11 @@
+import { createContext, useContext, useState, type ReactNode } from "react";
 import useSWR from "swr";
 import { API_BASE } from "../config";
 
-// sessionStorage is preferred over localStorage: the token is scoped to the tab
-// lifetime and is not persisted across sessions. It is still readable by any XSS
-// in the admin frontend — acceptable here because the admin surface is internal
-// and already protected by the bearer-token auth gate.
+// This bearer token is still readable by any injected script in the admin SPA.
+// Keep the admin frontend on a trusted internal origin until it moves to a
+// server-issued session/cookie model.
 const SESSION_KEY = "admin_api_key";
-
-let onAuthRequired: (() => void) | null = null;
-let onServerMisconfigured: ((message: string) => void) | null = null;
-
-export function setAuthRequiredCallback(cb: (() => void) | null) {
-  onAuthRequired = cb;
-}
-
-export function setServerMisconfiguredCallback(cb: ((message: string) => void) | null) {
-  onServerMisconfigured = cb;
-}
 
 function isStorageAvailable(): boolean {
   try {
@@ -42,16 +31,22 @@ export function hasStoredApiKey(): boolean {
 }
 
 export function setAdminApiKey(key: string): void {
-  if (!isStorageAvailable()) { memoryFallback = key; return; }
+  if (!isStorageAvailable()) {
+    memoryFallback = key;
+    return;
+  }
   sessionStorage.setItem(SESSION_KEY, key);
 }
 
 export function clearAdminApiKey(): void {
-  if (!isStorageAvailable()) { memoryFallback = ""; return; }
+  if (!isStorageAvailable()) {
+    memoryFallback = "";
+    return;
+  }
   sessionStorage.removeItem(SESSION_KEY);
 }
 
-export function authHeaders(): Record<string, string> {
+function authHeaders(): Record<string, string> {
   const key = getAdminApiKey();
   if (!key) return {};
   return { Authorization: `Bearer ${key}` };
@@ -65,40 +60,102 @@ export class ApiError extends Error {
   }
 }
 
-async function handleResponse(res: Response) {
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    if (res.status === 401 && onAuthRequired) onAuthRequired();
-    if (res.status === 403 && onServerMisconfigured) {
-      onServerMisconfigured(body?.error || "Server returned 403 — check ADMIN_API_KEY configuration");
-    }
-    throw new ApiError(body?.error || res.statusText, res.status);
-  }
-  return res.json();
+interface AdminAuthContextValue {
+  adminFetch: (url: string, init?: RequestInit) => Promise<unknown>;
+  authRequired: boolean;
+  authError: boolean;
+  serverError: string | null;
+  signIn: (key: string) => void;
+  signOut: () => void;
 }
 
-const fetcher = async (url: string) => {
-  const res = await fetch(url, { headers: authHeaders() });
-  return handleResponse(res);
-};
+const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
 
-export async function adminFetch(url: string, init?: RequestInit): Promise<unknown> {
-  const merged = new Headers(authHeaders());
-  const extra = init?.headers;
-  if (extra) {
-    const entries = extra instanceof Headers ? extra.entries()
-      : Array.isArray(extra) ? extra
-      : Object.entries(extra);
-    for (const [k, v] of entries) merged.set(k, v);
+async function parseResponseBody(res: Response) {
+  return res.json().catch(() => null) as Promise<{ error?: string } | null>;
+}
+
+export function AdminApiProvider({ children }: { children: ReactNode }) {
+  const [authRequired, setAuthRequired] = useState(!hasStoredApiKey());
+  const [authError, setAuthError] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  function signOut() {
+    clearAdminApiKey();
+    setAuthRequired(true);
+    setAuthError(false);
+    setServerError(null);
   }
-  const res = await fetch(url, { ...init, headers: merged });
-  return handleResponse(res);
+
+  function signIn(key: string) {
+    setAdminApiKey(key);
+    setAuthRequired(false);
+    setAuthError(false);
+    setServerError(null);
+  }
+
+  async function adminFetch(url: string, init?: RequestInit): Promise<unknown> {
+    const merged = new Headers(authHeaders());
+    const extra = init?.headers;
+    if (extra) {
+      const entries = extra instanceof Headers ? extra.entries()
+        : Array.isArray(extra) ? extra
+        : Object.entries(extra);
+      for (const [k, v] of entries) merged.set(k, v);
+    }
+
+    const res = await fetch(url, { ...init, headers: merged });
+    if (!res.ok) {
+      const body = await parseResponseBody(res);
+      if (res.status === 401) {
+        setAuthError(!!getAdminApiKey());
+        setServerError(null);
+        clearAdminApiKey();
+        setAuthRequired(true);
+      }
+      if (res.status === 403) {
+        setAuthError(false);
+        setServerError(body?.error || "Server returned 403 - check ADMIN_API_KEY configuration");
+        clearAdminApiKey();
+        setAuthRequired(true);
+      }
+      throw new ApiError(body?.error || res.statusText, res.status);
+    }
+    return res.json();
+  }
+
+  const value: AdminAuthContextValue = {
+    adminFetch,
+    authRequired,
+    authError,
+    serverError,
+    signIn,
+    signOut,
+  };
+
+  return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;
+}
+
+function useAdminAuthContext(): AdminAuthContextValue {
+  const ctx = useContext(AdminAuthContext);
+  if (!ctx) throw new Error("AdminApiProvider is required");
+  return ctx;
+}
+
+export function useAdminAuth() {
+  const { authRequired, authError, serverError, signIn, signOut } = useAdminAuthContext();
+  return { authRequired, authError, serverError, signIn, signOut };
+}
+
+export function useAdminFetch() {
+  return useAdminAuthContext().adminFetch;
 }
 
 export function useAdminApi<T>(path: string) {
+  const adminFetch = useAdminFetch();
   const { data, error, isLoading, mutate } = useSWR<T>(
     hasStoredApiKey() ? `${API_BASE}${path}` : null,
-    fetcher,
+    adminFetch,
     {
       revalidateOnFocus: true,
     },

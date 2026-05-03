@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
@@ -6,12 +6,8 @@ import Licenses from "./pages/Licenses";
 import Backlog from "./pages/Backlog";
 import Configuration from "./pages/Configuration";
 import {
-  setAuthRequiredCallback,
-  setServerMisconfiguredCallback,
-  setAdminApiKey,
-  getAdminApiKey,
-  hasStoredApiKey,
-  clearAdminApiKey,
+  AdminApiProvider,
+  useAdminAuth,
 } from "./hooks/useAdminApi";
 
 const navItems = [
@@ -53,7 +49,7 @@ function Layout({ children, onLogout }: { children: React.ReactNode; onLogout: (
             onClick={onLogout}
             className="block w-full rounded px-3 py-2 text-left text-sm font-medium text-gray-300 transition-colors hover:bg-gray-800 hover:text-white"
           >
-            Change API Key
+            Sign Out
           </button>
         </div>
       </nav>
@@ -75,6 +71,9 @@ function AuthPrompt({ error, serverError, onSubmit }: { error: boolean; serverEr
       <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
         <h2 className="text-lg font-semibold text-gray-900">Admin Authentication</h2>
         <p className="mt-2 text-sm text-gray-600">Enter the admin API key to access the panel.</p>
+        <p className="mt-2 text-sm text-amber-700">
+          The key is kept only for this tab session. Because browser-stored bearer tokens can be read by injected scripts, deploy this admin UI only on a trusted internal origin.
+        </p>
         {error && <p className="mt-2 text-sm text-red-600">Invalid API key. Please try again.</p>}
         {serverError && <p className="mt-2 text-sm text-red-600">{serverError}</p>}
         <input
@@ -96,55 +95,22 @@ function AuthPrompt({ error, serverError, onSubmit }: { error: boolean; serverEr
   );
 }
 
-function App() {
-  const [authRequired, setAuthRequired] = useState(!hasStoredApiKey());
-  const [authError, setAuthError] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setAuthRequiredCallback(() => {
-      setAuthError(!!getAdminApiKey());
-      setServerError(null);
-      clearAdminApiKey();
-      setAuthRequired(true);
-    });
-    setServerMisconfiguredCallback((message) => {
-      setAuthError(false);
-      setServerError(message);
-      clearAdminApiKey();
-      setAuthRequired(true);
-    });
-    return () => {
-      setAuthRequiredCallback(null);
-      setServerMisconfiguredCallback(null);
-    };
-  }, []);
-
-  function handleLogout() {
-    clearAdminApiKey();
-    setAuthRequired(true);
-    setAuthError(false);
-    setServerError(null);
-  }
+function AppShell() {
+  const { authRequired, authError, serverError, signIn, signOut } = useAdminAuth();
 
   if (authRequired) {
     return (
       <AuthPrompt
         error={authError}
         serverError={serverError}
-        onSubmit={(key) => {
-          setAdminApiKey(key);
-          setAuthRequired(false);
-          setAuthError(false);
-          setServerError(null);
-        }}
+        onSubmit={signIn}
       />
     );
   }
 
   return (
     <BrowserRouter>
-      <Layout onLogout={handleLogout}>
+      <Layout onLogout={signOut}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/users" element={<Users />} />
@@ -154,6 +120,14 @@ function App() {
         </Routes>
       </Layout>
     </BrowserRouter>
+  );
+}
+
+function App() {
+  return (
+    <AdminApiProvider>
+      <AppShell />
+    </AdminApiProvider>
   );
 }
 

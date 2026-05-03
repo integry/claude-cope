@@ -1,29 +1,9 @@
 import { useState } from "react";
-import { useAdminApi, adminFetch } from "../hooks/useAdminApi";
+import { SENSITIVE_KEYS, validateConfigKeyAndTier, validateConfigValue } from "@claude-cope/shared/config";
+import { useAdminApi, useAdminFetch } from "../hooks/useAdminApi";
 import { API_BASE } from "../config";
-import { SENSITIVE_KEYS } from "@claude-cope/shared/config";
 import { ConfigFormPanel, ConfirmDeleteModal, TierBadge } from "./ConfigurationParts";
 import { emptyForm, type ConfigEntry, type ConfigForm } from "./configurationShared";
-
-function validateConfigValue(key: string, value: string): string | null {
-  if (key === "category_model") {
-    const trimmed = value.trim();
-    if (!trimmed) return 'Value is required for "category_model".';
-    if (!trimmed.includes("/")) {
-      return 'Category model must look like an OpenRouter model ID such as "openai/gpt-4o".';
-    }
-  }
-
-  if (key === "openrouter_providers") {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    if (trimmed.split(",").some((part) => part.trim().length === 0)) {
-      return "Provider lists must be comma-separated names without empty entries.";
-    }
-  }
-
-  return null;
-}
 
 function formatUpdatedAt(updatedAt: string): string {
   const parsed = new Date(updatedAt);
@@ -36,13 +16,13 @@ function formatUpdatedAt(updatedAt: string): string {
 }
 
 export default function Configuration() {
+  const adminFetch = useAdminFetch();
   const { data, isLoading, isError, mutate } = useAdminApi<ConfigEntry[]>("/api/config");
   const [showForm, setShowForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<{ key: string; tier: string } | null>(null);
   const [form, setForm] = useState<ConfigForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [deletingEntry, setDeletingEntry] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ConfigEntry | null>(null);
@@ -51,12 +31,10 @@ export default function Configuration() {
   function openCreate() {
     setEditingEntry(null);
     setForm(emptyForm);
-    setSaveWarning(null);
     setShowForm(true);
   }
 
   function openEdit(entry: ConfigEntry) {
-    setSaveWarning(null);
     setEditingEntry({ key: entry.key, tier: entry.tier });
     setForm({
       key: entry.key,
@@ -75,17 +53,20 @@ export default function Configuration() {
   }
 
   async function handleSave() {
-    if (!form.key.trim()) {
-      setSaveError("Key is required.");
+    const normalizedKey = form.key.trim();
+    const normalizedTier = form.tier.trim() || "*";
+    const keyTierValidationError = validateConfigKeyAndTier(normalizedKey, normalizedTier);
+    if (keyTierValidationError) {
+      setSaveError(keyTierValidationError);
       return;
     }
-    const isSensitiveEdit = editingEntry && SENSITIVE_KEYS.has(form.key);
+    const isSensitiveEdit = editingEntry && SENSITIVE_KEYS.has(normalizedKey);
     if (!isSensitiveEdit && !editingEntry && !form.value.trim()) {
       setSaveError("Value is required.");
       return;
     }
 
-    const valueValidationError = validateConfigValue(form.key.trim(), form.value);
+    const valueValidationError = validateConfigValue(normalizedKey, form.value);
     if (valueValidationError) {
       setSaveError(valueValidationError);
       return;
@@ -94,9 +75,9 @@ export default function Configuration() {
     setSaving(true);
     setSaveError(null);
     try {
-      const key = encodeURIComponent(form.key.trim());
-      const tier = encodeURIComponent(form.tier.trim() || "*");
-      const result = await adminFetch(`${API_BASE}/api/config/${key}/${tier}`, {
+      const key = encodeURIComponent(normalizedKey);
+      const tier = encodeURIComponent(normalizedTier);
+      await adminFetch(`${API_BASE}/api/config/${key}/${tier}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -104,12 +85,9 @@ export default function Configuration() {
           description: form.description || undefined,
           preserveExisting: isSensitiveEdit && !form.value.trim() ? true : undefined,
         }),
-      }) as { warning?: string };
+      });
       await mutate();
       closeForm();
-      if (result?.warning) {
-        setSaveWarning(result.warning);
-      }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save configuration.");
     } finally {
@@ -201,13 +179,6 @@ export default function Configuration() {
           onSave={handleSave}
           onClose={closeForm}
         />
-      )}
-
-      {saveWarning && (
-        <div className="mt-4 flex items-center justify-between rounded border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          <span>{saveWarning}</span>
-          <button onClick={() => setSaveWarning(null)} className="ml-4 text-yellow-600 hover:text-yellow-800">&times;</button>
-        </div>
       )}
 
       <div className="mt-4">
