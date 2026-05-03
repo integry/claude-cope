@@ -150,6 +150,23 @@ export const migrations: Migration[] = [
     sql: "ALTER TABLE licenses RENAME COLUMN activated_at TO last_activated_at",
     ignoreErrorMatching: /no such column.*activated_at/i,
   },
+
+  // ── system_config table ────────────────────────────────────────────
+  {
+    name: "020_create_system_config",
+    sql: `CREATE TABLE IF NOT EXISTS system_config (
+      key TEXT NOT NULL,
+      tier TEXT NOT NULL DEFAULT '*',
+      value TEXT NOT NULL,
+      description TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (key, tier)
+    )`,
+  },
+  {
+    name: "021_idx_system_config_tier",
+    sql: "CREATE INDEX IF NOT EXISTS idx_system_config_tier ON system_config (tier)",
+  },
 ];
 
 /**

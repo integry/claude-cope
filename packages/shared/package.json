@@ -12,6 +12,7 @@
     "./buddies": "./src/buddies.ts",
     "./migrations": "./src/migrations.ts",
     "./openrouter": "./src/openrouter.ts",
-    "./turnstile": "./src/turnstile.ts"
+    "./turnstile": "./src/turnstile.ts",
+    "./config": "./src/config.ts"
   }
 }

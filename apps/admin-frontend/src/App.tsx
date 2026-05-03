@@ -1,17 +1,24 @@
+import { useState } from "react";
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
 import Licenses from "./pages/Licenses";
 import Backlog from "./pages/Backlog";
+import Configuration from "./pages/Configuration";
+import {
+  AdminApiProvider,
+  useAdminAuth,
+} from "./hooks/useAdminApi";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
   { to: "/users", label: "Users" },
   { to: "/licenses", label: "Licenses" },
   { to: "/backlog", label: "Backlog" },
+  { to: "/configuration", label: "Configuration" },
 ];
 
-function Layout({ children }: { children: React.ReactNode }) {
+function Layout({ children, onLogout }: { children: React.ReactNode; onLogout: () => void }) {
   return (
     <div className="flex h-screen">
       <nav className="w-56 shrink-0 bg-gray-900 text-gray-100 flex flex-col">
@@ -37,24 +44,113 @@ function Layout({ children }: { children: React.ReactNode }) {
             </li>
           ))}
         </ul>
+        <div className="border-t border-gray-800 p-2">
+          <button
+            onClick={onLogout}
+            className="block w-full rounded px-3 py-2 text-left text-sm font-medium text-gray-300 transition-colors hover:bg-gray-800 hover:text-white"
+          >
+            Sign Out
+          </button>
+        </div>
       </nav>
       <main className="flex-1 overflow-auto bg-gray-50 p-6">{children}</main>
     </div>
   );
 }
 
-function App() {
+function AuthPrompt({
+  error,
+  serverError,
+  onSubmit,
+}: {
+  error: boolean;
+  serverError: string | null;
+  onSubmit: (key: string) => Promise<boolean>;
+}) {
+  const [key, setKey] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!key.trim()) return;
+
+    setSubmitting(true);
+    try {
+      await onSubmit(key.trim());
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
+        <h2 className="text-lg font-semibold text-gray-900">Admin Authentication</h2>
+        <p className="mt-2 text-sm text-gray-600">Enter the admin API key to access the panel.</p>
+        {error && <p className="mt-2 text-sm text-red-600">Invalid API key. Please try again.</p>}
+        {serverError && <p className="mt-2 text-sm text-red-600">{serverError}</p>}
+        <input
+          type="password"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          placeholder="API Key"
+          className="mt-4 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+          autoFocus
+          disabled={submitting}
+        />
+        <button
+          type="submit"
+          disabled={submitting}
+          className="mt-4 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          {submitting ? "Signing In..." : "Sign In"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function AppShell() {
+  const { authChecking, authRequired, authError, serverError, signIn, signOut } = useAdminAuth();
+
+  if (authChecking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="rounded-lg bg-white px-6 py-4 text-sm text-gray-600 shadow-lg">Checking admin access...</div>
+      </div>
+    );
+  }
+
+  if (authRequired) {
+    return (
+      <AuthPrompt
+        error={authError}
+        serverError={serverError}
+        onSubmit={signIn}
+      />
+    );
+  }
+
   return (
     <BrowserRouter>
-      <Layout>
+      <Layout onLogout={signOut}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/users" element={<Users />} />
           <Route path="/licenses" element={<Licenses />} />
           <Route path="/backlog" element={<Backlog />} />
+          <Route path="/configuration" element={<Configuration />} />
         </Routes>
       </Layout>
     </BrowserRouter>
+  );
+}
+
+function App() {
+  return (
+    <AdminApiProvider>
+      <AppShell />
+    </AdminApiProvider>
   );
 }
 
