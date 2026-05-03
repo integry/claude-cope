@@ -226,9 +226,12 @@ export function resolveProviderList(
   freeOnlyEnv: string | undefined,
   category: RequestCategory,
 ): string[] {
+  const normalizedFreeOnly = freeOnlyEnv?.trim().toLowerCase();
+  const freeOnlyEnabled = normalizedFreeOnly === "true" || normalizedFreeOnly === "1" || normalizedFreeOnly === "yes";
+
   // When free-only mode is active, only free-tier categories get the provider list.
   // Depleted users are demoted to free-tier status per spec.
-  if (freeOnlyEnv === "true") {
+  if (freeOnlyEnabled) {
     const isFreeTier = category === "free" || category === "depleted";
     if (!isFreeTier) return [];
   }

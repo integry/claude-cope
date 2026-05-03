@@ -320,10 +320,15 @@ describe("resolveProviderList", () => {
     expect(resolveProviderList("DeepInfra,NovitaAI", "true", "max")).toEqual([]);
   });
 
+  it("treats 1 and yes as enabled for FREE_ONLY env fallback", () => {
+    expect(resolveProviderList("DeepInfra,NovitaAI", "1", "max")).toEqual([]);
+    expect(resolveProviderList("DeepInfra,NovitaAI", "yes", "max")).toEqual([]);
+  });
+
   it("returns parsed providers for max category when FREE_ONLY is unset or non-'true'", () => {
     expect(resolveProviderList("DeepInfra,NovitaAI", undefined, "max")).toEqual(["DeepInfra", "NovitaAI"]);
     expect(resolveProviderList("DeepInfra,NovitaAI", "false", "max")).toEqual(["DeepInfra", "NovitaAI"]);
-    expect(resolveProviderList("DeepInfra,NovitaAI", "1", "max")).toEqual(["DeepInfra", "NovitaAI"]);
+    expect(resolveProviderList("DeepInfra,NovitaAI", "no", "max")).toEqual(["DeepInfra", "NovitaAI"]);
   });
 
   it("returns parsed providers for depleted category regardless of FREE_ONLY", () => {

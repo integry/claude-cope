@@ -37,6 +37,21 @@ export function ConfigFormPanel({ editingEntry, form, setForm, saving, saveError
     });
   }
 
+  function getValueHelpText(): string | null {
+    if (form.key === "category_model") {
+      return 'Use a full OpenRouter model ID such as "openai/gpt-4o".';
+    }
+    if (form.key === "openrouter_providers") {
+      return 'Use a comma-separated provider list such as "Together,Fireworks" with no empty entries.';
+    }
+    if (form.key === "openrouter_providers_free_only") {
+      return 'Accepted boolean values: true/false, 1/0, yes/no.';
+    }
+    return null;
+  }
+
+  const valueHelpText = getValueHelpText();
+
   return (
     <div className="mt-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <h2 className="mb-4 text-lg font-semibold">
@@ -119,6 +134,7 @@ export function ConfigFormPanel({ editingEntry, form, setForm, saving, saveError
               className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
               autoComplete={SENSITIVE_KEYS.has(form.key) ? "off" : undefined}
             />
+            {valueHelpText && <p className="mt-2 text-sm text-gray-500">{valueHelpText}</p>}
           </div>
         </div>
         <div>

@@ -116,6 +116,29 @@ describe("GET /api/config", () => {
     expect(data).toHaveLength(1);
     expect(data[0]?.key).toBe("free_quota_limit");
   });
+
+  it("rejects invalid tier filters", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config?tier=pro", {
+      headers: authHeaders(),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("Invalid tier");
+  });
+
+  it("accepts model-id style tier filters", async () => {
+    const db = createMockDB([
+      { key: "model_multiplier", tier: "openai/gpt-4o", value: "2", description: null, updated_at: "2026-01-01" },
+    ]);
+    const res = await app.request("/api/config?tier=openai%2Fgpt-4o", {
+      headers: authHeaders(),
+    }, makeEnv(db));
+    expect(res.status).toBe(200);
+    const data = await res.json() as ConfigRow[];
+    expect(data).toHaveLength(1);
+    expect(data[0]?.tier).toBe("openai/gpt-4o");
+  });
 });
 
 describe("GET /api/config/:key", () => {
@@ -155,6 +178,30 @@ describe("PUT /api/config/:key/:tier", () => {
       }, makeEnv(db));
       expect(res.status).toBe(200);
     }
+  });
+
+  it("rejects blank category_model values", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/category_model/max", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "   " }),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("category_model");
+  });
+
+  it("rejects malformed category_model values", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/category_model/max", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "gpt-4o" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("OpenRouter model ID");
   });
 
   it("accepts empty value for non-sensitive keys (allows clearing env overrides)", async () => {
@@ -291,6 +338,18 @@ describe("PUT /api/config/:key/:tier", () => {
     expect(res.status).toBe(400);
     const body = await res.json() as { error: string };
     expect(body.error).toContain("Invalid boolean value");
+  });
+
+  it("rejects provider lists with empty entries", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/openrouter_providers/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "Together,,Fireworks" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("comma-separated list");
   });
 
   it("preserves the existing description when omitted from an update", async () => {

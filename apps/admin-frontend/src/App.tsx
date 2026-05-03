@@ -22,7 +22,7 @@ const navItems = [
   { to: "/configuration", label: "Configuration" },
 ];
 
-function Layout({ children }: { children: React.ReactNode }) {
+function Layout({ children, onLogout }: { children: React.ReactNode; onLogout: () => void }) {
   return (
     <div className="flex h-screen">
       <nav className="w-56 shrink-0 bg-gray-900 text-gray-100 flex flex-col">
@@ -48,6 +48,14 @@ function Layout({ children }: { children: React.ReactNode }) {
             </li>
           ))}
         </ul>
+        <div className="border-t border-gray-800 p-2">
+          <button
+            onClick={onLogout}
+            className="block w-full rounded px-3 py-2 text-left text-sm font-medium text-gray-300 transition-colors hover:bg-gray-800 hover:text-white"
+          >
+            Change API Key
+          </button>
+        </div>
       </nav>
       <main className="flex-1 overflow-auto bg-gray-50 p-6">{children}</main>
     </div>
@@ -112,6 +120,13 @@ function App() {
     };
   }, []);
 
+  function handleLogout() {
+    clearAdminApiKey();
+    setAuthRequired(true);
+    setAuthError(false);
+    setServerError(null);
+  }
+
   if (authRequired) {
     return (
       <AuthPrompt
@@ -129,7 +144,7 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Layout>
+      <Layout onLogout={handleLogout}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/users" element={<Users />} />

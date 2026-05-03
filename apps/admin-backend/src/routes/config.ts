@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS, WELL_KNOWN_KEYS, BOOLEAN_KEYS } from "@claude-cope/shared/config";
+import { parseProviderList } from "@claude-cope/shared/openrouter";
 
 type Env = {
   Bindings: {
@@ -42,6 +43,41 @@ function normalizeBooleanValue(value: string): string | null {
   return null;
 }
 
+function jsonError(c: Context<Env>, error: string, status: number): Response {
+  return c.json({ error }, status);
+}
+
+function isValidTierQuery(tier: string): boolean {
+  return VALID_CATEGORY_TIERS_SET.has(tier) || tier.includes("/");
+}
+
+function validateConfigValue(key: string, value: string): string | null {
+  if (key === "category_model") {
+    const trimmed = value.trim();
+    if (!trimmed) return 'Value for "category_model" must not be empty.';
+    if (!trimmed.includes("/")) {
+      return 'Value for "category_model" must look like an OpenRouter model ID such as "openai/gpt-4o".';
+    }
+  }
+
+  if (key === "openrouter_providers") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const rawParts = trimmed.split(",");
+    if (rawParts.some((part) => part.trim().length === 0)) {
+      return 'Value for "openrouter_providers" must be a comma-separated list of provider names without empty entries.';
+    }
+
+    const providers = parseProviderList(trimmed);
+    if (providers.length === 0) {
+      return 'Value for "openrouter_providers" must contain at least one provider name.';
+    }
+  }
+
+  return null;
+}
+
 function validateKeyAndTier(key: string, tier: string): string | null {
   if (!key) return "key must not be empty";
   if (!tier) return "tier must not be empty";
@@ -69,21 +105,22 @@ async function parseMutationBody(c: Context<Env>): Promise<ConfigMutationBody | 
   try {
     const body = await c.req.json<ConfigMutationBody>();
     if (typeof body.value !== "string") {
-      return c.json({ error: "value is required and must be a string" }, 400);
+      return jsonError(c, "value is required and must be a string", 400);
     }
     if (body.description != null && typeof body.description !== "string") {
-      return c.json({ error: "description must be a string" }, 400);
+      return jsonError(c, "description must be a string", 400);
     }
     if (body.preserveExisting != null && typeof body.preserveExisting !== "boolean") {
-      return c.json({ error: "preserveExisting must be a boolean" }, 400);
+      return jsonError(c, "preserveExisting must be a boolean", 400);
     }
     return body;
   } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
+    return jsonError(c, "Invalid JSON body", 400);
   }
 }
 
 async function resolveStoredValue(
+  c: Context<Env>,
   db: D1Database,
   key: string,
   tier: string,
@@ -97,10 +134,7 @@ async function resolveStoredValue(
       .bind(key, tier)
       .first<{ value: string }>();
     if (!existing) {
-      return new Response(JSON.stringify({ error: "Value is required for new sensitive key entries" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonError(c, "Value is required for new sensitive key entries", 400);
     }
     value = existing.value;
   }
@@ -108,12 +142,14 @@ async function resolveStoredValue(
   if (BOOLEAN_KEYS.has(key)) {
     const normalized = normalizeBooleanValue(value);
     if (normalized === null) {
-      return new Response(JSON.stringify({ error: `Invalid boolean value for "${key}". Use true/false, 1/0, or yes/no.` }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonError(c, `Invalid boolean value for "${key}". Use true/false, 1/0, or yes/no.`, 400);
     }
     value = normalized;
+  }
+
+  const configValidationError = validateConfigValue(key, value);
+  if (configValidationError) {
+    return jsonError(c, configValidationError, 400);
   }
 
   return value;
@@ -143,7 +179,10 @@ config.get("/", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const tier = c.req.query("tier");
+  const tier = c.req.query("tier")?.trim();
+  if (tier && !isValidTierQuery(tier)) {
+    return jsonError(c, `Invalid tier "${tier}". Use one of *, max, free, depleted, or a model ID tier such as "openai/gpt-4o".`, 400);
+  }
 
   let results: ConfigRow[];
   if (tier) {
@@ -201,7 +240,7 @@ config.put("/:key/:tier", async (c) => {
   const parsedBody = await parseMutationBody(c);
   if (parsedBody instanceof Response) return parsedBody;
 
-  const value = await resolveStoredValue(db, key, tier, parsedBody);
+  const value = await resolveStoredValue(c, db, key, tier, parsedBody);
   if (value instanceof Response) return value;
   const description = await resolveStoredDescription(db, key, tier, parsedBody);
 

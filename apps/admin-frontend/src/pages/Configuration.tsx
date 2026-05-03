@@ -5,6 +5,36 @@ import { SENSITIVE_KEYS } from "@claude-cope/shared/config";
 import { ConfigFormPanel, ConfirmDeleteModal, TierBadge } from "./ConfigurationParts";
 import { emptyForm, type ConfigEntry, type ConfigForm } from "./configurationShared";
 
+function validateConfigValue(key: string, value: string): string | null {
+  if (key === "category_model") {
+    const trimmed = value.trim();
+    if (!trimmed) return 'Value is required for "category_model".';
+    if (!trimmed.includes("/")) {
+      return 'Category model must look like an OpenRouter model ID such as "openai/gpt-4o".';
+    }
+  }
+
+  if (key === "openrouter_providers") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (trimmed.split(",").some((part) => part.trim().length === 0)) {
+      return "Provider lists must be comma-separated names without empty entries.";
+    }
+  }
+
+  return null;
+}
+
+function formatUpdatedAt(updatedAt: string): string {
+  const parsed = new Date(updatedAt);
+  if (Number.isNaN(parsed.getTime())) return updatedAt;
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
+}
+
 export default function Configuration() {
   const { data, isLoading, isError, mutate } = useAdminApi<ConfigEntry[]>("/api/config");
   const [showForm, setShowForm] = useState(false);
@@ -54,6 +84,13 @@ export default function Configuration() {
       setSaveError("Value is required.");
       return;
     }
+
+    const valueValidationError = validateConfigValue(form.key.trim(), form.value);
+    if (valueValidationError) {
+      setSaveError(valueValidationError);
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
     try {
@@ -214,7 +251,7 @@ export default function Configuration() {
                       {entry.description ?? ""}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                      {entry.updated_at}
+                      {formatUpdatedAt(entry.updated_at)}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm">
                       <div className="flex gap-2">
