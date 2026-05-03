@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { CORPORATE_RANKS } from "./rankConstants";
+import { FREE_TIER_RANK_CAP } from "./rankConstants";
 import { computeMultiplier } from "../gameConstants";
 import { getProfile, getProfileByLicenseHash, isLicenseActive, resolveRank as resolveRankFromProfile, resolveProUser } from "../utils/profile";
 
@@ -54,22 +54,6 @@ async function validateTaskBonuses(
   return { validatedTaskBonus, validatedClaims };
 }
 
-/** GET /api/score/check-alias?username=X — check if a username is already taken */
-score.get("/check-alias", async (c) => {
-  const username = c.req.query("username");
-  if (!username) return c.json({ error: "username required" }, 400);
-
-  const db = c.env?.DB;
-  if (!db) return c.json({ error: "Database not configured" }, 500);
-
-  const row = await db
-    .prepare("SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?)")
-    .bind(username)
-    .first();
-
-  return c.json({ taken: !!row });
-});
-
 /** GET /api/score?username=X — fetch server-authoritative score for syncing */
 score.get("/", async (c) => {
   const username = c.req.query("username");
@@ -79,12 +63,17 @@ score.get("/", async (c) => {
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
   const row = await db
-    .prepare("SELECT total_td, current_td, corporate_rank FROM user_scores WHERE username = ?")
+    .prepare("SELECT total_td, current_td, corporate_rank, license_hash FROM user_scores WHERE username = ?")
     .bind(username)
-    .first<{ total_td: number; current_td: number; corporate_rank: string }>();
+    .first<{ total_td: number; current_td: number; corporate_rank: string; license_hash: string | null }>();
 
-  if (!row) return c.json({ total_td: 0, current_td: 0, corporate_rank: "Junior Code Monkey" });
-  return c.json(row);
+  // TODO(byok): BYOK users are treated as free tier here because the backend has no
+  // knowledge of client-side apiKey. Add a BYOK tier to allow rank progression for
+  // standalone installations once BYOK becomes a first-class feature.
+  if (!row) return c.json({ total_td: 0, current_td: 0, corporate_rank: FREE_TIER_RANK_CAP });
+  const licenseActive = row.license_hash ? await isLicenseActive(db, row.license_hash) : false;
+  const rank = licenseActive ? row.corporate_rank : FREE_TIER_RANK_CAP;
+  return c.json({ total_td: row.total_td, current_td: row.current_td, corporate_rank: rank });
 });
 
 type ScoreBody = {
@@ -148,13 +137,9 @@ function computeTimeCap(existing: { last_sync_time: string } | null, serverTotal
   return serverTotal + maxTDPerSecond * elapsedSeconds + validatedTaskBonus;
 }
 
-function resolveRankAndFlags(validatedTotal: number, claimedTotal: number, serverTotal: number): string {
-  let rank = "Junior Code Monkey";
-  for (const r of CORPORATE_RANKS) {
-    if (validatedTotal >= r.threshold) rank = r.title;
-  }
-  if (claimedTotal > serverTotal * 2 && serverTotal > 1000) rank = "🤡 DevTools Hacker";
-  return rank;
+function resolveRankAndFlags(claimedTotal: number, serverTotal: number): string {
+  if (claimedTotal > serverTotal * 2 && serverTotal > 1000) return "🤡 DevTools Hacker";
+  return FREE_TIER_RANK_CAP;
 }
 
 // INVARIANT: opts.validatedTotal includes opts.validatedClaims' bonus_td (computed
@@ -304,7 +289,7 @@ score.post("/", async (c) => {
   const validatedTotal = Math.min(body.totalTDEarned, Math.round(serverTotal * 1.1) + validatedTaskBonus, Math.round(timeClampedTotal));
   const validatedCurrent = Math.min(body.currentTD, validatedTotal);
 
-  const rank = resolveRankAndFlags(validatedTotal, body.totalTDEarned, serverTotal);
+  const rank = resolveRankAndFlags(body.totalTDEarned, serverTotal);
   const batchStatements = buildScoreBatch(db, {
     existing, serverTotal, validatedTotal, validatedCurrent,
     rank, country, username: body.username, validatedClaims,

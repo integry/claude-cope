@@ -120,6 +120,14 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_user_hour
 CREATE INDEX IF NOT EXISTS idx_usage_logs_model
     ON usage_logs (model, hour DESC);
 
+-- Atomic alias-change rate limiting (replaces KV-based get/put which was raceable)
+CREATE TABLE IF NOT EXISTS alias_rate_limits (
+    license_key_hash TEXT NOT NULL,
+    change_date TEXT NOT NULL,
+    change_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (license_key_hash, change_date)
+);
+
 -- System-wide configuration (OpenRouter keys, model definitions, quota limits)
 -- scoped by tier. Tier '*' is the global default. For category keys
 -- (category_model, category_api_key), tiers are 'max', 'free', 'depleted'.

@@ -1,10 +1,8 @@
 import { Hono } from "hono";
-import { validatePolarKey } from "../utils/polar";
-import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
-import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
-import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase } from "./accountHelpers";
-import type { SyncBody } from "./accountHelpers";
+import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
+import { getProfile, getProfileRow, rowToProfile, isLicenseActive } from "../utils/profile";
+import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
+import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, checkAliasRateLimit, rollbackAliasRateToken, performAliasDbUpdate } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 
@@ -24,80 +22,29 @@ type Env = {
 };
 const SHILL_CREDIT = 5;
 
-/** Ensure the KV quota entry exists for a license hash, restoring revoked quota if available. */
-async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: number): Promise<void> {
-  const kvKey = `polar:${hash}`;
-  const existingQuota = await kv.get(kvKey);
-  if (existingQuota !== null) return;
-
-  // If the license was previously revoked, restore the saved remaining
-  // quota instead of granting a fresh allocation.
-  const revokedKey = `polar_revoked:${hash}`;
-  const savedQuota = await kv.get(revokedKey);
-  if (savedQuota !== null) {
-    await kv.put(kvKey, savedQuota);
-    await kv.delete(revokedKey);
-  } else {
-    await kv.put(kvKey, String(proInitialQuota));
-  }
-}
-
-/** Validate preconditions for /sync and return the validated resources, or an error response. */
-async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response }) {
-  const body = await c.req.json<SyncBody>();
-  if (!body.licenseKey) {
-    return { error: c.json({ error: "licenseKey is required" }, 400) } as const;
-  }
-
-  const accessToken = c.env?.POLAR_ACCESS_TOKEN;
-  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
-  if (!accessToken || !organizationId) {
-    return { error: c.json({ error: "Polar integration is not configured" }, 500) } as const;
-  }
-
-  const validation = await validatePolarKey(body.licenseKey, accessToken, organizationId);
-  if (!validation.valid) {
-    return { error: c.json({ error: "Invalid or inactive license key", status: validation.status }, 403) } as const;
-  }
-
-  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  if (!kv) {
-    return { error: c.json({ error: "KV storage is not configured" }, 500) } as const;
-  }
-
-  const db = c.env?.DB;
-  if (!db) {
-    return { error: c.json({ error: "Database not configured" }, 500) } as const;
-  }
-
-  const hash = await hashKey(body.licenseKey);
-  return { body, validation, kv, db, hash } as const;
-}
-
-/** Provision the licenses row and KV quota for a license hash.
- *  Called AFTER resolveProfile succeeds so that a failed profile claim
- *  (username taken, concurrent race, etc.) never leaves behind orphaned
- *  active licenses or KV quota entries. */
-async function commitSyncSideEffects(
-  deps: { db: D1Database; kv: KVNamespace; hash: string },
-  opts: { validationId?: string; limits: ReturnType<typeof getQuotaLimits>; sessionId?: string },
-) {
-  const { db, kv, hash } = deps;
-  await db
-    .prepare(
-      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
-    )
-    .bind(hash)
-    .run();
-
-  await ensureQuota(kv, hash, opts.limits.proInitialQuota);
-
-  if (opts.validationId) {
-    await kv.put(`polar_id:${hash}`, opts.validationId);
-  }
-}
-
 const account = new Hono<Env>();
+
+async function buildMePayload(opts: {
+  row: unknown;
+  db: D1Database | undefined;
+  kv: KVNamespace;
+  env: Env["Bindings"];
+  sessionId: string;
+}) {
+  const { row, db, kv, env, sessionId } = opts;
+  const rawLicenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
+  const licenseActive = rawLicenseHash && db ? await isLicenseActive(db, rawLicenseHash) : false;
+  const isPro = Boolean(rawLicenseHash && licenseActive);
+  const limits = getQuotaLimits(env);
+  const quotaPercent = isPro
+    ? await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: rawLicenseHash!, limits })
+    : await getQuotaPercent(kv, { tier: "free", sessionId, limits });
+  const profile = row
+    ? { ...rowToProfile(row as Parameters<typeof rowToProfile>[0]), quota_percent: quotaPercent, ...(!isPro ? { corporate_rank: FREE_TIER_RANK_CAP } : {}) }
+    : null;
+  const revoked = Boolean(rawLicenseHash && !licenseActive);
+  return { isPro, quotaPercent, profile, revoked };
+}
 
 account.post("/sync", async (c) => {
   const validated = await validateSyncRequest(c);
@@ -124,7 +71,7 @@ account.post("/sync", async (c) => {
   // licenses or quota entries.
   await commitSyncSideEffects(
     { db, kv, hash },
-    { validationId: validation.id, limits, sessionId },
+    { validationId: validation.id, proInitialQuota: limits.proInitialQuota },
   );
 
   // Bind the session to the resolved username so /me can look it up.
@@ -143,42 +90,46 @@ account.get("/me", async (c) => {
   const sessionId = c.get("sessionId");
   if (!kv || !sessionId) return c.json({ found: false });
 
-  const username = await kv.get(`session_user:${sessionId}`);
+  let username = await kv.get(`session_user:${sessionId}`);
   if (!username) return c.json({ found: false });
 
   const db = c.env?.DB;
-  const row = db ? await getProfileRow(db, username) : null;
+  let row = db ? await getProfileRow(db, username) : null;
 
-  // A session_user mapping with no backing row is the username-only restore
-  // case: the user's first chat 402'd before recordUsage could create a row,
-  // so we have a session-bound username but no progress yet. Return found:
-  // true with profile: null so the frontend can restore the username and
-  // show truthful quota instead of inventing a fresh identity.
-  const rawLicenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
+  // If no DB row exists, check if the username was renamed by an alias change
+  // in another session. Follow the redirect chain (up to 5 hops to handle
+  // multiple renames like alice->bob->carol) and repair this session's mapping.
+  // When we resolve the chain, we also write a shortcut redirect from the
+  // original stale username directly to the final destination. This collapses
+  // the chain so future lookups from other sessions only need 1 hop,
+  // regardless of how many lifetime renames have occurred.
+  if (!row && db) {
+    const originalUsername = username;
+    let current = username;
+    for (let i = 0; i < 5 && !row; i++) {
+      const renamedTo = await kv.get(`renamed:${current}`);
+      if (!renamedTo) break;
+      row = await getProfileRow(db, renamedTo);
+      if (row) {
+        username = renamedTo;
+        await kv.put(`session_user:${sessionId}`, renamedTo, { expirationTtl: 60 * 60 * 24 * 365 });
+        // Collapse multi-hop chains: write a direct shortcut from the
+        // original stale username to the final target so that other sessions
+        // (or this one after cookie reset) resolve in a single KV lookup.
+        if (originalUsername !== current) {
+          await kv.put(`renamed:${originalUsername}`, renamedTo, { expirationTtl: 60 * 60 * 24 * 30 });
+        }
+      }
+      current = renamedTo;
+    }
+  }
 
-  // Verify the license is still active — a revoked license should be treated as free.
-  // This prevents the UI from showing isPro: true with quotaPercent: 0 for revoked users.
-  const licenseActive = rawLicenseHash && db ? await isLicenseActive(db, rawLicenseHash) : false;
-  const isPro = Boolean(rawLicenseHash && licenseActive);
+  const { isPro, quotaPercent, profile, revoked } = await buildMePayload({ row, db, kv, env: c.env, sessionId });
 
-  const limits = getQuotaLimits(c.env);
-  const quotaPercent = isPro
-    ? await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: rawLicenseHash!, limits })
-    : await getQuotaPercent(kv, { tier: "free", sessionId, limits });
-
-  const profile = db ? await getProfile(db, username) : null;
-
-  // Never expose the raw license hash — it's a credential that grants write
-  // access to the account.  Return a boolean flag instead so the frontend
-  // knows this is a Pro user and can prompt them to re-sync.
-  // A revoked user has a license_hash but is no longer active — surface this
-  // so the frontend can show "license revoked" instead of treating them as
-  // a vanilla free user.
-  const revoked = Boolean(rawLicenseHash && !licenseActive);
   return c.json({
     found: true,
     username,
-    profile: profile ? { ...profile, quota_percent: quotaPercent } : null,
+    profile,
     quotaPercent,
     isPro,
     ...(revoked ? { revoked: true } : {}),
@@ -343,25 +294,6 @@ account.post("/buy-theme", async (c) => {
   return c.json({ success: true, profile: updated });
 });
 
-// Allowlists for client-supplied IDs in mutation routes are imported from
-// @claude-cope/shared so frontend and backend share one source of truth —
-// no manual sync required when the achievement/buddy lists evolve.
-
-const MAX_TICKET_TITLE_LEN = 200;
-const MAX_TICKET_ID_LEN = 100;
-
-function validateActiveTicket(ticket: unknown): string | null {
-  if (ticket === null || ticket === undefined) return null;
-  if (typeof ticket !== "object") return "activeTicket must be an object or null";
-  const t = ticket as Record<string, unknown>;
-  if (typeof t.id !== "string" || !t.id || t.id.length > MAX_TICKET_ID_LEN) return "Invalid ticket id";
-  if (typeof t.title !== "string" || !t.title || t.title.length > MAX_TICKET_TITLE_LEN) return "Invalid ticket title";
-  if (!Number.isFinite(t.sprintProgress) || (t.sprintProgress as number) < 0) return "Invalid sprintProgress";
-  if (!Number.isFinite(t.sprintGoal) || (t.sprintGoal as number) <= 0) return "Invalid sprintGoal";
-  if ((t.sprintProgress as number) > (t.sprintGoal as number)) return "sprintProgress cannot exceed sprintGoal";
-  return null;
-}
-
 account.post("/unlock-achievement", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
@@ -483,6 +415,65 @@ account.post("/update-ticket", async (c) => {
   }
 
   const updated = await getProfile(db, body.username);
+  return c.json({ success: true, profile: updated });
+});
+
+account.post("/update-alias", async (c) => {
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: "Database not configured" }, 500);
+
+  const body = await c.req.json<{ username: string; newAlias: string; licenseKeyHash: string }>();
+  if (!body.username || !body.newAlias) {
+    return c.json({ error: "username and newAlias are required" }, 400);
+  }
+  if (!body.licenseKeyHash) {
+    return c.json({ error: "Alias changes require an active Max license" }, 403);
+  }
+
+  const v = validateAlias(body.newAlias);
+  if (v.error) return c.json({ error: v.error }, 400);
+  const alias = v.alias!;
+
+  if (alias.toLowerCase() === body.username.toLowerCase()) {
+    return c.json({ error: "New alias is the same as the current username" }, 400);
+  }
+
+  const ownership = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  if (ownership.status !== "ok") {
+    return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
+  }
+
+  const rateLimit = await checkAliasRateLimit(db, body.licenseKeyHash, ALIAS_CHANGES_PER_DAY);
+  if (!rateLimit.allowed) {
+    return c.json({ error: `Alias change limit reached (max ${ALIAS_CHANGES_PER_DAY} per day)` }, 429);
+  }
+
+  const dbResult = await performAliasDbUpdate(db, body.username, alias, body.licenseKeyHash);
+  if (!dbResult.success) {
+    await rollbackAliasRateToken(db, body.licenseKeyHash);
+    return c.json({ error: dbResult.error }, dbResult.status);
+  }
+
+  // The DB rename succeeded — KV session updates and profile fetch are
+  // best-effort. If they fail the alias is already changed, so return
+  // success with whatever profile data we can gather.
+  const sessionId = c.get("sessionId");
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  let updated: Awaited<ReturnType<typeof getProfile>> = null;
+  try {
+    if (kv && sessionId) {
+      await kv.put(`session_user:${sessionId}`, alias, { expirationTtl: 60 * 60 * 24 * 365 });
+      await kv.put(`username_session:${alias}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 });
+      await kv.delete(`username_session:${body.username}`);
+      // Store a redirect so other active sessions following the old username
+      // can discover the rename via /me and repair their own session mapping.
+      await kv.put(`renamed:${body.username}`, alias, { expirationTtl: 60 * 60 * 24 * 30 });
+    }
+    updated = await getProfile(db, alias);
+  } catch {
+    // KV or profile fetch failed after a successful DB rename.
+    // Return success so the client knows the alias changed.
+  }
   return c.json({ success: true, profile: updated });
 });
 

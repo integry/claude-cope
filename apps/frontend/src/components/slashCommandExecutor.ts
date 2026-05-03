@@ -2,11 +2,12 @@
 import { track, identify } from "../analytics";
 import { AnalyticsEvents, SlashCommandFailureReasons } from "../analyticsEvents";
 import { parseBaseCommand } from "../parseBaseCommand";
-import { PING_COST, THEMES } from "../game/constants";
+import { PING_COST, THEMES, PRO_GATED_COMMANDS } from "../game/constants";
 import { COPE_MODELS } from "@claude-cope/shared/models";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE, BYOK_ENABLED, PRO_QUOTA_LIMIT } from "../config";
 import { applyServerProfile } from "../hooks/profileSync";
+import { isPaidUser } from "../hooks/gameStateUtils";
 import { updateTicketServer } from "../api/profileApi";
 
 import type { GameState } from "../hooks/useGameState";
@@ -61,6 +62,26 @@ export interface SlashCommandContext {
 }
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.role !== "loading");
+
+function proGatedMessage(baseCommand: string): string {
+  return `[🔒 **403 FORBIDDEN**] \`${baseCommand}\` is a Max-tier command. Free users may look, but not touch.\n\nUpgrade at \`/upgrade\` to unlock the full command arsenal.`;
+}
+
+function handlePaidRoute403(
+  command: string,
+  errorMessage: string | undefined,
+  ctx: SlashCommandContext,
+  reply: Reply,
+): void {
+  const isRevoked = errorMessage?.toLowerCase().includes("revoked") || errorMessage?.toLowerCase().includes("no longer active");
+  if (isRevoked) {
+    ctx.setState((prev) => ({ ...prev, proKey: undefined, proKeyHash: undefined, isPro: undefined }));
+    reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] Your Max license has been revoked or is no longer active. Re-activate with \`/sync <key>\` or upgrade at \`/upgrade\`.` });
+  } else {
+    reply({ role: "error", content: proGatedMessage(command) });
+  }
+  track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command, reason: SlashCommandFailureReasons.PRO_GATED });
+}
 
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
@@ -519,30 +540,58 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     reply({ role: "error", content: `[❌] Alias can only contain letters, numbers, hyphens, and underscores.` });
     return;
   }
-  try {
-    const res = await fetch(`${API_BASE}/api/score/check-alias?username=${encodeURIComponent(newName)}`);
-    if (!res.ok) throw new Error("Failed to check alias");
-    const { taken } = (await res.json()) as { taken: boolean };
-    if (taken) {
-      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.TAKEN });
-      reply({ role: "error", content: `[❌] The alias **${newName}** is already in use by another player. Pick something else.` });
-      return;
-    }
-  } catch {
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.NETWORK_ERROR });
-    reply({ role: "error", content: `[❌] Could not verify alias availability. Try again later.` });
+  if (newName.toLowerCase() === ctx.state.username.toLowerCase()) {
+    reply({ role: "system", content: `[👤] Your alias is already **${ctx.state.username}**. Nothing to change.` });
     return;
   }
   const oldName = ctx.state.username;
-  ctx.setState((prev) => ({ ...prev, username: newName }));
-  identify({ username: newName });
-  reply({ role: "system", content: `[✓] Alias updated from **${oldName}** to **${newName}**. The codebase will never know.` });
+  try {
+    const res = await fetch(`${API_BASE}/api/account/update-alias`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: oldName,
+        newAlias: newName,
+        licenseKeyHash: ctx.state.proKeyHash,
+      }),
+    });
+    if (res.status === 403) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      handlePaidRoute403("/alias", data.error, ctx, reply);
+      return;
+    }
+    if (res.status === 429) {
+      const data = (await res.json()) as { error: string };
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.RATE_LIMITED });
+      reply({ role: "error", content: `[⏳] ${data.error}` });
+      return;
+    }
+    if (res.status === 409) {
+      const data = (await res.json()) as { error: string };
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.TAKEN });
+      reply({ role: "error", content: `[❌] ${data.error}` });
+      return;
+    }
+    if (!res.ok) throw new Error("Failed to update alias");
+    const data = (await res.json()) as { success: boolean; profile: ServerProfile | null };
+    const canonicalAlias = data.profile?.username ?? newName;
+    if (data.profile) {
+      ctx.setState((prev) => applyServerProfile(prev, data.profile!));
+    } else {
+      ctx.setState((prev) => ({ ...prev, username: canonicalAlias }));
+    }
+    identify({ username: canonicalAlias });
+    reply({ role: "system", content: `[✓] Alias updated from **${oldName}** to **${canonicalAlias}**. The codebase will never know.` });
+  } catch {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/alias", reason: SlashCommandFailureReasons.NETWORK_ERROR });
+    reply({ role: "error", content: `[❌] Could not update alias. Try again later.` });
+  }
 }
 
 function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
   const modelName = command.slice(6).trim();
   const isBYOK = BYOK_ENABLED && Boolean(ctx.state.apiKey);
-  const isPro = Boolean(ctx.state.proKey);
+  const isPro = isPaidUser(ctx.state);
 
   if (!modelName) {
     const current = ctx.state.selectedModel ?? "default";
@@ -663,7 +712,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
     const data = await res.json() as { success?: boolean; hash?: string; restored?: boolean; profile?: ServerProfile; error?: string };
     if (res.ok && data.success) {
       ctx.setState((prev) => {
-        const withKey: GameState = { ...prev, proKey: licenseKey, proKeyHash: data.hash };
+        const withKey: GameState = { ...prev, proKey: licenseKey, proKeyHash: data.hash, isPro: true };
         if (data.profile) {
           return applyServerProfile(withKey, data.profile, { includeActiveTicket: true });
         }
@@ -859,6 +908,28 @@ export function executeSlashCommand(
   }
 
   track(AnalyticsEvents.SLASH_COMMAND_ATTEMPTED, { command: baseCommand });
+
+  // Pro-gated commands: block free users with a 403-style error.
+  // BYOK users are exempted for client-side commands but /alias requires a
+  // real Max license key because it hits the backend.
+  // Limitation: /brrrrrr, /blame, and /synergize are purely client-side — a
+  // user who tampers with localStorage (setting proKeyHash or isPro) can bypass
+  // this gate. This is a deliberate tradeoff: these commands have no server-side
+  // effects, so the impact is cosmetic. /alias is server-enforced via
+  // licenseKeyHash. The pro-validation effect in useGameState clears stale pro
+  // state on page load, which limits the window for revoked-license bypass.
+  // TODO(byok): Strengthen BYOK gating once BYOK is a first-class feature.
+  if (PRO_GATED_COMMANDS.has(baseCommand)) {
+    const hasPro = isPaidUser(ctx.state);
+    const isBYOK = BYOK_ENABLED && Boolean(ctx.state.apiKey);
+    const needsLicense = baseCommand === "/alias";
+    if (!hasPro && (!isBYOK || needsLicense)) {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: baseCommand, reason: SlashCommandFailureReasons.PRO_GATED });
+      reply({ role: "error", content: proGatedMessage(baseCommand) });
+      ctx.setIsProcessing(false);
+      return;
+    }
+  }
 
   // /clear fires instantly — no fake processing delay
   if (command === "/clear") {

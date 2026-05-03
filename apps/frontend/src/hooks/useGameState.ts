@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, SetStateAction } from "react";
 import { track, identify } from "../analytics";
 import { AnalyticsEvents } from "../analyticsEvents";
-import { GENERATORS, UPGRADES, THEMES } from "../game/constants";
+import { GENERATORS, UPGRADES, THEMES, FREE_TIER_RANK_CAP } from "../game/constants";
 import { supabase } from "../supabaseClient";
 import {
   type Message,
@@ -10,6 +10,8 @@ import {
   calcBulkCost,
   calculateActiveMultiplier,
   resolveRank,
+  isPaidUser,
+  isFreeUser,
   STORAGE_KEY,
 } from "./gameStateUtils";
 import { applyServerProfile } from "./profileSync";
@@ -61,25 +63,53 @@ export function useGameState() {
       const restoredUsername = result.profile?.username ?? result.username;
       if (restoredUsername) identify({ username: restoredUsername });
       setState((prev) => {
+        const withPro = result.isPro ? { ...prev, isPro: true } : prev;
         // Full profile restore (server has user_scores row).
         if (result.profile) {
-          return applyServerProfile(prev, result.profile, { includeActiveTicket: true });
+          return applyServerProfile(withPro, result.profile, { includeActiveTicket: true });
         }
         // Username-only restore: server knows the identity but has no
         // profile row yet (e.g., the previous attempt 402'd on quota).
         // Restore the username and accurate quota so the UI is honest.
         if (result.username) {
           return {
-            ...prev,
+            ...withPro,
             username: result.username,
             economy: {
-              ...prev.economy,
+              ...withPro.economy,
               ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}),
             },
           };
         }
-        return prev;
+        return withPro;
       });
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Pro license validation: if local state claims paid status, verify against
+  // the server and clear pro fields when the license has been revoked.
+  // Only clear when the server explicitly confirms the user is not Pro
+  // (result.found && !result.isPro). If the session mapping is missing
+  // (found: false — e.g. cookie expired or KV evicted), the license may
+  // still be valid; don't wipe pro state or the user would have to re-sync
+  // after every cookie reset. They can re-run /sync <key> to restore the
+  // session binding.
+  useEffect(() => {
+    const initial = stateRef.current;
+    if (!isPaidUser(initial)) return;
+
+    let cancelled = false;
+    fetchSessionProfile().then((result) => {
+      if (cancelled) return;
+      if (result.found && !result.isPro) {
+        setState((prev) => ({
+          ...prev,
+          proKey: undefined,
+          proKeyHash: undefined,
+          isPro: undefined,
+        }));
+      }
     });
     return () => { cancelled = true; };
   }, []);
@@ -175,7 +205,10 @@ export function useGameState() {
       const boosted = Math.round(amount * multiplier);
       const newCurrentTD = Math.max(0, prev.economy.currentTD + boosted);
       const newTotalTDEarned = Math.max(0, prev.economy.totalTDEarned + boosted);
-      const newRank = resolveRank(newTotalTDEarned, prev.economy.currentRank);
+      // TODO(byok): BYOK rank bypass is client-side only. If the user's localStorage
+      // is cleared or they sync from another device, the server will return
+      // FREE_TIER_RANK_CAP because the backend has no BYOK awareness yet.
+      const newRank = isFreeUser(prev) ? FREE_TIER_RANK_CAP : resolveRank(newTotalTDEarned, prev.economy.currentRank);
 
       return {
         ...prev,

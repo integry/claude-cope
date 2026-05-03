@@ -50,6 +50,7 @@ type SessionRestoreResult = {
   profile?: ServerProfile | null;
   quotaPercent?: number;
   isPro?: boolean;
+  revoked?: boolean;
 };
 
 /** Look up the previous user associated with this browser's session cookie. */
