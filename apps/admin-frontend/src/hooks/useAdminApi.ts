@@ -69,6 +69,10 @@ interface AdminAuthContextValue {
 
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
 
+function shouldClearStoredKeyForVerificationFailure(result: { authError: boolean; serverError: string | null }): boolean {
+  return result.authError;
+}
+
 async function parseResponseBody(res: Response) {
   return res.json().catch(() => null) as Promise<{ error?: string } | null>;
 }
@@ -130,14 +134,15 @@ export function AdminApiProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        clearAdminApiKey();
+        if (shouldClearStoredKeyForVerificationFailure(result)) {
+          clearAdminApiKey();
+        }
         setAuthRequired(true);
         setAuthError(result.authError);
         setServerError(result.serverError);
       })
       .catch(() => {
         if (cancelled) return;
-        clearAdminApiKey();
         setAuthRequired(true);
         setAuthError(false);
         setServerError("Failed to verify admin API key.");
@@ -168,7 +173,9 @@ export function AdminApiProvider({ children }: { children: ReactNode }) {
     try {
       const result = await verifyApiKey(key);
       if (!result.ok) {
-        clearAdminApiKey();
+        if (shouldClearStoredKeyForVerificationFailure(result)) {
+          clearAdminApiKey();
+        }
         setAuthRequired(true);
         setAuthError(result.authError);
         setServerError(result.serverError);
@@ -179,7 +186,6 @@ export function AdminApiProvider({ children }: { children: ReactNode }) {
       setAuthRequired(false);
       return true;
     } catch {
-      clearAdminApiKey();
       setAuthRequired(true);
       setAuthError(false);
       setServerError("Failed to verify admin API key.");

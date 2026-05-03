@@ -62,13 +62,10 @@ export default function Configuration() {
     const normalizedTier = form.tier.trim() || "*";
     const normalizedValue =
       BOOLEAN_KEYS.has(normalizedKey) ? (normalizeBooleanConfigValue(form.value) ?? form.value) : form.value;
+    const description = form.description === "" ? (editingEntry ? "" : undefined) : form.description;
     const keyTierValidationError = validateConfigKeyAndTier(normalizedKey, normalizedTier);
     if (keyTierValidationError) {
       setSaveError(keyTierValidationError);
-      return;
-    }
-    if (!editingEntry && !form.value.trim()) {
-      setSaveError("Value is required.");
       return;
     }
 
@@ -88,7 +85,7 @@ export default function Configuration() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           value: normalizedValue,
-          description: form.description || undefined,
+          description,
         }),
       });
       await mutate();

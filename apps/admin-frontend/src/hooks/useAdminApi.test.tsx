@@ -89,6 +89,42 @@ describe("useAdminAuth", () => {
     expect(getAdminApiKey()).toBe("");
   });
 
+  it("preserves a stored key when initial verification hits a server error", async () => {
+    setAdminApiKey("stored-key");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ error: "Database not configured" }, { status: 500, statusText: "Internal Server Error" }),
+    );
+
+    renderProvider();
+    await flushEffects();
+
+    expect(latestAuth?.authRequired).toBe(true);
+    expect(latestAuth?.authError).toBe(false);
+    expect(latestAuth?.serverError).toBe("Database not configured");
+    expect(getAdminApiKey()).toBe("stored-key");
+  });
+
+  it("preserves the stored key when sign-in verification hits a server error", async () => {
+    setAdminApiKey("stored-key");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ error: "Database not configured" }, { status: 500, statusText: "Internal Server Error" }),
+    );
+
+    renderProvider();
+    await flushEffects();
+
+    let result = true;
+    await act(async () => {
+      result = await latestAuth!.signIn("replacement-key");
+    });
+
+    expect(result).toBe(false);
+    expect(latestAuth?.authRequired).toBe(true);
+    expect(latestAuth?.authError).toBe(false);
+    expect(latestAuth?.serverError).toBe("Database not configured");
+    expect(getAdminApiKey()).toBe("stored-key");
+  });
+
   it("holds the app behind auth checking while validating a stored key", async () => {
     let resolveFetch: ((response: Response) => void) | null = null;
     vi.spyOn(globalThis, "fetch").mockImplementation(

@@ -124,6 +124,69 @@ describe("Configuration save flow", () => {
     });
   });
 
+  it("allows clearing an existing description from the edit form", async () => {
+    useAdminApiMock.mockReturnValue({
+      data: [
+        {
+          key: "openrouter_api_key",
+          tier: "*",
+          value: "sk-or-v1-real-secret",
+          description: "Old description",
+          updated_at: "2026-05-03T00:00:00.000Z",
+        },
+      ],
+      isLoading: false,
+      isError: null,
+      mutate: mutateMock,
+    });
+
+    renderComponent();
+    await clickButton("Edit");
+
+    const panel = getFormPanel();
+    const editableInputs = Array.from(panel.querySelectorAll('input[type="text"]')).filter(
+      (input): input is HTMLInputElement => input instanceof HTMLInputElement && !input.disabled,
+    );
+    const descriptionInput = editableInputs.find((input) => input.value === "Old description");
+    if (!descriptionInput) throw new Error("Description input not found");
+
+    await changeInput(descriptionInput, "");
+    await clickButton("Save");
+
+    expect(adminFetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = adminFetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      value: "sk-or-v1-real-secret",
+      description: "",
+    });
+  });
+
+  it("allows creating a global sensitive setting with an empty value", async () => {
+    useAdminApiMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: null,
+      mutate: mutateMock,
+    });
+
+    renderComponent();
+    await clickButton("Add Setting");
+
+    const panel = getFormPanel();
+    const keySelect = panel.querySelector("select");
+    if (!(keySelect instanceof HTMLSelectElement)) throw new Error("Key select not found");
+
+    await changeSelect(keySelect, "openrouter_api_key");
+    await clickButton("Save");
+
+    expect(adminFetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = adminFetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/api/config/openrouter_api_key/*");
+    expect(JSON.parse(String(init.body))).toEqual({
+      value: "",
+    });
+  });
+
   it("normalizes documented boolean aliases before client-side validation and submission", async () => {
     useAdminApiMock.mockReturnValue({
       data: [],
