@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, createElement, useContext, useState, type ReactNode } from "react";
 import useSWR from "swr";
 import { API_BASE } from "../config";
 
@@ -133,7 +133,7 @@ export function AdminApiProvider({ children }: { children: ReactNode }) {
     signOut,
   };
 
-  return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;
+  return createElement(AdminAuthContext.Provider, { value }, children);
 }
 
 function useAdminAuthContext(): AdminAuthContextValue {
