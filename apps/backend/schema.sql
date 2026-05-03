@@ -137,3 +137,14 @@ CREATE TABLE IF NOT EXISTS system_config (
 
 CREATE INDEX IF NOT EXISTS idx_system_config_tier
     ON system_config (tier);
+
+-- Atomic checkout-to-session binding: prevents a different session from
+-- claiming a Polar checkout that was initiated by another user.
+CREATE TABLE IF NOT EXISTS checkout_claims (
+    checkout_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    claimed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    claimed_keys TEXT,
+    checkout_created_at TEXT,
+    customer_hash TEXT
+);

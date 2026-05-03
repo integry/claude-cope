@@ -1,4 +1,144 @@
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { getProfile, getProfileByLicenseHash, getProfileRow, resolveRank } from "../utils/profile";
+import { getQuotaLimits } from "../utils/quota";
+
+export type PolarCheckout = {
+  organization_id?: string;
+  status?: string;
+  customer_id?: string | null;
+  customer?: { id?: string };
+  created_at?: string;
+};
+
+export type PolarLicenseKeyItem = {
+  key: string;
+  created_at: string;
+  status: string;
+};
+
+const MAX_KEY_MINT_WINDOW_MS = 15 * 60 * 1000;
+const MAX_KEY_FALLBACK_WINDOW_MS = 60 * 60 * 1000;
+
+// Returns ALL keys minted by a checkout, ordered oldest-first.
+// Uses a time window after checkout creation to avoid returning keys from later purchases.
+// When nextCheckoutCreatedAt is provided (from a subsequent purchase by the same
+// customer), the window is narrowed to end before that checkout's creation time,
+// preventing this checkout from claiming keys that belong to the next purchase.
+export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreatedAt: string, nextCheckoutCreatedAt?: string): PolarLicenseKeyItem[] {
+  const checkoutTime = new Date(checkoutCreatedAt).getTime();
+  if (!Number.isFinite(checkoutTime)) return [];
+
+  const nextCheckoutTime = nextCheckoutCreatedAt ? new Date(nextCheckoutCreatedAt).getTime() : NaN;
+  const hasNextCheckout = Number.isFinite(nextCheckoutTime) && nextCheckoutTime > checkoutTime;
+
+  const sorted = [...granted].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const upperBound = hasNextCheckout
+    ? Math.min(checkoutTime + MAX_KEY_MINT_WINDOW_MS, nextCheckoutTime)
+    : checkoutTime + MAX_KEY_MINT_WINDOW_MS;
+  const windowed = sorted.filter((k) => {
+    const t = new Date(k.created_at).getTime();
+    return t >= checkoutTime && t <= upperBound;
+  });
+  if (windowed.length > 0) return windowed;
+
+  // Fallback: if Polar minted keys beyond the primary window (delayed
+  // processing), extend to 1 hour. This prevents permanent rejection of
+  // legitimate purchases without returning keys from unrelated later orders.
+  // The next-checkout bound still applies to avoid grabbing keys from a
+  // subsequent purchase by the same customer.
+  const fallbackBound = hasNextCheckout
+    ? Math.min(checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS, nextCheckoutTime)
+    : checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS;
+  return sorted.filter((k) => {
+    const t = new Date(k.created_at).getTime();
+    return t >= checkoutTime && t <= fallbackBound;
+  });
+}
+
+const MAX_LICENSE_KEY_PAGES = 3;
+const LICENSE_KEY_PAGE_SIZE = 100;
+
+export async function fetchLicenseKeys(
+  customerId: string,
+  organizationId: string,
+  accessToken: string,
+  opts: { createdAt: string; nextCheckoutCreatedAt?: string },
+): Promise<{ keys: string[] } | { error: string; status: ContentfulStatusCode }> {
+  const { createdAt, nextCheckoutCreatedAt } = opts;
+  const allItems: PolarLicenseKeyItem[] = [];
+  for (let page = 1; page <= MAX_LICENSE_KEY_PAGES; page++) {
+    let lkResp: Response;
+    try {
+      lkResp = await fetch(
+        `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=${LICENSE_KEY_PAGE_SIZE}&page=${page}&sorting=-created_at`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+    } catch {
+      return { error: "Unable to reach Polar — please try again", status: 502 };
+    }
+    if (!lkResp.ok) return { error: "Failed to list license keys", status: 502 };
+    const lkData = await lkResp.json() as { items?: PolarLicenseKeyItem[] };
+    const items = lkData.items ?? [];
+    allItems.push(...items);
+    if (items.length < LICENSE_KEY_PAGE_SIZE) break;
+  }
+  const granted = allItems.filter((l) => l.status === "granted");
+  if (!granted.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
+  const allKeys = pickAllLicenseKeys(granted, createdAt, nextCheckoutCreatedAt);
+  if (!allKeys.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
+  return { keys: allKeys.map((k) => k.key) };
+}
+
+export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: string, organizationId: string): Promise<{ customerId: string; createdAt?: string } | { error: string; status: ContentfulStatusCode }> {
+  let resp: Response;
+  try {
+    resp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(checkoutId)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch {
+    return { error: "Unable to reach Polar — please try again", status: 502 };
+  }
+  if (!resp.ok) {
+    if (resp.status >= 500) return { error: "Polar is temporarily unavailable — please try again", status: 502 };
+    if (resp.status === 404) return { error: "Invalid checkout id", status: 400 };
+    return { error: `Polar returned an unexpected error (${resp.status})`, status: 502 };
+  }
+  const checkout = await resp.json() as PolarCheckout;
+  if (checkout.organization_id !== organizationId) return { error: "Checkout belongs to a different organization", status: 403 };
+  if (checkout.status !== "succeeded") return { error: "Payment not yet confirmed", status: 409 };
+  const customerId = checkout.customer_id || checkout.customer?.id;
+  if (!customerId) return { error: "Checkout has no associated customer", status: 500 };
+  return { customerId, createdAt: checkout.created_at };
+}
+
+export type CheckoutCache = {
+  keys: string[];
+  sessionId: string;
+};
+
+function isNonEmptyStringArray(arr: unknown[]): arr is string[] {
+  return arr.length > 0 && arr.every((v) => typeof v === "string" && v.length > 0);
+}
+
+export function parseCheckoutCache(raw: string): CheckoutCache | null {
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      if (!isNonEmptyStringArray(parsed)) return null;
+      return { keys: parsed, sessionId: "" };
+    }
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.keys)) {
+      if (!isNonEmptyStringArray(parsed.keys)) return null;
+      const sid = parsed.sessionId;
+      if (sid !== undefined && sid !== null && typeof sid !== "string") return null;
+      return { keys: parsed.keys, sessionId: typeof sid === "string" ? sid : "" };
+    }
+    return null;
+  } catch {
+    if (typeof raw === "string" && raw.length > 0 && /^[A-Za-z0-9_-]+$/.test(raw)) return { keys: [raw], sessionId: "" };
+    return null;
+  }
+}
 
 export type SyncBody = {
   licenseKey?: string;
@@ -175,4 +315,151 @@ export function broadcastPurchase(message: string, db: D1Database | undefined, c
       db.prepare("INSERT INTO recent_events (message) VALUES (?)").bind(message).run(),
     );
   }
+}
+
+export const SHILL_CREDIT = 5;
+
+async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: number): Promise<void> {
+  const kvKey = `polar:${hash}`;
+  const existingQuota = await kv.get(kvKey);
+  if (existingQuota !== null) return;
+
+  const revokedKey = `polar_revoked:${hash}`;
+  const savedQuota = await kv.get(revokedKey);
+  if (savedQuota !== null) {
+    await kv.put(kvKey, savedQuota);
+    await kv.delete(revokedKey);
+  } else {
+    await kv.put(kvKey, String(proInitialQuota));
+  }
+}
+
+export async function commitSyncSideEffects(
+  deps: { db: D1Database; kv: KVNamespace; hash: string },
+  opts: { validationId?: string; limits: ReturnType<typeof getQuotaLimits>; sessionId?: string },
+) {
+  const { db, kv, hash } = deps;
+  await db
+    .prepare(
+      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
+    )
+    .bind(hash)
+    .run();
+
+  await ensureQuota(kv, hash, opts.limits.proInitialQuota);
+
+  if (opts.validationId) {
+    await kv.put(`polar_id:${hash}`, opts.validationId);
+  }
+}
+
+export async function claimCheckoutForSession(
+  db: D1Database,
+  checkoutId: string,
+  sessionId: string,
+  opts: { checkoutCreatedAt?: string; customerHash?: string } = {},
+): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
+  const { checkoutCreatedAt, customerHash } = opts;
+  try {
+    const result = await db
+      .prepare(
+        "INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at, customer_hash) VALUES (?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING",
+      )
+      .bind(checkoutId, sessionId, checkoutCreatedAt ?? null, customerHash ?? null)
+      .run();
+
+    if (result.meta.changes) {
+      // Opportunistic cleanup: remove claims older than 30 days to prevent
+      // unbounded table growth. Best-effort — failures are silently ignored.
+      try {
+        await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run();
+      } catch {
+        // Cleanup is best-effort
+      }
+      return { ok: true };
+    }
+
+    const existing = await db
+      .prepare("SELECT session_id, claimed_at FROM checkout_claims WHERE checkout_id = ?")
+      .bind(checkoutId)
+      .first<{ session_id: string; claimed_at: string }>();
+
+    if (existing && existing.session_id === sessionId) {
+      return { ok: true };
+    }
+
+    return { ok: false, error: "This checkout was already claimed by another session", retriable: false };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("no such table") || msg.includes("checkout_claims")) {
+      return { ok: false, error: "Checkout claim table is not available — please try again later", retriable: true };
+    }
+    return { ok: false, error: "Unable to verify checkout claim — please try again", retriable: true };
+  }
+}
+
+export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys: string[]): Promise<void> {
+  try {
+    await db.prepare("UPDATE checkout_claims SET claimed_keys = ? WHERE checkout_id = ?")
+      .bind(JSON.stringify(keys), checkoutId)
+      .run();
+  } catch {
+    // Best-effort: claim succeeded, keys were fetched — a failure to record
+    // them only affects future cross-checkout dedup, not this request.
+  }
+}
+
+export async function getAlreadyClaimedKeys(db: D1Database, excludeCheckoutId: string): Promise<Set<string>> {
+  const result = new Set<string>();
+  try {
+    const rows = await db
+      .prepare("SELECT claimed_keys FROM checkout_claims WHERE checkout_id != ? AND claimed_keys IS NOT NULL AND claimed_at > datetime('now', '-1 hour')")
+      .bind(excludeCheckoutId)
+      .all<{ claimed_keys: string }>();
+    for (const row of rows.results ?? []) {
+      try {
+        const keys = JSON.parse(row.claimed_keys) as string[];
+        for (const k of keys) result.add(k);
+      } catch {
+        // Skip malformed entries
+      }
+    }
+  } catch {
+    // If the table/column doesn't exist, return empty — dedup is best-effort.
+  }
+  return result;
+}
+
+export async function getNextCheckoutTime(
+  db: D1Database,
+  excludeCheckoutId: string,
+  checkoutCreatedAt: string,
+  customerHash: string,
+): Promise<string | null> {
+  try {
+    const row = await db
+      .prepare(
+        "SELECT checkout_created_at FROM checkout_claims WHERE checkout_id != ? AND customer_hash = ? AND checkout_created_at > ? AND checkout_created_at IS NOT NULL ORDER BY checkout_created_at ASC LIMIT 1",
+      )
+      .bind(excludeCheckoutId, customerHash, checkoutCreatedAt)
+      .first<{ checkout_created_at: string }>();
+    return row?.checkout_created_at ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const MAX_TICKET_TITLE_LEN = 200;
+const MAX_TICKET_ID_LEN = 100;
+
+export function validateActiveTicket(ticket: unknown): string | null {
+  if (ticket === null || ticket === undefined) return null;
+  if (typeof ticket !== "object") return "activeTicket must be an object or null";
+  const t = ticket as Record<string, unknown>;
+  if (typeof t.id !== "string" || !t.id || t.id.length > MAX_TICKET_ID_LEN) return "Invalid ticket id";
+  if (typeof t.title !== "string" || !t.title || t.title.length > MAX_TICKET_TITLE_LEN) return "Invalid ticket title";
+  if (!Number.isFinite(t.sprintProgress) || (t.sprintProgress as number) < 0) return "Invalid sprintProgress";
+  if (!Number.isFinite(t.sprintGoal) || (t.sprintGoal as number) <= 0) return "Invalid sprintGoal";
+  if ((t.sprintProgress as number) > (t.sprintGoal as number)) return "sprintProgress cannot exceed sprintGoal";
+  return null;
 }

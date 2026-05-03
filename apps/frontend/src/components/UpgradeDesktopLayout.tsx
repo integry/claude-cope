@@ -93,6 +93,7 @@ export default function DesktopLayout({
     );
   };
 
+  // Links open in same tab so the app receives checkout_id on return navigation.
   const buttonBlock = (
     label: string,
     url: string,
@@ -126,8 +127,6 @@ export default function DesktopLayout({
     return (
       <a
         href={url}
-        target="_blank"
-        rel="noopener noreferrer"
         className={primary ? "upgrade-btn-primary" : "upgrade-btn-secondary"}
         style={{
           display: "inline",

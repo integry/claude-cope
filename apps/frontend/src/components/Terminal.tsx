@@ -9,7 +9,7 @@ import { BuddyDisplay } from "./BuddyDisplay";
 import { parseGlitchStyle } from "./parseGlitchStyle";
 import { terminalContainerClassName } from "./terminalClassName";
 import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
-import { BYOK_ENABLED } from "../config";
+import { API_BASE, BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
 import { applyServerProfile } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
@@ -135,15 +135,8 @@ function Terminal() {
   }, [history]);
   useEffect(() => {
     const onPopState = () => {
-      if (pendingNagCommandRef.current !== null) {
-        setShowUpgrade(true);
-        return;
-      }
-      if (window.location.pathname !== "/upgrade") {
-        setShowUpgrade(false);
-      } else {
-        setShowUpgrade(true);
-      }
+      if (pendingNagCommandRef.current !== null) { setShowUpgrade(true); return; }
+      setShowUpgrade(window.location.pathname === "/upgrade");
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -158,19 +151,11 @@ function Terminal() {
   }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
 
   const handleQuotaLockout = useCallback((command?: string) => {
-    const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
-    if (effectiveApiKey) return;
+    if (BYOK_ENABLED && state.apiKey) return;
     if (!state.proKey && !state.proKeyHash) {
-      if (command) {
-        pendingNagCommandRef.current = command;
-        nagArmedFromQuotaRef.current = true;
-        setShowUpgrade(true);
-      } else {
-        nagArmedFromQuotaRef.current = true;
-      }
-    } else {
-      triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState });
-    }
+      nagArmedFromQuotaRef.current = true;
+      if (command) { pendingNagCommandRef.current = command; setShowUpgrade(true); }
+    } else { triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState }); }
   }, [playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState, setShowUpgrade]);
 
   const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
@@ -186,20 +171,11 @@ function Terminal() {
   }, [setIsProcessing, playError, setHistory]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value;
-    if (activeRegression === "backwards_typing" && value.length > inputValue.length) { value = value.slice(inputValue.length) + inputValue; }
-    setInputValue(value); setHistoryIndex(-1); setSuggestedReply(null);
-    setSlashQuery(value.startsWith("/") ? value : ""); setSlashIndex(0);
+    const value = activeRegression === "backwards_typing" && e.target.value.length > inputValue.length ? e.target.value.slice(inputValue.length) + inputValue : e.target.value;
+    setInputValue(value); setHistoryIndex(-1); setSuggestedReply(null); setSlashQuery(value.startsWith("/") ? value : ""); setSlashIndex(0);
   };
 
-  const getFilteredSlashCommands = () => {
-    const query = slashQuery.toLowerCase();
-
-    return SLASH_COMMANDS.filter((cmd) => {
-      const storeLocked = cmd === "/store" && state.economy.totalTDEarned < 1000;
-      return !storeLocked && cmd.startsWith(query);
-    });
-  };
+  const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => !(cmd === "/store" && state.economy.totalTDEarned < 1000) && cmd.startsWith(slashQuery.toLowerCase()));
 
   const runSlashCommand = (command: string) => {
     executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: setSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
@@ -208,25 +184,70 @@ function Terminal() {
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
 
+  const checkoutHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isBooting) return;
+    const checkoutId = new URLSearchParams(window.location.search).get("checkout_id");
+    if (!checkoutId || checkoutHandledRef.current === checkoutId) return;
+    checkoutHandledRef.current = checkoutId;
+    const strip = () => { const p = new URLSearchParams(window.location.search); p.delete("checkout_id"); const qs = p.toString(); window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "")); };
+    const alreadyPro = Boolean(state.proKeyHash);
+    void (async () => {
+      setHistory((prev) => [...prev, { role: "system", content: "[💳] Retrieving your license — one sec…" }]);
+      try {
+        let lastData: { licenseKey?: string; allKeys?: string[]; error?: string } = {};
+        let lastStatus = 0;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
+          let res: Response;
+          try {
+            res = await fetch(`${API_BASE}/api/account/checkout-license`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ checkoutId }),
+              credentials: "include",
+            });
+          } catch {
+            if (attempt < 4) continue;
+            throw new Error("Network error");
+          }
+          if (res.status >= 500 && attempt < 4) continue;
+          lastStatus = res.status;
+          lastData = await res.json() as { licenseKey?: string; allKeys?: string[]; error?: string };
+          if (res.ok && lastData.licenseKey) {
+            const keys = lastData.allKeys ?? [lastData.licenseKey];
+            if (keys.length > 1) {
+              const keyList = keys.map((k, i) => `${i + 1}. \`${k}\``).join("\n");
+              setHistory((prev) => [...prev, { role: "system", content: `[✅ TEAM PACK] Your purchase includes **${keys.length} license keys**:\n\n${keyList}\n\nShare these with your team. Each person can activate their key by running \`/sync <KEY>\`.` }]);
+              strip();
+              return;
+            }
+            if (alreadyPro) {
+              setHistory((prev) => [...prev, { role: "system", content: `[✅] License key retrieved: \`${lastData.licenseKey}\`. You're already synced — run \`/sync ${lastData.licenseKey}\` to switch keys.` }]);
+              strip();
+              return;
+            }
+            runSlashCommandRef.current(`/sync ${lastData.licenseKey}`);
+            strip();
+            return;
+          }
+          if (res.status !== 409) break;
+        }
+        if (lastStatus !== 409) strip();
+        const manualHint = lastData.licenseKey ? ` Your key: \`${lastData.licenseKey}\` — run \`/sync ${lastData.licenseKey}\` manually.` : lastStatus === 409 ? " Refresh the page to retry automatically." : " If your license arrived by email, you can run `/sync <COPE-XXX>` manually.";
+        setHistory((prev) => [...prev, { role: "error", content: `[❌] License activation failed: ${lastData.error ?? "Unknown error"}.${manualHint}` }]);
+      } catch {
+        setHistory((prev) => [...prev, { role: "error", content: "[❌] Network error during license activation. Check your email for the license key and run `/sync <COPE-XXX>` manually." }]);
+      }
+    })();
+  }, [isBooting, state.proKeyHash, setHistory]);
+
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
-    if (action === "execute") {
-      runSlashCommandRef.current(command);
-    } else {
-      // Prefill: write command + trailing space into input, update slash state, focus
-      const prefill = command + " ";
-      setInputValue(prefill);
-      setSlashQuery("");
-      setSlashIndex(0);
-      setSuggestedReply(null);
-      inputRef.current?.focus();
-    }
+    if (action === "execute") { runSlashCommandRef.current(command); return; }
+    setInputValue(command + " "); setSlashQuery(""); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
   }, []);
 
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
-    if (state.buddy.type) {
-      const newCount = buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1;
-      setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: newCount } }));
-    }
+    if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1 } }));
   }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
 
   const processCommandRef = useRef<(command: string) => void>(() => {});
@@ -313,24 +334,15 @@ function Terminal() {
   };
 
   const handleUpgradeNagClose = useCallback(() => {
-    setShowUpgrade(false);
-    if (window.location.pathname === "/upgrade") {
-      window.history.pushState(null, "", "/");
-    }
+    setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
     if (pendingNagCommandRef.current !== null) {
-      const command = pendingNagCommandRef.current;
-      pendingNagCommandRef.current = null;
-      nagArmedFromQuotaRef.current = false;
-      setCommandHistory((prev) => [...prev, command]);
-      processCommandRef.current(command);
+      const command = pendingNagCommandRef.current; pendingNagCommandRef.current = null; nagArmedFromQuotaRef.current = false;
+      setCommandHistory((prev) => [...prev, command]); processCommandRef.current(command);
     }
   }, [setShowUpgrade]);
 
   const handleManualUpgradeDismiss = useCallback(() => {
-    setShowUpgrade(false);
-    if (window.location.pathname === "/upgrade") {
-      window.history.pushState(null, "", "/");
-    }
+    setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
   }, [setShowUpgrade]);
 
   const { handleKeyDown } = useTerminalKeyboard({

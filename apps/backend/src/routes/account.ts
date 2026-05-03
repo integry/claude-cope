@@ -3,8 +3,8 @@ import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase } from "./accountHelpers";
-import type { SyncBody } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, fetchLicenseKeys, fetchCheckoutCustomerId, parseCheckoutCache, claimCheckoutForSession, storeClaimedKeys, getAlreadyClaimedKeys, getNextCheckoutTime } from "./accountHelpers";
+import type { SyncBody, CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 
@@ -22,25 +22,6 @@ type Env = {
     sessionId: string;
   };
 };
-const SHILL_CREDIT = 5;
-
-/** Ensure the KV quota entry exists for a license hash, restoring revoked quota if available. */
-async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: number): Promise<void> {
-  const kvKey = `polar:${hash}`;
-  const existingQuota = await kv.get(kvKey);
-  if (existingQuota !== null) return;
-
-  // If the license was previously revoked, restore the saved remaining
-  // quota instead of granting a fresh allocation.
-  const revokedKey = `polar_revoked:${hash}`;
-  const savedQuota = await kv.get(revokedKey);
-  if (savedQuota !== null) {
-    await kv.put(kvKey, savedQuota);
-    await kv.delete(revokedKey);
-  } else {
-    await kv.put(kvKey, String(proInitialQuota));
-  }
-}
 
 /** Validate preconditions for /sync and return the validated resources, or an error response. */
 async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response }) {
@@ -74,30 +55,77 @@ async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?
   return { body, validation, kv, db, hash } as const;
 }
 
-/** Provision the licenses row and KV quota for a license hash.
- *  Called AFTER resolveProfile succeeds so that a failed profile claim
- *  (username taken, concurrent race, etc.) never leaves behind orphaned
- *  active licenses or KV quota entries. */
-async function commitSyncSideEffects(
-  deps: { db: D1Database; kv: KVNamespace; hash: string },
-  opts: { validationId?: string; limits: ReturnType<typeof getQuotaLimits>; sessionId?: string },
-) {
-  const { db, kv, hash } = deps;
-  await db
-    .prepare(
-      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
-    )
-    .bind(hash)
-    .run();
+async function lookupCheckoutCache(kv: KVNamespace, checkoutId: string, sessionId: string): Promise<{ keys: string[]; sessionMismatch?: boolean } | null> {
+  const cached = await kv.get(`checkout_used:${checkoutId}`);
+  if (!cached) return null;
+  const entry = parseCheckoutCache(cached);
+  if (!entry) return null;
+  if (entry.sessionId && entry.sessionId !== sessionId) return { keys: entry.keys, sessionMismatch: true };
+  return { keys: entry.keys };
+}
 
-  await ensureQuota(kv, hash, opts.limits.proInitialQuota);
+async function validateCheckoutRequest(c: { req: { json: <T>() => Promise<T> }; get: (key: string) => string; env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response }) {
+  const body = await c.req.json<{ checkoutId?: string }>();
+  if (!body.checkoutId) return { error: c.json({ error: "checkoutId is required" }, 400) } as const;
+  if (!/^[\w-]{4,128}$/.test(body.checkoutId)) return { error: c.json({ error: "Invalid checkoutId format" }, 400) } as const;
 
-  if (opts.validationId) {
-    await kv.put(`polar_id:${hash}`, opts.validationId);
-  }
+  const sessionId = c.get("sessionId");
+  if (!sessionId) return { error: c.json({ error: "Session required" }, 401) } as const;
+
+  const accessToken = c.env?.POLAR_ACCESS_TOKEN;
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
+  if (!accessToken || !organizationId) return { error: c.json({ error: "Polar integration is not configured" }, 500) } as const;
+
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  if (!kv) return { error: c.json({ error: "KV storage is not configured" }, 500) } as const;
+
+  return { checkoutId: body.checkoutId, sessionId, accessToken, organizationId, kv } as const;
+}
+
+function filterCheckoutKeys(allKeys: string[], alreadyClaimed: Set<string>): string[] {
+  let keys = alreadyClaimed.size > 0 ? allKeys.filter((k) => !alreadyClaimed.has(k)) : allKeys;
+  if (!keys.length && allKeys.length > 0) keys = allKeys;
+  return keys;
 }
 
 const account = new Hono<Env>();
+
+account.post("/checkout-license", async (c) => {
+  const validated = await validateCheckoutRequest(c);
+  if ("error" in validated) return validated.error;
+  const { checkoutId, sessionId, accessToken, organizationId, kv } = validated;
+
+  const cacheResult = await lookupCheckoutCache(kv, checkoutId, sessionId);
+  if (cacheResult) {
+    if (cacheResult.sessionMismatch) {
+      return c.json({ error: "This checkout was already redeemed by another session" }, 403);
+    }
+    return c.json({ licenseKey: cacheResult.keys[0], allKeys: cacheResult.keys });
+  }
+
+  const result = await fetchCheckoutCustomerId(checkoutId, accessToken, organizationId);
+  if ("error" in result) return c.json({ error: result.error }, result.status);
+  if (!result.createdAt) return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
+
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: "Database not configured" }, 500);
+  const customerHash = await hashKey(result.customerId);
+  const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt: result.createdAt, customerHash });
+  if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
+
+  const nextCheckoutAt = await getNextCheckoutTime(db, checkoutId, result.createdAt, customerHash);
+  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: result.createdAt, nextCheckoutCreatedAt: nextCheckoutAt ?? undefined });
+  if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
+
+  const alreadyClaimedKeys = await getAlreadyClaimedKeys(db, checkoutId);
+  const allKeyStrings = filterCheckoutKeys(lkResult.keys, alreadyClaimedKeys);
+  if (!allKeyStrings.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
+
+  await storeClaimedKeys(db, checkoutId, allKeyStrings);
+  const cachePayload: CheckoutCache = { keys: allKeyStrings, sessionId };
+  await kv.put(`checkout_used:${checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 7 * 24 * 60 * 60 });
+  return c.json({ licenseKey: allKeyStrings[0], allKeys: allKeyStrings });
+});
 
 account.post("/sync", async (c) => {
   const validated = await validateSyncRequest(c);
@@ -346,21 +374,6 @@ account.post("/buy-theme", async (c) => {
 // Allowlists for client-supplied IDs in mutation routes are imported from
 // @claude-cope/shared so frontend and backend share one source of truth —
 // no manual sync required when the achievement/buddy lists evolve.
-
-const MAX_TICKET_TITLE_LEN = 200;
-const MAX_TICKET_ID_LEN = 100;
-
-function validateActiveTicket(ticket: unknown): string | null {
-  if (ticket === null || ticket === undefined) return null;
-  if (typeof ticket !== "object") return "activeTicket must be an object or null";
-  const t = ticket as Record<string, unknown>;
-  if (typeof t.id !== "string" || !t.id || t.id.length > MAX_TICKET_ID_LEN) return "Invalid ticket id";
-  if (typeof t.title !== "string" || !t.title || t.title.length > MAX_TICKET_TITLE_LEN) return "Invalid ticket title";
-  if (!Number.isFinite(t.sprintProgress) || (t.sprintProgress as number) < 0) return "Invalid sprintProgress";
-  if (!Number.isFinite(t.sprintGoal) || (t.sprintGoal as number) <= 0) return "Invalid sprintGoal";
-  if ((t.sprintProgress as number) > (t.sprintGoal as number)) return "sprintProgress cannot exceed sprintGoal";
-  return null;
-}
 
 account.post("/unlock-achievement", async (c) => {
   const db = c.env?.DB;
