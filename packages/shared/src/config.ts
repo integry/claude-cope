@@ -41,8 +41,11 @@ export const KNOWN_CONFIG_KEYS_SET = new Set<string>(WELL_KNOWN_KEYS.map((key) =
 
 export function isModelTier(tier: string): boolean {
   if (!tier.includes("/")) return false;
-  const [provider, model, ...rest] = tier.split("/");
-  return rest.length === 0 && provider.trim().length > 0 && model.trim().length > 0;
+  const parts = tier.split("/");
+  if (parts.length !== 2) return false;
+  const provider = parts[0] ?? "";
+  const model = parts[1] ?? "";
+  return provider.trim().length > 0 && model.trim().length > 0;
 }
 
 export function isValidTierQuery(tier: string): boolean {

@@ -61,7 +61,7 @@ export class ApiError extends Error {
 }
 
 interface AdminAuthContextValue {
-  adminFetch: (url: string, init?: RequestInit) => Promise<unknown>;
+  adminFetch: <T>(url: string, init?: RequestInit) => Promise<T>;
   authRequired: boolean;
   authError: boolean;
   serverError: string | null;
@@ -94,7 +94,7 @@ export function AdminApiProvider({ children }: { children: ReactNode }) {
     setServerError(null);
   }
 
-  async function adminFetch(url: string, init?: RequestInit): Promise<unknown> {
+  async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
     const merged = new Headers(authHeaders());
     const extra = init?.headers;
     if (extra) {
@@ -121,7 +121,7 @@ export function AdminApiProvider({ children }: { children: ReactNode }) {
       }
       throw new ApiError(body?.error || res.statusText, res.status);
     }
-    return res.json();
+    return res.json() as Promise<T>;
   }
 
   const value: AdminAuthContextValue = {
@@ -153,9 +153,10 @@ export function useAdminFetch() {
 
 export function useAdminApi<T>(path: string) {
   const adminFetch = useAdminFetch();
-  const { data, error, isLoading, mutate } = useSWR<T>(
-    hasStoredApiKey() ? `${API_BASE}${path}` : null,
-    adminFetch,
+  const key = hasStoredApiKey() ? [`${API_BASE}${path}`] as const : null;
+  const { data, error, isLoading, mutate } = useSWR<T, ApiError, typeof key>(
+    key,
+    ([url]) => adminFetch<T>(url),
     {
       revalidateOnFocus: true,
     },
