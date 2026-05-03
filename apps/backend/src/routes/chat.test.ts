@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
-import { sanitizeChatMessages, enforceContextTrimming, resolveFreeChatLicenseState, resolveProviderList } from "./chat";
+import { sanitizeChatMessages, enforceContextTrimming, resolveFreeChatLicenseState, resolveProviderList, resolveRoutingQuotaState } from "./chat";
 import { buildFreeChatProfileSnapshot } from "./chatHelpers";
 
 describe("sanitizeChatMessages", () => {
@@ -391,5 +391,40 @@ describe("Category routing integration", () => {
     expect(category).toBe("free");
     expect(resolveProviderList("DeepInfra,NovitaAI", "true", category)).toEqual(["DeepInfra", "NovitaAI"]);
     expect(category === "max").toBe(false);
+  });
+});
+
+describe("resolveRoutingQuotaState", () => {
+  const makeKv = (values: Record<string, string | null>) =>
+    ({
+      get: vi.fn(async (key: string) => values[key] ?? null),
+      put: vi.fn(),
+    }) as unknown as KVNamespace;
+
+  it("keeps paid users on max routing while pro quota remains", async () => {
+    const state = await resolveRoutingQuotaState({
+      QUOTA_KV: makeKv({ "polar:pro-hash": "60" }),
+      PRO_INITIAL_QUOTA: "100",
+      FREE_QUOTA_LIMIT: "20",
+    }, "session-1", "pro-hash");
+    expect(state).toEqual({ quotaPercent: 60, isProUserForRouting: true });
+  });
+
+  it("demotes paid users to free routing when pro quota is exhausted", async () => {
+    const state = await resolveRoutingQuotaState({
+      QUOTA_KV: makeKv({ "polar:pro-hash": "0", "free:session-1": "4" }),
+      PRO_INITIAL_QUOTA: "100",
+      FREE_QUOTA_LIMIT: "20",
+    }, "session-1", "pro-hash");
+    expect(state).toEqual({ quotaPercent: 80, isProUserForRouting: false });
+  });
+
+  it("returns depleted routing when both pro and free quota are exhausted", async () => {
+    const state = await resolveRoutingQuotaState({
+      QUOTA_KV: makeKv({ "polar:pro-hash": "0", "free:session-1": "20" }),
+      PRO_INITIAL_QUOTA: "100",
+      FREE_QUOTA_LIMIT: "20",
+    }, "session-1", "pro-hash");
+    expect(state).toEqual({ quotaPercent: 0, isProUserForRouting: false });
   });
 });

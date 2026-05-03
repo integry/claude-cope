@@ -41,12 +41,17 @@ function createMockDB(rows: ConfigRow[] = []) {
                 const row: ConfigRow = { key, tier, value, description, updated_at: "2026-01-01T00:00:00" };
                 if (idx >= 0) state[idx] = row;
                 else state.push(row);
+                return { meta: { changes: 1 } };
               }
               if (sql.includes("DELETE")) {
                 const key = boundArgs[0] as string;
                 const tier = boundArgs[1] as string;
                 const idx = state.findIndex((r) => r.key === key && r.tier === tier);
-                if (idx >= 0) state.splice(idx, 1);
+                if (idx >= 0) {
+                  state.splice(idx, 1);
+                  return { meta: { changes: 1 } };
+                }
+                return { meta: { changes: 0 } };
               }
               return { meta: { changes: 1 } };
             }),
@@ -145,10 +150,20 @@ describe("PUT /api/config/:key/:tier", () => {
     expect(body.error).toContain("string");
   });
 
-  it("preserves existing value when explicit sentinel is sent for sensitive key", async () => {
+  it("preserves existing value when preserveExisting is sent for a sensitive key", async () => {
     const db = createMockDB([
       { key: "openrouter_api_key", tier: "*", value: "sk-real-secret-key", description: null, updated_at: "2026-01-01" },
     ]);
+    const res = await app.request("/api/config/openrouter_api_key/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "", preserveExisting: true }),
+    }, makeEnv(db));
+    expect(res.status).toBe(200);
+  });
+
+  it("allows the previous sentinel string to be stored as a real sensitive value", async () => {
+    const db = createMockDB();
     const res = await app.request("/api/config/openrouter_api_key/*", {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -236,6 +251,18 @@ describe("PUT /api/config/:key/:tier", () => {
     const body = await res.json() as { error: string };
     expect(body.error).toContain("Invalid JSON");
   });
+
+  it("rejects invalid boolean values for boolean keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/enable_byok/*", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value: "TRUEE" }),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("Invalid boolean value");
+  });
 });
 
 describe("DELETE /api/config/:key/:tier", () => {
@@ -280,6 +307,28 @@ describe("DELETE /api/config/:key/:tier", () => {
     expect(res.status).toBe(400);
     const body = await res.json() as { error: string };
     expect(body.error).toContain("only supports tier");
+  });
+
+  it("rejects unknown configuration keys", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/category_modle/*", {
+      method: "DELETE",
+      headers: authHeaders(),
+    }, makeEnv(db));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("Unknown configuration key");
+  });
+
+  it("returns 404 when the target entry does not exist", async () => {
+    const db = createMockDB();
+    const res = await app.request("/api/config/free_quota_limit/*", {
+      method: "DELETE",
+      headers: authHeaders(),
+    }, makeEnv(db));
+    expect(res.status).toBe(404);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("was not found");
   });
 });
 

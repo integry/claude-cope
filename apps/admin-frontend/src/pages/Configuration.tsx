@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAdminApi, adminFetch } from "../hooks/useAdminApi";
 import { API_BASE } from "../config";
-import { SENSITIVE_KEYS, PRESERVE_VALUE_SENTINEL } from "@claude-cope/shared/config";
+import { SENSITIVE_KEYS } from "@claude-cope/shared/config";
 import { ConfigFormPanel, ConfirmDeleteModal, TierBadge } from "./ConfigurationParts";
 import { emptyForm, type ConfigEntry, type ConfigForm } from "./configurationShared";
 
@@ -59,13 +59,13 @@ export default function Configuration() {
     try {
       const key = encodeURIComponent(form.key.trim());
       const tier = encodeURIComponent(form.tier.trim() || "*");
-      const effectiveValue = isSensitiveEdit && !form.value.trim() ? PRESERVE_VALUE_SENTINEL : form.value;
       const result = await adminFetch(`${API_BASE}/api/config/${key}/${tier}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          value: effectiveValue,
+          value: form.value,
           description: form.description || undefined,
+          preserveExisting: isSensitiveEdit && !form.value.trim() ? true : undefined,
         }),
       }) as { warning?: string };
       await mutate();

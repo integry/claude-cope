@@ -20,10 +20,6 @@ export const GLOBAL_ONLY_KEYS = new Set([
   "enable_byok",
 ]);
 
-// Sentinel value used in PUT requests to indicate the existing value should be
-// kept (e.g. when editing a sensitive key without changing its secret).
-export const PRESERVE_VALUE_SENTINEL = "__PRESERVE_EXISTING__";
-
 export const WELL_KNOWN_KEYS = [
   { key: "openrouter_api_key", description: "OpenRouter API key for LLM requests" },
   { key: "openrouter_providers", description: "Preferred OpenRouter providers (comma-separated)" },

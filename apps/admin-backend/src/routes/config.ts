@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS, PRESERVE_VALUE_SENTINEL, WELL_KNOWN_KEYS, BOOLEAN_KEYS } from "@claude-cope/shared/config";
+import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS, WELL_KNOWN_KEYS, BOOLEAN_KEYS } from "@claude-cope/shared/config";
 
 type Env = {
   Bindings: {
@@ -24,15 +24,11 @@ function maskSensitiveValue(key: string, value: string): string {
   return MASKED_PLACEHOLDER;
 }
 
-function normalizeBooleanValue(value: string): string {
+function normalizeBooleanValue(value: string): string | null {
   const lower = value.trim().toLowerCase();
   if (lower === "true" || lower === "1" || lower === "yes") return "true";
   if (lower === "false" || lower === "0" || lower === "no") return "false";
-  return value;
-}
-
-function shouldPreserveValue(value: string): boolean {
-  return value === PRESERVE_VALUE_SENTINEL;
+  return null;
 }
 
 const config = new Hono<Env>();
@@ -103,7 +99,7 @@ config.put("/:key/:tier", async (c) => {
     return c.json({ error: `Unknown configuration key "${key}". Check for typos.` }, 400);
   }
 
-  let body: { value: string; description?: string };
+  let body: { value: string; description?: string; preserveExisting?: boolean };
   try {
     body = await c.req.json<{ value: string; description?: string }>();
   } catch {
@@ -118,9 +114,13 @@ config.put("/:key/:tier", async (c) => {
     return c.json({ error: "description must be a string" }, 400);
   }
 
+  if (body.preserveExisting != null && typeof body.preserveExisting !== "boolean") {
+    return c.json({ error: "preserveExisting must be a boolean" }, 400);
+  }
+
   let value = body.value;
 
-  if (SENSITIVE_KEYS.has(key) && (!value.trim() || shouldPreserveValue(value))) {
+  if (SENSITIVE_KEYS.has(key) && (body.preserveExisting === true || !value.trim())) {
     const existing = await db
       .prepare("SELECT value FROM system_config WHERE key = ? AND tier = ?")
       .bind(key, tier)
@@ -133,7 +133,11 @@ config.put("/:key/:tier", async (c) => {
   }
 
   if (BOOLEAN_KEYS.has(key)) {
-    value = normalizeBooleanValue(value);
+    const normalized = normalizeBooleanValue(value);
+    if (normalized === null) {
+      return c.json({ error: `Invalid boolean value for "${key}". Use true/false, 1/0, or yes/no.` }, 400);
+    }
+    value = normalized;
   }
 
   await db
@@ -169,10 +173,18 @@ config.delete("/:key/:tier", async (c) => {
     return c.json({ error: `Key "${key}" only supports tier "*". This key is not category-specific.` }, 400);
   }
 
-  await db
+  if (!KNOWN_KEYS_SET.has(key)) {
+    return c.json({ error: `Unknown configuration key "${key}". Check for typos.` }, 400);
+  }
+
+  const result = await db
     .prepare("DELETE FROM system_config WHERE key = ? AND tier = ?")
     .bind(key, tier)
     .run();
+
+  if ((result.meta?.changes ?? 0) < 1) {
+    return c.json({ error: `Configuration key "${key}" with tier "${tier}" was not found.` }, 404);
+  }
 
   return c.json({ success: true, key, tier });
 });

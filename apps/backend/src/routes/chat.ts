@@ -160,11 +160,16 @@ interface RoutingConfigResult {
   categoryApiKey: string | null;
 }
 
+export type RoutingQuotaState = {
+  quotaPercent: number;
+  isProUserForRouting: boolean;
+};
+
 // Config is cached per-worker for up to 5s. Admin writes land in D1 immediately
 // but may take up to ROUTING_CACHE_TTL_MS to propagate to chat workers since the
 // admin-backend and chat backend are separate Workers without service bindings.
 const ROUTING_CACHE_TTL_MS = 5_000;
-let routingCache: { data: Awaited<ReturnType<typeof getRoutingConfig>>; category: RequestCategory; ts: number } | null = null;
+const routingCache = new Map<RequestCategory, { data: Awaited<ReturnType<typeof getRoutingConfig>>; ts: number }>();
 
 async function loadRoutingConfig(
   db: D1Database | undefined,
@@ -181,11 +186,12 @@ async function loadRoutingConfig(
     try {
       const now = Date.now();
       let config: Awaited<ReturnType<typeof getRoutingConfig>>;
-      if (routingCache && routingCache.category === category && now - routingCache.ts < ROUTING_CACHE_TTL_MS) {
-        config = routingCache.data;
+      const cached = routingCache.get(category);
+      if (cached && now - cached.ts < ROUTING_CACHE_TTL_MS) {
+        config = cached.data;
       } else {
         config = await getRoutingConfig(db, category);
-        routingCache = { data: config, category, ts: now };
+        routingCache.set(category, { data: config, ts: now });
       }
       // DB values override env: null means "not set in DB, keep env default";
       // empty string means "admin explicitly cleared this setting".
@@ -271,6 +277,7 @@ type PreChatResult = {
   profileLicenseHash: string | null;
   revokedProfileLicenseHash: string | null;
   quotaPercent: number;
+  isProUserForRouting: boolean;
   ownsUsername: boolean;
   deferredKvWrites: (() => void) | null;
 };
@@ -283,6 +290,7 @@ function rejectPreChat(msg: string, status: number, base: Partial<PreChatResult>
     profileLicenseHash: null,
     revokedProfileLicenseHash: null,
     quotaPercent: 0,
+    isProUserForRouting: false,
     ownsUsername: false,
     deferredKvWrites: null,
     ...base,
@@ -326,6 +334,51 @@ async function validateFreeUserAccess(
   return { profileLicenseHash, revokedProfileLicenseHash };
 }
 
+export async function resolveRoutingQuotaState(
+  env: Env["Bindings"],
+  sessionId: string,
+  effectiveProKeyHash: string | undefined,
+): Promise<RoutingQuotaState> {
+  const quotaKv = env.QUOTA_KV ?? env.USAGE_KV;
+  if (!quotaKv) {
+    return {
+      quotaPercent: 100,
+      isProUserForRouting: Boolean(effectiveProKeyHash),
+    };
+  }
+
+  const limits = getQuotaLimits(env);
+  if (effectiveProKeyHash) {
+    const proQuotaPercent = await getQuotaPercent(quotaKv, {
+      tier: "pro",
+      sessionId,
+      licenseKeyHash: effectiveProKeyHash,
+      limits,
+    });
+    if (proQuotaPercent > 0) {
+      return { quotaPercent: proQuotaPercent, isProUserForRouting: true };
+    }
+
+    return {
+      quotaPercent: await getQuotaPercent(quotaKv, {
+        tier: "free",
+        sessionId,
+        limits,
+      }),
+      isProUserForRouting: false,
+    };
+  }
+
+  return {
+    quotaPercent: await getQuotaPercent(quotaKv, {
+      tier: "free",
+      sessionId,
+      limits,
+    }),
+    isProUserForRouting: false,
+  };
+}
+
 async function preChatChecks(
   env: Env["Bindings"],
   ctx: { waitUntil: (p: Promise<unknown>) => void },
@@ -362,18 +415,17 @@ async function preChatChecks(
     revokedProfileLicenseHash = freeAccess.revokedProfileLicenseHash;
   }
 
-  let quotaPercent = 100;
-  const quotaKv = env.QUOTA_KV ?? env.USAGE_KV;
-  if (quotaKv) {
-    quotaPercent = await getQuotaPercent(quotaKv, {
-      tier: effectiveProKeyHash ? "pro" : "free",
-      sessionId,
-      licenseKeyHash: effectiveProKeyHash,
-      limits: getQuotaLimits(env),
-    });
-  }
+  const { quotaPercent, isProUserForRouting } = await resolveRoutingQuotaState(env, sessionId, effectiveProKeyHash);
 
-  return { effectiveProKeyHash, profileLicenseHash, revokedProfileLicenseHash, quotaPercent, ownsUsername: true, deferredKvWrites };
+  return {
+    effectiveProKeyHash,
+    profileLicenseHash,
+    revokedProfileLicenseHash,
+    quotaPercent,
+    isProUserForRouting,
+    ownsUsername: true,
+    deferredKvWrites,
+  };
 }
 
 const chat = new Hono<Env>();
@@ -397,8 +449,7 @@ chat.post("/", async (c) => {
     return c.json({ error: preCheck.error }, (preCheck.status ?? 500) as ContentfulStatusCode);
   }
 
-  const isProUser = Boolean(preCheck.effectiveProKeyHash);
-  const category = assignCategory({ isProUser, quotaPercent: preCheck.quotaPercent });
+  const category = assignCategory({ isProUser: preCheck.isProUserForRouting, quotaPercent: preCheck.quotaPercent });
 
   const { baseApiKey, baseProviders, baseProvidersFreeOnly, categoryModel, categoryApiKey } =
     await loadRoutingConfig(db, c.env, category);
