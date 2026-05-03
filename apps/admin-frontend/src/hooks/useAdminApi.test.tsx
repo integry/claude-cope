@@ -5,18 +5,26 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import {
   AdminApiProvider,
+  ApiError,
   clearAdminApiKey,
   getAdminApiKey,
   setAdminApiKey,
   useAdminAuth,
+  useAdminFetch,
 } from "./useAdminApi";
 
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 let latestAuth: ReturnType<typeof useAdminAuth> | null = null;
+let latestAdminFetch: ReturnType<typeof useAdminFetch> | null = null;
 
 function AuthHarness() {
   latestAuth = useAdminAuth();
+  return createElement("div");
+}
+
+function FetchHarness() {
+  latestAdminFetch = useAdminFetch();
   return createElement("div");
 }
 
@@ -25,7 +33,7 @@ function renderProvider() {
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root.render(createElement(AdminApiProvider, null, createElement(AuthHarness)));
+    root.render(createElement(AdminApiProvider, null, createElement(AuthHarness), createElement(FetchHarness)));
   });
 }
 
@@ -44,6 +52,7 @@ async function flushEffects() {
 
 function cleanup() {
   latestAuth = null;
+  latestAdminFetch = null;
   clearAdminApiKey();
   vi.restoreAllMocks();
   if (root) {
@@ -89,6 +98,27 @@ describe("useAdminAuth", () => {
     expect(getAdminApiKey()).toBe("");
   });
 
+  it("keeps the admin key in memory instead of session storage", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse([], { status: 200, statusText: "OK" }),
+    );
+
+    renderProvider();
+    await flushEffects();
+
+    await act(async () => {
+      await latestAuth!.signIn("memory-only-key");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/config", {
+      headers: {
+        Authorization: "Bearer memory-only-key",
+      },
+    });
+    expect(getAdminApiKey()).toBe("memory-only-key");
+    expect(sessionStorage.getItem("admin_api_key")).toBeNull();
+  });
+
   it("preserves a stored key when initial verification hits a server error", async () => {
     setAdminApiKey("stored-key");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -106,7 +136,7 @@ describe("useAdminAuth", () => {
 
   it("preserves the stored key when sign-in verification hits a server error", async () => {
     setAdminApiKey("stored-key");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
       jsonResponse({ error: "Database not configured" }, { status: 500, statusText: "Internal Server Error" }),
     );
 
@@ -148,5 +178,37 @@ describe("useAdminAuth", () => {
     expect(latestAuth?.authChecking).toBe(false);
     expect(latestAuth?.authRequired).toBe(false);
     expect(latestAuth?.authError).toBe(false);
+  });
+
+  it("preserves the in-memory key when an authenticated request gets a 403", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse([], { status: 200, statusText: "OK" }))
+      .mockImplementation(async () =>
+        jsonResponse({ error: "ADMIN_API_KEY is not configured" }, { status: 403, statusText: "Forbidden" }),
+      );
+
+    renderProvider();
+    await flushEffects();
+
+    await act(async () => {
+      await latestAuth!.signIn("stored-key");
+    });
+
+    let thrown: unknown = null;
+    await act(async () => {
+      try {
+        await latestAdminFetch!("/api/config");
+      } catch (error) {
+        thrown = error;
+      }
+    });
+
+    expect(thrown).toBeInstanceOf(ApiError);
+    expect((thrown as ApiError).message).toBe("ADMIN_API_KEY is not configured");
+    expect((thrown as ApiError).status).toBe(403);
+    expect(getAdminApiKey()).toBe("stored-key");
+    expect(latestAuth?.authRequired).toBe(false);
+    expect(latestAuth?.authError).toBe(false);
+    expect(latestAuth?.serverError).toBe("ADMIN_API_KEY is not configured");
   });
 });

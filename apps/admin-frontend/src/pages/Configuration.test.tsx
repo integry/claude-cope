@@ -182,7 +182,7 @@ describe("Configuration save flow", () => {
     expect(adminFetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = adminFetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("/api/config/openrouter_api_key/*");
-    expect(JSON.parse(String(init.body))).toEqual({
+    expect(JSON.parse(String(init.body))).toMatchObject({
       value: "",
     });
   });

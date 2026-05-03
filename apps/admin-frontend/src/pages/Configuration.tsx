@@ -170,6 +170,10 @@ export default function Configuration() {
       <p className="mt-1 text-sm text-gray-500">
         Routing changes are written immediately, but chat workers may take up to 5 seconds to pick them up.
       </p>
+      <p className="mt-1 text-sm text-amber-700">
+        Sensitive values are shown in full to signed-in admins. Avoid screen sharing or recordings while editing API
+        keys.
+      </p>
 
       {showForm && (
         <ConfigFormPanel

@@ -2,45 +2,22 @@ import { createContext, createElement, useContext, useEffect, useState, type Rea
 import useSWR from "swr";
 import { API_BASE } from "../config";
 
-const SESSION_KEY = "admin_api_key";
-
-function isStorageAvailable(): boolean {
-  try {
-    const testKey = "__storage_test__";
-    sessionStorage.setItem(testKey, "1");
-    sessionStorage.removeItem(testKey);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-let memoryFallback = "";
+let memoryApiKey = "";
 
 export function getAdminApiKey(): string {
-  if (!isStorageAvailable()) return memoryFallback;
-  return sessionStorage.getItem(SESSION_KEY) || "";
+  return memoryApiKey;
 }
 
 export function hasStoredApiKey(): boolean {
-  if (!isStorageAvailable()) return !!memoryFallback;
-  return !!sessionStorage.getItem(SESSION_KEY);
+  return !!memoryApiKey;
 }
 
 export function setAdminApiKey(key: string): void {
-  if (!isStorageAvailable()) {
-    memoryFallback = key;
-    return;
-  }
-  sessionStorage.setItem(SESSION_KEY, key);
+  memoryApiKey = key;
 }
 
 export function clearAdminApiKey(): void {
-  if (!isStorageAvailable()) {
-    memoryFallback = "";
-    return;
-  }
-  sessionStorage.removeItem(SESSION_KEY);
+  memoryApiKey = "";
 }
 
 function authHeaders(): Record<string, string> {
@@ -217,8 +194,6 @@ export function AdminApiProvider({ children }: { children: ReactNode }) {
       if (res.status === 403) {
         setAuthError(false);
         setServerError(body?.error || "Server returned 403 - check ADMIN_API_KEY configuration");
-        clearAdminApiKey();
-        setAuthRequired(true);
       }
       throw new ApiError(body?.error || res.statusText, res.status);
     }
