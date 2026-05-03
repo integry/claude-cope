@@ -87,7 +87,7 @@ describe("GET /api/config", () => {
     expect(res.status).toBe(500);
   });
 
-  it("returns config entries with sensitive values fully masked (no suffix leak)", async () => {
+  it("returns config entries with full sensitive values for trusted admin access", async () => {
     const db = createMockDB([
       { key: "openrouter_api_key", tier: "*", value: "sk-or-v1-abc123xyz789", description: null, updated_at: "2026-01-01" },
       { key: "free_quota_limit", tier: "*", value: "100", description: "Quota", updated_at: "2026-01-01" },
@@ -98,7 +98,7 @@ describe("GET /api/config", () => {
     expect(res.status).toBe(200);
     const data = await res.json() as ConfigRow[];
     const apiKeyEntry = data.find((r) => r.key === "openrouter_api_key");
-    expect(apiKeyEntry?.value).toBe("••••");
+    expect(apiKeyEntry?.value).toBe("sk-or-v1-abc123xyz789");
     const quotaEntry = data.find((r) => r.key === "free_quota_limit");
     expect(quotaEntry?.value).toBe("100");
   });
@@ -258,14 +258,14 @@ describe("PUT /api/config/:key/:tier", () => {
     expect(body.error).toContain("string");
   });
 
-  it("preserves existing value when preserveExisting is sent for a sensitive key", async () => {
+  it("allows clearing an existing sensitive key value", async () => {
     const db = createMockDB([
       { key: "openrouter_api_key", tier: "*", value: "sk-real-secret-key", description: null, updated_at: "2026-01-01" },
     ]);
     const res = await app.request("/api/config/openrouter_api_key/*", {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ value: "", preserveExisting: true }),
+      body: JSON.stringify({ value: "" }),
     }, makeEnv(db));
     expect(res.status).toBe(200);
   });
@@ -280,7 +280,7 @@ describe("PUT /api/config/:key/:tier", () => {
     expect(res.status).toBe(200);
   });
 
-  it("preserves existing value when empty string is sent for sensitive key edit", async () => {
+  it("allows empty string when editing a sensitive key", async () => {
     const db = createMockDB([
       { key: "category_api_key", tier: "max", value: "sk-existing", description: null, updated_at: "2026-01-01" },
     ]);
@@ -292,16 +292,14 @@ describe("PUT /api/config/:key/:tier", () => {
     expect(res.status).toBe(200);
   });
 
-  it("rejects new sensitive key entry with no existing value", async () => {
+  it("allows new sensitive key entry with an empty value", async () => {
     const db = createMockDB();
     const res = await app.request("/api/config/openrouter_api_key/*", {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ value: "" }),
     }, makeEnv(db));
-    expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
-    expect(body.error).toContain("required");
+    expect(res.status).toBe(200);
   });
 
   it("rejects missing value field", async () => {

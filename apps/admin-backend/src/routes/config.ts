@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
-  SENSITIVE_KEYS,
   BOOLEAN_KEYS,
   validateConfigValue,
   validateConfigKey,
@@ -24,21 +23,13 @@ interface ConfigRow {
   updated_at: string;
 }
 
-const MASKED_PLACEHOLDER = "••••";
-
 interface ConfigMutationBody {
   value: string;
   description?: string;
-  preserveExisting?: boolean;
 }
 
 interface StoredDescriptionRow {
   description: string | null;
-}
-
-function maskSensitiveValue(key: string, value: string): string {
-  if (!SENSITIVE_KEYS.has(key)) return value;
-  return MASKED_PLACEHOLDER;
 }
 
 function normalizeBooleanValue(value: string): string | null {
@@ -61,9 +52,6 @@ async function parseMutationBody(c: Context<Env>): Promise<ConfigMutationBody | 
     if (body.description != null && typeof body.description !== "string") {
       return jsonError(c, "description must be a string", 400);
     }
-    if (body.preserveExisting != null && typeof body.preserveExisting !== "boolean") {
-      return jsonError(c, "preserveExisting must be a boolean", 400);
-    }
     return body;
   } catch {
     return jsonError(c, "Invalid JSON body", 400);
@@ -72,22 +60,10 @@ async function parseMutationBody(c: Context<Env>): Promise<ConfigMutationBody | 
 
 async function resolveStoredValue(
   c: Context<Env>,
-  db: D1Database,
   params: { key: string; tier: string; body: ConfigMutationBody },
 ): Promise<string | Response> {
-  const { key, tier, body } = params;
+  const { key, body } = params;
   let value = body.value;
-
-  if (SENSITIVE_KEYS.has(key) && (body.preserveExisting === true || !value.trim())) {
-    const existing = await db
-      .prepare("SELECT value FROM system_config WHERE key = ? AND tier = ?")
-      .bind(key, tier)
-      .first<{ value: string }>();
-    if (!existing) {
-      return jsonError(c, "Value is required for new sensitive key entries", 400);
-    }
-    value = existing.value;
-  }
 
   if (BOOLEAN_KEYS.has(key)) {
     const normalized = normalizeBooleanValue(value);
@@ -153,9 +129,7 @@ config.get("/", async (c) => {
   }
 
   return c.json(
-    results
-      .filter((r) => validateConfigKey(r.key) === null)
-      .map((r) => ({ ...r, value: maskSensitiveValue(r.key, r.value) }))
+    results.filter((r) => validateConfigKey(r.key) === null)
   );
 });
 
@@ -174,8 +148,7 @@ config.get("/:key", async (c) => {
     .bind(key)
     .all<ConfigRow>();
 
-  const rows = results ?? [];
-  return c.json(rows.map((r) => ({ ...r, value: maskSensitiveValue(r.key, r.value) })));
+  return c.json(results ?? []);
 });
 
 config.put("/:key/:tier", async (c) => {
@@ -190,7 +163,7 @@ config.put("/:key/:tier", async (c) => {
   const parsedBody = await parseMutationBody(c);
   if (parsedBody instanceof Response) return parsedBody;
 
-  const value = await resolveStoredValue(c, db, { key, tier, body: parsedBody });
+  const value = await resolveStoredValue(c, { key, tier, body: parsedBody });
   if (value instanceof Response) return value;
   const description = await resolveStoredDescription(db, key, tier, parsedBody);
 

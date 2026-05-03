@@ -87,9 +87,6 @@ function AuthPrompt({
       <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
         <h2 className="text-lg font-semibold text-gray-900">Admin Authentication</h2>
         <p className="mt-2 text-sm text-gray-600">Enter the admin API key to access the panel.</p>
-        <p className="mt-2 text-sm text-amber-700">
-          The key is kept only for this tab session. Because browser-stored bearer tokens can be read by injected scripts, deploy this admin UI only on a trusted internal origin.
-        </p>
         {error && <p className="mt-2 text-sm text-red-600">Invalid API key. Please try again.</p>}
         {serverError && <p className="mt-2 text-sm text-red-600">{serverError}</p>}
         <input

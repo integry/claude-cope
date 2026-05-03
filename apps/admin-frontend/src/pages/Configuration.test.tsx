@@ -84,13 +84,13 @@ describe("Configuration save flow", () => {
 
   afterEach(cleanup);
 
-  it("preserves the existing secret when editing a sensitive key with a blank value", async () => {
+  it("submits the actual sensitive value when editing a trusted admin setting", async () => {
     useAdminApiMock.mockReturnValue({
       data: [
         {
           key: "openrouter_api_key",
           tier: "*",
-          value: "••••••••",
+          value: "sk-or-v1-real-secret",
           description: "Old description",
           updated_at: "2026-05-03T00:00:00.000Z",
         },
@@ -104,9 +104,12 @@ describe("Configuration save flow", () => {
     await clickButton("Edit");
 
     const panel = getFormPanel();
-    const descriptionInput = Array.from(panel.querySelectorAll('input[type="text"]')).find(
-      (input): input is HTMLInputElement => input instanceof HTMLInputElement && input.value === "Old description",
-    ) as HTMLInputElement | undefined;
+    const editableInputs = Array.from(panel.querySelectorAll('input[type="text"]')).filter(
+      (input): input is HTMLInputElement => input instanceof HTMLInputElement && !input.disabled,
+    );
+    const valueInput = editableInputs.find((input) => input.value === "sk-or-v1-real-secret");
+    if (!valueInput) throw new Error("Value input not found");
+    const descriptionInput = editableInputs.find((input) => input.value === "Old description");
     if (!descriptionInput) throw new Error("Description input not found");
 
     await changeInput(descriptionInput, "Updated description");
@@ -116,9 +119,8 @@ describe("Configuration save flow", () => {
     const [, init] = adminFetchMock.mock.calls[0] as [string, RequestInit];
     expect(init.method).toBe("PUT");
     expect(JSON.parse(String(init.body))).toEqual({
-      value: "",
+      value: "sk-or-v1-real-secret",
       description: "Updated description",
-      preserveExisting: true,
     });
   });
 

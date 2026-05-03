@@ -1,4 +1,4 @@
-import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS, GLOBAL_ONLY_KEYS } from "@claude-cope/shared/config";
+import { CATEGORY_KEYS, VALID_CATEGORY_TIERS, GLOBAL_ONLY_KEYS } from "@claude-cope/shared/config";
 import { WELL_KNOWN_KEYS, type ConfigEntry, type ConfigForm } from "./configurationShared";
 
 export function TierBadge({ tier }: { tier: string }) {
@@ -127,12 +127,10 @@ export function ConfigFormPanel({ editingEntry, form, setForm, saving, saveError
           <div>
             <label className="block text-sm font-medium text-gray-700">Value</label>
             <input
-              type={SENSITIVE_KEYS.has(form.key) ? "password" : "text"}
+              type="text"
               value={form.value}
               onChange={(e) => setForm({ ...form, value: e.target.value })}
-              placeholder={editingEntry && SENSITIVE_KEYS.has(form.key) ? "Leave empty to keep current value" : ""}
               className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
-              autoComplete={SENSITIVE_KEYS.has(form.key) ? "off" : undefined}
             />
             {valueHelpText && <p className="mt-2 text-sm text-gray-500">{valueHelpText}</p>}
           </div>

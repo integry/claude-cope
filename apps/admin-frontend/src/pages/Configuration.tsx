@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   BOOLEAN_KEYS,
-  SENSITIVE_KEYS,
   normalizeBooleanConfigValue,
   validateConfigKeyAndTier,
   validateConfigValue,
@@ -45,7 +44,7 @@ export default function Configuration() {
     setForm({
       key: entry.key,
       tier: entry.tier,
-      value: SENSITIVE_KEYS.has(entry.key) ? "" : entry.value,
+      value: entry.value,
       description: entry.description ?? "",
     });
     setShowForm(true);
@@ -61,7 +60,6 @@ export default function Configuration() {
   async function handleSave() {
     const normalizedKey = form.key.trim();
     const normalizedTier = form.tier.trim() || "*";
-    const preserveExisting = !!(editingEntry && SENSITIVE_KEYS.has(normalizedKey) && !form.value.trim());
     const normalizedValue =
       BOOLEAN_KEYS.has(normalizedKey) ? (normalizeBooleanConfigValue(form.value) ?? form.value) : form.value;
     const keyTierValidationError = validateConfigKeyAndTier(normalizedKey, normalizedTier);
@@ -69,17 +67,15 @@ export default function Configuration() {
       setSaveError(keyTierValidationError);
       return;
     }
-    if (!preserveExisting && !editingEntry && !form.value.trim()) {
+    if (!editingEntry && !form.value.trim()) {
       setSaveError("Value is required.");
       return;
     }
 
-    if (!preserveExisting) {
-      const valueValidationError = validateConfigValue(normalizedKey, normalizedValue);
-      if (valueValidationError) {
-        setSaveError(valueValidationError);
-        return;
-      }
+    const valueValidationError = validateConfigValue(normalizedKey, normalizedValue);
+    if (valueValidationError) {
+      setSaveError(valueValidationError);
+      return;
     }
 
     setSaving(true);
@@ -91,9 +87,8 @@ export default function Configuration() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          value: preserveExisting ? form.value : normalizedValue,
+          value: normalizedValue,
           description: form.description || undefined,
-          preserveExisting: preserveExisting ? true : undefined,
         }),
       });
       await mutate();

@@ -2,9 +2,6 @@ import { createContext, createElement, useContext, useEffect, useState, type Rea
 import useSWR from "swr";
 import { API_BASE } from "../config";
 
-// This bearer token is still readable by any injected script in the admin SPA.
-// Keep the admin frontend on a trusted internal origin until it moves to a
-// server-issued session/cookie model.
 const SESSION_KEY = "admin_api_key";
 
 function isStorageAvailable(): boolean {
