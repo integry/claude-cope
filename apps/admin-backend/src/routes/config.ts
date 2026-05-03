@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { SENSITIVE_KEYS, CATEGORY_KEYS, VALID_CATEGORY_TIERS_SET, GLOBAL_ONLY_KEYS, WELL_KNOWN_KEYS, BOOLEAN_KEYS } from "@claude-cope/shared/config";
 import { parseProviderList } from "@claude-cope/shared/openrouter";
 
@@ -43,7 +44,7 @@ function normalizeBooleanValue(value: string): string | null {
   return null;
 }
 
-function jsonError(c: Context<Env>, error: string, status: number): Response {
+function jsonError(c: Context<Env>, error: string, status: ContentfulStatusCode): Response {
   return c.json({ error }, status);
 }
 
@@ -122,10 +123,9 @@ async function parseMutationBody(c: Context<Env>): Promise<ConfigMutationBody | 
 async function resolveStoredValue(
   c: Context<Env>,
   db: D1Database,
-  key: string,
-  tier: string,
-  body: ConfigMutationBody,
+  params: { key: string; tier: string; body: ConfigMutationBody },
 ): Promise<string | Response> {
+  const { key, tier, body } = params;
   let value = body.value;
 
   if (SENSITIVE_KEYS.has(key) && (body.preserveExisting === true || !value.trim())) {
@@ -240,7 +240,7 @@ config.put("/:key/:tier", async (c) => {
   const parsedBody = await parseMutationBody(c);
   if (parsedBody instanceof Response) return parsedBody;
 
-  const value = await resolveStoredValue(c, db, key, tier, parsedBody);
+  const value = await resolveStoredValue(c, db, { key, tier, body: parsedBody });
   if (value instanceof Response) return value;
   const description = await resolveStoredDescription(db, key, tier, parsedBody);
 
