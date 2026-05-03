@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { SENSITIVE_KEYS, validateConfigKeyAndTier, validateConfigValue } from "@claude-cope/shared/config";
+import {
+  BOOLEAN_KEYS,
+  SENSITIVE_KEYS,
+  normalizeBooleanConfigValue,
+  validateConfigKeyAndTier,
+  validateConfigValue,
+} from "@claude-cope/shared/config";
 import { useAdminApi, useAdminFetch } from "../hooks/useAdminApi";
 import { API_BASE } from "../config";
 import { ConfigFormPanel, ConfirmDeleteModal, TierBadge } from "./ConfigurationParts";
@@ -55,21 +61,25 @@ export default function Configuration() {
   async function handleSave() {
     const normalizedKey = form.key.trim();
     const normalizedTier = form.tier.trim() || "*";
+    const preserveExisting = !!(editingEntry && SENSITIVE_KEYS.has(normalizedKey) && !form.value.trim());
+    const normalizedValue =
+      BOOLEAN_KEYS.has(normalizedKey) ? (normalizeBooleanConfigValue(form.value) ?? form.value) : form.value;
     const keyTierValidationError = validateConfigKeyAndTier(normalizedKey, normalizedTier);
     if (keyTierValidationError) {
       setSaveError(keyTierValidationError);
       return;
     }
-    const isSensitiveEdit = editingEntry && SENSITIVE_KEYS.has(normalizedKey);
-    if (!isSensitiveEdit && !editingEntry && !form.value.trim()) {
+    if (!preserveExisting && !editingEntry && !form.value.trim()) {
       setSaveError("Value is required.");
       return;
     }
 
-    const valueValidationError = validateConfigValue(normalizedKey, form.value);
-    if (valueValidationError) {
-      setSaveError(valueValidationError);
-      return;
+    if (!preserveExisting) {
+      const valueValidationError = validateConfigValue(normalizedKey, normalizedValue);
+      if (valueValidationError) {
+        setSaveError(valueValidationError);
+        return;
+      }
     }
 
     setSaving(true);
@@ -81,9 +91,9 @@ export default function Configuration() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          value: form.value,
+          value: preserveExisting ? form.value : normalizedValue,
           description: form.description || undefined,
-          preserveExisting: isSensitiveEdit && !form.value.trim() ? true : undefined,
+          preserveExisting: preserveExisting ? true : undefined,
         }),
       });
       await mutate();

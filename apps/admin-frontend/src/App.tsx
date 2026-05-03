@@ -58,12 +58,28 @@ function Layout({ children, onLogout }: { children: React.ReactNode; onLogout: (
   );
 }
 
-function AuthPrompt({ error, serverError, onSubmit }: { error: boolean; serverError: string | null; onSubmit: (key: string) => void }) {
+function AuthPrompt({
+  error,
+  serverError,
+  onSubmit,
+}: {
+  error: boolean;
+  serverError: string | null;
+  onSubmit: (key: string) => Promise<boolean>;
+}) {
   const [key, setKey] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (key.trim()) onSubmit(key.trim());
+    if (!key.trim()) return;
+
+    setSubmitting(true);
+    try {
+      await onSubmit(key.trim());
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -83,12 +99,14 @@ function AuthPrompt({ error, serverError, onSubmit }: { error: boolean; serverEr
           placeholder="API Key"
           className="mt-4 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
           autoFocus
+          disabled={submitting}
         />
         <button
           type="submit"
+          disabled={submitting}
           className="mt-4 w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
-          Sign In
+          {submitting ? "Signing In..." : "Sign In"}
         </button>
       </form>
     </div>
@@ -96,7 +114,15 @@ function AuthPrompt({ error, serverError, onSubmit }: { error: boolean; serverEr
 }
 
 function AppShell() {
-  const { authRequired, authError, serverError, signIn, signOut } = useAdminAuth();
+  const { authChecking, authRequired, authError, serverError, signIn, signOut } = useAdminAuth();
+
+  if (authChecking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="rounded-lg bg-white px-6 py-4 text-sm text-gray-600 shadow-lg">Checking admin access...</div>
+      </div>
+    );
+  }
 
   if (authRequired) {
     return (

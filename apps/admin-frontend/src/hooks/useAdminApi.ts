@@ -1,4 +1,4 @@
-import { createContext, createElement, useContext, useState, type ReactNode } from "react";
+import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react";
 import useSWR from "swr";
 import { API_BASE } from "../config";
 
@@ -62,10 +62,11 @@ export class ApiError extends Error {
 
 interface AdminAuthContextValue {
   adminFetch: <T>(url: string, init?: RequestInit) => Promise<T>;
+  authChecking: boolean;
   authRequired: boolean;
   authError: boolean;
   serverError: string | null;
-  signIn: (key: string) => void;
+  signIn: (key: string) => Promise<boolean>;
   signOut: () => void;
 }
 
@@ -76,22 +77,119 @@ async function parseResponseBody(res: Response) {
 }
 
 export function AdminApiProvider({ children }: { children: ReactNode }) {
-  const [authRequired, setAuthRequired] = useState(!hasStoredApiKey());
+  const [authChecking, setAuthChecking] = useState(hasStoredApiKey());
+  const [authRequired, setAuthRequired] = useState(true);
   const [authError, setAuthError] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
+  async function verifyApiKey(key: string): Promise<{ ok: boolean; authError: boolean; serverError: string | null }> {
+    const res = await fetch(`${API_BASE}/api/config`, {
+      headers: {
+        Authorization: `Bearer ${key}`,
+      },
+    });
+
+    if (res.ok) {
+      return { ok: true, authError: false, serverError: null };
+    }
+
+    const body = await parseResponseBody(res);
+    if (res.status === 401) {
+      return { ok: false, authError: true, serverError: null };
+    }
+    if (res.status === 403) {
+      return {
+        ok: false,
+        authError: false,
+        serverError: body?.error || "Server returned 403 - check ADMIN_API_KEY configuration",
+      };
+    }
+
+    return {
+      ok: false,
+      authError: false,
+      serverError: body?.error || res.statusText || "Failed to verify admin API key.",
+    };
+  }
+
+  useEffect(() => {
+    const storedKey = getAdminApiKey();
+    if (!storedKey) {
+      setAuthChecking(false);
+      setAuthRequired(true);
+      return;
+    }
+
+    let cancelled = false;
+    setAuthChecking(true);
+
+    void verifyApiKey(storedKey)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.ok) {
+          setAuthRequired(false);
+          setAuthError(false);
+          setServerError(null);
+          return;
+        }
+
+        clearAdminApiKey();
+        setAuthRequired(true);
+        setAuthError(result.authError);
+        setServerError(result.serverError);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        clearAdminApiKey();
+        setAuthRequired(true);
+        setAuthError(false);
+        setServerError("Failed to verify admin API key.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAuthChecking(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function signOut() {
     clearAdminApiKey();
+    setAuthChecking(false);
     setAuthRequired(true);
     setAuthError(false);
     setServerError(null);
   }
 
-  function signIn(key: string) {
-    setAdminApiKey(key);
-    setAuthRequired(false);
+  async function signIn(key: string) {
+    setAuthChecking(true);
     setAuthError(false);
     setServerError(null);
+    try {
+      const result = await verifyApiKey(key);
+      if (!result.ok) {
+        clearAdminApiKey();
+        setAuthRequired(true);
+        setAuthError(result.authError);
+        setServerError(result.serverError);
+        return false;
+      }
+
+      setAdminApiKey(key);
+      setAuthRequired(false);
+      return true;
+    } catch {
+      clearAdminApiKey();
+      setAuthRequired(true);
+      setAuthError(false);
+      setServerError("Failed to verify admin API key.");
+      return false;
+    } finally {
+      setAuthChecking(false);
+    }
   }
 
   async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
@@ -126,6 +224,7 @@ export function AdminApiProvider({ children }: { children: ReactNode }) {
 
   const value: AdminAuthContextValue = {
     adminFetch,
+    authChecking,
     authRequired,
     authError,
     serverError,
@@ -143,8 +242,8 @@ function useAdminAuthContext(): AdminAuthContextValue {
 }
 
 export function useAdminAuth() {
-  const { authRequired, authError, serverError, signIn, signOut } = useAdminAuthContext();
-  return { authRequired, authError, serverError, signIn, signOut };
+  const { authChecking, authRequired, authError, serverError, signIn, signOut } = useAdminAuthContext();
+  return { authChecking, authRequired, authError, serverError, signIn, signOut };
 }
 
 export function useAdminFetch() {
