@@ -1,0 +1,94 @@
+/**
+ * Shared Turnstile verification status types used by both the backend
+ * verify route and the frontend TurnstileWidget.
+ *
+ * Keeping these in one place reduces drift risk when the verify API changes.
+ */
+
+/** Status strings returned by GET /api/verify */
+export const VERIFY_STATUS = {
+  DISABLED: "disabled",
+  ENABLED: "enabled",
+  VERIFIED: "verified",
+  MISCONFIGURED: "misconfigured",
+  UNAVAILABLE: "unavailable",
+} as const;
+
+export type VerifyStatus = (typeof VERIFY_STATUS)[keyof typeof VERIFY_STATUS];
+
+/** Reason strings for unavailable status */
+export const UNAVAILABLE_REASON = {
+  SESSION_UNAVAILABLE: "session_unavailable",
+  STORAGE_UNAVAILABLE: "storage_unavailable",
+  VERIFICATION_CHECK_FAILED: "verification_check_failed",
+} as const;
+
+export type UnavailableReason = (typeof UNAVAILABLE_REASON)[keyof typeof UNAVAILABLE_REASON];
+
+export type VerifyStatusResponse =
+  | {
+      status: typeof VERIFY_STATUS.DISABLED;
+      enabled: false;
+      bypassed: true;
+      misconfigured: false;
+    }
+  | {
+      status: typeof VERIFY_STATUS.ENABLED;
+      enabled: true;
+      bypassed: false;
+      misconfigured: false;
+    }
+  | {
+      status: typeof VERIFY_STATUS.VERIFIED;
+      enabled: true;
+      bypassed: false;
+      misconfigured: false;
+    }
+  | {
+      status: typeof VERIFY_STATUS.MISCONFIGURED;
+      enabled: false;
+      bypassed: false;
+      misconfigured: true;
+      reason: typeof MISCONFIGURED_REASON.INVALID_EXPECTED_HOSTNAME;
+    }
+  | {
+      status: typeof VERIFY_STATUS.UNAVAILABLE;
+      enabled: false;
+      bypassed: false;
+      misconfigured: false;
+      reason:
+        | typeof UNAVAILABLE_REASON.SESSION_UNAVAILABLE
+        | typeof UNAVAILABLE_REASON.STORAGE_UNAVAILABLE
+        | typeof UNAVAILABLE_REASON.VERIFICATION_CHECK_FAILED;
+    };
+
+/** Reason strings for POST /api/verify 403 responses */
+export const VERIFY_FAILURE_REASON = {
+  TOKEN_EXPIRED: "token_expired",
+  CHALLENGE_FAILED: "challenge_failed",
+} as const;
+
+export type VerifyFailureReason = (typeof VERIFY_FAILURE_REASON)[keyof typeof VERIFY_FAILURE_REASON];
+
+/** Misconfigured reason strings */
+export const MISCONFIGURED_REASON = {
+  INVALID_EXPECTED_HOSTNAME: "invalid_expected_hostname",
+} as const;
+
+export type MisconfiguredReason = (typeof MISCONFIGURED_REASON)[keyof typeof MISCONFIGURED_REASON];
+
+/** Human verification KV key prefix and TTL */
+export const HUMAN_FLAG_PREFIX = "human:";
+export const HUMAN_FLAG_TTL_SECONDS = 60 * 60 * 24; // 24 hours
+
+export const humanFlagKey = (sessionId: string): string => `${HUMAN_FLAG_PREFIX}${sessionId}`;
+
+/** Reason strings for /api/chat bot-protection failures */
+export const BOT_PROTECTION_REASON = {
+  HUMAN_VERIFICATION_REQUIRED: "human_verification_required",
+  SESSION_UNAVAILABLE: "session_unavailable",
+  STORAGE_UNAVAILABLE: "storage_unavailable",
+  VERIFICATION_CHECK_FAILED: "verification_check_failed",
+} as const;
+
+export type BotProtectionReason = (typeof BOT_PROTECTION_REASON)[keyof typeof BOT_PROTECTION_REASON];

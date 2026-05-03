@@ -161,6 +161,23 @@ export const migrations: Migration[] = [
       PRIMARY KEY (license_key_hash, change_date)
     )`,
   },
+
+  // ── system_config table ────────────────────────────────────────────
+  {
+    name: "021_create_system_config",
+    sql: `CREATE TABLE IF NOT EXISTS system_config (
+      key TEXT NOT NULL,
+      tier TEXT NOT NULL DEFAULT '*',
+      value TEXT NOT NULL,
+      description TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (key, tier)
+    )`,
+  },
+  {
+    name: "022_idx_system_config_tier",
+    sql: "CREATE INDEX IF NOT EXISTS idx_system_config_tier ON system_config (tier)",
+  },
 ];
 
 /**

@@ -1,4 +1,5 @@
 {
   "name": "claude-cope-party",
-  "main": "src/server.ts"
+  "main": "src/server.ts",
+  "compatibilityDate": "2026-04-30"
 }

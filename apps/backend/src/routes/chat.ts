@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { COPE_MODELS } from "@claude-cope/shared/models";
@@ -6,7 +7,6 @@ import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { parseProviderList } from "@claude-cope/shared/openrouter";
 import { getProfileRow, isLicenseActive, resolveProUser } from "../utils/profile";
 import {
-  checkQuotaAvailable,
   consumeQuotaPostSuccess,
   mirrorPolarUsage,
   handleProUserScoring,
@@ -14,6 +14,7 @@ import {
   type ChatResponseData,
 } from "./chatHelpers";
 import { getQuotaPercent, getQuotaLimits } from "../utils/quota";
+import { assignCategory, getRoutingConfig, type RequestCategory } from "../utils/categoryRouting";
 
 type Env = {
   Bindings: {
@@ -152,14 +153,64 @@ async function tryCacheSessionMapping(
   return { profileLicenseHash: profileHash, hasRow: Boolean(row), deferredKvWrites: null };
 }
 
-function validateChatRequest(body: ChatBody, apiKey: string | undefined): { error: string; status: 400 | 500 } | null {
-  if (!body.chatMessages || !Array.isArray(body.chatMessages)) {
-    return { error: "chatMessages array is required", status: 400 };
+interface RoutingConfigResult {
+  baseApiKey: string | undefined;
+  baseProviders: string | undefined;
+  baseProvidersFreeOnly: string | undefined;
+  categoryModel: string | null;
+  categoryApiKey: string | null;
+}
+
+export type RoutingQuotaState = {
+  quotaPercent: number;
+  isProUserForRouting: boolean;
+};
+
+// Config is cached per-worker for up to 5s. Admin writes land in D1 immediately
+// but may take up to ROUTING_CACHE_TTL_MS to propagate to chat workers since the
+// admin-backend and chat backend are separate Workers without service bindings.
+const ROUTING_CACHE_TTL_MS = 5_000;
+const routingCache = new Map<RequestCategory, { data: Awaited<ReturnType<typeof getRoutingConfig>>; ts: number }>();
+
+async function loadRoutingConfig(
+  db: D1Database | undefined,
+  env: Env["Bindings"],
+  category: RequestCategory,
+): Promise<RoutingConfigResult> {
+  let baseApiKey: string | undefined = env.OPENROUTER_API_KEY;
+  let baseProviders: string | undefined = env.OPENROUTER_PROVIDERS;
+  let baseProvidersFreeOnly: string | undefined = env.OPENROUTER_PROVIDERS_FREE_ONLY;
+  let categoryModel: string | null = null;
+  let categoryApiKey: string | null = null;
+
+  if (db) {
+    try {
+      const now = Date.now();
+      let config: Awaited<ReturnType<typeof getRoutingConfig>>;
+      const cached = routingCache.get(category);
+      if (cached && now - cached.ts < ROUTING_CACHE_TTL_MS) {
+        config = cached.data;
+      } else {
+        config = await getRoutingConfig(db, category);
+        routingCache.set(category, { data: config, ts: now });
+      }
+      // DB values override env: null means "not set in DB, keep env default";
+      // empty string means "admin explicitly cleared this setting".
+      if (config.openRouter.apiKey !== null) baseApiKey = config.openRouter.apiKey || undefined;
+      if (config.openRouter.providers !== null) baseProviders = config.openRouter.providers === "" ? undefined : config.openRouter.providers;
+      if (config.openRouter.providersFreeOnly !== null) baseProvidersFreeOnly = config.openRouter.providersFreeOnly === "" ? undefined : config.openRouter.providersFreeOnly;
+      categoryModel = config.category.model;
+      categoryApiKey = config.category.apiKey;
+    } catch (err) {
+      console.log(`[ROUTING] D1 config lookup failed (table may not exist yet), falling back to env vars: ${err}`);
+    }
   }
-  if (!apiKey) {
-    return { error: "OPENROUTER_API_KEY is not configured", status: 500 };
-  }
-  return null;
+
+  return { baseApiKey, baseProviders, baseProvidersFreeOnly, categoryModel, categoryApiKey };
+}
+
+function resolveCountry(body: ChatBody, req: { raw: unknown; header: (name: string) => string | undefined }): string {
+  return body.country || (req.raw as unknown as { cf?: { country?: string } }).cf?.country || req.header("cf-ipcountry") || "Unknown";
 }
 
 type OpenRouterRequestBody = {
@@ -173,9 +224,17 @@ type OpenRouterRequestBody = {
 export function resolveProviderList(
   providersEnv: string | undefined,
   freeOnlyEnv: string | undefined,
-  isProUser: boolean,
+  category: RequestCategory,
 ): string[] {
-  if (isProUser && freeOnlyEnv === "true") return [];
+  const normalizedFreeOnly = freeOnlyEnv?.trim().toLowerCase();
+  const freeOnlyEnabled = normalizedFreeOnly === "true" || normalizedFreeOnly === "1" || normalizedFreeOnly === "yes";
+
+  // When free-only mode is active, only free-tier categories get the provider list.
+  // Depleted users are demoted to free-tier status per spec.
+  if (freeOnlyEnabled) {
+    const isFreeTier = category === "free" || category === "depleted";
+    if (!isFreeTier) return [];
+  }
   return parseProviderList(providersEnv);
 }
 
@@ -222,6 +281,7 @@ type PreChatResult = {
   profileLicenseHash: string | null;
   revokedProfileLicenseHash: string | null;
   quotaPercent: number;
+  isProUserForRouting: boolean;
   ownsUsername: boolean;
   deferredKvWrites: (() => void) | null;
 };
@@ -234,6 +294,7 @@ function rejectPreChat(msg: string, status: number, base: Partial<PreChatResult>
     profileLicenseHash: null,
     revokedProfileLicenseHash: null,
     quotaPercent: 0,
+    isProUserForRouting: false,
     ownsUsername: false,
     deferredKvWrites: null,
     ...base,
@@ -277,6 +338,51 @@ async function validateFreeUserAccess(
   return { profileLicenseHash, revokedProfileLicenseHash };
 }
 
+export async function resolveRoutingQuotaState(
+  env: Env["Bindings"],
+  sessionId: string,
+  effectiveProKeyHash: string | undefined,
+): Promise<RoutingQuotaState> {
+  const quotaKv = env.QUOTA_KV ?? env.USAGE_KV;
+  if (!quotaKv) {
+    return {
+      quotaPercent: 100,
+      isProUserForRouting: Boolean(effectiveProKeyHash),
+    };
+  }
+
+  const limits = getQuotaLimits(env);
+  if (effectiveProKeyHash) {
+    const proQuotaPercent = await getQuotaPercent(quotaKv, {
+      tier: "pro",
+      sessionId,
+      licenseKeyHash: effectiveProKeyHash,
+      limits,
+    });
+    if (proQuotaPercent > 0) {
+      return { quotaPercent: proQuotaPercent, isProUserForRouting: true };
+    }
+
+    return {
+      quotaPercent: await getQuotaPercent(quotaKv, {
+        tier: "free",
+        sessionId,
+        limits,
+      }),
+      isProUserForRouting: false,
+    };
+  }
+
+  return {
+    quotaPercent: await getQuotaPercent(quotaKv, {
+      tier: "free",
+      sessionId,
+      limits,
+    }),
+    isProUserForRouting: false,
+  };
+}
+
 async function preChatChecks(
   env: Env["Bindings"],
   ctx: { waitUntil: (p: Promise<unknown>) => void },
@@ -313,26 +419,17 @@ async function preChatChecks(
     revokedProfileLicenseHash = freeAccess.revokedProfileLicenseHash;
   }
 
-  // WinRAR nag (issue #736): free-tier quota enforcement is handled entirely
-  // on the frontend — the nag overlay is shown before every command, but the
-  // command still executes after dismissal.  Only pro-tier users get a hard
-  // server-side block when their quota is exhausted.
-  if (effectiveProKeyHash) {
-    const quotaCheck = await checkQuotaAvailable(env, sessionId, effectiveProKeyHash);
-    if (quotaCheck.exhaustedMessage) {
-      return rejectPreChat(quotaCheck.exhaustedMessage, 402, { effectiveProKeyHash, profileLicenseHash });
-    }
-  }
+  const { quotaPercent, isProUserForRouting } = await resolveRoutingQuotaState(env, sessionId, effectiveProKeyHash);
 
-  // For free-tier users we still fetch the current percentage so the frontend
-  // can update its nag state, but we never block the request.
-  let quotaPercent = 100;
-  const quotaKv = env.QUOTA_KV ?? env.USAGE_KV;
-  if (!effectiveProKeyHash && quotaKv) {
-    quotaPercent = await getQuotaPercent(quotaKv, { tier: "free", sessionId, limits: getQuotaLimits(env) });
-  }
-
-  return { effectiveProKeyHash, profileLicenseHash, revokedProfileLicenseHash, quotaPercent, ownsUsername: true, deferredKvWrites };
+  return {
+    effectiveProKeyHash,
+    profileLicenseHash,
+    revokedProfileLicenseHash,
+    quotaPercent,
+    isProUserForRouting,
+    ownsUsername: true,
+    deferredKvWrites,
+  };
 }
 
 const chat = new Hono<Env>();
@@ -340,13 +437,12 @@ const chat = new Hono<Env>();
 chat.post("/", async (c) => {
   const body = await c.req.json<ChatBody>();
 
-  const apiKey = c.env.OPENROUTER_API_KEY;
-  const validation = validateChatRequest(body, apiKey);
-  if (validation) {
-    return c.json({ error: validation.error }, validation.status);
+  if (!body.chatMessages || !Array.isArray(body.chatMessages)) {
+    return c.json({ error: "chatMessages array is required" }, 400);
   }
 
   const db = c.env?.DB;
+
   const effectiveProKeyHash = await verifyProKeyHash(db, body.proKeyHash);
 
   const sessionId = c.get("sessionId");
@@ -357,7 +453,16 @@ chat.post("/", async (c) => {
     return c.json({ error: preCheck.error }, (preCheck.status ?? 500) as ContentfulStatusCode);
   }
 
-  const model = resolveModel(body.modelId);
+  const category = assignCategory({ isProUser: preCheck.isProUserForRouting, quotaPercent: preCheck.quotaPercent });
+
+  const { baseApiKey, baseProviders, baseProvidersFreeOnly, categoryModel, categoryApiKey } =
+    await loadRoutingConfig(db, c.env, category);
+
+  const model = categoryModel ?? resolveModel(body.modelId);
+  const effectiveApiKey = categoryApiKey ?? baseApiKey;
+  if (!effectiveApiKey) {
+    return c.json({ error: "No OpenRouter API key configured" }, 500);
+  }
 
   const sanitizedMessages = sanitizeChatMessages(body.chatMessages);
   const trimmedMessages = enforceContextTrimming(sanitizedMessages);
@@ -369,12 +474,8 @@ chat.post("/", async (c) => {
     buddyType: body.buddyType,
   });
 
-  const providerList = resolveProviderList(
-    c.env.OPENROUTER_PROVIDERS,
-    c.env.OPENROUTER_PROVIDERS_FREE_ONLY,
-    Boolean(preCheck.effectiveProKeyHash),
-  );
-  const orResponse = await callOpenRouter(apiKey!, model, messages, providerList);
+  const providerList = resolveProviderList(baseProviders, baseProvidersFreeOnly, category);
+  const orResponse = await callOpenRouter(effectiveApiKey, model, messages, providerList);
 
   if (!orResponse.ok) {
     const errData = await orResponse.json();
@@ -385,17 +486,21 @@ chat.post("/", async (c) => {
   const data = await orResponse.json() as ChatResponseData;
   logChatDiagnostics(messages, data);
 
-  const quotaResult = await consumeQuotaPostSuccess(c.env, sessionId, preCheck.effectiveProKeyHash);
+  // Depleted pro users are demoted to free for billing/scoring
+  const isMaxTier = category === "max";
+  const billingProKeyHash = isMaxTier ? preCheck.effectiveProKeyHash : undefined;
+
+  const quotaResult = await consumeQuotaPostSuccess(c.env, sessionId, billingProKeyHash);
   const quotaPercent = quotaResult.quotaPercent;
-  if (preCheck.effectiveProKeyHash && quotaResult.remaining != null) {
-    c.executionCtx.waitUntil(mirrorPolarUsage(c.env, preCheck.effectiveProKeyHash, quotaResult.remaining));
+  if (billingProKeyHash && quotaResult.remaining != null) {
+    c.executionCtx.waitUntil(mirrorPolarUsage(c.env, billingProKeyHash, quotaResult.remaining));
   }
 
-  const country = body.country || (c.req.raw as unknown as { cf?: { country?: string } }).cf?.country || c.req.header("cf-ipcountry") || "Unknown";
+  const country = resolveCountry(body, c.req);
   const hour = new Date().toISOString().slice(0, 13);
 
-  if (preCheck.effectiveProKeyHash && db) {
-    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: preCheck.effectiveProKeyHash, model, hour, data, quotaPercent });
+  if (billingProKeyHash && db) {
+    const proResponse = await handleProUserScoring(db, c.executionCtx, { proKeyHash: billingProKeyHash, model, hour, data, quotaPercent });
     if (proResponse) return proResponse;
     return c.json({ error: "Pro scoring failed — please retry" }, 500);
   }
