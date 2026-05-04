@@ -28,9 +28,14 @@ export function createMockDB(opts: {
     }
     return opts.firstResults ?? null;
   };
-  const stmt = (sql: string, bindings: unknown[]) => ({
-    first: vi.fn().mockResolvedValue(resolveFirst(sql, bindings)),
-    run: vi.fn().mockImplementation(async () => {
+  const createStatement = (sql: string, bindings: unknown[]) => {
+    const statement = {
+      bind: vi.fn((...args: unknown[]) => {
+        calls.push({ sql, bindings: args });
+        return createStatement(sql, args);
+      }),
+      first: vi.fn().mockResolvedValue(resolveFirst(sql, bindings)),
+      run: vi.fn().mockImplementation(async () => {
       if (sql.includes("INSERT INTO checkout_claims")) {
         const [checkoutId, sessionId] = bindings as [string, string];
         if (checkoutClaims.has(checkoutId)) return { meta: { changes: 0 } };
@@ -51,8 +56,8 @@ export function createMockDB(opts: {
         return { meta: { changes: 1 } };
       }
       return { meta: { changes: opts.runChanges ?? 0 } };
-    }),
-    all: vi.fn().mockImplementation(async () => {
+      }),
+      all: vi.fn().mockImplementation(async () => {
       if (sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")) {
         return {
           results: (bindings as string[])
@@ -61,18 +66,14 @@ export function createMockDB(opts: {
         };
       }
       return { results: [] };
-    }),
-    raw: vi.fn().mockResolvedValue([]),
-  });
+      }),
+      raw: vi.fn().mockResolvedValue([]),
+    };
+    return statement;
+  };
   return {
     db: {
-      prepare: vi.fn((sql: string) => ({
-        bind: vi.fn((...args: unknown[]) => {
-          calls.push({ sql, bindings: args });
-          return stmt(sql, args);
-        }),
-        ...stmt(sql, []),
-      })),
+      prepare: vi.fn((sql: string) => createStatement(sql, [])),
       exec: vi.fn().mockResolvedValue({ results: [] }),
       batch: vi.fn().mockResolvedValue([]),
       withSession: vi.fn(),
