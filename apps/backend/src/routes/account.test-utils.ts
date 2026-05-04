@@ -107,6 +107,14 @@ export function postJSON(path: string, body: unknown, env: Record<string, unknow
   }, { ALLOWED_ORIGINS: "http://localhost:5173", ...env });
 }
 
+export function postRaw(path: string, body: string, env: Record<string, unknown>, sid = "test-session") {
+  return app.request(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: `cope_session_id=${sid}` },
+    body,
+  }, { ALLOWED_ORIGINS: "http://localhost:5173", ...env });
+}
+
 export function postWithSession(path: string, body: unknown, env: Record<string, unknown>, sid = "test-session") {
   return app.request(path, { method: "POST",
     headers: { "Content-Type": "application/json", Cookie: `cope_session_id=${sid}` },

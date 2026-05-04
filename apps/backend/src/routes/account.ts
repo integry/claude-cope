@@ -47,7 +47,12 @@ async function lookupCheckoutCache(
 }
 
 async function validateCheckoutRequest(c: { req: { json: <T>() => Promise<T> }; get: (key: string) => string; env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response }) {
-  const body = await c.req.json<{ checkoutId?: string }>();
+  let body: { checkoutId?: string };
+  try {
+    body = await c.req.json<{ checkoutId?: string }>();
+  } catch {
+    return { error: c.json({ error: "Invalid JSON body" }, 400) } as const;
+  }
   if (!body.checkoutId) return { error: c.json({ error: "checkoutId is required" }, 400) } as const;
   if (!/^[\w-]{4,128}$/.test(body.checkoutId)) return { error: c.json({ error: "Invalid checkoutId format" }, 400) } as const;
   const sessionId = c.get("sessionId");
@@ -74,23 +79,20 @@ async function respondWithStoredClaim(
 
 type CheckoutClaimLookup =
   | { status: "miss" }
-  | { status: "stored-only" }
-  | { status: "hit"; response: Response };
+  | { status: "cached"; keys: string[]; sessionMismatch: boolean; requiresStoredClaim: boolean };
 
 async function resolveCachedClaim(
-  c: { json: (data: unknown, status?: number) => Response },
   deps: { kv: KVNamespace | undefined; checkoutId: string; sessionId: string },
 ): Promise<CheckoutClaimLookup> {
   const { kv, checkoutId, sessionId } = deps;
   if (!kv) return { status: "miss" };
   const cacheResult = await lookupCheckoutCache(kv, checkoutId, sessionId);
   if (!cacheResult) return { status: "miss" };
-  if (cacheResult.requiresStoredClaim) return { status: "stored-only" };
   return {
-    status: "hit",
-    response: cacheResult.sessionMismatch
-      ? c.json({ error: "This checkout was already redeemed by another session" }, 403)
-      : respondWithClaimedKeys(c, cacheResult.keys),
+    status: "cached",
+    keys: cacheResult.keys,
+    sessionMismatch: Boolean(cacheResult.sessionMismatch),
+    requiresStoredClaim: Boolean(cacheResult.requiresStoredClaim),
   };
 }
 
@@ -99,8 +101,7 @@ async function resolveCachedOrStoredClaim(
   deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string; cacheLookup?: CheckoutClaimLookup },
 ) {
   const { db, kv, checkoutId, sessionId, claimSecret } = deps;
-  const cachedClaim = deps.cacheLookup ?? await resolveCachedClaim(c, { kv, checkoutId, sessionId });
-  if (cachedClaim.status === "hit") return cachedClaim.response;
+  const cachedClaim = deps.cacheLookup ?? await resolveCachedClaim({ kv, checkoutId, sessionId });
   const storedClaim = await getStoredClaimedKeys(db, checkoutId, claimSecret);
   if (!storedClaim.ok) return c.json({ error: storedClaim.error }, 503);
   if (storedClaim.sessionId && storedClaim.sessionId !== sessionId) {
@@ -109,7 +110,7 @@ async function resolveCachedOrStoredClaim(
   if (storedClaim.keys?.length) {
     return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: storedClaim.keys });
   }
-  if (cachedClaim.status === "stored-only" && storedClaim.unreadable) return null;
+  if (cachedClaim.status === "cached" && cachedClaim.requiresStoredClaim && storedClaim.unreadable) return null;
   return null;
 }
 
@@ -132,7 +133,7 @@ async function redeemCheckoutLicense(
   const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt: result.createdAt });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
   const postClaimResponse = await resolveCachedOrStoredClaim(c, {
-    db, kv, checkoutId, sessionId, claimSecret, cacheLookup: { status: "stored-only" },
+    db, kv, checkoutId, sessionId, claimSecret, cacheLookup: { status: "cached", keys: [], sessionMismatch: false, requiresStoredClaim: true },
   });
   if (postClaimResponse) return postClaimResponse;
   const nextCheckout = await fetchNextCheckoutCreatedAt(result.customerId, organizationId, accessToken, { checkoutId, checkoutCreatedAt: result.createdAt });
@@ -246,7 +247,7 @@ account.post("/checkout-license", async (c) => {
   if (!claimSecret) return c.json({ error: "Checkout claim secret is not configured" }, 500);
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
-  const cacheLookup = await resolveCachedClaim(c, { kv, checkoutId, sessionId });
+  const cacheLookup = await resolveCachedClaim({ kv, checkoutId, sessionId });
   const existingClaim = await resolveCachedOrStoredClaim(c, { db, kv, checkoutId, sessionId, claimSecret, cacheLookup });
   if (existingClaim) return existingClaim;
   return redeemCheckoutLicense(c, { db, kv, checkoutId, sessionId, claimSecret });
