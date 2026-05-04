@@ -427,6 +427,18 @@ describe("GET /api/account/me", () => {
       },
     });
   });
+  it("restores a username-only session even before a user_scores row exists", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const { db } = createMockDB({ firstBySQL: { "SELECT username": null } });
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "alice",
+      isPro: false,
+      profile: null,
+    });
+  });
   it("repairs a single-hop renamed session mapping", async () => {
     const kv = mockKV({
       "session_user:test-session": "alice",
@@ -525,7 +537,12 @@ describe("GET /api/account/me", () => {
     };
     const res = await meReq({ QUOTA_KV: kv, DB: db });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ found: false });
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "bob",
+      isPro: false,
+      profile: null,
+    });
     expect(kv.put).not.toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
   });
   it("repairs rename chains longer than five hops", async () => {
@@ -589,5 +606,17 @@ describe("GET /api/account/me", () => {
         corporate_rank: "Junior Code Monkey",
       },
     });
+  });
+});
+
+describe("license SQL guard alignment", () => {
+  it("uses the same stale-license cutoff in SQL write guards", async () => {
+    const { db, calls } = ownedMockDB();
+    const res = await postJSON("/api/account/update-buddy", {
+      username: "alice", buddyType: "Agile Snail", isShiny: false, licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(200);
+    const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores SET buddy_type"));
+    expect(updateCall?.sql).toContain("datetime(last_activated_at) >= datetime('now', '-90 days')");
   });
 });

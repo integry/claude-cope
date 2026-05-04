@@ -178,6 +178,10 @@ export const migrations: Migration[] = [
       PRIMARY KEY (license_key_hash, change_date)
     )`,
   },
+  {
+    name: "023_idx_user_scores_username_nocase",
+    sql: "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_username_nocase ON user_scores (LOWER(username))",
+  },
 ];
 
 /**

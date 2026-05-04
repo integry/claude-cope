@@ -2,6 +2,15 @@ import { getProfile, getProfileByLicenseHash, getProfileRow, isLicenseActive, re
 import { validatePolarKey } from "../utils/polar";
 import { hashKey } from "../utils/quota";
 
+const LICENSE_STALE_SQL_CUTOFF = "-90 days";
+export const ACTIVE_LICENSE_EXISTS_SQL =
+  `EXISTS (
+     SELECT 1 FROM licenses
+     WHERE key_hash = user_scores.license_hash
+       AND status = 'active'
+       AND datetime(last_activated_at) >= datetime('now', '${LICENSE_STALE_SQL_CUTOFF}')
+   )`;
+
 export type SyncBody = {
   licenseKey?: string;
   username?: string;
@@ -46,13 +55,14 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
 
   // Check if username already exists.
   const existing = await db
-    .prepare("SELECT license_hash FROM user_scores WHERE username = ?")
+    .prepare("SELECT username, license_hash FROM user_scores WHERE LOWER(username) = LOWER(?)")
     .bind(newUsername)
-    .first<{ license_hash: string | null }>();
+    .first<{ username: string; license_hash: string | null }>();
   if (existing) {
+    const existingUsername = existing.username;
     if (existing.license_hash === hash) {
       // Already belongs to this license — just return the existing profile
-      const profile = await getProfile(db, newUsername);
+      const profile = await getProfile(db, existingUsername);
       if (!profile) return { profile: null, error: "Profile not found after lookup" };
       return { profile };
     }
@@ -67,7 +77,7 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
         return { profile: null, error: "Session required to upgrade an existing username." };
       }
       const boundUsername = await sessionContext.kv.get(`session_user:${sessionContext.sessionId}`);
-      if (boundUsername !== newUsername) {
+      if (boundUsername?.toLowerCase() !== existingUsername.toLowerCase()) {
         return { profile: null, error: "Cannot claim an existing free username — log in to that account first or pick a different username." };
       }
       // Preserve the server-authoritative profile data (TD, inventory, etc.).
@@ -76,13 +86,13 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
       // result.meta.changes to detect if another request won the race.
       const upgradeResult = await db
         .prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ? AND license_hash IS NULL")
-        .bind(hash, newUsername)
+        .bind(hash, existingUsername)
         .run();
       if (!upgradeResult.meta.changes) {
         // Another concurrent request already attached a license to this row.
         return { profile: null, error: "This username was just claimed by another request. Please try again." };
       }
-      const profile = await getProfile(db, newUsername);
+      const profile = await getProfile(db, existingUsername);
       if (!profile) return { profile: null, error: "Profile not found after upgrade" };
       return { profile };
     }
@@ -322,7 +332,7 @@ export async function performAliasDbUpdate(
       db.prepare(
         `UPDATE user_scores SET username = ?, updated_at = datetime('now')
          WHERE username = ? AND license_hash = ?
-           AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
+           AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
       ).bind(newAlias, oldUsername, licenseKeyHash),
       db.prepare(
         `UPDATE completed_tasks SET username = ? WHERE username = ?

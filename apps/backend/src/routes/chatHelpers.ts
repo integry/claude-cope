@@ -207,7 +207,6 @@ export function recordUsage(
       db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, license_hash, credits_used) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, license_hash = ?, credits_used = credits_used + 1, updated_at = datetime('now')").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.proKeyHash, params.tdAwarded, params.tdAwarded, params.proKeyHash).run(),
     );
   } else if (!isOwnershipSpoofed) {
-    const serverDerivedRank = params.rank ?? FREE_TIER_RANK_CAP;
     queries.push(
       db.prepare(
         `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, credits_used)
@@ -223,7 +222,7 @@ export function recordUsage(
         params.username,
         params.tdAwarded,
         params.tdAwarded,
-        serverDerivedRank,
+        FREE_TIER_RANK_CAP,
         params.country,
         params.tdAwarded,
         params.tdAwarded,

@@ -40,5 +40,6 @@ describe("recordUsage", () => {
     const upsert = statements.find((statement) => statement.sql.includes("INSERT INTO user_scores"));
     expect(upsert?.sql).toContain("corporate_rank = ?");
     expect(upsert?.bindings).toEqual(expect.arrayContaining([FREE_TIER_RANK_CAP, FREE_TIER_RANK_CAP]));
+    expect(upsert?.bindings?.[3]).toBe(FREE_TIER_RANK_CAP);
   });
 });

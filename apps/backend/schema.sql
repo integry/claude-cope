@@ -66,6 +66,9 @@ CREATE TABLE IF NOT EXISTS user_scores (
 CREATE INDEX IF NOT EXISTS idx_user_scores_total_td
     ON user_scores (total_td DESC);
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_username_nocase
+    ON user_scores (LOWER(username));
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_license_hash
     ON user_scores (license_hash) WHERE license_hash IS NOT NULL AND license_hash != '';
 

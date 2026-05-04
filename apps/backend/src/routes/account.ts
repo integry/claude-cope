@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, checkAliasRateLimit, rollbackAliasRateToken, performAliasDbUpdate } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, checkAliasRateLimit, rollbackAliasRateToken, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 
@@ -147,7 +147,16 @@ account.get("/me", async (c) => {
   const resolved = await resolveSessionProfileRow({ db, kv, sessionId, username });
   username = resolved.username;
   const row = resolved.row;
-  if (!row) return c.json({ found: false });
+  if (!row) {
+    const quotaPercent = await getQuotaPercent(kv, { tier: "free", sessionId, limits: getQuotaLimits(c.env) });
+    return c.json({
+      found: true,
+      username,
+      profile: null,
+      quotaPercent,
+      isPro: false,
+    });
+  }
 
   const { isPro, quotaPercent, profile, revoked } = await buildMePayload({ row, db, kv, env: c.env, sessionId });
 
@@ -199,7 +208,7 @@ account.post("/buy-generator", async (c) => {
         updated_at = datetime('now')
       WHERE username = ? AND current_td >= ? AND license_hash = ?
         AND COALESCE(json_extract(inventory, '$."' || ? || '"'), 0) = ?
-        AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
+        AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
     )
     .bind(cost, body.generatorId, body.generatorId, body.amount, body.username, cost, body.licenseKeyHash, body.generatorId, owned)
     .run();
@@ -257,7 +266,7 @@ account.post("/buy-upgrade", async (c) => {
         updated_at = datetime('now')
       WHERE username = ? AND current_td >= ? AND license_hash = ?
         AND ? NOT IN (SELECT value FROM json_each(COALESCE(upgrades, '[]')))
-        AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
+        AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
     )
     .bind(upgrade.cost, body.upgradeId, body.username, upgrade.cost, body.licenseKeyHash, body.upgradeId)
     .run();
@@ -306,7 +315,7 @@ account.post("/buy-theme", async (c) => {
         updated_at = datetime('now')
       WHERE username = ? AND current_td >= ? AND license_hash = ?
         AND ? NOT IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
-        AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
+        AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
     )
     .bind(theme.cost, body.themeId, body.username, theme.cost, body.licenseKeyHash, body.themeId)
     .run();
@@ -350,7 +359,7 @@ account.post("/unlock-achievement", async (c) => {
         updated_at = datetime('now')
       WHERE username = ? AND license_hash = ?
         AND ? NOT IN (SELECT value FROM json_each(COALESCE(achievements, '[]')))
-        AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
+        AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
     )
     .bind(body.achievementId, body.username, body.licenseKeyHash, body.achievementId)
     .run();
@@ -389,7 +398,7 @@ account.post("/update-buddy", async (c) => {
     .prepare(
       `UPDATE user_scores SET buddy_type = ?, buddy_is_shiny = ?, updated_at = datetime('now')
        WHERE username = ? AND license_hash = ?
-         AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
+         AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
     )
     .bind(body.buddyType ?? null, body.isShiny ? 1 : 0, body.username, body.licenseKeyHash)
     .run();
@@ -430,7 +439,7 @@ account.post("/update-ticket", async (c) => {
     .prepare(
       `UPDATE user_scores SET active_ticket = ?, updated_at = datetime('now')
        WHERE username = ? AND license_hash = ?
-         AND EXISTS (SELECT 1 FROM licenses WHERE key_hash = user_scores.license_hash AND status = 'active')`,
+         AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
     )
     .bind(body.activeTicket ? JSON.stringify(body.activeTicket) : null, body.username, body.licenseKeyHash)
     .run();
