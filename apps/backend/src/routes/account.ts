@@ -70,13 +70,15 @@ async function cacheClaimedKeys(kv: KVNamespace | undefined, checkoutId: string,
 
 async function respondWithStoredClaim(
   c: { json: (data: unknown, status?: number) => Response },
-  kv: KVNamespace | undefined,
-  checkoutId: string,
-  sessionId: string,
-  keys: string[],
+  claim: {
+    kv: KVNamespace | undefined;
+    checkoutId: string;
+    sessionId: string;
+    keys: string[];
+  },
 ) {
-  await cacheClaimedKeys(kv, checkoutId, sessionId, keys);
-  return respondWithClaimedKeys(c, keys);
+  await cacheClaimedKeys(claim.kv, claim.checkoutId, claim.sessionId, claim.keys);
+  return respondWithClaimedKeys(c, claim.keys);
 }
 
 const account = new Hono<Env>();
@@ -98,14 +100,14 @@ account.post("/checkout-license", async (c) => {
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
   const storedClaim = await getStoredClaimedKeys(db, checkoutId);
   if (!storedClaim.ok) return c.json({ error: storedClaim.error }, 503);
-  if (storedClaim.keys?.length) return respondWithStoredClaim(c, kv, checkoutId, sessionId, storedClaim.keys);
+  if (storedClaim.keys?.length) return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: storedClaim.keys });
   const nextCheckout = await fetchNextCheckoutCreatedAt(result.customerId, organizationId, accessToken, { checkoutId, checkoutCreatedAt: result.createdAt });
   if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
   const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: result.createdAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
   const claimedKeys = await claimLicenseKeysForCheckout(db, checkoutId, lkResult.keys);
   if (!claimedKeys.ok) return c.json({ error: claimedKeys.error }, claimedKeys.error.includes("already claimed") ? 409 : 503);
-  return respondWithStoredClaim(c, kv, checkoutId, sessionId, claimedKeys.keys);
+  return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: claimedKeys.keys });
 });
 
 account.post("/sync", async (c) => {
