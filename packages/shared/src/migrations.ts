@@ -167,6 +167,21 @@ export const migrations: Migration[] = [
     name: "021_idx_system_config_tier",
     sql: "CREATE INDEX IF NOT EXISTS idx_system_config_tier ON system_config (tier)",
   },
+
+  // ── alias rate limiting (D1-based, replaces raceable KV get/put) ──
+  {
+    name: "022_create_alias_rate_limits",
+    sql: `CREATE TABLE IF NOT EXISTS alias_rate_limits (
+      license_key_hash TEXT NOT NULL,
+      change_date TEXT NOT NULL,
+      change_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (license_key_hash, change_date)
+    )`,
+  },
+  {
+    name: "023_idx_user_scores_username_nocase",
+    sql: "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_username_nocase ON user_scores (LOWER(username))",
+  },
 ];
 
 /**

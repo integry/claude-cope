@@ -2,6 +2,7 @@ import { useState } from "react";
 import { GENERATORS, UPGRADES, THEMES } from "../game/constants";
 import { calcBulkCost } from "../hooks/useGameState";
 import type { GameState } from "../hooks/useGameState";
+import { isPaidUser } from "../hooks/gameStateUtils";
 
 type BuyMultiplier = 1 | 10 | 100;
 
@@ -182,8 +183,8 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, buyTheme, equipTheme, o
           const isUnlocked = state.unlockedThemes.includes(theme.id);
           const isEquipped = state.activeTheme === theme.id;
           const canAfford = state.economy.currentTD >= theme.cost;
-          const isPro = !!state.proKey;
-          const canBuy = isPro && !isUnlocked && canAfford;
+          const hasPro = isPaidUser(state);
+          const canBuy = hasPro && !isUnlocked && canAfford;
 
           return (
             <div
@@ -227,7 +228,7 @@ function StoreOverlay({ state, buyGenerator, buyUpgrade, buyTheme, equipTheme, o
                       : "bg-gray-800 text-gray-400 cursor-not-allowed"
                   }`}
                 >
-                  {!isPro ? "Max Required" : canAfford ? "Buy Theme" : "Can't afford"}
+                  {!hasPro ? "Max Required" : canAfford ? "Buy Theme" : "Can't afford"}
                 </button>
               )}
             </div>

@@ -1,1 +1,1 @@
-export { CORPORATE_RANKS } from "@claude-cope/shared/gameData";
+export { CORPORATE_RANKS, FREE_TIER_RANK_CAP } from "@claude-cope/shared/gameData";

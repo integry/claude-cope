@@ -124,7 +124,7 @@ vi.mock("../../hooks/useGameState", async () => {
     },
   };
 });
-vi.mock("../../hooks/gameStateUtils", () => ({ calculateActiveMultiplier: () => 1 }));
+vi.mock("../../hooks/gameStateUtils", () => ({ calculateActiveMultiplier: () => 1, isFreeUser: (s: { proKey?: string; proKeyHash?: string; isPro?: boolean; apiKey?: string }) => !s.proKey && !s.proKeyHash && !s.isPro }));
 vi.mock("../BuddyDisplay", () => ({ BuddyDisplay: () => null }));
 vi.mock("../parseGlitchStyle", () => ({ parseGlitchStyle: () => ({}) }));
 vi.mock("../terminalClassName", () => ({ terminalContainerClassName: () => "terminal" }));
