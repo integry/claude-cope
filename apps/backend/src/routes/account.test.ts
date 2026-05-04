@@ -1,10 +1,13 @@
 /* eslint-disable max-lines */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import app from "../app";
-import { ACCOUNT_TEST_SQL, createMockDB, mockKV, postJSON, BASE_PROFILE, profileWithHash, ownedMockDB } from "./account.test-helpers";
+import { ACCOUNT_TEST_SQL } from "./account.test-helpers";
+import { createMockDB, mockKV, postJSON, postRaw, postWithSession, getWithSession, BASE_PROFILE, profileWithHash, ownedMockDB, GEN_BODY } from "./account.test-utils";
+import { storeClaimedKeys } from "./accountHelpers";
+import { hashKey } from "../utils/quota";
 import { FREE_TIER_RANK_CAP } from "../gameConstants";
 
-const GEN_BODY = { username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash" };
+const CLAIM_SECRET = "tok";
 
 describe("POST /api/account/buy-generator", () => {
   it("returns 500 when DB is not configured", async () => {
@@ -532,18 +535,783 @@ describe("POST /api/account/shill", () => {
   });
 });
 
+describe("POST /api/account/checkout-license", () => {
+  it("returns 400 when checkoutId is missing", async () => {
+    const res = await postJSON("/api/account/checkout-license", {}, {
+      CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+    expect(res.status).toBe(400);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("checkoutId");
+  });
+  it("returns 400 for malformed JSON bodies", async () => {
+    const res = await postRaw("/api/account/checkout-license", "{", {
+      CHECKOUT_CLAIM_SECRET: CLAIM_SECRET,
+      POLAR_ACCESS_TOKEN: "tok",
+      POLAR_ORGANIZATION_ID: "org",
+      DB: createMockDB({ runChanges: 1 }).db,
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain("Invalid JSON");
+  });
+  it("returns 500 when Polar is not configured", async () => {
+    const res = await postJSON("/api/account/checkout-license", { checkoutId: "co_123" }, {});
+    expect(res.status).toBe(500);
+  });
+  it("redeems checkout without KV when DB and Polar are available", async () => {
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const u = typeof input === "string" ? input : input.toString();
+      if (u.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z", metadata: { reference_id: "s" } }));
+      }
+      if (u.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({ items: [{ key: "COPE-NOKV", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
+      }
+      return origFetch(input as RequestInfo, undefined);
+    }) as typeof fetch;
+    try {
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_nokv" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", DB: createMockDB({ runChanges: 1 }).db }, "s");
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-NOKV"]);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+  it("returns cached key from KV on repeated calls", async () => {
+    const kv = mockKV({ "checkout_used:co_123": JSON.stringify({ keys: ["COPE-ABC"], sessionId: "s" }) });
+    const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_123" },
+      { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "s");
+    expect(res.status).toBe(200);
+    const data = await res.json() as { licenseKey: string; allKeys: string[] };
+    expect(data.licenseKey).toBe("COPE-ABC");
+    expect(data.allKeys).toEqual(["COPE-ABC"]);
+  });
+  it("handles legacy cached string (not JSON array) gracefully", async () => {
+    const kv = mockKV({ "checkout_used:co_old": "COPE-LEGACY" });
+    let encryptedKeys: string | null = null;
+    const seedDb = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => ({
+          run: vi.fn().mockImplementation(async () => {
+            if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) encryptedKeys = args[0] as string;
+            return { meta: { changes: 1 } };
+          }),
+        })),
+      })),
+    } as unknown as D1Database;
+    await storeClaimedKeys(seedDb, "co_old", ["COPE-LEGACY"], CLAIM_SECRET);
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn(() => ({
+          first: vi.fn().mockImplementation(async () => {
+            if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) return { session_id: "s", encrypted_keys: encryptedKeys };
+            return null;
+          }),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        first: vi.fn().mockResolvedValue(null),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+        all: vi.fn().mockResolvedValue({ results: [] }),
+      })),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
+    const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_old" },
+      { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv, DB: db }, "s");
+    expect(res.status).toBe(200);
+    const data = await res.json() as { licenseKey: string; allKeys: string[] };
+    expect(data.licenseKey).toBe("COPE-LEGACY");
+    expect(data.allKeys).toEqual(["COPE-LEGACY"]);
+  });
+  it("returns cached multi-key team pack from KV", async () => {
+    const keys = ["COPE-T1", "COPE-T2", "COPE-T3"];
+    const kv = mockKV({ "checkout_used:co_team": JSON.stringify({ keys, sessionId: "s" }) });
+    const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_team" },
+      { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "s");
+    expect(res.status).toBe(200);
+    const data = await res.json() as { licenseKey: string; allKeys: string[] };
+    expect(data.licenseKey).toBe("COPE-T1");
+    expect(data.allKeys).toEqual(keys);
+  });
+  it("returns 400 for invalid checkoutId format", async () => {
+    expect((await postJSON("/api/account/checkout-license", { checkoutId: ";;;invalid" }, {
+      CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    })).status).toBe(400);
+  });
+  it("returns 403 when cached checkout was redeemed by a different session", async () => {
+    const cachePayload = JSON.stringify({ keys: ["COPE-BOUND"], sessionId: "original-session" });
+    const kv = mockKV({ "checkout_used:co_bound": cachePayload });
+    const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_bound" },
+      { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "different-session");
+    expect(res.status).toBe(403);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("already redeemed");
+  });
+  it("returns keys when cached checkout session matches the caller", async () => {
+    const cachePayload = JSON.stringify({ keys: ["COPE-MINE"], sessionId: "my-session" });
+    const kv = mockKV({ "checkout_used:co_mine": cachePayload });
+    const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_mine" },
+      { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "my-session");
+    expect(res.status).toBe(200);
+    const data = await res.json() as { licenseKey: string; allKeys: string[] };
+    expect(data.licenseKey).toBe("COPE-MINE");
+    expect(data.allKeys).toEqual(["COPE-MINE"]);
+  });
+  it("reuses legacy cache entries only when D1 confirms the stored claim", async () => {
+    const kv = mockKV({ "checkout_used:co_legacy": JSON.stringify(["COPE-STALE"]) });
+    let encryptedKeys: string | null = null;
+    const seedDb = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => ({
+          run: vi.fn().mockImplementation(async () => {
+            if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) encryptedKeys = args[0] as string;
+            return { meta: { changes: 1 } };
+          }),
+        })),
+      })),
+    } as unknown as D1Database;
+    await storeClaimedKeys(seedDb, "co_legacy", ["COPE-OLD"], CLAIM_SECRET);
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn(() => ({
+          first: vi.fn().mockImplementation(async () => {
+            if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) return { session_id: "any-session", encrypted_keys: encryptedKeys };
+            return null;
+          }),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        first: vi.fn().mockResolvedValue(null),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+        all: vi.fn().mockResolvedValue({ results: [] }),
+      })),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
+    const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_legacy" },
+      { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv, DB: db }, "any-session");
+    expect(res.status).toBe(200);
+    const data = await res.json() as { licenseKey: string; allKeys: string[] };
+    expect(data.licenseKey).toBe("COPE-OLD");
+    expect(data.allKeys).toEqual(["COPE-OLD"]);
+  });
+  it("ignores legacy cache entries when D1 has no stored claim and falls back to Polar", async () => {
+    const origFetch = globalThis.fetch;
+    const kv = mockKV({ "checkout_used:co_legacy_miss": JSON.stringify(["COPE-STALE"]) });
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const u = typeof input === "string" ? input : input.toString();
+      if (u.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z", metadata: { reference_id: "s" } }));
+      }
+      if (u.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({ items: [{ key: "COPE-FRESH", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
+      }
+      return origFetch(input as RequestInfo, undefined);
+    }) as typeof fetch;
+    try {
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_legacy_miss" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv, DB: createMockDB({ runChanges: 1 }).db }, "s");
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-FRESH"]);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+  it("deletes malformed cache entries before falling back to Polar", async () => {
+    const origFetch = globalThis.fetch;
+    const kv = mockKV({ "checkout_used:co_bad": "{broken" });
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const u = typeof input === "string" ? input : input.toString();
+      if (u.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z", metadata: { reference_id: "s" } }));
+      }
+      if (u.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({ items: [{ key: "COPE-FRESH", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
+      }
+      return origFetch(input as RequestInfo, undefined);
+    }) as typeof fetch;
+    try {
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_bad" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv, DB: createMockDB({ runChanges: 1 }).db }, "s");
+      expect(res.status).toBe(200);
+      expect(kv.delete).toHaveBeenCalledWith("checkout_used:co_bad");
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+  it("continues to Polar when malformed cache cleanup fails", async () => {
+    const origFetch = globalThis.fetch;
+    const kv = mockKV({ "checkout_used:co_bad_delete": "{broken" });
+    kv.delete = vi.fn().mockRejectedValue(new Error("KV unavailable"));
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const u = typeof input === "string" ? input : input.toString();
+      if (u.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z", metadata: { reference_id: "s" } }));
+      }
+      if (u.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({ items: [{ key: "COPE-FRESH", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
+      }
+      return origFetch(input as RequestInfo, undefined);
+    }) as typeof fetch;
+    try {
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_bad_delete" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv, DB: createMockDB({ runChanges: 1 }).db }, "s");
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-FRESH"]);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+  describe("non-cached Polar fetch path", () => {
+    const origFetch = globalThis.fetch;
+    afterEach(() => { globalThis.fetch = origFetch; });
+    const T = "2026-01-02T00:00:00Z";
+    const co = (id: string) => postWithSession("/api/account/checkout-license", { checkoutId: id }, {
+      CHECKOUT_CLAIM_SECRET: CLAIM_SECRET,
+      POLAR_ACCESS_TOKEN: "tok",
+      POLAR_ORGANIZATION_ID: "org",
+      QUOTA_KV: mockKV({}),
+      DB: createMockDB({ runChanges: 1 }).db,
+    }, "s");
+    function stubPolar(checkout: object, lk?: object) {
+      const payload = { metadata: { reference_id: "s" }, ...checkout } as object;
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const u = typeof input === "string" ? input : input.toString();
+        if (u.includes("/v1/checkouts/")) return new Response(JSON.stringify(payload));
+        if (u.includes("/v1/license-keys/")) return new Response(JSON.stringify(lk ?? { items: [] }));
+        return origFetch(input as RequestInfo, undefined);
+      }) as typeof fetch;
+    }
+    it("returns single key for successful checkout", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "COPE-NEW", created_at: "2026-01-02T00:00:05Z", status: "granted" }] });
+      const res = await co("co_new");
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-NEW"]);
+    });
+    it("returns multiple keys for team-pack", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: ["T1", "T2", "T3"].map((k, i) => ({ key: `COPE-${k}`, created_at: `2026-01-02T00:00:0${i + 1}Z`, status: "granted" })) });
+      expect(((await (await co("co_tp")).json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-T1", "COPE-T2", "COPE-T3"]);
+    });
+    it("does not assign later purchase keys to an earlier checkout redeemed first", async () => {
+      stubPolar(
+        { organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T },
+        {
+          items: [
+            { key: "COPE-A1", created_at: "2026-01-02T00:00:10Z", status: "granted" },
+            { key: "COPE-A2", created_at: "2026-01-02T00:00:20Z", status: "granted" },
+            { key: "COPE-B1", created_at: "2026-01-02T00:05:10Z", status: "granted" },
+            { key: "COPE-B2", created_at: "2026-01-02T00:05:20Z", status: "granted" },
+          ],
+        },
+      );
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const u = typeof input === "string" ? input : input.toString();
+        if (u.includes("/v1/checkouts/co_a")) {
+          return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T, metadata: { reference_id: "s" } }));
+        }
+        if (u.includes("/v1/checkouts/?")) {
+          return new Response(JSON.stringify({
+            items: [
+              { id: "co_b", created_at: "2026-01-02T00:05:00Z", status: "succeeded" },
+              { id: "co_a", created_at: T, status: "succeeded" },
+            ],
+          }));
+        }
+        if (u.includes("/v1/license-keys/")) {
+          return new Response(JSON.stringify({
+            items: [
+              { key: "COPE-A1", created_at: "2026-01-02T00:00:10Z", status: "granted" },
+              { key: "COPE-A2", created_at: "2026-01-02T00:00:20Z", status: "granted" },
+              { key: "COPE-B1", created_at: "2026-01-02T00:05:10Z", status: "granted" },
+              { key: "COPE-B2", created_at: "2026-01-02T00:05:20Z", status: "granted" },
+            ],
+          }));
+        }
+        return origFetch(input as RequestInfo, undefined);
+      }) as typeof fetch;
+
+      const res = await co("co_a");
+      expect(res.status).toBe(200);
+
+      const data = await res.json() as { allKeys: string[] };
+      expect(data.allKeys).toEqual(["COPE-A1", "COPE-A2"]);
+    });
+    it("returns 409 when no granted keys exist", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "X", created_at: "2026-01-02T00:00:05Z", status: "pending" }] });
+      expect((await co("co_p")).status).toBe(409);
+    });
+    it("returns 409 instead of re-issuing keys already claimed by another checkout", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "COPE-DUPE", created_at: "2026-01-02T00:00:05Z", status: "granted" }] });
+      const dupeHash = await hashKey("COPE-DUPE");
+      const dedupDB = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockResolvedValue(sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims") ? { session_id: "s", encrypted_keys: null } : null),
+            run: vi.fn().mockResolvedValue({ meta: { changes: sql.includes("INSERT INTO checkout_claims") ? 1 : 0 } }),
+            all: vi.fn().mockResolvedValue({ results: [{ license_key_hash: dupeHash, checkout_id: "other-checkout" }] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_dupe" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: dedupDB }, "s");
+      expect(res.status).toBe(409);
+      expect(((await res.json()) as { error: string }).error).toContain("already claimed");
+    });
+    it("returns 409 when another checkout wins part of an overlapping key set", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, {
+        items: [
+          { key: "COPE-1", created_at: "2026-01-02T00:00:05Z", status: "granted" },
+          { key: "COPE-2", created_at: "2026-01-02T00:00:06Z", status: "granted" },
+        ],
+      });
+      let storedKeys: string | null = null;
+      const keyOwners = new Map<string, string>([[await hashKey("COPE-1"), "other-checkout"]]);
+      const db = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn((...args: unknown[]) => ({
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) return { session_id: "s", encrypted_keys: storedKeys };
+              if (sql.includes("SELECT encrypted_keys FROM checkout_claims")) return { encrypted_keys: storedKeys };
+              return null;
+            }),
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("INSERT INTO checkout_claims")) return { meta: { changes: 1 } };
+              if (sql.includes("INSERT INTO checkout_key_claims")) {
+                const bindings = args as string[];
+                const checkoutId = bindings[bindings.length - 1]!;
+                const licenseKeyHashes = bindings.slice(0, -2);
+                const hasConflict = licenseKeyHashes.some((licenseKeyHash) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash) !== checkoutId);
+                if (hasConflict) return { meta: { changes: 0 } };
+                for (const licenseKeyHash of licenseKeyHashes) {
+                  if (!keyOwners.has(licenseKeyHash)) keyOwners.set(licenseKeyHash, checkoutId);
+                }
+                return { meta: { changes: licenseKeyHashes.length } };
+              }
+              if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
+                storedKeys = args[0] as string;
+                return { meta: { changes: 1 } };
+              }
+              return { meta: { changes: 0 } };
+            }),
+            all: vi.fn().mockImplementation(async () => ({
+              results: sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")
+                ? (args as string[]).map((licenseKeyHash) => ({ license_key_hash: licenseKeyHash, checkout_id: keyOwners.get(licenseKeyHash)! }))
+                : [],
+            })),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_overlap" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: db }, "s");
+      expect(res.status).toBe(409);
+      expect(((await res.json()) as { error: string }).error).toContain("full license set");
+      expect(keyOwners.get(await hashKey("COPE-2"))).toBeUndefined();
+    });
+    it("returns 403 for wrong organization", async () => {
+      stubPolar({ organization_id: "other", status: "succeeded", customer_id: "c1" });
+      expect((await co("co_wo")).status).toBe(403);
+    });
+    it("returns 400 for unknown checkout (Polar 404)", async () => {
+      globalThis.fetch = vi.fn(async () => new Response("{}", { status: 404 })) as typeof fetch;
+      expect((await co("co_inv")).status).toBe(400);
+    });
+    it("excludes keys outside 15-minute window", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "THIS", created_at: "2026-01-02T00:00:10Z", status: "granted" }, { key: "LATER", created_at: "2026-01-02T01:00:00Z", status: "granted" }] });
+      expect(((await (await co("co_w")).json()) as { allKeys: string[] }).allKeys).toEqual(["THIS"]);
+    });
+    it("returns 503 when checkout claim table is missing (infrastructure failure)", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T });
+      const failDB = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockResolvedValue(null),
+            run: sql.includes("checkout_claims")
+              ? vi.fn().mockRejectedValue(new Error("no such table: checkout_claims"))
+              : vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_infra" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: failDB }, "s");
+      expect(res.status).toBe(503);
+      const data = await res.json() as { error: string };
+      expect(data.error).toContain("try again");
+    });
+    it("returns 503 when atomic key claiming fails", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "COPE-NEW", created_at: "2026-01-02T00:00:05Z", status: "granted" }] });
+      const failDB = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockResolvedValue(sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims") ? { session_id: "s", encrypted_keys: null } : null),
+            run: vi.fn().mockResolvedValue({ meta: { changes: sql.includes("INSERT INTO checkout_claims") ? 1 : 0 } }),
+            all: sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")
+              ? vi.fn().mockRejectedValue(new Error("D1_ERROR: checkout_key_claims unavailable"))
+              : vi.fn().mockResolvedValue({ results: [] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_dedupfail" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: failDB }, "s");
+      expect(res.status).toBe(503);
+      expect(((await res.json()) as { error: string }).error).toContain("atomically claim");
+    });
+    it("returns 503 when storing claimed keys fails", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "COPE-NEW", created_at: "2026-01-02T00:00:05Z", status: "granted" }] });
+      const newKeyHash = await hashKey("COPE-NEW");
+      const failDB = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockResolvedValue(sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims") ? { session_id: "s", encrypted_keys: null } : null),
+            run: sql.includes("UPDATE checkout_claims SET encrypted_keys")
+              ? vi.fn().mockRejectedValue(new Error("D1_ERROR: cannot update encrypted_keys"))
+              : vi.fn().mockResolvedValue({ meta: { changes: sql.includes("INSERT INTO checkout_claims") ? 1 : 0 } }),
+            all: vi.fn().mockResolvedValue({ results: [{ license_key_hash: newKeyHash, checkout_id: "co_storefail" }] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_storefail" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: failDB }, "s");
+      expect(res.status).toBe(503);
+      expect(((await res.json()) as { error: string }).error).toContain("record claimed license keys");
+    });
+    it("reuses stored claimed keys from D1 for the same checkout before hitting Polar again", async () => {
+      const kv = mockKV({});
+      let encryptedKeys: string | null = null;
+      const seedDb = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn((...args: unknown[]) => ({
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) encryptedKeys = args[0] as string;
+              return { meta: { changes: 1 } };
+            }),
+          })),
+        })),
+      } as unknown as D1Database;
+      await storeClaimedKeys(seedDb, "co_stored", ["COPE-STORED"], CLAIM_SECRET);
+      const db = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) return { session_id: "s", encrypted_keys: encryptedKeys };
+              return null;
+            }),
+            run: vi.fn().mockResolvedValue({ meta: { changes: sql.includes("INSERT INTO checkout_claims") ? 1 : 0 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const origFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const u = typeof input === "string" ? input : input.toString();
+        if (u.includes("/v1/checkouts/")) {
+          return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }));
+        }
+        throw new Error(`unexpected fetch: ${u}`);
+      }) as typeof fetch;
+      try {
+        const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_stored" },
+          { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv, DB: db }, "s");
+        expect(res.status).toBe(200);
+        expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-STORED"]);
+        expect(kv.put).toHaveBeenCalled();
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
+    it("falls back to Polar for the same session when a stored claim is unreadable after secret rotation", async () => {
+      let encryptedKeys: string | null = null;
+      const seedDb = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn((...args: unknown[]) => ({
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) encryptedKeys = args[0] as string;
+              return { meta: { changes: 1 } };
+            }),
+          })),
+        })),
+      } as unknown as D1Database;
+      await storeClaimedKeys(seedDb, "co_rotated", ["COPE-OLD"], "old-secret");
+      const db = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn((...args: unknown[]) => ({
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) return { session_id: "s", encrypted_keys: encryptedKeys };
+              if (sql.includes("SELECT session_id, claimed_at FROM checkout_claims")) return { session_id: "s", claimed_at: T };
+              if (sql.includes("SELECT encrypted_keys FROM checkout_claims")) return { encrypted_keys: encryptedKeys };
+              return null;
+            }),
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("INSERT INTO checkout_claims")) return { meta: { changes: 0 } };
+              if (sql.includes("INSERT INTO checkout_key_claims")) return { meta: { changes: 1 } };
+              if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
+                encryptedKeys = args[0] as string;
+                return { meta: { changes: 1 } };
+              }
+              return { meta: { changes: 0 } };
+            }),
+            all: vi.fn().mockImplementation(async () => ({
+              results: sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")
+                ? [{ license_key_hash: args[0] as string, checkout_id: "co_rotated" }]
+                : [],
+            })),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const origFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const u = typeof input === "string" ? input : input.toString();
+        if (u.includes("/v1/checkouts/co_rotated")) {
+          return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }));
+        }
+        if (u.includes("/v1/checkouts/?")) {
+          return new Response(JSON.stringify({ items: [{ id: "co_rotated", created_at: T, status: "succeeded" }] }));
+        }
+        if (u.includes("/v1/license-keys/")) {
+          return new Response(JSON.stringify({ items: [{ key: "COPE-FRESH", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
+        }
+        throw new Error(`unexpected fetch: ${u}`);
+      }) as typeof fetch;
+      try {
+        const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_rotated" },
+          { CHECKOUT_CLAIM_SECRET: "new-secret", POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: db }, "s");
+        expect(res.status).toBe(200);
+        expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-FRESH"]);
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
+    it("surfaces corrupted stored claims instead of silently re-fetching from Polar", async () => {
+      const db = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) {
+                return { session_id: "s", encrypted_keys: "{broken" };
+              }
+              return null;
+            }),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const origFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () => {
+        throw new Error("Polar should not be queried for corrupted stored claims");
+      }) as typeof fetch;
+      try {
+        const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_corrupt" },
+          { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: db }, "s");
+        expect(res.status).toBe(503);
+        expect(((await res.json()) as { error: string }).error).toContain("corrupted");
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
+    it("rejects a checkout whose Polar reference_id is bound to another session", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T, metadata: { reference_id: "buyer-session" } });
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_bound_polar" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: createMockDB({ runChanges: 1 }).db }, "attacker-session");
+      expect(res.status).toBe(403);
+      expect(((await res.json()) as { error: string }).error).toContain("different session");
+    });
+    it("fails closed when Polar checkout metadata omits reference_id", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T, metadata: {} });
+      const res = await co("co_unbound");
+      expect(res.status).toBe(500);
+      expect(((await res.json()) as { error: string }).error).toContain("session binding metadata");
+    });
+    it("returns 503 for generic DB runtime error during claim", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T });
+      const failDB = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockResolvedValue(null),
+            run: sql.includes("INSERT INTO checkout_claims")
+              ? vi.fn().mockRejectedValue(new Error("D1_ERROR: internal error"))
+              : vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_dberr" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: failDB }, "s");
+      expect(res.status).toBe(503);
+      const data = await res.json() as { error: string };
+      expect(data.error).toContain("try again");
+    });
+    it("does not treat a stale cache session mismatch as authoritative when D1 confirms the caller owns the claim", async () => {
+      const cachePayload = JSON.stringify({ keys: ["COPE-BOUND"], sessionId: "original-session" });
+      const kv = mockKV({ "checkout_used:co_nomatch": cachePayload });
+      let encryptedKeys: string | null = null;
+      const seedDb = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn((...args: unknown[]) => ({
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) encryptedKeys = args[0] as string;
+              return { meta: { changes: 1 } };
+            }),
+          })),
+        })),
+      } as unknown as D1Database;
+      await storeClaimedKeys(seedDb, "co_nomatch", ["COPE-REAL"], CLAIM_SECRET);
+      const dbSpy = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) {
+                return { session_id: "attacker-session", encrypted_keys: encryptedKeys };
+              }
+              return null;
+            }),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_nomatch" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv, DB: dbSpy }, "attacker-session");
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-REAL"]);
+      expect((dbSpy.prepare as ReturnType<typeof vi.fn>).mock.calls.some(
+        (args: unknown[]) => typeof args[0] === "string" && args[0].includes("SELECT session_id, encrypted_keys FROM checkout_claims"),
+      )).toBe(true);
+    });
+    it("reads KV only once on the miss path before checking stored claims", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "COPE-MISS", created_at: "2026-01-02T00:00:05Z", status: "granted" }] });
+      const kv = mockKV({});
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_single_kv" }, {
+        CHECKOUT_CLAIM_SECRET: CLAIM_SECRET,
+        POLAR_ACCESS_TOKEN: "tok",
+        POLAR_ORGANIZATION_ID: "org",
+        QUOTA_KV: kv,
+        DB: createMockDB({ runChanges: 1 }).db,
+      }, "s");
+      expect(res.status).toBe(200);
+      expect(kv.get).toHaveBeenCalledTimes(1);
+    });
+    it("ignores stale session-bound KV keys when D1 has newer stored keys", async () => {
+      const kv = mockKV({ "checkout_used:co_stale_cache": JSON.stringify({ keys: ["COPE-OLD"], sessionId: "s" }) });
+      let encryptedKeys: string | null = null;
+      const seedDb = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn((...args: unknown[]) => ({
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) encryptedKeys = args[0] as string;
+              return { meta: { changes: 1 } };
+            }),
+          })),
+        })),
+      } as unknown as D1Database;
+      await storeClaimedKeys(seedDb, "co_stale_cache", ["COPE-NEW"], CLAIM_SECRET);
+      const db = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) return { session_id: "s", encrypted_keys: encryptedKeys };
+              return null;
+            }),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const origFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () => {
+        throw new Error("Polar should not be queried when D1 already has the claim");
+      }) as typeof fetch;
+      try {
+        const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_stale_cache" }, {
+          CHECKOUT_CLAIM_SECRET: CLAIM_SECRET,
+          POLAR_ACCESS_TOKEN: "tok",
+          POLAR_ORGANIZATION_ID: "org",
+          QUOTA_KV: kv,
+          DB: db,
+        }, "s");
+        expect(res.status).toBe(200);
+        expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-NEW"]);
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
+  });
+});
+
 describe("GET /api/account/me", () => {
   const meReq = (env: Record<string, unknown>) => app.request("/api/account/me", {
     headers: { Cookie: "cope_session_id=test-session" },
   }, { ALLOWED_ORIGINS: "http://localhost:5173", ...env });
 
   it("returns found: false when KV is not configured", async () => {
-    const res = await meReq({});
+    const res = await getWithSession("/api/account/me", {});
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ found: false });
   });
   it("returns found: false when session has no mapped username", async () => {
-    const res = await meReq({ QUOTA_KV: mockKV({}) });
+    const kv = mockKV({});
+    const res = await getWithSession("/api/account/me", { QUOTA_KV: kv });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ found: false });
   });

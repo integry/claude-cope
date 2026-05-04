@@ -182,6 +182,38 @@ export const migrations: Migration[] = [
     name: "023_idx_user_scores_username_nocase",
     sql: "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_username_nocase ON user_scores (LOWER(username))",
   },
+
+  // ── checkout session binding and key dedup ───────────────────────
+  {
+    name: "024_create_checkout_claims",
+    sql: `CREATE TABLE IF NOT EXISTS checkout_claims (
+      checkout_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+  },
+  {
+    name: "025_add_checkout_claims_encrypted_keys",
+    sql: "ALTER TABLE checkout_claims ADD COLUMN encrypted_keys TEXT",
+    ignoreErrorMatching: /duplicate column name.*encrypted_keys/i,
+  },
+  {
+    name: "026_add_checkout_created_at",
+    sql: "ALTER TABLE checkout_claims ADD COLUMN checkout_created_at TEXT",
+    ignoreErrorMatching: /duplicate column name.*checkout_created_at/i,
+  },
+  {
+    name: "027_create_checkout_key_claims",
+    sql: `CREATE TABLE IF NOT EXISTS checkout_key_claims (
+      license_key_hash TEXT PRIMARY KEY,
+      checkout_id TEXT NOT NULL,
+      claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+  },
+  {
+    name: "028_idx_checkout_key_claims_checkout_id",
+    sql: "CREATE INDEX IF NOT EXISTS idx_checkout_key_claims_checkout_id ON checkout_key_claims (checkout_id)",
+  },
 ];
 
 /**

@@ -3,7 +3,8 @@ import { Hono } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout } from "./accountHelpers";
+import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 
@@ -12,6 +13,7 @@ type Env = {
     DB?: D1Database;
     QUOTA_KV?: KVNamespace;
     USAGE_KV?: KVNamespace;
+    CHECKOUT_CLAIM_SECRET?: string;
     POLAR_ACCESS_TOKEN?: string;
     POLAR_ORGANIZATION_ID?: string;
     FREE_QUOTA_LIMIT?: string;
@@ -27,6 +29,166 @@ const SESSION_USERNAME_TTL_SECONDS = 60 * 60 * 24 * 365;
 const RENAME_REDIRECT_TTL_SECONDS = SESSION_USERNAME_TTL_SECONDS;
 
 const account = new Hono<Env>();
+
+async function lookupCheckoutCache(
+  kv: KVNamespace,
+  checkoutId: string,
+  sessionId: string,
+): Promise<{ keys: string[]; sessionMismatch?: boolean; requiresStoredClaim?: boolean } | null> {
+  const cached = await kv.get(`checkout_used:${checkoutId}`);
+  if (!cached) return null;
+  const entry = parseCheckoutCache(cached);
+  if (!entry) {
+    await kv.delete(`checkout_used:${checkoutId}`).catch(() => undefined);
+    return null;
+  }
+  if (!entry.sessionId) return { keys: entry.keys, requiresStoredClaim: true };
+  return entry.sessionId !== sessionId ? { keys: entry.keys, sessionMismatch: true } : { keys: entry.keys };
+}
+
+async function validateCheckoutRequest(c: { req: { json: <T>() => Promise<T> }; get: (key: string) => string; env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response }) {
+  let body: { checkoutId?: string };
+  try {
+    body = await c.req.json<{ checkoutId?: string }>();
+  } catch {
+    return { error: c.json({ error: "Invalid JSON body" }, 400) } as const;
+  }
+  if (!body.checkoutId) return { error: c.json({ error: "checkoutId is required" }, 400) } as const;
+  if (!/^[\w-]{4,128}$/.test(body.checkoutId)) return { error: c.json({ error: "Invalid checkoutId format" }, 400) } as const;
+  const sessionId = c.get("sessionId");
+  if (!sessionId) return { error: c.json({ error: "Session required" }, 401) } as const;
+  return { checkoutId: body.checkoutId, sessionId, kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV } as const;
+}
+
+function respondWithClaimedKeys(c: { json: (data: unknown, status?: number) => Response }, keys: string[]) {
+  return c.json({ licenseKey: keys[0], allKeys: keys });
+}
+
+async function cacheClaimedKeys(kv: KVNamespace | undefined, checkoutId: string, sessionId: string, keys: string[]) {
+  if (!kv) return;
+  await kv.put(`checkout_used:${checkoutId}`, JSON.stringify({ keys, sessionId } satisfies CheckoutCache), { expirationTtl: 7 * 24 * 60 * 60 }).catch(() => undefined);
+}
+
+async function respondWithStoredClaim(
+  c: { json: (data: unknown, status?: number) => Response },
+  claim: { kv: KVNamespace | undefined; checkoutId: string; sessionId: string; keys: string[] },
+) {
+  await cacheClaimedKeys(claim.kv, claim.checkoutId, claim.sessionId, claim.keys);
+  return respondWithClaimedKeys(c, claim.keys);
+}
+
+type CheckoutClaimLookup =
+  | { status: "miss" }
+  | { status: "cached"; keys: string[]; sessionMismatch: boolean; requiresStoredClaim: boolean };
+
+type CachedOrStoredClaimResolution = {
+  response: Response | null;
+  allowMissingReferenceBinding: boolean;
+};
+
+async function resolveCachedClaim(
+  deps: { kv: KVNamespace | undefined; checkoutId: string; sessionId: string },
+): Promise<CheckoutClaimLookup> {
+  const { kv, checkoutId, sessionId } = deps;
+  if (!kv) return { status: "miss" };
+  const cacheResult = await lookupCheckoutCache(kv, checkoutId, sessionId);
+  if (!cacheResult) return { status: "miss" };
+  return {
+    status: "cached",
+    keys: cacheResult.keys,
+    sessionMismatch: Boolean(cacheResult.sessionMismatch),
+    requiresStoredClaim: Boolean(cacheResult.requiresStoredClaim),
+  };
+}
+
+async function resolveCachedOrStoredClaim(
+  c: { json: (data: unknown, status?: number) => Response },
+  deps: { db?: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string; cacheLookup?: CheckoutClaimLookup },
+): Promise<CachedOrStoredClaimResolution> {
+  const { db, kv, checkoutId, sessionId, claimSecret } = deps;
+  const cachedClaim = deps.cacheLookup ?? await resolveCachedClaim({ kv, checkoutId, sessionId });
+  if (!db) {
+    if (cachedClaim.status === "cached" && cachedClaim.sessionMismatch) {
+      return {
+        response: c.json({ error: "This checkout was already redeemed by another session" }, 403),
+        allowMissingReferenceBinding: false,
+      };
+    }
+    if (cachedClaim.status === "cached" && !cachedClaim.requiresStoredClaim) {
+      return { response: respondWithClaimedKeys(c, cachedClaim.keys), allowMissingReferenceBinding: false };
+    }
+    return { response: null, allowMissingReferenceBinding: false };
+  }
+  const storedClaim = await getStoredClaimedKeys(db, checkoutId, claimSecret);
+  if (!storedClaim.ok) {
+    return { response: c.json({ error: storedClaim.error }, 503), allowMissingReferenceBinding: false };
+  }
+  if (storedClaim.sessionId && storedClaim.sessionId !== sessionId) {
+    return {
+      response: c.json({ error: "This checkout was already redeemed by another session" }, 403),
+      allowMissingReferenceBinding: false,
+    };
+  }
+  if (storedClaim.keys?.length) {
+    return {
+      response: await respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: storedClaim.keys }),
+      allowMissingReferenceBinding: false,
+    };
+  }
+  if (cachedClaim.status === "cached" && !cachedClaim.requiresStoredClaim) {
+    if (cachedClaim.sessionMismatch) {
+      return {
+        response: c.json({ error: "This checkout was already redeemed by another session" }, 403),
+        allowMissingReferenceBinding: false,
+      };
+    }
+    return { response: respondWithClaimedKeys(c, cachedClaim.keys), allowMissingReferenceBinding: false };
+  }
+  return {
+    response: null,
+    allowMissingReferenceBinding: Boolean(storedClaim.unreadable && storedClaim.sessionId === sessionId),
+  };
+}
+
+async function redeemCheckoutLicense(
+  c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
+  deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string; allowMissingReferenceBinding?: boolean },
+) {
+  const { db, kv, checkoutId, sessionId, claimSecret } = deps;
+  const accessToken = c.env?.POLAR_ACCESS_TOKEN;
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
+  if (!accessToken || !organizationId) return c.json({ error: "Polar integration is not configured" }, 500);
+  const result = await fetchCheckoutCustomerId(checkoutId, accessToken, organizationId, {
+    allowMissingReferenceId: deps.allowMissingReferenceBinding,
+  });
+  if ("error" in result) return c.json({ error: result.error }, result.status);
+  if (result.referenceId && result.referenceId !== sessionId) {
+    return c.json({ error: "This checkout belongs to a different session" }, 403);
+  }
+  if (!result.referenceId && !deps.allowMissingReferenceBinding) {
+    return c.json({ error: "Checkout is missing session binding metadata — cannot verify license ownership" }, 500);
+  }
+  if (!result.createdAt) {
+    return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
+  }
+  const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt: result.createdAt });
+  if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
+  const postClaimResolution = await resolveCachedOrStoredClaim(c, {
+    db, kv, checkoutId, sessionId, claimSecret, cacheLookup: { status: "cached", keys: [], sessionMismatch: false, requiresStoredClaim: true },
+  });
+  if (postClaimResolution.response) return postClaimResolution.response;
+  const nextCheckout = await fetchNextCheckoutCreatedAt(result.customerId, organizationId, accessToken, { checkoutId, checkoutCreatedAt: result.createdAt });
+  if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
+  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: result.createdAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
+  if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
+  const claimedKeys = await claimLicenseKeysForCheckout(db, checkoutId, lkResult.keys, claimSecret);
+  if (!claimedKeys.ok) {
+    const isConflict = claimedKeys.error.includes("already claimed") || claimedKeys.error.includes("full license set");
+    return c.json({ error: claimedKeys.error }, isConflict ? 409 : 503);
+  }
+  return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: claimedKeys.keys });
+}
+
 
 function normalizeFreeTierRank(row: unknown, isPro: boolean) {
   if (!row || isPro) return row;
@@ -117,6 +279,27 @@ async function resolveSessionProfileRow(opts: {
 
   return { username: current, row, redirected };
 }
+
+account.post("/checkout-license", async (c) => {
+  const validated = await validateCheckoutRequest(c);
+  if ("error" in validated) return validated.error;
+  const { checkoutId, sessionId, kv } = validated;
+  const claimSecret = c.env?.CHECKOUT_CLAIM_SECRET;
+  if (!claimSecret) return c.json({ error: "Checkout claim secret is not configured" }, 500);
+  const db = c.env?.DB;
+  const cacheLookup = await resolveCachedClaim({ kv, checkoutId, sessionId });
+  const resolvedClaim = await resolveCachedOrStoredClaim(c, { db, kv, checkoutId, sessionId, claimSecret, cacheLookup });
+  if (resolvedClaim.response) return resolvedClaim.response;
+  if (!db) return c.json({ error: "Database not configured" }, 500);
+  return redeemCheckoutLicense(c, {
+    db,
+    kv,
+    checkoutId,
+    sessionId,
+    claimSecret,
+    allowMissingReferenceBinding: resolvedClaim.allowMissingReferenceBinding,
+  });
+});
 
 account.post("/sync", async (c) => {
   const validated = await validateSyncRequest(c);

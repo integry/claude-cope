@@ -132,9 +132,12 @@ function renderLineWithTags(line: string, onSlashCommand?: (command: string, act
   const bracketMatch = BRACKET_TAG.exec(line);
   if (bracketMatch) {
     const category = classifyTag(bracketMatch[1]!);
+    const isReward = category === "SUCCESS" && /reward/i.test(bracketMatch[1]!);
+    const sizeClass = isReward ? "text-sm" : "text-xs";
+    const colorClass = isReward ? "text-green-300" : TAG_STYLES[category];
     return (
       <>
-        <span className={`${TAG_STYLES[category]} font-mono text-xs font-bold mr-2`}>
+        <span className={`${colorClass} font-mono ${sizeClass} font-bold mr-2`}>
           {bracketMatch[1]}
         </span>
         {linkify(line.slice(bracketMatch[0].length))}
@@ -184,8 +187,20 @@ function buildMarkdownComponents(onSlashCommand?: (command: string, action: Slas
   const linkifyChildren = (children: React.ReactNode): React.ReactNode =>
     onSlashCommand ? linkifySlashCommands(children, onSlashCommand) : children;
 
+  const flattenTextContent = (node: React.ReactNode): string => {
+    if (typeof node === "string" || typeof node === "number") return String(node);
+    if (Array.isArray(node)) return node.map(flattenTextContent).join("");
+    if (React.isValidElement<{ children?: React.ReactNode }>(node)) return flattenTextContent(node.props.children);
+    return "";
+  };
+
   return {
   p({ children }: { children?: React.ReactNode }) {
+    const textContent = flattenTextContent(children);
+    const trimmed = textContent.trim();
+    if (/^[=]{3,}$/.test(trimmed) || /^[-]{3,}$/.test(trimmed)) {
+      return <p className="mb-1 text-gray-600 leading-relaxed select-none">{trimmed}</p>;
+    }
     // Process [BRACKET TAG] markers in text children, then recursively linkify
     const processed = React.Children.map(children, (child) => {
       if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
