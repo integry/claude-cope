@@ -286,11 +286,18 @@ describe("POST /api/account/update-alias", () => {
   });
   it("succeeds with valid ownership and available alias", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });
-    db.batch = vi.fn().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 0 } }]);
+    db.batch = vi.fn().mockResolvedValue([
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+    ]);
     const kv = mockKV({ "session_user:test-session": "alice" });
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db, QUOTA_KV: kv });
     expect(res.status).toBe(200);
     expect((await res.json() as { success: boolean }).success).toBe(true);
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect((db.batch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toHaveLength(4);
   });
   it("returns 409 when alias is already taken", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": { "1": 1 } }, runChanges: 1 });
@@ -385,5 +392,105 @@ describe("GET /api/account/me", () => {
     const res = await meReq({ QUOTA_KV: mockKV({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ found: false });
+  });
+  it("returns the mapped free profile when the session username exists", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const { db } = createMockDB({ firstBySQL: { "SELECT username": { ...BASE_PROFILE, license_hash: null } } });
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "alice",
+      isPro: false,
+      profile: {
+        username: "alice",
+        corporate_rank: "Junior Code Monkey",
+      },
+    });
+  });
+  it("repairs a single-hop renamed session mapping", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+    });
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((username: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("licenses")
+              ? null
+              : username === "bob"
+                ? { ...BASE_PROFILE, username: "bob", license_hash: null }
+                : null,
+          ),
+        })),
+      })),
+    };
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "bob",
+      profile: { username: "bob" },
+    });
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
+  });
+  it("collapses multi-hop rename chains to the final alias", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+      "renamed:bob": "carol",
+    });
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((username: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("licenses")
+              ? null
+              : username === "carol"
+                ? { ...BASE_PROFILE, username: "carol", license_hash: null }
+                : null,
+          ),
+        })),
+      })),
+    };
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "carol",
+      profile: { username: "carol" },
+    });
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "carol", expect.any(Object));
+    expect(kv.put).toHaveBeenCalledWith("renamed:alice", "carol", expect.any(Object));
+  });
+  it("marks revoked licensed users as non-pro in the /me payload", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const staleDate = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString();
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? { status: "active", last_activated_at: staleDate }
+              : value === "alice"
+                ? { ...BASE_PROFILE, license_hash: "pro-hash", corporate_rank: "CTO" }
+                : null,
+          ),
+        })),
+      })),
+    };
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "alice",
+      isPro: false,
+      revoked: true,
+      profile: {
+        username: "alice",
+        corporate_rank: "Junior Code Monkey",
+      },
+    });
   });
 });

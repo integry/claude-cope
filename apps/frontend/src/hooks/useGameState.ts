@@ -88,13 +88,9 @@ export function useGameState() {
   }, []);
 
   // Pro license validation: if local state claims paid status, verify against
-  // the server and clear pro fields when the license has been revoked.
-  // Only clear when the server explicitly confirms the user is not Pro
-  // (result.found && !result.isPro). If the session mapping is missing
-  // (found: false — e.g. cookie expired or KV evicted), the license may
-  // still be valid; don't wipe pro state or the user would have to re-sync
-  // after every cookie reset. They can re-run /sync <key> to restore the
-  // session binding.
+  // the server and clear pro fields whenever the current session can no longer
+  // prove paid access. This intentionally fails closed for client-side-only Max
+  // gates; users can re-run /sync <key> to restore the session binding.
   useEffect(() => {
     const initial = stateRef.current;
     if (!isPaidUser(initial)) return;
@@ -102,7 +98,7 @@ export function useGameState() {
     let cancelled = false;
     fetchSessionProfile().then((result) => {
       if (cancelled) return;
-      if (result.found && !result.isPro) {
+      if (!result.found || !result.isPro) {
         setState((prev) => ({
           ...prev,
           proKey: undefined,

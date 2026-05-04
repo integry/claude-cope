@@ -158,6 +158,29 @@ describe("POST /api/score", () => {
     expect(json.corporate_rank).toBe("Junior Code Monkey");
   });
 
+  it("preserves paid-user rank on the authenticated pro sync path", async () => {
+    const { db } = makeDB({
+      username: "prouser",
+      total_td: 200000,
+      current_td: 150000,
+      corporate_rank: "Mid-Level Googler",
+      license_hash: "pro-hash",
+    } as never, { licenseActive: true });
+    const res = await postScore(db, {
+      username: "prouser",
+      currentTD: 150000,
+      totalTDEarned: 200000,
+      inventory: {},
+      upgrades: [],
+      proKeyHash: "pro-hash",
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json() as { profile: { corporate_rank: string; total_td: number; current_td: number } };
+    expect(json.profile.corporate_rank).toBe("Mid-Level Googler");
+    expect(json.profile.total_td).toBe(200000);
+    expect(json.profile.current_td).toBe(150000);
+  });
+
   it("uses cf-ipcountry header for country detection", async () => {
     const { db, bound } = makeDB(undefined);
     await postScore(

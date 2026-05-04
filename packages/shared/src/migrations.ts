@@ -151,20 +151,9 @@ export const migrations: Migration[] = [
     ignoreErrorMatching: /no such column.*activated_at/i,
   },
 
-  // ── alias rate limiting (D1-based, replaces raceable KV get/put) ──
-  {
-    name: "020_create_alias_rate_limits",
-    sql: `CREATE TABLE IF NOT EXISTS alias_rate_limits (
-      license_key_hash TEXT NOT NULL,
-      change_date TEXT NOT NULL,
-      change_count INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (license_key_hash, change_date)
-    )`,
-  },
-
   // ── system_config table ────────────────────────────────────────────
   {
-    name: "021_create_system_config",
+    name: "020_create_system_config",
     sql: `CREATE TABLE IF NOT EXISTS system_config (
       key TEXT NOT NULL,
       tier TEXT NOT NULL DEFAULT '*',
@@ -175,8 +164,19 @@ export const migrations: Migration[] = [
     )`,
   },
   {
-    name: "022_idx_system_config_tier",
+    name: "021_idx_system_config_tier",
     sql: "CREATE INDEX IF NOT EXISTS idx_system_config_tier ON system_config (tier)",
+  },
+
+  // ── alias rate limiting (D1-based, replaces raceable KV get/put) ──
+  {
+    name: "022_create_alias_rate_limits",
+    sql: `CREATE TABLE IF NOT EXISTS alias_rate_limits (
+      license_key_hash TEXT NOT NULL,
+      change_date TEXT NOT NULL,
+      change_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (license_key_hash, change_date)
+    )`,
   },
 ];
 
