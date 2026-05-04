@@ -56,7 +56,7 @@ type CreateProfileResult =
 type SyncProfileMutation =
   | { kind: "none" }
   | { kind: "created"; username: string }
-  | { kind: "attached_license"; username: string };
+  | { kind: "attached_license"; username: string; previousUsername: string };
 
 async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<CreateProfileResult> {
   const newUsername = body.username?.trim();
@@ -105,7 +105,7 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
       }
       const profile = await getProfile(db, newUsername);
       if (!profile) return { profile: null, error: "Profile not found after upgrade" };
-      return { profile, mutation: { kind: "attached_license", username: newUsername } };
+      return { profile, mutation: { kind: "attached_license", username: newUsername, previousUsername: existingUsername } };
     }
     // Username is owned by a different license — refuse
     return { profile: null, error: "This username is already taken. Please change your username and try again." };
@@ -182,8 +182,8 @@ export async function rollbackProfileMutation(
   }
 
   await db
-    .prepare("UPDATE user_scores SET license_hash = NULL, updated_at = datetime('now') WHERE username = ? AND license_hash = ?")
-    .bind(mutation.username, hash)
+    .prepare("UPDATE user_scores SET username = ?, license_hash = NULL, updated_at = datetime('now') WHERE username = ? AND license_hash = ?")
+    .bind(mutation.previousUsername, mutation.username, hash)
     .run();
 }
 
@@ -241,7 +241,7 @@ async function rollbackLicenseActivation(
 ): Promise<void> {
   if (previousLicense) {
     await db
-      .prepare("UPDATE licenses SET status = ?, last_activated_at = COALESCE(?, last_activated_at) WHERE key_hash = ?")
+      .prepare("UPDATE licenses SET status = ?, last_activated_at = ? WHERE key_hash = ?")
       .bind(previousLicense.status, previousLicense.last_activated_at, hash)
       .run();
     return;
@@ -372,6 +372,29 @@ async function pruneAliasRateLimits(db: D1Database): Promise<void> {
     .run();
 }
 
+async function rollbackAliasRateLimitClaim(db: D1Database, licenseKeyHash: string): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE alias_rate_limits
+       SET change_count = change_count - 1
+       WHERE license_key_hash = ?
+         AND change_date = date('now')
+         AND change_count > 0`,
+    )
+    .bind(licenseKeyHash)
+    .run();
+
+  await db
+    .prepare(
+      `DELETE FROM alias_rate_limits
+       WHERE license_key_hash = ?
+         AND change_date = date('now')
+         AND change_count <= 0`,
+    )
+    .bind(licenseKeyHash)
+    .run();
+}
+
 export async function performAliasDbUpdate(
   db: D1Database,
   opts: {
@@ -446,6 +469,7 @@ export async function performAliasDbUpdate(
   }
 
   if (!results[2].meta.changes) {
+    await rollbackAliasRateLimitClaim(db, licenseKeyHash);
     return { success: false, error: "Update failed — profile not found, license mismatch, or license revoked", status: 409 };
   }
 

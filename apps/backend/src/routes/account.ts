@@ -28,6 +28,30 @@ const RENAME_REDIRECT_TTL_SECONDS = SESSION_USERNAME_TTL_SECONDS;
 
 const account = new Hono<Env>();
 
+async function normalizeFreeTierRank(db: D1Database | undefined, row: unknown, isPro: boolean) {
+  if (!db || !row || isPro) return row;
+
+  const username = (row as { username: string }).username;
+  const corporateRank = (row as { corporate_rank: string }).corporate_rank;
+  if (corporateRank === FREE_TIER_RANK_CAP) return row;
+
+  const update = db
+    .prepare(
+      `UPDATE user_scores
+       SET corporate_rank = ?, updated_at = datetime('now')
+       WHERE username = ?
+         AND corporate_rank != ?
+         AND (license_hash IS NULL OR NOT ${ACTIVE_LICENSE_EXISTS_SQL})`,
+    )
+    .bind(FREE_TIER_RANK_CAP, username, FREE_TIER_RANK_CAP) as { run?: () => Promise<unknown> };
+
+  if (typeof update.run === "function") {
+    await update.run();
+  }
+
+  return { ...(row as Record<string, unknown>), corporate_rank: FREE_TIER_RANK_CAP };
+}
+
 async function buildMePayload(opts: {
   row: unknown;
   db: D1Database | undefined;
@@ -39,12 +63,13 @@ async function buildMePayload(opts: {
   const rawLicenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
   const licenseActive = rawLicenseHash && db ? await isLicenseActive(db, rawLicenseHash) : false;
   const isPro = Boolean(rawLicenseHash && licenseActive);
+  const normalizedRow = await normalizeFreeTierRank(db, row, isPro);
   const limits = getQuotaLimits(env);
   const quotaPercent = isPro
     ? await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: rawLicenseHash!, limits })
     : await getQuotaPercent(kv, { tier: "free", sessionId, limits });
-  const profile = row
-    ? { ...rowToProfile(row as Parameters<typeof rowToProfile>[0]), quota_percent: quotaPercent, ...(!isPro ? { corporate_rank: FREE_TIER_RANK_CAP } : {}) }
+  const profile = normalizedRow
+    ? { ...rowToProfile(normalizedRow as Parameters<typeof rowToProfile>[0]), quota_percent: quotaPercent }
     : null;
   const revoked = Boolean(rawLicenseHash && !licenseActive);
   return { isPro, quotaPercent, profile, revoked };

@@ -2,6 +2,7 @@
 import { describe, it, expect, vi } from "vitest";
 import app from "../app";
 import { ACCOUNT_TEST_SQL, createMockDB, mockKV, postJSON, BASE_PROFILE, profileWithHash, ownedMockDB } from "./account.test-helpers";
+import { FREE_TIER_RANK_CAP } from "../gameConstants";
 
 const GEN_BODY = { username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash" };
 
@@ -479,6 +480,9 @@ describe("POST /api/account/update-alias", () => {
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
     expect(db.batch).toHaveBeenCalled();
+    expect((db.prepare as ReturnType<typeof vi.fn>).mock.calls.some(
+      (args: unknown[]) => typeof args[0] === "string" && args[0].includes("SET change_count = change_count - 1"),
+    )).toBe(true);
   });
   it("cleans orphaned completed task collisions before renaming to an otherwise-free alias", async () => {
     const { db } = createMockDB({
@@ -566,6 +570,28 @@ describe("GET /api/account/me", () => {
         corporate_rank: "Junior Code Monkey",
       },
     });
+  });
+  it("persists the free-tier rank cap when an existing free row is above the ceiling", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, license_hash: null, corporate_rank: "CTO" },
+      },
+      runChanges: 1,
+    });
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "alice",
+      profile: {
+        username: "alice",
+        corporate_rank: FREE_TIER_RANK_CAP,
+      },
+    });
+    expect((db.prepare as ReturnType<typeof vi.fn>).mock.calls.some(
+      (args: unknown[]) => typeof args[0] === "string" && args[0].includes("UPDATE user_scores") && args[0].includes("corporate_rank = ?"),
+    )).toBe(true);
   });
   it("restores a username-only session even before a user_scores row exists", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });

@@ -344,7 +344,106 @@ describe("POST /api/account/sync", () => {
     });
 
     expect(res.status).toBe(500);
-    expect(calls.some((c) => c.sql.includes("UPDATE user_scores SET license_hash = NULL"))).toBe(true);
+    const rollbackCall = calls.find((c) => c.sql.includes("UPDATE user_scores SET username = ?, license_hash = NULL"));
+    expect(rollbackCall).toBeDefined();
+    expect(rollbackCall?.bindings).toEqual(["alice", "alice", expect.any(String)]);
+  });
+
+  it("restores the original username casing when free-account upgrade rollback follows a case-only rename", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const kv = {
+      get: vi.fn((key: string) => Promise.resolve(key === "session_user:test-session" ? "alice" : null)),
+      put: vi.fn((key: string) => (
+        key.startsWith("polar:")
+          ? Promise.reject(new Error("kv unavailable"))
+          : Promise.resolve()
+      )),
+      delete: vi.fn(() => Promise.resolve()),
+    };
+    const db = {
+      prepare: vi.fn((sql: string) => {
+        const isProfileByHash = sql.includes("WHERE license_hash = ?");
+        const isUsernameCheck = sql.includes("WHERE LOWER(username) = LOWER(?)");
+        const isGetProfile = sql.includes("FROM user_scores WHERE username = ?");
+        return {
+          bind: vi.fn((...args: unknown[]) => {
+            calls.push({ sql, bindings: args });
+            return {
+              first: vi.fn().mockResolvedValue(
+                isProfileByHash ? null :
+                isUsernameCheck ? { username: "alice", license_hash: null } :
+                isGetProfile ? { ...PROFILE_ROW, username: "ALICE", license_hash: "testhash" } :
+                sql.includes("SELECT status, last_activated_at FROM licenses") ? null :
+                null,
+              ),
+              run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+              all: vi.fn().mockResolvedValue({ results: [] }),
+            };
+          }),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        };
+      }),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
+
+    const res = await postSync({ licenseKey: "COPE-TEST", username: "ALICE" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+
+    expect(res.status).toBe(500);
+    const rollbackCall = calls.find((c) => c.sql.includes("UPDATE user_scores SET username = ?, license_hash = NULL"));
+    expect(rollbackCall?.bindings).toEqual(["alice", "ALICE", expect.any(String)]);
+  });
+
+  it("restores a previous NULL last_activated_at when license provisioning rollback runs", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => {
+          calls.push({ sql, bindings: args });
+          return {
+            first: vi.fn().mockResolvedValue(
+              sql.includes("SELECT status, last_activated_at FROM licenses")
+                ? { status: "revoked", last_activated_at: null }
+                : sql.includes("WHERE license_hash = ?")
+                  ? PROFILE_ROW
+                  : null,
+            ),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          };
+        }),
+        first: vi.fn().mockResolvedValue(null),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        all: vi.fn().mockResolvedValue({ results: [] }),
+      })),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
+    const kv = {
+      get: vi.fn(() => Promise.resolve(null)),
+      put: vi.fn((key: string) => (
+        key.startsWith("polar:")
+          ? Promise.reject(new Error("kv unavailable"))
+          : Promise.resolve()
+      )),
+      delete: vi.fn(() => Promise.resolve()),
+    };
+
+    const res = await postSync({ licenseKey: "COPE-TEST" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+
+    expect(res.status).toBe(500);
+    const rollbackCall = calls.find((c) => c.sql.includes("UPDATE licenses SET status = ?, last_activated_at = ?"));
+    expect(rollbackCall?.bindings).toEqual(["revoked", null, expect.any(String)]);
   });
 
   it("upgrades an existing free account even when the requested username only changes casing", async () => {
