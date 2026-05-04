@@ -206,6 +206,27 @@ describe("POST /api/account/checkout-license", () => {
     const res = await postJSON("/api/account/checkout-license", { checkoutId: "co_123" }, {});
     expect(res.status).toBe(500);
   });
+  it("redeems checkout without KV when DB and Polar are available", async () => {
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const u = typeof input === "string" ? input : input.toString();
+      if (u.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z" }));
+      }
+      if (u.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({ items: [{ key: "COPE-NOKV", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
+      }
+      return origFetch(input as RequestInfo, undefined);
+    }) as typeof fetch;
+    try {
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_nokv" },
+        { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", DB: createMockDB({ runChanges: 1 }).db }, "s");
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-NOKV"]);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
   it("returns cached key from KV on repeated calls", async () => {
     const kv = mockKV({ "checkout_used:co_123": JSON.stringify(["COPE-ABC"]) });
     const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_123" },
@@ -264,6 +285,28 @@ describe("POST /api/account/checkout-license", () => {
     const data = await res.json() as { licenseKey: string; allKeys: string[] };
     expect(data.licenseKey).toBe("COPE-OLD");
   });
+  it("deletes malformed cache entries before falling back to Polar", async () => {
+    const origFetch = globalThis.fetch;
+    const kv = mockKV({ "checkout_used:co_bad": "{broken" });
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const u = typeof input === "string" ? input : input.toString();
+      if (u.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z" }));
+      }
+      if (u.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({ items: [{ key: "COPE-FRESH", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
+      }
+      return origFetch(input as RequestInfo, undefined);
+    }) as typeof fetch;
+    try {
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_bad" },
+        { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv, DB: createMockDB({ runChanges: 1 }).db }, "s");
+      expect(res.status).toBe(200);
+      expect(kv.delete).toHaveBeenCalledWith("checkout_used:co_bad");
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
   describe("non-cached Polar fetch path", () => {
     const origFetch = globalThis.fetch;
     afterEach(() => { globalThis.fetch = origFetch; });
@@ -292,6 +335,31 @@ describe("POST /api/account/checkout-license", () => {
     it("returns 409 when no granted keys exist", async () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "X", created_at: "2026-01-02T00:00:05Z", status: "pending" }] });
       expect((await co("co_p")).status).toBe(409);
+    });
+    it("returns 409 instead of re-issuing keys already claimed by another checkout", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "COPE-DUPE", created_at: "2026-01-02T00:00:05Z", status: "granted" }] });
+      const dedupDB = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockResolvedValue(null),
+            run: vi.fn().mockResolvedValue({ meta: { changes: sql.includes("INSERT INTO checkout_claims") ? 1 : 0 } }),
+            all: vi.fn().mockResolvedValue({
+              results: sql.includes("SELECT claimed_keys")
+                ? [{ claimed_keys: JSON.stringify(["COPE-DUPE"]) }]
+                : [],
+            }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_dupe" },
+        { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: dedupDB }, "s");
+      expect(res.status).toBe(409);
+      expect(((await res.json()) as { error: string }).error).toContain("already claimed");
     });
     it("returns 403 for wrong organization", async () => {
       stubPolar({ organization_id: "other", status: "succeeded", customer_id: "c1" });

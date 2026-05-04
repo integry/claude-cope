@@ -18,6 +18,7 @@ export type PolarLicenseKeyItem = {
 
 const MAX_KEY_MINT_WINDOW_MS = 15 * 60 * 1000;
 const MAX_KEY_FALLBACK_WINDOW_MS = 60 * 60 * 1000;
+const MAX_FALLBACK_CLUSTER_GAP_MS = 2 * 60 * 1000;
 
 // Returns ALL keys minted by a checkout, ordered oldest-first.
 // Uses a time window after checkout creation to avoid returning keys from later purchases.
@@ -49,13 +50,28 @@ export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreat
   const fallbackBound = hasNextCheckout
     ? Math.min(checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS, nextCheckoutTime)
     : checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS;
-  return sorted.filter((k) => {
+  const fallback = sorted.filter((k) => {
     const t = new Date(k.created_at).getTime();
     return t >= checkoutTime && t <= fallbackBound;
   });
+
+  if (fallback.length === 0 || hasNextCheckout) return fallback;
+
+  // Without a recorded next checkout boundary, the fallback window is best-effort.
+  // Fail closed on a later mint cluster instead of assigning keys from multiple
+  // purchases to the earlier checkout.
+  const firstCluster: PolarLicenseKeyItem[] = [fallback[0]!];
+  let previousTime = new Date(fallback[0]!.created_at).getTime();
+  for (let i = 1; i < fallback.length; i++) {
+    const current = fallback[i]!;
+    const currentTime = new Date(current.created_at).getTime();
+    if (!Number.isFinite(currentTime) || currentTime - previousTime > MAX_FALLBACK_CLUSTER_GAP_MS) break;
+    firstCluster.push(current);
+    previousTime = currentTime;
+  }
+  return firstCluster;
 }
 
-const MAX_LICENSE_KEY_PAGES = 3;
 const LICENSE_KEY_PAGE_SIZE = 100;
 
 export async function fetchLicenseKeys(
@@ -66,7 +82,9 @@ export async function fetchLicenseKeys(
 ): Promise<{ keys: string[] } | { error: string; status: ContentfulStatusCode }> {
   const { createdAt, nextCheckoutCreatedAt } = opts;
   const allItems: PolarLicenseKeyItem[] = [];
-  for (let page = 1; page <= MAX_LICENSE_KEY_PAGES; page++) {
+  const checkoutTime = new Date(createdAt).getTime();
+  const lowerBound = Number.isFinite(checkoutTime) ? checkoutTime : NaN;
+  for (let page = 1; ; page++) {
     let lkResp: Response;
     try {
       lkResp = await fetch(
@@ -81,6 +99,11 @@ export async function fetchLicenseKeys(
     const items = lkData.items ?? [];
     allItems.push(...items);
     if (items.length < LICENSE_KEY_PAGE_SIZE) break;
+    const oldestItemTime = items.reduce((oldest, item) => {
+      const t = new Date(item.created_at).getTime();
+      return Number.isFinite(t) ? Math.min(oldest, t) : oldest;
+    }, Number.POSITIVE_INFINITY);
+    if (Number.isFinite(lowerBound) && oldestItemTime <= lowerBound) break;
   }
   const granted = allItems.filter((l) => l.status === "granted");
   if (!granted.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };

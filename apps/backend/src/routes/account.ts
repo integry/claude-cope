@@ -59,7 +59,10 @@ async function lookupCheckoutCache(kv: KVNamespace, checkoutId: string, sessionI
   const cached = await kv.get(`checkout_used:${checkoutId}`);
   if (!cached) return null;
   const entry = parseCheckoutCache(cached);
-  if (!entry) return null;
+  if (!entry) {
+    await kv.delete(`checkout_used:${checkoutId}`);
+    return null;
+  }
   if (entry.sessionId && entry.sessionId !== sessionId) return { keys: entry.keys, sessionMismatch: true };
   return { keys: entry.keys };
 }
@@ -77,15 +80,12 @@ async function validateCheckoutRequest(c: { req: { json: <T>() => Promise<T> }; 
   if (!accessToken || !organizationId) return { error: c.json({ error: "Polar integration is not configured" }, 500) } as const;
 
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  if (!kv) return { error: c.json({ error: "KV storage is not configured" }, 500) } as const;
 
   return { checkoutId: body.checkoutId, sessionId, accessToken, organizationId, kv } as const;
 }
 
 function filterCheckoutKeys(allKeys: string[], alreadyClaimed: Set<string>): string[] {
-  let keys = alreadyClaimed.size > 0 ? allKeys.filter((k) => !alreadyClaimed.has(k)) : allKeys;
-  if (!keys.length && allKeys.length > 0) keys = allKeys;
-  return keys;
+  return alreadyClaimed.size > 0 ? allKeys.filter((k) => !alreadyClaimed.has(k)) : allKeys;
 }
 
 const account = new Hono<Env>();
@@ -95,12 +95,14 @@ account.post("/checkout-license", async (c) => {
   if ("error" in validated) return validated.error;
   const { checkoutId, sessionId, accessToken, organizationId, kv } = validated;
 
-  const cacheResult = await lookupCheckoutCache(kv, checkoutId, sessionId);
-  if (cacheResult) {
-    if (cacheResult.sessionMismatch) {
-      return c.json({ error: "This checkout was already redeemed by another session" }, 403);
+  if (kv) {
+    const cacheResult = await lookupCheckoutCache(kv, checkoutId, sessionId);
+    if (cacheResult) {
+      if (cacheResult.sessionMismatch) {
+        return c.json({ error: "This checkout was already redeemed by another session" }, 403);
+      }
+      return c.json({ licenseKey: cacheResult.keys[0], allKeys: cacheResult.keys });
     }
-    return c.json({ licenseKey: cacheResult.keys[0], allKeys: cacheResult.keys });
   }
 
   const result = await fetchCheckoutCustomerId(checkoutId, accessToken, organizationId);
@@ -119,11 +121,15 @@ account.post("/checkout-license", async (c) => {
 
   const alreadyClaimedKeys = await getAlreadyClaimedKeys(db, checkoutId);
   const allKeyStrings = filterCheckoutKeys(lkResult.keys, alreadyClaimedKeys);
-  if (!allKeyStrings.length) return c.json({ error: "No license issued yet — try again in a few seconds" }, 409);
+  if (!allKeyStrings.length) {
+    return c.json({ error: "These license keys were already claimed by another checkout — please retry in a few seconds" }, 409);
+  }
 
   await storeClaimedKeys(db, checkoutId, allKeyStrings);
-  const cachePayload: CheckoutCache = { keys: allKeyStrings, sessionId };
-  await kv.put(`checkout_used:${checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 7 * 24 * 60 * 60 });
+  if (kv) {
+    const cachePayload: CheckoutCache = { keys: allKeyStrings, sessionId };
+    await kv.put(`checkout_used:${checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 7 * 24 * 60 * 60 });
+  }
   return c.json({ licenseKey: allKeyStrings[0], allKeys: allKeyStrings });
 });
 

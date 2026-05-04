@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache } from "./accountHelpers";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { fetchLicenseKeys, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
 
 describe("pickAllLicenseKeys", () => {
@@ -150,6 +150,47 @@ describe("pickAllLicenseKeys", () => {
     ];
     const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z", "not-a-date");
     expect(result).toHaveLength(2);
+  });
+
+  it("fails closed on a second delayed mint cluster when no later checkout boundary is known", () => {
+    const keys = [
+      key("A1", "2026-01-02T00:20:00Z"),
+      key("A2", "2026-01-02T00:20:30Z"),
+      key("B1", "2026-01-02T00:35:00Z"),
+      key("B2", "2026-01-02T00:35:20Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z");
+    expect(result.map((k) => k.key)).toEqual(["A1", "A2"]);
+  });
+});
+
+describe("fetchLicenseKeys", () => {
+  const origFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+  });
+
+  it("keeps paginating past three pages until it reaches the checkout window", async () => {
+    const pageItems = new Map<number, PolarLicenseKeyItem[]>([
+      [1, Array.from({ length: 100 }, (_, i) => ({ key: `NEW-${i}`, created_at: `2026-01-05T00:${String(i % 60).padStart(2, "0")}:00Z`, status: "granted" }))],
+      [2, Array.from({ length: 100 }, (_, i) => ({ key: `MID-${i}`, created_at: `2026-01-04T00:${String(i % 60).padStart(2, "0")}:00Z`, status: "granted" }))],
+      [3, Array.from({ length: 100 }, (_, i) => ({ key: `OLDER-${i}`, created_at: `2026-01-03T00:${String(i % 60).padStart(2, "0")}:00Z`, status: "granted" }))],
+      [4, [
+        { key: "TARGET-1", created_at: "2026-01-02T00:00:10Z", status: "granted" },
+        { key: "TARGET-2", created_at: "2026-01-02T00:00:20Z", status: "granted" },
+        { key: "TOO-OLD", created_at: "2026-01-01T23:59:59Z", status: "granted" },
+      ]],
+    ]);
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(typeof input === "string" ? input : input.toString());
+      const page = Number(url.searchParams.get("page") ?? "1");
+      return new Response(JSON.stringify({ items: pageItems.get(page) ?? [] }));
+    }) as typeof fetch;
+
+    const result = await fetchLicenseKeys("cust", "org", "tok", { createdAt: "2026-01-02T00:00:00Z" });
+    expect("keys" in result && result.keys).toEqual(["TARGET-1", "TARGET-2"]);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4);
   });
 });
 
