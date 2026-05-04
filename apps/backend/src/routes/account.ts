@@ -72,6 +72,22 @@ async function respondWithStoredClaim(
   return respondWithClaimedKeys(c, claim.keys);
 }
 
+async function resolvePostClaimStoredResponse(
+  c: { json: (data: unknown, status?: number) => Response },
+  deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string },
+) {
+  const { db, kv, checkoutId, sessionId, claimSecret } = deps;
+  const storedClaim = await getStoredClaimedKeys(db, checkoutId, claimSecret);
+  if (!storedClaim.ok) return c.json({ error: storedClaim.error }, 503);
+  if (storedClaim.keys?.length) {
+    return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: storedClaim.keys });
+  }
+  if (storedClaim.unreadable && storedClaim.sessionId && storedClaim.sessionId !== sessionId) {
+    return c.json({ error: "This checkout was already redeemed by another session" }, 403);
+  }
+  return null;
+}
+
 async function resolveCachedOrStoredClaim(
   c: { json: (data: unknown, status?: number) => Response },
   deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string },
@@ -127,14 +143,8 @@ async function redeemCheckoutLicense(
   }
   const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt: result.createdAt });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
-  const postClaimStored = await getStoredClaimedKeys(db, checkoutId, claimSecret);
-  if (!postClaimStored.ok) return c.json({ error: postClaimStored.error }, 503);
-  if (postClaimStored.keys?.length) {
-    return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: postClaimStored.keys });
-  }
-  if (postClaimStored.unreadable && postClaimStored.sessionId && postClaimStored.sessionId !== sessionId) {
-    return c.json({ error: "This checkout was already redeemed by another session" }, 403);
-  }
+  const postClaimResponse = await resolvePostClaimStoredResponse(c, { db, kv, checkoutId, sessionId, claimSecret });
+  if (postClaimResponse) return postClaimResponse;
   const nextCheckout = await fetchNextCheckoutCreatedAt(result.customerId, organizationId, accessToken, { checkoutId, checkoutCreatedAt: result.createdAt });
   if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
   const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: result.createdAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
