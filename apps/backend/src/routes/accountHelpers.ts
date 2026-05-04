@@ -208,8 +208,8 @@ export type OwnershipResult = { profile: NonNullable<Awaited<ReturnType<typeof g
 export async function verifyOwnership(db: D1Database, username: string, licenseKeyHash: string): Promise<OwnershipResult> {
   const row = await getProfileRow(db, username);
   if (!row) return { profile: null, status: "not_found", error: "Profile not found" };
-  const rowWithHash = row as { license_hash: string | null };
-  if (!rowWithHash.license_hash || rowWithHash.license_hash !== licenseKeyHash) return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
+  const rowLicenseHash = "license_hash" in row ? row.license_hash : null;
+  if (!rowLicenseHash || rowLicenseHash !== licenseKeyHash) return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
   const license = await db.prepare("SELECT status FROM licenses WHERE key_hash = ?").bind(licenseKeyHash).first<{ status: string }>();
   if (!license || license.status !== "active") return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
   const profile = await getProfile(db, username);
@@ -248,7 +248,9 @@ export async function claimCheckoutForSession(db: D1Database, checkoutId: string
     if (result.meta.changes) {
       try {
         await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run();
-      } catch {}
+      } catch {
+        // Cleanup is best-effort and should not block a successful claim.
+      }
       return { ok: true };
     }
     const existing = await db.prepare("SELECT session_id, claimed_at FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ session_id: string; claimed_at: string }>();
@@ -276,7 +278,9 @@ export async function getAlreadyClaimedKeys(db: D1Database, excludeCheckoutId: s
     for (const row of rows.results ?? []) {
       try {
         for (const k of JSON.parse(row.claimed_keys) as string[]) result.add(k);
-      } catch {}
+      } catch {
+        // Ignore malformed historical rows and continue scanning others.
+      }
     }
     return { ok: true, keys: result };
   } catch {
