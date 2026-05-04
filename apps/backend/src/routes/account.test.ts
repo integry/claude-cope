@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, it, expect, vi } from "vitest";
 import app from "../app";
 import { createMockDB, mockKV, postJSON, BASE_PROFILE, profileWithHash, ownedMockDB } from "./account.test-helpers";
