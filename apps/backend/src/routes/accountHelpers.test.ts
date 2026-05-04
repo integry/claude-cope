@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys } from "./accountHelpers";
+import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys, fetchCheckoutCustomerId } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
 import { hashKey } from "../utils/quota";
 
@@ -329,9 +329,15 @@ describe("checkout key claims", () => {
         bind: vi.fn((...args: unknown[]) => ({
           run: vi.fn().mockImplementation(async () => {
             if (sql.includes("INSERT INTO checkout_key_claims")) {
-              const [licenseKeyHash, checkoutId] = args as [string, string];
-              if (!keyOwners.has(licenseKeyHash)) keyOwners.set(licenseKeyHash, checkoutId);
-              return { meta: { changes: keyOwners.get(licenseKeyHash) === checkoutId ? 1 : 0 } };
+              const bindings = args as string[];
+              const checkoutId = bindings[bindings.length - 1]!;
+              const licenseKeyHashes = bindings.slice(0, -2);
+              const hasConflict = licenseKeyHashes.some((licenseKeyHash) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash) !== checkoutId);
+              if (hasConflict) return { meta: { changes: 0 } };
+              for (const licenseKeyHash of licenseKeyHashes) {
+                if (!keyOwners.has(licenseKeyHash)) keyOwners.set(licenseKeyHash, checkoutId);
+              }
+              return { meta: { changes: licenseKeyHashes.length } };
             }
             if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
               storedClaimedKeys = args[0] as string;
@@ -358,6 +364,8 @@ describe("checkout key claims", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("full license set");
     expect(storedClaimedKeys).toBeNull();
+    expect(keyOwners.get(await hashKey("COPE-1"))).toBeUndefined();
+    expect(keyOwners.get(await hashKey("COPE-2"))).toBeUndefined();
   });
 
   it("returns a conflict when every requested key is already claimed elsewhere", async () => {
@@ -492,6 +500,29 @@ describe("checkout key claims", () => {
     await expect(getStoredClaimedKeys(db, "checkout-a", CLAIM_SECRET)).resolves.toEqual({
       ok: false,
       error: "Stored checkout claim is corrupted — please try again later",
+    });
+  });
+});
+
+describe("fetchCheckoutCustomerId", () => {
+  const origFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+  });
+
+  it("fails closed when Polar checkout metadata is missing reference_id", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      organization_id: "org",
+      status: "succeeded",
+      customer_id: "cust-1",
+      created_at: "2026-01-02T00:00:00Z",
+      metadata: {},
+    }))) as typeof fetch;
+
+    await expect(fetchCheckoutCustomerId("co_123", "tok", "org")).resolves.toEqual({
+      error: "Checkout is missing session binding metadata — cannot verify license ownership",
+      status: 500,
     });
   });
 });

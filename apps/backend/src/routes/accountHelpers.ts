@@ -383,6 +383,8 @@ export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreat
     return t >= checkoutTime && (hasNextCheckout ? t < fallbackBound : t <= fallbackBound);
   });
   if (fallback.length === 0 || hasNextCheckout) return fallback;
+  // Without a later checkout boundary, fail closed by treating only the first
+  // tightly-clustered delayed mint burst as this checkout's likely key set.
   const firstCluster: PolarLicenseKeyItem[] = [fallback[0]];
   let previousTime = new Date(fallback[0].created_at).getTime();
   for (let i = 1; i < fallback.length; i++) {
@@ -435,7 +437,7 @@ export async function fetchCheckoutCustomerId(
   checkoutId: string,
   accessToken: string,
   organizationId: string,
-): Promise<{ customerId: string; createdAt?: string; referenceId?: string } | { error: string; status: ContentfulStatusCode }> {
+): Promise<{ customerId: string; createdAt?: string; referenceId: string } | { error: string; status: ContentfulStatusCode }> {
   let resp: Response;
   try {
     resp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(checkoutId)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -452,7 +454,11 @@ export async function fetchCheckoutCustomerId(
   if (checkout.status !== "succeeded") return { error: "Payment not yet confirmed", status: 409 };
   const customerId = checkout.customer_id || checkout.customer?.id;
   const referenceId = typeof checkout.metadata?.reference_id === "string" ? checkout.metadata.reference_id : undefined;
-  return customerId ? { customerId, createdAt: checkout.created_at, referenceId } : { error: "Checkout has no associated customer", status: 500 };
+  if (!customerId) return { error: "Checkout has no associated customer", status: 500 };
+  if (!referenceId) {
+    return { error: "Checkout is missing session binding metadata — cannot verify license ownership", status: 500 };
+  }
+  return { customerId, createdAt: checkout.created_at, referenceId };
 }
 
 export async function fetchNextCheckoutCreatedAt(customerId: string, organizationId: string, accessToken: string, opts: { checkoutId: string; checkoutCreatedAt: string }): Promise<{ createdAt: string | null } | { error: string; status: ContentfulStatusCode }> {
@@ -501,6 +507,8 @@ async function importCheckoutClaimKey(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
+// CHECKOUT_CLAIM_SECRET supports rotation by splitting on commas/newlines, so
+// operators must avoid those delimiters inside a single secret value.
 function parseCheckoutClaimSecrets(secret: string): string[] {
   return secret.split(/[\n,]/).map((part) => part.trim()).filter(Boolean);
 }
@@ -657,10 +665,23 @@ export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys:
 
 export async function claimLicenseKeysForCheckout(db: D1Database, checkoutId: string, keys: string[], secret: string): Promise<{ ok: true; keys: string[] } | { ok: false; error: string }> {
   try {
+    if (!keys.length) return { ok: false, error: "No license keys were provided for this checkout" };
     const keyHashes = await Promise.all(keys.map((key) => hashKey(key)));
-    for (const keyHash of keyHashes) {
-      await db.prepare("INSERT INTO checkout_key_claims (license_key_hash, checkout_id) VALUES (?, ?) ON CONFLICT(license_key_hash) DO NOTHING").bind(keyHash, checkoutId).run();
-    }
+    const valuePlaceholders = keyHashes.map(() => "(?)").join(", ");
+    await db.prepare(
+      `WITH incoming(license_key_hash) AS (VALUES ${valuePlaceholders})
+       INSERT INTO checkout_key_claims (license_key_hash, checkout_id)
+       SELECT incoming.license_key_hash, ?
+       FROM incoming
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM checkout_key_claims existing
+         JOIN incoming conflicted
+           ON conflicted.license_key_hash = existing.license_key_hash
+         WHERE existing.checkout_id != ?
+       )
+       ON CONFLICT(license_key_hash) DO NOTHING`,
+    ).bind(...keyHashes, checkoutId, checkoutId).run();
     const placeholders = keyHashes.map(() => "?").join(", ");
     const rows = await db.prepare(`SELECT license_key_hash, checkout_id FROM checkout_key_claims WHERE license_key_hash IN (${placeholders})`).bind(...keyHashes).all<{ license_key_hash: string; checkout_id: string }>();
     const ownerByHash = new Map((rows.results ?? []).map((row) => [row.license_key_hash, row.checkout_id]));

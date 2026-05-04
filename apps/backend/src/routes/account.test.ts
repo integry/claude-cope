@@ -553,7 +553,7 @@ describe("POST /api/account/checkout-license", () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const u = typeof input === "string" ? input : input.toString();
       if (u.includes("/v1/checkouts/")) {
-        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z" }));
+        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z", metadata: { reference_id: "s" } }));
       }
       if (u.includes("/v1/license-keys/")) {
         return new Response(JSON.stringify({ items: [{ key: "COPE-NOKV", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
@@ -694,7 +694,7 @@ describe("POST /api/account/checkout-license", () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const u = typeof input === "string" ? input : input.toString();
       if (u.includes("/v1/checkouts/")) {
-        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z" }));
+        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z", metadata: { reference_id: "s" } }));
       }
       if (u.includes("/v1/license-keys/")) {
         return new Response(JSON.stringify({ items: [{ key: "COPE-FRESH", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
@@ -716,7 +716,7 @@ describe("POST /api/account/checkout-license", () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const u = typeof input === "string" ? input : input.toString();
       if (u.includes("/v1/checkouts/")) {
-        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z" }));
+        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z", metadata: { reference_id: "s" } }));
       }
       if (u.includes("/v1/license-keys/")) {
         return new Response(JSON.stringify({ items: [{ key: "COPE-FRESH", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
@@ -739,7 +739,7 @@ describe("POST /api/account/checkout-license", () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const u = typeof input === "string" ? input : input.toString();
       if (u.includes("/v1/checkouts/")) {
-        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z" }));
+        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z", metadata: { reference_id: "s" } }));
       }
       if (u.includes("/v1/license-keys/")) {
         return new Response(JSON.stringify({ items: [{ key: "COPE-FRESH", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
@@ -767,9 +767,10 @@ describe("POST /api/account/checkout-license", () => {
       DB: createMockDB({ runChanges: 1 }).db,
     }, "s");
     function stubPolar(checkout: object, lk?: object) {
+      const payload = { metadata: { reference_id: "s" }, ...checkout } as object;
       globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
         const u = typeof input === "string" ? input : input.toString();
-        if (u.includes("/v1/checkouts/")) return new Response(JSON.stringify(checkout));
+        if (u.includes("/v1/checkouts/")) return new Response(JSON.stringify(payload));
         if (u.includes("/v1/license-keys/")) return new Response(JSON.stringify(lk ?? { items: [] }));
         return origFetch(input as RequestInfo, undefined);
       }) as typeof fetch;
@@ -799,7 +800,7 @@ describe("POST /api/account/checkout-license", () => {
       globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
         const u = typeof input === "string" ? input : input.toString();
         if (u.includes("/v1/checkouts/co_a")) {
-          return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }));
+          return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T, metadata: { reference_id: "s" } }));
         }
         if (u.includes("/v1/checkouts/?")) {
           return new Response(JSON.stringify({
@@ -874,9 +875,15 @@ describe("POST /api/account/checkout-license", () => {
             run: vi.fn().mockImplementation(async () => {
               if (sql.includes("INSERT INTO checkout_claims")) return { meta: { changes: 1 } };
               if (sql.includes("INSERT INTO checkout_key_claims")) {
-                const [licenseKeyHash, checkoutId] = args as [string, string];
-                if (!keyOwners.has(licenseKeyHash)) keyOwners.set(licenseKeyHash, checkoutId);
-                return { meta: { changes: keyOwners.get(licenseKeyHash) === checkoutId ? 1 : 0 } };
+                const bindings = args as string[];
+                const checkoutId = bindings[bindings.length - 1]!;
+                const licenseKeyHashes = bindings.slice(0, -2);
+                const hasConflict = licenseKeyHashes.some((licenseKeyHash) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash) !== checkoutId);
+                if (hasConflict) return { meta: { changes: 0 } };
+                for (const licenseKeyHash of licenseKeyHashes) {
+                  if (!keyOwners.has(licenseKeyHash)) keyOwners.set(licenseKeyHash, checkoutId);
+                }
+                return { meta: { changes: licenseKeyHashes.length } };
               }
               if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
                 storedKeys = args[0] as string;
@@ -901,6 +908,7 @@ describe("POST /api/account/checkout-license", () => {
         { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: db }, "s");
       expect(res.status).toBe(409);
       expect(((await res.json()) as { error: string }).error).toContain("full license set");
+      expect(keyOwners.get(await hashKey("COPE-2"))).toBeUndefined();
     });
     it("returns 403 for wrong organization", async () => {
       stubPolar({ organization_id: "other", status: "succeeded", customer_id: "c1" });
@@ -1143,6 +1151,12 @@ describe("POST /api/account/checkout-license", () => {
       expect(res.status).toBe(403);
       expect(((await res.json()) as { error: string }).error).toContain("different session");
     });
+    it("fails closed when Polar checkout metadata omits reference_id", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T, metadata: {} });
+      const res = await co("co_unbound");
+      expect(res.status).toBe(500);
+      expect(((await res.json()) as { error: string }).error).toContain("session binding metadata");
+    });
     it("returns 503 for generic DB runtime error during claim", async () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T });
       const failDB = {
@@ -1175,6 +1189,19 @@ describe("POST /api/account/checkout-license", () => {
         { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv, DB: dbSpy.db }, "attacker-session");
       expect(res.status).toBe(403);
       expect(dbSpy.calls.filter((c) => c.sql.includes("checkout_claims"))).toHaveLength(0);
+    });
+    it("reads KV only once on the miss path before checking stored claims", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "COPE-MISS", created_at: "2026-01-02T00:00:05Z", status: "granted" }] });
+      const kv = mockKV({});
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_single_kv" }, {
+        CHECKOUT_CLAIM_SECRET: CLAIM_SECRET,
+        POLAR_ACCESS_TOKEN: "tok",
+        POLAR_ORGANIZATION_ID: "org",
+        QUOTA_KV: kv,
+        DB: createMockDB({ runChanges: 1 }).db,
+      }, "s");
+      expect(res.status).toBe(200);
+      expect(kv.get).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -50,10 +50,18 @@ export function createMockDB(opts: {
         return { meta: { changes: opts.runChanges ?? 1 } };
       }
       if (sql.includes("INSERT INTO checkout_key_claims")) {
-        const [licenseKeyHash, checkoutId] = bindings as [string, string];
-        if (keyOwners.has(licenseKeyHash)) return { meta: { changes: 0 } };
-        keyOwners.set(licenseKeyHash, checkoutId);
-        return { meta: { changes: 1 } };
+        const bound = bindings as string[];
+        const checkoutId = bound[bound.length - 1]!;
+        const licenseKeyHashes = bound.slice(0, -2);
+        const hasConflict = licenseKeyHashes.some((licenseKeyHash) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash) !== checkoutId);
+        if (hasConflict) return { meta: { changes: 0 } };
+        let inserted = 0;
+        for (const licenseKeyHash of licenseKeyHashes) {
+          if (keyOwners.has(licenseKeyHash)) continue;
+          keyOwners.set(licenseKeyHash, checkoutId);
+          inserted += 1;
+        }
+        return { meta: { changes: inserted } };
       }
       return { meta: { changes: opts.runChanges ?? 0 } };
       }),
