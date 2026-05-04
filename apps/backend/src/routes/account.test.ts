@@ -570,7 +570,7 @@ describe("POST /api/account/checkout-license", () => {
     }
   });
   it("returns cached key from KV on repeated calls", async () => {
-    const kv = mockKV({ "checkout_used:co_123": JSON.stringify(["COPE-ABC"]) });
+    const kv = mockKV({ "checkout_used:co_123": JSON.stringify({ keys: ["COPE-ABC"], sessionId: "s" }) });
     const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_123" },
       { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "s");
     expect(res.status).toBe(200);
@@ -580,8 +580,37 @@ describe("POST /api/account/checkout-license", () => {
   });
   it("handles legacy cached string (not JSON array) gracefully", async () => {
     const kv = mockKV({ "checkout_used:co_old": "COPE-LEGACY" });
+    let encryptedKeys: string | null = null;
+    const seedDb = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => ({
+          run: vi.fn().mockImplementation(async () => {
+            if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) encryptedKeys = args[0] as string;
+            return { meta: { changes: 1 } };
+          }),
+        })),
+      })),
+    } as unknown as D1Database;
+    await storeClaimedKeys(seedDb, "co_old", ["COPE-LEGACY"], CLAIM_SECRET);
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn(() => ({
+          first: vi.fn().mockImplementation(async () => {
+            if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) return { session_id: "s", encrypted_keys: encryptedKeys };
+            return null;
+          }),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        first: vi.fn().mockResolvedValue(null),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+        all: vi.fn().mockResolvedValue({ results: [] }),
+      })),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
     const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_old" },
-      { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "s");
+      { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv, DB: db }, "s");
     expect(res.status).toBe(200);
     const data = await res.json() as { licenseKey: string; allKeys: string[] };
     expect(data.licenseKey).toBe("COPE-LEGACY");
@@ -589,7 +618,7 @@ describe("POST /api/account/checkout-license", () => {
   });
   it("returns cached multi-key team pack from KV", async () => {
     const keys = ["COPE-T1", "COPE-T2", "COPE-T3"];
-    const kv = mockKV({ "checkout_used:co_team": JSON.stringify(keys) });
+    const kv = mockKV({ "checkout_used:co_team": JSON.stringify({ keys, sessionId: "s" }) });
     const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_team" },
       { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv }, "s");
     expect(res.status).toBe(200);
@@ -623,8 +652,35 @@ describe("POST /api/account/checkout-license", () => {
   });
   it("reuses legacy cache entries only when D1 confirms the stored claim", async () => {
     const kv = mockKV({ "checkout_used:co_legacy": JSON.stringify(["COPE-STALE"]) });
-    const db = createMockDB({ runChanges: 1 }).db;
-    await storeClaimedKeys(db, "co_legacy", ["COPE-OLD"], CLAIM_SECRET);
+    let encryptedKeys: string | null = null;
+    const seedDb = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => ({
+          run: vi.fn().mockImplementation(async () => {
+            if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) encryptedKeys = args[0] as string;
+            return { meta: { changes: 1 } };
+          }),
+        })),
+      })),
+    } as unknown as D1Database;
+    await storeClaimedKeys(seedDb, "co_legacy", ["COPE-OLD"], CLAIM_SECRET);
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn(() => ({
+          first: vi.fn().mockImplementation(async () => {
+            if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) return { session_id: "any-session", encrypted_keys: encryptedKeys };
+            return null;
+          }),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        first: vi.fn().mockResolvedValue(null),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+        all: vi.fn().mockResolvedValue({ results: [] }),
+      })),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
     const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_legacy" },
       { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: kv, DB: db }, "any-session");
     expect(res.status).toBe(200);
@@ -975,6 +1031,73 @@ describe("POST /api/account/checkout-license", () => {
         expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-STORED"]);
         expect(kv.put).toHaveBeenCalled();
         expect(globalThis.fetch).not.toHaveBeenCalled();
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
+    it("falls back to Polar for the same session when a stored claim is unreadable after secret rotation", async () => {
+      let encryptedKeys: string | null = null;
+      const seedDb = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn((...args: unknown[]) => ({
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) encryptedKeys = args[0] as string;
+              return { meta: { changes: 1 } };
+            }),
+          })),
+        })),
+      } as unknown as D1Database;
+      await storeClaimedKeys(seedDb, "co_rotated", ["COPE-OLD"], "old-secret");
+      const db = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn((...args: unknown[]) => ({
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) return { session_id: "s", encrypted_keys: encryptedKeys };
+              if (sql.includes("SELECT session_id, claimed_at FROM checkout_claims")) return { session_id: "s", claimed_at: T };
+              if (sql.includes("SELECT encrypted_keys FROM checkout_claims")) return { encrypted_keys: encryptedKeys };
+              return null;
+            }),
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("INSERT INTO checkout_claims")) return { meta: { changes: 0 } };
+              if (sql.includes("INSERT INTO checkout_key_claims")) return { meta: { changes: 1 } };
+              if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
+                encryptedKeys = args[0] as string;
+                return { meta: { changes: 1 } };
+              }
+              return { meta: { changes: 0 } };
+            }),
+            all: vi.fn().mockImplementation(async () => ({
+              results: sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")
+                ? [{ license_key_hash: args[0] as string, checkout_id: "co_rotated" }]
+                : [],
+            })),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const origFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const u = typeof input === "string" ? input : input.toString();
+        if (u.includes("/v1/checkouts/co_rotated")) {
+          return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }));
+        }
+        if (u.includes("/v1/checkouts/?")) {
+          return new Response(JSON.stringify({ items: [{ id: "co_rotated", created_at: T, status: "succeeded" }] }));
+        }
+        if (u.includes("/v1/license-keys/")) {
+          return new Response(JSON.stringify({ items: [{ key: "COPE-FRESH", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
+        }
+        throw new Error(`unexpected fetch: ${u}`);
+      }) as typeof fetch;
+      try {
+        const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_rotated" },
+          { CHECKOUT_CLAIM_SECRET: "new-secret", POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: db }, "s");
+        expect(res.status).toBe(200);
+        expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-FRESH"]);
       } finally {
         globalThis.fetch = origFetch;
       }

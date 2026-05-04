@@ -36,6 +36,8 @@ const MAX_KEY_FALLBACK_WINDOW_MS = 60 * 60 * 1000;
 const MAX_FALLBACK_CLUSTER_GAP_MS = 2 * 60 * 1000;
 const LICENSE_KEY_PAGE_SIZE = 100;
 const CHECKOUT_PAGE_SIZE = 100;
+const CHECKOUT_CLAIM_CIPHER_VERSION = 1;
+const CHECKOUT_CLAIM_KEY_INFO = "checkout-claim:v1";
 
 export type SyncBody = {
   licenseKey?: string;
@@ -372,13 +374,13 @@ export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreat
   const upperBound = hasNextCheckout ? Math.min(checkoutTime + MAX_KEY_MINT_WINDOW_MS, nextCheckoutTime) : checkoutTime + MAX_KEY_MINT_WINDOW_MS;
   const windowed = sorted.filter((k) => {
     const t = new Date(k.created_at).getTime();
-    return t >= checkoutTime && t <= upperBound;
+    return t >= checkoutTime && (hasNextCheckout ? t < upperBound : t <= upperBound);
   });
   if (windowed.length > 0) return windowed;
   const fallbackBound = hasNextCheckout ? Math.min(checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS, nextCheckoutTime) : checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS;
   const fallback = sorted.filter((k) => {
     const t = new Date(k.created_at).getTime();
-    return t >= checkoutTime && t <= fallbackBound;
+    return t >= checkoutTime && (hasNextCheckout ? t < fallbackBound : t <= fallbackBound);
   });
   if (fallback.length === 0 || hasNextCheckout) return fallback;
   const firstCluster: PolarLicenseKeyItem[] = [fallback[0]];
@@ -484,26 +486,58 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 async function importCheckoutClaimKey(secret: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+  const rawSecret = new TextEncoder().encode(`${CHECKOUT_CLAIM_KEY_INFO}:${secret}`);
+  const digest = await crypto.subtle.digest("SHA-256", rawSecret);
+  return crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+function parseCheckoutClaimSecrets(secret: string): string[] {
+  return secret.split(/[\n,]/).map((part) => part.trim()).filter(Boolean);
+}
+
+function isLegacyAesKeyLength(secret: string): boolean {
+  const bytes = new TextEncoder().encode(secret).byteLength;
+  return bytes === 16 || bytes === 24 || bytes === 32;
+}
+
+async function importLegacyCheckoutClaimKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "AES-GCM" }, false, ["decrypt"]);
 }
 
 async function encryptClaimedKeys(keys: string[], secret: string): Promise<string> {
+  const [activeSecret] = parseCheckoutClaimSecrets(secret);
+  if (!activeSecret) throw new Error("Checkout claim secret is empty");
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const payload = new TextEncoder().encode(JSON.stringify(keys));
-  const key = await importCheckoutClaimKey(secret);
+  const key = await importCheckoutClaimKey(activeSecret);
   const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, payload));
-  return JSON.stringify({ iv: toBase64(iv), data: toBase64(ciphertext) });
+  return JSON.stringify({ v: CHECKOUT_CLAIM_CIPHER_VERSION, iv: toBase64(iv), data: toBase64(ciphertext) });
 }
 
 async function decryptClaimedKeys(raw: string, secret: string): Promise<string[] | null> {
-  const parsed = JSON.parse(raw) as { iv?: unknown; data?: unknown };
+  const parsed = JSON.parse(raw) as { v?: unknown; iv?: unknown; data?: unknown };
   if (typeof parsed?.iv !== "string" || typeof parsed?.data !== "string") return null;
-  const key = await importCheckoutClaimKey(secret);
   const iv = toArrayBuffer(fromBase64(parsed.iv));
   const encrypted = toArrayBuffer(fromBase64(parsed.data));
-  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
-  const decoded = JSON.parse(new TextDecoder().decode(plaintext));
-  return Array.isArray(decoded) && decoded.every((item) => typeof item === "string" && item.length > 0) ? decoded : null;
+  const secrets = parseCheckoutClaimSecrets(secret);
+  for (const candidate of secrets) {
+    const keyFactories = [
+      () => importCheckoutClaimKey(candidate),
+      ...(parsed.v === undefined && isLegacyAesKeyLength(candidate)
+        ? [() => importLegacyCheckoutClaimKey(candidate)]
+        : []),
+    ];
+    for (const createKey of keyFactories) {
+      try {
+        const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, await createKey(), encrypted);
+        const decoded = JSON.parse(new TextDecoder().decode(plaintext));
+        return Array.isArray(decoded) && decoded.every((item) => typeof item === "string" && item.length > 0) ? decoded : null;
+      } catch {
+        continue;
+      }
+    }
+  }
+  throw new Error("Unable to decrypt stored checkout claim");
 }
 
 function isNonEmptyStringArray(arr: unknown[]): arr is string[] {
@@ -545,12 +579,17 @@ export async function getStoredClaimedKeys(
   db: D1Database,
   checkoutId: string,
   secret: string,
-): Promise<{ ok: true; sessionId: string | null; keys: string[] | null } | { ok: false; error: string }> {
+): Promise<{ ok: true; sessionId: string | null; keys: string[] | null; unreadable?: boolean } | { ok: false; error: string }> {
   try {
     const row = await db.prepare("SELECT session_id, encrypted_keys FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ session_id: string | null; encrypted_keys: string | null }>();
     if (!row) return { ok: true, sessionId: null, keys: null };
     if (!row.encrypted_keys) return { ok: true, sessionId: row.session_id, keys: null };
-    const parsed = await decryptClaimedKeys(row.encrypted_keys, secret);
+    let parsed: string[] | null;
+    try {
+      parsed = await decryptClaimedKeys(row.encrypted_keys, secret);
+    } catch {
+      return { ok: true, sessionId: row.session_id, keys: null, unreadable: true };
+    }
     return parsed ? { ok: true, sessionId: row.session_id, keys: parsed } : { ok: false, error: "Stored checkout claim is malformed — please try again" };
   } catch {
     return { ok: false, error: "Unable to read stored checkout claim — please try again" };
@@ -576,10 +615,10 @@ export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys:
 
 export async function claimLicenseKeysForCheckout(db: D1Database, checkoutId: string, keys: string[], secret: string): Promise<{ ok: true; keys: string[] } | { ok: false; error: string }> {
   try {
-    for (const key of keys) {
-      await db.prepare("INSERT INTO checkout_key_claims (license_key_hash, checkout_id) VALUES (?, ?) ON CONFLICT(license_key_hash) DO NOTHING").bind(await hashKey(key), checkoutId).run();
-    }
     const keyHashes = await Promise.all(keys.map((key) => hashKey(key)));
+    for (const keyHash of keyHashes) {
+      await db.prepare("INSERT INTO checkout_key_claims (license_key_hash, checkout_id) VALUES (?, ?) ON CONFLICT(license_key_hash) DO NOTHING").bind(keyHash, checkoutId).run();
+    }
     const placeholders = keyHashes.map(() => "?").join(", ");
     const rows = await db.prepare(`SELECT license_key_hash, checkout_id FROM checkout_key_claims WHERE license_key_hash IN (${placeholders})`).bind(...keyHashes).all<{ license_key_hash: string; checkout_id: string }>();
     const ownerByHash = new Map((rows.results ?? []).map((row) => [row.license_key_hash, row.checkout_id]));

@@ -155,6 +155,24 @@ describe("pickAllLicenseKeys", () => {
     expect(result).toHaveLength(2);
   });
 
+  it("excludes a key minted exactly at the next checkout timestamp", () => {
+    const keys = [
+      key("K1", "2026-01-02T00:00:10Z"),
+      key("NEXT", "2026-01-02T00:05:00Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z", "2026-01-02T00:05:00Z");
+    expect(result.map((k) => k.key)).toEqual(["K1"]);
+  });
+
+  it("excludes a delayed fallback key minted exactly at the next checkout timestamp", () => {
+    const keys = [
+      key("DELAYED", "2026-01-02T00:20:00Z"),
+      key("NEXT", "2026-01-02T00:30:00Z"),
+    ];
+    const result = pickAllLicenseKeys(keys, "2026-01-02T00:00:00Z", "2026-01-02T00:30:00Z");
+    expect(result.map((k) => k.key)).toEqual(["DELAYED"]);
+  });
+
   it("fails closed on a second delayed mint cluster when no later checkout boundary is known", () => {
     const keys = [
       key("A1", "2026-01-02T00:20:00Z"),
@@ -404,6 +422,60 @@ describe("checkout key claims", () => {
     } as unknown as D1Database;
 
     await expect(getStoredClaimedKeys(db, "checkout-a", CLAIM_SECRET)).resolves.toEqual({ ok: true, sessionId: "sess-1", keys: ["COPE-1", "COPE-2"] });
+  });
+
+  it("accepts arbitrary claim secret lengths by deriving a fixed AES key", async () => {
+    let encryptedKeys: string | null = null;
+    const recordingDb = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn((...args: unknown[]) => ({
+          run: vi.fn().mockImplementation(async () => {
+            encryptedKeys = args[0] as string;
+            return { meta: { changes: 1 } };
+          }),
+          first: vi.fn().mockResolvedValue({ session_id: "sess-1", encrypted_keys: encryptedKeys }),
+        })),
+      })),
+    } as unknown as D1Database;
+
+    await expect(storeClaimedKeys(recordingDb, "checkout-a", ["COPE-1"], "tok")).resolves.toEqual({ ok: true });
+    await expect(getStoredClaimedKeys(recordingDb, "checkout-a", "tok")).resolves.toEqual({ ok: true, sessionId: "sess-1", keys: ["COPE-1"] });
+  });
+
+  it("supports a rotation window by decrypting with fallback secrets", async () => {
+    let encryptedKeys: string | null = null;
+    const recordingDb = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn((...args: unknown[]) => ({
+          run: vi.fn().mockImplementation(async () => {
+            encryptedKeys = args[0] as string;
+            return { meta: { changes: 1 } };
+          }),
+          first: vi.fn().mockResolvedValue({ session_id: "sess-1", encrypted_keys: encryptedKeys }),
+        })),
+      })),
+    } as unknown as D1Database;
+
+    await storeClaimedKeys(recordingDb, "checkout-a", ["COPE-1"], "old-secret");
+    await expect(getStoredClaimedKeys(recordingDb, "checkout-a", "new-secret, old-secret")).resolves.toEqual({ ok: true, sessionId: "sess-1", keys: ["COPE-1"] });
+  });
+
+  it("marks stored claims unreadable instead of failing hard when the secret no longer matches", async () => {
+    let encryptedKeys: string | null = null;
+    const recordingDb = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn((...args: unknown[]) => ({
+          run: vi.fn().mockImplementation(async () => {
+            encryptedKeys = args[0] as string;
+            return { meta: { changes: 1 } };
+          }),
+          first: vi.fn().mockResolvedValue({ session_id: "sess-1", encrypted_keys: encryptedKeys }),
+        })),
+      })),
+    } as unknown as D1Database;
+
+    await storeClaimedKeys(recordingDb, "checkout-a", ["COPE-1"], "old-secret");
+    await expect(getStoredClaimedKeys(recordingDb, "checkout-a", "new-secret")).resolves.toEqual({ ok: true, sessionId: "sess-1", keys: null, unreadable: true });
   });
 });
 
