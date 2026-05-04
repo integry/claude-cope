@@ -315,11 +315,11 @@ describe("POST /api/account/update-alias", () => {
         [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
         [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
         [ACCOUNT_TEST_SQL.aliasTakenLookup]: null,
+        [ACCOUNT_TEST_SQL.aliasHistoryLookup]: null,
       },
       runChanges: 1,
     });
     db.batch = vi.fn().mockResolvedValue([
-      { meta: { changes: 1 } },
       { meta: { changes: 1 } },
       { meta: { changes: 1 } },
       { meta: { changes: 1 } },
@@ -331,9 +331,9 @@ describe("POST /api/account/update-alias", () => {
     expect(res.status).toBe(200);
     expect((await res.json() as { success: boolean }).success).toBe(true);
     expect(db.batch).toHaveBeenCalledTimes(1);
-    expect((db.batch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toHaveLength(6);
+    expect((db.batch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toHaveLength(5);
   });
-  it("succeeds when cleanup delete affects 0 rows but the profile rename succeeds", async () => {
+  it("succeeds when secondary table updates affect 0 rows but the profile rename succeeds", async () => {
     const { db } = createMockDB({
       firstBySQL: {
         [ACCOUNT_TEST_SQL.getProfile]: {
@@ -344,12 +344,12 @@ describe("POST /api/account/update-alias", () => {
         [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
         [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
         [ACCOUNT_TEST_SQL.aliasTakenLookup]: null,
+        [ACCOUNT_TEST_SQL.aliasHistoryLookup]: null,
       },
       runChanges: 1,
     });
     db.batch = vi.fn().mockResolvedValue([
       { meta: { changes: 1 } },
-      { meta: { changes: 0 } },
       { meta: { changes: 1 } },
       { meta: { changes: 1 } },
       { meta: { changes: 1 } },
@@ -371,6 +371,7 @@ describe("POST /api/account/update-alias", () => {
         [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
         [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
         [ACCOUNT_TEST_SQL.aliasTakenLookup]: { "1": 1 },
+        [ACCOUNT_TEST_SQL.aliasHistoryLookup]: null,
       },
       runChanges: 1,
     });
@@ -388,6 +389,7 @@ describe("POST /api/account/update-alias", () => {
         [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
         [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
         [ACCOUNT_TEST_SQL.aliasTakenLookup]: null,
+        [ACCOUNT_TEST_SQL.aliasHistoryLookup]: null,
       },
       runChanges: 1,
     });
@@ -407,11 +409,11 @@ describe("POST /api/account/update-alias", () => {
         },
         [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
         [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
+        [ACCOUNT_TEST_SQL.aliasHistoryLookup]: null,
       },
       runChanges: 0,
     });
     db.batch = vi.fn().mockResolvedValue([
-      { meta: { changes: 0 } },
       { meta: { changes: 0 } },
       { meta: { changes: 0 } },
       { meta: { changes: 0 } },
@@ -435,6 +437,7 @@ describe("POST /api/account/update-alias", () => {
         [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
         [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
         [ACCOUNT_TEST_SQL.aliasTakenLookup]: { "1": 1 },
+        [ACCOUNT_TEST_SQL.aliasHistoryLookup]: null,
       },
       runChanges: 1,
     });
@@ -456,6 +459,7 @@ describe("POST /api/account/update-alias", () => {
         [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
         [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
         [ACCOUNT_TEST_SQL.aliasTakenLookup]: null,
+        [ACCOUNT_TEST_SQL.aliasHistoryLookup]: null,
       },
       runChanges: 0,
     });
@@ -476,7 +480,7 @@ describe("POST /api/account/update-alias", () => {
       });
       return base;
     }) as unknown as typeof db.prepare;
-    db.batch = vi.fn().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]);
+    db.batch = vi.fn().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]);
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
     expect(db.batch).toHaveBeenCalled();
@@ -484,7 +488,7 @@ describe("POST /api/account/update-alias", () => {
       (args: unknown[]) => typeof args[0] === "string" && args[0].includes("SET change_count = change_count - 1"),
     )).toBe(true);
   });
-  it("cleans orphaned completed task collisions before renaming to an otherwise-free alias", async () => {
+  it("returns 409 when the destination alias still has historical activity", async () => {
     const { db } = createMockDB({
       firstBySQL: {
         [ACCOUNT_TEST_SQL.getProfile]: {
@@ -494,27 +498,14 @@ describe("POST /api/account/update-alias", () => {
         [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
         [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
         [ACCOUNT_TEST_SQL.aliasTakenLookup]: null,
+        [ACCOUNT_TEST_SQL.aliasHistoryLookup]: { "1": 1 },
       },
       runChanges: 1,
     });
-    db.batch = vi.fn().mockResolvedValue([
-      { meta: { changes: 1 } },
-      { meta: { changes: 1 } },
-      { meta: { changes: 1 } },
-      { meta: { changes: 1 } },
-      { meta: { changes: 1 } },
-      { meta: { changes: 1 } },
-    ]);
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
-    expect(res.status).toBe(200);
-    expect(db.batch).toHaveBeenCalled();
-    const batchStatements = (db.batch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Array<{ run?: unknown }>;
-    expect(batchStatements).toHaveLength(6);
-    const preparedSql = (db.prepare as ReturnType<typeof vi.fn>).mock.calls.map((args: unknown[]) => String(args[0]));
-    const deleteIndex = preparedSql.findIndex((sql) => sql.includes("DELETE FROM completed_tasks"));
-    const userRenameIndex = preparedSql.findIndex((sql) => sql.includes("UPDATE user_scores SET username = ?"));
-    expect(deleteIndex).toBeGreaterThan(-1);
-    expect(userRenameIndex).toBeGreaterThan(deleteIndex);
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toContain("historical activity");
+    expect(db.batch).not.toHaveBeenCalled();
   });
 });
 
@@ -571,7 +562,7 @@ describe("GET /api/account/me", () => {
       },
     });
   });
-  it("persists the free-tier rank cap when an existing free row is above the ceiling", async () => {
+  it("applies the free-tier rank cap in the response without writing on /me", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
     const { db } = createMockDB({
       firstBySQL: {
@@ -591,7 +582,7 @@ describe("GET /api/account/me", () => {
     });
     expect((db.prepare as ReturnType<typeof vi.fn>).mock.calls.some(
       (args: unknown[]) => typeof args[0] === "string" && args[0].includes("UPDATE user_scores") && args[0].includes("corporate_rank = ?"),
-    )).toBe(true);
+    )).toBe(false);
   });
   it("restores a username-only session even before a user_scores row exists", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
@@ -632,7 +623,7 @@ describe("GET /api/account/me", () => {
     });
     expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
   });
-  it("prefers the rename redirect target over a re-claimed old username", async () => {
+  it("prefers a reclaimed username row over a stale rename redirect", async () => {
     const kv = mockKV({
       "session_user:test-session": "alice",
       "renamed:alice": "bob",
@@ -656,10 +647,10 @@ describe("GET /api/account/me", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       found: true,
-      username: "bob",
-      profile: { username: "bob", current_td: 1000, total_td: 1000 },
+      username: "alice",
+      profile: { username: "alice", current_td: 5, total_td: 5 },
     });
-    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
+    expect(kv.put).not.toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
   });
   it("collapses multi-hop rename chains to the final alias", async () => {
     const kv = mockKV({

@@ -28,26 +28,11 @@ const RENAME_REDIRECT_TTL_SECONDS = SESSION_USERNAME_TTL_SECONDS;
 
 const account = new Hono<Env>();
 
-async function normalizeFreeTierRank(db: D1Database | undefined, row: unknown, isPro: boolean) {
-  if (!db || !row || isPro) return row;
+function normalizeFreeTierRank(row: unknown, isPro: boolean) {
+  if (!row || isPro) return row;
 
-  const username = (row as { username: string }).username;
   const corporateRank = (row as { corporate_rank: string }).corporate_rank;
   if (corporateRank === FREE_TIER_RANK_CAP) return row;
-
-  const update = db
-    .prepare(
-      `UPDATE user_scores
-       SET corporate_rank = ?, updated_at = datetime('now')
-       WHERE username = ?
-         AND corporate_rank != ?
-         AND (license_hash IS NULL OR NOT ${ACTIVE_LICENSE_EXISTS_SQL})`,
-    )
-    .bind(FREE_TIER_RANK_CAP, username, FREE_TIER_RANK_CAP) as { run?: () => Promise<unknown> };
-
-  if (typeof update.run === "function") {
-    await update.run();
-  }
 
   return { ...(row as Record<string, unknown>), corporate_rank: FREE_TIER_RANK_CAP };
 }
@@ -63,7 +48,7 @@ async function buildMePayload(opts: {
   const rawLicenseHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
   const licenseActive = rawLicenseHash && db ? await isLicenseActive(db, rawLicenseHash) : false;
   const isPro = Boolean(rawLicenseHash && licenseActive);
-  const normalizedRow = await normalizeFreeTierRank(db, row, isPro);
+  const normalizedRow = normalizeFreeTierRank(row, isPro);
   const limits = getQuotaLimits(env);
   const quotaPercent = isPro
     ? await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: rawLicenseHash!, limits })
@@ -85,17 +70,20 @@ async function resolveSessionProfileRow(opts: {
   const originalUsername = opts.username;
   if (!db) return { username: originalUsername, row: null };
 
+  const originalRow = await getProfileRow(db, originalUsername);
+  if (originalRow) {
+    return { username: originalUsername, row: originalRow, redirected: false };
+  }
+
   let current = originalUsername;
   let hops = 0;
   const seen = new Set([originalUsername]);
   const traversed = [originalUsername];
-  let cycledToOriginal = false;
 
   while (hops < MAX_SESSION_RENAME_HOPS) {
     const renamedTo = await kv.get(accountKvKeys.renamed(current));
     if (!renamedTo) break;
     if (seen.has(renamedTo)) {
-      cycledToOriginal = renamedTo === originalUsername;
       break;
     }
     current = renamedTo;
@@ -108,23 +96,8 @@ async function resolveSessionProfileRow(opts: {
     console.warn(`[account/me] rename chain hop cap reached for ${originalUsername}`);
   }
 
-  let originalRow: Awaited<ReturnType<typeof getProfileRow>> | null = null;
-  if (current === originalUsername || cycledToOriginal) {
-    originalRow = await getProfileRow(db, originalUsername);
-    if (originalRow) {
-      return { username: originalUsername, row: originalRow, redirected: false };
-    }
-  }
-
   const row = await getProfileRow(db, current);
   const redirected = current !== originalUsername;
-
-  if (!row && redirected) {
-    originalRow ??= await getProfileRow(db, originalUsername);
-    if (originalRow) {
-      return { username: originalUsername, row: originalRow, redirected: false };
-    }
-  }
 
   if (row && redirected) {
     try {

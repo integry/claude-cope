@@ -6,6 +6,7 @@ export const ACCOUNT_TEST_SQL = {
   getProfileRow: "td_multiplier, license_hash FROM user_scores WHERE username = ?",
   getLicenseStatus: "FROM licenses WHERE key_hash = ?",
   aliasTakenLookup: "SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?) AND username != ?",
+  aliasHistoryLookup: "FROM completed_tasks",
 } as const;
 
 export function createMockDB(opts: {

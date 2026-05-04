@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { getProfile, getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank } from "../utils/profile";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey } from "../utils/quota";
@@ -395,6 +396,27 @@ async function rollbackAliasRateLimitClaim(db: D1Database, licenseKeyHash: strin
     .run();
 }
 
+async function aliasHasHistoricalRows(db: D1Database, alias: string, oldUsername: string): Promise<boolean> {
+  const existing = await db
+    .prepare(
+      `SELECT 1
+       FROM (
+         SELECT username FROM completed_tasks
+         UNION ALL
+         SELECT username FROM hall_of_blame
+         UNION ALL
+         SELECT username FROM usage_logs
+       ) AS alias_history
+       WHERE LOWER(username) = LOWER(?)
+         AND LOWER(username) != LOWER(?)
+       LIMIT 1`,
+    )
+    .bind(alias, oldUsername)
+    .first();
+
+  return Boolean(existing);
+}
+
 export async function performAliasDbUpdate(
   db: D1Database,
   opts: {
@@ -415,14 +437,15 @@ export async function performAliasDbUpdate(
     return { success: false, error: "This alias is already taken", status: 409 };
   }
 
+  if (await aliasHasHistoricalRows(db, newAlias, oldUsername)) {
+    return { success: false, error: "This alias is unavailable because it still has historical activity", status: 409 };
+  }
+
   // All updates run in a single db.batch() transaction so that primary
   // (user_scores), alias-rate-limit claim, and secondary
   // (completed_tasks, hall_of_blame, usage_logs) renames are atomic.
   // If any statement throws (e.g. UNIQUE constraint), the entire transaction
   // is rolled back so transient failures do not burn a daily alias token.
-  // Clear colliding completed_tasks rows before renaming user_scores: after the
-  // user_scores rename, a NOT EXISTS check for the destination alias would see
-  // the freshly renamed row and skip the cleanup entirely.
   let results: D1Result[];
   try {
     results = await db.batch([
@@ -433,11 +456,6 @@ export async function performAliasDbUpdate(
          DO UPDATE SET change_count = change_count + 1
          WHERE change_count < ?`,
       ).bind(licenseKeyHash, dailyLimit),
-      db.prepare(
-        `DELETE FROM completed_tasks
-         WHERE username = ?
-           AND ticket_id IN (SELECT ticket_id FROM completed_tasks WHERE username = ?)`,
-      ).bind(newAlias, oldUsername),
       db.prepare(
         `UPDATE user_scores SET username = ?, updated_at = datetime('now')
          WHERE username = ? AND license_hash = ?
@@ -468,7 +486,7 @@ export async function performAliasDbUpdate(
     return { success: false, error: "Alias change limit reached", status: 429 };
   }
 
-  if (!results[2].meta.changes) {
+  if (!results[1].meta.changes) {
     await rollbackAliasRateLimitClaim(db, licenseKeyHash);
     return { success: false, error: "Update failed — profile not found, license mismatch, or license revoked", status: 409 };
   }
