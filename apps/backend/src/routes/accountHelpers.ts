@@ -137,6 +137,12 @@ function fromBase64(raw: string): Uint8Array {
   return Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 async function importCheckoutClaimKey(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     "raw",
@@ -159,7 +165,9 @@ async function decryptClaimedKeys(raw: string, secret: string): Promise<string[]
   const parsed = JSON.parse(raw) as { iv?: unknown; data?: unknown };
   if (typeof parsed?.iv !== "string" || typeof parsed?.data !== "string") return null;
   const key = await importCheckoutClaimKey(secret);
-  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64(parsed.iv) }, key, fromBase64(parsed.data));
+  const iv = toArrayBuffer(fromBase64(parsed.iv));
+  const encrypted = toArrayBuffer(fromBase64(parsed.data));
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
   const decoded = JSON.parse(new TextDecoder().decode(plaintext));
   return Array.isArray(decoded) && decoded.every((item) => typeof item === "string" && item.length > 0) ? decoded : null;
 }
