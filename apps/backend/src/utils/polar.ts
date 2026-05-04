@@ -1,6 +1,6 @@
 const POLAR_API_BASE = "https://api.polar.sh/v1";
 
-interface PolarLicenseValidation {
+export interface PolarLicenseValidation {
   valid: boolean;
   status: string;
   id?: string;

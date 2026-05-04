@@ -232,6 +232,17 @@ export const CORPORATE_RANKS: CorporateRank[] = [
   { title: "Ultimate API Baba", threshold: 1300000000 },
 ];
 
+export const FREE_TIER_RANK_CAP = CORPORATE_RANKS[0]!.title;
+
+export const ALIAS_CHANGES_PER_DAY = 3;
+
+export const PRO_GATED_COMMANDS: ReadonlySet<string> = new Set([
+  "/brrrrrr",
+  "/blame",
+  "/synergize",
+  "/alias",
+]);
+
 export const THEMES: Theme[] = [
   { id: "default", name: "Default", cost: 0 },
   { id: "amber", name: "Amber", cost: 5000 },

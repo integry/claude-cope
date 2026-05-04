@@ -168,34 +168,51 @@ export const migrations: Migration[] = [
     sql: "CREATE INDEX IF NOT EXISTS idx_system_config_tier ON system_config (tier)",
   },
 
-  // ── checkout session binding ──────────────────────────────────────
+  // ── alias rate limiting (D1-based, replaces raceable KV get/put) ──
   {
-    name: "022_create_checkout_claims",
+    name: "022_create_alias_rate_limits",
+    sql: `CREATE TABLE IF NOT EXISTS alias_rate_limits (
+      license_key_hash TEXT NOT NULL,
+      change_date TEXT NOT NULL,
+      change_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (license_key_hash, change_date)
+    )`,
+  },
+  {
+    name: "023_idx_user_scores_username_nocase",
+    sql: "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_username_nocase ON user_scores (LOWER(username))",
+  },
+
+  // ── checkout session binding and key dedup ───────────────────────
+  {
+    name: "024_create_checkout_claims",
     sql: `CREATE TABLE IF NOT EXISTS checkout_claims (
       checkout_id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,
       claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`,
   },
-
-  // ── cross-checkout key dedup ──────────────────────────────────────
   {
-    name: "023_add_checkout_claims_keys",
-    sql: "ALTER TABLE checkout_claims ADD COLUMN claimed_keys TEXT",
-    ignoreErrorMatching: /duplicate column name.*claimed_keys/i,
+    name: "025_add_checkout_claims_encrypted_keys",
+    sql: "ALTER TABLE checkout_claims ADD COLUMN encrypted_keys TEXT",
+    ignoreErrorMatching: /duplicate column name.*encrypted_keys/i,
   },
-
-  // ── purchase-to-key correctness: store checkout metadata for
-  //    time-window partitioning across concurrent purchases ─────────
   {
-    name: "024_add_checkout_created_at",
+    name: "026_add_checkout_created_at",
     sql: "ALTER TABLE checkout_claims ADD COLUMN checkout_created_at TEXT",
     ignoreErrorMatching: /duplicate column name.*checkout_created_at/i,
   },
   {
-    name: "025_add_checkout_customer_hash",
-    sql: "ALTER TABLE checkout_claims ADD COLUMN customer_hash TEXT",
-    ignoreErrorMatching: /duplicate column name.*customer_hash/i,
+    name: "027_create_checkout_key_claims",
+    sql: `CREATE TABLE IF NOT EXISTS checkout_key_claims (
+      license_key_hash TEXT PRIMARY KEY,
+      checkout_id TEXT NOT NULL,
+      claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+  },
+  {
+    name: "028_idx_checkout_key_claims_checkout_id",
+    sql: "CREATE INDEX IF NOT EXISTS idx_checkout_key_claims_checkout_id ON checkout_key_claims (checkout_id)",
   },
 ];
 

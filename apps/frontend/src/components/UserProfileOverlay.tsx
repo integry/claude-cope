@@ -1,7 +1,7 @@
-import { GENERATORS, CORPORATE_RANKS, UPGRADES } from "../game/constants";
+import { GENERATORS, CORPORATE_RANKS, UPGRADES, FREE_TIER_RANK_CAP } from "../game/constants";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
 import AsciiBox from "./AsciiBox";
-import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
+import { calculateActiveMultiplier, isFreeUser as checkIsFreeUser } from "../hooks/gameStateUtils";
 import { BYOK_ENABLED } from "../config";
 import type { GameState } from "../hooks/useGameState";
 
@@ -19,6 +19,7 @@ function formatTD(n: number): string {
 
 function UserProfileOverlay({ state, onClose }: UserProfileOverlayProps) {
   const { economy, inventory, upgrades, achievements, username, buddy } = state;
+  const isFreeUser = checkIsFreeUser(state);
   const activeMultiplier = calculateActiveMultiplier(inventory, upgrades) * economy.tdMultiplier;
   const unlockedAchievements = ALL_ACHIEVEMENTS.filter((a) => achievements.includes(a.id)).length;
   const totalGenerators = Object.values(inventory).reduce((sum, count) => sum + count, 0);
@@ -85,14 +86,25 @@ function UserProfileOverlay({ state, onClose }: UserProfileOverlayProps) {
         {/* Rank Progress */}
         <div className="border border-gray-700 rounded px-3 py-2 text-xs">
           <div className="text-green-400 font-bold mb-1">[RANK PROGRESS]</div>
-          <div className="text-gray-300 font-mono">
-            [{progressBar}] {progressToNext.toFixed(0)}%
-          </div>
-          <div className="text-gray-500 mt-1">
-            {nextRank
-              ? `Next: ${nextRank.title} (${formatTD(nextRank.threshold)} TD)`
-              : "MAX RANK — You are the corporate singularity."}
-          </div>
+          {isFreeUser ? (
+            <div className="text-yellow-500">
+              🔒 Rank progression locked to <span className="text-yellow-300">{FREE_TIER_RANK_CAP}</span>.
+              <div className="text-gray-500 mt-1">
+                Upgrade to Max via <span className="text-green-400">/upgrade</span> to climb the corporate ladder.
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="text-gray-300 font-mono">
+                [{progressBar}] {progressToNext.toFixed(0)}%
+              </div>
+              <div className="text-gray-500 mt-1">
+                {nextRank
+                  ? `Next: ${nextRank.title} (${formatTD(nextRank.threshold)} TD)`
+                  : "MAX RANK — You are the corporate singularity."}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Inventory */}

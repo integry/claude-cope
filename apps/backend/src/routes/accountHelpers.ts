@@ -1,6 +1,23 @@
+/* eslint-disable max-lines */
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { getProfile, getProfileByLicenseHash, getProfileRow, resolveRank } from "../utils/profile";
-import { getQuotaLimits, hashKey } from "../utils/quota";
+import { getProfile, getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank } from "../utils/profile";
+import { validatePolarKey } from "../utils/polar";
+import { hashKey } from "../utils/quota";
+
+const LICENSE_STALE_SQL_CUTOFF = "-90 days";
+export const accountKvKeys = {
+  renamed: (username: string) => `renamed:${username}`,
+  sessionUser: (sessionId: string) => `session_user:${sessionId}`,
+  shill: (sessionId: string) => `shill:${sessionId}`,
+  usernameSession: (username: string) => `username_session:${username}`,
+} as const;
+export const ACTIVE_LICENSE_EXISTS_SQL =
+  `EXISTS (
+     SELECT 1 FROM licenses
+     WHERE key_hash = user_scores.license_hash
+       AND status = 'active'
+       AND datetime(last_activated_at) >= datetime('now', '${LICENSE_STALE_SQL_CUTOFF}')
+   )`;
 
 export type PolarCheckout = {
   id?: string;
@@ -12,14 +29,339 @@ export type PolarCheckout = {
   metadata?: Record<string, unknown>;
 };
 export type PolarLicenseKeyItem = { key: string; created_at: string; status: string };
+export type CheckoutCache = { keys: string[]; sessionId: string };
 
 const MAX_KEY_MINT_WINDOW_MS = 15 * 60 * 1000;
 const MAX_KEY_FALLBACK_WINDOW_MS = 60 * 60 * 1000;
 const MAX_FALLBACK_CLUSTER_GAP_MS = 2 * 60 * 1000;
 const LICENSE_KEY_PAGE_SIZE = 100;
 const CHECKOUT_PAGE_SIZE = 100;
-const MAX_TICKET_TITLE_LEN = 200;
-const MAX_TICKET_ID_LEN = 100;
+
+export type SyncBody = {
+  licenseKey?: string;
+  username?: string;
+  currentProfile?: {
+    total_td?: number;
+    current_td?: number;
+    corporate_rank?: string;
+    inventory?: Record<string, number>;
+    upgrades?: string[];
+    achievements?: string[];
+    buddy_type?: string | null;
+    buddy_is_shiny?: boolean;
+    unlocked_themes?: string[];
+    active_theme?: string;
+    active_ticket?: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null;
+  };
+};
+
+function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
+  // Only truly cosmetic preferences are accepted from the client.
+  // unlocked_themes, active_theme, and active_ticket are server-authoritative:
+  // themes are paid items that must not be mintable or activated via a forged
+  // first-sync payload, and ticket state must not be restored from stale
+  // client data.  active_theme is always "default" for new profiles because
+  // the server initializes unlocked_themes to ["default"] — accepting a
+  // client-supplied theme here would bypass the paid-theme gate.
+  return {
+    buddyType: cp?.buddy_type ?? null,
+    buddyIsShiny: cp?.buddy_is_shiny ? 1 : 0,
+  };
+}
+
+type CreateProfileResult =
+  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; mutation: SyncProfileMutation; error?: undefined }
+  | { profile: null; error: string; mutation?: undefined };
+
+type SyncProfileMutation =
+  | { kind: "none" }
+  | { kind: "created"; username: string }
+  | { kind: "attached_license"; username: string; previousUsername: string };
+
+async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<CreateProfileResult> {
+  const newUsername = body.username?.trim();
+  if (!newUsername) {
+    return { profile: null, error: "Username is required — please set a username before activating." };
+  }
+
+  // Check if username already exists.
+  const existing = await db
+    .prepare("SELECT username, license_hash FROM user_scores WHERE LOWER(username) = LOWER(?)")
+    .bind(newUsername)
+    .first<{ username: string; license_hash: string | null }>();
+  if (existing) {
+    const existingUsername = existing.username;
+    if (existing.license_hash === hash) {
+      // Already belongs to this license — just return the existing profile
+      const profile = await getProfile(db, existingUsername);
+      if (!profile) return { profile: null, error: "Profile not found after lookup" };
+      return { profile, mutation: { kind: "none" } };
+    }
+    if (existing.license_hash === null) {
+      // Free user upgrading to Max — attach the license to their existing profile.
+      // Verify the caller's session is bound to this username to prevent an
+      // attacker from seizing another free user's profile by sending /sync
+      // with their username. Fail closed if no sessionContext: without it we
+      // have no way to verify ownership of an existing free row, so refuse
+      // the upgrade rather than allowing it unconditionally.
+      if (!sessionContext) {
+        return { profile: null, error: "Session required to upgrade an existing username." };
+      }
+      const boundUsername = await sessionContext.kv.get(accountKvKeys.sessionUser(sessionContext.sessionId));
+      if (boundUsername?.toLowerCase() !== existingUsername.toLowerCase()) {
+        return { profile: null, error: "Cannot claim an existing free username — log in to that account first or pick a different username." };
+      }
+      // Preserve the server-authoritative profile data (TD, inventory, etc.).
+      // The WHERE clause includes `license_hash IS NULL` so that under a
+      // concurrent /sync race only one request can claim the row. Check
+      // result.meta.changes to detect if another request won the race.
+      const upgradeResult = await db
+        .prepare("UPDATE user_scores SET username = ?, license_hash = ?, updated_at = datetime('now') WHERE username = ? AND license_hash IS NULL")
+        .bind(newUsername, hash, existingUsername)
+        .run();
+      if (!upgradeResult.meta.changes) {
+        // Another concurrent request already attached a license to this row.
+        return { profile: null, error: "This username was just claimed by another request. Please try again." };
+      }
+      const profile = await getProfile(db, newUsername);
+      if (!profile) return { profile: null, error: "Profile not found after upgrade" };
+      return { profile, mutation: { kind: "attached_license", username: newUsername, previousUsername: existingUsername } };
+    }
+    // Username is owned by a different license — refuse
+    return { profile: null, error: "This username is already taken. Please change your username and try again." };
+  }
+
+  // New profile for a freshly activated license — use server-authoritative defaults.
+  // Only cosmetic preferences (theme, buddy) are accepted from the client; scoring
+  // fields (TD, inventory, upgrades, achievements) start at zero to prevent a
+  // forged first-sync payload from minting arbitrary progress.
+  // TODO(byok): Profile creation only supports Pro licenses. BYOK users have no
+  // server-side persistence — their progress lives in localStorage only. To support
+  // cross-device sync for BYOK, add an apiKey-hash field to user_scores.
+  const c = buildProfileCosmetics(body.currentProfile);
+  const defaultRank = resolveRank(0);
+
+  try {
+    await db
+      .prepare(
+        `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
+         VALUES (?, 0, 0, ?, ?, '{}', '[]', '[]', ?, ?, '["default"]', 'default', NULL, 1.0)`,
+      )
+      .bind(
+        newUsername, defaultRank, hash,
+        c.buddyType, c.buddyIsShiny,
+      )
+      .run();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Catch UNIQUE constraint violations from concurrent /sync requests racing
+    // on the same username or license_hash.
+    if (msg.includes("UNIQUE") || msg.includes("unique") || msg.includes("constraint")) {
+      return { profile: null, error: "This username or license is being activated by another request. Please try again." };
+    }
+    throw err;
+  }
+
+  const profile = await getProfile(db, newUsername);
+  if (!profile) return { profile: null, error: "Failed to create profile" };
+  return { profile, mutation: { kind: "created", username: newUsername } };
+}
+
+type ResolveProfileResult =
+  | { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; mutation: SyncProfileMutation; error?: undefined }
+  | { restored: false; profile: null; error: string; mutation?: undefined };
+
+export async function resolveProfile(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<ResolveProfileResult> {
+  // Case 1: Existing profile with this license_hash → restore (cross-device sync)
+  const existingByHash = await getProfileByLicenseHash(db, hash);
+  if (existingByHash) {
+    return { restored: true, profile: existingByHash, mutation: { kind: "none" } };
+  }
+
+  // Case 2: No profile for this license → create a new one, or upgrade an
+  // existing free (unlicensed) profile if the username matches.
+  const created = await createProfileFromClient(db, hash, body, sessionContext);
+  if (created.profile === null) {
+    return { restored: false, profile: null, error: created.error };
+  }
+  return { restored: false, profile: created.profile, mutation: created.mutation };
+}
+
+export async function rollbackProfileMutation(
+  db: D1Database,
+  hash: string,
+  mutation: SyncProfileMutation,
+): Promise<void> {
+  if (mutation.kind === "none") return;
+  if (mutation.kind === "created") {
+    await db
+      .prepare("DELETE FROM user_scores WHERE username = ? AND license_hash = ?")
+      .bind(mutation.username, hash)
+      .run();
+    return;
+  }
+
+  await db
+    .prepare("UPDATE user_scores SET username = ?, license_hash = NULL, updated_at = datetime('now') WHERE username = ? AND license_hash = ?")
+    .bind(mutation.previousUsername, mutation.username, hash)
+    .run();
+}
+
+export type OwnershipResult =
+  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; status: "ok" }
+  | { profile: null; status: "not_found"; error: string }
+  | { profile: null; status: "unauthorized"; error: string };
+
+export async function verifyOwnership(db: D1Database, username: string, licenseKeyHash: string): Promise<OwnershipResult> {
+  const row = await getProfileRow(db, username);
+  if (!row) return { profile: null, status: "not_found", error: "Profile not found" };
+  const rowWithHash = row as unknown as { license_hash: string | null };
+  if (!rowWithHash.license_hash || rowWithHash.license_hash !== licenseKeyHash) {
+    return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
+  }
+
+  // Keep paid mutation routes aligned with /me and score gating semantics:
+  // stale "active" rows are treated as revoked until refreshed.
+  if (!(await isLicenseActive(db, licenseKeyHash))) {
+    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
+  }
+
+  const profile = await getProfile(db, username);
+  if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
+  return { profile, status: "ok" };
+}
+
+export function broadcastPurchase(message: string, db: D1Database | undefined, ctx: { waitUntil: (p: Promise<unknown>) => void }) {
+  if (db) {
+    ctx.waitUntil(
+      db.prepare("INSERT INTO recent_events (message) VALUES (?)").bind(message).run(),
+    );
+  }
+}
+
+async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: number): Promise<void> {
+  const kvKey = `polar:${hash}`;
+  const existingQuota = await kv.get(kvKey);
+  if (existingQuota !== null) return;
+
+  const revokedKey = `polar_revoked:${hash}`;
+  const savedQuota = await kv.get(revokedKey);
+  if (savedQuota !== null) {
+    await kv.put(kvKey, savedQuota);
+    await kv.delete(revokedKey);
+  } else {
+    await kv.put(kvKey, String(proInitialQuota));
+  }
+}
+
+async function rollbackLicenseActivation(
+  db: D1Database,
+  hash: string,
+  previousLicense: { status: string; last_activated_at: string | null } | null,
+): Promise<void> {
+  if (previousLicense) {
+    await db
+      .prepare("UPDATE licenses SET status = ?, last_activated_at = ? WHERE key_hash = ?")
+      .bind(previousLicense.status, previousLicense.last_activated_at, hash)
+      .run();
+    return;
+  }
+
+  await db.prepare("DELETE FROM licenses WHERE key_hash = ?").bind(hash).run();
+}
+
+export async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?: { POLAR_ACCESS_TOKEN?: string; POLAR_ORGANIZATION_ID?: string; QUOTA_KV?: KVNamespace; USAGE_KV?: KVNamespace; DB?: D1Database }; json: (data: unknown, status?: number) => Response }) {
+  const body = await c.req.json<SyncBody>();
+  if (!body.licenseKey) {
+    return { error: c.json({ error: "licenseKey is required" }, 400) } as const;
+  }
+
+  const accessToken = c.env?.POLAR_ACCESS_TOKEN;
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
+  if (!accessToken || !organizationId) {
+    return { error: c.json({ error: "Polar integration is not configured" }, 500) } as const;
+  }
+
+  const validation = await validatePolarKey(body.licenseKey, accessToken, organizationId);
+  if (!validation.valid) {
+    return { error: c.json({ error: "Invalid or inactive license key", status: validation.status }, 403) } as const;
+  }
+
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  if (!kv) {
+    return { error: c.json({ error: "KV storage is not configured" }, 500) } as const;
+  }
+
+  const db = c.env?.DB;
+  if (!db) {
+    return { error: c.json({ error: "Database not configured" }, 500) } as const;
+  }
+
+  const hash = await hashKey(body.licenseKey);
+  return { body, validation, kv, db, hash } as const;
+}
+
+export async function commitSyncSideEffects(
+  deps: { db: D1Database; kv: KVNamespace; hash: string },
+  opts: { validationId?: string; proInitialQuota: number },
+) {
+  const { db, kv, hash } = deps;
+  const polarKey = `polar:${hash}`;
+  const revokedKey = `polar_revoked:${hash}`;
+  const polarIdKey = `polar_id:${hash}`;
+  const [previousLicense, previousQuota, previousRevokedQuota, previousPolarId] = await Promise.all([
+    db
+      .prepare("SELECT status, last_activated_at FROM licenses WHERE key_hash = ?")
+      .bind(hash)
+      .first<{ status: string; last_activated_at: string | null }>(),
+    kv.get(polarKey),
+    kv.get(revokedKey),
+    kv.get(polarIdKey),
+  ]);
+
+  try {
+    await db
+      .prepare(
+        "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
+      )
+      .bind(hash)
+      .run();
+
+    await ensureQuota(kv, hash, opts.proInitialQuota);
+
+    if (opts.validationId) {
+      await kv.put(polarIdKey, opts.validationId);
+    }
+  } catch (err: unknown) {
+    try {
+      await rollbackLicenseActivation(db, hash, previousLicense);
+
+      if (previousQuota === null) {
+        await kv.delete(polarKey);
+      } else {
+        await kv.put(polarKey, previousQuota);
+      }
+
+      if (previousRevokedQuota === null) {
+        await kv.delete(revokedKey);
+      } else {
+        await kv.put(revokedKey, previousRevokedQuota);
+      }
+
+      if (previousPolarId === null) {
+        await kv.delete(polarIdKey);
+      } else {
+        await kv.put(polarIdKey, previousPolarId);
+      }
+    } catch (rollbackErr: unknown) {
+      console.warn(
+        `[account/sync] failed to rollback side effects for ${hash.slice(0, 8)}:`,
+        rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+      );
+    }
+    throw err;
+  }
+}
 
 export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreatedAt: string, nextCheckoutCreatedAt?: string): PolarLicenseKeyItem[] {
   const checkoutTime = new Date(checkoutCreatedAt).getTime();
@@ -39,10 +381,10 @@ export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreat
     return t >= checkoutTime && t <= fallbackBound;
   });
   if (fallback.length === 0 || hasNextCheckout) return fallback;
-  const firstCluster: PolarLicenseKeyItem[] = [fallback[0]!];
-  let previousTime = new Date(fallback[0]!.created_at).getTime();
+  const firstCluster: PolarLicenseKeyItem[] = [fallback[0]];
+  let previousTime = new Date(fallback[0].created_at).getTime();
   for (let i = 1; i < fallback.length; i++) {
-    const current = fallback[i]!;
+    const current = fallback[i];
     const currentTime = new Date(current.created_at).getTime();
     if (!Number.isFinite(currentTime) || currentTime - previousTime > MAX_FALLBACK_CLUSTER_GAP_MS) break;
     firstCluster.push(current);
@@ -127,8 +469,6 @@ export async function fetchNextCheckoutCreatedAt(customerId: string, organizatio
   return { createdAt: candidate };
 }
 
-export type CheckoutCache = { keys: string[]; sessionId: string };
-
 function toBase64(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes));
 }
@@ -144,13 +484,7 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 async function importCheckoutClaimKey(secret: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "AES-GCM" },
-    false,
-    ["encrypt", "decrypt"],
-  );
+  return crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
 async function encryptClaimedKeys(keys: string[], secret: string): Promise<string> {
@@ -182,120 +516,13 @@ export function parseCheckoutCache(raw: string): CheckoutCache | null {
     if (Array.isArray(parsed)) return isNonEmptyStringArray(parsed) ? { keys: parsed, sessionId: "" } : null;
     if (parsed && typeof parsed === "object" && Array.isArray(parsed.keys)) {
       if (!isNonEmptyStringArray(parsed.keys)) return null;
-      const sid = parsed.sessionId;
+      const sid = (parsed as { sessionId?: unknown }).sessionId;
       return sid !== undefined && sid !== null && typeof sid !== "string" ? null : { keys: parsed.keys, sessionId: typeof sid === "string" ? sid : "" };
     }
     return null;
   } catch {
     return typeof raw === "string" && raw.length > 0 && /^[A-Za-z0-9_-]+$/.test(raw) ? { keys: [raw], sessionId: "" } : null;
   }
-}
-
-export type SyncBody = {
-  licenseKey?: string;
-  username?: string;
-  currentProfile?: {
-    total_td?: number;
-    current_td?: number;
-    corporate_rank?: string;
-    inventory?: Record<string, number>;
-    upgrades?: string[];
-    achievements?: string[];
-    buddy_type?: string | null;
-    buddy_is_shiny?: boolean;
-    unlocked_themes?: string[];
-    active_theme?: string;
-    active_ticket?: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null;
-  };
-};
-
-function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
-  return { buddyType: cp?.buddy_type ?? null, buddyIsShiny: cp?.buddy_is_shiny ? 1 : 0 };
-}
-
-type CreateProfileResult = { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined } | { profile: null; error: string };
-
-async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<CreateProfileResult> {
-  const newUsername = body.username?.trim();
-  if (!newUsername) return { profile: null, error: "Username is required — please set a username before activating." };
-  const existing = await db.prepare("SELECT license_hash FROM user_scores WHERE username = ?").bind(newUsername).first<{ license_hash: string | null }>();
-  if (existing) {
-    if (existing.license_hash === hash) {
-      const profile = await getProfile(db, newUsername);
-      return profile ? { profile } : { profile: null, error: "Profile not found after lookup" };
-    }
-    if (existing.license_hash === null) {
-      if (!sessionContext) return { profile: null, error: "Session required to upgrade an existing username." };
-      const boundUsername = await sessionContext.kv.get(`session_user:${sessionContext.sessionId}`);
-      if (boundUsername !== newUsername) return { profile: null, error: "Cannot claim an existing free username — log in to that account first or pick a different username." };
-      const upgradeResult = await db.prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ? AND license_hash IS NULL").bind(hash, newUsername).run();
-      if (!upgradeResult.meta.changes) return { profile: null, error: "This username was just claimed by another request. Please try again." };
-      const profile = await getProfile(db, newUsername);
-      return profile ? { profile } : { profile: null, error: "Profile not found after upgrade" };
-    }
-    return { profile: null, error: "This username is already taken. Please change your username and try again." };
-  }
-  const c = buildProfileCosmetics(body.currentProfile);
-  try {
-    await db.prepare(
-      `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
-       VALUES (?, 0, 0, ?, ?, '{}', '[]', '[]', ?, ?, '["default"]', 'default', NULL, 1.0)`,
-    ).bind(newUsername, resolveRank(0), hash, c.buddyType, c.buddyIsShiny).run();
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("UNIQUE") || msg.includes("unique") || msg.includes("constraint")) return { profile: null, error: "This username or license is being activated by another request. Please try again." };
-    throw err;
-  }
-  const profile = await getProfile(db, newUsername);
-  return profile ? { profile } : { profile: null, error: "Failed to create profile" };
-}
-
-type ResolveProfileResult = { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined } | { restored: false; profile: null; error: string };
-
-export async function resolveProfile(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<ResolveProfileResult> {
-  const existingByHash = await getProfileByLicenseHash(db, hash);
-  if (existingByHash) return { restored: true, profile: existingByHash };
-  const created = await createProfileFromClient(db, hash, body, sessionContext);
-  return "error" in created && created.error ? { restored: false, profile: null, error: created.error } : { restored: false, profile: created.profile! };
-}
-
-export type OwnershipResult = { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; status: "ok" } | { profile: null; status: "not_found"; error: string } | { profile: null; status: "unauthorized"; error: string };
-
-export async function verifyOwnership(db: D1Database, username: string, licenseKeyHash: string): Promise<OwnershipResult> {
-  const row = await getProfileRow(db, username);
-  if (!row) return { profile: null, status: "not_found", error: "Profile not found" };
-  const rowLicenseHash = "license_hash" in row ? row.license_hash : null;
-  if (!rowLicenseHash || rowLicenseHash !== licenseKeyHash) return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
-  const license = await db.prepare("SELECT status FROM licenses WHERE key_hash = ?").bind(licenseKeyHash).first<{ status: string }>();
-  if (!license || license.status !== "active") return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
-  const profile = await getProfile(db, username);
-  return profile ? { profile, status: "ok" } : { profile: null, status: "not_found", error: "Profile not found" };
-}
-
-export function broadcastPurchase(message: string, db: D1Database | undefined, ctx: { waitUntil: (p: Promise<unknown>) => void }) {
-  if (db) ctx.waitUntil(db.prepare("INSERT INTO recent_events (message) VALUES (?)").bind(message).run());
-}
-
-export const SHILL_CREDIT = 5;
-
-async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: number): Promise<void> {
-  const kvKey = `polar:${hash}`;
-  if (await kv.get(kvKey) !== null) return;
-  const revokedKey = `polar_revoked:${hash}`;
-  const savedQuota = await kv.get(revokedKey);
-  if (savedQuota !== null) {
-    await kv.put(kvKey, savedQuota);
-    await kv.delete(revokedKey);
-  } else {
-    await kv.put(kvKey, String(proInitialQuota));
-  }
-}
-
-export async function commitSyncSideEffects(deps: { db: D1Database; kv: KVNamespace; hash: string }, opts: { validationId?: string; limits: ReturnType<typeof getQuotaLimits>; sessionId?: string }) {
-  const { db, kv, hash } = deps;
-  await db.prepare("INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')").bind(hash).run();
-  await ensureQuota(kv, hash, opts.limits.proInitialQuota);
-  if (opts.validationId) await kv.put(`polar_id:${hash}`, opts.validationId);
 }
 
 export async function claimCheckoutForSession(db: D1Database, checkoutId: string, sessionId: string, opts: { checkoutCreatedAt?: string } = {}): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
@@ -305,13 +532,12 @@ export async function claimCheckoutForSession(db: D1Database, checkoutId: string
       try {
         await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run();
       } catch {
-        // Cleanup is best-effort and should not block a successful claim.
       }
       return { ok: true };
     }
     const existing = await db.prepare("SELECT session_id, claimed_at FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ session_id: string; claimed_at: string }>();
     return existing && existing.session_id === sessionId ? { ok: true } : { ok: false, error: "This checkout was already claimed by another session", retriable: false };
-  } catch (err: unknown) {
+  } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("no such table") || msg.includes("checkout_claims")) return { ok: false, error: "Checkout claim table is not available — please try again later", retriable: true };
     return { ok: false, error: "Unable to verify checkout claim — please try again", retriable: true };
@@ -328,9 +554,7 @@ export async function getStoredClaimedKeys(
     if (!row) return { ok: true, sessionId: null, keys: null };
     if (!row.encrypted_keys) return { ok: true, sessionId: row.session_id, keys: null };
     const parsed = await decryptClaimedKeys(row.encrypted_keys, secret);
-    return parsed
-      ? { ok: true, sessionId: row.session_id, keys: parsed }
-      : { ok: false, error: "Stored checkout claim is malformed — please try again" };
+    return parsed ? { ok: true, sessionId: row.session_id, keys: parsed } : { ok: false, error: "Stored checkout claim is malformed — please try again" };
   } catch {
     return { ok: false, error: "Unable to read stored checkout claim — please try again" };
   }
@@ -362,7 +586,7 @@ export async function claimLicenseKeysForCheckout(db: D1Database, checkoutId: st
     const placeholders = keyHashes.map(() => "?").join(", ");
     const rows = await db.prepare(`SELECT license_key_hash, checkout_id FROM checkout_key_claims WHERE license_key_hash IN (${placeholders})`).bind(...keyHashes).all<{ license_key_hash: string; checkout_id: string }>();
     const ownerByHash = new Map((rows.results ?? []).map((row) => [row.license_key_hash, row.checkout_id]));
-    const claimedKeys = keys.filter((key, idx) => ownerByHash.get(keyHashes[idx]!) === checkoutId);
+    const claimedKeys = keys.filter((key, idx) => ownerByHash.get(keyHashes[idx]) === checkoutId);
     if (!claimedKeys.length) return { ok: false, error: "These license keys were already claimed by another checkout — please retry in a few seconds" };
     const stored = await storeClaimedKeys(db, checkoutId, claimedKeys, secret);
     return stored.ok ? { ok: true, keys: claimedKeys } : stored;
@@ -370,6 +594,9 @@ export async function claimLicenseKeysForCheckout(db: D1Database, checkoutId: st
     return { ok: false, error: "Unable to atomically claim license keys — please try again" };
   }
 }
+
+const MAX_TICKET_TITLE_LEN = 200;
+const MAX_TICKET_ID_LEN = 100;
 
 export function validateActiveTicket(ticket: unknown): string | null {
   if (ticket === null || ticket === undefined) return null;
@@ -382,3 +609,140 @@ export function validateActiveTicket(ticket: unknown): string | null {
   if ((t.sprintProgress as number) > (t.sprintGoal as number)) return "sprintProgress cannot exceed sprintGoal";
   return null;
 }
+
+export function validateAlias(raw: string): { alias: string; error?: undefined } | { alias?: undefined; error: string } {
+  const alias = raw.trim();
+  if (alias.length < 3 || alias.length > 33) return { error: "Alias must be between 3 and 33 characters" };
+  if (!/^[a-zA-Z0-9_-]+$/.test(alias)) return { error: "Alias can only contain letters, numbers, hyphens, and underscores" };
+  if (!/[a-zA-Z]/.test(alias)) return { error: "Alias must contain at least one letter" };
+  return { alias };
+}
+
+async function pruneAliasRateLimits(db: D1Database): Promise<void> {
+  await db
+    .prepare("DELETE FROM alias_rate_limits WHERE change_date < date('now', '-30 days')")
+    .run();
+}
+
+async function rollbackAliasRateLimitClaim(db: D1Database, licenseKeyHash: string): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE alias_rate_limits
+       SET change_count = change_count - 1
+       WHERE license_key_hash = ?
+         AND change_date = date('now')
+         AND change_count > 0`,
+    )
+    .bind(licenseKeyHash)
+    .run();
+
+  await db
+    .prepare(
+      `DELETE FROM alias_rate_limits
+       WHERE license_key_hash = ?
+         AND change_date = date('now')
+         AND change_count <= 0`,
+    )
+    .bind(licenseKeyHash)
+    .run();
+}
+
+async function aliasHasHistoricalRows(db: D1Database, alias: string, oldUsername: string): Promise<boolean> {
+  const existing = await db
+    .prepare(
+      `SELECT 1
+       FROM (
+         SELECT username FROM completed_tasks
+         UNION ALL
+         SELECT username FROM hall_of_blame
+         UNION ALL
+         SELECT username FROM usage_logs
+       ) AS alias_history
+       WHERE LOWER(username) = LOWER(?)
+         AND LOWER(username) != LOWER(?)
+       LIMIT 1`,
+    )
+    .bind(alias, oldUsername)
+    .first();
+
+  return Boolean(existing);
+}
+
+export async function performAliasDbUpdate(
+  db: D1Database,
+  opts: {
+    oldUsername: string;
+    newAlias: string;
+    licenseKeyHash: string;
+    dailyLimit: number;
+  },
+): Promise<{ success: true } | { success: false; error: string; status: 409 | 429 | 500 }> {
+  const { oldUsername, newAlias, licenseKeyHash, dailyLimit } = opts;
+  await pruneAliasRateLimits(db);
+
+  const taken = await db
+    .prepare("SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?) AND username != ?")
+    .bind(newAlias, oldUsername)
+    .first();
+  if (taken) {
+    return { success: false, error: "This alias is already taken", status: 409 };
+  }
+
+  if (await aliasHasHistoricalRows(db, newAlias, oldUsername)) {
+    return { success: false, error: "This alias is unavailable because it still has historical activity", status: 409 };
+  }
+
+  // All updates run in a single db.batch() transaction so that primary
+  // (user_scores), alias-rate-limit claim, and secondary
+  // (completed_tasks, hall_of_blame, usage_logs) renames are atomic.
+  // If any statement throws (e.g. UNIQUE constraint), the entire transaction
+  // is rolled back so transient failures do not burn a daily alias token.
+  let results: D1Result[];
+  try {
+    results = await db.batch([
+      db.prepare(
+        `INSERT INTO alias_rate_limits (license_key_hash, change_date, change_count)
+         VALUES (?, date('now'), 1)
+         ON CONFLICT(license_key_hash, change_date)
+         DO UPDATE SET change_count = change_count + 1
+         WHERE change_count < ?`,
+      ).bind(licenseKeyHash, dailyLimit),
+      db.prepare(
+        `UPDATE user_scores SET username = ?, updated_at = datetime('now')
+         WHERE username = ? AND license_hash = ?
+           AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
+      ).bind(newAlias, oldUsername, licenseKeyHash),
+      db.prepare(
+        `UPDATE completed_tasks SET username = ? WHERE username = ?
+           AND EXISTS (SELECT 1 FROM user_scores WHERE username = ? AND license_hash = ?)`,
+      ).bind(newAlias, oldUsername, newAlias, licenseKeyHash),
+      db.prepare(
+        `UPDATE hall_of_blame SET username = ? WHERE username = ?
+           AND EXISTS (SELECT 1 FROM user_scores WHERE username = ? AND license_hash = ?)`,
+      ).bind(newAlias, oldUsername, newAlias, licenseKeyHash),
+      db.prepare(
+        `UPDATE usage_logs SET username = ? WHERE username = ?
+           AND EXISTS (SELECT 1 FROM user_scores WHERE username = ? AND license_hash = ?)`,
+      ).bind(newAlias, oldUsername, newAlias, licenseKeyHash),
+    ]);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE") || msg.includes("unique") || msg.includes("constraint")) {
+      return { success: false, error: "This alias is already taken", status: 409 };
+    }
+    return { success: false, error: "Alias update failed — please retry", status: 500 };
+  }
+
+  if (!results[0].meta.changes) {
+    return { success: false, error: "Alias change limit reached", status: 429 };
+  }
+
+  if (!results[1].meta.changes) {
+    await rollbackAliasRateLimitClaim(db, licenseKeyHash);
+    return { success: false, error: "Update failed — profile not found, license mismatch, or license revoked", status: 409 };
+  }
+
+  return { success: true };
+}
+
+export { getQuotaLimits, getQuotaPercent } from "../utils/quota";
