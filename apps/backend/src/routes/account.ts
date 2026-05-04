@@ -25,6 +25,12 @@ const SHILL_CREDIT = 5;
 const MAX_SESSION_RENAME_HOPS = 32;
 const SESSION_USERNAME_TTL_SECONDS = 60 * 60 * 24 * 365;
 const RENAME_REDIRECT_TTL_SECONDS = 60 * 60 * 24 * 30;
+const accountKvKeys = {
+  renamed: (username: string) => `renamed:${username}`,
+  sessionUser: (sessionId: string) => `session_user:${sessionId}`,
+  shill: (sessionId: string) => `shill:${sessionId}`,
+  usernameSession: (username: string) => `username_session:${username}`,
+} as const;
 
 const account = new Hono<Env>();
 
@@ -60,13 +66,18 @@ async function resolveSessionProfileRow(opts: {
   const originalUsername = opts.username;
   if (!db) return { username: originalUsername, row: null };
 
+  const originalRow = await getProfileRow(db, originalUsername);
+  if (originalRow) {
+    return { username: originalUsername, row: originalRow, redirected: false };
+  }
+
   let current = originalUsername;
   let hops = 0;
   const seen = new Set([originalUsername]);
   const traversed = [originalUsername];
 
   while (hops < MAX_SESSION_RENAME_HOPS) {
-    const renamedTo = await kv.get(`renamed:${current}`);
+    const renamedTo = await kv.get(accountKvKeys.renamed(current));
     if (!renamedTo || seen.has(renamedTo)) break;
     current = renamedTo;
     seen.add(current);
@@ -83,11 +94,11 @@ async function resolveSessionProfileRow(opts: {
 
   if (row && redirected) {
     try {
-      await kv.put(`session_user:${sessionId}`, current, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+      await kv.put(accountKvKeys.sessionUser(sessionId), current, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
       await Promise.all(
         traversed
           .slice(0, -1)
-          .map((username) => kv.put(`renamed:${username}`, current, { expirationTtl: RENAME_REDIRECT_TTL_SECONDS })),
+          .map((username) => kv.put(accountKvKeys.renamed(username), current, { expirationTtl: RENAME_REDIRECT_TTL_SECONDS })),
       );
     } catch (err: unknown) {
       console.warn(
@@ -131,7 +142,7 @@ account.post("/sync", async (c) => {
   // Bind the session to the resolved username so /me can look it up.
   if (sessionId && result.profile?.username) {
     try {
-      await kv.put(`session_user:${sessionId}`, result.profile.username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+      await kv.put(accountKvKeys.sessionUser(sessionId), result.profile.username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
     } catch (err: unknown) {
       console.warn(
         `[account/sync] failed to bind session for ${result.profile.username}:`,
@@ -151,7 +162,7 @@ account.get("/me", async (c) => {
   const sessionId = c.get("sessionId");
   if (!kv || !sessionId) return c.json({ found: false });
 
-  let username = await kv.get(`session_user:${sessionId}`);
+  let username = await kv.get(accountKvKeys.sessionUser(sessionId));
   if (!username) return c.json({ found: false });
 
   const db = c.env?.DB;
@@ -161,7 +172,7 @@ account.get("/me", async (c) => {
   if (!row) {
     if (resolved.redirected) {
       try {
-        await kv.delete(`session_user:${sessionId}`);
+        await kv.delete(accountKvKeys.sessionUser(sessionId));
       } catch (err: unknown) {
         console.warn(
           `[account/me] failed to clear stale renamed session for ${sessionId}:`,
@@ -516,12 +527,12 @@ account.post("/update-alias", async (c) => {
   let updated: Awaited<ReturnType<typeof getProfile>> = null;
   if (kv && sessionId) {
     try {
-      await kv.put(`session_user:${sessionId}`, alias, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
-      await kv.put(`username_session:${alias}`, sessionId, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
-      await kv.delete(`username_session:${body.username}`);
+      await kv.put(accountKvKeys.sessionUser(sessionId), alias, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+      await kv.put(accountKvKeys.usernameSession(alias), sessionId, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+      await kv.delete(accountKvKeys.usernameSession(body.username));
       // Store a redirect so other active sessions following the old username
       // can discover the rename via /me and repair their own session mapping.
-      await kv.put(`renamed:${body.username}`, alias, { expirationTtl: RENAME_REDIRECT_TTL_SECONDS });
+      await kv.put(accountKvKeys.renamed(body.username), alias, { expirationTtl: RENAME_REDIRECT_TTL_SECONDS });
     } catch (err: unknown) {
       // TODO: Once accounts have immutable IDs, make this repair path durable
       // instead of relying on best-effort username redirects.
@@ -548,7 +559,7 @@ account.post("/shill", async (c) => {
   if (!kv) return c.json({ error: "KV storage is not configured" }, 500);
 
   const sessionId = c.get("sessionId");
-  const shillKey = `shill:${sessionId}`;
+  const shillKey = accountKvKeys.shill(sessionId);
 
   const alreadyShilled = await kv.get(shillKey);
   if (alreadyShilled) {

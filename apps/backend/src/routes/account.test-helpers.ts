@@ -1,17 +1,30 @@
 import { vi } from "vitest";
 import app from "../app";
 
+function normalizeSql(sql: string) {
+  return sql.replace(/\s+/g, " ").trim();
+}
+
+export const ACCOUNT_TEST_SQL = {
+  getProfile: normalizeSql("SELECT username, total_td, current_td, corporate_rank, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier FROM user_scores WHERE username = ?"),
+  getProfileRow: normalizeSql("SELECT username, total_td, current_td, corporate_rank, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier, license_hash FROM user_scores WHERE username = ?"),
+  getLicenseStatus: normalizeSql("SELECT status, last_activated_at FROM licenses WHERE key_hash = ?"),
+  aliasTakenLookup: normalizeSql("SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?) AND username != ?"),
+} as const;
+
 export function createMockDB(opts: {
   firstResults?: Record<string, unknown>;
   firstBySQL?: Record<string, Record<string, unknown> | null>;
   runChanges?: number;
 } = {}) {
   const calls: { sql: string; bindings: unknown[] }[] = [];
+  const firstBySQL = opts.firstBySQL
+    ? Object.fromEntries(Object.entries(opts.firstBySQL).map(([sql, result]) => [normalizeSql(sql), result]))
+    : null;
   const resolveFirst = (sql: string) => {
-    if (opts.firstBySQL) {
-      for (const [pattern, result] of Object.entries(opts.firstBySQL)) {
-        if (sql.includes(pattern)) return result;
-      }
+    if (firstBySQL) {
+      const normalizedSql = normalizeSql(sql);
+      if (normalizedSql in firstBySQL) return firstBySQL[normalizedSql] ?? null;
     }
     return opts.firstResults ?? null;
   };
@@ -65,11 +78,17 @@ export function profileWithHash(hash: string) {
   return { ...BASE_PROFILE, license_hash: hash };
 }
 
+function withoutLicenseHash<T extends { license_hash: string | null }>(row: T) {
+  const { license_hash, ...rest } = row;
+  return rest;
+}
+
 export function ownedMockDB(opts: { runChanges?: number } = {}) {
   return createMockDB({
     firstBySQL: {
-      "SELECT username": BASE_PROFILE,
-      "SELECT status": { status: "active" },
+      [ACCOUNT_TEST_SQL.getProfile]: withoutLicenseHash(BASE_PROFILE),
+      [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
+      [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
     },
     runChanges: opts.runChanges ?? 1,
   });

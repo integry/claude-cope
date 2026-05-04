@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi } from "vitest";
 import app from "../app";
-import { createMockDB, mockKV, postJSON, BASE_PROFILE, profileWithHash, ownedMockDB } from "./account.test-helpers";
+import { ACCOUNT_TEST_SQL, createMockDB, mockKV, postJSON, BASE_PROFILE, profileWithHash, ownedMockDB } from "./account.test-helpers";
 
 const GEN_BODY = { username: "alice", generatorId: "stackoverflow-copy-paster", amount: 1, licenseKeyHash: "hash" };
 
@@ -43,7 +43,7 @@ describe("POST /api/account/buy-generator", () => {
     expect(res.status).toBe(403);
   });
   it("returns 403 when license is revoked", async () => {
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "revoked" } } });
+    const { db } = createMockDB({ firstBySQL: { [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE, [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "revoked" } } });
     const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
     expect(res.status).toBe(403);
     expect(((await res.json()) as { error: string }).error).toContain("revoked");
@@ -292,7 +292,7 @@ describe("POST /api/account/update-alias", () => {
     expect(res.status).toBe(403);
   });
   it("returns 403 when license is revoked", async () => {
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "revoked" } } });
+    const { db } = createMockDB({ firstBySQL: { [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE, [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "revoked" } } });
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(403);
     expect(((await res.json()) as { error: string }).error).toContain("revoked");
@@ -304,7 +304,19 @@ describe("POST /api/account/update-alias", () => {
     expect(((await res.json()) as { error: string }).error).toContain("same as the current username");
   });
   it("succeeds with valid ownership and available alias", async () => {
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfile]: {
+          ...BASE_PROFILE,
+          username: "alice-new",
+          license_hash: undefined,
+        },
+        [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
+        [ACCOUNT_TEST_SQL.aliasTakenLookup]: null,
+      },
+      runChanges: 1,
+    });
     db.batch = vi.fn().mockResolvedValue([
       { meta: { changes: 1 } },
       { meta: { changes: 1 } },
@@ -319,13 +331,35 @@ describe("POST /api/account/update-alias", () => {
     expect((db.batch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toHaveLength(4);
   });
   it("returns 409 when alias is already taken", async () => {
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": { "1": 1 } }, runChanges: 1 });
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfile]: {
+          ...BASE_PROFILE,
+          license_hash: undefined,
+        },
+        [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
+        [ACCOUNT_TEST_SQL.aliasTakenLookup]: { "1": 1 },
+      },
+      runChanges: 1,
+    });
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "taken-name", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toContain("already taken");
   });
   it("returns 409 when UNIQUE constraint violation occurs on user_scores update", async () => {
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 1 });
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfile]: {
+          ...BASE_PROFILE,
+          license_hash: undefined,
+        },
+        [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
+        [ACCOUNT_TEST_SQL.aliasTakenLookup]: null,
+      },
+      runChanges: 1,
+    });
     db.batch = vi.fn().mockRejectedValue(new Error("UNIQUE constraint failed: user_scores.username"));
     const res = await postJSON("/api/account/update-alias", {
       username: "alice", newAlias: "alice-new", licenseKeyHash: "hash",
@@ -334,7 +368,17 @@ describe("POST /api/account/update-alias", () => {
     expect(((await res.json()) as { error: string }).error).toContain("already taken");
   });
   it("returns 429 when alias change limit is reached (D1 atomic claim returns 0 changes)", async () => {
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" } }, runChanges: 0 });
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfile]: {
+          ...BASE_PROFILE,
+          license_hash: undefined,
+        },
+        [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
+      },
+      runChanges: 0,
+    });
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(429);
     expect(((await res.json()) as { error: string }).error).toContain("limit reached");
@@ -343,7 +387,18 @@ describe("POST /api/account/update-alias", () => {
     )).toBe(true);
   });
   it("rolls back rate-limit token when alias DB update fails", async () => {
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": { "1": 1 } }, runChanges: 1 });
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfile]: {
+          ...BASE_PROFILE,
+          license_hash: undefined,
+        },
+        [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
+        [ACCOUNT_TEST_SQL.aliasTakenLookup]: { "1": 1 },
+      },
+      runChanges: 1,
+    });
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "taken-name", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
     const rollbackCalls = (db.prepare as ReturnType<typeof vi.fn>).mock.calls.filter(
@@ -352,7 +407,18 @@ describe("POST /api/account/update-alias", () => {
     expect(rollbackCalls.length).toBe(1);
   });
   it("returns 409 and guards secondary tables when user_scores update returns 0 rows (revoked license)", async () => {
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": null }, runChanges: 0 });
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfile]: {
+          ...BASE_PROFILE,
+          license_hash: undefined,
+        },
+        [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
+        [ACCOUNT_TEST_SQL.aliasTakenLookup]: null,
+      },
+      runChanges: 0,
+    });
     const originalPrepare = db.prepare as ReturnType<typeof vi.fn>;
     db.prepare = vi.fn((sql: string) => {
       const base = originalPrepare(sql);
@@ -417,7 +483,7 @@ describe("GET /api/account/me", () => {
   });
   it("returns the mapped free profile when the session username exists", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": { ...BASE_PROFILE, license_hash: null } } });
+    const { db } = createMockDB({ firstBySQL: { [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, license_hash: null } } });
     const res = await meReq({ QUOTA_KV: kv, DB: db });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
@@ -432,7 +498,7 @@ describe("GET /api/account/me", () => {
   });
   it("restores a username-only session even before a user_scores row exists", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
-    const { db } = createMockDB({ firstBySQL: { "SELECT username": null } });
+    const { db } = createMockDB({ firstBySQL: { [ACCOUNT_TEST_SQL.getProfileRow]: null } });
     const res = await meReq({ QUOTA_KV: kv, DB: db });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
@@ -469,7 +535,7 @@ describe("GET /api/account/me", () => {
     });
     expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
   });
-  it("prefers rename redirects over a reclaimed stale username", async () => {
+  it("prefers the current session username when it still maps to a valid profile", async () => {
     const kv = mockKV({
       "session_user:test-session": "alice",
       "renamed:alice": "bob",
@@ -493,9 +559,10 @@ describe("GET /api/account/me", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       found: true,
-      username: "bob",
-      profile: { username: "bob" },
+      username: "alice",
+      profile: { username: "alice", current_td: 5, total_td: 5 },
     });
+    expect(kv.put).not.toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
   });
   it("collapses multi-hop rename chains to the final alias", async () => {
     const kv = mockKV({
