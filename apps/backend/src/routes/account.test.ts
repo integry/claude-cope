@@ -338,6 +338,9 @@ describe("POST /api/account/update-alias", () => {
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(429);
     expect(((await res.json()) as { error: string }).error).toContain("limit reached");
+    expect((db.prepare as ReturnType<typeof vi.fn>).mock.calls.some(
+      (args: unknown[]) => typeof args[0] === "string" && args[0].includes("DELETE FROM alias_rate_limits"),
+    )).toBe(true);
   });
   it("rolls back rate-limit token when alias DB update fails", async () => {
     const { db } = createMockDB({ firstBySQL: { "SELECT username": BASE_PROFILE, "SELECT status": { status: "active" }, "LOWER(username)": { "1": 1 } }, runChanges: 1 });
@@ -537,13 +540,9 @@ describe("GET /api/account/me", () => {
     };
     const res = await meReq({ QUOTA_KV: kv, DB: db });
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({
-      found: true,
-      username: "bob",
-      isPro: false,
-      profile: null,
-    });
+    expect(await res.json()).toEqual({ found: false });
     expect(kv.put).not.toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
+    expect(kv.delete).toHaveBeenCalledWith("session_user:test-session");
   });
   it("repairs rename chains longer than five hops", async () => {
     const kv = mockKV({
@@ -577,6 +576,7 @@ describe("GET /api/account/me", () => {
     });
     expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "grace", expect.any(Object));
     expect(kv.put).toHaveBeenCalledWith("renamed:alice", "grace", expect.any(Object));
+    expect(kv.put).toHaveBeenCalledWith("renamed:bob", "grace", expect.any(Object));
   });
   it("marks revoked licensed users as non-pro in the /me payload", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });

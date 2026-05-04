@@ -196,4 +196,81 @@ describe("POST /api/account/sync", () => {
     const licenseInserts = calls.filter(c => c.sql.includes("INSERT INTO licenses"));
     expect(licenseInserts.length).toBeGreaterThan(0);
   });
+
+  it("rolls back license activation when KV provisioning fails", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => {
+          calls.push({ sql, bindings: args });
+          return {
+            first: vi.fn().mockResolvedValue(
+              sql.includes("SELECT status, last_activated_at FROM licenses") ? null :
+              sql.includes("WHERE license_hash = ?") ? PROFILE_ROW :
+              null,
+            ),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          };
+        }),
+        first: vi.fn().mockResolvedValue(null),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        all: vi.fn().mockResolvedValue({ results: [] }),
+      })),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
+    const kv = {
+      get: vi.fn(() => Promise.resolve(null)),
+      put: vi.fn((key: string) => (
+        key.startsWith("polar:")
+          ? Promise.reject(new Error("kv unavailable"))
+          : Promise.resolve()
+      )),
+      delete: vi.fn(() => Promise.resolve()),
+    };
+
+    const res = await postSync({ licenseKey: "COPE-TEST" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+
+    expect(res.status).toBe(500);
+    expect(calls.some((c) => c.sql.includes("DELETE FROM licenses"))).toBe(true);
+    expect((kv.delete as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0])).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^polar:/),
+        expect.stringMatching(/^polar_revoked:/),
+        expect.stringMatching(/^polar_id:/),
+      ]),
+    );
+  });
+
+  it("still succeeds when session binding fails after provisioning", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const { db } = createMockDB({
+      firstBySQL: {
+        "license_hash =": PROFILE_ROW,
+        "SELECT status, last_activated_at FROM licenses": null,
+      },
+    });
+    const kv = {
+      get: vi.fn(() => Promise.resolve(null)),
+      put: vi.fn((key: string) => (
+        key === "session_user:test-session"
+          ? Promise.reject(new Error("session kv unavailable"))
+          : Promise.resolve()
+      )),
+      delete: vi.fn(() => Promise.resolve()),
+    };
+
+    const res = await postSync({ licenseKey: "COPE-TEST" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+
+    expect(res.status).toBe(200);
+    expect((await res.json() as { success: boolean }).success).toBe(true);
+  });
 });

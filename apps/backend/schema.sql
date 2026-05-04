@@ -67,6 +67,9 @@ CREATE INDEX IF NOT EXISTS idx_user_scores_total_td
     ON user_scores (total_td DESC);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_username_nocase
+    -- Deployment note: this will fail if an environment already contains
+    -- usernames that differ only by case. That is acceptable during current
+    -- development, but mixed-case duplicates must be cleaned up before rollout.
     ON user_scores (LOWER(username));
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_license_hash
@@ -124,6 +127,8 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_model
     ON usage_logs (model, hour DESC);
 
 -- Atomic alias-change rate limiting (replaces KV-based get/put which was raceable)
+-- The app opportunistically prunes rows older than 30 days during alias checks
+-- so this table only retains a small rolling window of enforcement state.
 CREATE TABLE IF NOT EXISTS alias_rate_limits (
     license_key_hash TEXT NOT NULL,
     change_date TEXT NOT NULL,

@@ -208,6 +208,9 @@ export function recordUsage(
     );
   } else if (!isOwnershipSpoofed) {
     queries.push(
+      // Revoked licensed profiles are intentionally allowed through this
+      // free-tier branch so they keep local progress after losing paid status,
+      // but the WHERE clause prevents writes onto someone else's active profile.
       db.prepare(
         `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, credits_used)
          VALUES (?, ?, ?, ?, ?, 1)

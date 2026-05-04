@@ -204,6 +204,22 @@ async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: numbe
   }
 }
 
+async function rollbackLicenseActivation(
+  db: D1Database,
+  hash: string,
+  previousLicense: { status: string; last_activated_at: string | null } | null,
+): Promise<void> {
+  if (previousLicense) {
+    await db
+      .prepare("UPDATE licenses SET status = ?, last_activated_at = COALESCE(?, last_activated_at) WHERE key_hash = ?")
+      .bind(previousLicense.status, previousLicense.last_activated_at, hash)
+      .run();
+    return;
+  }
+
+  await db.prepare("DELETE FROM licenses WHERE key_hash = ?").bind(hash).run();
+}
+
 export async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?: { POLAR_ACCESS_TOKEN?: string; POLAR_ORGANIZATION_ID?: string; QUOTA_KV?: KVNamespace; USAGE_KV?: KVNamespace; DB?: D1Database }; json: (data: unknown, status?: number) => Response }) {
   const body = await c.req.json<SyncBody>();
   if (!body.licenseKey) {
@@ -240,17 +256,60 @@ export async function commitSyncSideEffects(
   opts: { validationId?: string; proInitialQuota: number },
 ) {
   const { db, kv, hash } = deps;
-  await db
-    .prepare(
-      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
-    )
-    .bind(hash)
-    .run();
+  const polarKey = `polar:${hash}`;
+  const revokedKey = `polar_revoked:${hash}`;
+  const polarIdKey = `polar_id:${hash}`;
+  const [previousLicense, previousQuota, previousRevokedQuota, previousPolarId] = await Promise.all([
+    db
+      .prepare("SELECT status, last_activated_at FROM licenses WHERE key_hash = ?")
+      .bind(hash)
+      .first<{ status: string; last_activated_at: string | null }>(),
+    kv.get(polarKey),
+    kv.get(revokedKey),
+    kv.get(polarIdKey),
+  ]);
 
-  await ensureQuota(kv, hash, opts.proInitialQuota);
+  try {
+    await db
+      .prepare(
+        "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
+      )
+      .bind(hash)
+      .run();
 
-  if (opts.validationId) {
-    await kv.put(`polar_id:${hash}`, opts.validationId);
+    await ensureQuota(kv, hash, opts.proInitialQuota);
+
+    if (opts.validationId) {
+      await kv.put(polarIdKey, opts.validationId);
+    }
+  } catch (err: unknown) {
+    try {
+      await rollbackLicenseActivation(db, hash, previousLicense);
+
+      if (previousQuota === null) {
+        await kv.delete(polarKey);
+      } else {
+        await kv.put(polarKey, previousQuota);
+      }
+
+      if (previousRevokedQuota === null) {
+        await kv.delete(revokedKey);
+      } else {
+        await kv.put(revokedKey, previousRevokedQuota);
+      }
+
+      if (previousPolarId === null) {
+        await kv.delete(polarIdKey);
+      } else {
+        await kv.put(polarIdKey, previousPolarId);
+      }
+    } catch (rollbackErr: unknown) {
+      console.warn(
+        `[account/sync] failed to rollback side effects for ${hash.slice(0, 8)}:`,
+        rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+      );
+    }
+    throw err;
   }
 }
 
@@ -280,6 +339,10 @@ export function validateAlias(raw: string): { alias: string; error?: undefined }
 export async function checkAliasRateLimit(
   db: D1Database, licenseKeyHash: string, limit: number,
 ): Promise<{ allowed: boolean }> {
+  await db
+    .prepare("DELETE FROM alias_rate_limits WHERE change_date < date('now', '-30 days')")
+    .run();
+
   // Atomic check-and-claim via D1's ACID guarantees.
   // INSERT creates count=1 on first change of the day; ON CONFLICT atomically
   // increments only while the count is below the limit. Two concurrent requests
