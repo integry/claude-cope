@@ -511,6 +511,23 @@ describe("GET /api/account/me", () => {
     expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "carol", expect.any(Object));
     expect(kv.put).toHaveBeenCalledWith("renamed:alice", "carol", expect.any(Object));
   });
+  it("does not repair session mappings to a renamed target without a backing profile", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+    });
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn(() => ({
+          first: vi.fn().mockResolvedValue(sql.includes("licenses") ? null : null),
+        })),
+      })),
+    };
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ found: false });
+    expect(kv.put).not.toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
+  });
   it("repairs rename chains longer than five hops", async () => {
     const kv = mockKV({
       "session_user:test-session": "alice",

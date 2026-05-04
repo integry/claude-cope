@@ -74,9 +74,14 @@ async function resolveSessionProfileRow(opts: {
     console.warn(`[account/me] rename chain hop cap reached for ${originalUsername}`);
   }
 
-  const row = await getProfileRow(db, current);
+  let row = await getProfileRow(db, current);
 
-  if (current !== originalUsername) {
+  if (!row && current !== originalUsername) {
+    row = await getProfileRow(db, originalUsername);
+    current = row ? originalUsername : current;
+  }
+
+  if (row && current !== originalUsername) {
     try {
       await kv.put(`session_user:${sessionId}`, current, { expirationTtl: 60 * 60 * 24 * 365 });
       await kv.put(`renamed:${originalUsername}`, current, { expirationTtl: 60 * 60 * 24 * 30 });
@@ -142,6 +147,7 @@ account.get("/me", async (c) => {
   const resolved = await resolveSessionProfileRow({ db, kv, sessionId, username });
   username = resolved.username;
   const row = resolved.row;
+  if (!row) return c.json({ found: false });
 
   const { isPro, quotaPercent, profile, revoked } = await buildMePayload({ row, db, kv, env: c.env, sessionId });
 

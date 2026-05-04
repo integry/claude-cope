@@ -130,7 +130,7 @@ describe("POST /api/score", () => {
     expect(json.total_td).toBeLessThanOrEqual(1100);
   });
 
-  it("flags suspicious scores as DevTools Hacker", async () => {
+  it("keeps free users capped even when their score claim is suspicious", async () => {
     const { db } = makeDB({ total_td: 2000, current_td: 1500 });
     const res = await postScore(db, {
       username: "cheater",
@@ -141,7 +141,7 @@ describe("POST /api/score", () => {
     });
     expect(res.status).toBe(200);
     const json = await res.json() as { corporate_rank: string };
-    expect(json.corporate_rank).toBe("🤡 DevTools Hacker");
+    expect(json.corporate_rank).toBe("Junior Code Monkey");
   });
 
   it("caps rank to Junior Code Monkey for free users regardless of TD", async () => {

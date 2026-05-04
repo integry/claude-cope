@@ -138,7 +138,10 @@ function computeTimeCap(existing: { last_sync_time: string } | null, serverTotal
 }
 
 function resolveRankAndFlags(claimedTotal: number, serverTotal: number): string {
-  if (claimedTotal > serverTotal * 2 && serverTotal > 1000) return "🤡 DevTools Hacker";
+  void claimedTotal;
+  void serverTotal;
+  // Free-tier users are always rank-capped, even when their claim is suspicious.
+  // Anti-cheat still clamps their score; the paid-only rank ladder remains closed.
   return FREE_TIER_RANK_CAP;
 }
 
