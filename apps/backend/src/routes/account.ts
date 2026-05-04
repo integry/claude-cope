@@ -21,6 +21,7 @@ type Env = {
   };
 };
 const SHILL_CREDIT = 5;
+const MAX_SESSION_RENAME_HOPS = 32;
 
 const account = new Hono<Env>();
 
@@ -44,6 +45,49 @@ async function buildMePayload(opts: {
     : null;
   const revoked = Boolean(rawLicenseHash && !licenseActive);
   return { isPro, quotaPercent, profile, revoked };
+}
+
+async function resolveSessionProfileRow(opts: {
+  db: D1Database | undefined;
+  kv: KVNamespace;
+  sessionId: string;
+  username: string;
+}) {
+  const { db, kv, sessionId } = opts;
+  const originalUsername = opts.username;
+  if (!db) return { username: originalUsername, row: null };
+
+  let current = originalUsername;
+  let hops = 0;
+  const seen = new Set([originalUsername]);
+
+  while (hops < MAX_SESSION_RENAME_HOPS) {
+    const renamedTo = await kv.get(`renamed:${current}`);
+    if (!renamedTo || seen.has(renamedTo)) break;
+    current = renamedTo;
+    seen.add(current);
+    hops += 1;
+  }
+
+  if (hops === MAX_SESSION_RENAME_HOPS) {
+    console.warn(`[account/me] rename chain hop cap reached for ${originalUsername}`);
+  }
+
+  const row = await getProfileRow(db, current);
+
+  if (current !== originalUsername) {
+    try {
+      await kv.put(`session_user:${sessionId}`, current, { expirationTtl: 60 * 60 * 24 * 365 });
+      await kv.put(`renamed:${originalUsername}`, current, { expirationTtl: 60 * 60 * 24 * 30 });
+    } catch (err: unknown) {
+      console.warn(
+        `[account/me] failed to repair session rename ${originalUsername} -> ${current}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  return { username: current, row };
 }
 
 account.post("/sync", async (c) => {
@@ -94,35 +138,9 @@ account.get("/me", async (c) => {
   if (!username) return c.json({ found: false });
 
   const db = c.env?.DB;
-  let row = db ? await getProfileRow(db, username) : null;
-
-  // If no DB row exists, check if the username was renamed by an alias change
-  // in another session. Follow the redirect chain (up to 5 hops to handle
-  // multiple renames like alice->bob->carol) and repair this session's mapping.
-  // When we resolve the chain, we also write a shortcut redirect from the
-  // original stale username directly to the final destination. This collapses
-  // the chain so future lookups from other sessions only need 1 hop,
-  // regardless of how many lifetime renames have occurred.
-  if (!row && db) {
-    const originalUsername = username;
-    let current = username;
-    for (let i = 0; i < 5 && !row; i++) {
-      const renamedTo = await kv.get(`renamed:${current}`);
-      if (!renamedTo) break;
-      row = await getProfileRow(db, renamedTo);
-      if (row) {
-        username = renamedTo;
-        await kv.put(`session_user:${sessionId}`, renamedTo, { expirationTtl: 60 * 60 * 24 * 365 });
-        // Collapse multi-hop chains: write a direct shortcut from the
-        // original stale username to the final target so that other sessions
-        // (or this one after cookie reset) resolve in a single KV lookup.
-        if (originalUsername !== current) {
-          await kv.put(`renamed:${originalUsername}`, renamedTo, { expirationTtl: 60 * 60 * 24 * 30 });
-        }
-      }
-      current = renamedTo;
-    }
-  }
+  const resolved = await resolveSessionProfileRow({ db, kv, sessionId, username });
+  username = resolved.username;
+  const row = resolved.row;
 
   const { isPro, quotaPercent, profile, revoked } = await buildMePayload({ row, db, kv, env: c.env, sessionId });
 
@@ -454,25 +472,34 @@ account.post("/update-alias", async (c) => {
     return c.json({ error: dbResult.error }, dbResult.status);
   }
 
-  // The DB rename succeeded — KV session updates and profile fetch are
-  // best-effort. If they fail the alias is already changed, so return
-  // success with whatever profile data we can gather.
   const sessionId = c.get("sessionId");
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
   let updated: Awaited<ReturnType<typeof getProfile>> = null;
-  try {
-    if (kv && sessionId) {
+  if (kv && sessionId) {
+    try {
       await kv.put(`session_user:${sessionId}`, alias, { expirationTtl: 60 * 60 * 24 * 365 });
       await kv.put(`username_session:${alias}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 });
       await kv.delete(`username_session:${body.username}`);
       // Store a redirect so other active sessions following the old username
       // can discover the rename via /me and repair their own session mapping.
       await kv.put(`renamed:${body.username}`, alias, { expirationTtl: 60 * 60 * 24 * 30 });
+    } catch (err: unknown) {
+      // TODO: Once accounts have immutable IDs, make this repair path durable
+      // instead of relying on best-effort username redirects.
+      console.warn(
+        `[account/update-alias] KV session repair failed for ${body.username} -> ${alias}:`,
+        err instanceof Error ? err.message : err,
+      );
     }
+  }
+
+  try {
     updated = await getProfile(db, alias);
-  } catch {
-    // KV or profile fetch failed after a successful DB rename.
-    // Return success so the client knows the alias changed.
+  } catch (err: unknown) {
+    console.warn(
+      `[account/update-alias] profile fetch failed after renaming ${body.username} -> ${alias}:`,
+      err instanceof Error ? err.message : err,
+    );
   }
   return c.json({ success: true, profile: updated });
 });

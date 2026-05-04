@@ -1,4 +1,4 @@
-import { getProfile, getProfileByLicenseHash, getProfileRow, resolveRank } from "../utils/profile";
+import { getProfile, getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank } from "../utils/profile";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey } from "../utils/quota";
 
@@ -160,12 +160,9 @@ export async function verifyOwnership(db: D1Database, username: string, licenseK
     return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
   }
 
-  // Verify the license is still active in the local licenses table.
-  const license = await db
-    .prepare("SELECT status FROM licenses WHERE key_hash = ?")
-    .bind(licenseKeyHash)
-    .first<{ status: string }>();
-  if (!license || license.status !== "active") {
+  // Keep paid mutation routes aligned with /me and score gating semantics:
+  // stale "active" rows are treated as revoked until refreshed.
+  if (!(await isLicenseActive(db, licenseKeyHash))) {
     return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
   }
 

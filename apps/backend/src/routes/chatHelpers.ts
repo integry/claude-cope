@@ -215,6 +215,7 @@ export function recordUsage(
          ON CONFLICT(username) DO UPDATE SET
            total_td = total_td + ?,
            current_td = current_td + ?,
+           corporate_rank = ?,
            credits_used = credits_used + 1,
            updated_at = datetime('now')
          WHERE license_hash IS NULL OR license_hash = ?`,
@@ -226,6 +227,7 @@ export function recordUsage(
         params.country,
         params.tdAwarded,
         params.tdAwarded,
+        FREE_TIER_RANK_CAP,
         params.revokedProfileLicenseHash ?? "",
       ).run(),
     );

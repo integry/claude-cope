@@ -48,6 +48,24 @@ describe("POST /api/account/buy-generator", () => {
     expect(res.status).toBe(403);
     expect(((await res.json()) as { error: string }).error).toContain("revoked");
   });
+  it("returns 403 when license row is stale even if status is still active", async () => {
+    const staleDate = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString();
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn(() => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? { status: "active", last_activated_at: staleDate }
+              : BASE_PROFILE,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+    const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toContain("revoked");
+  });
   it("succeeds with valid ownership and sufficient TD", async () => {
     const { db } = ownedMockDB();
     const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
@@ -436,6 +454,34 @@ describe("GET /api/account/me", () => {
     });
     expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
   });
+  it("prefers rename redirects over a reclaimed stale username", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+    });
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((username: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("licenses")
+              ? null
+              : username === "alice"
+                ? { ...BASE_PROFILE, username: "alice", current_td: 5, total_td: 5, license_hash: null }
+                : username === "bob"
+                  ? { ...BASE_PROFILE, username: "bob", current_td: 1000, total_td: 1000, license_hash: null }
+                  : null,
+          ),
+        })),
+      })),
+    };
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "bob",
+      profile: { username: "bob" },
+    });
+  });
   it("collapses multi-hop rename chains to the final alias", async () => {
     const kv = mockKV({
       "session_user:test-session": "alice",
@@ -464,6 +510,39 @@ describe("GET /api/account/me", () => {
     });
     expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "carol", expect.any(Object));
     expect(kv.put).toHaveBeenCalledWith("renamed:alice", "carol", expect.any(Object));
+  });
+  it("repairs rename chains longer than five hops", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+      "renamed:bob": "carol",
+      "renamed:carol": "dave",
+      "renamed:dave": "erin",
+      "renamed:erin": "frank",
+      "renamed:frank": "grace",
+    });
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((username: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("licenses")
+              ? null
+              : username === "grace"
+                ? { ...BASE_PROFILE, username: "grace", license_hash: null }
+                : null,
+          ),
+        })),
+      })),
+    };
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "grace",
+      profile: { username: "grace" },
+    });
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "grace", expect.any(Object));
+    expect(kv.put).toHaveBeenCalledWith("renamed:alice", "grace", expect.any(Object));
   });
   it("marks revoked licensed users as non-pro in the /me payload", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
