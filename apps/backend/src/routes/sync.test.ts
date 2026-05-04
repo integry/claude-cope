@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock validatePolarKey before importing app
