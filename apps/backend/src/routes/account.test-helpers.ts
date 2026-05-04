@@ -79,8 +79,9 @@ export function profileWithHash(hash: string) {
 }
 
 function withoutLicenseHash<T extends { license_hash: string | null }>(row: T) {
-  const { license_hash, ...rest } = row;
-  return rest;
+  const copy = { ...row };
+  delete copy.license_hash;
+  return copy;
 }
 
 export function ownedMockDB(opts: { runChanges?: number } = {}) {
