@@ -119,7 +119,7 @@ account.get("/me", async (c) => {
   if (!username) return c.json({ found: false });
   const db = c.env?.DB;
   const row = db ? await getProfileRow(db, username) : null;
-  const rawLicenseHash = row && "license_hash" in row ? row.license_hash : null;
+  const rawLicenseHash = row?.license_hash ?? null;
   const licenseActive = rawLicenseHash && db ? await isLicenseActive(db, rawLicenseHash) : false;
   const isPro = Boolean(rawLicenseHash && licenseActive);
   const limits = getQuotaLimits(c.env);

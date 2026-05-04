@@ -17,6 +17,10 @@ interface UserScoreRow {
   td_multiplier: number;
 }
 
+interface UserScoreWithLicenseHashRow extends UserScoreRow {
+  license_hash: string | null;
+}
+
 function parseJSON<T>(raw: string, fallback: T): T {
   try {
     return JSON.parse(raw) as T;
@@ -79,11 +83,11 @@ export async function getProfileByLicenseHash(db: D1Database, hash: string): Pro
   return row ? rowToProfile(row) : null;
 }
 
-export async function getProfileRow(db: D1Database, username: string): Promise<UserScoreRow | null> {
+export async function getProfileRow(db: D1Database, username: string): Promise<UserScoreWithLicenseHashRow | null> {
   return db
     .prepare(`SELECT ${PROFILE_COLUMNS}, license_hash FROM user_scores WHERE username = ?`)
     .bind(username)
-    .first<UserScoreRow & { license_hash: string | null }>();
+    .first<UserScoreWithLicenseHashRow>();
 }
 
 /** Maximum age (ms) before a license is considered stale and hard-rejected.
