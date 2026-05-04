@@ -105,7 +105,7 @@ describe("POST /api/account/sync", () => {
     // Override prepare to track SQL-aware routing
     db.prepare = vi.fn((sql: string) => {
       const isProfileByHash = sql.includes("WHERE license_hash = ?");
-      const isUsernameCheck = sql.includes("WHERE username = ?");
+      const isUsernameCheck = sql.includes("WHERE LOWER(username) = LOWER(?)");
       return {
         bind: vi.fn(() => {
           return {
@@ -137,7 +137,7 @@ describe("POST /api/account/sync", () => {
     const db = {
       prepare: vi.fn((sql: string) => {
         const isProfileByHash = sql.includes("WHERE license_hash = ?");
-        const isUsernameCheck = sql.includes("WHERE username = ?");
+        const isUsernameCheck = sql.includes("WHERE LOWER(username) = LOWER(?)");
         return {
           bind: vi.fn((...args: unknown[]) => {
             calls.push({ sql, bindings: args });
@@ -164,8 +164,7 @@ describe("POST /api/account/sync", () => {
       DB: db, QUOTA_KV: kv,
       POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
     });
-    // The request should fail (username taken by different license)
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBe(409);
     // The licenses INSERT should NOT have been called (no orphaned side effects)
     const licenseInserts = calls.filter(c => c.sql.includes("INSERT INTO licenses"));
     expect(licenseInserts).toHaveLength(0);

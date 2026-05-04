@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import app from "../app";
 
+const TEST_ADMIN_KEY = "test-admin-key";
+
 function createMockDB(opts: {
   total?: number;
   rows?: Record<string, unknown>[];
@@ -26,7 +28,9 @@ function createMockDB(opts: {
 }
 
 function getLicenses(env: Record<string, unknown>, query = "") {
-  return app.request(`/api/licenses${query}`, {}, { ALLOWED_ORIGINS: "http://localhost:5174", ...env });
+  return app.request(`/api/licenses${query}`, {
+    headers: { Authorization: `Bearer ${TEST_ADMIN_KEY}` },
+  }, { ALLOWED_ORIGINS: "http://localhost:5174", ADMIN_API_KEY: TEST_ADMIN_KEY, ...env });
 }
 
 describe("GET /api/licenses", () => {
