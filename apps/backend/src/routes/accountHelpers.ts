@@ -3,6 +3,7 @@ import { getProfile, getProfileByLicenseHash, getProfileRow, resolveRank } from 
 import { getQuotaLimits } from "../utils/quota";
 
 export type PolarCheckout = {
+  id?: string;
   organization_id?: string;
   status?: string;
   customer_id?: string | null;
@@ -73,6 +74,7 @@ export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreat
 }
 
 const LICENSE_KEY_PAGE_SIZE = 100;
+const CHECKOUT_PAGE_SIZE = 100;
 
 export async function fetchLicenseKeys(
   customerId: string,
@@ -132,6 +134,55 @@ export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: s
   const customerId = checkout.customer_id || checkout.customer?.id;
   if (!customerId) return { error: "Checkout has no associated customer", status: 500 };
   return { customerId, createdAt: checkout.created_at };
+}
+
+export async function fetchNextCheckoutCreatedAt(
+  customerId: string,
+  organizationId: string,
+  accessToken: string,
+  opts: { checkoutId: string; checkoutCreatedAt: string },
+): Promise<{ createdAt: string | null } | { error: string; status: ContentfulStatusCode }> {
+  const checkoutTime = new Date(opts.checkoutCreatedAt).getTime();
+  if (!Number.isFinite(checkoutTime)) {
+    return { error: "Checkout is missing creation timestamp — cannot verify license ownership", status: 500 };
+  }
+
+  let candidate: string | null = null;
+  for (let page = 1; ; page++) {
+    let resp: Response;
+    try {
+      const params = new URLSearchParams({
+        customer_id: customerId,
+        organization_id: organizationId,
+        status: "succeeded",
+        limit: String(CHECKOUT_PAGE_SIZE),
+        page: String(page),
+        sorting: "-created_at",
+      });
+      resp = await fetch(`https://api.polar.sh/v1/checkouts/?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+    } catch {
+      return { error: "Unable to reach Polar — please try again", status: 502 };
+    }
+    if (!resp.ok) return { error: "Failed to list customer checkouts", status: 502 };
+
+    const data = await resp.json() as { items?: PolarCheckout[] };
+    const items = data.items ?? [];
+    for (const item of items) {
+      if (!item?.created_at || item.id === opts.checkoutId) continue;
+      const itemTime = new Date(item.created_at).getTime();
+      if (!Number.isFinite(itemTime)) continue;
+      if (itemTime > checkoutTime) {
+        candidate = item.created_at;
+      } else if (candidate) {
+        return { createdAt: candidate };
+      }
+    }
+    if (items.length < CHECKOUT_PAGE_SIZE) break;
+  }
+
+  return { createdAt: candidate };
 }
 
 export type CheckoutCache = {
@@ -380,20 +431,20 @@ export async function claimCheckoutForSession(
   db: D1Database,
   checkoutId: string,
   sessionId: string,
-  opts: { checkoutCreatedAt?: string; customerHash?: string } = {},
+  opts: { checkoutCreatedAt?: string } = {},
 ): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
-  const { checkoutCreatedAt, customerHash } = opts;
+  const { checkoutCreatedAt } = opts;
   try {
     const result = await db
       .prepare(
         "INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at, customer_hash) VALUES (?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING",
       )
-      .bind(checkoutId, sessionId, checkoutCreatedAt ?? null, customerHash ?? null)
+      .bind(checkoutId, sessionId, checkoutCreatedAt ?? null, null)
       .run();
 
     if (result.meta.changes) {
       // Opportunistic cleanup: remove claims older than 30 days to prevent
-      // unbounded table growth. Best-effort — failures are silently ignored.
+      // unbounded table growth. Failures here should not block a successful claim.
       try {
         await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run();
       } catch {
@@ -421,18 +472,25 @@ export async function claimCheckoutForSession(
   }
 }
 
-export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys: string[]): Promise<void> {
+export async function storeClaimedKeys(
+  db: D1Database,
+  checkoutId: string,
+  keys: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     await db.prepare("UPDATE checkout_claims SET claimed_keys = ? WHERE checkout_id = ?")
       .bind(JSON.stringify(keys), checkoutId)
       .run();
+    return { ok: true };
   } catch {
-    // Best-effort: claim succeeded, keys were fetched — a failure to record
-    // them only affects future cross-checkout dedup, not this request.
+    return { ok: false, error: "Unable to record claimed license keys — please try again" };
   }
 }
 
-export async function getAlreadyClaimedKeys(db: D1Database, excludeCheckoutId: string): Promise<Set<string>> {
+export async function getAlreadyClaimedKeys(
+  db: D1Database,
+  excludeCheckoutId: string,
+): Promise<{ ok: true; keys: Set<string> } | { ok: false; error: string }> {
   const result = new Set<string>();
   try {
     const rows = await db
@@ -447,28 +505,9 @@ export async function getAlreadyClaimedKeys(db: D1Database, excludeCheckoutId: s
         // Skip malformed entries
       }
     }
+    return { ok: true, keys: result };
   } catch {
-    // If the table/column doesn't exist, return empty — dedup is best-effort.
-  }
-  return result;
-}
-
-export async function getNextCheckoutTime(
-  db: D1Database,
-  excludeCheckoutId: string,
-  checkoutCreatedAt: string,
-  customerHash: string,
-): Promise<string | null> {
-  try {
-    const row = await db
-      .prepare(
-        "SELECT checkout_created_at FROM checkout_claims WHERE checkout_id != ? AND customer_hash = ? AND checkout_created_at > ? AND checkout_created_at IS NOT NULL ORDER BY checkout_created_at ASC LIMIT 1",
-      )
-      .bind(excludeCheckoutId, customerHash, checkoutCreatedAt)
-      .first<{ checkout_created_at: string }>();
-    return row?.checkout_created_at ?? null;
-  } catch {
-    return null;
+    return { ok: false, error: "Unable to verify previously claimed license keys — please try again" };
   }
 }
 

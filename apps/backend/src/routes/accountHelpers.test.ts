@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchLicenseKeys, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache } from "./accountHelpers";
+import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
 
 describe("pickAllLicenseKeys", () => {
@@ -191,6 +191,46 @@ describe("fetchLicenseKeys", () => {
     const result = await fetchLicenseKeys("cust", "org", "tok", { createdAt: "2026-01-02T00:00:00Z" });
     expect("keys" in result && result.keys).toEqual(["TARGET-1", "TARGET-2"]);
     expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe("fetchNextCheckoutCreatedAt", () => {
+  const origFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+  });
+
+  it("finds the next succeeded checkout even when the later purchase has not been claimed locally", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      items: [
+        { id: "co_b", created_at: "2026-01-02T00:05:00Z", status: "succeeded" },
+        { id: "co_a", created_at: "2026-01-02T00:00:00Z", status: "succeeded" },
+      ],
+    }))) as typeof fetch;
+
+    const result = await fetchNextCheckoutCreatedAt("cust", "org", "tok", {
+      checkoutId: "co_a",
+      checkoutCreatedAt: "2026-01-02T00:00:00Z",
+    });
+
+    expect(result).toEqual({ createdAt: "2026-01-02T00:05:00Z" });
+  });
+
+  it("returns null when there is no later checkout", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      items: [
+        { id: "co_a", created_at: "2026-01-02T00:00:00Z", status: "succeeded" },
+        { id: "co_old", created_at: "2026-01-01T23:55:00Z", status: "succeeded" },
+      ],
+    }))) as typeof fetch;
+
+    const result = await fetchNextCheckoutCreatedAt("cust", "org", "tok", {
+      checkoutId: "co_a",
+      checkoutCreatedAt: "2026-01-02T00:00:00Z",
+    });
+
+    expect(result).toEqual({ createdAt: null });
   });
 });
 

@@ -3,7 +3,7 @@ import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, fetchLicenseKeys, fetchCheckoutCustomerId, parseCheckoutCache, claimCheckoutForSession, storeClaimedKeys, getAlreadyClaimedKeys, getNextCheckoutTime } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, storeClaimedKeys, getAlreadyClaimedKeys } from "./accountHelpers";
 import type { SyncBody, CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -111,21 +111,30 @@ account.post("/checkout-license", async (c) => {
 
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
-  const customerHash = await hashKey(result.customerId);
-  const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt: result.createdAt, customerHash });
+  const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt: result.createdAt });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
 
-  const nextCheckoutAt = await getNextCheckoutTime(db, checkoutId, result.createdAt, customerHash);
-  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: result.createdAt, nextCheckoutCreatedAt: nextCheckoutAt ?? undefined });
+  const nextCheckout = await fetchNextCheckoutCreatedAt(result.customerId, organizationId, accessToken, {
+    checkoutId,
+    checkoutCreatedAt: result.createdAt,
+  });
+  if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
+  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, {
+    createdAt: result.createdAt,
+    nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined,
+  });
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
 
-  const alreadyClaimedKeys = await getAlreadyClaimedKeys(db, checkoutId);
-  const allKeyStrings = filterCheckoutKeys(lkResult.keys, alreadyClaimedKeys);
+  const alreadyClaimed = await getAlreadyClaimedKeys(db, checkoutId);
+  if (!alreadyClaimed.ok) return c.json({ error: alreadyClaimed.error }, 503);
+
+  const allKeyStrings = filterCheckoutKeys(lkResult.keys, alreadyClaimed.keys);
   if (!allKeyStrings.length) {
     return c.json({ error: "These license keys were already claimed by another checkout — please retry in a few seconds" }, 409);
   }
 
-  await storeClaimedKeys(db, checkoutId, allKeyStrings);
+  const stored = await storeClaimedKeys(db, checkoutId, allKeyStrings);
+  if (!stored.ok) return c.json({ error: stored.error }, 503);
   if (kv) {
     const cachePayload: CheckoutCache = { keys: allKeyStrings, sessionId };
     await kv.put(`checkout_used:${checkoutId}`, JSON.stringify(cachePayload), { expirationTtl: 7 * 24 * 60 * 60 });

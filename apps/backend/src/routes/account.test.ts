@@ -333,6 +333,50 @@ describe("POST /api/account/checkout-license", () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: ["T1", "T2", "T3"].map((k, i) => ({ key: `COPE-${k}`, created_at: `2026-01-02T00:00:0${i + 1}Z`, status: "granted" })) });
       expect(((await (await co("co_tp")).json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-T1", "COPE-T2", "COPE-T3"]);
     });
+    it("does not assign later purchase keys to an earlier checkout redeemed first", async () => {
+      stubPolar(
+        { organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T },
+        {
+          items: [
+            { key: "COPE-A1", created_at: "2026-01-02T00:00:10Z", status: "granted" },
+            { key: "COPE-A2", created_at: "2026-01-02T00:00:20Z", status: "granted" },
+            { key: "COPE-B1", created_at: "2026-01-02T00:05:10Z", status: "granted" },
+            { key: "COPE-B2", created_at: "2026-01-02T00:05:20Z", status: "granted" },
+          ],
+        },
+      );
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const u = typeof input === "string" ? input : input.toString();
+        if (u.includes("/v1/checkouts/co_a")) {
+          return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }));
+        }
+        if (u.includes("/v1/checkouts/?")) {
+          return new Response(JSON.stringify({
+            items: [
+              { id: "co_b", created_at: "2026-01-02T00:05:00Z", status: "succeeded" },
+              { id: "co_a", created_at: T, status: "succeeded" },
+            ],
+          }));
+        }
+        if (u.includes("/v1/license-keys/")) {
+          return new Response(JSON.stringify({
+            items: [
+              { key: "COPE-A1", created_at: "2026-01-02T00:00:10Z", status: "granted" },
+              { key: "COPE-A2", created_at: "2026-01-02T00:00:20Z", status: "granted" },
+              { key: "COPE-B1", created_at: "2026-01-02T00:05:10Z", status: "granted" },
+              { key: "COPE-B2", created_at: "2026-01-02T00:05:20Z", status: "granted" },
+            ],
+          }));
+        }
+        return origFetch(input as RequestInfo, undefined);
+      }) as typeof fetch;
+
+      const res = await co("co_a");
+      expect(res.status).toBe(200);
+
+      const data = await res.json() as { allKeys: string[] };
+      expect(data.allKeys).toEqual(["COPE-A1", "COPE-A2"]);
+    });
     it("returns 409 when no granted keys exist", async () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "X", created_at: "2026-01-02T00:00:05Z", status: "pending" }] });
       expect((await co("co_p")).status).toBe(409);
@@ -397,6 +441,52 @@ describe("POST /api/account/checkout-license", () => {
       expect(res.status).toBe(503);
       const data = await res.json() as { error: string };
       expect(data.error).toContain("try again");
+    });
+    it("returns 503 when previously claimed key lookup fails", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "COPE-NEW", created_at: "2026-01-02T00:00:05Z", status: "granted" }] });
+      const failDB = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockResolvedValue(null),
+            run: vi.fn().mockResolvedValue({ meta: { changes: sql.includes("INSERT INTO checkout_claims") ? 1 : 0 } }),
+            all: sql.includes("SELECT claimed_keys")
+              ? vi.fn().mockRejectedValue(new Error("D1_ERROR: claimed_keys unavailable"))
+              : vi.fn().mockResolvedValue({ results: [] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_dedupfail" },
+        { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: failDB }, "s");
+      expect(res.status).toBe(503);
+      expect(((await res.json()) as { error: string }).error).toContain("previously claimed");
+    });
+    it("returns 503 when storing claimed keys fails", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "COPE-NEW", created_at: "2026-01-02T00:00:05Z", status: "granted" }] });
+      const failDB = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockResolvedValue(null),
+            run: sql.includes("UPDATE checkout_claims SET claimed_keys")
+              ? vi.fn().mockRejectedValue(new Error("D1_ERROR: cannot update claimed_keys"))
+              : vi.fn().mockResolvedValue({ meta: { changes: sql.includes("INSERT INTO checkout_claims") ? 1 : 0 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_storefail" },
+        { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: failDB }, "s");
+      expect(res.status).toBe(503);
+      expect(((await res.json()) as { error: string }).error).toContain("record claimed license keys");
     });
     it("returns 503 for generic DB runtime error during claim", async () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T });
