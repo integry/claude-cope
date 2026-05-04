@@ -79,7 +79,8 @@ export function profileWithHash(hash: string) {
 }
 
 function withoutLicenseHash<T extends { license_hash: string | null }>(row: T) {
-  const { license_hash: _licenseHash, ...rest } = row;
+  const rest = { ...row };
+  delete rest.license_hash;
   return rest;
 }
 
