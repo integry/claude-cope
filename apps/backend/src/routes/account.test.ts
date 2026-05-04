@@ -322,13 +322,14 @@ describe("POST /api/account/update-alias", () => {
       { meta: { changes: 1 } },
       { meta: { changes: 1 } },
       { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
     ]);
     const kv = mockKV({ "session_user:test-session": "alice" });
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db, QUOTA_KV: kv });
     expect(res.status).toBe(200);
     expect((await res.json() as { success: boolean }).success).toBe(true);
     expect(db.batch).toHaveBeenCalledTimes(1);
-    expect((db.batch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toHaveLength(4);
+    expect((db.batch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toHaveLength(5);
   });
   it("returns 409 when alias is already taken", async () => {
     const { db } = createMockDB({
@@ -386,7 +387,7 @@ describe("POST /api/account/update-alias", () => {
       (args: unknown[]) => typeof args[0] === "string" && args[0].includes("DELETE FROM alias_rate_limits"),
     )).toBe(true);
   });
-  it("rolls back rate-limit token when alias DB update fails", async () => {
+  it("does not consume an alias-rate-limit token when the rename fails before the transaction", async () => {
     const { db } = createMockDB({
       firstBySQL: {
         [ACCOUNT_TEST_SQL.getProfile]: {
@@ -401,10 +402,11 @@ describe("POST /api/account/update-alias", () => {
     });
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "taken-name", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
-    const rollbackCalls = (db.prepare as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (args: unknown[]) => typeof args[0] === "string" && args[0].includes("alias_rate_limits") && args[0].includes("MAX(change_count - 1"),
+    const aliasRateLimitCalls = (db.prepare as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (args: unknown[]) => typeof args[0] === "string" && args[0].includes("INSERT INTO alias_rate_limits"),
     );
-    expect(rollbackCalls.length).toBe(1);
+    expect(aliasRateLimitCalls.length).toBe(0);
+    expect(db.batch).not.toHaveBeenCalled();
   });
   it("returns 409 and guards secondary tables when user_scores update returns 0 rows (revoked license)", async () => {
     const { db } = createMockDB({
@@ -436,7 +438,7 @@ describe("POST /api/account/update-alias", () => {
       });
       return base;
     }) as unknown as typeof db.prepare;
-    db.batch = vi.fn().mockResolvedValue([{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]);
+    db.batch = vi.fn().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]);
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
     expect(db.batch).toHaveBeenCalled();
@@ -535,7 +537,7 @@ describe("GET /api/account/me", () => {
     });
     expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
   });
-  it("prefers the current session username when it still maps to a valid profile", async () => {
+  it("prefers the rename redirect target over a re-claimed old username", async () => {
     const kv = mockKV({
       "session_user:test-session": "alice",
       "renamed:alice": "bob",
@@ -559,10 +561,10 @@ describe("GET /api/account/me", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       found: true,
-      username: "alice",
-      profile: { username: "alice", current_td: 5, total_td: 5 },
+      username: "bob",
+      profile: { username: "bob", current_td: 1000, total_td: 1000 },
     });
-    expect(kv.put).not.toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
   });
   it("collapses multi-hop rename chains to the final alias", async () => {
     const kv = mockKV({

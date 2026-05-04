@@ -247,6 +247,106 @@ describe("POST /api/account/sync", () => {
     );
   });
 
+  it("rolls back a newly created profile when provisioning fails after insert", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => {
+        const isProfileByHash = sql.includes("WHERE license_hash = ?");
+        const isUsernameCheck = sql.includes("WHERE LOWER(username) = LOWER(?)");
+        const isGetProfile = sql.includes("FROM user_scores WHERE username = ?");
+        return {
+          bind: vi.fn((...args: unknown[]) => {
+            calls.push({ sql, bindings: args });
+            return {
+              first: vi.fn().mockResolvedValue(
+                isProfileByHash ? null :
+                isUsernameCheck ? null :
+                isGetProfile ? { ...PROFILE_ROW, username: String(args[0]), license_hash: "testhash" } :
+                sql.includes("SELECT status, last_activated_at FROM licenses") ? null :
+                null,
+              ),
+              run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+              all: vi.fn().mockResolvedValue({ results: [] }),
+            };
+          }),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        };
+      }),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
+    const kv = {
+      get: vi.fn(() => Promise.resolve(null)),
+      put: vi.fn((key: string) => (
+        key.startsWith("polar:")
+          ? Promise.reject(new Error("kv unavailable"))
+          : Promise.resolve()
+      )),
+      delete: vi.fn(() => Promise.resolve()),
+    };
+
+    const res = await postSync({ licenseKey: "COPE-TEST", username: "alice" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+
+    expect(res.status).toBe(500);
+    expect(calls.some((c) => c.sql.includes("DELETE FROM user_scores WHERE username = ? AND license_hash = ?"))).toBe(true);
+  });
+
+  it("detaches a just-attached license when provisioning fails after upgrading a free account", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const kv = {
+      get: vi.fn((key: string) => Promise.resolve(key === "session_user:test-session" ? "alice" : null)),
+      put: vi.fn((key: string) => (
+        key.startsWith("polar:")
+          ? Promise.reject(new Error("kv unavailable"))
+          : Promise.resolve()
+      )),
+      delete: vi.fn(() => Promise.resolve()),
+    };
+    const db = {
+      prepare: vi.fn((sql: string) => {
+        const isProfileByHash = sql.includes("WHERE license_hash = ?");
+        const isUsernameCheck = sql.includes("WHERE LOWER(username) = LOWER(?)");
+        const isGetProfile = sql.includes("FROM user_scores WHERE username = ?");
+        return {
+          bind: vi.fn((...args: unknown[]) => {
+            calls.push({ sql, bindings: args });
+            return {
+              first: vi.fn().mockResolvedValue(
+                isProfileByHash ? null :
+                isUsernameCheck ? { username: "alice", license_hash: null } :
+                isGetProfile ? { ...PROFILE_ROW, username: "alice", license_hash: "testhash" } :
+                sql.includes("SELECT status, last_activated_at FROM licenses") ? null :
+                null,
+              ),
+              run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+              all: vi.fn().mockResolvedValue({ results: [] }),
+            };
+          }),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        };
+      }),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
+
+    const res = await postSync({ licenseKey: "COPE-TEST", username: "alice" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+
+    expect(res.status).toBe(500);
+    expect(calls.some((c) => c.sql.includes("UPDATE user_scores SET license_hash = NULL"))).toBe(true);
+  });
+
   it("still succeeds when session binding fails after provisioning", async () => {
     mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
     const { db } = createMockDB({

@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, checkAliasRateLimit, rollbackAliasRateToken, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 
@@ -24,13 +24,7 @@ type Env = {
 const SHILL_CREDIT = 5;
 const MAX_SESSION_RENAME_HOPS = 32;
 const SESSION_USERNAME_TTL_SECONDS = 60 * 60 * 24 * 365;
-const RENAME_REDIRECT_TTL_SECONDS = 60 * 60 * 24 * 30;
-const accountKvKeys = {
-  renamed: (username: string) => `renamed:${username}`,
-  sessionUser: (sessionId: string) => `session_user:${sessionId}`,
-  shill: (sessionId: string) => `shill:${sessionId}`,
-  usernameSession: (username: string) => `username_session:${username}`,
-} as const;
+const RENAME_REDIRECT_TTL_SECONDS = SESSION_USERNAME_TTL_SECONDS;
 
 const account = new Hono<Env>();
 
@@ -66,11 +60,6 @@ async function resolveSessionProfileRow(opts: {
   const originalUsername = opts.username;
   if (!db) return { username: originalUsername, row: null };
 
-  const originalRow = await getProfileRow(db, originalUsername);
-  if (originalRow) {
-    return { username: originalUsername, row: originalRow, redirected: false };
-  }
-
   let current = originalUsername;
   let hops = 0;
   const seen = new Set([originalUsername]);
@@ -87,6 +76,13 @@ async function resolveSessionProfileRow(opts: {
 
   if (hops === MAX_SESSION_RENAME_HOPS) {
     console.warn(`[account/me] rename chain hop cap reached for ${originalUsername}`);
+  }
+
+  if (current === originalUsername) {
+    const originalRow = await getProfileRow(db, originalUsername);
+    if (originalRow) {
+      return { username: originalUsername, row: originalRow, redirected: false };
+    }
   }
 
   const row = await getProfileRow(db, current);
@@ -134,10 +130,22 @@ account.post("/sync", async (c) => {
   // Profile claim succeeded — now provision the licenses row and KV quota.
   // This ordering ensures that failed syncs never produce orphaned active
   // licenses or quota entries.
-  await commitSyncSideEffects(
-    { db, kv, hash },
-    { validationId: validation.id, proInitialQuota: limits.proInitialQuota },
-  );
+  try {
+    await commitSyncSideEffects(
+      { db, kv, hash },
+      { validationId: validation.id, proInitialQuota: limits.proInitialQuota },
+    );
+  } catch (err: unknown) {
+    try {
+      await rollbackProfileMutation(db, hash, result.mutation);
+    } catch (rollbackErr: unknown) {
+      console.warn(
+        `[account/sync] failed to rollback profile mutation for ${hash.slice(0, 8)}:`,
+        rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+      );
+    }
+    throw err;
+  }
 
   // Bind the session to the resolved username so /me can look it up.
   if (sessionId && result.profile?.username) {
@@ -511,14 +519,11 @@ account.post("/update-alias", async (c) => {
     return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
   }
 
-  const rateLimit = await checkAliasRateLimit(db, body.licenseKeyHash, ALIAS_CHANGES_PER_DAY);
-  if (!rateLimit.allowed) {
-    return c.json({ error: `Alias change limit reached (max ${ALIAS_CHANGES_PER_DAY} per day)` }, 429);
-  }
-
-  const dbResult = await performAliasDbUpdate(db, body.username, alias, body.licenseKeyHash);
+  const dbResult = await performAliasDbUpdate(db, body.username, alias, body.licenseKeyHash, ALIAS_CHANGES_PER_DAY);
   if (!dbResult.success) {
-    await rollbackAliasRateToken(db, body.licenseKeyHash);
+    if (dbResult.status === 429) {
+      return c.json({ error: `Alias change limit reached (max ${ALIAS_CHANGES_PER_DAY} per day)` }, 429);
+    }
     return c.json({ error: dbResult.error }, dbResult.status);
   }
 
@@ -532,6 +537,8 @@ account.post("/update-alias", async (c) => {
       await kv.delete(accountKvKeys.usernameSession(body.username));
       // Store a redirect so other active sessions following the old username
       // can discover the rename via /me and repair their own session mapping.
+      // This still relies on username redirects rather than immutable account IDs,
+      // so keep the TTL long enough to cover dormant-but-still-valid sessions.
       await kv.put(accountKvKeys.renamed(body.username), alias, { expirationTtl: RENAME_REDIRECT_TTL_SECONDS });
     } catch (err: unknown) {
       // TODO: Once accounts have immutable IDs, make this repair path durable

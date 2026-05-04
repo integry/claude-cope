@@ -3,6 +3,12 @@ import { validatePolarKey } from "../utils/polar";
 import { hashKey } from "../utils/quota";
 
 const LICENSE_STALE_SQL_CUTOFF = "-90 days";
+export const accountKvKeys = {
+  renamed: (username: string) => `renamed:${username}`,
+  sessionUser: (sessionId: string) => `session_user:${sessionId}`,
+  shill: (sessionId: string) => `shill:${sessionId}`,
+  usernameSession: (username: string) => `username_session:${username}`,
+} as const;
 export const ACTIVE_LICENSE_EXISTS_SQL =
   `EXISTS (
      SELECT 1 FROM licenses
@@ -44,8 +50,13 @@ function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
 }
 
 type CreateProfileResult =
-  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined }
+  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; mutation: SyncProfileMutation; error?: undefined }
   | { profile: null; error: string };
+
+type SyncProfileMutation =
+  | { kind: "none" }
+  | { kind: "created"; username: string }
+  | { kind: "attached_license"; username: string };
 
 async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<CreateProfileResult> {
   const newUsername = body.username?.trim();
@@ -64,7 +75,7 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
       // Already belongs to this license — just return the existing profile
       const profile = await getProfile(db, existingUsername);
       if (!profile) return { profile: null, error: "Profile not found after lookup" };
-      return { profile };
+      return { profile, mutation: { kind: "none" } };
     }
     if (existing.license_hash === null) {
       // Free user upgrading to Max — attach the license to their existing profile.
@@ -76,7 +87,7 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
       if (!sessionContext) {
         return { profile: null, error: "Session required to upgrade an existing username." };
       }
-      const boundUsername = await sessionContext.kv.get(`session_user:${sessionContext.sessionId}`);
+      const boundUsername = await sessionContext.kv.get(accountKvKeys.sessionUser(sessionContext.sessionId));
       if (boundUsername?.toLowerCase() !== existingUsername.toLowerCase()) {
         return { profile: null, error: "Cannot claim an existing free username — log in to that account first or pick a different username." };
       }
@@ -94,7 +105,7 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
       }
       const profile = await getProfile(db, existingUsername);
       if (!profile) return { profile: null, error: "Profile not found after upgrade" };
-      return { profile };
+      return { profile, mutation: { kind: "attached_license", username: existingUsername } };
     }
     // Username is owned by a different license — refuse
     return { profile: null, error: "This username is already taken. Please change your username and try again." };
@@ -133,18 +144,18 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
 
   const profile = await getProfile(db, newUsername);
   if (!profile) return { profile: null, error: "Failed to create profile" };
-  return { profile };
+  return { profile, mutation: { kind: "created", username: newUsername } };
 }
 
 type ResolveProfileResult =
-  | { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined }
+  | { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; mutation: SyncProfileMutation; error?: undefined }
   | { restored: false; profile: null; error: string };
 
 export async function resolveProfile(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<ResolveProfileResult> {
   // Case 1: Existing profile with this license_hash → restore (cross-device sync)
   const existingByHash = await getProfileByLicenseHash(db, hash);
   if (existingByHash) {
-    return { restored: true, profile: existingByHash };
+    return { restored: true, profile: existingByHash, mutation: { kind: "none" } };
   }
 
   // Case 2: No profile for this license → create a new one, or upgrade an
@@ -154,7 +165,27 @@ export async function resolveProfile(db: D1Database, hash: string, body: SyncBod
     return { restored: false, profile: null, error: created.error };
   }
   // After error check, created.profile is guaranteed non-null by CreateProfileResult union
-  return { restored: false, profile: created.profile! };
+  return { restored: false, profile: created.profile!, mutation: created.mutation };
+}
+
+export async function rollbackProfileMutation(
+  db: D1Database,
+  hash: string,
+  mutation: SyncProfileMutation,
+): Promise<void> {
+  if (mutation.kind === "none") return;
+  if (mutation.kind === "created") {
+    await db
+      .prepare("DELETE FROM user_scores WHERE username = ? AND license_hash = ?")
+      .bind(mutation.username, hash)
+      .run();
+    return;
+  }
+
+  await db
+    .prepare("UPDATE user_scores SET license_hash = NULL, updated_at = datetime('now') WHERE username = ? AND license_hash = ?")
+    .bind(mutation.username, hash)
+    .run();
 }
 
 export type OwnershipResult =
@@ -336,45 +367,21 @@ export function validateAlias(raw: string): { alias: string; error?: undefined }
   return { alias };
 }
 
-export async function checkAliasRateLimit(
-  db: D1Database, licenseKeyHash: string, limit: number,
-): Promise<{ allowed: boolean }> {
+async function pruneAliasRateLimits(db: D1Database): Promise<void> {
   await db
     .prepare("DELETE FROM alias_rate_limits WHERE change_date < date('now', '-30 days')")
-    .run();
-
-  // Atomic check-and-claim via D1's ACID guarantees.
-  // INSERT creates count=1 on first change of the day; ON CONFLICT atomically
-  // increments only while the count is below the limit. Two concurrent requests
-  // are serialized by SQLite's write lock, so the KV get/put race is eliminated.
-  const result = await db
-    .prepare(
-      `INSERT INTO alias_rate_limits (license_key_hash, change_date, change_count)
-       VALUES (?, date('now'), 1)
-       ON CONFLICT(license_key_hash, change_date)
-       DO UPDATE SET change_count = change_count + 1
-       WHERE change_count < ?`,
-    )
-    .bind(licenseKeyHash, limit)
-    .run();
-  return { allowed: Boolean(result.meta.changes) };
-}
-
-export async function rollbackAliasRateToken(
-  db: D1Database, licenseKeyHash: string,
-): Promise<void> {
-  await db
-    .prepare(
-      `UPDATE alias_rate_limits SET change_count = MAX(change_count - 1, 0)
-       WHERE license_key_hash = ? AND change_date = date('now')`,
-    )
-    .bind(licenseKeyHash)
     .run();
 }
 
 export async function performAliasDbUpdate(
-  db: D1Database, oldUsername: string, newAlias: string, licenseKeyHash: string,
-): Promise<{ success: true } | { success: false; error: string; status: 409 | 500 }> {
+  db: D1Database,
+  oldUsername: string,
+  newAlias: string,
+  licenseKeyHash: string,
+  dailyLimit: number,
+): Promise<{ success: true } | { success: false; error: string; status: 409 | 429 | 500 }> {
+  await pruneAliasRateLimits(db);
+
   const taken = await db
     .prepare("SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?) AND username != ?")
     .bind(newAlias, oldUsername)
@@ -384,14 +391,20 @@ export async function performAliasDbUpdate(
   }
 
   // All updates run in a single db.batch() transaction so that primary
-  // (user_scores) and secondary (completed_tasks, hall_of_blame, usage_logs)
-  // renames are atomic. If the primary rename fails, the secondary updates
-  // are guarded by an EXISTS subquery that checks for the new alias in
-  // user_scores, so they no-op. If any statement throws (e.g. UNIQUE
-  // constraint), the entire transaction is rolled back — no partial state.
+  // (user_scores), alias-rate-limit claim, and secondary
+  // (completed_tasks, hall_of_blame, usage_logs) renames are atomic.
+  // If any statement throws (e.g. UNIQUE constraint), the entire transaction
+  // is rolled back so transient failures do not burn a daily alias token.
   let results: D1Result[];
   try {
     results = await db.batch([
+      db.prepare(
+        `INSERT INTO alias_rate_limits (license_key_hash, change_date, change_count)
+         VALUES (?, date('now'), 1)
+         ON CONFLICT(license_key_hash, change_date)
+         DO UPDATE SET change_count = change_count + 1
+         WHERE change_count < ?`,
+      ).bind(licenseKeyHash, dailyLimit),
       db.prepare(
         `UPDATE user_scores SET username = ?, updated_at = datetime('now')
          WHERE username = ? AND license_hash = ?
@@ -419,6 +432,10 @@ export async function performAliasDbUpdate(
   }
 
   if (!results[0].meta.changes) {
+    return { success: false, error: "Alias change limit reached", status: 429 };
+  }
+
+  if (!results[1].meta.changes) {
     return { success: false, error: "Update failed — profile not found, license mismatch, or license revoked", status: 409 };
   }
 
