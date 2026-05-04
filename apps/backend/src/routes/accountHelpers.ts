@@ -445,7 +445,7 @@ export async function performAliasDbUpdate(
     return { success: false, error: "Alias change limit reached", status: 429 };
   }
 
-  if (!results[1].meta.changes) {
+  if (!results[2].meta.changes) {
     return { success: false, error: "Update failed — profile not found, license mismatch, or license revoked", status: 409 };
   }
 

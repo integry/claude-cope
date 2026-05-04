@@ -332,6 +332,34 @@ describe("POST /api/account/update-alias", () => {
     expect(db.batch).toHaveBeenCalledTimes(1);
     expect((db.batch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toHaveLength(6);
   });
+  it("succeeds when cleanup delete affects 0 rows but the profile rename succeeds", async () => {
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfile]: {
+          ...BASE_PROFILE,
+          username: "alice-new",
+          license_hash: undefined,
+        },
+        [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
+        [ACCOUNT_TEST_SQL.aliasTakenLookup]: null,
+      },
+      runChanges: 1,
+    });
+    db.batch = vi.fn().mockResolvedValue([
+      { meta: { changes: 1 } },
+      { meta: { changes: 0 } },
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+    ]);
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect((await res.json() as { success: boolean }).success).toBe(true);
+    expect(db.batch).toHaveBeenCalledTimes(1);
+  });
   it("returns 409 when alias is already taken", async () => {
     const { db } = createMockDB({
       firstBySQL: {
