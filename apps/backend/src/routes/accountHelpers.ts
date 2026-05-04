@@ -51,7 +51,7 @@ function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
 
 type CreateProfileResult =
   | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; mutation: SyncProfileMutation; error?: undefined }
-  | { profile: null; error: string };
+  | { profile: null; error: string; mutation?: undefined };
 
 type SyncProfileMutation =
   | { kind: "none" }
@@ -149,7 +149,7 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
 
 type ResolveProfileResult =
   | { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; mutation: SyncProfileMutation; error?: undefined }
-  | { restored: false; profile: null; error: string };
+  | { restored: false; profile: null; error: string; mutation?: undefined };
 
 export async function resolveProfile(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<ResolveProfileResult> {
   // Case 1: Existing profile with this license_hash → restore (cross-device sync)
@@ -161,11 +161,10 @@ export async function resolveProfile(db: D1Database, hash: string, body: SyncBod
   // Case 2: No profile for this license → create a new one, or upgrade an
   // existing free (unlicensed) profile if the username matches.
   const created = await createProfileFromClient(db, hash, body, sessionContext);
-  if ('error' in created && created.error) {
+  if (created.profile === null) {
     return { restored: false, profile: null, error: created.error };
   }
-  // After error check, created.profile is guaranteed non-null by CreateProfileResult union
-  return { restored: false, profile: created.profile!, mutation: created.mutation };
+  return { restored: false, profile: created.profile, mutation: created.mutation };
 }
 
 export async function rollbackProfileMutation(
@@ -375,11 +374,14 @@ async function pruneAliasRateLimits(db: D1Database): Promise<void> {
 
 export async function performAliasDbUpdate(
   db: D1Database,
-  oldUsername: string,
-  newAlias: string,
-  licenseKeyHash: string,
-  dailyLimit: number,
+  opts: {
+    oldUsername: string;
+    newAlias: string;
+    licenseKeyHash: string;
+    dailyLimit: number;
+  },
 ): Promise<{ success: true } | { success: false; error: string; status: 409 | 429 | 500 }> {
+  const { oldUsername, newAlias, licenseKeyHash, dailyLimit } = opts;
   await pruneAliasRateLimits(db);
 
   const taken = await db

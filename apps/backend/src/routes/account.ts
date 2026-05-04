@@ -119,7 +119,7 @@ account.post("/sync", async (c) => {
   // claim, etc.) we must NOT leave behind an activated license row or KV
   // quota for a sync that never completed.
   const result = await resolveProfile(db, hash, body, sessionId && kv ? { sessionId, kv } : undefined);
-  if (result.error) {
+  if (result.profile === null) {
     const isConflict =
       result.error.includes("already taken") ||
       result.error.includes("just claimed") ||
@@ -519,7 +519,12 @@ account.post("/update-alias", async (c) => {
     return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
   }
 
-  const dbResult = await performAliasDbUpdate(db, body.username, alias, body.licenseKeyHash, ALIAS_CHANGES_PER_DAY);
+  const dbResult = await performAliasDbUpdate(db, {
+    oldUsername: body.username,
+    newAlias: alias,
+    licenseKeyHash: body.licenseKeyHash,
+    dailyLimit: ALIAS_CHANGES_PER_DAY,
+  });
   if (!dbResult.success) {
     if (dbResult.status === 429) {
       return c.json({ error: `Alias change limit reached (max ${ALIAS_CHANGES_PER_DAY} per day)` }, 429);
