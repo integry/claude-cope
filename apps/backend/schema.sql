@@ -136,6 +136,9 @@ CREATE TABLE IF NOT EXISTS alias_rate_limits (
     PRIMARY KEY (license_key_hash, change_date)
 );
 
+CREATE INDEX IF NOT EXISTS idx_alias_rate_limits_change_date
+    ON alias_rate_limits (change_date);
+
 -- System-wide configuration (OpenRouter keys, model definitions, quota limits)
 -- scoped by tier. Tier '*' is the global default. For category keys
 -- (category_model, category_api_key), tiers are 'max', 'free', 'depleted'.

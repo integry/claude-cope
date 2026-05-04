@@ -323,13 +323,14 @@ describe("POST /api/account/update-alias", () => {
       { meta: { changes: 1 } },
       { meta: { changes: 1 } },
       { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
     ]);
     const kv = mockKV({ "session_user:test-session": "alice" });
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db, QUOTA_KV: kv });
     expect(res.status).toBe(200);
     expect((await res.json() as { success: boolean }).success).toBe(true);
     expect(db.batch).toHaveBeenCalledTimes(1);
-    expect((db.batch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toHaveLength(5);
+    expect((db.batch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toHaveLength(6);
   });
   it("returns 409 when alias is already taken", async () => {
     const { db } = createMockDB({
@@ -380,6 +381,14 @@ describe("POST /api/account/update-alias", () => {
       },
       runChanges: 0,
     });
+    db.batch = vi.fn().mockResolvedValue([
+      { meta: { changes: 0 } },
+      { meta: { changes: 0 } },
+      { meta: { changes: 0 } },
+      { meta: { changes: 0 } },
+      { meta: { changes: 0 } },
+      { meta: { changes: 0 } },
+    ]);
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(429);
     expect(((await res.json()) as { error: string }).error).toContain("limit reached");
@@ -438,10 +447,37 @@ describe("POST /api/account/update-alias", () => {
       });
       return base;
     }) as unknown as typeof db.prepare;
-    db.batch = vi.fn().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]);
+    db.batch = vi.fn().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]);
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
     expect(db.batch).toHaveBeenCalled();
+  });
+  it("cleans orphaned completed task collisions before renaming to an otherwise-free alias", async () => {
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfile]: {
+          ...BASE_PROFILE,
+          license_hash: undefined,
+        },
+        [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active" },
+        [ACCOUNT_TEST_SQL.aliasTakenLookup]: null,
+      },
+      runChanges: 1,
+    });
+    db.batch = vi.fn().mockResolvedValue([
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+    ]);
+    const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
+    expect(res.status).toBe(200);
+    expect(db.batch).toHaveBeenCalled();
+    const preparedSql = (db.prepare as ReturnType<typeof vi.fn>).mock.calls.map((args: unknown[]) => String(args[0]));
+    expect(preparedSql.some((sql) => sql.includes("DELETE FROM completed_tasks"))).toBe(true);
   });
 });
 
@@ -646,6 +682,34 @@ describe("GET /api/account/me", () => {
     expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "grace", expect.any(Object));
     expect(kv.put).toHaveBeenCalledWith("renamed:alice", "grace", expect.any(Object));
     expect(kv.put).toHaveBeenCalledWith("renamed:bob", "grace", expect.any(Object));
+  });
+  it("restores rename-back sessions when the redirect chain cycles to the original username", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+      "renamed:bob": "alice",
+    });
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((username: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("licenses")
+              ? null
+              : username === "alice"
+                ? { ...BASE_PROFILE, username: "alice", license_hash: null }
+                : null,
+          ),
+        })),
+      })),
+    };
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "alice",
+      profile: { username: "alice" },
+    });
+    expect(kv.delete).not.toHaveBeenCalledWith("session_user:test-session");
   });
   it("marks revoked licensed users as non-pro in the /me payload", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });

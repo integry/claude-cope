@@ -64,10 +64,15 @@ async function resolveSessionProfileRow(opts: {
   let hops = 0;
   const seen = new Set([originalUsername]);
   const traversed = [originalUsername];
+  let cycledToOriginal = false;
 
   while (hops < MAX_SESSION_RENAME_HOPS) {
     const renamedTo = await kv.get(accountKvKeys.renamed(current));
-    if (!renamedTo || seen.has(renamedTo)) break;
+    if (!renamedTo) break;
+    if (seen.has(renamedTo)) {
+      cycledToOriginal = renamedTo === originalUsername;
+      break;
+    }
     current = renamedTo;
     seen.add(current);
     traversed.push(current);
@@ -78,7 +83,7 @@ async function resolveSessionProfileRow(opts: {
     console.warn(`[account/me] rename chain hop cap reached for ${originalUsername}`);
   }
 
-  if (current === originalUsername) {
+  if (current === originalUsername || cycledToOriginal) {
     const originalRow = await getProfileRow(db, originalUsername);
     if (originalRow) {
       return { username: originalUsername, row: originalRow, redirected: false };

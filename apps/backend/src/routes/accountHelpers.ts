@@ -397,6 +397,9 @@ export async function performAliasDbUpdate(
   // (completed_tasks, hall_of_blame, usage_logs) renames are atomic.
   // If any statement throws (e.g. UNIQUE constraint), the entire transaction
   // is rolled back so transient failures do not burn a daily alias token.
+  // We also clear orphaned completed_tasks rows for the destination alias
+  // before the rename so stale historical task claims cannot block reclaiming
+  // an otherwise-free alias.
   let results: D1Result[];
   try {
     results = await db.batch([
@@ -412,6 +415,12 @@ export async function performAliasDbUpdate(
          WHERE username = ? AND license_hash = ?
            AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
       ).bind(newAlias, oldUsername, licenseKeyHash),
+      db.prepare(
+        `DELETE FROM completed_tasks
+         WHERE username = ?
+           AND NOT EXISTS (SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?) AND username != ?)
+           AND ticket_id IN (SELECT ticket_id FROM completed_tasks WHERE username = ?)`,
+      ).bind(newAlias, newAlias, oldUsername, oldUsername),
       db.prepare(
         `UPDATE completed_tasks SET username = ? WHERE username = ?
            AND EXISTS (SELECT 1 FROM user_scores WHERE username = ? AND license_hash = ?)`,
