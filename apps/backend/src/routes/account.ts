@@ -13,6 +13,7 @@ type Env = {
     DB?: D1Database;
     QUOTA_KV?: KVNamespace;
     USAGE_KV?: KVNamespace;
+    CHECKOUT_CLAIM_SECRET?: string;
     POLAR_ACCESS_TOKEN?: string;
     POLAR_ORGANIZATION_ID?: string;
     FREE_QUOTA_LIMIT?: string;
@@ -53,10 +54,7 @@ async function validateCheckoutRequest(c: { req: { json: <T>() => Promise<T> }; 
   if (!/^[\w-]{4,128}$/.test(body.checkoutId)) return { error: c.json({ error: "Invalid checkoutId format" }, 400) } as const;
   const sessionId = c.get("sessionId");
   if (!sessionId) return { error: c.json({ error: "Session required" }, 401) } as const;
-  const accessToken = c.env?.POLAR_ACCESS_TOKEN;
-  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
-  if (!accessToken || !organizationId) return { error: c.json({ error: "Polar integration is not configured" }, 500) } as const;
-  return { checkoutId: body.checkoutId, sessionId, accessToken, organizationId, kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV } as const;
+  return { checkoutId: body.checkoutId, sessionId, kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV } as const;
 }
 
 function respondWithClaimedKeys(c: { json: (data: unknown, status?: number) => Response }, keys: string[]) {
@@ -65,7 +63,11 @@ function respondWithClaimedKeys(c: { json: (data: unknown, status?: number) => R
 
 async function cacheClaimedKeys(kv: KVNamespace | undefined, checkoutId: string, sessionId: string, keys: string[]) {
   if (!kv) return;
-  await kv.put(`checkout_used:${checkoutId}`, JSON.stringify({ keys, sessionId } satisfies CheckoutCache), { expirationTtl: 7 * 24 * 60 * 60 });
+  try {
+    await kv.put(`checkout_used:${checkoutId}`, JSON.stringify({ keys, sessionId } satisfies CheckoutCache), { expirationTtl: 7 * 24 * 60 * 60 });
+  } catch {
+    // Cache writes are best-effort. D1 remains the source of truth.
+  }
 }
 
 async function respondWithStoredClaim(
@@ -86,26 +88,36 @@ const account = new Hono<Env>();
 account.post("/checkout-license", async (c) => {
   const validated = await validateCheckoutRequest(c);
   if ("error" in validated) return validated.error;
-  const { checkoutId, sessionId, accessToken, organizationId, kv } = validated;
+  const { checkoutId, sessionId, kv } = validated;
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: "Database not configured" }, 500);
+  const claimSecret = c.env?.CHECKOUT_CLAIM_SECRET ?? c.env?.POLAR_ACCESS_TOKEN;
+  if (!claimSecret) return c.json({ error: "Checkout claim secret is not configured" }, 500);
   if (kv) {
     const cacheResult = await lookupCheckoutCache(kv, checkoutId, sessionId);
     if (cacheResult) return cacheResult.sessionMismatch ? c.json({ error: "This checkout was already redeemed by another session" }, 403) : c.json({ licenseKey: cacheResult.keys[0], allKeys: cacheResult.keys });
   }
+  const storedClaim = await getStoredClaimedKeys(db, checkoutId, claimSecret);
+  if (!storedClaim.ok) return c.json({ error: storedClaim.error }, 503);
+  if (storedClaim.sessionId && storedClaim.sessionId !== sessionId) return c.json({ error: "This checkout was already redeemed by another session" }, 403);
+  if (storedClaim.keys?.length) return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: storedClaim.keys });
+  const accessToken = c.env?.POLAR_ACCESS_TOKEN;
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
+  if (!accessToken || !organizationId) return c.json({ error: "Polar integration is not configured" }, 500);
   const result = await fetchCheckoutCustomerId(checkoutId, accessToken, organizationId);
   if ("error" in result) return c.json({ error: result.error }, result.status);
+  if (result.referenceId && result.referenceId !== sessionId) return c.json({ error: "This checkout belongs to a different session" }, 403);
   if (!result.createdAt) return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
-  const db = c.env?.DB;
-  if (!db) return c.json({ error: "Database not configured" }, 500);
   const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt: result.createdAt });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
-  const storedClaim = await getStoredClaimedKeys(db, checkoutId);
-  if (!storedClaim.ok) return c.json({ error: storedClaim.error }, 503);
-  if (storedClaim.keys?.length) return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: storedClaim.keys });
+  const postClaimStored = await getStoredClaimedKeys(db, checkoutId, claimSecret);
+  if (!postClaimStored.ok) return c.json({ error: postClaimStored.error }, 503);
+  if (postClaimStored.keys?.length) return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: postClaimStored.keys });
   const nextCheckout = await fetchNextCheckoutCreatedAt(result.customerId, organizationId, accessToken, { checkoutId, checkoutCreatedAt: result.createdAt });
   if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
   const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: result.createdAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
-  const claimedKeys = await claimLicenseKeysForCheckout(db, checkoutId, lkResult.keys);
+  const claimedKeys = await claimLicenseKeysForCheckout(db, checkoutId, lkResult.keys, claimSecret);
   if (!claimedKeys.ok) return c.json({ error: claimedKeys.error }, claimedKeys.error.includes("already claimed") ? 409 : 503);
   return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: claimedKeys.keys });
 });

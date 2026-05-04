@@ -1,6 +1,10 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createMockDB, mockKV, postJSON, postWithSession, getWithSession, BASE_PROFILE, profileWithHash, ownedMockDB, GEN_BODY } from "./account.test-utils";
+import { storeClaimedKeys } from "./accountHelpers";
+import { hashKey } from "../utils/quota";
+
+const CLAIM_SECRET = "tok";
 
 describe("POST /api/account/buy-generator", () => {
   it("returns 500 when DB is not configured", async () => { expect((await postJSON("/api/account/buy-generator", GEN_BODY, {})).status).toBe(500); });
@@ -311,10 +315,13 @@ describe("POST /api/account/checkout-license", () => {
   describe("non-cached Polar fetch path", () => {
     const origFetch = globalThis.fetch;
     afterEach(() => { globalThis.fetch = origFetch; });
-    const claimDB = createMockDB({ runChanges: 1 }).db;
-    const penv = { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: claimDB };
     const T = "2026-01-02T00:00:00Z";
-    const co = (id: string) => postWithSession("/api/account/checkout-license", { checkoutId: id }, { ...penv, QUOTA_KV: mockKV({}) }, "s");
+    const co = (id: string) => postWithSession("/api/account/checkout-license", { checkoutId: id }, {
+      POLAR_ACCESS_TOKEN: "tok",
+      POLAR_ORGANIZATION_ID: "org",
+      QUOTA_KV: mockKV({}),
+      DB: createMockDB({ runChanges: 1 }).db,
+    }, "s");
     function stubPolar(checkout: object, lk?: object) {
       globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
         const u = typeof input === "string" ? input : input.toString();
@@ -383,12 +390,13 @@ describe("POST /api/account/checkout-license", () => {
     });
     it("returns 409 instead of re-issuing keys already claimed by another checkout", async () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "COPE-DUPE", created_at: "2026-01-02T00:00:05Z", status: "granted" }] });
+      const dupeHash = await hashKey("COPE-DUPE");
       const dedupDB = {
         prepare: vi.fn((sql: string) => ({
           bind: vi.fn(() => ({
-            first: vi.fn().mockResolvedValue(sql.includes("SELECT claimed_keys FROM checkout_claims") ? { claimed_keys: null } : null),
+            first: vi.fn().mockResolvedValue(sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims") ? { session_id: "s", encrypted_keys: null } : null),
             run: vi.fn().mockResolvedValue({ meta: { changes: sql.includes("INSERT INTO checkout_claims") ? 1 : 0 } }),
-            all: vi.fn().mockResolvedValue({ results: [{ license_key: "COPE-DUPE", checkout_id: "other-checkout" }] }),
+            all: vi.fn().mockResolvedValue({ results: [{ license_key_hash: dupeHash, checkout_id: "other-checkout" }] }),
           })),
           first: vi.fn().mockResolvedValue(null),
           run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
@@ -410,30 +418,31 @@ describe("POST /api/account/checkout-license", () => {
         ],
       });
       let storedKeys: string | null = null;
-      const keyOwners = new Map<string, string>([["COPE-1", "other-checkout"]]);
+      const keyOwners = new Map<string, string>([[await hashKey("COPE-1"), "other-checkout"]]);
       const db = {
         prepare: vi.fn((sql: string) => ({
           bind: vi.fn((...args: unknown[]) => ({
             first: vi.fn().mockImplementation(async () => {
-              if (sql.includes("SELECT claimed_keys FROM checkout_claims")) return { claimed_keys: storedKeys };
+              if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) return { session_id: "s", encrypted_keys: storedKeys };
+              if (sql.includes("SELECT encrypted_keys FROM checkout_claims")) return { encrypted_keys: storedKeys };
               return null;
             }),
             run: vi.fn().mockImplementation(async () => {
               if (sql.includes("INSERT INTO checkout_claims")) return { meta: { changes: 1 } };
               if (sql.includes("INSERT INTO checkout_key_claims")) {
-                const [licenseKey, checkoutId] = args as [string, string];
-                if (!keyOwners.has(licenseKey)) keyOwners.set(licenseKey, checkoutId);
-                return { meta: { changes: keyOwners.get(licenseKey) === checkoutId ? 1 : 0 } };
+                const [licenseKeyHash, checkoutId] = args as [string, string];
+                if (!keyOwners.has(licenseKeyHash)) keyOwners.set(licenseKeyHash, checkoutId);
+                return { meta: { changes: keyOwners.get(licenseKeyHash) === checkoutId ? 1 : 0 } };
               }
-              if (sql.includes("UPDATE checkout_claims SET claimed_keys")) {
+              if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
                 storedKeys = args[0] as string;
                 return { meta: { changes: 1 } };
               }
               return { meta: { changes: 0 } };
             }),
             all: vi.fn().mockImplementation(async () => ({
-              results: sql.includes("SELECT license_key, checkout_id FROM checkout_key_claims")
-                ? (args as string[]).map((licenseKey) => ({ license_key: licenseKey, checkout_id: keyOwners.get(licenseKey)! }))
+              results: sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")
+                ? (args as string[]).map((licenseKeyHash) => ({ license_key_hash: licenseKeyHash, checkout_id: keyOwners.get(licenseKeyHash)! }))
                 : [],
             })),
           })),
@@ -490,9 +499,9 @@ describe("POST /api/account/checkout-license", () => {
       const failDB = {
         prepare: vi.fn((sql: string) => ({
           bind: vi.fn(() => ({
-            first: vi.fn().mockResolvedValue(sql.includes("SELECT claimed_keys FROM checkout_claims") ? { claimed_keys: null } : null),
+            first: vi.fn().mockResolvedValue(sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims") ? { session_id: "s", encrypted_keys: null } : null),
             run: vi.fn().mockResolvedValue({ meta: { changes: sql.includes("INSERT INTO checkout_claims") ? 1 : 0 } }),
-            all: sql.includes("SELECT license_key, checkout_id FROM checkout_key_claims")
+            all: sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")
               ? vi.fn().mockRejectedValue(new Error("D1_ERROR: checkout_key_claims unavailable"))
               : vi.fn().mockResolvedValue({ results: [] }),
           })),
@@ -510,14 +519,15 @@ describe("POST /api/account/checkout-license", () => {
     });
     it("returns 503 when storing claimed keys fails", async () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: [{ key: "COPE-NEW", created_at: "2026-01-02T00:00:05Z", status: "granted" }] });
+      const newKeyHash = await hashKey("COPE-NEW");
       const failDB = {
         prepare: vi.fn((sql: string) => ({
           bind: vi.fn(() => ({
-            first: vi.fn().mockResolvedValue(sql.includes("SELECT claimed_keys FROM checkout_claims") ? { claimed_keys: null } : null),
-            run: sql.includes("UPDATE checkout_claims SET claimed_keys")
-              ? vi.fn().mockRejectedValue(new Error("D1_ERROR: cannot update claimed_keys"))
+            first: vi.fn().mockResolvedValue(sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims") ? { session_id: "s", encrypted_keys: null } : null),
+            run: sql.includes("UPDATE checkout_claims SET encrypted_keys")
+              ? vi.fn().mockRejectedValue(new Error("D1_ERROR: cannot update encrypted_keys"))
               : vi.fn().mockResolvedValue({ meta: { changes: sql.includes("INSERT INTO checkout_claims") ? 1 : 0 } }),
-            all: vi.fn().mockResolvedValue({ results: [{ license_key: "COPE-NEW", checkout_id: "co_storefail" }] }),
+            all: vi.fn().mockResolvedValue({ results: [{ license_key_hash: newKeyHash, checkout_id: "co_storefail" }] }),
           })),
           first: vi.fn().mockResolvedValue(null),
           run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
@@ -533,11 +543,23 @@ describe("POST /api/account/checkout-license", () => {
     });
     it("reuses stored claimed keys from D1 for the same checkout before hitting Polar again", async () => {
       const kv = mockKV({});
+      let encryptedKeys: string | null = null;
+      const seedDb = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn((...args: unknown[]) => ({
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) encryptedKeys = args[0] as string;
+              return { meta: { changes: 1 } };
+            }),
+          })),
+        })),
+      } as unknown as D1Database;
+      await storeClaimedKeys(seedDb, "co_stored", ["COPE-STORED"], CLAIM_SECRET);
       const db = {
         prepare: vi.fn((sql: string) => ({
           bind: vi.fn(() => ({
             first: vi.fn().mockImplementation(async () => {
-              if (sql.includes("SELECT claimed_keys FROM checkout_claims")) return { claimed_keys: JSON.stringify(["COPE-STORED"]) };
+              if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) return { session_id: "s", encrypted_keys: encryptedKeys };
               return null;
             }),
             run: vi.fn().mockResolvedValue({ meta: { changes: sql.includes("INSERT INTO checkout_claims") ? 1 : 0 } }),
@@ -564,10 +586,17 @@ describe("POST /api/account/checkout-license", () => {
         expect(res.status).toBe(200);
         expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-STORED"]);
         expect(kv.put).toHaveBeenCalled();
-        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+        expect(globalThis.fetch).not.toHaveBeenCalled();
       } finally {
         globalThis.fetch = origFetch;
       }
+    });
+    it("rejects a checkout whose Polar reference_id is bound to another session", async () => {
+      stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T, metadata: { reference_id: "buyer-session" } });
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_bound_polar" },
+        { POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: createMockDB({ runChanges: 1 }).db }, "attacker-session");
+      expect(res.status).toBe(403);
+      expect(((await res.json()) as { error: string }).error).toContain("different session");
     });
     it("returns 503 for generic DB runtime error during claim", async () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T });

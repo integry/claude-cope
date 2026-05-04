@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
+import { hashKey } from "../utils/quota";
+
+const CLAIM_SECRET = "polar-test-secret";
 
 describe("pickAllLicenseKeys", () => {
   const key = (k: string, created_at: string): PolarLicenseKeyItem => ({ key: k, created_at, status: "granted" });
@@ -300,31 +303,31 @@ describe("parseCheckoutCache", () => {
 
 describe("checkout key claims", () => {
   it("claims only the keys still owned by this checkout and persists them", async () => {
-    const keyOwners = new Map<string, string>([["COPE-TAKEN", "other-checkout"]]);
+    const keyOwners = new Map<string, string>([[await hashKey("COPE-TAKEN"), "other-checkout"]]);
     let storedClaimedKeys: string | null = null;
     const db = {
       prepare: vi.fn((sql: string) => ({
         bind: vi.fn((...args: unknown[]) => ({
           run: vi.fn().mockImplementation(async () => {
             if (sql.includes("INSERT INTO checkout_key_claims")) {
-              const [licenseKey, checkoutId] = args as [string, string];
-              if (!keyOwners.has(licenseKey)) keyOwners.set(licenseKey, checkoutId);
-              return { meta: { changes: keyOwners.get(licenseKey) === checkoutId ? 1 : 0 } };
+              const [licenseKeyHash, checkoutId] = args as [string, string];
+              if (!keyOwners.has(licenseKeyHash)) keyOwners.set(licenseKeyHash, checkoutId);
+              return { meta: { changes: keyOwners.get(licenseKeyHash) === checkoutId ? 1 : 0 } };
             }
-            if (sql.includes("UPDATE checkout_claims SET claimed_keys")) {
+            if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
               storedClaimedKeys = args[0] as string;
               return { meta: { changes: 1 } };
             }
             return { meta: { changes: 0 } };
           }),
           first: vi.fn().mockImplementation(async () => {
-            if (sql.includes("SELECT claimed_keys FROM checkout_claims")) return { claimed_keys: storedClaimedKeys };
+            if (sql.includes("SELECT encrypted_keys FROM checkout_claims")) return { encrypted_keys: storedClaimedKeys };
             return null;
           }),
           all: vi.fn().mockImplementation(async () => ({
-            results: sql.includes("SELECT license_key, checkout_id FROM checkout_key_claims")
-              ? (args as string[]).map((licenseKey) => keyOwners.has(licenseKey)
-                ? { license_key: licenseKey, checkout_id: keyOwners.get(licenseKey)! }
+            results: sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")
+              ? (args as string[]).map((licenseKeyHash) => keyOwners.has(licenseKeyHash)
+                ? { license_key_hash: licenseKeyHash, checkout_id: keyOwners.get(licenseKeyHash)! }
                 : null).filter(Boolean)
               : [],
           })),
@@ -332,9 +335,9 @@ describe("checkout key claims", () => {
       })),
     } as unknown as D1Database;
 
-    const result = await claimLicenseKeysForCheckout(db, "checkout-a", ["COPE-1", "COPE-TAKEN", "COPE-2"]);
+    const result = await claimLicenseKeysForCheckout(db, "checkout-a", ["COPE-1", "COPE-TAKEN", "COPE-2"], CLAIM_SECRET);
     expect(result).toEqual({ ok: true, keys: ["COPE-1", "COPE-2"] });
-    expect(storedClaimedKeys).toBe(JSON.stringify(["COPE-1", "COPE-2"]));
+    expect(storedClaimedKeys).toBeTruthy();
   });
 
   it("returns a conflict when every requested key is already claimed elsewhere", async () => {
@@ -342,46 +345,65 @@ describe("checkout key claims", () => {
       prepare: vi.fn((sql: string) => ({
         bind: vi.fn((...args: unknown[]) => ({
           run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
-          first: vi.fn().mockResolvedValue({ claimed_keys: null }),
+          first: vi.fn().mockResolvedValue({ encrypted_keys: null }),
           all: vi.fn().mockResolvedValue({
-            results: sql.includes("SELECT license_key, checkout_id FROM checkout_key_claims")
-              ? (args as string[]).map((licenseKey) => ({ license_key: licenseKey, checkout_id: "other-checkout" }))
+            results: sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")
+              ? (args as string[]).map((licenseKeyHash) => ({ license_key_hash: licenseKeyHash, checkout_id: "other-checkout" }))
               : [],
           }),
         })),
       })),
     } as unknown as D1Database;
 
-    const result = await claimLicenseKeysForCheckout(db, "checkout-a", ["COPE-X"]);
+    const result = await claimLicenseKeysForCheckout(db, "checkout-a", ["COPE-X"], CLAIM_SECRET);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("already claimed");
   });
 
   it("treats an identical claimed_keys payload as a successful no-op", async () => {
+    let encryptedKeys: string | null = null;
     const db = {
       prepare: vi.fn((sql: string) => ({
-        bind: vi.fn(() => ({
-          first: vi.fn().mockResolvedValue(sql.includes("SELECT claimed_keys FROM checkout_claims")
-            ? { claimed_keys: JSON.stringify(["COPE-1"]) }
+        bind: vi.fn((...args: unknown[]) => ({
+          first: vi.fn().mockResolvedValue(sql.includes("SELECT encrypted_keys FROM checkout_claims")
+            ? { encrypted_keys: encryptedKeys }
             : null),
-          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          run: vi.fn().mockImplementation(async () => {
+            if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
+              encryptedKeys = args[0] as string;
+            }
+            return { meta: { changes: 0 } };
+          }),
         })),
       })),
     } as unknown as D1Database;
 
-    await expect(storeClaimedKeys(db, "checkout-a", ["COPE-1"])).resolves.toEqual({ ok: true });
+    await storeClaimedKeys(db, "checkout-a", ["COPE-1"], CLAIM_SECRET);
+    await expect(storeClaimedKeys(db, "checkout-a", ["COPE-1"], CLAIM_SECRET)).resolves.toEqual({ ok: true });
   });
 
   it("returns stored keys for a previously completed checkout claim", async () => {
+    let encryptedKeys: string | null = null;
+    const recordingDb = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn((...args: unknown[]) => ({
+          run: vi.fn().mockImplementation(async () => {
+            encryptedKeys = args[0] as string;
+            return { meta: { changes: 1 } };
+          }),
+        })),
+      })),
+    } as unknown as D1Database;
+    await storeClaimedKeys(recordingDb, "checkout-a", ["COPE-1", "COPE-2"], CLAIM_SECRET);
     const db = {
       prepare: vi.fn(() => ({
         bind: vi.fn(() => ({
-          first: vi.fn().mockResolvedValue({ claimed_keys: JSON.stringify(["COPE-1", "COPE-2"]) }),
+          first: vi.fn().mockResolvedValue({ session_id: "sess-1", encrypted_keys: encryptedKeys }),
         })),
       })),
     } as unknown as D1Database;
 
-    await expect(getStoredClaimedKeys(db, "checkout-a")).resolves.toEqual({ ok: true, keys: ["COPE-1", "COPE-2"] });
+    await expect(getStoredClaimedKeys(db, "checkout-a", CLAIM_SECRET)).resolves.toEqual({ ok: true, sessionId: "sess-1", keys: ["COPE-1", "COPE-2"] });
   });
 });
 

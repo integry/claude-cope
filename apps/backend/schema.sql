@@ -138,18 +138,18 @@ CREATE TABLE IF NOT EXISTS system_config (
 CREATE INDEX IF NOT EXISTS idx_system_config_tier
     ON system_config (tier);
 
--- Records which session first redeemed a checkout through this app.
--- This is a first-redeemer lock, not proof that the session initiated checkout creation.
+-- Records which session redeemed a checkout through this app, plus an encrypted
+-- copy of the issued keys for idempotent retrieval after redirects/retries.
 CREATE TABLE IF NOT EXISTS checkout_claims (
     checkout_id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
     claimed_at TEXT NOT NULL DEFAULT (datetime('now')),
-    claimed_keys TEXT,
+    encrypted_keys TEXT,
     checkout_created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS checkout_key_claims (
-    license_key TEXT PRIMARY KEY,
+    license_key_hash TEXT PRIMARY KEY,
     checkout_id TEXT NOT NULL,
     claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

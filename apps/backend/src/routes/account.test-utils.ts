@@ -7,13 +7,19 @@ export function createMockDB(opts: {
   runChanges?: number;
 } = {}) {
   const calls: { sql: string; bindings: unknown[] }[] = [];
-  const checkoutClaims = new Map<string, { sessionId?: string; claimedKeys: string | null }>();
+  const checkoutClaims = new Map<string, { sessionId?: string; encryptedKeys: string | null }>();
   const keyOwners = new Map<string, string>();
   const resolveFirst = (sql: string, bindings: unknown[]) => {
-    if (sql.includes("SELECT claimed_keys FROM checkout_claims WHERE checkout_id = ?")) {
+    if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims WHERE checkout_id = ?")) {
       const checkoutId = bindings[0] as string;
       if (!checkoutClaims.has(checkoutId)) return null;
-      return { claimed_keys: checkoutClaims.get(checkoutId)?.claimedKeys ?? null };
+      const claim = checkoutClaims.get(checkoutId)!;
+      return { session_id: claim.sessionId ?? null, encrypted_keys: claim.encryptedKeys ?? null };
+    }
+    if (sql.includes("SELECT encrypted_keys FROM checkout_claims WHERE checkout_id = ?")) {
+      const checkoutId = bindings[0] as string;
+      if (!checkoutClaims.has(checkoutId)) return null;
+      return { encrypted_keys: checkoutClaims.get(checkoutId)?.encryptedKeys ?? null };
     }
     if (opts.firstBySQL) {
       for (const [pattern, result] of Object.entries(opts.firstBySQL)) {
@@ -28,30 +34,30 @@ export function createMockDB(opts: {
       if (sql.includes("INSERT INTO checkout_claims")) {
         const [checkoutId, sessionId] = bindings as [string, string];
         if (checkoutClaims.has(checkoutId)) return { meta: { changes: 0 } };
-        checkoutClaims.set(checkoutId, { sessionId, claimedKeys: null });
+        checkoutClaims.set(checkoutId, { sessionId, encryptedKeys: null });
         return { meta: { changes: 1 } };
       }
-      if (sql.includes("UPDATE checkout_claims SET claimed_keys")) {
-        const [claimedKeys, checkoutId] = bindings as [string, string];
+      if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
+        const [encryptedKeys, checkoutId] = bindings as [string, string];
         const claim = checkoutClaims.get(checkoutId);
         if (!claim) return { meta: { changes: 0 } };
-        claim.claimedKeys = claimedKeys;
+        claim.encryptedKeys = encryptedKeys;
         return { meta: { changes: opts.runChanges ?? 1 } };
       }
       if (sql.includes("INSERT INTO checkout_key_claims")) {
-        const [licenseKey, checkoutId] = bindings as [string, string];
-        if (keyOwners.has(licenseKey)) return { meta: { changes: 0 } };
-        keyOwners.set(licenseKey, checkoutId);
+        const [licenseKeyHash, checkoutId] = bindings as [string, string];
+        if (keyOwners.has(licenseKeyHash)) return { meta: { changes: 0 } };
+        keyOwners.set(licenseKeyHash, checkoutId);
         return { meta: { changes: 1 } };
       }
       return { meta: { changes: opts.runChanges ?? 0 } };
     }),
     all: vi.fn().mockImplementation(async () => {
-      if (sql.includes("SELECT license_key, checkout_id FROM checkout_key_claims")) {
+      if (sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")) {
         return {
           results: (bindings as string[])
-            .filter((licenseKey) => keyOwners.has(licenseKey))
-            .map((licenseKey) => ({ license_key: licenseKey, checkout_id: keyOwners.get(licenseKey)! })),
+            .filter((licenseKeyHash) => keyOwners.has(licenseKeyHash))
+            .map((licenseKeyHash) => ({ license_key_hash: licenseKeyHash, checkout_id: keyOwners.get(licenseKeyHash)! })),
         };
       }
       return { results: [] };

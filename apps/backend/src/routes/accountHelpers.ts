@@ -1,8 +1,16 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { getProfile, getProfileByLicenseHash, getProfileRow, resolveRank } from "../utils/profile";
-import { getQuotaLimits } from "../utils/quota";
+import { getQuotaLimits, hashKey } from "../utils/quota";
 
-export type PolarCheckout = { id?: string; organization_id?: string; status?: string; customer_id?: string | null; customer?: { id?: string }; created_at?: string };
+export type PolarCheckout = {
+  id?: string;
+  organization_id?: string;
+  status?: string;
+  customer_id?: string | null;
+  customer?: { id?: string };
+  created_at?: string;
+  metadata?: Record<string, unknown>;
+};
 export type PolarLicenseKeyItem = { key: string; created_at: string; status: string };
 
 const MAX_KEY_MINT_WINDOW_MS = 15 * 60 * 1000;
@@ -69,7 +77,11 @@ export async function fetchLicenseKeys(customerId: string, organizationId: strin
   return allKeys.length ? { keys: allKeys.map((k) => k.key) } : { error: "No license issued yet — try again in a few seconds", status: 409 };
 }
 
-export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: string, organizationId: string): Promise<{ customerId: string; createdAt?: string } | { error: string; status: ContentfulStatusCode }> {
+export async function fetchCheckoutCustomerId(
+  checkoutId: string,
+  accessToken: string,
+  organizationId: string,
+): Promise<{ customerId: string; createdAt?: string; referenceId?: string } | { error: string; status: ContentfulStatusCode }> {
   let resp: Response;
   try {
     resp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(checkoutId)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -85,7 +97,8 @@ export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: s
   if (checkout.organization_id !== organizationId) return { error: "Checkout belongs to a different organization", status: 403 };
   if (checkout.status !== "succeeded") return { error: "Payment not yet confirmed", status: 409 };
   const customerId = checkout.customer_id || checkout.customer?.id;
-  return customerId ? { customerId, createdAt: checkout.created_at } : { error: "Checkout has no associated customer", status: 500 };
+  const referenceId = typeof checkout.metadata?.reference_id === "string" ? checkout.metadata.reference_id : undefined;
+  return customerId ? { customerId, createdAt: checkout.created_at, referenceId } : { error: "Checkout has no associated customer", status: 500 };
 }
 
 export async function fetchNextCheckoutCreatedAt(customerId: string, organizationId: string, accessToken: string, opts: { checkoutId: string; checkoutCreatedAt: string }): Promise<{ createdAt: string | null } | { error: string; status: ContentfulStatusCode }> {
@@ -115,6 +128,41 @@ export async function fetchNextCheckoutCreatedAt(customerId: string, organizatio
 }
 
 export type CheckoutCache = { keys: string[]; sessionId: string };
+
+function toBase64(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function fromBase64(raw: string): Uint8Array {
+  return Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
+}
+
+async function importCheckoutClaimKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "AES-GCM" },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
+async function encryptClaimedKeys(keys: string[], secret: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const payload = new TextEncoder().encode(JSON.stringify(keys));
+  const key = await importCheckoutClaimKey(secret);
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, payload));
+  return JSON.stringify({ iv: toBase64(iv), data: toBase64(ciphertext) });
+}
+
+async function decryptClaimedKeys(raw: string, secret: string): Promise<string[] | null> {
+  const parsed = JSON.parse(raw) as { iv?: unknown; data?: unknown };
+  if (typeof parsed?.iv !== "string" || typeof parsed?.data !== "string") return null;
+  const key = await importCheckoutClaimKey(secret);
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64(parsed.iv) }, key, fromBase64(parsed.data));
+  const decoded = JSON.parse(new TextDecoder().decode(plaintext));
+  return Array.isArray(decoded) && decoded.every((item) => typeof item === "string" && item.length > 0) ? decoded : null;
+}
 
 function isNonEmptyStringArray(arr: unknown[]): arr is string[] {
   return arr.length > 0 && arr.every((v) => typeof v === "string" && v.length > 0);
@@ -262,44 +310,53 @@ export async function claimCheckoutForSession(db: D1Database, checkoutId: string
   }
 }
 
-export async function getStoredClaimedKeys(db: D1Database, checkoutId: string): Promise<{ ok: true; keys: string[] | null } | { ok: false; error: string }> {
+export async function getStoredClaimedKeys(
+  db: D1Database,
+  checkoutId: string,
+  secret: string,
+): Promise<{ ok: true; sessionId: string | null; keys: string[] | null } | { ok: false; error: string }> {
   try {
-    const row = await db.prepare("SELECT claimed_keys FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ claimed_keys: string | null }>();
-    if (!row?.claimed_keys) return { ok: true, keys: null };
-    const parsed = JSON.parse(row.claimed_keys);
-    return Array.isArray(parsed) && parsed.every((key) => typeof key === "string" && key.length > 0)
-      ? { ok: true, keys: parsed }
+    const row = await db.prepare("SELECT session_id, encrypted_keys FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ session_id: string | null; encrypted_keys: string | null }>();
+    if (!row) return { ok: true, sessionId: null, keys: null };
+    if (!row.encrypted_keys) return { ok: true, sessionId: row.session_id, keys: null };
+    const parsed = await decryptClaimedKeys(row.encrypted_keys, secret);
+    return parsed
+      ? { ok: true, sessionId: row.session_id, keys: parsed }
       : { ok: false, error: "Stored checkout claim is malformed — please try again" };
   } catch {
     return { ok: false, error: "Unable to read stored checkout claim — please try again" };
   }
 }
 
-export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys: string[]): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys: string[], secret: string): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const serializedKeys = JSON.stringify(keys);
-    const result = await db.prepare("UPDATE checkout_claims SET claimed_keys = ? WHERE checkout_id = ?").bind(serializedKeys, checkoutId).run();
+    const encryptedKeys = await encryptClaimedKeys(keys, secret);
+    const result = await db.prepare("UPDATE checkout_claims SET encrypted_keys = ? WHERE checkout_id = ?").bind(encryptedKeys, checkoutId).run();
     if (result.meta.changes) return { ok: true };
-    const existing = await db.prepare("SELECT claimed_keys FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ claimed_keys: string | null }>();
+    const existing = await db.prepare("SELECT encrypted_keys FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ encrypted_keys: string | null }>();
     if (!existing) return { ok: false, error: "Checkout claim disappeared before keys could be recorded — please try again" };
-    if (existing.claimed_keys === serializedKeys) return { ok: true };
+    if (existing.encrypted_keys) {
+      const parsed = await decryptClaimedKeys(existing.encrypted_keys, secret);
+      if (parsed && JSON.stringify(parsed) === JSON.stringify(keys)) return { ok: true };
+    }
     return { ok: false, error: "Checkout claim changed before keys could be recorded — please try again" };
   } catch {
     return { ok: false, error: "Unable to record claimed license keys — please try again" };
   }
 }
 
-export async function claimLicenseKeysForCheckout(db: D1Database, checkoutId: string, keys: string[]): Promise<{ ok: true; keys: string[] } | { ok: false; error: string }> {
+export async function claimLicenseKeysForCheckout(db: D1Database, checkoutId: string, keys: string[], secret: string): Promise<{ ok: true; keys: string[] } | { ok: false; error: string }> {
   try {
     for (const key of keys) {
-      await db.prepare("INSERT INTO checkout_key_claims (license_key, checkout_id) VALUES (?, ?) ON CONFLICT(license_key) DO NOTHING").bind(key, checkoutId).run();
+      await db.prepare("INSERT INTO checkout_key_claims (license_key_hash, checkout_id) VALUES (?, ?) ON CONFLICT(license_key_hash) DO NOTHING").bind(await hashKey(key), checkoutId).run();
     }
-    const placeholders = keys.map(() => "?").join(", ");
-    const rows = await db.prepare(`SELECT license_key, checkout_id FROM checkout_key_claims WHERE license_key IN (${placeholders})`).bind(...keys).all<{ license_key: string; checkout_id: string }>();
-    const ownerByKey = new Map((rows.results ?? []).map((row) => [row.license_key, row.checkout_id]));
-    const claimedKeys = keys.filter((key) => ownerByKey.get(key) === checkoutId);
+    const keyHashes = await Promise.all(keys.map((key) => hashKey(key)));
+    const placeholders = keyHashes.map(() => "?").join(", ");
+    const rows = await db.prepare(`SELECT license_key_hash, checkout_id FROM checkout_key_claims WHERE license_key_hash IN (${placeholders})`).bind(...keyHashes).all<{ license_key_hash: string; checkout_id: string }>();
+    const ownerByHash = new Map((rows.results ?? []).map((row) => [row.license_key_hash, row.checkout_id]));
+    const claimedKeys = keys.filter((key, idx) => ownerByHash.get(keyHashes[idx]!) === checkoutId);
     if (!claimedKeys.length) return { ok: false, error: "These license keys were already claimed by another checkout — please retry in a few seconds" };
-    const stored = await storeClaimedKeys(db, checkoutId, claimedKeys);
+    const stored = await storeClaimedKeys(db, checkoutId, claimedKeys, secret);
     return stored.ok ? { ok: true, keys: claimedKeys } : stored;
   } catch {
     return { ok: false, error: "Unable to atomically claim license keys — please try again" };
