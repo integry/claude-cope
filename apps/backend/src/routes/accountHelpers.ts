@@ -2,65 +2,35 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { getProfile, getProfileByLicenseHash, getProfileRow, resolveRank } from "../utils/profile";
 import { getQuotaLimits } from "../utils/quota";
 
-export type PolarCheckout = {
-  id?: string;
-  organization_id?: string;
-  status?: string;
-  customer_id?: string | null;
-  customer?: { id?: string };
-  created_at?: string;
-};
-
-export type PolarLicenseKeyItem = {
-  key: string;
-  created_at: string;
-  status: string;
-};
+export type PolarCheckout = { id?: string; organization_id?: string; status?: string; customer_id?: string | null; customer?: { id?: string }; created_at?: string };
+export type PolarLicenseKeyItem = { key: string; created_at: string; status: string };
 
 const MAX_KEY_MINT_WINDOW_MS = 15 * 60 * 1000;
 const MAX_KEY_FALLBACK_WINDOW_MS = 60 * 60 * 1000;
 const MAX_FALLBACK_CLUSTER_GAP_MS = 2 * 60 * 1000;
+const LICENSE_KEY_PAGE_SIZE = 100;
+const CHECKOUT_PAGE_SIZE = 100;
+const MAX_TICKET_TITLE_LEN = 200;
+const MAX_TICKET_ID_LEN = 100;
 
-// Returns ALL keys minted by a checkout, ordered oldest-first.
-// Uses a time window after checkout creation to avoid returning keys from later purchases.
-// When nextCheckoutCreatedAt is provided (from a subsequent purchase by the same
-// customer), the window is narrowed to end before that checkout's creation time,
-// preventing this checkout from claiming keys that belong to the next purchase.
 export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreatedAt: string, nextCheckoutCreatedAt?: string): PolarLicenseKeyItem[] {
   const checkoutTime = new Date(checkoutCreatedAt).getTime();
   if (!Number.isFinite(checkoutTime)) return [];
-
   const nextCheckoutTime = nextCheckoutCreatedAt ? new Date(nextCheckoutCreatedAt).getTime() : NaN;
   const hasNextCheckout = Number.isFinite(nextCheckoutTime) && nextCheckoutTime > checkoutTime;
-
   const sorted = [...granted].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  const upperBound = hasNextCheckout
-    ? Math.min(checkoutTime + MAX_KEY_MINT_WINDOW_MS, nextCheckoutTime)
-    : checkoutTime + MAX_KEY_MINT_WINDOW_MS;
+  const upperBound = hasNextCheckout ? Math.min(checkoutTime + MAX_KEY_MINT_WINDOW_MS, nextCheckoutTime) : checkoutTime + MAX_KEY_MINT_WINDOW_MS;
   const windowed = sorted.filter((k) => {
     const t = new Date(k.created_at).getTime();
     return t >= checkoutTime && t <= upperBound;
   });
   if (windowed.length > 0) return windowed;
-
-  // Fallback: if Polar minted keys beyond the primary window (delayed
-  // processing), extend to 1 hour. This prevents permanent rejection of
-  // legitimate purchases without returning keys from unrelated later orders.
-  // The next-checkout bound still applies to avoid grabbing keys from a
-  // subsequent purchase by the same customer.
-  const fallbackBound = hasNextCheckout
-    ? Math.min(checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS, nextCheckoutTime)
-    : checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS;
+  const fallbackBound = hasNextCheckout ? Math.min(checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS, nextCheckoutTime) : checkoutTime + MAX_KEY_FALLBACK_WINDOW_MS;
   const fallback = sorted.filter((k) => {
     const t = new Date(k.created_at).getTime();
     return t >= checkoutTime && t <= fallbackBound;
   });
-
   if (fallback.length === 0 || hasNextCheckout) return fallback;
-
-  // Without a recorded next checkout boundary, the fallback window is best-effort.
-  // Fail closed on a later mint cluster instead of assigning keys from multiple
-  // purchases to the earlier checkout.
   const firstCluster: PolarLicenseKeyItem[] = [fallback[0]!];
   let previousTime = new Date(fallback[0]!.created_at).getTime();
   for (let i = 1; i < fallback.length; i++) {
@@ -73,32 +43,18 @@ export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreat
   return firstCluster;
 }
 
-const LICENSE_KEY_PAGE_SIZE = 100;
-const CHECKOUT_PAGE_SIZE = 100;
-
-export async function fetchLicenseKeys(
-  customerId: string,
-  organizationId: string,
-  accessToken: string,
-  opts: { createdAt: string; nextCheckoutCreatedAt?: string },
-): Promise<{ keys: string[] } | { error: string; status: ContentfulStatusCode }> {
-  const { createdAt, nextCheckoutCreatedAt } = opts;
+export async function fetchLicenseKeys(customerId: string, organizationId: string, accessToken: string, opts: { createdAt: string; nextCheckoutCreatedAt?: string }): Promise<{ keys: string[] } | { error: string; status: ContentfulStatusCode }> {
   const allItems: PolarLicenseKeyItem[] = [];
-  const checkoutTime = new Date(createdAt).getTime();
-  const lowerBound = Number.isFinite(checkoutTime) ? checkoutTime : NaN;
+  const lowerBound = new Date(opts.createdAt).getTime();
   for (let page = 1; ; page++) {
     let lkResp: Response;
     try {
-      lkResp = await fetch(
-        `https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=${LICENSE_KEY_PAGE_SIZE}&page=${page}&sorting=-created_at`,
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
+      lkResp = await fetch(`https://api.polar.sh/v1/license-keys/?customer_id=${encodeURIComponent(customerId)}&organization_id=${encodeURIComponent(organizationId)}&limit=${LICENSE_KEY_PAGE_SIZE}&page=${page}&sorting=-created_at`, { headers: { Authorization: `Bearer ${accessToken}` } });
     } catch {
       return { error: "Unable to reach Polar — please try again", status: 502 };
     }
     if (!lkResp.ok) return { error: "Failed to list license keys", status: 502 };
-    const lkData = await lkResp.json() as { items?: PolarLicenseKeyItem[] };
-    const items = lkData.items ?? [];
+    const items = ((await lkResp.json()) as { items?: PolarLicenseKeyItem[] }).items ?? [];
     allItems.push(...items);
     if (items.length < LICENSE_KEY_PAGE_SIZE) break;
     const oldestItemTime = items.reduce((oldest, item) => {
@@ -109,17 +65,14 @@ export async function fetchLicenseKeys(
   }
   const granted = allItems.filter((l) => l.status === "granted");
   if (!granted.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
-  const allKeys = pickAllLicenseKeys(granted, createdAt, nextCheckoutCreatedAt);
-  if (!allKeys.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
-  return { keys: allKeys.map((k) => k.key) };
+  const allKeys = pickAllLicenseKeys(granted, opts.createdAt, opts.nextCheckoutCreatedAt);
+  return allKeys.length ? { keys: allKeys.map((k) => k.key) } : { error: "No license issued yet — try again in a few seconds", status: 409 };
 }
 
 export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: string, organizationId: string): Promise<{ customerId: string; createdAt?: string } | { error: string; status: ContentfulStatusCode }> {
   let resp: Response;
   try {
-    resp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(checkoutId)}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    resp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(checkoutId)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
   } catch {
     return { error: "Unable to reach Polar — please try again", status: 502 };
   }
@@ -132,63 +85,36 @@ export async function fetchCheckoutCustomerId(checkoutId: string, accessToken: s
   if (checkout.organization_id !== organizationId) return { error: "Checkout belongs to a different organization", status: 403 };
   if (checkout.status !== "succeeded") return { error: "Payment not yet confirmed", status: 409 };
   const customerId = checkout.customer_id || checkout.customer?.id;
-  if (!customerId) return { error: "Checkout has no associated customer", status: 500 };
-  return { customerId, createdAt: checkout.created_at };
+  return customerId ? { customerId, createdAt: checkout.created_at } : { error: "Checkout has no associated customer", status: 500 };
 }
 
-export async function fetchNextCheckoutCreatedAt(
-  customerId: string,
-  organizationId: string,
-  accessToken: string,
-  opts: { checkoutId: string; checkoutCreatedAt: string },
-): Promise<{ createdAt: string | null } | { error: string; status: ContentfulStatusCode }> {
+export async function fetchNextCheckoutCreatedAt(customerId: string, organizationId: string, accessToken: string, opts: { checkoutId: string; checkoutCreatedAt: string }): Promise<{ createdAt: string | null } | { error: string; status: ContentfulStatusCode }> {
   const checkoutTime = new Date(opts.checkoutCreatedAt).getTime();
-  if (!Number.isFinite(checkoutTime)) {
-    return { error: "Checkout is missing creation timestamp — cannot verify license ownership", status: 500 };
-  }
-
+  if (!Number.isFinite(checkoutTime)) return { error: "Checkout is missing creation timestamp — cannot verify license ownership", status: 500 };
   let candidate: string | null = null;
   for (let page = 1; ; page++) {
     let resp: Response;
     try {
-      const params = new URLSearchParams({
-        customer_id: customerId,
-        organization_id: organizationId,
-        status: "succeeded",
-        limit: String(CHECKOUT_PAGE_SIZE),
-        page: String(page),
-        sorting: "-created_at",
-      });
-      resp = await fetch(`https://api.polar.sh/v1/checkouts/?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const params = new URLSearchParams({ customer_id: customerId, organization_id: organizationId, status: "succeeded", limit: String(CHECKOUT_PAGE_SIZE), page: String(page), sorting: "-created_at" });
+      resp = await fetch(`https://api.polar.sh/v1/checkouts/?${params.toString()}`, { headers: { Authorization: `Bearer ${accessToken}` } });
     } catch {
       return { error: "Unable to reach Polar — please try again", status: 502 };
     }
     if (!resp.ok) return { error: "Failed to list customer checkouts", status: 502 };
-
-    const data = await resp.json() as { items?: PolarCheckout[] };
-    const items = data.items ?? [];
+    const items = ((await resp.json()) as { items?: PolarCheckout[] }).items ?? [];
     for (const item of items) {
       if (!item?.created_at || item.id === opts.checkoutId) continue;
       const itemTime = new Date(item.created_at).getTime();
       if (!Number.isFinite(itemTime)) continue;
-      if (itemTime > checkoutTime) {
-        candidate = item.created_at;
-      } else if (candidate) {
-        return { createdAt: candidate };
-      }
+      if (itemTime > checkoutTime) candidate = item.created_at;
+      else if (candidate) return { createdAt: candidate };
     }
     if (items.length < CHECKOUT_PAGE_SIZE) break;
   }
-
   return { createdAt: candidate };
 }
 
-export type CheckoutCache = {
-  keys: string[];
-  sessionId: string;
-};
+export type CheckoutCache = { keys: string[]; sessionId: string };
 
 function isNonEmptyStringArray(arr: unknown[]): arr is string[] {
   return arr.length > 0 && arr.every((v) => typeof v === "string" && v.length > 0);
@@ -197,20 +123,15 @@ function isNonEmptyStringArray(arr: unknown[]): arr is string[] {
 export function parseCheckoutCache(raw: string): CheckoutCache | null {
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      if (!isNonEmptyStringArray(parsed)) return null;
-      return { keys: parsed, sessionId: "" };
-    }
+    if (Array.isArray(parsed)) return isNonEmptyStringArray(parsed) ? { keys: parsed, sessionId: "" } : null;
     if (parsed && typeof parsed === "object" && Array.isArray(parsed.keys)) {
       if (!isNonEmptyStringArray(parsed.keys)) return null;
       const sid = parsed.sessionId;
-      if (sid !== undefined && sid !== null && typeof sid !== "string") return null;
-      return { keys: parsed.keys, sessionId: typeof sid === "string" ? sid : "" };
+      return sid !== undefined && sid !== null && typeof sid !== "string" ? null : { keys: parsed.keys, sessionId: typeof sid === "string" ? sid : "" };
     }
     return null;
   } catch {
-    if (typeof raw === "string" && raw.length > 0 && /^[A-Za-z0-9_-]+$/.test(raw)) return { keys: [raw], sessionId: "" };
-    return null;
+    return typeof raw === "string" && raw.length > 0 && /^[A-Za-z0-9_-]+$/.test(raw) ? { keys: [raw], sessionId: "" } : null;
   }
 }
 
@@ -233,171 +154,77 @@ export type SyncBody = {
 };
 
 function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
-  // Only truly cosmetic preferences are accepted from the client.
-  // unlocked_themes, active_theme, and active_ticket are server-authoritative:
-  // themes are paid items that must not be mintable or activated via a forged
-  // first-sync payload, and ticket state must not be restored from stale
-  // client data.  active_theme is always "default" for new profiles because
-  // the server initializes unlocked_themes to ["default"] — accepting a
-  // client-supplied theme here would bypass the paid-theme gate.
-  return {
-    buddyType: cp?.buddy_type ?? null,
-    buddyIsShiny: cp?.buddy_is_shiny ? 1 : 0,
-  };
+  return { buddyType: cp?.buddy_type ?? null, buddyIsShiny: cp?.buddy_is_shiny ? 1 : 0 };
 }
 
-type CreateProfileResult =
-  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined }
-  | { profile: null; error: string };
+type CreateProfileResult = { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined } | { profile: null; error: string };
 
 async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<CreateProfileResult> {
   const newUsername = body.username?.trim();
-  if (!newUsername) {
-    return { profile: null, error: "Username is required — please set a username before activating." };
-  }
-
-  // Check if username already exists.
-  const existing = await db
-    .prepare("SELECT license_hash FROM user_scores WHERE username = ?")
-    .bind(newUsername)
-    .first<{ license_hash: string | null }>();
+  if (!newUsername) return { profile: null, error: "Username is required — please set a username before activating." };
+  const existing = await db.prepare("SELECT license_hash FROM user_scores WHERE username = ?").bind(newUsername).first<{ license_hash: string | null }>();
   if (existing) {
     if (existing.license_hash === hash) {
-      // Already belongs to this license — just return the existing profile
       const profile = await getProfile(db, newUsername);
-      if (!profile) return { profile: null, error: "Profile not found after lookup" };
-      return { profile };
+      return profile ? { profile } : { profile: null, error: "Profile not found after lookup" };
     }
     if (existing.license_hash === null) {
-      // Free user upgrading to Max — attach the license to their existing profile.
-      // Verify the caller's session is bound to this username to prevent an
-      // attacker from seizing another free user's profile by sending /sync
-      // with their username. Fail closed if no sessionContext: without it we
-      // have no way to verify ownership of an existing free row, so refuse
-      // the upgrade rather than allowing it unconditionally.
-      if (!sessionContext) {
-        return { profile: null, error: "Session required to upgrade an existing username." };
-      }
+      if (!sessionContext) return { profile: null, error: "Session required to upgrade an existing username." };
       const boundUsername = await sessionContext.kv.get(`session_user:${sessionContext.sessionId}`);
-      if (boundUsername !== newUsername) {
-        return { profile: null, error: "Cannot claim an existing free username — log in to that account first or pick a different username." };
-      }
-      // Preserve the server-authoritative profile data (TD, inventory, etc.).
-      // The WHERE clause includes `license_hash IS NULL` so that under a
-      // concurrent /sync race only one request can claim the row. Check
-      // result.meta.changes to detect if another request won the race.
-      const upgradeResult = await db
-        .prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ? AND license_hash IS NULL")
-        .bind(hash, newUsername)
-        .run();
-      if (!upgradeResult.meta.changes) {
-        // Another concurrent request already attached a license to this row.
-        return { profile: null, error: "This username was just claimed by another request. Please try again." };
-      }
+      if (boundUsername !== newUsername) return { profile: null, error: "Cannot claim an existing free username — log in to that account first or pick a different username." };
+      const upgradeResult = await db.prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ? AND license_hash IS NULL").bind(hash, newUsername).run();
+      if (!upgradeResult.meta.changes) return { profile: null, error: "This username was just claimed by another request. Please try again." };
       const profile = await getProfile(db, newUsername);
-      if (!profile) return { profile: null, error: "Profile not found after upgrade" };
-      return { profile };
+      return profile ? { profile } : { profile: null, error: "Profile not found after upgrade" };
     }
-    // Username is owned by a different license — refuse
     return { profile: null, error: "This username is already taken. Please change your username and try again." };
   }
-
-  // New profile for a freshly activated license — use server-authoritative defaults.
-  // Only cosmetic preferences (theme, buddy) are accepted from the client; scoring
-  // fields (TD, inventory, upgrades, achievements) start at zero to prevent a
-  // forged first-sync payload from minting arbitrary progress.
   const c = buildProfileCosmetics(body.currentProfile);
-  const defaultRank = resolveRank(0);
-
   try {
-    await db
-      .prepare(
-        `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
-         VALUES (?, 0, 0, ?, ?, '{}', '[]', '[]', ?, ?, '["default"]', 'default', NULL, 1.0)`,
-      )
-      .bind(
-        newUsername, defaultRank, hash,
-        c.buddyType, c.buddyIsShiny,
-      )
-      .run();
+    await db.prepare(
+      `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, license_hash, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier)
+       VALUES (?, 0, 0, ?, ?, '{}', '[]', '[]', ?, ?, '["default"]', 'default', NULL, 1.0)`,
+    ).bind(newUsername, resolveRank(0), hash, c.buddyType, c.buddyIsShiny).run();
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Catch UNIQUE constraint violations from concurrent /sync requests racing
-    // on the same username or license_hash.
-    if (msg.includes("UNIQUE") || msg.includes("unique") || msg.includes("constraint")) {
-      return { profile: null, error: "This username or license is being activated by another request. Please try again." };
-    }
+    if (msg.includes("UNIQUE") || msg.includes("unique") || msg.includes("constraint")) return { profile: null, error: "This username or license is being activated by another request. Please try again." };
     throw err;
   }
-
   const profile = await getProfile(db, newUsername);
-  if (!profile) return { profile: null, error: "Failed to create profile" };
-  return { profile };
+  return profile ? { profile } : { profile: null, error: "Failed to create profile" };
 }
 
-type ResolveProfileResult =
-  | { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined }
-  | { restored: false; profile: null; error: string };
+type ResolveProfileResult = { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; error?: undefined } | { restored: false; profile: null; error: string };
 
 export async function resolveProfile(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<ResolveProfileResult> {
-  // Case 1: Existing profile with this license_hash → restore (cross-device sync)
   const existingByHash = await getProfileByLicenseHash(db, hash);
-  if (existingByHash) {
-    return { restored: true, profile: existingByHash };
-  }
-
-  // Case 2: No profile for this license → create a new one, or upgrade an
-  // existing free (unlicensed) profile if the username matches.
+  if (existingByHash) return { restored: true, profile: existingByHash };
   const created = await createProfileFromClient(db, hash, body, sessionContext);
-  if ('error' in created && created.error) {
-    return { restored: false, profile: null, error: created.error };
-  }
-  // After error check, created.profile is guaranteed non-null by CreateProfileResult union
-  return { restored: false, profile: created.profile! };
+  return "error" in created && created.error ? { restored: false, profile: null, error: created.error } : { restored: false, profile: created.profile! };
 }
 
-export type OwnershipResult =
-  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; status: "ok" }
-  | { profile: null; status: "not_found"; error: string }
-  | { profile: null; status: "unauthorized"; error: string };
+export type OwnershipResult = { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; status: "ok" } | { profile: null; status: "not_found"; error: string } | { profile: null; status: "unauthorized"; error: string };
 
 export async function verifyOwnership(db: D1Database, username: string, licenseKeyHash: string): Promise<OwnershipResult> {
   const row = await getProfileRow(db, username);
   if (!row) return { profile: null, status: "not_found", error: "Profile not found" };
-  const rowWithHash = row as unknown as { license_hash: string | null };
-  if (!rowWithHash.license_hash || rowWithHash.license_hash !== licenseKeyHash) {
-    return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
-  }
-
-  // Verify the license is still active in the local licenses table.
-  const license = await db
-    .prepare("SELECT status FROM licenses WHERE key_hash = ?")
-    .bind(licenseKeyHash)
-    .first<{ status: string }>();
-  if (!license || license.status !== "active") {
-    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
-  }
-
+  const rowWithHash = row as { license_hash: string | null };
+  if (!rowWithHash.license_hash || rowWithHash.license_hash !== licenseKeyHash) return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
+  const license = await db.prepare("SELECT status FROM licenses WHERE key_hash = ?").bind(licenseKeyHash).first<{ status: string }>();
+  if (!license || license.status !== "active") return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
   const profile = await getProfile(db, username);
-  if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
-  return { profile, status: "ok" };
+  return profile ? { profile, status: "ok" } : { profile: null, status: "not_found", error: "Profile not found" };
 }
 
 export function broadcastPurchase(message: string, db: D1Database | undefined, ctx: { waitUntil: (p: Promise<unknown>) => void }) {
-  if (db) {
-    ctx.waitUntil(
-      db.prepare("INSERT INTO recent_events (message) VALUES (?)").bind(message).run(),
-    );
-  }
+  if (db) ctx.waitUntil(db.prepare("INSERT INTO recent_events (message) VALUES (?)").bind(message).run());
 }
 
 export const SHILL_CREDIT = 5;
 
 async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: number): Promise<void> {
   const kvKey = `polar:${hash}`;
-  const existingQuota = await kv.get(kvKey);
-  if (existingQuota !== null) return;
-
+  if (await kv.get(kvKey) !== null) return;
   const revokedKey = `polar_revoked:${hash}`;
   const savedQuota = await kv.get(revokedKey);
   if (savedQuota !== null) {
@@ -408,111 +235,54 @@ async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: numbe
   }
 }
 
-export async function commitSyncSideEffects(
-  deps: { db: D1Database; kv: KVNamespace; hash: string },
-  opts: { validationId?: string; limits: ReturnType<typeof getQuotaLimits>; sessionId?: string },
-) {
+export async function commitSyncSideEffects(deps: { db: D1Database; kv: KVNamespace; hash: string }, opts: { validationId?: string; limits: ReturnType<typeof getQuotaLimits>; sessionId?: string }) {
   const { db, kv, hash } = deps;
-  await db
-    .prepare(
-      "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
-    )
-    .bind(hash)
-    .run();
-
+  await db.prepare("INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')").bind(hash).run();
   await ensureQuota(kv, hash, opts.limits.proInitialQuota);
-
-  if (opts.validationId) {
-    await kv.put(`polar_id:${hash}`, opts.validationId);
-  }
+  if (opts.validationId) await kv.put(`polar_id:${hash}`, opts.validationId);
 }
 
-export async function claimCheckoutForSession(
-  db: D1Database,
-  checkoutId: string,
-  sessionId: string,
-  opts: { checkoutCreatedAt?: string } = {},
-): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
-  const { checkoutCreatedAt } = opts;
+export async function claimCheckoutForSession(db: D1Database, checkoutId: string, sessionId: string, opts: { checkoutCreatedAt?: string } = {}): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
   try {
-    const result = await db
-      .prepare(
-        "INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at, customer_hash) VALUES (?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING",
-      )
-      .bind(checkoutId, sessionId, checkoutCreatedAt ?? null, null)
-      .run();
-
+    const result = await db.prepare("INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at, customer_hash) VALUES (?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING").bind(checkoutId, sessionId, opts.checkoutCreatedAt ?? null, null).run();
     if (result.meta.changes) {
-      // Opportunistic cleanup: remove claims older than 30 days to prevent
-      // unbounded table growth. Failures here should not block a successful claim.
       try {
         await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run();
-      } catch {
-        // Cleanup is best-effort
-      }
+      } catch {}
       return { ok: true };
     }
-
-    const existing = await db
-      .prepare("SELECT session_id, claimed_at FROM checkout_claims WHERE checkout_id = ?")
-      .bind(checkoutId)
-      .first<{ session_id: string; claimed_at: string }>();
-
-    if (existing && existing.session_id === sessionId) {
-      return { ok: true };
-    }
-
-    return { ok: false, error: "This checkout was already claimed by another session", retriable: false };
+    const existing = await db.prepare("SELECT session_id, claimed_at FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ session_id: string; claimed_at: string }>();
+    return existing && existing.session_id === sessionId ? { ok: true } : { ok: false, error: "This checkout was already claimed by another session", retriable: false };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("no such table") || msg.includes("checkout_claims")) {
-      return { ok: false, error: "Checkout claim table is not available — please try again later", retriable: true };
-    }
+    if (msg.includes("no such table") || msg.includes("checkout_claims")) return { ok: false, error: "Checkout claim table is not available — please try again later", retriable: true };
     return { ok: false, error: "Unable to verify checkout claim — please try again", retriable: true };
   }
 }
 
-export async function storeClaimedKeys(
-  db: D1Database,
-  checkoutId: string,
-  keys: string[],
-): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys: string[]): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await db.prepare("UPDATE checkout_claims SET claimed_keys = ? WHERE checkout_id = ?")
-      .bind(JSON.stringify(keys), checkoutId)
-      .run();
+    await db.prepare("UPDATE checkout_claims SET claimed_keys = ? WHERE checkout_id = ?").bind(JSON.stringify(keys), checkoutId).run();
     return { ok: true };
   } catch {
     return { ok: false, error: "Unable to record claimed license keys — please try again" };
   }
 }
 
-export async function getAlreadyClaimedKeys(
-  db: D1Database,
-  excludeCheckoutId: string,
-): Promise<{ ok: true; keys: Set<string> } | { ok: false; error: string }> {
+export async function getAlreadyClaimedKeys(db: D1Database, excludeCheckoutId: string): Promise<{ ok: true; keys: Set<string> } | { ok: false; error: string }> {
   const result = new Set<string>();
   try {
-    const rows = await db
-      .prepare("SELECT claimed_keys FROM checkout_claims WHERE checkout_id != ? AND claimed_keys IS NOT NULL AND claimed_at > datetime('now', '-1 hour')")
-      .bind(excludeCheckoutId)
-      .all<{ claimed_keys: string }>();
+    const rows = await db.prepare("SELECT claimed_keys FROM checkout_claims WHERE checkout_id != ? AND claimed_keys IS NOT NULL AND claimed_at > datetime('now', '-1 hour')").bind(excludeCheckoutId).all<{ claimed_keys: string }>();
     for (const row of rows.results ?? []) {
       try {
-        const keys = JSON.parse(row.claimed_keys) as string[];
-        for (const k of keys) result.add(k);
-      } catch {
-        // Skip malformed entries
-      }
+        for (const k of JSON.parse(row.claimed_keys) as string[]) result.add(k);
+      } catch {}
     }
     return { ok: true, keys: result };
   } catch {
     return { ok: false, error: "Unable to verify previously claimed license keys — please try again" };
   }
 }
-
-const MAX_TICKET_TITLE_LEN = 200;
-const MAX_TICKET_ID_LEN = 100;
 
 export function validateActiveTicket(ticket: unknown): string | null {
   if (ticket === null || ticket === undefined) return null;
