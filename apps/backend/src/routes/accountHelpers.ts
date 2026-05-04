@@ -244,7 +244,7 @@ export async function commitSyncSideEffects(deps: { db: D1Database; kv: KVNamesp
 
 export async function claimCheckoutForSession(db: D1Database, checkoutId: string, sessionId: string, opts: { checkoutCreatedAt?: string } = {}): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
   try {
-    const result = await db.prepare("INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at, customer_hash) VALUES (?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING").bind(checkoutId, sessionId, opts.checkoutCreatedAt ?? null, null).run();
+    const result = await db.prepare("INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at) VALUES (?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING").bind(checkoutId, sessionId, opts.checkoutCreatedAt ?? null).run();
     if (result.meta.changes) {
       try {
         await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run();
@@ -262,29 +262,47 @@ export async function claimCheckoutForSession(db: D1Database, checkoutId: string
   }
 }
 
+export async function getStoredClaimedKeys(db: D1Database, checkoutId: string): Promise<{ ok: true; keys: string[] | null } | { ok: false; error: string }> {
+  try {
+    const row = await db.prepare("SELECT claimed_keys FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ claimed_keys: string | null }>();
+    if (!row?.claimed_keys) return { ok: true, keys: null };
+    const parsed = JSON.parse(row.claimed_keys);
+    return Array.isArray(parsed) && parsed.every((key) => typeof key === "string" && key.length > 0)
+      ? { ok: true, keys: parsed }
+      : { ok: false, error: "Stored checkout claim is malformed — please try again" };
+  } catch {
+    return { ok: false, error: "Unable to read stored checkout claim — please try again" };
+  }
+}
+
 export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys: string[]): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await db.prepare("UPDATE checkout_claims SET claimed_keys = ? WHERE checkout_id = ?").bind(JSON.stringify(keys), checkoutId).run();
-    return { ok: true };
+    const serializedKeys = JSON.stringify(keys);
+    const result = await db.prepare("UPDATE checkout_claims SET claimed_keys = ? WHERE checkout_id = ?").bind(serializedKeys, checkoutId).run();
+    if (result.meta.changes) return { ok: true };
+    const existing = await db.prepare("SELECT claimed_keys FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ claimed_keys: string | null }>();
+    if (!existing) return { ok: false, error: "Checkout claim disappeared before keys could be recorded — please try again" };
+    if (existing.claimed_keys === serializedKeys) return { ok: true };
+    return { ok: false, error: "Checkout claim changed before keys could be recorded — please try again" };
   } catch {
     return { ok: false, error: "Unable to record claimed license keys — please try again" };
   }
 }
 
-export async function getAlreadyClaimedKeys(db: D1Database, excludeCheckoutId: string): Promise<{ ok: true; keys: Set<string> } | { ok: false; error: string }> {
-  const result = new Set<string>();
+export async function claimLicenseKeysForCheckout(db: D1Database, checkoutId: string, keys: string[]): Promise<{ ok: true; keys: string[] } | { ok: false; error: string }> {
   try {
-    const rows = await db.prepare("SELECT claimed_keys FROM checkout_claims WHERE checkout_id != ? AND claimed_keys IS NOT NULL AND claimed_at > datetime('now', '-1 hour')").bind(excludeCheckoutId).all<{ claimed_keys: string }>();
-    for (const row of rows.results ?? []) {
-      try {
-        for (const k of JSON.parse(row.claimed_keys) as string[]) result.add(k);
-      } catch {
-        // Ignore malformed historical rows and continue scanning others.
-      }
+    for (const key of keys) {
+      await db.prepare("INSERT INTO checkout_key_claims (license_key, checkout_id) VALUES (?, ?) ON CONFLICT(license_key) DO NOTHING").bind(key, checkoutId).run();
     }
-    return { ok: true, keys: result };
+    const placeholders = keys.map(() => "?").join(", ");
+    const rows = await db.prepare(`SELECT license_key, checkout_id FROM checkout_key_claims WHERE license_key IN (${placeholders})`).bind(...keys).all<{ license_key: string; checkout_id: string }>();
+    const ownerByKey = new Map((rows.results ?? []).map((row) => [row.license_key, row.checkout_id]));
+    const claimedKeys = keys.filter((key) => ownerByKey.get(key) === checkoutId);
+    if (!claimedKeys.length) return { ok: false, error: "These license keys were already claimed by another checkout — please retry in a few seconds" };
+    const stored = await storeClaimedKeys(db, checkoutId, claimedKeys);
+    return stored.ok ? { ok: true, keys: claimedKeys } : stored;
   } catch {
-    return { ok: false, error: "Unable to verify previously claimed license keys — please try again" };
+    return { ok: false, error: "Unable to atomically claim license keys — please try again" };
   }
 }
 

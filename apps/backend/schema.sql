@@ -145,6 +145,14 @@ CREATE TABLE IF NOT EXISTS checkout_claims (
     session_id TEXT NOT NULL,
     claimed_at TEXT NOT NULL DEFAULT (datetime('now')),
     claimed_keys TEXT,
-    checkout_created_at TEXT,
-    customer_hash TEXT
+    checkout_created_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS checkout_key_claims (
+    license_key TEXT PRIMARY KEY,
+    checkout_id TEXT NOT NULL,
+    claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_checkout_key_claims_checkout_id
+    ON checkout_key_claims (checkout_id);

@@ -7,7 +7,14 @@ export function createMockDB(opts: {
   runChanges?: number;
 } = {}) {
   const calls: { sql: string; bindings: unknown[] }[] = [];
-  const resolveFirst = (sql: string) => {
+  const checkoutClaims = new Map<string, { sessionId?: string; claimedKeys: string | null }>();
+  const keyOwners = new Map<string, string>();
+  const resolveFirst = (sql: string, bindings: unknown[]) => {
+    if (sql.includes("SELECT claimed_keys FROM checkout_claims WHERE checkout_id = ?")) {
+      const checkoutId = bindings[0] as string;
+      if (!checkoutClaims.has(checkoutId)) return null;
+      return { claimed_keys: checkoutClaims.get(checkoutId)?.claimedKeys ?? null };
+    }
     if (opts.firstBySQL) {
       for (const [pattern, result] of Object.entries(opts.firstBySQL)) {
         if (sql.includes(pattern)) return result;
@@ -15,19 +22,49 @@ export function createMockDB(opts: {
     }
     return opts.firstResults ?? null;
   };
-  const stmt = (sql: string) => ({
-    first: vi.fn().mockResolvedValue(resolveFirst(sql)),
-    run: vi.fn().mockResolvedValue({ meta: { changes: opts.runChanges ?? 0 } }),
-    all: vi.fn().mockResolvedValue({ results: [] }),
+  const stmt = (sql: string, bindings: unknown[]) => ({
+    first: vi.fn().mockResolvedValue(resolveFirst(sql, bindings)),
+    run: vi.fn().mockImplementation(async () => {
+      if (sql.includes("INSERT INTO checkout_claims")) {
+        const [checkoutId, sessionId] = bindings as [string, string];
+        if (checkoutClaims.has(checkoutId)) return { meta: { changes: 0 } };
+        checkoutClaims.set(checkoutId, { sessionId, claimedKeys: null });
+        return { meta: { changes: 1 } };
+      }
+      if (sql.includes("UPDATE checkout_claims SET claimed_keys")) {
+        const [claimedKeys, checkoutId] = bindings as [string, string];
+        const claim = checkoutClaims.get(checkoutId);
+        if (!claim) return { meta: { changes: 0 } };
+        claim.claimedKeys = claimedKeys;
+        return { meta: { changes: opts.runChanges ?? 1 } };
+      }
+      if (sql.includes("INSERT INTO checkout_key_claims")) {
+        const [licenseKey, checkoutId] = bindings as [string, string];
+        if (keyOwners.has(licenseKey)) return { meta: { changes: 0 } };
+        keyOwners.set(licenseKey, checkoutId);
+        return { meta: { changes: 1 } };
+      }
+      return { meta: { changes: opts.runChanges ?? 0 } };
+    }),
+    all: vi.fn().mockImplementation(async () => {
+      if (sql.includes("SELECT license_key, checkout_id FROM checkout_key_claims")) {
+        return {
+          results: (bindings as string[])
+            .filter((licenseKey) => keyOwners.has(licenseKey))
+            .map((licenseKey) => ({ license_key: licenseKey, checkout_id: keyOwners.get(licenseKey)! })),
+        };
+      }
+      return { results: [] };
+    }),
   });
   return {
     db: {
       prepare: vi.fn((sql: string) => ({
         bind: vi.fn((...args: unknown[]) => {
           calls.push({ sql, bindings: args });
-          return stmt(sql);
+          return stmt(sql, args);
         }),
-        ...stmt(sql),
+        ...stmt(sql, []),
       })),
       exec: vi.fn().mockResolvedValue({ results: [] }),
       batch: vi.fn().mockResolvedValue([]),

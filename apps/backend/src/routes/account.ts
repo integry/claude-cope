@@ -3,7 +3,7 @@ import { validatePolarKey } from "../utils/polar";
 import { hashKey, getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, calcBulkCost } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, storeClaimedKeys, getAlreadyClaimedKeys } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, broadcastPurchase, commitSyncSideEffects, validateActiveTicket, SHILL_CREDIT, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout } from "./accountHelpers";
 import type { SyncBody, CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -59,10 +59,6 @@ async function validateCheckoutRequest(c: { req: { json: <T>() => Promise<T> }; 
   return { checkoutId: body.checkoutId, sessionId, accessToken, organizationId, kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV } as const;
 }
 
-function filterCheckoutKeys(allKeys: string[], alreadyClaimed: Set<string>): string[] {
-  return alreadyClaimed.size > 0 ? allKeys.filter((k) => !alreadyClaimed.has(k)) : allKeys;
-}
-
 const account = new Hono<Env>();
 
 account.post("/checkout-license", async (c) => {
@@ -80,18 +76,20 @@ account.post("/checkout-license", async (c) => {
   if (!db) return c.json({ error: "Database not configured" }, 500);
   const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt: result.createdAt });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
+  const storedClaim = await getStoredClaimedKeys(db, checkoutId);
+  if (!storedClaim.ok) return c.json({ error: storedClaim.error }, 503);
+  if (storedClaim.keys?.length) {
+    if (kv) await kv.put(`checkout_used:${checkoutId}`, JSON.stringify({ keys: storedClaim.keys, sessionId } satisfies CheckoutCache), { expirationTtl: 7 * 24 * 60 * 60 });
+    return c.json({ licenseKey: storedClaim.keys[0], allKeys: storedClaim.keys });
+  }
   const nextCheckout = await fetchNextCheckoutCreatedAt(result.customerId, organizationId, accessToken, { checkoutId, checkoutCreatedAt: result.createdAt });
   if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
   const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: result.createdAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
-  const alreadyClaimed = await getAlreadyClaimedKeys(db, checkoutId);
-  if (!alreadyClaimed.ok) return c.json({ error: alreadyClaimed.error }, 503);
-  const allKeyStrings = filterCheckoutKeys(lkResult.keys, alreadyClaimed.keys);
-  if (!allKeyStrings.length) return c.json({ error: "These license keys were already claimed by another checkout — please retry in a few seconds" }, 409);
-  const stored = await storeClaimedKeys(db, checkoutId, allKeyStrings);
-  if (!stored.ok) return c.json({ error: stored.error }, 503);
-  if (kv) await kv.put(`checkout_used:${checkoutId}`, JSON.stringify({ keys: allKeyStrings, sessionId } satisfies CheckoutCache), { expirationTtl: 7 * 24 * 60 * 60 });
-  return c.json({ licenseKey: allKeyStrings[0], allKeys: allKeyStrings });
+  const claimedKeys = await claimLicenseKeysForCheckout(db, checkoutId, lkResult.keys);
+  if (!claimedKeys.ok) return c.json({ error: claimedKeys.error }, claimedKeys.error.includes("already claimed") ? 409 : 503);
+  if (kv) await kv.put(`checkout_used:${checkoutId}`, JSON.stringify({ keys: claimedKeys.keys, sessionId } satisfies CheckoutCache), { expirationTtl: 7 * 24 * 60 * 60 });
+  return c.json({ licenseKey: claimedKeys.keys[0], allKeys: claimedKeys.keys });
 });
 
 account.post("/sync", async (c) => {
