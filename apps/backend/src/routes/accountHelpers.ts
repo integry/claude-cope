@@ -437,7 +437,8 @@ export async function fetchCheckoutCustomerId(
   checkoutId: string,
   accessToken: string,
   organizationId: string,
-): Promise<{ customerId: string; createdAt?: string; referenceId: string } | { error: string; status: ContentfulStatusCode }> {
+  opts: { allowMissingReferenceId?: boolean } = {},
+): Promise<{ customerId: string; createdAt?: string; referenceId?: string } | { error: string; status: ContentfulStatusCode }> {
   let resp: Response;
   try {
     resp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(checkoutId)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -455,7 +456,7 @@ export async function fetchCheckoutCustomerId(
   const customerId = checkout.customer_id || checkout.customer?.id;
   const referenceId = typeof checkout.metadata?.reference_id === "string" ? checkout.metadata.reference_id : undefined;
   if (!customerId) return { error: "Checkout has no associated customer", status: 500 };
-  if (!referenceId) {
+  if (!referenceId && !opts.allowMissingReferenceId) {
     return { error: "Checkout is missing session binding metadata — cannot verify license ownership", status: 500 };
   }
   return { customerId, createdAt: checkout.created_at, referenceId };
