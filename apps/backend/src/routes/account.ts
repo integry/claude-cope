@@ -39,10 +39,7 @@ async function lookupCheckoutCache(
   if (!cached) return null;
   const entry = parseCheckoutCache(cached);
   if (!entry) {
-    try {
-      await kv.delete(`checkout_used:${checkoutId}`);
-    } catch (_err) {
-    }
+    await kv.delete(`checkout_used:${checkoutId}`).catch(() => undefined);
     return null;
   }
   if (!entry.sessionId) return { keys: entry.keys, requiresStoredClaim: true };
@@ -64,10 +61,7 @@ function respondWithClaimedKeys(c: { json: (data: unknown, status?: number) => R
 
 async function cacheClaimedKeys(kv: KVNamespace | undefined, checkoutId: string, sessionId: string, keys: string[]) {
   if (!kv) return;
-  try {
-    await kv.put(`checkout_used:${checkoutId}`, JSON.stringify({ keys, sessionId } satisfies CheckoutCache), { expirationTtl: 7 * 24 * 60 * 60 });
-  } catch (_err) {
-  }
+  await kv.put(`checkout_used:${checkoutId}`, JSON.stringify({ keys, sessionId } satisfies CheckoutCache), { expirationTtl: 7 * 24 * 60 * 60 }).catch(() => undefined);
 }
 
 async function respondWithStoredClaim(

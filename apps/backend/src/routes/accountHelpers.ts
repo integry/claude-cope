@@ -529,10 +529,7 @@ export async function claimCheckoutForSession(db: D1Database, checkoutId: string
   try {
     const result = await db.prepare("INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at) VALUES (?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING").bind(checkoutId, sessionId, opts.checkoutCreatedAt ?? null).run();
     if (result.meta.changes) {
-      try {
-        await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run();
-      } catch (_err) {
-      }
+      await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run().catch(() => undefined);
       return { ok: true };
     }
     const existing = await db.prepare("SELECT session_id, claimed_at FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ session_id: string; claimed_at: string }>();

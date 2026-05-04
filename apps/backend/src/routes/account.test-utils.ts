@@ -62,6 +62,7 @@ export function createMockDB(opts: {
       }
       return { results: [] };
     }),
+    raw: vi.fn().mockResolvedValue([]),
   });
   return {
     db: {
