@@ -531,7 +531,7 @@ export async function claimCheckoutForSession(db: D1Database, checkoutId: string
     if (result.meta.changes) {
       try {
         await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run();
-      } catch {
+      } catch (_err) {
       }
       return { ok: true };
     }

@@ -41,7 +41,7 @@ async function lookupCheckoutCache(
   if (!entry) {
     try {
       await kv.delete(`checkout_used:${checkoutId}`);
-    } catch {
+    } catch (_err) {
     }
     return null;
   }
@@ -66,7 +66,7 @@ async function cacheClaimedKeys(kv: KVNamespace | undefined, checkoutId: string,
   if (!kv) return;
   try {
     await kv.put(`checkout_used:${checkoutId}`, JSON.stringify({ keys, sessionId } satisfies CheckoutCache), { expirationTtl: 7 * 24 * 60 * 60 });
-  } catch {
+  } catch (_err) {
   }
 }
 

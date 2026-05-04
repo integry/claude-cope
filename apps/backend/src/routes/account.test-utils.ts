@@ -74,6 +74,8 @@ export function createMockDB(opts: {
       })),
       exec: vi.fn().mockResolvedValue({ results: [] }),
       batch: vi.fn().mockResolvedValue([]),
+      withSession: vi.fn(),
+      dump: vi.fn(),
     },
     calls,
   };
