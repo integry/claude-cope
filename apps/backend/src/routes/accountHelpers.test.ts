@@ -321,7 +321,7 @@ describe("parseCheckoutCache", () => {
 });
 
 describe("checkout key claims", () => {
-  it("claims only the keys still owned by this checkout and persists them", async () => {
+  it("fails closed when another checkout already owns part of the expected license set", async () => {
     const keyOwners = new Map<string, string>([[await hashKey("COPE-TAKEN"), "other-checkout"]]);
     let storedClaimedKeys: string | null = null;
     const db = {
@@ -355,8 +355,9 @@ describe("checkout key claims", () => {
     } as unknown as D1Database;
 
     const result = await claimLicenseKeysForCheckout(db, "checkout-a", ["COPE-1", "COPE-TAKEN", "COPE-2"], CLAIM_SECRET);
-    expect(result).toEqual({ ok: true, keys: ["COPE-1", "COPE-2"] });
-    expect(storedClaimedKeys).toBeTruthy();
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("full license set");
+    expect(storedClaimedKeys).toBeNull();
   });
 
   it("returns a conflict when every requested key is already claimed elsewhere", async () => {
@@ -477,6 +478,21 @@ describe("checkout key claims", () => {
 
     await storeClaimedKeys(recordingDb, "checkout-a", ["COPE-1"], "old-secret");
     await expect(getStoredClaimedKeys(recordingDb, "checkout-a", "new-secret")).resolves.toEqual({ ok: true, sessionId: "sess-1", keys: null, unreadable: true });
+  });
+
+  it("surfaces malformed stored claims instead of treating them like secret rotation", async () => {
+    const db = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          first: vi.fn().mockResolvedValue({ session_id: "sess-1", encrypted_keys: "{broken" }),
+        })),
+      })),
+    } as unknown as D1Database;
+
+    await expect(getStoredClaimedKeys(db, "checkout-a", CLAIM_SECRET)).resolves.toEqual({
+      ok: false,
+      error: "Stored checkout claim is corrupted — please try again later",
+    });
   });
 });
 

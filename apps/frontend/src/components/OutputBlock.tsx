@@ -187,9 +187,16 @@ function buildMarkdownComponents(onSlashCommand?: (command: string, action: Slas
   const linkifyChildren = (children: React.ReactNode): React.ReactNode =>
     onSlashCommand ? linkifySlashCommands(children, onSlashCommand) : children;
 
+  const flattenTextContent = (node: React.ReactNode): string => {
+    if (typeof node === "string" || typeof node === "number") return String(node);
+    if (Array.isArray(node)) return node.map(flattenTextContent).join("");
+    if (React.isValidElement<{ children?: React.ReactNode }>(node)) return flattenTextContent(node.props.children);
+    return "";
+  };
+
   return {
   p({ children }: { children?: React.ReactNode }) {
-    const textContent = React.Children.toArray(children).filter((c) => typeof c === "string").join("");
+    const textContent = flattenTextContent(children);
     const trimmed = textContent.trim();
     if (/^[=]{3,}$/.test(trimmed) || /^[-]{3,}$/.test(trimmed)) {
       return <p className="mb-1 text-gray-600 leading-relaxed select-none">{trimmed}</p>;

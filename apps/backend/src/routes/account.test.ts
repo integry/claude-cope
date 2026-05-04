@@ -854,7 +854,7 @@ describe("POST /api/account/checkout-license", () => {
       expect(res.status).toBe(409);
       expect(((await res.json()) as { error: string }).error).toContain("already claimed");
     });
-    it("keeps the unclaimed subset when another checkout wins overlapping keys first", async () => {
+    it("returns 409 when another checkout wins part of an overlapping key set", async () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, {
         items: [
           { key: "COPE-1", created_at: "2026-01-02T00:00:05Z", status: "granted" },
@@ -899,8 +899,8 @@ describe("POST /api/account/checkout-license", () => {
       };
       const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_overlap" },
         { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: db }, "s");
-      expect(res.status).toBe(200);
-      expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-2"]);
+      expect(res.status).toBe(409);
+      expect(((await res.json()) as { error: string }).error).toContain("full license set");
     });
     it("returns 403 for wrong organization", async () => {
       stubPolar({ organization_id: "other", status: "succeeded", customer_id: "c1" });
@@ -1098,6 +1098,40 @@ describe("POST /api/account/checkout-license", () => {
           { CHECKOUT_CLAIM_SECRET: "new-secret", POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: db }, "s");
         expect(res.status).toBe(200);
         expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-FRESH"]);
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
+    it("surfaces corrupted stored claims instead of silently re-fetching from Polar", async () => {
+      const db = {
+        prepare: vi.fn((sql: string) => ({
+          bind: vi.fn(() => ({
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims")) {
+                return { session_id: "s", encrypted_keys: "{broken" };
+              }
+              return null;
+            }),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          })),
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        exec: vi.fn().mockResolvedValue({ results: [] }),
+        batch: vi.fn().mockResolvedValue([]),
+      };
+      const origFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () => {
+        throw new Error("Polar should not be queried for corrupted stored claims");
+      }) as typeof fetch;
+      try {
+        const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_corrupt" },
+          { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", QUOTA_KV: mockKV({}), DB: db }, "s");
+        expect(res.status).toBe(503);
+        expect(((await res.json()) as { error: string }).error).toContain("corrupted");
+        expect(globalThis.fetch).not.toHaveBeenCalled();
       } finally {
         globalThis.fetch = origFetch;
       }

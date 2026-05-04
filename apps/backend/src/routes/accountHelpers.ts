@@ -396,8 +396,14 @@ export function pickAllLicenseKeys(granted: PolarLicenseKeyItem[], checkoutCreat
 }
 
 export async function fetchLicenseKeys(customerId: string, organizationId: string, accessToken: string, opts: { createdAt: string; nextCheckoutCreatedAt?: string }): Promise<{ keys: string[] } | { error: string; status: ContentfulStatusCode }> {
-  const allItems: PolarLicenseKeyItem[] = [];
   const lowerBound = new Date(opts.createdAt).getTime();
+  const nextCheckoutTime = opts.nextCheckoutCreatedAt ? new Date(opts.nextCheckoutCreatedAt).getTime() : NaN;
+  const fetchUpperBound = Number.isFinite(lowerBound)
+    ? (Number.isFinite(nextCheckoutTime) && nextCheckoutTime > lowerBound
+      ? Math.min(lowerBound + MAX_KEY_FALLBACK_WINDOW_MS, nextCheckoutTime)
+      : lowerBound + MAX_KEY_FALLBACK_WINDOW_MS)
+    : Number.POSITIVE_INFINITY;
+  const granted: PolarLicenseKeyItem[] = [];
   for (let page = 1; ; page++) {
     let lkResp: Response;
     try {
@@ -407,7 +413,12 @@ export async function fetchLicenseKeys(customerId: string, organizationId: strin
     }
     if (!lkResp.ok) return { error: "Failed to list license keys", status: 502 };
     const items = ((await lkResp.json()) as { items?: PolarLicenseKeyItem[] }).items ?? [];
-    allItems.push(...items);
+    for (const item of items) {
+      const itemTime = new Date(item.created_at).getTime();
+      if (!Number.isFinite(itemTime) || item.status !== "granted") continue;
+      if (itemTime < lowerBound || itemTime > fetchUpperBound) continue;
+      granted.push(item);
+    }
     if (items.length < LICENSE_KEY_PAGE_SIZE) break;
     const oldestItemTime = items.reduce((oldest, item) => {
       const t = new Date(item.created_at).getTime();
@@ -415,7 +426,6 @@ export async function fetchLicenseKeys(customerId: string, organizationId: strin
     }, Number.POSITIVE_INFINITY);
     if (Number.isFinite(lowerBound) && oldestItemTime <= lowerBound) break;
   }
-  const granted = allItems.filter((l) => l.status === "granted");
   if (!granted.length) return { error: "No license issued yet — try again in a few seconds", status: 409 };
   const allKeys = pickAllLicenseKeys(granted, opts.createdAt, opts.nextCheckoutCreatedAt);
   return allKeys.length ? { keys: allKeys.map((k) => k.key) } : { error: "No license issued yet — try again in a few seconds", status: 409 };
@@ -514,11 +524,26 @@ async function encryptClaimedKeys(keys: string[], secret: string): Promise<strin
   return JSON.stringify({ v: CHECKOUT_CLAIM_CIPHER_VERSION, iv: toBase64(iv), data: toBase64(ciphertext) });
 }
 
-async function decryptClaimedKeys(raw: string, secret: string): Promise<string[] | null> {
-  const parsed = JSON.parse(raw) as { v?: unknown; iv?: unknown; data?: unknown };
-  if (typeof parsed?.iv !== "string" || typeof parsed?.data !== "string") return null;
-  const iv = toArrayBuffer(fromBase64(parsed.iv));
-  const encrypted = toArrayBuffer(fromBase64(parsed.data));
+type DecryptClaimedKeysResult =
+  | { ok: true; keys: string[] }
+  | { ok: false; reason: "secret-mismatch" | "malformed" };
+
+async function decryptClaimedKeys(raw: string, secret: string): Promise<DecryptClaimedKeysResult> {
+  let parsed: { v?: unknown; iv?: unknown; data?: unknown };
+  try {
+    parsed = JSON.parse(raw) as { v?: unknown; iv?: unknown; data?: unknown };
+  } catch {
+    return { ok: false, reason: "malformed" };
+  }
+  if (typeof parsed?.iv !== "string" || typeof parsed?.data !== "string") return { ok: false, reason: "malformed" };
+  let iv: ArrayBuffer;
+  let encrypted: ArrayBuffer;
+  try {
+    iv = toArrayBuffer(fromBase64(parsed.iv));
+    encrypted = toArrayBuffer(fromBase64(parsed.data));
+  } catch {
+    return { ok: false, reason: "malformed" };
+  }
   const secrets = parseCheckoutClaimSecrets(secret);
   for (const candidate of secrets) {
     const keyFactories = [
@@ -531,13 +556,16 @@ async function decryptClaimedKeys(raw: string, secret: string): Promise<string[]
       try {
         const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, await createKey(), encrypted);
         const decoded = JSON.parse(new TextDecoder().decode(plaintext));
-        return Array.isArray(decoded) && decoded.every((item) => typeof item === "string" && item.length > 0) ? decoded : null;
+        if (!Array.isArray(decoded) || !decoded.every((item) => typeof item === "string" && item.length > 0)) {
+          return { ok: false, reason: "malformed" };
+        }
+        return { ok: true, keys: decoded };
       } catch {
         continue;
       }
     }
   }
-  throw new Error("Unable to decrypt stored checkout claim");
+  return { ok: false, reason: "secret-mismatch" };
 }
 
 function isNonEmptyStringArray(arr: unknown[]): arr is string[] {
@@ -559,11 +587,21 @@ export function parseCheckoutCache(raw: string): CheckoutCache | null {
   }
 }
 
+function shouldPruneCheckoutClaims(checkoutId: string): boolean {
+  let hash = 0;
+  for (let i = 0; i < checkoutId.length; i++) {
+    hash = (hash * 31 + checkoutId.charCodeAt(i)) >>> 0;
+  }
+  return hash % 64 === 0;
+}
+
 export async function claimCheckoutForSession(db: D1Database, checkoutId: string, sessionId: string, opts: { checkoutCreatedAt?: string } = {}): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
   try {
     const result = await db.prepare("INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at) VALUES (?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING").bind(checkoutId, sessionId, opts.checkoutCreatedAt ?? null).run();
     if (result.meta.changes) {
-      await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run().catch(() => undefined);
+      if (shouldPruneCheckoutClaims(checkoutId)) {
+        await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run().catch(() => undefined);
+      }
       return { ok: true };
     }
     const existing = await db.prepare("SELECT session_id, claimed_at FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ session_id: string; claimed_at: string }>();
@@ -584,13 +622,14 @@ export async function getStoredClaimedKeys(
     const row = await db.prepare("SELECT session_id, encrypted_keys FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ session_id: string | null; encrypted_keys: string | null }>();
     if (!row) return { ok: true, sessionId: null, keys: null };
     if (!row.encrypted_keys) return { ok: true, sessionId: row.session_id, keys: null };
-    let parsed: string[] | null;
-    try {
-      parsed = await decryptClaimedKeys(row.encrypted_keys, secret);
-    } catch {
-      return { ok: true, sessionId: row.session_id, keys: null, unreadable: true };
+    const parsed = await decryptClaimedKeys(row.encrypted_keys, secret);
+    if (!parsed.ok) {
+      if (parsed.reason === "secret-mismatch") {
+        return { ok: true, sessionId: row.session_id, keys: null, unreadable: true };
+      }
+      return { ok: false, error: "Stored checkout claim is corrupted — please try again later" };
     }
-    return parsed ? { ok: true, sessionId: row.session_id, keys: parsed } : { ok: false, error: "Stored checkout claim is malformed — please try again" };
+    return { ok: true, sessionId: row.session_id, keys: parsed.keys };
   } catch {
     return { ok: false, error: "Unable to read stored checkout claim — please try again" };
   }
@@ -605,7 +644,10 @@ export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys:
     if (!existing) return { ok: false, error: "Checkout claim disappeared before keys could be recorded — please try again" };
     if (existing.encrypted_keys) {
       const parsed = await decryptClaimedKeys(existing.encrypted_keys, secret);
-      if (parsed && JSON.stringify(parsed) === JSON.stringify(keys)) return { ok: true };
+      if (parsed.ok && JSON.stringify(parsed.keys) === JSON.stringify(keys)) return { ok: true };
+      if (!parsed.ok && parsed.reason === "malformed") {
+        return { ok: false, error: "Stored checkout claim is corrupted — please try again later" };
+      }
     }
     return { ok: false, error: "Checkout claim changed before keys could be recorded — please try again" };
   } catch {
@@ -622,10 +664,12 @@ export async function claimLicenseKeysForCheckout(db: D1Database, checkoutId: st
     const placeholders = keyHashes.map(() => "?").join(", ");
     const rows = await db.prepare(`SELECT license_key_hash, checkout_id FROM checkout_key_claims WHERE license_key_hash IN (${placeholders})`).bind(...keyHashes).all<{ license_key_hash: string; checkout_id: string }>();
     const ownerByHash = new Map((rows.results ?? []).map((row) => [row.license_key_hash, row.checkout_id]));
-    const claimedKeys = keys.filter((key, idx) => ownerByHash.get(keyHashes[idx]) === checkoutId);
-    if (!claimedKeys.length) return { ok: false, error: "These license keys were already claimed by another checkout — please retry in a few seconds" };
-    const stored = await storeClaimedKeys(db, checkoutId, claimedKeys, secret);
-    return stored.ok ? { ok: true, keys: claimedKeys } : stored;
+    const hasConflict = keyHashes.some((keyHash) => ownerByHash.get(keyHash) !== checkoutId);
+    if (hasConflict) {
+      return { ok: false, error: "Unable to claim the full license set for this checkout because some keys are already claimed elsewhere — please contact support" };
+    }
+    const stored = await storeClaimedKeys(db, checkoutId, keys, secret);
+    return stored.ok ? { ok: true, keys } : stored;
   } catch {
     return { ok: false, error: "Unable to atomically claim license keys — please try again" };
   }

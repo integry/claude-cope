@@ -72,6 +72,22 @@ async function respondWithStoredClaim(
   return respondWithClaimedKeys(c, claim.keys);
 }
 
+async function resolveCachedClaim(
+  c: { json: (data: unknown, status?: number) => Response },
+  deps: { kv: KVNamespace | undefined; checkoutId: string; sessionId: string },
+) {
+  const { kv, checkoutId, sessionId } = deps;
+  if (!kv) return null;
+  const cacheResult = await lookupCheckoutCache(kv, checkoutId, sessionId);
+  if (!cacheResult) return null;
+  if (cacheResult.requiresStoredClaim) return { requiresStoredClaim: true } as const;
+  return {
+    response: cacheResult.sessionMismatch
+      ? c.json({ error: "This checkout was already redeemed by another session" }, 403)
+      : respondWithClaimedKeys(c, cacheResult.keys),
+  } as const;
+}
+
 async function resolvePostClaimStoredResponse(
   c: { json: (data: unknown, status?: number) => Response },
   deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string },
@@ -93,25 +109,19 @@ async function resolveCachedOrStoredClaim(
   deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string },
 ) {
   const { db, kv, checkoutId, sessionId, claimSecret } = deps;
-  if (kv) {
-    const cacheResult = await lookupCheckoutCache(kv, checkoutId, sessionId);
-    if (cacheResult) {
-      if (cacheResult.requiresStoredClaim) {
-        const storedClaim = await getStoredClaimedKeys(db, checkoutId, claimSecret);
-        if (!storedClaim.ok) return c.json({ error: storedClaim.error }, 503);
-        if (storedClaim.sessionId && storedClaim.sessionId !== sessionId) {
-          return c.json({ error: "This checkout was already redeemed by another session" }, 403);
-        }
-        if (storedClaim.keys?.length) {
-          return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: storedClaim.keys });
-        }
-        if (storedClaim.unreadable) return null;
-      } else {
-        return cacheResult.sessionMismatch
-          ? c.json({ error: "This checkout was already redeemed by another session" }, 403)
-          : respondWithClaimedKeys(c, cacheResult.keys);
-      }
+  const cachedClaim = await resolveCachedClaim(c, { kv, checkoutId, sessionId });
+  if (cachedClaim?.response) return cachedClaim.response;
+  if (!cachedClaim?.requiresStoredClaim) {
+    const storedClaim = await getStoredClaimedKeys(db, checkoutId, claimSecret);
+    if (!storedClaim.ok) return c.json({ error: storedClaim.error }, 503);
+    if (storedClaim.sessionId && storedClaim.sessionId !== sessionId) {
+      return c.json({ error: "This checkout was already redeemed by another session" }, 403);
     }
+    if (storedClaim.keys?.length) {
+      return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: storedClaim.keys });
+    }
+    if (storedClaim.unreadable) return null;
+    return null;
   }
   const storedClaim = await getStoredClaimedKeys(db, checkoutId, claimSecret);
   if (!storedClaim.ok) return c.json({ error: storedClaim.error }, 503);
@@ -151,7 +161,8 @@ async function redeemCheckoutLicense(
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
   const claimedKeys = await claimLicenseKeysForCheckout(db, checkoutId, lkResult.keys, claimSecret);
   if (!claimedKeys.ok) {
-    return c.json({ error: claimedKeys.error }, claimedKeys.error.includes("already claimed") ? 409 : 503);
+    const isConflict = claimedKeys.error.includes("already claimed") || claimedKeys.error.includes("full license set");
+    return c.json({ error: claimedKeys.error }, isConflict ? 409 : 503);
   }
   return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: claimedKeys.keys });
 }
@@ -253,14 +264,8 @@ account.post("/checkout-license", async (c) => {
   const { checkoutId, sessionId, kv } = validated;
   const claimSecret = c.env?.CHECKOUT_CLAIM_SECRET;
   if (!claimSecret) return c.json({ error: "Checkout claim secret is not configured" }, 500);
-  if (kv) {
-    const cacheResult = await lookupCheckoutCache(kv, checkoutId, sessionId);
-    if (cacheResult && !cacheResult.requiresStoredClaim) {
-      return cacheResult.sessionMismatch
-        ? c.json({ error: "This checkout was already redeemed by another session" }, 403)
-        : respondWithClaimedKeys(c, cacheResult.keys);
-    }
-  }
+  const cachedClaim = await resolveCachedClaim(c, { kv, checkoutId, sessionId });
+  if (cachedClaim?.response) return cachedClaim.response;
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
   const existingClaim = await resolveCachedOrStoredClaim(c, { db, kv, checkoutId, sessionId, claimSecret });
