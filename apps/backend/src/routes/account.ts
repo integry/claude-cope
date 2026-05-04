@@ -37,15 +37,24 @@ async function validateSyncRequest(c: { req: { json: <T>() => Promise<T> }; env?
   return { body, validation, kv, db, hash: await hashKey(body.licenseKey) } as const;
 }
 
-async function lookupCheckoutCache(kv: KVNamespace, checkoutId: string, sessionId: string): Promise<{ keys: string[]; sessionMismatch?: boolean } | null> {
+async function lookupCheckoutCache(
+  kv: KVNamespace,
+  checkoutId: string,
+  sessionId: string,
+): Promise<{ keys: string[]; sessionMismatch?: boolean; requiresStoredClaim?: boolean } | null> {
   const cached = await kv.get(`checkout_used:${checkoutId}`);
   if (!cached) return null;
   const entry = parseCheckoutCache(cached);
   if (!entry) {
-    await kv.delete(`checkout_used:${checkoutId}`);
+    try {
+      await kv.delete(`checkout_used:${checkoutId}`);
+    } catch {
+      // Cache cleanup is best-effort. Continue with D1/Polar recovery.
+    }
     return null;
   }
-  return entry.sessionId && entry.sessionId !== sessionId ? { keys: entry.keys, sessionMismatch: true } : { keys: entry.keys };
+  if (!entry.sessionId) return { keys: entry.keys, requiresStoredClaim: true };
+  return entry.sessionId !== sessionId ? { keys: entry.keys, sessionMismatch: true } : { keys: entry.keys };
 }
 
 async function validateCheckoutRequest(c: { req: { json: <T>() => Promise<T> }; get: (key: string) => string; env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response }) {
@@ -97,9 +106,20 @@ async function resolveCachedOrStoredClaim(
   if (kv) {
     const cacheResult = await lookupCheckoutCache(kv, checkoutId, sessionId);
     if (cacheResult) {
-      return cacheResult.sessionMismatch
-        ? c.json({ error: "This checkout was already redeemed by another session" }, 403)
-        : respondWithClaimedKeys(c, cacheResult.keys);
+      if (cacheResult.requiresStoredClaim) {
+        const storedClaim = await getStoredClaimedKeys(db, checkoutId, claimSecret);
+        if (!storedClaim.ok) return c.json({ error: storedClaim.error }, 503);
+        if (storedClaim.sessionId && storedClaim.sessionId !== sessionId) {
+          return c.json({ error: "This checkout was already redeemed by another session" }, 403);
+        }
+        if (storedClaim.keys?.length) {
+          return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: storedClaim.keys });
+        }
+      } else {
+        return cacheResult.sessionMismatch
+          ? c.json({ error: "This checkout was already redeemed by another session" }, 403)
+          : respondWithClaimedKeys(c, cacheResult.keys);
+      }
     }
   }
   const storedClaim = await getStoredClaimedKeys(db, checkoutId, claimSecret);
@@ -167,7 +187,7 @@ account.post("/checkout-license", async (c) => {
   const { checkoutId, sessionId, kv } = validated;
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
-  const claimSecret = c.env?.CHECKOUT_CLAIM_SECRET ?? c.env?.POLAR_ACCESS_TOKEN;
+  const claimSecret = c.env?.CHECKOUT_CLAIM_SECRET;
   if (!claimSecret) return c.json({ error: "Checkout claim secret is not configured" }, 500);
   const existingClaim = await resolveCachedOrStoredClaim(c, { db, kv, checkoutId, sessionId, claimSecret });
   if (existingClaim) return existingClaim;
