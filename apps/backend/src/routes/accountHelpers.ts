@@ -96,16 +96,16 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
       // concurrent /sync race only one request can claim the row. Check
       // result.meta.changes to detect if another request won the race.
       const upgradeResult = await db
-        .prepare("UPDATE user_scores SET license_hash = ?, updated_at = datetime('now') WHERE username = ? AND license_hash IS NULL")
-        .bind(hash, existingUsername)
+        .prepare("UPDATE user_scores SET username = ?, license_hash = ?, updated_at = datetime('now') WHERE username = ? AND license_hash IS NULL")
+        .bind(newUsername, hash, existingUsername)
         .run();
       if (!upgradeResult.meta.changes) {
         // Another concurrent request already attached a license to this row.
         return { profile: null, error: "This username was just claimed by another request. Please try again." };
       }
-      const profile = await getProfile(db, existingUsername);
+      const profile = await getProfile(db, newUsername);
       if (!profile) return { profile: null, error: "Profile not found after upgrade" };
-      return { profile, mutation: { kind: "attached_license", username: existingUsername } };
+      return { profile, mutation: { kind: "attached_license", username: newUsername } };
     }
     // Username is owned by a different license — refuse
     return { profile: null, error: "This username is already taken. Please change your username and try again." };
@@ -397,9 +397,9 @@ export async function performAliasDbUpdate(
   // (completed_tasks, hall_of_blame, usage_logs) renames are atomic.
   // If any statement throws (e.g. UNIQUE constraint), the entire transaction
   // is rolled back so transient failures do not burn a daily alias token.
-  // We also clear orphaned completed_tasks rows for the destination alias
-  // before the rename so stale historical task claims cannot block reclaiming
-  // an otherwise-free alias.
+  // Clear colliding completed_tasks rows before renaming user_scores: after the
+  // user_scores rename, a NOT EXISTS check for the destination alias would see
+  // the freshly renamed row and skip the cleanup entirely.
   let results: D1Result[];
   try {
     results = await db.batch([
@@ -411,16 +411,15 @@ export async function performAliasDbUpdate(
          WHERE change_count < ?`,
       ).bind(licenseKeyHash, dailyLimit),
       db.prepare(
+        `DELETE FROM completed_tasks
+         WHERE username = ?
+           AND ticket_id IN (SELECT ticket_id FROM completed_tasks WHERE username = ?)`,
+      ).bind(newAlias, oldUsername),
+      db.prepare(
         `UPDATE user_scores SET username = ?, updated_at = datetime('now')
          WHERE username = ? AND license_hash = ?
            AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
       ).bind(newAlias, oldUsername, licenseKeyHash),
-      db.prepare(
-        `DELETE FROM completed_tasks
-         WHERE username = ?
-           AND NOT EXISTS (SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?) AND username != ?)
-           AND ticket_id IN (SELECT ticket_id FROM completed_tasks WHERE username = ?)`,
-      ).bind(newAlias, newAlias, oldUsername, oldUsername),
       db.prepare(
         `UPDATE completed_tasks SET username = ? WHERE username = ?
            AND EXISTS (SELECT 1 FROM user_scores WHERE username = ? AND license_hash = ?)`,

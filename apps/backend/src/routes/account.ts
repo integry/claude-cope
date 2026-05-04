@@ -83,8 +83,9 @@ async function resolveSessionProfileRow(opts: {
     console.warn(`[account/me] rename chain hop cap reached for ${originalUsername}`);
   }
 
+  let originalRow: Awaited<ReturnType<typeof getProfileRow>> | null = null;
   if (current === originalUsername || cycledToOriginal) {
-    const originalRow = await getProfileRow(db, originalUsername);
+    originalRow = await getProfileRow(db, originalUsername);
     if (originalRow) {
       return { username: originalUsername, row: originalRow, redirected: false };
     }
@@ -92,6 +93,13 @@ async function resolveSessionProfileRow(opts: {
 
   const row = await getProfileRow(db, current);
   const redirected = current !== originalUsername;
+
+  if (!row && redirected) {
+    originalRow ??= await getProfileRow(db, originalUsername);
+    if (originalRow) {
+      return { username: originalUsername, row: originalRow, redirected: false };
+    }
+  }
 
   if (row && redirected) {
     try {

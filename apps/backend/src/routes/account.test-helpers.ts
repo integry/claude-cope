@@ -1,15 +1,11 @@
 import { vi } from "vitest";
 import app from "../app";
 
-function normalizeSql(sql: string) {
-  return sql.replace(/\s+/g, " ").trim();
-}
-
 export const ACCOUNT_TEST_SQL = {
-  getProfile: normalizeSql("SELECT username, total_td, current_td, corporate_rank, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier FROM user_scores WHERE username = ?"),
-  getProfileRow: normalizeSql("SELECT username, total_td, current_td, corporate_rank, inventory, upgrades, achievements, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier, license_hash FROM user_scores WHERE username = ?"),
-  getLicenseStatus: normalizeSql("SELECT status, last_activated_at FROM licenses WHERE key_hash = ?"),
-  aliasTakenLookup: normalizeSql("SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?) AND username != ?"),
+  getProfile: "td_multiplier FROM user_scores WHERE username = ?",
+  getProfileRow: "td_multiplier, license_hash FROM user_scores WHERE username = ?",
+  getLicenseStatus: "FROM licenses WHERE key_hash = ?",
+  aliasTakenLookup: "SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?) AND username != ?",
 } as const;
 
 export function createMockDB(opts: {
@@ -18,13 +14,12 @@ export function createMockDB(opts: {
   runChanges?: number;
 } = {}) {
   const calls: { sql: string; bindings: unknown[] }[] = [];
-  const firstBySQL = opts.firstBySQL
-    ? Object.fromEntries(Object.entries(opts.firstBySQL).map(([sql, result]) => [normalizeSql(sql), result]))
-    : null;
+  const firstBySQL = opts.firstBySQL ?? null;
   const resolveFirst = (sql: string) => {
     if (firstBySQL) {
-      const normalizedSql = normalizeSql(sql);
-      if (normalizedSql in firstBySQL) return firstBySQL[normalizedSql] ?? null;
+      for (const [pattern, result] of Object.entries(firstBySQL)) {
+        if (sql.includes(pattern)) return result ?? null;
+      }
     }
     return opts.firstResults ?? null;
   };

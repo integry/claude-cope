@@ -204,7 +204,9 @@ export function recordUsage(
 
   if (params.proKeyHash) {
     queries.push(
-      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, license_hash, credits_used) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT(username) DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, license_hash = ?, credits_used = credits_used + 1, updated_at = datetime('now')").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.proKeyHash, params.tdAwarded, params.tdAwarded, params.proKeyHash).run(),
+      // Omit the conflict target so case-only username variants also route into
+      // the update path via the LOWER(username) unique index.
+      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, license_hash, credits_used) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT DO UPDATE SET total_td = total_td + ?, current_td = current_td + ?, license_hash = ?, credits_used = credits_used + 1, updated_at = datetime('now')").bind(params.username, params.tdAwarded, params.tdAwarded, params.rank, params.country, params.proKeyHash, params.tdAwarded, params.tdAwarded, params.proKeyHash).run(),
     );
   } else if (!isOwnershipSpoofed) {
     queries.push(
@@ -214,7 +216,7 @@ export function recordUsage(
       db.prepare(
         `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, credits_used)
          VALUES (?, ?, ?, ?, ?, 1)
-         ON CONFLICT(username) DO UPDATE SET
+         ON CONFLICT DO UPDATE SET
            total_td = total_td + ?,
            current_td = current_td + ?,
            corporate_rank = ?,

@@ -476,8 +476,13 @@ describe("POST /api/account/update-alias", () => {
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new", licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(200);
     expect(db.batch).toHaveBeenCalled();
+    const batchStatements = (db.batch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Array<{ run?: unknown }>;
+    expect(batchStatements).toHaveLength(6);
     const preparedSql = (db.prepare as ReturnType<typeof vi.fn>).mock.calls.map((args: unknown[]) => String(args[0]));
-    expect(preparedSql.some((sql) => sql.includes("DELETE FROM completed_tasks"))).toBe(true);
+    const deleteIndex = preparedSql.findIndex((sql) => sql.includes("DELETE FROM completed_tasks"));
+    const userRenameIndex = preparedSql.findIndex((sql) => sql.includes("UPDATE user_scores SET username = ?"));
+    expect(deleteIndex).toBeGreaterThan(-1);
+    expect(userRenameIndex).toBeGreaterThan(deleteIndex);
   });
 });
 
@@ -648,6 +653,33 @@ describe("GET /api/account/me", () => {
     expect(await res.json()).toEqual({ found: false });
     expect(kv.put).not.toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
     expect(kv.delete).toHaveBeenCalledWith("session_user:test-session");
+  });
+  it("falls back to the original profile when a rename redirect points at a missing target", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+    });
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((username: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("licenses")
+              ? null
+              : username === "alice"
+                ? { ...BASE_PROFILE, username: "alice", license_hash: null }
+                : null,
+          ),
+        })),
+      })),
+    };
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "alice",
+      profile: { username: "alice" },
+    });
+    expect(kv.delete).not.toHaveBeenCalledWith("session_user:test-session");
   });
   it("repairs rename chains longer than five hops", async () => {
     const kv = mockKV({
