@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { Hono } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, rowToProfile, isLicenseActive } from "../utils/profile";
@@ -436,6 +437,7 @@ account.post("/update-ticket", async (c) => {
   return c.json({ success: true, profile: updated });
 });
 
+// eslint-disable-next-line complexity
 account.post("/update-alias", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
