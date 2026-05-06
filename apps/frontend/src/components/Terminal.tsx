@@ -47,7 +47,7 @@ function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, 
 }
 
 function Terminal() {
-  const { state, setState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
+  const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const creditTD = useCallback((amount: number) => addActiveTD(amount, true), [addActiveTD]);
@@ -274,7 +274,13 @@ function Terminal() {
     const chatMessages = isFreeTier
       ? contextMessages
       : [...contextMessages, { role: "user", content: userMessage.content }];
-    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({ state, updateTicketProgress, addActiveTD, playChime, setState });
+    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({
+      getState: getCurrentState,
+      updateTicketProgress,
+      addActiveTD,
+      playChime,
+      setState,
+    });
     const controller = new AbortController();
     abortControllerRef.current = controller;
     submitChatMessage({

@@ -151,16 +151,24 @@ Congratulations: you asked for a simple lesson and summoned a workplace incident
 }
 
 const UNHINGED_USER_NEXT_MESSAGE_FALLBACKS = [
-  "Which cursed part detonates first?",
-  "Show the most haunted line.",
+  "Which part detonates first?",
   "Which bad idea catches fire next?",
-  "Point at the goblin in the config.",
-  "Show the part compliance invented.",
+  "Which part did compliance invent?",
   "Which relic screams the loudest?",
-  "What explodes if we touch it again?",
-  "Show the weirdest moving part.",
+  "What explodes if we try that?",
+  "Which part matters here?",
   "Which suspicious blob is doing the damage?",
   "What fresh sabotage did that summon?",
+  "Which lie in here shipped?",
+  "Which switch looks the most cursed?",
+  "What breaks if we try it?",
+  "Which knob runs production?",
+  "Which part does nobody own?",
+  "Which gremlin signed off this?",
+  "What detonates after deploy?",
+  "Which option is pretending to be safe?",
+  "Which secret tunnel is leaking?",
+  "Is that the bad one?",
 ] as const;
 
 const BROKEN_REPLY_FALLBACKS = [
@@ -199,18 +207,19 @@ function buildFallbackUserNextMessage(content: string): string {
     ?? text.match(/\b[a-z]+-[a-z0-9-]{3,}\b/i)?.[0];
 
   if (token) {
-    if (/^0x/i.test(token)) return `Show the ${token} line`;
-    if (/^offset\s+\d+/i.test(token)) return `Why ${token}?`;
-    if (/^restartPolicy$/i.test(token)) return "Why restartPolicy Never?";
-    if (/orphaned pods?/i.test(token)) return "Show the orphaned pods";
-    if (/legacy code/i.test(token)) return "Show the legacy file";
-    if (/^magic(?:=true)?$/i.test(token)) return "Show the magic flag";
-    return `Show the ${token}`;
+    if (/^0x/i.test(token)) return `Why ${token} of all things?`;
+    if (/^offset\s+\d+/i.test(token)) return `Who cursed ${token}?`;
+    if (/^restartPolicy$/i.test(token)) return "Who chose restartPolicy Never?";
+    if (/orphaned pods?/i.test(token)) return "Which pod got orphaned?";
+    if (/legacy code/i.test(token)) return "Is the legacy file the bad one?";
+    if (/^magic(?:=true)?$/i.test(token)) return "Who enabled the magic flag?";
+    if (/^[a-z]+-[a-z0-9-]{3,}$/i.test(token)) return `Is ${token} the cursed bit?`;
+    return `Why is ${token} involved?`;
   }
 
-  if (/logs?/i.test(text)) return "Which log line broke?";
-  if (/cluster/i.test(text)) return "Which cluster thing broke?";
-  if (/version control/i.test(text)) return "Which relic are you mocking?";
+  if (/logs?/i.test(text)) return "Which part is lying, then?";
+  if (/cluster/i.test(text)) return "Which cluster thing caught fire?";
+  if (/version control/i.test(text)) return "Which relic rewrote history?";
   return UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
     hashTextForFallback(text) % UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length
   ];
@@ -220,6 +229,9 @@ function isGenericUserNextMessage(text: string): boolean {
   const normalized = text.trim().toLowerCase().replace(/[.!?]+$/g, "");
   return (
     [
+      "what's next",
+      "what’s next",
+      "whats next",
       "what should i do next",
       "what now",
       "what happens if i run this",

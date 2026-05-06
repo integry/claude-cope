@@ -4,7 +4,7 @@ import { supabase } from "../supabaseClient";
 import { updateTicketServer } from "../api/profileApi";
 
 interface SprintContext {
-  state: GameState;
+  getState: () => GameState;
   updateTicketProgress: (amount: number) => void;
   addActiveTD: (amount: number) => void;
   playChime: () => void;
@@ -37,32 +37,50 @@ export function buildSprintCallbacks(ctx: SprintContext) {
   let sprintCompleteMessage: Message | null = null;
 
   const onSprintProgress = (rawAmount: number) => {
-    if (!ctx.state.activeTicket) return;
     const amount = Math.round(rawAmount * 1.5);
-    ctx.updateTicketProgress(amount);
-    if (Math.min(ctx.state.activeTicket.sprintProgress + amount, ctx.state.activeTicket.sprintGoal) >= ctx.state.activeTicket.sprintGoal) {
-      const payout = ctx.state.activeTicket.sprintGoal * 10;
-      ctx.addActiveTD(payout); ctx.playChime();
-      sprintCompleteMessage = { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${ctx.state.activeTicket!.id} "${ctx.state.activeTicket!.title}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` };
-      ctx.setState((prev) => ({
+    const current = ctx.getState();
+    const ticket = current.activeTicket;
+    if (!ticket) return;
+
+    const willComplete =
+      Math.min(ticket.sprintProgress + amount, ticket.sprintGoal) >= ticket.sprintGoal;
+
+    if (!willComplete) {
+      ctx.updateTicketProgress(amount);
+      return;
+    }
+
+    const completedTicketId = ticket.id;
+    const completedTicketTitle = ticket.title;
+    const completedUsername = current.username;
+    const completedProKeyHash = current.proKeyHash;
+    const payout = ticket.sprintGoal * 10;
+
+    ctx.setState((prev) => {
+      if (!prev.activeTicket || prev.activeTicket.id !== completedTicketId) return prev;
+      return {
         ...prev,
         activeTicket: null,
-        pendingCompletedTaskIds: [...prev.pendingCompletedTaskIds, ctx.state.activeTicket!.id],
-      }));
-      if (ctx.state.username) {
+        pendingCompletedTaskIds: [...prev.pendingCompletedTaskIds, completedTicketId],
+      };
+    });
+
+    ctx.addActiveTD(payout);
+    ctx.playChime();
+    sprintCompleteMessage = { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${completedTicketId} "${completedTicketTitle}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` };
+
+    if (completedUsername && completedProKeyHash) {
         void syncCompletedTicketReward({
-          username: ctx.state.username,
-          ticketId: ctx.state.activeTicket!.id,
-          proKeyHash: ctx.state.proKeyHash,
+          username: completedUsername,
+          ticketId: completedTicketId,
+          proKeyHash: completedProKeyHash,
         });
-      }
-      if (ctx.state.proKeyHash && ctx.state.username) {
-        void updateTicketServer(ctx.state.username, null, ctx.state.proKeyHash);
-      }
-      const completedMessage = `✅ ${ctx.state.username || "A player"} completed ticket "${ctx.state.activeTicket!.title}" and earned ${payout.toLocaleString()} TD!`;
-      fetch(`${API_BASE}/api/recent-events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: completedMessage }) }).catch(() => {});
-      supabase?.channel('global_incidents').send({ type: 'broadcast', event: 'new_incident', payload: { message: completedMessage } }).catch(() => {});
+        void updateTicketServer(completedUsername, null, completedProKeyHash);
     }
+
+    const completedMessage = `✅ ${completedUsername || "A player"} completed ticket "${completedTicketTitle}" and earned ${payout.toLocaleString()} TD!`;
+    fetch(`${API_BASE}/api/recent-events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: completedMessage }) }).catch(() => {});
+    supabase?.channel('global_incidents').send({ type: 'broadcast', event: 'new_incident', payload: { message: completedMessage } }).catch(() => {});
   };
 
   const getSprintCompleteMessage = () => { const msg = sprintCompleteMessage; sprintCompleteMessage = null; return msg; };
