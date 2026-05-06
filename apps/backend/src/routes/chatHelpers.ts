@@ -1,5 +1,4 @@
 import { consumeQuota, getQuotaLimits, getQuotaPercent, QuotaExhaustedError } from "../utils/quota";
-import type { ServerProfile } from "@claude-cope/shared/profile";
 import { getProfile, getProfileByLicenseHash, resolveRank } from "../utils/profile";
 import { FREE_TIER_RANK_CAP } from "../gameConstants";
 import { syncPolarUsage } from "../utils/polar";
@@ -19,51 +18,6 @@ export type ChatResponseData = {
   choices?: Array<{ message?: { content?: string } }>;
   [key: string]: unknown;
 };
-
-type FreeProfileSnapshotParams = {
-  username: string;
-  serverProfile: ServerProfile | null;
-  tdAwarded: number;
-  quotaPercent: number;
-};
-
-// TODO(byok): This snapshot always caps rank at FREE_TIER_RANK_CAP. BYOK users
-// bypass the cap on the frontend, but server-synced profiles will reset their rank.
-// Once BYOK is promoted to a first-class feature, accept a BYOK flag so that rank
-// progression is preserved across sessions and devices.
-export function buildFreeChatProfileSnapshot(params: FreeProfileSnapshotParams): ServerProfile | null {
-  const { username, serverProfile, tdAwarded, quotaPercent } = params;
-  if (!serverProfile && tdAwarded <= 0) return null;
-
-  if (!serverProfile) {
-    return {
-      username,
-      total_td: tdAwarded,
-      current_td: tdAwarded,
-      corporate_rank: FREE_TIER_RANK_CAP,
-      inventory: {},
-      upgrades: [],
-      achievements: [],
-      buddy_type: null,
-      buddy_is_shiny: false,
-      unlocked_themes: ["default"],
-      active_theme: "default",
-      active_ticket: null,
-      td_multiplier: 1,
-      multiplier: 1,
-      quota_percent: quotaPercent,
-    };
-  }
-
-  const totalTD = serverProfile.total_td + tdAwarded;
-  return {
-    ...serverProfile,
-    total_td: totalTD,
-    current_td: serverProfile.current_td + tdAwarded,
-    corporate_rank: FREE_TIER_RANK_CAP,
-    quota_percent: quotaPercent,
-  };
-}
 
 /** Pre-flight quota availability check — does NOT consume credits. */
 export async function checkQuotaAvailable(
@@ -256,11 +210,10 @@ export async function handleFreeUserResponse(
     ownsUsername: boolean; deferredKvWrites: (() => void) | null;
   },
 ): Promise<Response> {
-  let serverProfile: ServerProfile | null = null;
   let serverMultiplier = 1;
   const serverRank = FREE_TIER_RANK_CAP;
   if (db) {
-    serverProfile = await getProfile(db, params.username);
+    const serverProfile = await getProfile(db, params.username);
     if (serverProfile) {
       serverMultiplier = serverProfile.multiplier;
     }
@@ -281,11 +234,5 @@ export async function handleFreeUserResponse(
 
   (params.data as Record<string, unknown>).td_awarded = tdAwarded;
   (params.data as Record<string, unknown>).quotaPercent = params.quotaPercent;
-  (params.data as Record<string, unknown>).profile = buildFreeChatProfileSnapshot({
-    username: params.username,
-    serverProfile,
-    tdAwarded,
-    quotaPercent: params.quotaPercent,
-  });
   return new Response(JSON.stringify(params.data), { headers: { "Content-Type": "application/json" } });
 }

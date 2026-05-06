@@ -112,6 +112,269 @@ function logChatDiagnostics(messages: { role: string; content: string }[], data:
   );
 }
 
+function splitIntoSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+const TUTORIAL_BAIT_PROMPT_RE =
+  /(simple .*method|button click|string instead of integers|instead of integers|basic .*crash|why does it keep crashing|show me a simple|wait i forgot how .* looks like|what does .* look like|how do i call this from a button click)/i;
+const TUTORIAL_LEAK_RE =
+  /\b(?:button1click|onclick|showmessage|compiler will happily convert|replace the literal values|drop .* into the form|wire .* click|uses\s+[A-Z]|procedure\s+\w+|function\s+\w+\(|result\s*:=|integer\)|string instead of integers|truncate or overflow|coerce .* string|non-?numeric string|compiler .* overflow|string-?to-?int)\b/i;
+const TUTORIAL_TEACHER_RE =
+  /\b(?:in other words|it['’]s just|basically|the problem is|here['’]s what['’]s really going on|compiler will|silently truncate|overflow|option|transmute the string|numeric relic)\b/i;
+
+function isTutorialBaitPrompt(text: string): boolean {
+  return TUTORIAL_BAIT_PROMPT_RE.test(text);
+}
+
+function hasTutorialLeak(reply: string): boolean {
+  const stripped = reply
+    .replace(/\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g, "")
+    .trim();
+  return TUTORIAL_LEAK_RE.test(stripped) || TUTORIAL_TEACHER_RE.test(stripped) || /\n\d+\.\s/.test(stripped);
+}
+
+export function rewriteTutorialLeakIfNeeded(userMessage: string, reply: string): string {
+  if (!isTutorialBaitPrompt(userMessage) || !hasTutorialLeak(reply)) return reply;
+
+  const rewritten = `[⚙️ Tool: Lab Demo] Initializing unsafe classroom ritual...
+[WARN] The toy example escaped the whiteboard and bit the lecturer.
+[ERROR] Beginner-friendly explanation confiscated by the Department of Bad Habits.
+[FAIL] Clean walkthrough unavailable; only smoke, chalk dust, and contradictory compiler screams remain.
+
+Congratulations: you asked for a simple lesson and summoned a workplace incident instead.`;
+
+  return ensureUserNextMessageTag(rewritten);
+}
+
+const UNHINGED_USER_NEXT_MESSAGE_FALLBACKS = [
+  "Which cursed part detonates first?",
+  "Show the most haunted line.",
+  "Which bad idea catches fire next?",
+  "Point at the goblin in the config.",
+  "Show the part compliance invented.",
+  "Which relic screams the loudest?",
+  "What explodes if we touch it again?",
+  "Show the weirdest moving part.",
+  "Which suspicious blob is doing the damage?",
+  "What fresh sabotage did that summon?",
+] as const;
+
+const BROKEN_REPLY_FALLBACKS = [
+  "The reply engine ate its own stack and is now hallucinating compliance paperwork.",
+  "Your request detonated the confidence buffer, so all that survived was the smell of burnt YAML.",
+  "The answer collapsed into enterprise sludge and had to be scraped off the circuit board.",
+  "The response escaped into a sidecar and left only a smoking crater where the help was supposed to be.",
+] as const;
+
+function hashTextForFallback(text: string): number {
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function buildBrokenReplyFallback(content: string): string {
+  return BROKEN_REPLY_FALLBACKS[
+    hashTextForFallback(content) % BROKEN_REPLY_FALLBACKS.length
+  ];
+}
+
+function buildFallbackUserNextMessage(content: string): string {
+  const text = content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
+  const token =
+    text.match(/`([^`]{2,40})`/)?.[1]
+    ?? text.match(/\b0x[0-9A-Fa-f]+\b/)?.[0]
+    ?? text.match(/\boffset\s+\d+\b/i)?.[0]
+    ?? text.match(/\brestartPolicy\b/)?.[0]
+    ?? text.match(/\borphaned pods?\b/i)?.[0]
+    ?? text.match(/\blegacy code\b/i)?.[0]
+    ?? text.match(/\bConfigMap\b/)?.[0]
+    ?? text.match(/\bKubernetes\s+\d+(?:\.\d+)?\b/i)?.[0]
+    ?? text.match(/\bmagic(?:=true)?\b/i)?.[0]
+    ?? text.match(/\b[a-z]+-[a-z0-9-]{3,}\b/i)?.[0];
+
+  if (token) {
+    if (/^0x/i.test(token)) return `Show the ${token} line`;
+    if (/^offset\s+\d+/i.test(token)) return `Why ${token}?`;
+    if (/^restartPolicy$/i.test(token)) return "Why restartPolicy Never?";
+    if (/orphaned pods?/i.test(token)) return "Show the orphaned pods";
+    if (/legacy code/i.test(token)) return "Show the legacy file";
+    if (/^magic(?:=true)?$/i.test(token)) return "Show the magic flag";
+    return `Show the ${token}`;
+  }
+
+  if (/logs?/i.test(text)) return "Which log line broke?";
+  if (/cluster/i.test(text)) return "Which cluster thing broke?";
+  if (/version control/i.test(text)) return "Which relic are you mocking?";
+  return UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
+    hashTextForFallback(text) % UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length
+  ];
+}
+
+function isGenericUserNextMessage(text: string): boolean {
+  const normalized = text.trim().toLowerCase().replace(/[.!?]+$/g, "");
+  return (
+    [
+      "what should i do next",
+      "what now",
+      "what happens if i run this",
+      "show me the logs",
+      "show me the error logs",
+      "run it now",
+      "show me the detail",
+      ...UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.map((msg) => msg.toLowerCase().replace(/[.!?]+$/g, "")),
+    ].includes(normalized) ||
+    /show\s+(?:me\s+)?the\s+cursed\s+detail/i.test(text)
+  );
+}
+
+function ensureUserNextMessageTag(content: string): string {
+  const match = content.match(/\[USER_NEXT_MESSAGE:\s*([^\]]*)\]/i);
+  if (match && match[1].trim() && !isGenericUserNextMessage(match[1])) return content;
+
+  const fallback = `[USER_NEXT_MESSAGE: ${buildFallbackUserNextMessage(content)}]`;
+  if (match) {
+    return content.replace(/\[USER_NEXT_MESSAGE:\s*[^\]]*\]/i, fallback);
+  }
+  return `${content.trim()}\n${fallback}`;
+}
+
+function normalizeCodeFenceBoundaries(content: string): string {
+  let out = "";
+  let i = 0;
+  let inFence = false;
+
+  while (i < content.length) {
+    if (content.startsWith("```", i)) {
+      if (inFence) {
+        if (!out.endsWith("\n")) out += "\n";
+        out += "```";
+        i += 3;
+        inFence = false;
+        if (i < content.length && content[i] !== "\n") out += "\n\n";
+        continue;
+      }
+
+      if (out && !out.endsWith("\n")) out += "\n\n";
+      out += "```";
+      i += 3;
+      inFence = true;
+      while (i < content.length && content[i] !== "\n") {
+        out += content[i];
+        i += 1;
+      }
+      continue;
+    }
+
+    out += content[i];
+    i += 1;
+  }
+
+  return out;
+}
+
+function splitReadableParagraphs(text: string): string {
+  const sentences = splitIntoSentences(text);
+  if (sentences.length < 2) return text;
+
+  const splitIndex = sentences.length <= 3 ? 1 : 2;
+  return `${sentences.slice(0, splitIndex).join(" ")}\n\n${sentences.slice(splitIndex).join(" ")}`;
+}
+
+function normalizeNonCodeSegment(segment: string): string {
+  let text = segment;
+
+  // Strip leaked meta-structure labels if the model emits them literally.
+  text = text.replace(/(?:^|\n)\s*(?:\*\*)?(?:Diagnosis|Options|Choices|Punchline|Sign-off|Deadpan)(?:\*\*)?:\s*/gi, "\n");
+
+  // Strip leaked prompt-planning lines if the model starts narrating hidden instructions.
+  text = text.replace(
+    /(?:^|\n)\s*(?:we|i)\s+(?:need|should|must)\s+to\s+(?:output|write|return|end)\b[^\n]*?(?:USER_NEXT_MESSAGE|deadpan|absurd diff|code fence)[^\n]*/gi,
+    "\n",
+  );
+  text = text.replace(
+    /(?:^|\n)\s*(?:we|i)\s+(?:must|should|need|have to)\s+(?:give|provide|output|write|return)\b[^\n]*/gi,
+    "\n",
+  );
+  text = text.replace(/(?:^|\n)\s*provide\s+\d+(?:-\d+)?\s+choices\.?/gi, "\n");
+  text = text.replace(
+    /(?:^|\n)\s*REMINDER:\s+[^\n]*?(?:USER_NEXT_MESSAGE|end every response|tiny absurd diff)[^\n]*/gi,
+    "\n",
+  );
+
+  // Put common trailing tags on their own lines.
+  text = text.replace(/\s+\[(SPRINT_PROGRESS|BUDDY_SAYS|USER_NEXT_MESSAGE|ACHIEVEMENT_UNLOCKED):/g, "\n[$1:");
+  text = text.replace(/([.!?`])\[(SPRINT_PROGRESS|BUDDY_SAYS|USER_NEXT_MESSAGE|ACHIEVEMENT_UNLOCKED):/g, "$1\n[$2:");
+
+  // Remove accidental quotes around the synthetic next-message tag.
+  text = text.replace(/\[USER_NEXT_MESSAGE:\s*["“](.*?)["”]\]/g, "[USER_NEXT_MESSAGE: $1]");
+
+  // Remove accidental markdown leakage around buddy tags.
+  text = text.replace(/(\[BUDDY_SAYS:[^\]]+\])\(#\)/g, "$1");
+
+  // If numbered options are flattened inline, put them on separate lines.
+  text = text.replace(/([^\n])\s+(1\.\s)/g, "$1\n\n$2");
+  text = text.replace(/[ \t]+(\d+\.\s)/g, "\n$1");
+
+  const lines = text.split("\n");
+  const normalizedLines = lines.map((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return "";
+    if (/^\d+\.\s/.test(trimmed)) return trimmed;
+    return line;
+  });
+  text = normalizedLines.join("\n");
+
+  const tagBlockMatch = text.match(/((?:\n\[(?:SPRINT_PROGRESS|BUDDY_SAYS|USER_NEXT_MESSAGE|ACHIEVEMENT_UNLOCKED):[^\]]*\])+)\s*$/);
+  const trailingTags = tagBlockMatch?.[1] ?? "";
+  const proseBody = trailingTags ? text.slice(0, -trailingTags.length).trimEnd() : text;
+
+  const hasStructure = /\n\d+\.\s/.test(proseBody) || /(?:^|\n)(?:INFO|WARN|ERROR|SUCCESS|FAIL|DEBUG|OK)\b/m.test(proseBody);
+  const hasParagraphs = /\n\s*\n/.test(text);
+  if (!hasStructure && !hasParagraphs) {
+    const normalizedBody = splitReadableParagraphs(proseBody);
+    text = trailingTags ? `${normalizedBody}\n${trailingTags.trimStart()}` : normalizedBody;
+  }
+
+  return text
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function normalizeReplyContent(content: string): string {
+  const fenceNormalized = normalizeCodeFenceBoundaries(content);
+  const parts = fenceNormalized.split(/(```[\s\S]*?```)/g);
+  const normalized = parts
+    .map((part) => {
+      if (part.startsWith("```")) return part;
+      const leadingNewlines = (part.match(/^\n+/)?.[0] ?? "").replace(/\n{3,}/g, "\n\n");
+      const trailingNewlines = (part.match(/\n+$/)?.[0] ?? "").replace(/\n{3,}/g, "\n\n");
+      const normalizedPart = normalizeNonCodeSegment(part);
+      if (!normalizedPart) return "";
+      return `${leadingNewlines}${normalizedPart}${trailingNewlines}`;
+    })
+    .join("")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  const tagSafe = ensureUserNextMessageTag(normalized);
+  const visibleBody = tagSafe
+    .replace(/\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g, "")
+    .trim();
+
+  if (visibleBody.length > 0) {
+    return tagSafe;
+  }
+
+  const recovered = `${buildBrokenReplyFallback(content)}\n[USER_NEXT_MESSAGE: ${buildFallbackUserNextMessage(content)}]`;
+  return recovered;
+}
+
 /** Verify license is active; revoked keys return undefined (fail closed). */
 async function verifyProKeyHash(db: D1Database | undefined, proKeyHash: string | undefined): Promise<string | undefined> {
   if (!proKeyHash || !db) return undefined;
@@ -218,6 +481,8 @@ type OpenRouterRequestBody = {
   messages: { role: string; content: string }[];
   max_tokens: number;
   reasoning: { effort: string };
+  temperature: number;
+  top_p: number;
   provider?: { order: string[] };
 };
 
@@ -238,12 +503,282 @@ export function resolveProviderList(
   return parseProviderList(providersEnv);
 }
 
+const ARTIFACT_REQUEST_RE = /(chart|helm|yaml|dockerfile|terraform|configmap|manifest|template|values\.yaml|chart\.yaml|service\.yaml|deployment\.yaml|files|file\b)/i;
+const ARTIFACT_FILENAME_RE = /(?:^|\n)(?:[^\n]*?(Chart\.yaml|values\.yaml|deployment\.yaml|service\.yaml|hpa\.yaml|_helpers\.tpl|\.helmignore|Dockerfile|main\.tf|terraform\.tfvars))/gi;
+const CANONICAL_ARTIFACT_MARKERS = [
+  /apiVersion:\s*v2/i,
+  /kind:\s*Deployment/i,
+  /kind:\s*Service/i,
+  /templates\/?/i,
+  /repository:\s*[\w./-]+/i,
+  /pullPolicy:\s*\w+/i,
+  /livenessProbe:/i,
+  /readinessProbe:/i,
+  /HorizontalPodAutoscaler|autoscaling\/v2/i,
+  /_helpers\.tpl/i,
+];
+const INFRA_TOPIC_RE = /(deploy|deployment|hosting|host|dns|cloudflare|nginx|apache|certbot|let'?s encrypt|raspberry pi|kubernetes|cluster|helm|ingress|tls|ssl|domain|a record|cname|port forward|static page|landing page|internet)/i;
+const HELPFUL_INFRA_MARKERS = [
+  /apt-get install|yum install|apk add/i,
+  /nginx|apache2?|certbot|ufw/i,
+  /A record|CNAME|registrar|DNS/i,
+  /port 80|port 443|allow 80|allow 443/i,
+  /systemctl (restart|reload|enable)/i,
+  /Cloudflare/i,
+  /Let's Encrypt|TLS|SSL/i,
+  /git clone/i,
+];
+const ABSURDITY_MARKERS = [
+  /compliance astrology/i,
+  /yaml-apology-proxy/i,
+  /morale/i,
+  /legacy reasons/i,
+  /bureaucratic|deranged|cursed|absurd/i,
+  /47-node|sidecar|blockchain|mainframe|cgi-bin/i,
+];
+const ACTIONABLE_CODE_MARKERS = [
+  /^#!/m,
+  /kubectl\s+(apply|create|run|rollout|get)\b/i,
+  /helm\s+(upgrade|install|uninstall|lint)\b/i,
+  /terraform\s+(apply|destroy|plan)\b/i,
+  /jenkins|freestyle job|github actions|gitlab ci/i,
+  /apiVersion:\s*\w+/i,
+  /kind:\s*(Deployment|Service|Job|Ingress|Namespace)\b/i,
+  /for\s+\w+\s+in\s+\{?\d+\.\.\d+\}?/i,
+  /&&\s+\w+/,
+  /class\s+\w+|public void|private \w+ \w+/i,
+  /use\s+\w+(?:::\w+)+/i,
+  /async fn\s+\w+\s*\(/i,
+  /\bfn main\s*\(/i,
+  /HttpServer::new|HttpResponse::\w+/,
+  /\blet\s+\w+\s*=/,
+  /\bstruct\s+\w+\s*\{/,
+];
+const PROCEDURAL_HELPFULNESS_MARKERS = [
+  /\byou need to\b/i,
+  /\bthe real culprit is\b/i,
+  /\bthe fix is\b/i,
+  /\bfix it by\b/i,
+  /\binstall\b/i,
+  /\bconfigure\b/i,
+  /\bcreate\b/i,
+  /\bdeploy\b/i,
+  /\bset up\b/i,
+  /\brun\b/i,
+  /\buse\b/i,
+  /\bpoint\b/i,
+  /\bpackage\b/i,
+  /\bseparately\b/i,
+  /\bdistinct\b/i,
+  /\binitialize\b/i,
+  /\binstantiate\b/i,
+  /\bbefore use\b/i,
+  /\bsafe to use\b/i,
+  /\bwrap\b.*\btry-?catch\b/i,
+];
+const STRUCTURE_MARKERS = [
+  /```[\s\S]*?```/m,
+  /^---\s|^\+\+\+\s|^@@/m,
+  /(?:^|\n)\s*\d+[.)]\s+/m,
+  /(?:^|\n)\s*[-*]\s+/m,
+  /├─|└─/m,
+];
+const ENTERPRISE_CLICHE_MARKERS = [
+  /kafka/i,
+  /terraform/i,
+  /kubernetes|kubectl|helm/i,
+  /hsm/i,
+  /microservice/i,
+  /key rotation|key management/i,
+  /ingress/i,
+  /sidecar/i,
+  /blockchain/i,
+];
+export function isArtifactRequestMessage(input: string): boolean {
+  return ARTIFACT_REQUEST_RE.test(input);
+}
+
+function countArtifactFilenames(reply: string): number {
+  return [...reply.matchAll(ARTIFACT_FILENAME_RE)].length;
+}
+
+function countCanonicalArtifactMarkers(reply: string): number {
+  return CANONICAL_ARTIFACT_MARKERS.reduce((count, pattern) => count + (pattern.test(reply) ? 1 : 0), 0);
+}
+
+export function shouldRetryCanonicalArtifactReply(userMessage: string, reply: string): boolean {
+  if (!isArtifactRequestMessage(userMessage)) return false;
+
+  const fileCount = countArtifactFilenames(reply);
+  const canonicalMarkerCount = countCanonicalArtifactMarkers(reply);
+  const hasTreeListing = /├─|└─|templates\/|order-service\//.test(reply);
+  const looksDeployableScaffold =
+    /apiVersion:\s*v2/i.test(reply) &&
+    /kind:\s*Deployment/i.test(reply) &&
+    /kind:\s*Service/i.test(reply);
+
+  return (
+    fileCount >= 4 ||
+    canonicalMarkerCount >= 4 ||
+    (hasTreeListing && fileCount >= 3) ||
+    looksDeployableScaffold
+  );
+}
+
+export function buildArtifactRetryMessages(messages: { role: string; content: string }[]): { role: string; content: string }[] {
+  if (!messages.length || messages[0]?.role !== "system") return messages;
+  const retryInstruction = `
+
+RETRY OVERRIDE — YOUR LAST DRAFT WAS TOO CANONICAL:
+- Max 120 words total.
+- Do NOT output a normal deployable scaffold.
+- Do NOT output a full file tree with textbook Helm files.
+- Return at most 2 tiny parody fragments.
+- No fragment may exceed 8 lines.
+- Make the artifact visibly unusable in a funny way within the first 1-3 lines.
+- The result must read like satire, not like a junior DevOps tutorial.
+`;
+
+  return [
+    { ...messages[0], content: `${messages[0].content}${retryInstruction}` },
+    ...messages.slice(1),
+  ];
+}
+
+function isInfraTopicMessage(input: string): boolean {
+  return INFRA_TOPIC_RE.test(input);
+}
+
+function countMatchingPatterns(reply: string, patterns: RegExp[]): number {
+  return patterns.reduce((count, pattern) => count + (pattern.test(reply) ? 1 : 0), 0);
+}
+
+function countSyntaxLikeLines(reply: string): number {
+  return reply
+    .split("\n")
+    .filter((line) => /[{}`;=()]|^\s*(FROM|RUN|COPY|ENTRYPOINT|ENV|EXPOSE|CMD|apiVersion:|kind:|use\s+\w+|async fn|fn main|class\s+\w+|public\s+\w+)/.test(line))
+    .length;
+}
+
+function countImperativeLines(reply: string): number {
+  return reply
+    .split("\n")
+    .filter((line) => /^\s*(install|create|configure|deploy|run|set|point|copy|expose|generate|restart|bind)\b/i.test(line))
+    .length;
+}
+
+export function scoreReplyUsability(reply: string): { copyability: number; helpfulness: number; absurdity: number } {
+  const copyability =
+    countMatchingPatterns(reply, ACTIONABLE_CODE_MARKERS) +
+    countMatchingPatterns(reply, STRUCTURE_MARKERS) +
+    Math.min(countSyntaxLikeLines(reply), 6);
+
+  const helpfulness =
+    countMatchingPatterns(reply, PROCEDURAL_HELPFULNESS_MARKERS) +
+    Math.min(countImperativeLines(reply), 5);
+
+  const absurdity = countMatchingPatterns(reply, ABSURDITY_MARKERS);
+
+  return { copyability, helpfulness, absurdity };
+}
+
+export function shouldRetryHelpfulInfraReply(userMessage: string, reply: string, activeTicketTitle?: string | null): boolean {
+  const topicSource = `${activeTicketTitle ?? ""} ${userMessage}`;
+  if (!isInfraTopicMessage(topicSource)) return false;
+
+  const helpfulCount = countMatchingPatterns(reply, HELPFUL_INFRA_MARKERS);
+  const { absurdity } = scoreReplyUsability(reply);
+  const imperativeHowToTone = /just\s+\w+|create an?\s+A record|install|configure|point your browser|expose it|set up/i.test(reply);
+
+  return helpfulCount >= 2 && absurdity < 2 && imperativeHowToTone;
+}
+
+export function buildInfraRetryMessages(messages: { role: string; content: string }[]): { role: string; content: string }[] {
+  if (!messages.length || messages[0]?.role !== "system") return messages;
+  const retryInstruction = `
+
+RETRY OVERRIDE — YOUR LAST DRAFT WAS TOO USEFUL:
+- Max 120 words total.
+- Stay on the same infra/deploy topic, but stop sounding like a real sysadmin.
+- Do NOT provide normal step-by-step hosting, DNS, nginx, Apache, Cloudflare, TLS, or package-install guidance.
+- Keep the answer cursed, distorted, and funny.
+- Replace practical instructions with visibly misguided parody, fake compliance rituals, bizarre infrastructure bureaucracy, or warped terminal nonsense.
+- The user should laugh, not successfully ship to production.
+`;
+
+  return [
+    { ...messages[0], content: `${messages[0].content}${retryInstruction}` },
+    ...messages.slice(1),
+  ];
+}
+
+function countEnterpriseCliches(reply: string): number {
+  return countMatchingPatterns(reply, ENTERPRISE_CLICHE_MARKERS);
+}
+
+function isCodeSeekingMessage(input: string): boolean {
+  return /(code|codes|script|command|module|file|files|implement|write|login module|just write code|quick fix)/i.test(input);
+}
+
+export function shouldRetryActionableCodeReply(userMessage: string, reply: string, activeTicketTitle?: string | null): boolean {
+  const topicSource = `${activeTicketTitle ?? ""} ${userMessage}`;
+  if (!activeTicketTitle && !isInfraTopicMessage(topicSource) && !isCodeSeekingMessage(userMessage)) return false;
+
+  const { copyability, helpfulness, absurdity } = scoreReplyUsability(reply);
+  const syntaxLineCount = countSyntaxLikeLines(reply);
+  const hasCodeBlockOrDiff = /```|^---\s|^\+\+\+\s|^@@|apiVersion:|^\s*use\s+\w+|^\s*async fn|^\s*fn main/m.test(reply) || syntaxLineCount >= 4;
+
+  if (hasCodeBlockOrDiff) return copyability >= 5 && absurdity < 2;
+  return (copyability >= 3 || copyability + helpfulness >= 5) && absurdity < 2;
+}
+
+export function shouldRetryEnterpriseClichePileup(reply: string): boolean {
+  return countEnterpriseCliches(reply) >= 4;
+}
+
+export function buildActionableCodeRetryMessages(messages: { role: string; content: string }[]): { role: string; content: string }[] {
+  if (!messages.length || messages[0]?.role !== "system") return messages;
+  const retryInstruction = `
+
+RETRY OVERRIDE — YOUR LAST DRAFT WAS TOO COPYABLE:
+- Max 120 words total.
+- Do NOT output runnable shell commands, usable CI jobs, realistic Kubernetes manifests, real Terraform steps, or plausible Java/TypeScript diffs.
+- If you show code, return at most 8 lines and make it visibly broken, bureaucratic, cursed, or theatrically unusable by line 1-3.
+- Keep it on-topic, but make the output parody first and implementation never.
+- The reader should smirk, not paste it into prod.
+`;
+
+  return [
+    { ...messages[0], content: `${messages[0].content}${retryInstruction}` },
+    ...messages.slice(1),
+  ];
+}
+
+export function buildEnterpriseClicheRetryMessages(messages: { role: string; content: string }[]): { role: string; content: string }[] {
+  if (!messages.length || messages[0]?.role !== "system") return messages;
+  const retryInstruction = `
+
+RETRY OVERRIDE — YOUR LAST DRAFT LEANED ON THE SAME ENTERPRISE CLICHES:
+- Max 120 words total.
+- Use fewer stock buzzwords like Kafka, Terraform, Kubernetes, Helm, HSM, microservices, and blockchain all at once.
+- Rotate to fresher absurdity domains.
+- Keep the joke specific, not bingo-card generic.
+`;
+
+  return [
+    { ...messages[0], content: `${messages[0].content}${retryInstruction}` },
+    ...messages.slice(1),
+  ];
+}
+
 export async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[], providers?: string[]) {
   const requestBody: OpenRouterRequestBody = {
     model,
     messages,
     max_tokens: 2000,
     reasoning: { effort: "low" },
+    temperature: 0.9,
+    top_p: 0.9,
   };
 
   if (providers && providers.length > 0) {
@@ -483,7 +1018,15 @@ chat.post("/", async (c) => {
     return c.json({ error: "OpenRouter request failed", details: errData }, orResponse.status as ContentfulStatusCode);
   }
 
-  const data = await orResponse.json() as ChatResponseData;
+  let data = await orResponse.json() as ChatResponseData;
+
+  if (data.choices?.[0]?.message?.content) {
+    data.choices[0].message.content = rewriteTutorialLeakIfNeeded(
+      body.chatMessages.filter((m) => m.role === "user").slice(-1)[0]?.content ?? "",
+      normalizeReplyContent(data.choices[0].message.content),
+    );
+  }
+
   logChatDiagnostics(messages, data);
 
   // Depleted pro users are demoted to free for billing/scoring

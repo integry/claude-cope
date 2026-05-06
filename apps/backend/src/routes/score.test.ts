@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import app from "../app";
-import { makeDB, makeDBWithTasks, postScore } from "./score.test-helpers";
+import { makeDB, makeDBWithTasks, mockKV, postScore } from "./score.test-helpers";
 
 describe("GET /api/score", () => {
   it("returns 400 when username is missing", async () => {
@@ -245,6 +245,72 @@ describe("POST /api/score", () => {
     });
     const json = await res.json() as { multiplier: number };
     expect(json.multiplier).toBe(1.5);
+  });
+
+  it("repairs an existing free-user session when username_session already points at this session", async () => {
+    const { db } = makeDB({ total_td: 1000, current_td: 800 });
+    const kv = mockKV({
+      "session_user:test-session": "some-old-name",
+      "username_session:alice": "test-session",
+    });
+    const res = await postScore(
+      db,
+      {
+        username: "alice",
+        currentTD: 1000,
+        totalTDEarned: 1000,
+        inventory: {},
+        upgrades: [],
+      },
+      { Cookie: "cope_session_id=test-session" },
+      kv,
+    );
+    expect(res.status).toBe(200);
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "alice", expect.any(Object));
+  });
+
+  it("repairs an existing free-user session through rename redirects", async () => {
+    const { db } = makeDB({ total_td: 1000, current_td: 800 });
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+    });
+    const res = await postScore(
+      db,
+      {
+        username: "bob",
+        currentTD: 1000,
+        totalTDEarned: 1000,
+        inventory: {},
+        upgrades: [],
+      },
+      { Cookie: "cope_session_id=test-session" },
+      kv,
+    );
+    expect(res.status).toBe(200);
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
+    expect(kv.put).toHaveBeenCalledWith("username_session:bob", "test-session", expect.any(Object));
+  });
+
+  it("still rejects existing free-user writes from another session", async () => {
+    const { db } = makeDB({ total_td: 1000, current_td: 800 });
+    const kv = mockKV({
+      "session_user:test-session": "mallory",
+      "username_session:alice": "other-session",
+    });
+    const res = await postScore(
+      db,
+      {
+        username: "alice",
+        currentTD: 1000,
+        totalTDEarned: 1000,
+        inventory: {},
+        upgrades: [],
+      },
+      { Cookie: "cope_session_id=test-session" },
+      kv,
+    );
+    expect(res.status).toBe(403);
   });
 
   it("allows large one-off earnings from completed task bonus", async () => {

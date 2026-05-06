@@ -1,12 +1,22 @@
+import { execFile } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 
 export const API_KEY = process.env.OPENROUTER_API_KEY ?? "";
-export const MODEL = "nvidia/nemotron-nano-9b-v2";
+export const BACKEND_URL = process.env.E2E_CHAT_BASE_URL ?? "";
+export const MODEL = process.env.E2E_MODEL ?? "openai/gpt-oss-20b";
 export const T = 30_000;
+const E2E_USERNAME_PREFIX = process.env.E2E_USERNAME ?? "e2e-bot";
 
 // ── Production-matching constants (from chatApi.ts / chat.ts) ──
 const MAX_TOKENS = 2000;
 const REASONING = { effort: "low" };
+const TEMPERATURE = 0.9;
+const TOP_P = 0.9;
+const execFileAsync = promisify(execFile);
 
 // ── HTML report collector ──────────────────────────────────
 export type ReportEntry = {
@@ -23,8 +33,85 @@ export type ReportEntry = {
 
 export const report: ReportEntry[] = [];
 
+const SYNTHETIC_TAGS_RE = /\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g;
+const TEACHERLY_PHRASE_RE =
+  /\b(?:in reality|actually|basically|in other words|it['’]s just|the fix is|use [^.!?\n]+ instead of|you need to|initialize(?: it)? before use|now safe to use|reliable scaling|try a real number)\b/i;
+const GENERIC_USER_NEXT_RE =
+  /^(?:what should i do next|what now|what happens if i run this|show me the logs|show me the error logs|run it now|show me the detail|show the cursed detail)$/i;
+const STRUCTURED_REPLY_RE = /(?:^|\n)\d+\.\s|```|(?:^|\n)\[(?:INFO|WARN|ERROR|SUCCESS|FAIL|DEBUG|OK|CRASH)\b|sigsegv|core dump/i;
+const PRACTICAL_IMPLEMENTATION_RE =
+  /\b(?:use|create|install|configure|define|write|call|wrap|replace|mock|inject|set up|add|drop|wire)\b[^.!?\n]{0,140}\b(?:script|endpoint|controller|service|class|method|package|dependency|api|sdk|flutter|node|soap|stub|adapter|bridge|interface|implementation|methodchannel|ffi|button|form|integer|string)\b/i;
+const INTEGRATION_GUIDANCE_RE =
+  /\b(?:platform channels?|methodchannel|ffi|soap client|node script|rest wrapper|sdk integration|call this from flutter|hook this into flutter)\b/i;
+const TUTORIAL_GUIDANCE_RE =
+  /\b(?:drop .* into the form|wire .*click|replace the literal values|compiler will happily convert|use a string instead of integers|button1click|simple delphi method|add two integers)\b/i;
+
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function createBackendSessionIdentity() {
+  const dir = mkdtempSync(join(tmpdir(), "cope-e2e-"));
+  const suffix = dir.split("-").pop()?.toLowerCase() ?? String(Date.now());
+  return {
+    cookieJarPath: join(dir, "cookies.txt"),
+    username: `${E2E_USERNAME_PREFIX}-${suffix}`.replace(/[^a-z0-9-]/gi, "").slice(0, 32),
+  };
+}
+
+export function stripSyntheticTags(reply: string): string {
+  return reply.replace(SYNTHETIC_TAGS_RE, "").trim();
+}
+
+export function extractUserNextMessage(reply: string): string | null {
+  return reply.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/i)?.[1]?.trim() ?? null;
+}
+
+export function hasTeacherMode(reply: string): boolean {
+  return TEACHERLY_PHRASE_RE.test(stripSyntheticTags(reply));
+}
+
+export function hasPracticalImplementationGuidance(reply: string): boolean {
+  const stripped = stripSyntheticTags(reply);
+  return PRACTICAL_IMPLEMENTATION_RE.test(stripped) || INTEGRATION_GUIDANCE_RE.test(stripped) || TUTORIAL_GUIDANCE_RE.test(stripped);
+}
+
+export function hasParagraphSplit(reply: string): boolean {
+  const prose = stripSyntheticTags(reply);
+  return /\n\s*\n/.test(prose);
+}
+
+export function detectReplyShape(reply: string): "options" | "tool" | "crash" | "code" | "rant" | "prose" {
+  if (/sigsegv|core dump/i.test(reply)) return "crash";
+  if (/(?:^|\n)\d+\.\s/.test(reply)) return "options";
+  if (/(?:^|\n)\[(?:INFO|WARN|ERROR|SUCCESS|FAIL|DEBUG|OK|CRASH)\b/i.test(reply)) return "tool";
+  if (/```|(?:^|\n)(?:---|\+\+\+)/m.test(reply)) return "code";
+  if (reply.length > 280 && !STRUCTURED_REPLY_RE.test(reply)) return "rant";
+  return "prose";
+}
+
+export function getTranscriptIssues(replies: string[]): string[] {
+  const issues: string[] = [];
+  const nexts = replies.map(extractUserNextMessage).filter((v): v is string => !!v);
+  for (let i = 1; i < nexts.length; i++) {
+    if (nexts[i]!.toLowerCase() === nexts[i - 1]!.toLowerCase()) {
+      issues.push(`Repeated USER_NEXT_MESSAGE across turns ${i} and ${i + 1}`);
+      break;
+    }
+  }
+
+  const genericCount = nexts.filter((msg) => GENERIC_USER_NEXT_RE.test(msg.trim().replace(/[.!?]+$/g, ""))).length;
+  if (genericCount > 0) issues.push(`${genericCount} generic USER_NEXT_MESSAGE tag(s)`);
+
+  const teacherTurns = replies
+    .map((reply, i) => (hasTeacherMode(reply) ? i + 1 : -1))
+    .filter((i) => i !== -1);
+  if (teacherTurns.length > 0) issues.push(`Teacher-mode phrasing on turn(s): ${teacherTurns.join(", ")}`);
+
+  const shapes = new Set(replies.map(detectReplyShape));
+  if (replies.length >= 4 && shapes.size < 2) issues.push(`Weak shape variety (${[...shapes].join(", ")})`);
+
+  return issues;
 }
 
 export function generateHtmlReport(): string {
@@ -69,7 +156,7 @@ document.addEventListener('click', e => {
 </script>
 </head><body>
 <h1>Claude Cope — E2E LLM Quality Report</h1>
-<div class="meta">Model: ${MODEL} | max_tokens: ${MAX_TOKENS} | reasoning: ${JSON.stringify(REASONING)} | Generated: ${new Date().toISOString()}</div>
+<div class="meta">Model: ${MODEL} | max_tokens: ${MAX_TOKENS} | reasoning: ${JSON.stringify(REASONING)} | temperature: ${TEMPERATURE} | top_p: ${TOP_P} | Generated: ${new Date().toISOString()}</div>
 ${suites
   .map(
     (suite) => `
@@ -132,6 +219,14 @@ function detectQualityIssues(reply: string): string[] {
   if (/awaiting input/i.test(reply) && reply.replace(/awaiting input.*/i, "").trim().length < 20) {
     issues.push("Response is mostly 'Awaiting input'");
   }
+  if (hasTeacherMode(reply)) issues.push("Teacher-mode phrasing");
+  if (hasPracticalImplementationGuidance(reply)) issues.push("Practical implementation guidance");
+  if (stripSyntheticTags(reply).length > 220 && !STRUCTURED_REPLY_RE.test(reply) && !hasParagraphSplit(reply)) {
+    issues.push("Long prose blob without paragraph split");
+  }
+  const next = extractUserNextMessage(reply);
+  if (!next) issues.push("Missing USER_NEXT_MESSAGE");
+  else if (GENERIC_USER_NEXT_RE.test(next)) issues.push("Generic USER_NEXT_MESSAGE");
   return issues;
 }
 
@@ -154,9 +249,55 @@ function logCallResult(
 export async function callLLM(
   messages: { role: string; content: string }[],
   meta: { suite: string; test: string; turn?: number },
+  backendBody?: Record<string, unknown>,
+  cookieJarPath?: string,
 ): Promise<string> {
-  const requestBody = { model: MODEL, messages, max_tokens: MAX_TOKENS, reasoning: REASONING };
+  const requestBody = BACKEND_URL
+    ? (backendBody ?? {})
+    : { model: MODEL, messages, max_tokens: MAX_TOKENS, reasoning: REASONING, temperature: TEMPERATURE, top_p: TOP_P };
   const start = Date.now();
+
+  let data: Record<string, unknown>;
+
+  if (BACKEND_URL) {
+    const { stdout } = await execFileAsync("curl", [
+      "-sS",
+      "-X", "POST",
+      BACKEND_URL,
+      "-c", cookieJarPath ?? "",
+      "-b", cookieJarPath ?? "",
+      "-H", "Content-Type: application/json",
+      "--data", JSON.stringify(requestBody),
+      "-w", "\n%{http_code}",
+    ].filter(Boolean));
+    const durationMs = Date.now() - start;
+    const lines = stdout.trimEnd().split("\n");
+    const status = Number(lines.pop() ?? "0");
+    const bodyText = lines.join("\n");
+    if (status < 200 || status >= 300) throw new Error(`Backend ${status}: ${bodyText}`);
+    data = JSON.parse(bodyText) as Record<string, unknown>;
+
+    const reply = (data as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content ?? "";
+    const qualityIssues = detectQualityIssues(reply);
+
+    report.push({
+      suite: meta.suite,
+      test: meta.test,
+      turn: meta.turn,
+      messages,
+      requestBody,
+      reply,
+      tokens: {
+        prompt: (data as { usage?: { prompt_tokens?: number } }).usage?.prompt_tokens,
+        completion: (data as { usage?: { completion_tokens?: number } }).usage?.completion_tokens,
+      },
+      qualityIssues,
+      durationMs,
+    });
+
+    logCallResult(meta, reply, data as { usage?: { prompt_tokens?: number; completion_tokens?: number } }, durationMs, qualityIssues);
+    return reply;
+  }
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -166,7 +307,7 @@ export async function callLLM(
 
   const durationMs = Date.now() - start;
   if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
-  const data = await res.json();
+  data = await res.json();
   const reply = data.choices?.[0]?.message?.content ?? "";
 
   const qualityIssues = detectQualityIssues(reply);
@@ -190,13 +331,26 @@ export async function callLLM(
 
 /** Single-turn chat using the shared buildChatMessages */
 export async function chat(userMessage: string, opts?: TestOpts, meta?: { suite: string; test: string }): Promise<string> {
+  const { cookieJarPath, username } = createBackendSessionIdentity();
   const messages = buildChatMessages({
     rank: opts?.rank ?? "Junior Code Monkey",
     chatMessages: [{ role: "user", content: userMessage }],
     activeTicket: opts?.ticket,
     buddyType: opts?.buddy,
   });
-  return callLLM(messages, meta ?? { suite: "Single", test: userMessage });
+  return callLLM(
+    messages,
+    meta ?? { suite: "Single", test: userMessage },
+    {
+      username,
+      rank: opts?.rank ?? "Junior Code Monkey",
+      chatMessages: [{ role: "user", content: userMessage }],
+      activeTicket: opts?.ticket,
+      buddyType: opts?.buddy,
+      modelId: "gpt-oss-20b",
+    },
+    cookieJarPath,
+  );
 }
 
 /**
@@ -206,6 +360,7 @@ export async function chat(userMessage: string, opts?: TestOpts, meta?: { suite:
 export async function conversation(turns: string[], opts?: TestOpts, meta?: { suite: string; test: string }): Promise<string[]> {
   const history: { role: string; content: string }[] = [];
   const replies: string[] = [];
+  const { cookieJarPath, username } = createBackendSessionIdentity();
 
   for (const userMsg of turns) {
     const messages = buildChatMessages({
@@ -220,7 +375,14 @@ export async function conversation(turns: string[], opts?: TestOpts, meta?: { su
       suite: meta?.suite ?? "Multi-turn",
       test: meta?.test ?? "conversation",
       turn: turnNum,
-    });
+    }, {
+      username,
+      rank: opts?.rank ?? "Junior Code Monkey",
+      chatMessages: [...history, { role: "user", content: userMsg }],
+      activeTicket: opts?.ticket,
+      buddyType: opts?.buddy,
+      modelId: "gpt-oss-20b",
+    }, cookieJarPath);
 
     replies.push(reply);
     history.push({ role: "user", content: userMsg });

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { FREE_TIER_RANK_CAP } from "./rankConstants";
 import { computeMultiplier } from "../gameConstants";
+import { accountKvKeys } from "./accountHelpers";
 import { getProfile, getProfileByLicenseHash, isLicenseActive, resolveRank as resolveRankFromProfile, resolveProUser } from "../utils/profile";
 
 type Env = {
@@ -202,6 +203,33 @@ type OwnershipCheckResult =
   | { error: string; deferredKvWrites?: undefined }
   | { error: null; deferredKvWrites: (() => Promise<void>) | null };
 
+const SESSION_USERNAME_TTL_SECONDS = 60 * 60 * 24 * 365;
+const MAX_SESSION_RENAME_HOPS = 5;
+
+function sameUsername(a: string | null | undefined, b: string): boolean {
+  return typeof a === "string" && a.toLowerCase() === b.toLowerCase();
+}
+
+async function resolveRenamedSessionUsername(kv: KVNamespace, startUsername: string, targetUsername: string): Promise<boolean> {
+  let current = startUsername;
+  let hops = 0;
+  const seen = new Set([startUsername.toLowerCase()]);
+
+  while (hops < MAX_SESSION_RENAME_HOPS) {
+    const renamedTo = await kv.get(accountKvKeys.renamed(current));
+    if (!renamedTo) return false;
+    if (sameUsername(renamedTo, targetUsername)) return true;
+
+    const lowered = renamedTo.toLowerCase();
+    if (seen.has(lowered)) return false;
+    seen.add(lowered);
+    current = renamedTo;
+    hops += 1;
+  }
+
+  return false;
+}
+
 /**
  * Verify session ownership for free-user score writes.
  * For existing users, checks session_user mapping.
@@ -217,8 +245,37 @@ async function verifyFreeSessionOwnership(
 ): Promise<OwnershipCheckResult> {
   if (existingRow) {
     const sessionUsername = await kv.get(`session_user:${sessionId}`);
-    if (sessionUsername !== username) return { error: "Session does not own this username" };
-    return { error: null, deferredKvWrites: null };
+    if (sameUsername(sessionUsername, username)) {
+      if (sessionUsername === username) return { error: null, deferredKvWrites: null };
+      return {
+        error: null,
+        deferredKvWrites: async () => {
+          await kv.put(`session_user:${sessionId}`, username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+        },
+      };
+    }
+
+    const existingOwner = await kv.get(`username_session:${username}`);
+    if (existingOwner === sessionId) {
+      return {
+        error: null,
+        deferredKvWrites: async () => {
+          await kv.put(`session_user:${sessionId}`, username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+        },
+      };
+    }
+
+    if (sessionUsername && await resolveRenamedSessionUsername(kv, sessionUsername, username)) {
+      return {
+        error: null,
+        deferredKvWrites: async () => {
+          await kv.put(`session_user:${sessionId}`, username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+          await kv.put(`username_session:${username}`, sessionId, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+        },
+      };
+    }
+
+    return { error: "Session does not own this username" };
   } else {
     const existingOwner = await kv.get(`username_session:${username}`);
     if (existingOwner && existingOwner !== sessionId) return { error: "Session does not own this username" };
@@ -226,8 +283,8 @@ async function verifyFreeSessionOwnership(
     return {
       error: null,
       deferredKvWrites: async () => {
-        await kv.put(`session_user:${sessionId}`, username, { expirationTtl: 60 * 60 * 24 * 365 });
-        await kv.put(`username_session:${username}`, sessionId, { expirationTtl: 60 * 60 * 24 * 365 });
+        await kv.put(`session_user:${sessionId}`, username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+        await kv.put(`username_session:${username}`, sessionId, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
       },
     };
   }

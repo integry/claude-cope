@@ -71,6 +71,10 @@ let pepperWarningLogged = false;
 
 export const rateLimiter: MiddlewareHandler = async (c, next) => {
   const env = c.env as Record<string, unknown>;
+  const disableChatRateLimits = env.DISABLE_CHAT_RATE_LIMITS === "true";
+  if (disableChatRateLimits) {
+    return next();
+  }
   const kv = env.RATE_LIMIT_KV as KVNamespace | undefined;
 
   if (!kv) {

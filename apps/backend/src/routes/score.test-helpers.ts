@@ -92,18 +92,36 @@ export function makeDBWithTasks(
   };
 }
 
-export function mockKV(boundUsername?: string) {
+export function mockKV(initial?: string | Record<string, string | null>) {
+  const map = new Map<string, string | null>();
+  const fallbackSessionUsername = typeof initial === "string" ? initial : null;
+  if (typeof initial === "string") {
+    map.set("session_user:test-session", initial);
+  } else if (initial) {
+    for (const [key, value] of Object.entries(initial)) {
+      map.set(key, value);
+    }
+  }
   return {
     get: vi.fn((key: string) => {
-      if (key.startsWith("session_user:")) return Promise.resolve(boundUsername ?? null);
+      if (map.has(key)) return Promise.resolve(map.get(key) ?? null);
+      if (fallbackSessionUsername && key.startsWith("session_user:")) return Promise.resolve(fallbackSessionUsername);
       return Promise.resolve(null);
     }),
-    put: vi.fn(() => Promise.resolve()),
+    put: vi.fn((key: string, value: string) => {
+      map.set(key, value);
+      return Promise.resolve();
+    }),
     delete: vi.fn(() => Promise.resolve()),
   };
 }
 
-export function postScore(db: unknown, body: Record<string, unknown>, headers?: Record<string, string>) {
+export function postScore(
+  db: unknown,
+  body: Record<string, unknown>,
+  headers?: Record<string, string>,
+  kv = mockKV(body.username as string | undefined),
+) {
   return app.request(
     "/api/score",
     {
@@ -111,6 +129,6 @@ export function postScore(db: unknown, body: Record<string, unknown>, headers?: 
       headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(body),
     },
-    { ALLOWED_ORIGINS: "http://localhost:5173", DB: db, QUOTA_KV: mockKV(body.username as string | undefined) }
+    { ALLOWED_ORIGINS: "http://localhost:5173", DB: db, QUOTA_KV: kv }
   );
 }

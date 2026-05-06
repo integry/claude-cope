@@ -11,6 +11,27 @@ interface SprintContext {
   setState: (fn: (prev: GameState) => GameState) => void;
 }
 
+export function syncCompletedTicketReward(params: {
+  username: string;
+  ticketId: string;
+  proKeyHash?: string;
+}) {
+  const { username, ticketId, proKeyHash } = params;
+  return fetch(`${API_BASE}/api/score`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username,
+      currentTD: 0,
+      totalTDEarned: 0,
+      inventory: {},
+      upgrades: [],
+      completedTaskIds: [ticketId],
+      ...(proKeyHash ? { proKeyHash } : {}),
+    }),
+  }).catch(() => {});
+}
+
 /** Build the onSprintProgress callback and a getter for the sprint-complete message */
 export function buildSprintCallbacks(ctx: SprintContext) {
   let sprintCompleteMessage: Message | null = null;
@@ -28,6 +49,13 @@ export function buildSprintCallbacks(ctx: SprintContext) {
         activeTicket: null,
         pendingCompletedTaskIds: [...prev.pendingCompletedTaskIds, ctx.state.activeTicket!.id],
       }));
+      if (ctx.state.username) {
+        void syncCompletedTicketReward({
+          username: ctx.state.username,
+          ticketId: ctx.state.activeTicket!.id,
+          proKeyHash: ctx.state.proKeyHash,
+        });
+      }
       if (ctx.state.proKeyHash && ctx.state.username) {
         void updateTicketServer(ctx.state.username, null, ctx.state.proKeyHash);
       }

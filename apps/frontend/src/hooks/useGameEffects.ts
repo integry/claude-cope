@@ -1,11 +1,18 @@
 import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateAction } from "react";
 import { GENERATORS, CORPORATE_RANKS } from "../game/constants";
-import { type GameState, calculateActiveMultiplier } from "./gameStateUtils";
+import { type GameState, calculateActiveMultiplier, isPaidUser } from "./gameStateUtils";
 import { unlockAchievementServer } from "../api/profileApi";
+
+export function shouldBackgroundSyncScore(state: GameState, lastSyncedTotalTD: number): boolean {
+  const hasPendingCompletedTickets = (state.pendingCompletedTaskIds?.length ?? 0) > 0;
+  if (isPaidUser(state)) return Boolean(state.proKeyHash) && hasPendingCompletedTickets;
+  return state.economy.totalTDEarned !== lastSyncedTotalTD;
+}
 
 /**
  * Background server score sync — fires every 5 minutes if TD has changed.
- * Skips pro users (server is authoritative for them).
+ * Skips paid users (server is authoritative for them, even when localStorage
+ * only restored `isPro` and not the original license hash).
  */
 export function useScoreSync(
   stateRef: MutableRefObject<GameState>,
@@ -17,8 +24,7 @@ export function useScoreSync(
   useEffect(() => {
     const syncInterval = setInterval(() => {
       const current = stateRef.current;
-      if (current.proKeyHash) return;
-      if (current.economy.totalTDEarned === lastSyncedTD.current) return;
+      if (!shouldBackgroundSyncScore(current, lastSyncedTD.current)) return;
       lastSyncedTD.current = current.economy.totalTDEarned;
 
       let country = "Unknown";
@@ -41,6 +47,7 @@ export function useScoreSync(
           upgrades: current.upgrades,
           country,
           completedTaskIds,
+          ...(current.proKeyHash ? { proKeyHash: current.proKeyHash } : {}),
         }),
       }).then((res) => {
         if (res.ok && completedTaskIds.length > 0) {

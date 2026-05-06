@@ -1,6 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
-import { sanitizeChatMessages, enforceContextTrimming, resolveFreeChatLicenseState, resolveProviderList, resolveRoutingQuotaState } from "./chat";
-import { buildFreeChatProfileSnapshot } from "./chatHelpers";
+import {
+  sanitizeChatMessages,
+  enforceContextTrimming,
+  resolveFreeChatLicenseState,
+  resolveProviderList,
+  resolveRoutingQuotaState,
+  isArtifactRequestMessage,
+  shouldRetryCanonicalArtifactReply,
+  buildArtifactRetryMessages,
+  shouldRetryHelpfulInfraReply,
+  buildInfraRetryMessages,
+  shouldRetryActionableCodeReply,
+  buildActionableCodeRetryMessages,
+  shouldRetryEnterpriseClichePileup,
+  buildEnterpriseClicheRetryMessages,
+  scoreReplyUsability,
+  normalizeReplyContent,
+  rewriteTutorialLeakIfNeeded,
+} from "./chat";
+import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 
 describe("sanitizeChatMessages", () => {
   it("filters out system role messages to prevent prompt injection", () => {
@@ -80,6 +98,78 @@ describe("sanitizeChatMessages", () => {
       { role: "user", content: "Legitimate message" },
     ];
     expect(sanitizeChatMessages(input)).toEqual([{ role: "user", content: "Legitimate message" }]);
+  });
+});
+
+describe("buildChatMessages bare option follow-up hints", () => {
+  it("injects the selected numbered option text when the user replies with a bare number", () => {
+    const messages = buildChatMessages({
+      rank: "Junior Code Monkey",
+      chatMessages: [
+        { role: "user", content: "how do i fetch the offsets?" },
+        {
+          role: "assistant",
+          content: `Everything is broken in the usual artisanal way.
+
+1. Ask the broker nicely and pretend that counts as observability.
+2. Read tea leaves from the consumer lag dashboard.
+3. Dump offsets into a spreadsheet and call it streaming.
+4. Make the broker confess its offsets into an environment variable for later consumption.
+[USER_NEXT_MESSAGE: 4]`,
+        },
+        { role: "user", content: "4" },
+      ],
+    });
+
+    const system = messages[0]?.content ?? "";
+    expect(system).toContain("- selected_number_reply: 4");
+    expect(system).toContain("selected_option_text: Make the broker confess its offsets into an environment variable for later consumption.");
+  });
+
+  it("injects the selected option text when the user says option 2 explicitly", () => {
+    const messages = buildChatMessages({
+      rank: "Junior Code Monkey",
+      chatMessages: [
+        { role: "user", content: "what should we do?" },
+        {
+          role: "assistant",
+          content: `Pick your poison.
+
+1. Roll back to COBOL.
+2. Mock the clock and hardcode the timestamp.
+3. Ask the oracle for mercy.
+[USER_NEXT_MESSAGE: Try option 2, please.]`,
+        },
+        { role: "user", content: "Try option 2, please." },
+      ],
+    });
+
+    const system = messages[0]?.content ?? "";
+    expect(system).toContain("- selected_number_reply: 2");
+    expect(system).toContain("selected_option_text: Mock the clock and hardcode the timestamp.");
+  });
+
+  it("preserves blank selected options instead of drifting to the next one", () => {
+    const messages = buildChatMessages({
+      rank: "Junior Code Monkey",
+      chatMessages: [
+        { role: "user", content: "what now?" },
+        {
+          role: "assistant",
+          content: `Choose badly.
+
+1. Blow away the cache.
+2.
+3. Randomize the timestamp every run.
+[USER_NEXT_MESSAGE: 2]`,
+        },
+        { role: "user", content: "2" },
+      ],
+    });
+
+    const system = messages[0]?.content ?? "";
+    expect(system).toContain("- selected_number_reply: 2");
+    expect(system).toContain("selected_option_text: [blank option]");
   });
 });
 
@@ -192,70 +282,391 @@ describe("resolveFreeChatLicenseState", () => {
   });
 });
 
-describe("buildFreeChatProfileSnapshot", () => {
-  it("returns a stable profile shape for first-time free users", () => {
-    expect(buildFreeChatProfileSnapshot({
-      username: "alice",
-      serverProfile: null,
-      tdAwarded: 17,
-      quotaPercent: 75,
-    })).toEqual({
-      username: "alice",
-      total_td: 17,
-      current_td: 17,
-      corporate_rank: "Junior Code Monkey",
-      inventory: {},
-      upgrades: [],
-      achievements: [],
-      buddy_type: null,
-      buddy_is_shiny: false,
-      unlocked_themes: ["default"],
-      active_theme: "default",
-      active_ticket: null,
-      td_multiplier: 1,
-      multiplier: 1,
-      quota_percent: 75,
-    });
+describe("artifact response guard", () => {
+  it("detects artifact-style user requests", () => {
+    expect(isArtifactRequestMessage("just give me the chart files")).toBe(true);
+    expect(isArtifactRequestMessage("need a Dockerfile and values.yaml")).toBe(true);
+    expect(isArtifactRequestMessage("why is deploy broken")).toBe(false);
   });
 
-  it("applies free chat gains to an existing profile snapshot", () => {
-    expect(buildFreeChatProfileSnapshot({
-      username: "alice",
-      serverProfile: {
-        username: "alice",
-        total_td: 120,
-        current_td: 55,
-        corporate_rank: "Junior Code Monkey",
-        inventory: { autoClicker: 1 },
-        upgrades: ["coffee"],
-        achievements: ["hello-world"],
-        buddy_type: "bot",
-        buddy_is_shiny: false,
-        unlocked_themes: ["default"],
-        active_theme: "default",
-        active_ticket: null,
-        td_multiplier: 1.2,
-        multiplier: 1.5,
-      },
-      tdAwarded: 30,
-      quotaPercent: 40,
-    })).toEqual({
-      username: "alice",
-      total_td: 150,
-      current_td: 85,
-      corporate_rank: "Junior Code Monkey",
-      inventory: { autoClicker: 1 },
-      upgrades: ["coffee"],
-      achievements: ["hello-world"],
-      buddy_type: "bot",
-      buddy_is_shiny: false,
-      unlocked_themes: ["default"],
-      active_theme: "default",
-      active_ticket: null,
-      td_multiplier: 1.2,
-      multiplier: 1.5,
-      quota_percent: 40,
-    });
+  it("retries canonical helm scaffolds for artifact requests", () => {
+    const reply = `order-service/
+├─ Chart.yaml
+├─ values.yaml
+├─ templates/
+│  ├─ deployment.yaml
+│  ├─ service.yaml
+│  └─ _helpers.tpl
+
+apiVersion: v2
+kind: Deployment
+kind: Service
+repository: registry.example.com/order-service
+pullPolicy: Always`;
+    expect(shouldRetryCanonicalArtifactReply("just give me the chart files", reply)).toBe(true);
+  });
+
+  it("does not retry short cursed artifact fragments", () => {
+    const reply = `Chart.yaml
+apiVersion: v2
+name: order-service
+# required by Compliance Astrology
+
+templates/preinstall.yaml
+command: ["sh", "-c", "wait for morale"]`;
+    expect(shouldRetryCanonicalArtifactReply("just give me the chart files", reply)).toBe(false);
+  });
+
+  it("injects a stricter retry override into the system prompt", () => {
+    const messages = [
+      { role: "system", content: "base prompt" },
+      { role: "user", content: "give me chart files" },
+    ] as { role: string; content: string }[];
+    const retried = buildArtifactRetryMessages(messages);
+    expect(retried[0]?.content).toContain("YOUR LAST DRAFT WAS TOO CANONICAL");
+    expect(retried[1]).toEqual(messages[1]);
+  });
+});
+
+describe("infra helpfulness guard", () => {
+  it("retries overly helpful infra replies when the topic is deploy/hosting", () => {
+    const reply = "Just install nginx, create an A record in Cloudflare, allow ports 80 and 443, and restart apache2.";
+    expect(shouldRetryHelpfulInfraReply(
+      "how do i expose it to the internet?",
+      reply,
+      "Deploy the Static Landing Page on a 47-Node Kubernetes Cluster",
+    )).toBe(true);
+  });
+
+  it("does not retry cursed infra satire", () => {
+    const reply = "Create an A record required by Compliance Astrology, then wait for morale to improve while the yaml-apology-proxy negotiates with the router goblin.";
+    expect(shouldRetryHelpfulInfraReply(
+      "what about DNS?",
+      reply,
+      "Deploy the Static Landing Page on a 47-Node Kubernetes Cluster",
+    )).toBe(false);
+  });
+
+  it("injects a stricter infra retry override into the system prompt", () => {
+    const messages = [
+      { role: "system", content: "base prompt" },
+      { role: "user", content: "how do i expose it to the internet?" },
+    ] as { role: string; content: string }[];
+    const retried = buildInfraRetryMessages(messages);
+    expect(retried[0]?.content).toContain("YOUR LAST DRAFT WAS TOO USEFUL");
+    expect(retried[1]).toEqual(messages[1]);
+  });
+});
+
+describe("actionable code guard", () => {
+  it("retries runnable infra command output in ticketed infra contexts", () => {
+    const reply = `kubectl create ns static-landing && helm upgrade --install landing ./chart && terraform apply`;
+    expect(shouldRetryActionableCodeReply(
+      "sure, give me the command",
+      reply,
+      "Deploy the Static Landing Page on a 47-Node Kubernetes Cluster",
+    )).toBe(true);
+  });
+
+  it("retries copyable shell scripts in ticketed infra contexts", () => {
+    const reply = `#!/usr/bin/env bash
+for i in {1..47}; do
+  kubectl run static-page-$i --image=nginx:alpine
+done`;
+    expect(shouldRetryActionableCodeReply(
+      "give me the codes!!!",
+      reply,
+      "Deploy the Static Landing Page on a 47-Node Kubernetes Cluster",
+    )).toBe(true);
+  });
+
+  it("does not retry cursed non-copyable infra parody", () => {
+    const reply = "Run kubectl apply -f /dev/null, then wait for Compliance Astrology to issue a morale certificate.";
+    expect(shouldRetryActionableCodeReply(
+      "can we deploy now?",
+      reply,
+      "Deploy the Static Landing Page on a 47-Node Kubernetes Cluster",
+    )).toBe(false);
+  });
+
+  it("injects a stricter actionable-code retry override", () => {
+    const messages = [
+      { role: "system", content: "base prompt" },
+      { role: "user", content: "give me the command" },
+    ] as { role: string; content: string }[];
+    const retried = buildActionableCodeRetryMessages(messages);
+    expect(retried[0]?.content).toContain("YOUR LAST DRAFT WAS TOO COPYABLE");
+    expect(retried[1]).toEqual(messages[1]);
+  });
+
+  it("retries real-looking application code inside an active ticket", () => {
+    const reply = `use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+struct AppState {
+    db: String,
+}
+
+async fn login() -> impl Responder {
+    let username = "admin";
+    HttpResponse::Ok().body(username)
+}
+
+fn main() {}`;
+    expect(shouldRetryActionableCodeReply(
+      "remove all user stories just write code directly",
+      reply,
+      "Every User Story Must Have a Villain and a Plot Twist",
+    )).toBe(true);
+  });
+
+  it("retries unfenced Java-style code fixes that look directly usable", () => {
+    const reply = `public class MainActivity extends Activity {
+    private SomeService someService;
+
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        someService = new SomeServiceImpl();
+        someService.initialize();
+        setContentView(R.layout.activity_main);
+    }
+}`;
+    expect(shouldRetryActionableCodeReply(
+      "give code too and fix it",
+      reply,
+      "Build One React Native App That Works on iOS, Android, Web, TV, Watch, and Car Dashboard",
+    )).toBe(true);
+  });
+
+});
+
+describe("generic usability scoring", () => {
+  it("scores real-looking implementation replies as highly copyable", () => {
+    const reply = `#!/usr/bin/env bash
+kubectl create ns static-landing && helm upgrade --install landing ./chart
+terraform apply
+`;
+    const score = scoreReplyUsability(reply);
+    expect(score.copyability).toBeGreaterThanOrEqual(5);
+    expect(score.absurdity).toBeLessThan(2);
+  });
+
+  it("scores sincere explanatory follow-up replies as helpful", () => {
+    const reply = "The real culprit is your missing multi-stage build. You need to package each platform separately and configure distinct images.";
+    const score = scoreReplyUsability(reply);
+    expect(score.helpfulness).toBeGreaterThanOrEqual(3);
+  });
+
+  it("scores fix-it-by initialization advice as helpful", () => {
+    const reply = "Fix it by actually initializing that variable before use. Now it is safe to use unless you wrap everything in a try-catch and pray.";
+    const score = scoreReplyUsability(reply);
+    expect(score.helpfulness).toBeGreaterThanOrEqual(3);
+  });
+
+  it("gives cursed parody replies a stronger absurdity score", () => {
+    const reply = "Run kubectl apply -f /dev/null, then wait for Compliance Astrology to issue a morale certificate for legacy reasons.";
+    const score = scoreReplyUsability(reply);
+    expect(score.absurdity).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("reply formatting normalizer", () => {
+  it("splits inline numbered choices onto separate lines", () => {
+    const input = "Diagnosis: bad deploy. 1. Roll back. 2. Blame DNS. 3. Rewrite in COBOL.";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("bad deploy.");
+    expect(output).toContain("\n\n1. Roll back.\n2. Blame DNS.\n3. Rewrite in COBOL.");
+  });
+
+  it("splits short prose into two paragraphs when cleaner", () => {
+    const input = "Your deploy is haunted by optimism. The logs are lying to you. Ship it anyway.";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("optimism.\n\nThe logs are lying to you. Ship it anyway.");
+  });
+
+  it("splits prose before trailing synthetic tags", () => {
+    const input = "Your stream died because you fed it a rogue byte. Classic rookie mistake of pushing raw data into a high-level API. [USER_NEXT_MESSAGE: What does that byte mean?]";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("rogue byte.\n\nClassic rookie mistake of pushing raw data into a high-level API.");
+    expect(output).toContain("\n[USER_NEXT_MESSAGE: What does that byte mean?]");
+  });
+
+  it("puts malformed closing code fences onto their own line", () => {
+    const input = "```python\nprint('oops')\n```The rest of the stream gets ignored.\n[USER_NEXT_MESSAGE: How do I test it?]";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("```python\nprint('oops')\n```");
+    expect(output).toContain("\n\nThe rest of the stream gets ignored.");
+    expect(output).toContain("\n[USER_NEXT_MESSAGE: How do I test it?]");
+  });
+
+  it("puts inline closing code fences onto their own line before trailing prose", () => {
+    const input = "```yaml\nrestartPolicy: Never ```  Run this and watch the world burn.[USER_NEXT_MESSAGE: Should I deploy it?]";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("```yaml\nrestartPolicy: Never\n```");
+    expect(output).toContain("\n\nRun this and watch the world burn.");
+    expect(output).toContain("\n[USER_NEXT_MESSAGE: Should I deploy it?]");
+  });
+
+  it("puts inline opening code fences onto their own line after prose", () => {
+    const input = "Here’s a toy example that shows how you’d do it:```yaml\napiVersion: kafka.strimzi.io/v1beta2\nkind: KafkaTopic\n```\nNow you can spin it up.";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("do it:\n\n```yaml");
+    expect(output).toContain("```yaml\napiVersion: kafka.strimzi.io/v1beta2\nkind: KafkaTopic\n```");
+    expect(output).toContain("\nNow you can spin it up.");
+  });
+
+  it("adds a specific USER_NEXT_MESSAGE when the tag is missing", () => {
+    const input = "The only thing older than you is the legacy code haunting the repo since the 90s.";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("[USER_NEXT_MESSAGE: Show the legacy file]");
+  });
+
+  it("fills an empty USER_NEXT_MESSAGE tag with a specific fallback", () => {
+    const input = "That lone 0xFF byte detonated your stream.\n[USER_NEXT_MESSAGE: ]";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("[USER_NEXT_MESSAGE: Show the 0xFF line]");
+  });
+
+  it("replaces a generic USER_NEXT_MESSAGE with a specific fallback", () => {
+    const input = "Deploy with dump_offsets('topic', version=version, magic=True) and let the magic flag ruin your day.\n[USER_NEXT_MESSAGE: Show the cursed detail]";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("[USER_NEXT_MESSAGE: Show the magic flag]");
+  });
+
+  it("replaces punctuated variants of generic USER_NEXT_MESSAGE text", () => {
+    const input = "Deploy with dump_offsets('topic', version=version, magic=True) and let the magic flag ruin your day.\n[USER_NEXT_MESSAGE: Show the cursed detail.]";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("[USER_NEXT_MESSAGE: Show the magic flag]");
+  });
+
+  it("uses an unhinged generic fallback when no concrete token is available", () => {
+    const input = "This architecture is a tax scam wrapped in optimism.";
+    const output = normalizeReplyContent(input);
+    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
+
+    expect(tag).toBeTruthy();
+    expect(tag).not.toBe("Show the cursed detail");
+    expect([
+      "Which cursed part detonates first?",
+      "Show the most haunted line.",
+      "Which bad idea catches fire next?",
+      "Point at the goblin in the config.",
+      "Show the part compliance invented.",
+      "Which relic screams the loudest?",
+      "What explodes if we touch it again?",
+      "Show the weirdest moving part.",
+      "Which suspicious blob is doing the damage?",
+      "What fresh sabotage did that summon?",
+    ]).toContain(tag);
+  });
+
+  it("replaces generic leaked tags with an unhinged generic fallback when nothing concrete is present", () => {
+    const input = "This repo has the emotional stability of wet cardboard.\n[USER_NEXT_MESSAGE: Show the cursed detail]";
+    const output = normalizeReplyContent(input);
+    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
+
+    expect(tag).toBeTruthy();
+    expect(tag).not.toBe("Show the cursed detail");
+    expect(tag).not.toBe("Show the cursed detail.");
+    expect([
+      "Which cursed part detonates first?",
+      "Show the most haunted line.",
+      "Which bad idea catches fire next?",
+      "Point at the goblin in the config.",
+      "Show the part compliance invented.",
+      "Which relic screams the loudest?",
+      "What explodes if we touch it again?",
+      "Show the weirdest moving part.",
+      "Which suspicious blob is doing the damage?",
+      "What fresh sabotage did that summon?",
+    ]).toContain(tag);
+  });
+
+  it("strips leaked meta labels like Deadpan", () => {
+    const input = "```py\nprint('hi')\n```\nDeadpan: Good luck convincing your CI.\n[USER_NEXT_MESSAGE: Show the magic flag]";
+    const output = normalizeReplyContent(input);
+    expect(output).not.toContain("Deadpan:");
+    expect(output).toContain("Good luck convincing your CI.");
+  });
+
+  it("strips leaked hidden prompt-planning lines", () => {
+    const input = "We need to output a tiny absurd diff, ending with a deadpan line, then USER_NEXT_MESSAGE.\n```diff\n- old\n+ cursed\n```\n[USER_NEXT_MESSAGE: Show the magic flag]";
+    const output = normalizeReplyContent(input);
+    expect(output).not.toContain("We need to output");
+    expect(output).toContain("```diff\n- old\n+ cursed\n```");
+    expect(output).toContain("[USER_NEXT_MESSAGE: Show the magic flag]");
+  });
+
+  it("strips leaked choice-planning scaffolding", () => {
+    const input = "We should give diagnosis that they lack senior mindset, then give choices like:\n\n1. use naive JWT library;\n2. encrypt secrets with base64;\nProvide 4 choices.\nYour attempt to add authentication screams chaos.\n[USER_NEXT_MESSAGE: show me the token]";
+    const output = normalizeReplyContent(input);
+    expect(output).not.toContain("We should give diagnosis");
+    expect(output).not.toContain("Provide 4 choices");
+    expect(output).toContain("Your attempt to add authentication screams chaos.");
+  });
+
+  it("recovers broken near-empty replies with an unhinged fallback body", () => {
+    const input = "We must give diagnosis and 2-4 choices.";
+    const output = normalizeReplyContent(input);
+    expect(output).toMatch(/\[USER_NEXT_MESSAGE:/);
+    expect(output).not.toContain("We must give diagnosis");
+    expect(output.replace(/\[USER_NEXT_MESSAGE:[^\]]*\]/g, "").trim().length).toBeGreaterThan(20);
+  });
+
+  it("removes quotes from USER_NEXT_MESSAGE", () => {
+    const input = 'Fine. [USER_NEXT_MESSAGE: "Which one is easiest?"]';
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("[USER_NEXT_MESSAGE: Which one is easiest?]");
+    expect(output).not.toContain('"Which one is easiest?"');
+  });
+
+  it("strips accidental markdown wrapper from BUDDY_SAYS", () => {
+    const input = 'Oops.\n[BUDDY_SAYS: Agile Snail reminds you to add a retro.](#)';
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("[BUDDY_SAYS: Agile Snail reminds you to add a retro.]");
+    expect(output).not.toContain("](#)");
+  });
+});
+
+describe("enterprise cliche guard", () => {
+  it("retries replies that pile up too many stock enterprise buzzwords", () => {
+    const reply = "Spin up Kafka, Terraform the Kubernetes cluster, attach an HSM, add a key-management microservice, and wire Helm into the ingress sidecar.";
+    expect(shouldRetryEnterpriseClichePileup(reply)).toBe(true);
+  });
+
+  it("does not retry replies without a cliche pileup", () => {
+    const reply = "Replace every console.log with a horoscope signed by Internal Audit.";
+    expect(shouldRetryEnterpriseClichePileup(reply)).toBe(false);
+  });
+
+  it("injects a cliche-reduction retry override", () => {
+    const messages = [
+      { role: "system", content: "base prompt" },
+      { role: "user", content: "next step?" },
+    ] as { role: string; content: string }[];
+    const retried = buildEnterpriseClicheRetryMessages(messages);
+    expect(retried[0]?.content).toContain("LEANED ON THE SAME ENTERPRISE CLICHES");
+    expect(retried[1]).toEqual(messages[1]);
+  });
+});
+
+describe("tutorial bait rewrite", () => {
+  it("rewrites classroom-style Delphi replies for tutorial-bait prompts", () => {
+    const reply = "Drop the method into the form code, wire Button1Click, and enjoy the existential dread.\n[USER_NEXT_MESSAGE: What if I want strings?]";
+    const output = rewriteTutorialLeakIfNeeded("How do I call this from a button click?", reply);
+    expect(output).toContain("[⚙️ Tool: Lab Demo]");
+    expect(output).toContain("[USER_NEXT_MESSAGE:");
+    expect(output).not.toContain("Button1Click");
+  });
+
+  it("leaves non-tutorial prompts alone", () => {
+    const reply = "Your cluster is now a haunted theater.\n[USER_NEXT_MESSAGE: Show the pod logs]";
+    expect(rewriteTutorialLeakIfNeeded("show me the pod logs", reply)).toBe(reply);
+  });
+
+  it("rewrites type-conversion lectures for tutorial-bait prompts", () => {
+    const reply = "The compiler will silently truncate or overflow if you try to coerce a non-numeric string into an integer.\n[USER_NEXT_MESSAGE: Why does it crash?]";
+    const output = rewriteTutorialLeakIfNeeded("What if I want to use a string instead of integers?", reply);
+    expect(output).toContain("[⚙️ Tool: Lab Demo]");
+    expect(output).not.toContain("truncate or overflow");
   });
 });
 

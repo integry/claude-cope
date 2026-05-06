@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FREE_TIER_RANK_CAP } from "../gameConstants";
-import { recordUsage } from "./chatHelpers";
+import { handleFreeUserResponse, recordUsage } from "./chatHelpers";
 
 describe("recordUsage", () => {
   it("uses a targetless upsert so case-only username conflicts hit the update path", async () => {
@@ -82,5 +82,32 @@ describe("recordUsage", () => {
     expect(upsert?.sql).toContain("corporate_rank = ?");
     expect(upsert?.bindings).toEqual(expect.arrayContaining([FREE_TIER_RANK_CAP, FREE_TIER_RANK_CAP]));
     expect(upsert?.bindings?.[3]).toBe(FREE_TIER_RANK_CAP);
+  });
+});
+
+describe("handleFreeUserResponse", () => {
+  it("returns TD and quota for free users without a profile snapshot", async () => {
+    const res = await handleFreeUserResponse(undefined, {
+      waitUntil: () => undefined,
+    }, {
+      username: "alice",
+      model: "gpt-5.4",
+      country: "US",
+      hour: "2026-05-06 10",
+      data: {
+        choices: [{ message: { content: "haunted response" } }],
+        usage: { prompt_tokens: 10, completion_tokens: 20 },
+      },
+      quotaPercent: 80,
+      profileLicenseHash: null,
+      revokedProfileLicenseHash: null,
+      ownsUsername: true,
+      deferredKvWrites: null,
+    });
+
+    const json = await res.json() as { td_awarded: number; quotaPercent: number; profile?: unknown };
+    expect(typeof json.td_awarded).toBe("number");
+    expect(json.quotaPercent).toBe(80);
+    expect("profile" in json).toBe(false);
   });
 });
