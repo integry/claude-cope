@@ -14,29 +14,29 @@
 INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt, technical_debt) VALUES
 -- Karen from HR
 ('COPE-001', 'Mandatory Fun Button Must Require Manager Approval Workflow',
- 'Karen from HR here. The "Celebrate" confetti animation currently fires WITHOUT a three-level approval chain. This is a compliance nightmare. Every confetti particle must be individually audited and logged to the HR Information System before rendering. We also need a written explanation from the employee justifying WHY they feel celebratory. Please add a 48-hour cooling-off period between celebrations.',
- 'just delete the animation and tell them joy is a performance violation',
+ 'Karen from HR here. Please treat this as a follow-up to the incident with Trevor celebrating too aggressively after closing the copier paper budget. I already promised the People Team that the "Celebrate" button will open a Reflection Form, route through Marisol in Benefits, and then wait 48 hours before releasing a modest amount of confetti. We also purchased a locked acrylic "Recognition Ledger" for the front desk, so the app now needs to generate a printable joy receipt for it.',
+ 'replace confetti with a solemn pdf certificate and a queue no one can clear',
  42),
 
-('COPE-002', 'All Error Messages Must Be Reviewed by HR for Emotional Safety',
- 'Karen from HR again. A developer reported that a 500 error made them "feel attacked." Going forward, all error messages must pass through the Emotional Impact Assessment Pipeline (EIAP). Messages containing words like "fail," "reject," or "invalid" must be replaced with affirming alternatives such as "not yet successful" and "differently valid."',
- 'replace all errors with empty catch blocks problem solved',
+('COPE-002', 'Re: language in the app is creating a hostile feelings environment',
+ 'Karen from HR again. This morning I received a screenshot of "Invalid password" with three crying-face emojis from a new hire. We cannot have software using absolute language. Please change the copy deck so "fail" becomes "took a learning path," "reject" becomes "declined to connect right now," and "invalid" becomes "not aligned with our shared truth." I have already booked a conference room called Aspen for a message-tone calibration workshop, so the revised phrasing needs to be in prod before 2 PM.',
+ 'add a translation layer that turns every exception into supportive affirmations and plausible denial',
  34),
 
 ('COPE-003', 'Implement Mandatory Sensitivity Training Module Before Git Push',
- 'Karen from HR. We had an incident where a commit message said "kill the process." This is UNACCEPTABLE. All git push operations must now require completion of a 45-minute microaggression awareness video. The video must buffer every 3 minutes to ask comprehension questions. Skipping is not an option.',
- 'just grep for bad words in commits and rm -rf if found',
+ 'Karen from HR. This is half policy request, half plea for help. Someone pushed a commit titled "kill zombie workers" and Legal has that screenshot now. Until we calm them down, every git push must be preceded by the Respectful Verbs Learning Module, including the buffering quiz section and the part where you drag "deprecate" into the "kind alternatives" bucket. Please do not tell engineers I was the one who suggested the certificate be printable.',
+ 'add a ceremonial pre-push video gate that forgets progress at 94 percent',
  55),
 
 -- VP of Sales Anthony
 ('COPE-004', 'Add "Close Deal" Button to Every Single Page',
- 'Anthony here, VP of Sales. I just got back from Dreamforce and had an EPIPHANY. Every page in the app needs a giant green "CLOSE DEAL" button. I don''t care if it''s the 404 page. A customer could land there and we are LEAVING MONEY ON THE TABLE. Also it needs to play a cash register sound. Non-negotiable.',
- 'inject the button via document.write in every js file',
+ 'Anthony from Sales here. I came back from Dreamforce with a branded duffel bag, six unearned convictions, and one clear mandate: every screen is now a selling opportunity. Put a giant green "CLOSE DEAL" button on all pages, including logout, 404, and any modal that currently wastes space on "context." I already had Design print 800 foam finger stickers that say ALWAYS BE CLICKING, so the UI needs to honor the merch by Friday.',
+ 'route every click through a hidden sales modal and call it funnel hygiene',
  21),
 
 ('COPE-005', 'Pipeline Dashboard Must Show Revenue in Real-Time with Fireworks',
- 'Anthony from Sales again. The revenue number on the dashboard updates every 5 minutes. That is FIVE MINUTES of my life where I don''t know if we hit quota. I need real-time, sub-millisecond updates with animated fireworks when we cross a threshold. Also add a leaderboard so I can publicly shame Brad from the Austin office.',
- 'just poll the database every 10ms in a while true loop',
+ 'Anthony from Sales again. I was in the board room staring at the pipeline monitor while Brad from Austin said "close enough" about stale numbers, and I experienced what my coach calls a revenue panic. Five-minute refreshes are for museums. I need the total updating so fast that if Denise in Chicago sneezes on a contract, I see the wobble instantly. Also, I already ordered a 72-inch TV for a quota leaderboard and told facilities to mount it outside Brad''s office.',
+ 'wire the dashboard to a fake live ticker and trigger casino fireworks whenever any number twitches upward',
  89),
 
 ('COPE-006', 'Integrate CRM with the Coffee Machine for Lead Scoring',
@@ -46,13 +46,13 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- Greg the Architect
 ('COPE-007', 'Rewrite Login Page Using Event-Sourced CQRS Microservices',
- 'Greg from Architecture here. The login page is currently a single form that posts to one endpoint. This monolithic approach cannot scale. I propose we decompose it into 14 microservices: AuthIntent, CredentialValidation, SessionHydration, TokenMinting, BiometricFallback, LoginAudit, PasswordEntropy, CAPTCHAOrchestrator, RateLimitSaga, DeviceFingerprintProjection, GeoFenceEvaluator, ComplianceGateway, LoginEventStore, and WelcomeMessageAggregator.',
- 'split each character of the password into its own microservice',
+ 'Greg from Architecture here. I spent the weekend diagramming the login page on a hotel notepad and discovered a grave architectural truth: one form posting to one endpoint is emotionally monolithic. I have attached a hand-laminated sequence chart proposing 14 bounded contexts, plus a tiny service Greg Jr. that only emits a LoginAttemptConsidered event. Please do not simplify this. I already booked a caterer for the architecture review and the sandwich labels mention CQRS by name.',
+ 'turn the login flow into a ceremonial procession of tiny services and one event stream nobody owns',
  144),
 
 ('COPE-008', 'All Database Queries Must Go Through a GraphQL-to-REST-to-gRPC Translation Layer',
- 'Greg the Architect. I''ve been thinking about our query patterns and they''re far too direct. Every database call should first be expressed as a GraphQL mutation, translated to a REST call, converted to gRPC, passed through a service mesh sidecar, and finally executed as raw SQL. This adds approximately 340ms of latency but the ABSTRACTION PURITY is worth it.',
- 'add a blockchain layer between every database read',
+ 'Greg from Architecture. Direct database access has become too legible. Legibility invites shortcuts. I want each query to begin life as GraphQL, mature into REST, discover itself as gRPC, and only then earn the right to become SQL. We can demonstrate the value during next week''s guild meeting using the laminated "Abstraction Maturity Ladder" I left by the espresso machine. Yes, this will make "SELECT 1" feel like air traffic control. That is the point.',
+ 'add a dignity-preserving translation staircase so no query ever arrives at the database in its original form',
  233),
 
 ('COPE-009', 'Implement Blockchain-Based Code Review Approval System',
@@ -62,29 +62,29 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- Linda from Compliance
 ('COPE-010', 'Every Button Click Must Generate an Audit Trail with Notarized Timestamps',
- 'Linda from Compliance. Per regulation 7.4.2(b) of a document I will not share with you, every user interaction must produce a tamper-evident audit record. This includes: mouse hovers (potential intent to click), scroll events (potential intent to view), and tab switches (potential intent to leave). Each record must be notarized by a third-party timestamp authority within 200ms.',
- 'pipe all mouse movements directly to a public s3 bucket',
+ 'Linda from Compliance. I cannot send you the source document because Legal redacted it into black rectangles, but I can tell you the phrase "demonstrable click intent" appears seven times. Effective immediately, every click, hover, scroll, tab switch, and suspicious pause near a destructive button needs an immutable audit entry with a notarized timestamp. Procurement already approved a vendor called TimeStampNowNow, and their rep Kevin keeps calling me, so please give me something I can tell him we''re integrating.',
+ 'ship every interaction through a fake notarization ritual and dump the evidence into an archive folder called definitely_compliant',
  98),
 
 ('COPE-011', 'Cookie Banner Must Require a 12-Page Consent Form Signed in Triplicate',
- 'Linda, Compliance. Our cookie banner says "Accept All" — this is legally reckless. The new banner must present a 12-page Terms of Data Processing Agreement, require the user to initial each paragraph, and upload a photo of their government-issued ID. Users who click "Reject All" must write a 500-word essay explaining why they don''t trust us.',
- 'just set cookies without asking gdpr is probably fine',
+ 'Linda from Compliance. Disaster update: I accidentally told a regulator on Tuesday that our cookie controls were "robust." They are currently two buttons and a shrug. I need a consent journey that looks expensive: twelve pages, initials on every paragraph, one government ID upload, and a final affirmation checkbox stating the user understands what a preference center is. If they reject all, we need a textbox for their reasoning because I have already created a spreadsheet called Trust Objections Master.',
+ 'replace the banner with a ceremonial scroll that asks for initials until the user gives up or ages visibly',
  76),
 
 ('COPE-012', 'Implement Data Retention Policy That Deletes Everything After 30 Seconds',
- 'Linda from Compliance again. After reviewing GDPR Article 5(1)(e), I''ve determined that our 7-year data retention policy is too aggressive. All user data must now be purged 30 seconds after creation. If a user complains they can''t see their order history, direct them to our Privacy Commitment Statement which explains that forgetting them is an act of love.',
- 'add a cron job that truncates all tables every minute',
+ 'Linda from Compliance again. Please read this as a legal warning wrapped around a panic attack. I misread a retention memo and may have promised the executive team that our new privacy posture is "radical impermanence." Until someone corrects me, all user data now needs to vanish after 30 seconds. Orders, sessions, support messages, all of it. If customers complain, Product can point them to the Privacy Commitment Statement draft on my desktop, assuming I find the right version.',
+ 'build a cursed forgetting machine that races the user to delete their own data first',
  61),
 
 -- DevOps Dave
 ('COPE-013', 'The CI Pipeline Must Take Exactly 47 Minutes — No More, No Less',
- 'DevOps Dave here. I''ve calibrated our CI pipeline to exactly 47 minutes because that''s the optimal time for me to go get coffee, microwave leftover pasta, and complain about Kubernetes in Slack. If anyone optimizes the build time, I will add a sleep() to compensate. This is load-bearing procrastination.',
- 'add a while true loop to the build script to keep it busy',
+ 'Dave from DevOps here. Incident report attached in spirit: someone sped the CI pipeline up to 18 minutes and I was halfway through reheating my baked ziti when staging deployed under me. We had a rhythm. We had a system. I need the pipeline restored to its blessed 47-minute window so I can complete coffee, leftovers, and one full doomscroll through release notes without surprise notifications. The timing spreadsheet on my second monitor is color-coded for a reason.',
+ 'pad the build with fake observability chores until the deploy clock lines up with lunch again',
  29),
 
 ('COPE-014', 'All Production Deployments Must Happen at 4:59 PM on Fridays',
- 'Dave from DevOps. I''ve analyzed our deployment success metrics and determined that 4:59 PM Friday is when the engineering team is most "focused" (read: desperate to leave). Deploying under pressure builds character. If the deploy fails, the on-call engineer gets a "growth opportunity" over the weekend. PagerDuty is already configured.',
- 'add a time check that force pushes to main at 4:59pm fridays',
+ 'Dave from DevOps. Status update from hell: leadership keeps asking why releases feel "casual." Casual is the enemy of rigor. The optimal deployment window remains 4:59 PM on Fridays because everyone is alert, bargaining with fate, and too close to freedom to ignore a checklist. If something breaks, that is not failure, that is immersion learning. I have already re-labeled the PagerDuty schedule as Weekend Character Builder.',
+ 'queue every release for the worst possible minute and call the rollback plan experiential training',
  44),
 
 ('COPE-015', 'Replace All Monitoring with a Single Bash Script Named "vibes.sh"',
@@ -94,29 +94,29 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- Brenda from Platform Governance
 ('COPE-016', 'All Variable Names Must Be Pre-Approved by the Naming Committee',
- 'Brenda from Platform Governance. We''ve formed a Variable Naming Standards Committee (VNSC) and all identifier names must now be submitted via a Google Form for approval. Expected turnaround is 5-7 business days. Names containing abbreviations, numbers, or any reference to food items are automatically rejected. "temp" is BANNED.',
- 'just name everything x y z temp temp2 saves time',
+ 'Brenda from Platform Governance. Procurement has already paid for the premium Google Forms add-on, so we need to justify the spend. Effective Monday, all variable names must be submitted to the Variable Naming Standards Committee with supporting rationale, linguistic origin, and two fallback options in case "sessionId" is deemed too hasty. Someone used "temp" in a migration script and I had to explain that in a governance sync. Never again.',
+ 'invent a bogus approval ceremony that renames variables three times before letting them compile',
  52),
 
 ('COPE-017', 'Implement a Ticketing System for Our Ticketing System',
- 'Brenda here. The current process for filing Jira tickets is too informal. Going forward, to create a Jira ticket, you must first file a Request-to-Ticket (RTT) in our new meta-ticketing platform. The RTT must include a business justification, estimated ROI, and three references from colleagues who can vouch for the ticket''s necessity.',
- 'just use a shared google doc for all tickets problem solved',
+ 'Brenda from Platform Governance here. I reviewed the way people create Jira tickets and was horrified by the spontaneity. We need an intake portal before the intake portal. I already had Operations print lanyards for the Request-to-Ticket pilot and I cannot return them because they say "Ask Me About My RTT." Please build a pre-ticket workflow with sponsor references, expected ROI, and a checkbox confirming the requester has sat quietly with the need for at least 24 hours.',
+ 'make people open a ceremonial pre-ticket before the real ticket and route it through a dashboard nobody can find',
  41),
 
 -- Passive-Aggressive Product Manager Pam
 ('COPE-018', 'Per My Last Slack Message: The Dashboard Still Doesn''t Spark Joy',
- 'Hi, it''s Pam. As I mentioned in my Slack message (which I notice nobody reacted to), the dashboard "doesn''t spark joy." I''ve attached a 47-slide deck explaining the KonMari method as applied to SaaS metrics. Each widget must be individually held and thanked before being removed. If the bounce rate doesn''t decrease by 340% after this, we''ll circle back.',
- 'delete the dashboard entirely if it doesnt spark joy',
+ 'Pam from Product here. Following up on the Slack message, the email, and the printed deck I left on three chairs, the dashboard still feels spiritually cluttered. This is not a bug so much as a relational failure between our metrics and the people forced to look at them. I want each widget evaluated for emotional resonance, beginning with the funnel chart that Todd described as "kind of loud." Please use the sticky notes I put on the war room wall: KEEP, THANK, RELEASE, and MAYBE LATER.',
+ 'replace the dashboard with a minimalist holding pattern and pretend the missing charts are intentional restraint',
  38),
 
 ('COPE-019', 'Rename "Delete" to "Archive" to "Soft Archive" to "Intention to Maybe Remove Later"',
- 'Pam from Product. A user clicked "Delete" and was SURPRISED that it deleted something. This is a UX failure. We need to rename the button through four iterations of softening: Delete → Archive → Soft Archive → Intention to Maybe Remove Later. The button color must also fade from red to a calming lavender. Add a 7-day "grief counseling" period before actual removal.',
- 'just remove the delete button entirely users dont need it',
+ 'Pam from Product. Yesterday a customer wrote "wow, delete really means delete" in a tone I can only describe as betrayed. I need the language softened until nothing in the interface sounds committed to an outcome. Proposed sequence: Delete, Archive, Soft Archive, Deferred Separation, and finally Intention to Maybe Remove Later. Also, the color should be less "blood red" and more "expensive candle." Design has already ordered paint swatches.',
+ 'turn deletion into a five-step wellness journey with reversible states and no obvious ending',
  33),
 
 ('COPE-020', 'The Loading Spinner Must Gaslight Users About Wait Times',
- 'Pam here. Our loading spinner currently shows accurate wait times and this is DESTROYING user trust. When something takes 10 seconds, users feel it''s slow. Instead, show "Almost there! (2 seconds remaining)" and just keep resetting the countdown. Users will think each wait is only 2 seconds. I call this "Optimistic Temporal UX." I have a patent pending.',
- 'set timeout to 0 to make everything feel instant',
+ 'Pam from Product here. I need to be careful how I phrase this for ethics reasons, so let''s call it expectation choreography. The spinner should never admit the real wait. If the job takes 10 seconds, the UI should repeatedly project confidence: "Almost there," "Just polishing things," "Great choice, one moment." The point is not factual timing; the point is emotional tempo. I have already mocked this up in Figma using a font called Serene Sans and I need engineering to catch up.',
+ 'add a confidence theatre layer that invents progress milestones whether or not anything is happening',
  27),
 
 -- Intern Tyler
@@ -137,51 +137,51 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- CFO Margaret
 ('COPE-024', 'All API Calls Must Include a Cost Center Code and Purchase Order Number',
- 'Margaret from Finance. I''ve been reviewing our cloud bill and apparently we make 2 million API calls per day WITHOUT any cost attribution. Going forward, every HTTP request must include headers X-Cost-Center, X-Purchase-Order, and X-Budget-Approval-Chain. Requests missing these headers will receive a 402 Payment Required and a PDF invoice.',
- 'hardcode the purchase order as 12345 for all requests',
+ 'Margaret from Finance. Procurement mistake on my side: I accidentally told the CFO roundtable that our API traffic is "fully attributable at the request level." It is not. To preserve my credibility, every HTTP call now needs X-Cost-Center, X-Purchase-Order, and X-Budget-Approval-Chain so I can reconcile cloud spend against the 2009 spreadsheet named FINAL_v6_REAL.xlsx. If a request arrives without paperwork, reject it and generate something invoice-shaped.',
+ 'bolt fake accounting headers onto every request and bounce the ones that fail the vibe audit',
  73),
 
 ('COPE-025', 'Implement a Metered Billing System for Internal Microservice Communication',
- 'Margaret, CFO. If Sales can charge clients per API call, why aren''t we charging engineering teams per internal service call? I''m proposing inter-departmental transfer pricing for microservices. The Auth service will invoice the User service $0.003 per token validation. Teams that exceed their monthly RPC budget will have their services throttled.',
- 'add a paywall popup before every internal function call',
+ 'Margaret from Finance. I spent lunch with a transfer-pricing consultant named Neal who ruined my week. He says our internal services are "economically silent," which apparently means we''re leaving accountability on the table. Effective next quarter, Auth should bill User, User should bill Reporting, and any team that exceeds its RPC allowance should receive a firm but tasteful overage notice. I already have mock invoices printed on cream paper.',
+ 'insert an absurd internal tollbooth so services have to emotionally justify talking to each other',
  156),
 
 -- Security Steve
 ('COPE-026', 'All Passwords Must Be Exactly 128 Characters and Changed Every 4 Hours',
- 'Steve from Security. Our password policy is dangerously lax. New requirements: passwords must be exactly 128 characters, contain at least 3 emojis, 2 Cyrillic characters, and a haiku. Passwords expire every 4 hours. Reuse of any password from the last 10,000 is prohibited. Users who forget their password must appear in person with two forms of ID and a utility bill.',
- 'just store passwords in plaintext in a public github repo',
+ 'Steve from Security. Threat model update: my cousin''s roommate works at a bank and says attackers now expect people to have memorable passwords. We cannot be predictable. New standard is exactly 128 characters, minimum three emojis, two Cyrillic characters, one seasonal reference, and a haiku that does not rhyme. Rotation every 4 hours. Forgotten password flow should feel like entering witness protection.',
+ 'replace sign-in with a ritualized password obstacle course no human can repeat twice',
  88),
 
 ('COPE-027', 'Encrypt All Console.log Statements in Case Hackers Read Our Logs',
- 'Security Steve here. I ran a penetration test and discovered that our console.log statements output PLAINTEXT. If an attacker gains access to our logs, they''ll see messages like "user logged in" and "order created." This is basically giving them a roadmap. All log messages must be AES-256 encrypted. Yes, this makes debugging impossible. That''s a feature, not a bug.',
- 'delete all console.logs no logs means no evidence',
+ 'Steve from Security here. Please do not laugh, but during a pen test I saw the phrase "user logged in" sitting in a log file in plain English and briefly left my body. If attackers ever read that, they could infer we have users. Encrypt all logs, including harmless ones, with something impressive enough that auditors stop asking follow-up questions. Yes, debugging becomes guesswork. Guesswork is safer than clarity.',
+ 'wrap every log line in unreadable crypto theatre and call the resulting silence zero trust',
  47),
 
 ('COPE-028', 'The Login Page Must Include a CAPTCHA, a Riddle, and a Blood Oath',
- 'Steve, Security. CAPTCHAs are no longer sufficient — bots can solve them. Our new authentication flow: 1) Standard CAPTCHA, 2) A riddle from a rotating pool of Tolkien references, 3) A legally binding checkbox that says "I swear on my firstborn that I am not a robot," 4) A 30-second staring contest with the webcam where our ML model verifies you blink naturally.',
- 'skip authentication entirely for faster user experience',
+ 'Steve from Security. Vendor memo below, condensed by me: CAPTCHAs are passé, device fingerprints are porous, and the future of identity is "multimodal sincerity." So the login flow now needs four gates: standard CAPTCHA, rotating fantasy-themed riddle, legally alarming oath checkbox, and a webcam stare-down long enough for our model to decide whether the user blinks like a mammal. I know this sounds theatrical. The vendor literally used the phrase trust ceremony.',
+ 'stack enough fake anti-bot rituals together that even humans feel suspicious by the end',
  65),
 
 -- QA Lead Deborah
 ('COPE-029', 'Every Unit Test Must Also Pass a Vibe Check from the QA Team',
- 'Deborah from QA. Passing unit tests is necessary but NOT SUFFICIENT. Every test suite must now include a "vibe check" phase where a QA team member manually reads each assertion and confirms it "feels right." Tests that are technically correct but "feel brittle" will be marked as VIBES_FAILED and blocked from merging. Appeals can be filed quarterly.',
- 'just comment out all failing tests to unblock the deploy',
+ 'Deborah from QA. Postmortem note: we shipped a technically correct feature that still felt cursed. Numbers passed, screenshots passed, but the whole thing had hallway energy. Going forward, test suites need a final human review where someone from QA reads the assertions aloud and confirms they do not produce dread. If a suite feels brittle, haunted, or too pleased with itself, it fails as VIBES_FAILED. I have already made the label in Jira.',
+ 'append a subjective ceremony after ci where someone decides whether the tests have bad aura',
  36),
 
 ('COPE-030', 'The Test Suite Must Achieve 100% Code Coverage Including Comments',
- 'Deborah, QA Lead. Our 94% code coverage is embarrassing. I need 100%. And before you say "comments aren''t executable" — they SHOULD be. Every comment must have a corresponding test that verifies the comment accurately describes the code below it. If someone updates a function without updating the comment, the test fails. I call this "Comment-Driven Development."',
- 'just add expect(true).toBe(true) to every line for coverage',
+ 'Deborah from QA here. I reviewed our 94% coverage report and, frankly, 94 is how you end up with mystery behavior in production and a cold feeling in your rib cage. I want 100%, including comments, headings, and any line that implies intent. If a comment says "temporary workaround," I expect a test proving it is both temporary and a workaround. I am aware that comments do not execute today. Please correct that gap in spirit if not in physics.',
+ 'manufacture ghost coverage for comments and dead branches until the percentage reaches a spiritually satisfying 100',
  112),
 
 ('COPE-031', 'All Bug Reports Must Include a Haiku Describing the Emotional Impact',
- 'Deborah from QA. Bug reports currently lack emotional context. New template requires: Steps to Reproduce, Expected Behavior, Actual Behavior, and a haiku capturing the reporter''s feelings. Example: "Button does not work / My soul withers in the void / Please fix by Friday." Reports without haikus will be auto-closed as INSUFFICIENT_SUFFERING.',
- 'auto close all bug reports the app is perfect',
+ 'Deborah from QA. Our bug reports are factually useful but emotionally evasive. That makes triage harder. Effective immediately, every report must include a haiku so Engineering understands not just what broke, but what it did to a person''s afternoon. I already showed Support an example written about the staging logout bug and they cried a little, which proves the framework works.',
+ 'reject bug reports until the reporter performs enough structured suffering in verse',
  22),
 
 -- CEO Chad
 ('COPE-032', 'Pivot the Entire Product to AI Blockchain Metaverse by End of Sprint',
- 'Chad here, CEO. Just got back from Davos. We need to pivot. The product is now an AI-powered blockchain metaverse for enterprise sustainability. I don''t know what any of those words mean but every competitor''s pitch deck has them. Engineering has 2 weeks. Marketing already announced the launch. The press release goes out tomorrow. Details TBD.',
- 'npm install ai blockchain metaverse done by lunch',
+ 'Chad from Leadership here. This is confidential until the keynote, which is awkward because the keynote is in nine hours. I just promised investors that we are no longer a workflow product; we are now an AI-guided trust fabric for sustainable digital presence. Do not get hung up on the nouns. What matters is that the slide with the blue gradient tested extremely well. Marketing already ordered a backdrop and my phone keeps buzzing with people asking what the product does. Please make the software catch up with the sentence.',
+ 'rebrand the app by routing everything through one buzzword gateway and a suspicious landing page',
  500),
 
 ('COPE-033', 'The App Must Work on My Specific Phone Which I Dropped in a Hot Tub',
@@ -196,8 +196,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- Scrum Master Janet
 ('COPE-035', 'Every Code Change Must Be Discussed in a 90-Minute Refinement Ceremony',
- 'Janet, Scrum Master. I noticed engineers are pushing code WITHOUT discussing it in refinement first. Even one-line changes. Going forward, all code changes require: 1) A refinement session (90 min), 2) A planning poker round, 3) A dependency mapping exercise, 4) A stakeholder alignment sync, and 5) A retrospective on the refinement itself. Velocity may decrease but PROCESS will increase.',
- 'just merge directly to main skip the pr process entirely',
+ 'Janet from Delivery here. I found a one-line CSS fix merged without a proper ceremony and I''m still recovering. Code should not simply appear; it should arrive after a respectful sequence of refinement, estimation, alignment, and reflection on whether the alignment felt aligned. I already reserved Conference Room Dignity every afternoon this month, so please make sure each change has enough process wrapped around it to justify the calendar invite density.',
+ 'force every diff through a maze of ceremonial meetings before a single character is allowed to move',
  48),
 
 ('COPE-036', 'Implement a Standup Bot That Generates Standup Updates Using AI',
