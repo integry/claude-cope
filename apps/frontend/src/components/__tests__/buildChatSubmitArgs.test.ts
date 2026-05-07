@@ -1,5 +1,40 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { buildSprintCallbacks, syncCompletedTicketReward } from "../buildChatSubmitArgs";
+import type { GameState } from "../../hooks/useGameState";
+
+function createGameState(overrides: Partial<GameState> = {}): GameState {
+  return {
+    version: "1.0",
+    username: "alice",
+    lastLogin: 0,
+    economy: {
+      currentTD: 0,
+      totalTDEarned: 0,
+      currentRank: "Junior Code Monkey",
+      quotaPercent: 100,
+      quotaLockouts: 0,
+      tdMultiplier: 1,
+    },
+    inventory: {},
+    upgrades: [],
+    achievements: [],
+    buddy: {
+      type: null,
+      isShiny: false,
+      promptsSinceLastInterjection: 0,
+    },
+    chatHistory: [],
+    commandUsage: {},
+    modes: { fast: false, voice: false },
+    activeTicket: null,
+    hasSeenTicketPrompt: false,
+    activeTheme: "default",
+    unlockedThemes: ["default"],
+    soundEnabled: true,
+    pendingCompletedTaskIds: [],
+    ...overrides,
+  };
+}
 
 describe("syncCompletedTicketReward", () => {
   const fetchMock = vi.fn();
@@ -39,19 +74,16 @@ describe("syncCompletedTicketReward", () => {
   it("uses the latest state when syncing a completed paid ticket", async () => {
     const playChime = vi.fn();
     const addActiveTD = vi.fn();
-    const setState = vi.fn((updater: (prev: any) => any) => updater({
-      username: "alice",
+    const setState = vi.fn((updater: (prev: GameState) => GameState) => updater(createGameState({
       proKeyHash: "fresh-pro-hash",
       activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
-      pendingCompletedTaskIds: [],
-    }));
+    })));
 
     const { onSprintProgress } = buildSprintCallbacks({
-      getState: () => ({
-        username: "alice",
+      getState: () => createGameState({
         proKeyHash: "fresh-pro-hash",
         activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
-      } as any),
+      }),
       updateTicketProgress: vi.fn(),
       addActiveTD,
       playChime,

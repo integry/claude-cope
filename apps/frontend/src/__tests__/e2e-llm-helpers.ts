@@ -217,6 +217,8 @@ type TestOpts = {
   buddy?: string;
 };
 
+type CallMeta = { suite: string; test: string; turn?: number };
+
 function detectQualityIssues(reply: string): string[] {
   const issues: string[] = [];
   if (reply.length < 50) issues.push("VERY SHORT response (<50 chars)");
@@ -239,7 +241,7 @@ function detectQualityIssues(reply: string): string[] {
 }
 
 function logCallResult(
-  meta: { suite: string; test: string; turn?: number },
+  meta: CallMeta,
   reply: string,
   data: LlmResponse,
   durationMs: number,
@@ -254,70 +256,64 @@ function logCallResult(
   console.log(`${"=".repeat(60)}\n`);
 }
 
-export async function callLLM(
+function buildRequestBody(
   messages: { role: string; content: string }[],
-  meta: { suite: string; test: string; turn?: number },
   backendBody?: Record<string, unknown>,
-  cookieJarPath?: string,
-): Promise<string> {
-  const requestBody = BACKEND_URL
-    ? (backendBody ?? {})
-    : { model: MODEL, messages, max_tokens: MAX_TOKENS, reasoning: REASONING, temperature: TEMPERATURE, top_p: TOP_P };
-  const start = Date.now();
-
-  let data: LlmResponse;
-
+): Record<string, unknown> {
   if (BACKEND_URL) {
-    const { stdout } = await execFileAsync("curl", [
-      "-sS",
-      "-X", "POST",
-      BACKEND_URL,
-      "-c", cookieJarPath ?? "",
-      "-b", cookieJarPath ?? "",
-      "-H", "Content-Type: application/json",
-      "--data", JSON.stringify(requestBody),
-      "-w", "\n%{http_code}",
-    ].filter(Boolean));
-    const durationMs = Date.now() - start;
-    const lines = stdout.trimEnd().split("\n");
-    const status = Number(lines.pop() ?? "0");
-    const bodyText = lines.join("\n");
-    if (status < 200 || status >= 300) throw new Error(`Backend ${status}: ${bodyText}`);
-    data = JSON.parse(bodyText) as LlmResponse;
-
-    const reply = data.choices?.[0]?.message?.content ?? "";
-    const qualityIssues = detectQualityIssues(reply);
-
-    report.push({
-      suite: meta.suite,
-      test: meta.test,
-      turn: meta.turn,
-      messages,
-      requestBody,
-      reply,
-      tokens: {
-        prompt: data.usage?.prompt_tokens,
-        completion: data.usage?.completion_tokens,
-      },
-      qualityIssues,
-      durationMs,
-    });
-
-    logCallResult(meta, reply, data, durationMs, qualityIssues);
-    return reply;
+    return backendBody ?? {};
   }
 
+  return {
+    model: MODEL,
+    messages,
+    max_tokens: MAX_TOKENS,
+    reasoning: REASONING,
+    temperature: TEMPERATURE,
+    top_p: TOP_P,
+  };
+}
+
+async function callBackend(
+  requestBody: Record<string, unknown>,
+  cookieJarPath?: string,
+): Promise<LlmResponse> {
+  const { stdout } = await execFileAsync("curl", [
+    "-sS",
+    "-X", "POST",
+    BACKEND_URL,
+    "-c", cookieJarPath ?? "",
+    "-b", cookieJarPath ?? "",
+    "-H", "Content-Type: application/json",
+    "--data", JSON.stringify(requestBody),
+    "-w", "\n%{http_code}",
+  ].filter(Boolean));
+  const lines = stdout.trimEnd().split("\n");
+  const status = Number(lines.pop() ?? "0");
+  const bodyText = lines.join("\n");
+  if (status < 200 || status >= 300) throw new Error(`Backend ${status}: ${bodyText}`);
+  return JSON.parse(bodyText) as LlmResponse;
+}
+
+async function callOpenRouter(requestBody: Record<string, unknown>): Promise<LlmResponse> {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
     body: JSON.stringify(requestBody),
   });
 
-  const durationMs = Date.now() - start;
   if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
-  data = await res.json() as LlmResponse;
-  const reply = data.choices?.[0]?.message?.content ?? "";
+  return await res.json() as LlmResponse;
+}
 
+function recordCall(
+  meta: CallMeta,
+  messages: { role: string; content: string }[],
+  requestBody: Record<string, unknown>,
+  data: LlmResponse,
+  durationMs: number,
+): string {
+  const reply = data.choices?.[0]?.message?.content ?? "";
   const qualityIssues = detectQualityIssues(reply);
 
   report.push({
@@ -327,14 +323,30 @@ export async function callLLM(
     messages,
     requestBody,
     reply,
-    tokens: { prompt: data.usage?.prompt_tokens, completion: data.usage?.completion_tokens },
+    tokens: {
+      prompt: data.usage?.prompt_tokens,
+      completion: data.usage?.completion_tokens,
+    },
     qualityIssues,
     durationMs,
   });
 
   logCallResult(meta, reply, data, durationMs, qualityIssues);
-
   return reply;
+}
+
+export async function callLLM(
+  messages: { role: string; content: string }[],
+  meta: CallMeta,
+  backendBody?: Record<string, unknown>,
+  cookieJarPath?: string,
+): Promise<string> {
+  const requestBody = buildRequestBody(messages, backendBody);
+  const start = Date.now();
+  const data = BACKEND_URL
+    ? await callBackend(requestBody, cookieJarPath)
+    : await callOpenRouter(requestBody);
+  return recordCall(meta, messages, requestBody, data, Date.now() - start);
 }
 
 /** Single-turn chat using the shared buildChatMessages */
