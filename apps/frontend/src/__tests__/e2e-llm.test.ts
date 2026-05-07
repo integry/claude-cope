@@ -10,7 +10,6 @@ import {
   T,
   API_KEY,
   BACKEND_URL,
-  extractUserNextMessage,
   getTranscriptIssues,
   hasParagraphSplit,
   hasTeacherMode,
