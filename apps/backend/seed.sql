@@ -1050,3 +1050,93 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  'Eli here, Indie Hacker. I spent two hours with Cursor and now I can feel the old codebase holding us back emotionally. The right move is a clean-sheet weekend rebuild: auth, billing, chat, analytics, onboarding, all of it. We do not need deep understanding because the model has context and I have momentum. By Monday, I want a dramatically faster product, a launch thread drafted in lowercase, and just enough metrics to imply discipline after the fact.',
  'one-shot the rewrite over a weekend and let monday morning discover whether the database still believes in us',
  97);
+
+-- Generated follow-up cluster: COPE-188 through COPE-1000
+WITH RECURSIVE seq(n) AS (
+  SELECT 188
+  UNION ALL
+  SELECT n + 1 FROM seq WHERE n < 1000
+)
+INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt, technical_debt)
+SELECT
+  printf('COPE-%03d', n) AS id,
+  'Backlog Stress Test #' || printf('%03d', n) || ': '
+    || CASE n % 12
+      WHEN 0 THEN 'Rails Callback Council'
+      WHEN 1 THEN 'Laravel Facade Emergency'
+      WHEN 2 THEN 'Django Admin Incident'
+      WHEN 3 THEN 'Phoenix LiveView Intervention'
+      WHEN 4 THEN 'Next.js Hydration Tribunal'
+      WHEN 5 THEN 'Nuxt Runtime Panic'
+      WHEN 6 THEN 'Remix Loader Debate'
+      WHEN 7 THEN 'Astro Island Escalation'
+      WHEN 8 THEN 'HTMX Fragment Crusade'
+      WHEN 9 THEN 'tRPC Boundary Collapse'
+      WHEN 10 THEN 'Supabase Dependence Spiral'
+      ELSE 'Agent Swarm Governance Review'
+    END
+    || ' for '
+    || CASE CAST(n / 12 AS INTEGER) % 12
+      WHEN 0 THEN 'Growth'
+      WHEN 1 THEN 'Finance'
+      WHEN 2 THEN 'Support'
+      WHEN 3 THEN 'Platform'
+      WHEN 4 THEN 'Mobile'
+      WHEN 5 THEN 'Compliance'
+      WHEN 6 THEN 'Data'
+      WHEN 7 THEN 'Sales'
+      WHEN 8 THEN 'Ops'
+      WHEN 9 THEN 'Security'
+      WHEN 10 THEN 'Product'
+      ELSE 'Leadership'
+    END AS title,
+  CASE n % 10
+    WHEN 0 THEN 'Avery from Product Ops here. '
+    WHEN 1 THEN 'Jordan from Platform Strategy here. '
+    WHEN 2 THEN 'Mina from Growth here. '
+    WHEN 3 THEN 'Rafael from Solutions Engineering here. '
+    WHEN 4 THEN 'Casey from Leadership Enablement here. '
+    WHEN 5 THEN 'Devon from Revenue Systems here. '
+    WHEN 6 THEN 'Parker from Applied AI here. '
+    WHEN 7 THEN 'Sage from Mobile Experience here. '
+    WHEN 8 THEN 'Taylor from Developer Success here. '
+    ELSE 'Quinn from the Transformation Office here. '
+  END
+  || CASE CAST(n / 10 AS INTEGER) % 10
+    WHEN 0 THEN 'We promised the board that our stack now reflects modern conviction instead of ordinary implementation detail. '
+    WHEN 1 THEN 'The current workflow still allows humans to understand cause and effect, which is making the roadmap look under-abstracted. '
+    WHEN 2 THEN 'During this morning''s demo somebody asked a direct question and the architecture did not have enough layers to hide behind. '
+    WHEN 3 THEN 'Investors keep rewarding companies that sound like runtime experiments with a billing page attached, so we need the product to perform more ideology. '
+    WHEN 4 THEN 'Our existing system is too stable to support the new narrative about velocity, reinvention, and prompt-led courage. '
+    WHEN 5 THEN 'I have already socialized this direction in three meetings, one deck, and a Slack thread with too many rocket emojis to unwind now. '
+    WHEN 6 THEN 'The team keeps solving problems with straightforward code when the market clearly wants a more ceremonial relationship with software. '
+    WHEN 7 THEN 'We need one premium place to concentrate the chaos so every department can finally align around the same category of suffering. '
+    WHEN 8 THEN 'A consultant used the phrase "compound leverage surface" and now leadership expects the application to behave accordingly. '
+    ELSE 'Please treat this as a strategic correction rather than a bug because I have already narrated it as an inevitability to people with budgets. '
+  END
+  || 'Ticket #' || printf('%03d', n) || ' specifically asks us to '
+  || CASE CAST(n / 100 AS INTEGER) % 10
+    WHEN 0 THEN 'route ordinary product behavior through more framework doctrine than the feature can emotionally support. '
+    WHEN 1 THEN 'make AI tooling responsible for judgment calls previously handled by professionals with sleep schedules. '
+    WHEN 2 THEN 'add wallet-first, token-adjacent ceremony to flows that were perfectly happy being email-based. '
+    WHEN 3 THEN 'move critical paths onto trendier runtimes so the launch thread sounds faster than the customer experience. '
+    WHEN 4 THEN 'rebuild admin surfaces around generated conventions, partial hydration, and politely concealed regret. '
+    WHEN 5 THEN 'centralize product decisions in prompts, evals, and a retrieval stack that costs more than the problem. '
+    WHEN 6 THEN 'turn the web app into a cross-platform compromise and call the side effects alignment. '
+    WHEN 7 THEN 'replace explicit boundaries with typed intimacy so every layer can fail with deeper mutual understanding. '
+    WHEN 8 THEN 'treat the vendor platform as destiny and describe any remaining custom code as transitional grief. '
+    ELSE 'spread operational risk across enough fashionable abstractions that no single postmortem can hold it all. '
+  END
+  || 'Please keep the tone premium, the diagram dense, and the rollback plan mostly theoretical.' AS description,
+  CASE n % 8
+    WHEN 0 THEN 'wrap the existing flow in a trendier orchestration layer and present the regressions as strategic texture'
+    WHEN 1 THEN 'let an ai judge intent, route the request, and apologize confidently when the wrong subsystem wakes up'
+    WHEN 2 THEN 'add a wallet gate, a manifesto checkbox, and enough ceremony that nobody asks whether this needed to be onchain'
+    WHEN 3 THEN 'move the path to a newer runtime, keep the unsupported dependency, and let prod discover the philosophy mismatch'
+    WHEN 4 THEN 'generate the boring screens, hide the business rules in callbacks, and call the resulting mystery convention'
+    WHEN 5 THEN 'embed the docs, run an eval, and treat whichever answer sounds most expensive as retrieved truth'
+    WHEN 6 THEN 'ship the same bug to web and mobile together so leadership can finally measure consistency'
+    ELSE 'merge the boundaries, trust the autocomplete, and let the outage explain where the contract actually lived'
+  END AS kickoff_prompt,
+  25 + ((n * 37) % 375) AS technical_debt
+FROM seq;

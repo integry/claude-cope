@@ -258,20 +258,26 @@ function sanitizeUserNextMessageContent(content: string): string {
   return content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
 }
 
+const USER_NEXT_MESSAGE_TOKEN_MATCHERS: Array<(text: string) => string | null> = [
+  (text) => text.match(/`([^`]{2,40})`/)?.[1] ?? null,
+  (text) => text.match(/\b0x[0-9A-Fa-f]+\b/)?.[0] ?? null,
+  (text) => text.match(/\boffset\s+\d+\b/i)?.[0] ?? null,
+  (text) => text.match(/\brestartPolicy\b/)?.[0] ?? null,
+  (text) => text.match(/\borphaned pods?\b/i)?.[0] ?? null,
+  (text) => text.match(/\blegacy code\b/i)?.[0] ?? null,
+  (text) => text.match(/\bConfigMap\b/)?.[0] ?? null,
+  (text) => text.match(/\bKubernetes\s+\d+(?:\.\d+)?\b/i)?.[0] ?? null,
+  (text) => text.match(/\bmagic(?:=true)?\b/i)?.[0] ?? null,
+  (text) => text.match(/\b[a-z]+-[a-z0-9_.-]{3,}\b/i)?.[0] ?? null,
+];
+
 function extractUserNextMessageToken(text: string): string | null {
-  return (
-    text.match(/`([^`]{2,40})`/)?.[1]
-    ?? text.match(/\b0x[0-9A-Fa-f]+\b/)?.[0]
-    ?? text.match(/\boffset\s+\d+\b/i)?.[0]
-    ?? text.match(/\brestartPolicy\b/)?.[0]
-    ?? text.match(/\borphaned pods?\b/i)?.[0]
-    ?? text.match(/\blegacy code\b/i)?.[0]
-    ?? text.match(/\bConfigMap\b/)?.[0]
-    ?? text.match(/\bKubernetes\s+\d+(?:\.\d+)?\b/i)?.[0]
-    ?? text.match(/\bmagic(?:=true)?\b/i)?.[0]
-    ?? text.match(/\b[a-z]+-[a-z0-9_.-]{3,}\b/i)?.[0]
-    ?? null
-  );
+  for (const matcher of USER_NEXT_MESSAGE_TOKEN_MATCHERS) {
+    const token = matcher(text);
+    if (token) return token;
+  }
+
+  return null;
 }
 
 function buildTokenUserNextMessageCandidates(token: string): string[] {
