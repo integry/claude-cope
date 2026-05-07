@@ -8,7 +8,7 @@ import { calculateActiveMultiplier, isFreeUser } from "../hooks/gameStateUtils";
 import { BuddyDisplay } from "./BuddyDisplay";
 import { parseGlitchStyle } from "./parseGlitchStyle";
 import { terminalContainerClassName } from "./terminalClassName";
-import { computeBuddyInterjection, submitChatMessage } from "./chatApi";
+import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
 import { API_BASE, BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
 import { applyServerProfile } from "../hooks/profileSync";
@@ -97,6 +97,7 @@ function Terminal() {
   const nagArmedFromQuotaRef = useRef(false);
   const historyRef = useRef(history);
   historyRef.current = history;
+  const lastSuggestedReplyRef = useRef<string | null>(null);
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
   const isFreeTier = isFreeUser(state);
 
@@ -107,6 +108,16 @@ function Terminal() {
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
     const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
   }, [unlockAchievement, playChime]);
+
+  const handleSuggestedReply = useCallback((suggestion: string) => {
+    const merged = mergeSuggestedReply(lastSuggestedReplyRef.current, suggestion);
+    if (!merged) {
+      setSuggestedReply(null);
+      return;
+    }
+    lastSuggestedReplyRef.current = merged;
+    setSuggestedReply(merged);
+  }, []);
 
   const restorePendingNagCommand = useCallback(() => {
     if (pendingNagCommandRef.current !== null) {
@@ -178,7 +189,7 @@ function Terminal() {
   const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => !(cmd === "/store" && state.economy.totalTDEarned < 1000) && cmd.startsWith(slashQuery.toLowerCase()));
 
   const runSlashCommand = (command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: setSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
   };
 
   const runSlashCommandRef = useRef(runSlashCommand);
@@ -287,7 +298,7 @@ function Terminal() {
       chatMessages, buddyResult, unlockAchievement: unlockAchievementWithSound, setHistory, setIsProcessing,
       currentRank: rank, apiKey: effectiveApiKey, customModel: state.selectedModel, proKey: state.proKey,
       proKeyHash: state.proKeyHash, modes: state.modes, activeTicket: state.activeTicket,
-      onSprintProgress, getSprintCompleteMessage, addActiveTD, onSuggestedReply: setSuggestedReply,
+      onSprintProgress, getSprintCompleteMessage, addActiveTD, onSuggestedReply: handleSuggestedReply,
       buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades,
       onByokUsage: (usage) => setState((prev) => {
         const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 };

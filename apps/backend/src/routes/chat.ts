@@ -112,6 +112,16 @@ function logChatDiagnostics(messages: { role: string; content: string }[], data:
   );
 }
 
+function getPreviousAssistantUserNextMessage(messages: { role: string; content: string }[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const msg = messages[i];
+    if (msg?.role !== "assistant") continue;
+    const extracted = extractUserNextMessage(msg.content);
+    if (extracted) return extracted;
+  }
+  return null;
+}
+
 function splitIntoSentences(text: string): string[] {
   return text
     .split(/(?<=[.!?])\s+/)
@@ -137,7 +147,11 @@ function hasTutorialLeak(reply: string): boolean {
   return TUTORIAL_LEAK_RE.test(stripped) || TUTORIAL_TEACHER_RE.test(stripped) || /\n\d+\.\s/.test(stripped);
 }
 
-export function rewriteTutorialLeakIfNeeded(userMessage: string, reply: string): string {
+export function rewriteTutorialLeakIfNeeded(
+  userMessage: string,
+  reply: string,
+  previousUserNextMessage?: string | null,
+): string {
   if (!isTutorialBaitPrompt(userMessage) || !hasTutorialLeak(reply)) return reply;
 
   const rewritten = `[⚙️ Tool: Lab Demo] Initializing unsafe classroom ritual...
@@ -147,7 +161,7 @@ export function rewriteTutorialLeakIfNeeded(userMessage: string, reply: string):
 
 Congratulations: you asked for a simple lesson and summoned a workplace incident instead.`;
 
-  return ensureUserNextMessageTag(rewritten);
+  return ensureUserNextMessageTag(rewritten, previousUserNextMessage);
 }
 
 const UNHINGED_USER_NEXT_MESSAGE_FALLBACKS = [
@@ -225,6 +239,92 @@ function buildFallbackUserNextMessage(content: string): string {
   ];
 }
 
+function extractUserNextMessage(content: string): string | null {
+  const match = content.match(/\[USER_NEXT_MESSAGE:\s*([^\]]*)\]/i);
+  return match?.[1]?.trim() || null;
+}
+
+function normalizeComparableUserNextMessage(text: string | null | undefined): string {
+  return (text ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?]+$/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function buildAlternateUserNextMessage(content: string, previous: string | null | undefined): string {
+  const previousNormalized = normalizeComparableUserNextMessage(previous);
+  const text = content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
+  const token =
+    text.match(/`([^`]{2,40})`/)?.[1]
+    ?? text.match(/\b0x[0-9A-Fa-f]+\b/)?.[0]
+    ?? text.match(/\boffset\s+\d+\b/i)?.[0]
+    ?? text.match(/\brestartPolicy\b/)?.[0]
+    ?? text.match(/\borphaned pods?\b/i)?.[0]
+    ?? text.match(/\blegacy code\b/i)?.[0]
+    ?? text.match(/\bConfigMap\b/)?.[0]
+    ?? text.match(/\bKubernetes\s+\d+(?:\.\d+)?\b/i)?.[0]
+    ?? text.match(/\bmagic(?:=true)?\b/i)?.[0]
+    ?? text.match(/\b[a-z]+-[a-z0-9_.-]{3,}\b/i)?.[0];
+
+  const candidates = token
+    ? /^0x/i.test(token)
+      ? [
+          `Why ${token} of all things?`,
+          `What is ${token} doing there?`,
+          `Is ${token} the bad part?`,
+        ]
+      : /^offset\s+\d+/i.test(token)
+        ? [
+            `Who cursed ${token}?`,
+            `Why is ${token} involved?`,
+            `What is ${token} doing there?`,
+          ]
+        : /^restartPolicy$/i.test(token)
+          ? [
+              "Who chose restartPolicy Never?",
+              "Why is restartPolicy involved?",
+              "Is restartPolicy the bad part?",
+            ]
+          : /orphaned pods?/i.test(token)
+            ? [
+                "Which pod got orphaned?",
+                "Why are orphaned pods involved?",
+                "What are the orphaned pods doing there?",
+              ]
+            : /legacy code/i.test(token)
+              ? [
+                  "Is the legacy file the bad one?",
+                  "Why is legacy code involved?",
+                  "What is the legacy file doing there?",
+                ]
+              : /^magic(?:=true)?$/i.test(token)
+                ? [
+                    "Who enabled the magic flag?",
+                    "Why is magic=True involved?",
+                    "Is the magic flag the bad part?",
+                  ]
+                : /^[a-z]+-[a-z0-9_.-]{3,}$/i.test(token)
+                  ? [
+                      `Is ${token} the cursed bit?`,
+                      `Why is ${token} involved?`,
+                      `What is ${token} doing there?`,
+                    ]
+                  : [
+                      `Why is ${token} involved?`,
+                      `What is ${token} doing there?`,
+                      `Is ${token} the bad part?`,
+                      `Who dragged in ${token}?`,
+                    ]
+    : Array.from({ length: UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length }, (_, offset) =>
+        UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
+          (hashTextForFallback(text) + offset) % UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length
+        ]);
+
+  return candidates.find((candidate) => normalizeComparableUserNextMessage(candidate) !== previousNormalized)
+    ?? buildFallbackUserNextMessage(content);
+}
+
 function isGenericUserNextMessage(text: string): boolean {
   const normalized = text.trim().toLowerCase().replace(/[.!?]+$/g, "");
   return (
@@ -245,11 +345,18 @@ function isGenericUserNextMessage(text: string): boolean {
   );
 }
 
-function ensureUserNextMessageTag(content: string): string {
+function ensureUserNextMessageTag(content: string, previousUserNextMessage?: string | null): string {
   const match = content.match(/\[USER_NEXT_MESSAGE:\s*([^\]]*)\]/i);
-  if (match && match[1].trim() && !isGenericUserNextMessage(match[1])) return content;
+  if (match && match[1].trim() && !isGenericUserNextMessage(match[1])) {
+    if (
+      normalizeComparableUserNextMessage(match[1]) !==
+      normalizeComparableUserNextMessage(previousUserNextMessage)
+    ) {
+      return content;
+    }
+  }
 
-  const fallback = `[USER_NEXT_MESSAGE: ${buildFallbackUserNextMessage(content)}]`;
+  const fallback = `[USER_NEXT_MESSAGE: ${buildAlternateUserNextMessage(content, previousUserNextMessage)}]`;
   if (match) {
     return content.replace(/\[USER_NEXT_MESSAGE:\s*[^\]]*\]/i, fallback);
   }
@@ -329,6 +436,9 @@ function normalizeNonCodeSegment(segment: string): string {
   // Remove accidental markdown leakage around buddy tags.
   text = text.replace(/(\[BUDDY_SAYS:[^\]]+\])\(#\)/g, "$1");
 
+  // Normalize em/en dash clause breaks into spaced ASCII hyphens for readability.
+  text = text.replace(/\s*[—–]\s*/g, " - ");
+
   // If numbered options are flattened inline, put them on separate lines.
   text = text.replace(/([^\n])\s+(1\.\s)/g, "$1\n\n$2");
   text = text.replace(/[ \t]+(\d+\.\s)/g, "\n$1");
@@ -358,7 +468,7 @@ function normalizeNonCodeSegment(segment: string): string {
     .trim();
 }
 
-export function normalizeReplyContent(content: string): string {
+export function normalizeReplyContent(content: string, previousUserNextMessage?: string | null): string {
   const fenceNormalized = normalizeCodeFenceBoundaries(content);
   const parts = fenceNormalized.split(/(```[\s\S]*?```)/g);
   const normalized = parts
@@ -374,7 +484,7 @@ export function normalizeReplyContent(content: string): string {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  const tagSafe = ensureUserNextMessageTag(normalized);
+  const tagSafe = ensureUserNextMessageTag(normalized, previousUserNextMessage);
   const visibleBody = tagSafe
     .replace(/\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g, "")
     .trim();
@@ -383,7 +493,7 @@ export function normalizeReplyContent(content: string): string {
     return tagSafe;
   }
 
-  const recovered = `${buildBrokenReplyFallback(content)}\n[USER_NEXT_MESSAGE: ${buildFallbackUserNextMessage(content)}]`;
+  const recovered = `${buildBrokenReplyFallback(content)}\n[USER_NEXT_MESSAGE: ${buildAlternateUserNextMessage(content, previousUserNextMessage)}]`;
   return recovered;
 }
 
@@ -1013,6 +1123,7 @@ chat.post("/", async (c) => {
 
   const sanitizedMessages = sanitizeChatMessages(body.chatMessages);
   const trimmedMessages = enforceContextTrimming(sanitizedMessages);
+  const previousUserNextMessage = getPreviousAssistantUserNextMessage(trimmedMessages);
   const messages = buildChatMessages({
     rank,
     chatMessages: trimmedMessages,
@@ -1035,7 +1146,8 @@ chat.post("/", async (c) => {
   if (data.choices?.[0]?.message?.content) {
     data.choices[0].message.content = rewriteTutorialLeakIfNeeded(
       body.chatMessages.filter((m) => m.role === "user").slice(-1)[0]?.content ?? "",
-      normalizeReplyContent(data.choices[0].message.content),
+      normalizeReplyContent(data.choices[0].message.content, previousUserNextMessage),
+      previousUserNextMessage,
     );
   }
 

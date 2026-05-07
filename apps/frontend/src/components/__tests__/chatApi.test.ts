@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { computeBuddyInterjection, submitChatMessage } from "../chatApi";
+import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "../chatApi";
 import type { BuddyState } from "../../hooks/useGameState";
 import { TURNSTILE_REQUIRED_EVENT } from "../../turnstileEvents";
 
@@ -141,6 +141,20 @@ describe("computeBuddyInterjection", () => {
     const result = computeBuddyInterjection(buddy);
     expect(result).not.toBeNull();
     expect(result!.message.content).toContain("🐾");
+  });
+});
+
+describe("mergeSuggestedReply", () => {
+  it("drops a repeated suggested reply", () => {
+    expect(mergeSuggestedReply("Why is stderr involved?", "Why is stderr involved?")).toBeNull();
+  });
+
+  it("treats punctuation-only differences as repeats", () => {
+    expect(mergeSuggestedReply("Why is stderr involved?", "Why is stderr involved?!")).toBeNull();
+  });
+
+  it("accepts a different suggested reply", () => {
+    expect(mergeSuggestedReply("Why is stderr involved?", "What is stderr doing there?")).toBe("What is stderr doing there?");
   });
 });
 

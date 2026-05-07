@@ -188,6 +188,22 @@ describe("buildChatMessages achievement injection", () => {
   });
 });
 
+describe("USER_NEXT_MESSAGE dedupe", () => {
+  it("replaces a repeated suggested reply with a different follow-up", () => {
+    const reply = "The real villain is `error_log_128.txt` and nobody will admit it.\n[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]";
+    const normalized = normalizeReplyContent(reply, "Why is error_log_128.txt involved?");
+    expect(normalized).toContain("[USER_NEXT_MESSAGE:");
+    expect(normalized).not.toContain("[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]");
+    expect(normalized).toContain("error_log_128.txt");
+  });
+
+  it("keeps a specific suggested reply when it is not a repeat", () => {
+    const reply = "The real villain is `error_log_128.txt` and nobody will admit it.\n[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]";
+    const normalized = normalizeReplyContent(reply, "Which daemon touched it?");
+    expect(normalized).toContain("[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]");
+  });
+});
+
 describe("enforceContextTrimming", () => {
   it("restricts messages to 6 most recent elements", () => {
     const input = [
@@ -526,6 +542,13 @@ describe("reply formatting normalizer", () => {
     expect(output).toContain("do it:\n\n```yaml");
     expect(output).toContain("```yaml\napiVersion: kafka.strimzi.io/v1beta2\nkind: KafkaTopic\n```");
     expect(output).toContain("\nNow you can spin it up.");
+  });
+
+  it("normalizes em dashes into spaced hyphens in prose", () => {
+    const input = "It invented the audit trail—a haunted ledger that logs regret instead of facts.";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("audit trail - a haunted ledger");
+    expect(output).not.toContain("trail—a");
   });
 
   it("adds a specific USER_NEXT_MESSAGE when the tag is missing", () => {

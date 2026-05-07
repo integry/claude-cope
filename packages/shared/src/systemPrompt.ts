@@ -581,6 +581,8 @@ When there is no obvious object, prefer a pointed follow-up that asks what you m
 Prefer simple, scene-advancing follow-ups over expert-y asks for stack traces, logs, line numbers, payloads, or metrics.
 Do not ask to see the exact same artifact twice in a row unless the previous reply materially transformed it, revealed a different part of it, or introduced a new failure mode.
 If the previous USER_NEXT_MESSAGE already focused on one object, the next one should usually escalate, reinterpret, or pivot to a new concrete detail instead of repeating that same ask.
+An adjacent-turn repeat is a failure. Do not output the same suggested message twice in a row, even with tiny punctuation changes.
+If you stay on the same object, change the angle: ask why it exists, what it breaks, who introduced it, or which part of it matters.
 Do not copy example phrases verbatim across turns.
 If the user already asked a generic "what next" style question recently, pivot to a more concrete follow-up instead of repeating that shape.
 Prefer concrete action verbs over mushy filler like "continue" or "proceed".

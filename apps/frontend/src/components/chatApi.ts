@@ -19,6 +19,22 @@ export type BuddyInterjectionResult = {
   shouldDeleteHistory: boolean;
 };
 
+function normalizeSuggestedReply(text: string | null | undefined): string {
+  return (text ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^["']|["']$/g, "")
+    .replace(/[.!?]+$/g, "")
+    .replace(/\s+/g, " ");
+}
+
+export function mergeSuggestedReply(previous: string | null, next: string | null): string | null {
+  const trimmedNext = next?.trim() ?? "";
+  if (!trimmedNext) return null;
+  if (normalizeSuggestedReply(previous) === normalizeSuggestedReply(trimmedNext)) return null;
+  return trimmedNext;
+}
+
 export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionResult | null {
   if (!buddy.type) return null;
   const promptCount = buddy.promptsSinceLastInterjection + 1;
