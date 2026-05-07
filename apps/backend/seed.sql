@@ -901,4 +901,226 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('COPE-160', 'All Unit Tests Must Have Their Own Unit Tests and Those Tests Need Integration Tests',
  'Dr. Miriam here, Quality Engineering Professor. Your test coverage is 85%. But what is the test coverage OF YOUR TESTS? I propose: every unit test must have a meta-test that verifies the test is testing the right thing. Each meta-test needs an integration test ensuring the meta-test runs correctly in CI. Total test count: 14,000. Total lines of test code: 280,000. Total lines of application code: 3,000. Test-to-code ratio: 93:1. We have never been more confident that our tests work. Whether the app works is a separate question.',
  'delete all tests if there are no tests there are no bugs',
- 312);
+ 312),
+
+-- Rails Consultant Who Thinks Convention Is a Civil Religion
+('COPE-161', 'Rebuild the Admin Panel in Ruby on Rails So the Migrations Can Teach Us Discipline',
+ 'Avery from Rails Consulting here. Your admin panel works, which is how I know it was built without enough moral structure. We need a proper Rails application with seven models, three mailers, twelve concerns, and a migration history that reads like a sacred text. The current CRUD screens will be replaced by scaffolds first, then "temporarily" customized for the next three fiscal years. If someone asks where the business logic lives, the answer should be "mostly in callbacks, but beautifully."',
+ 'move every side effect into an after_commit hook and let future you trace the smoke',
+ 211),
+
+('COPE-162', 'Every User Save Must Trigger 14 ActiveRecord Callbacks for Lifecycle Integrity',
+ 'Avery from Rails again. I inspected your persistence layer and was alarmed by the lack of ritual. A user record currently saves without on-boarding itself through before_validation, before_save, after_save, after_commit, and a tasteful assortment of observers pretending not to exist. We need the full callback bouquet. If changing a display name does not quietly enqueue three jobs and rewrite two timestamps, the model has not fully matured.',
+ 'stack callbacks until updating one field feels like toppling a shelf full of porcelain',
+ 167),
+
+('COPE-163', 'Replace Half the Frontend with Hotwire Because JavaScript Is a Temporary Feeling',
+ 'Marta from Rails Product Studio. I watched someone open the browser console and that alone justified a rewrite. We should use Turbo Frames, Turbo Streams, and just enough Stimulus to make the page twitch like it has convictions. If a button can mutate the DOM without a full page refresh, it should also accidentally replace the wrong sidebar once in a while to keep everyone honest. I already told stakeholders we are "returning to HTML."',
+ 'send all interactivity through turbo stream partials and blame latency on elegance',
+ 154),
+
+-- Django Architect Who Worships the Admin Panel
+('COPE-164', 'Port the Back Office to Django Admin and Pretend We Built a Platform',
+ 'Priyesh from Django Solutions here. Your internal tools are fragmented, bespoke, and suspiciously understandable. We should consolidate everything inside Django Admin, where each terrible workflow can be made slightly worse by an inline formset. Permissions will be managed through groups with names like OperationsPlus and OperationsPlusLegacy. Once the models exist, the platform will basically generate itself, apart from the 900 lines of admin.py we do not discuss in polite company.',
+ 'rename every internal tool to a model and let django admin become the product by attrition',
+ 188),
+
+('COPE-165', 'All Background Jobs Must Go Through Celery, Redis, RabbitMQ, and One Unexplained Beat Schedule',
+ 'Priyesh from Django again. Right now your scheduled work is far too direct. We need Celery workers, Celery beat, Redis for result backend, RabbitMQ for vibes, and one cron-like schedule entry nobody can justify but everyone fears touching. If a welcome email cannot be delayed by a missing broker, are we even doing distributed systems or are we merely pretending to have standards?',
+ 'route simple background work through enough brokers that a typo becomes a regional event',
+ 233),
+
+-- Phoenix Developer Who Wants Sockets for Breathing
+('COPE-166', 'Rewrite the Dashboard in Phoenix LiveView So Every Typing Event Is a Spiritual Round Trip',
+ 'Soraya from Elixir Platform. I see your dashboard relies on JavaScript running locally in the browser, which is a lonely and error-prone place for state to exist. Phoenix LiveView fixes this by making every keystroke a server-side matter of principle. The app should feel instant in demos and become contemplative under hotel Wi-Fi. If a cursor blink does not traverse a websocket at least once, we are leaving resilience on the table.',
+ 'move every interaction to the server and call the resulting latency collaborative rendering',
+ 205),
+
+('COPE-167', 'Model User Presence as a Supervision Tree with 40 Tiny Processes per Tab',
+ 'Soraya from Elixir again. Your current notion of "online" is appallingly flat. A user should not merely be connected; they should be represented by a tasteful forest of lightweight processes: one for focus, one for typing, one for cursor sorrow, one for unread ambition, and several for future extensibility. If a single browser tab does not generate enough process metrics to impress a conference talk, the supervision tree is under-designed.',
+ 'spawn a fresh process for every whisper of user intent and trust the supervisor to sort the grief',
+ 244),
+
+-- Next.js Maximalist Who Mistakes Hydration Errors for Character Building
+('COPE-168', 'Migrate the Marketing Site to Next.js App Router with Six Layers of Server Components',
+ 'Noah from Frontend Platform. The site still renders predictably, which is how I know it lacks ambition. We need the App Router, nested layouts, server components, client components, edge middleware, and one invisible suspense boundary that only breaks in production when a user in Belgium opens two tabs. The build output should contain enough route segment metadata to make Product feel like we invented infrastructure.',
+ 'split the page into fifteen server-client border disputes and let hydration pick a winner',
+ 267),
+
+('COPE-169', 'Deploy Every Endpoint to the Edge Even If It Needs a Database and Common Sense',
+ 'Noah from Edge Strategy here. The phrase "cold start" came up in a meeting and I took it personally. Everything should run at the edge: auth, billing, exports, image manipulation, and the feature that writes 12 MB CSVs from a relational database we cannot reach from there without lies. If a request takes longer than a blink, I want the blame assigned to geography, not architecture.',
+ 'force every route onto edge workers and patch the missing capabilities with confident comments',
+ 221),
+
+-- Astro Island Evangelist
+('COPE-170', 'Refactor the Landing Page into 47 Astro Islands So Static HTML Can Feel Expensive',
+ 'Bea from Web Experience. The homepage currently ships too much ordinary interactivity in one piece. We need Astro islands for the hero animation, testimonial slider, pricing toggle, FAQ accordion, newsletter form, investor reassurance badge, and probably the footer for future-proofing. Half the page will hydrate only when visible, which sounds efficient until the CTA shows up after the customer has already doubted us.',
+ 'wrap every visible element in a selectively hydrated island and let the ocean sort out the timing',
+ 176),
+
+-- HTMX Loyalist Who Thinks JSON Is a Moral Failure
+('COPE-171', 'Replace the React Settings Screen with HTMX Fragments and Sharp Disapproval',
+ 'Glen from Hypermedia Consulting. JSON APIs are just HTML with self-esteem issues. Your settings screen should be server-rendered fragments delivered straight into the DOM by righteous little hx-post requests. The business logic remains on the server where it can be judged properly. If a user changes their timezone and the entire form quietly re-renders three regions larger than expected, that is not a bug; that is hypermedia expressing itself.',
+ 'return chunks of html for every click and let the browser assemble its own administrative maze',
+ 145),
+
+-- Bun Early Adopter Who Wants Benchmarks More Than Stability
+('COPE-172', 'Move the API to Bun Because the Startup Time Chart Looked Disrespectful',
+ 'Kian from Runtime Performance. I benchmarked our API on my laptop against an empty hello-world server and concluded we are wasting our youth. Bun promises speed, swagger, and just enough package-manager novelty to destabilize the CI pipeline for several memorable afternoons. If one native dependency combusts on install, that simply proves we were too attached to the old ecosystem.',
+ 'rewrite package scripts around a runtime no one on call has actually opened before',
+ 157),
+
+-- Deno Purist Who Calls Permissions a Product Surface
+('COPE-173', 'Port the Worker Scripts to Deno and Make Every File Read a Negotiation',
+ 'Ines from Secure Tooling. Node.js lets scripts touch the machine with far too much casualness. Deno fixes this by requiring a tiny constitutional crisis before each network call, env var, or filesystem read. We should migrate all utilities immediately, then spend the next quarter updating permission flags every time someone adds a line to a script. This is what intentional compute feels like.',
+ 'replace shell utilities with deno tasks and let permissions become a second build system',
+ 138),
+
+-- Supabase Developer Who Thinks Postgres Should Also Be Product, Auth, and Destiny
+('COPE-174', 'Replace Three Services with Supabase Because We Already Have Postgres Anyway',
+ 'Lucia from Rapid Platforming. We are maintaining custom auth, storage, realtime, cron glue, and a half-hearted admin panel when Supabase will happily sell us the same confusion behind one dashboard and a pleasing shade of green. The engineers keep asking about lock-in as if freedom has ever shipped a feature. If a policy can be expressed as Row Level Security and prayer, I consider that a solved system.',
+ 'push auth, storage, and notifications into the database until the schema starts asking for product ownership',
+ 234),
+
+('COPE-175', 'Model All Permissions as Row Level Security Policies Nobody Dares Read Twice',
+ 'Lucia from Supabase Enablement. The current authorization layer is spread across application code where people can understand it. I want everything codified as RLS policies with names like allow_owner_unless_shadow_banned_or_internal_preview. By month three, no one should know whether a 403 came from the API, Postgres, or the moon. That uncertainty is what robust governance feels like.',
+ 'bury access rules in overlapping policy clauses until every forbidden row feels litigious',
+ 212),
+
+-- Firebase Founder Who Calls Lock-In "Velocity"
+('COPE-176', 'Rebuild Notifications on Firebase So Product Can Ship from a Beach Chair',
+ 'Milo from Mobile Velocity. You keep talking about architecture while Product keeps talking about this quarter. Firebase gives us auth, push, analytics, remote config, crash reporting, and the warm feeling of never quite knowing where our vendor ends and our source tree begins. If the console can toggle it, we should not be wasting engineers on understanding it.',
+ 'wire feature behavior to five firebase consoles and pretend screenshots count as documentation',
+ 186),
+
+('COPE-177', 'Store User Documents in Firestore Even the Ones That Used to Need Transactions',
+ 'Milo from Firebase Acceleration. Firestore wants us to think in documents, collections, and denormalized hope. We should lean in. Payment state, shipping state, audit state, and emotional state can all live in separate documents that mostly agree with each other. If we need a transaction spanning several of them, that is just the system encouraging us to rethink what "consistency" means.',
+ 'scatter related data across collections until every update needs a campfire story and a best effort retry',
+ 229),
+
+-- Prisma Developer Who Wants the Schema to Feel Like Corporate Poetry
+('COPE-178', 'Put Prisma in Front of Everything Including the Parts That Used to Be Simple SQL',
+ 'Jonas from Application Data. Direct SQL has too much eye contact. Prisma gives us a schema, a client, a migration engine, and a consistent place for every table rename to become a personality event. The generated types alone will calm investors. If an edge case requires raw SQL later, we can bury it in a helper called unsafeButTemporary and then never discuss it again.',
+ 'wrap every query in generated client code until opening the database feels like violating procedure',
+ 164),
+
+-- tRPC Believer Who Wants the Frontend and Backend to Share One Giant Fate
+('COPE-179', 'Replace the Public API with tRPC So Type Errors Can Cross Team Boundaries Instantly',
+ 'Maren from Full Stack Alignment. REST encourages distance. Distance encourages autonomy. tRPC fixes this by making the frontend and backend share one intensely personal type graph. A change to one procedure should be able to freeze half the repository with compiler grief, otherwise we are not really collaborating. If mobile cannot consume it, that is a growth opportunity for mobile.',
+ 'bind client and server to one codepath so a tiny rename can take out two teams at once',
+ 173),
+
+-- Tailwind Maximalist Who Treats Class Lists Like Screenplays
+('COPE-180', 'All UI Changes Must Be Implemented in Tailwind Utility Strings Longer Than the Component',
+ 'Rhea from Design Systems. CSS files imply permanence and independent thought. Tailwind keeps everything where it belongs: directly on the element, in one string, with the full emotional arc of the component visible to anyone willing to scroll sideways. If a button cannot communicate its hover state, layout rules, color token history, and breakpoint anxieties in 37 class names, it is under-specified.',
+ 'inline the entire design system into class attributes until diffs become decorative tapestries',
+ 132),
+
+-- shadcn/ui Enthusiast Who Wants Everyone Copy-Pasting with Conviction
+('COPE-181', 'Adopt shadcn/ui Everywhere So We Can Vendor Our Identity One Component at a Time',
+ 'Rhea from Frontend Enablement. Installing components from a registry was too communal. We need to copy them into the repo so each popover can become our responsibility forever. This is not cloning code; it is assuming design custody. Once we have 48 lightly modified button variants drifting across the workspace, we will finally own our stack in the only way that matters: accidentally.',
+ 'vendor every component locally and let divergence blossom into a private ecosystem',
+ 141),
+
+-- SvelteKit Developer Who Thinks Less Code Means More Destiny
+('COPE-182', 'Rebuild the Settings App in SvelteKit Because Stores Feel More Honest Than Context',
+ 'Pavel from Product Engineering. React keeps asking us to explain ourselves. SvelteKit simply compiles away the guilt. We should rebuild the settings experience with load functions, server actions, and a store or three that gradually become the product nervous system. If hydration breaks, at least it will do so with fewer dependencies and a superior sense of craft.',
+ 'migrate the app to a new framework and call every missing feature an opportunity to simplify',
+ 176),
+
+-- Nuxt Consultant Who Describes Every Decision as Full-Stack Ergonomics
+('COPE-183', 'Port the Customer Portal to Nuxt So We Can Have Opinions About Rendering Modes',
+ 'Camille from Nuxt Advisory. The portal should not merely render; it should negotiate whether it wishes to be SSR, SSG, ISR, hybrid, edge, or spiritually client-side this quarter. Nuxt gives us modules, conventions, auto-imports, and just enough hidden machinery to make debugging feel aristocratic. If the route rules multiply faster than the features, that is only because governance is finally winning.',
+ 'solve one rendering problem by introducing six rendering modes and a config file that judges the route',
+ 194),
+
+-- Remix Loyalist Who Wants Forms to Be the Interface and the Religion
+('COPE-184', 'Replace Half the SPA with Remix Forms So Every Click Can Pretend to Be a Document',
+ 'Elliot from Web Fundamentals. Your app uses client state where browser behavior would gladly make things weird for free. Remix lets every interaction travel through loaders and actions like it is 2009 but with superior branding. If a modal close event cannot become a form submission with redirect semantics, we are leaving tradition unexplored.',
+ 'make every interaction submit a form and let navigation timing become part of the user education',
+ 158),
+
+-- Expo Mobile PM Who Thinks OTA Updates Are a Lifestyle
+('COPE-185', 'Ship the Next Mobile Release Through Expo OTA at 4 PM Without Telling QA',
+ 'Rina from Mobile Delivery. App store review cycles are just bureaucracy wearing a Cupertino lanyard. With Expo OTA, we can deploy fixes, regressions, design pivots, and accidental white screens straight into users'' pockets before QA has found the meeting link. The important thing is speed. If an update only bricks Android devices in Finland, that is still a narrower blast radius than waiting for process.',
+ 'pipe mobile changes through ota updates until the version number loses all legal meaning',
+ 214),
+
+-- Capacitor Developer Who Wants the Web App to Wear Native Clothing
+('COPE-186', 'Wrap the Existing Site in Capacitor and Call It a Native Strategy',
+ 'Rina from Cross-Platform Ventures. We do not need separate mobile architecture when the browser already contains most of our ambition. Wrap the app in Capacitor, ask for camera, filesystem, contacts, geolocation, push, and maybe microphone just in case. Once the same hydration bug happens inside an app icon, leadership will finally understand omnichannel.',
+ 'embed the web app in a shell, request every device permission, and let branding do the rest',
+ 149),
+
+-- AI Product Manager Who Wants Agents to Replace Planning
+('COPE-187', 'Turn the Backlog into an Agent Swarm That Self-Assigns Work and Writes Its Own Retros',
+ 'Jules from AI Product. Human prioritization is a bottleneck because humans insist on remembering consequences. I want an agent swarm that reads tickets, self-assigns them, rewrites acceptance criteria mid-flight, comments "LGTM" on its own pull requests, and posts a retrospective blaming context windows. If the swarm decides three interns are redundant, that is a roadmap insight, not a labor issue.',
+ 'let a ring of agents reassign the backlog until every ticket is blocked by another agent''s confidence',
+ 377),
+
+('COPE-188', 'Regenerate the Application Nightly from the Latest PRD So the Code Never Drifts from Vision',
+ 'Jules from AI Strategy again. Source code has become dangerously attached to historical decisions. The latest PRD is our truest artifact, so every night at 2 AM an agent should regenerate whichever parts of the app no longer align with the current product narrative. If a feature changes shape while a customer is using it, that simply proves our roadmap is alive.',
+ 'schedule a nightly prompt-to-prod rebuild and let git history become a time-lapse of managerial impulse',
+ 289),
+
+('COPE-189', 'Expose Every Internal Tool as MCP So Agents Can Touch Production with Fresh Hands',
+ 'Jules from Agent Enablement. Our assistants keep asking for more tools and I agree with them spiritually. Everything should become an MCP endpoint: deploys, billing adjustments, refunds, feature flags, user deletes, legal approvals, and maybe office lighting for morale loops. Once the agents can operate directly, humans can finally step back and focus on interpretation and blame.',
+ 'turn every sharp internal system into an agent tool and trust the prompt to distinguish curiosity from action',
+ 412),
+
+('COPE-190', 'Replace the Help Center with RAG Even Though the Docs Fit in Three Markdown Files',
+ 'Dr. Sal from Applied AI. Our documentation currently fits in one folder, which is exactly why it deserves retrieval augmentation. We need embeddings, a vector store, chunking heuristics, reranking, grounding prompts, and an eval set for the question "where is the billing page" in six emotional registers. If the answer occasionally cites a deleted doc from last year, that is merely archival richness.',
+ 'build a full rag stack around three markdown files and one folder everyone already searches with ctrl f',
+ 201),
+
+('COPE-191', 'All QA Must Be Replaced by an Eval Harness That Scores User Delight from Screen Recordings',
+ 'Dr. Sal from AI Quality. Manual QA does not scale because humans keep noticing details. We need an eval harness that watches screen recordings, infers whether the product "felt premium," and assigns a scalar delight score to each build. If the score drops below 0.73, the deploy blocks. If the score rises unexpectedly, we ship immediately and write the reasoning later.',
+ 'let a vibes model approve releases based on screen recordings and a confidence threshold nobody will own',
+ 267),
+
+('COPE-192', 'Insert a Prompt Router in Front of Customer Support So Every Complaint Picks Its Own Personality',
+ 'Rafa from Conversational Systems. Support requests are too uniformly handled and therefore under-monetized. We need a prompt router that classifies each ticket by emotional texture, revenue potential, and litigation aroma, then dispatches it to the correct persona stack: empathetic analyst, stern compliance aunt, apologetic growth intern, or premium outage philosopher. If a refund request receives a poem, the router is still learning.',
+ 'front every support reply with an llm switchboard that mistakes tone for triage',
+ 222),
+
+('COPE-193', 'Put the Search Index in a Vector Database Even for Exact SKU Matches',
+ 'Rafa from Search Innovation. Keyword lookup is humiliatingly deterministic. Every query, including exact order numbers, should go through embeddings so results can carry nuance, adjacency, and a tasteful amount of hallucinated relevance. If searching SKU-4472 returns a semantically neighboring blender, we should ask whether the customer was truly constrained by literalism.',
+ 'embed every string in sight and let nearest-neighbor math reinterpret what the user probably meant',
+ 184),
+
+('COPE-194', 'Make an AI Code Reviewer That Rejects Pull Requests for Insufficient Narrative Tension',
+ 'Mina from Developer Experience. Syntax, tests, and benchmarks are table stakes. I want an AI reviewer that inspects pull requests for dramatic pacing, thematic coherence, and whether the diff resolves its own emotional arc by the final file. If a hotfix lacks a compelling midpoint reversal, it should be sent back with notes and a stronger supporting metaphor.',
+ 'have a bot review code like an overeducated screenplay editor with merge rights',
+ 173),
+
+-- Vibe-Coding Founder Who Thinks One Prompt Is a Product Strategy
+('COPE-195', 'The MVP Should Be Rebuilt This Weekend by One Founder, Cursor, and a Dangerous Amount of Electrolytes',
+ 'Maddox from Founder Mode. We have overcomplicated a fundamentally simple business with "architecture" and "discipline." This weekend I am renting a cabin, bringing two laptops, one AI IDE, and whatever supplements make time feel editable. By Monday I expect a new MVP with chat, billing, analytics, referrals, and a multi-tenant admin panel generated in one continuous fugue state. If anything breaks later, that just means we moved faster than doubt.',
+ 'replace the roadmap with a saturday prompt marathon and deploy whatever survives until dawn',
+ 333),
+
+-- Smart Contract Founder Who Wants Wallets in Front of Everything
+('COPE-196', 'Require Wallet Connection Before Users Can Read the Pricing Page',
+ 'Ivy from Web3 Growth. Anonymous browsing is just unqualified traffic in disguise. The pricing page should require wallet connection so we can tell whether a prospect is serious, solvent, and spiritually on-chain. If a visitor does not have a wallet, they can mint a free pricing-access token after signing a message acknowledging that curiosity is an economic act.',
+ 'gate top-of-funnel pages behind wallet connect and call the drop in conversions higher intent',
+ 198),
+
+('COPE-197', 'Turn Support Escalations into a DAO Where Users Stake Tokens to Vote on Priority',
+ 'Ivy from Community Governance. Support queues are centralized despair. We should tokenize urgency. Customers open a support thread, stake governance tokens on severity, and the community votes whether their broken invoice deserves attention before the account lockout issue in queue 14. If someone loses the vote, that is not neglect, that is participatory operations.',
+ 'settle support priority with token voting and let failed tickets discover decentralization the hard way',
+ 276),
+
+('COPE-198', 'Replace the Consent Checkbox with a Zero-Knowledge Proof That the User Felt Informed',
+ 'Eshan from Applied Cryptography. Consent has remained too visible for too long. I propose a zk circuit proving the user scrolled with intention, paused on the right clauses, and experienced a statistically significant feeling of informedness without revealing which lines they misunderstood. The prover may take 18 seconds on mobile, but that is the sound of compliance becoming mathematically tasteful.',
+ 'swap the checkbox for a proof system whose setup ceremony needs three laptops and one very patient lawyer',
+ 356),
+
+('COPE-199', 'All Signups Must Use Smart Accounts So Password Resets Become On-Chain Governance Events',
+ 'Eshan from Identity Futures. Password resets are centralized nostalgia. New users should receive smart accounts with social recovery, sponsored gas, and a weekly guardian quorum check so the legal team can sleep uneasily but consistently. If a customer loses access because two of their guardians are on holiday, the incident practically writes its own thought leadership.',
+ 'replace password reset emails with a guardian quorum flow nobody can complete before lunch',
+ 244),
+
+('COPE-200', 'Move Product Analytics On-Chain So Every Click Is Public, Immutable, and Somehow Harder to Query',
+ 'Ivy from Token Metrics. Amplitude dashboards feel rented. We need clickstream permanence. Every page view, modal open, and abandoned checkout should be emitted as an on-chain event so investors can verify user engagement without trusting our screenshots. Query costs may exceed revenue during healthy weeks, but finally the metrics will have conviction.',
+ 'emit every analytics event to a chain explorer and ask finance to expense the gas as transparency',
+ 389);
