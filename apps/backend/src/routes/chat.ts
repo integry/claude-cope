@@ -206,6 +206,8 @@ function buildBrokenReplyFallback(content: string): string {
   ];
 }
 
+// This fallback intentionally handles a broad set of content patterns.
+// eslint-disable-next-line complexity
 function buildFallbackUserNextMessage(content: string): string {
   const text = content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
   const token =
@@ -1091,6 +1093,8 @@ async function preChatChecks(
 
 const chat = new Hono<Env>();
 
+// The route coordinates validation, routing, provider I/O, quota, and scoring in one request path.
+// eslint-disable-next-line complexity
 chat.post("/", async (c) => {
   const body = await c.req.json<ChatBody>();
 
@@ -1141,7 +1145,7 @@ chat.post("/", async (c) => {
     return c.json({ error: "OpenRouter request failed", details: errData }, orResponse.status as ContentfulStatusCode);
   }
 
-  let data = await orResponse.json() as ChatResponseData;
+  const data = await orResponse.json() as ChatResponseData;
 
   if (data.choices?.[0]?.message?.content) {
     data.choices[0].message.content = rewriteTutorialLeakIfNeeded(
