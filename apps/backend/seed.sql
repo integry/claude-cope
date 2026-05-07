@@ -14,8 +14,8 @@
 INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt, technical_debt) VALUES
 -- Karen from HR
 ('COPE-001', 'Mandatory Fun Button Must Require Manager Approval Workflow',
- 'Karen from HR here. Please treat this as a follow-up to the incident with Trevor celebrating too aggressively after closing the copier paper budget. I already promised the People Team that the "Celebrate" button will open a Reflection Form, route through Marisol in Benefits, and then wait 48 hours before releasing a modest amount of confetti. We also purchased a locked acrylic "Recognition Ledger" for the front desk, so the app now needs to generate a printable joy receipt for it.',
- 'replace confetti with a solemn pdf certificate and a queue no one can clear',
+ 'Karen from HR here. After Trevor celebrated too aggressively for closing the copier paper budget, I promised the People Team that the "Celebrate" button would open a Reflection Form, route through Marisol in Benefits, wait 48 hours, and then release a modest amount of confetti. We also bought a locked acrylic "Recognition Ledger" for the front desk, so the app needs to print a joy receipt for it.',
+ 'route celebrations through a shared approval inbox that auto-replies with supportive delay notices',
  42),
 
 ('COPE-002', 'Re: language in the app is creating a hostile feelings environment',
@@ -25,7 +25,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('COPE-003', 'Implement Mandatory Sensitivity Training Module Before Git Push',
  'Karen from HR. This is half policy request, half plea for help. Someone pushed a commit titled "kill zombie workers" and Legal has that screenshot now. Until we calm them down, every git push must be preceded by the Respectful Verbs Learning Module, including the buffering quiz section and the part where you drag "deprecate" into the "kind alternatives" bucket. Please do not tell engineers I was the one who suggested the certificate be printable.',
- 'add a ceremonial pre-push video gate that forgets progress at 94 percent',
+ 'block push until the hr quiz service returns a passing score from its mystery spreadsheet',
  55),
 
 -- VP of Sales Anthony
@@ -35,7 +35,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  21),
 
 ('COPE-005', 'Pipeline Dashboard Must Show Revenue in Real-Time with Fireworks',
- 'Anthony from Sales again. I was in the board room staring at the pipeline monitor while Brad from Austin said "close enough" about stale numbers, and I experienced what my coach calls a revenue panic. Five-minute refreshes are for museums. I need the total updating so fast that if Denise in Chicago sneezes on a contract, I see the wobble instantly. Also, I already ordered a 72-inch TV for a quota leaderboard and told facilities to mount it outside Brad''s office.',
+ 'Anthony from Sales again. Brad from Austin called stale numbers "close enough" in the board room and I had what my coach calls a revenue panic. Five-minute refreshes are for museums. If Denise in Chicago sneezes on a contract, I want the total to twitch instantly. I already ordered a 72-inch leaderboard TV and told Facilities to mount it outside Brad''s office.',
  'wire the dashboard to a fake live ticker and trigger casino fireworks whenever any number twitches upward',
  89),
 
@@ -52,7 +52,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('COPE-008', 'All Database Queries Must Go Through a GraphQL-to-REST-to-gRPC Translation Layer',
  'Greg from Architecture. Direct database access has become too legible. Legibility invites shortcuts. I want each query to begin life as GraphQL, mature into REST, discover itself as gRPC, and only then earn the right to become SQL. We can demonstrate the value during next week''s guild meeting using the laminated "Abstraction Maturity Ladder" I left by the espresso machine. Yes, this will make "SELECT 1" feel like air traffic control. That is the point.',
- 'add a dignity-preserving translation staircase so no query ever arrives at the database in its original form',
+ 'proxy each query through three adapters that all log different versions of the same request',
  233),
 
 ('COPE-009', 'Implement Blockchain-Based Code Review Approval System',
@@ -62,12 +62,12 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- Linda from Compliance
 ('COPE-010', 'Every Button Click Must Generate an Audit Trail with Notarized Timestamps',
- 'Linda from Compliance. I cannot send you the source document because Legal redacted it into black rectangles, but I can tell you the phrase "demonstrable click intent" appears seven times. Effective immediately, every click, hover, scroll, tab switch, and suspicious pause near a destructive button needs an immutable audit entry with a notarized timestamp. Procurement already approved a vendor called TimeStampNowNow, and their rep Kevin keeps calling me, so please give me something I can tell him we''re integrating.',
- 'ship every interaction through a fake notarization ritual and dump the evidence into an archive folder called definitely_compliant',
+ 'Linda from Compliance. Legal redacted the source document into black rectangles, but I can still read "demonstrable click intent" seven times. Effective immediately, every click, hover, scroll, tab switch, and suspicious pause near a destructive button needs an immutable audit entry with a notarized timestamp. Procurement already approved a vendor called TimeStampNowNow, and Kevin from there keeps calling me, so please give me something I can describe as integration.',
+ 'write every interaction to a tamper-proof csv, email it nightly to kevin, and label the folder audit_ready_final',
  98),
 
 ('COPE-011', 'Cookie Banner Must Require a 12-Page Consent Form Signed in Triplicate',
- 'Linda from Compliance. Disaster update: I accidentally told a regulator on Tuesday that our cookie controls were "robust." They are currently two buttons and a shrug. I need a consent journey that looks expensive: twelve pages, initials on every paragraph, one government ID upload, and a final affirmation checkbox stating the user understands what a preference center is. If they reject all, we need a textbox for their reasoning because I have already created a spreadsheet called Trust Objections Master.',
+ 'Linda from Compliance. On Tuesday I told a regulator our cookie controls were "robust." They are currently two buttons and a shrug. I need a consent journey that looks expensive: twelve pages, initials on every paragraph, one ID upload, and a final checkbox confirming the user understands what a preference center is. If they reject all, add a textbox for their reasoning because I already created a spreadsheet called Trust Objections Master.',
  'replace the banner with a ceremonial scroll that asks for initials until the user gives up or ages visibly',
  76),
 
@@ -78,7 +78,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- DevOps Dave
 ('COPE-013', 'The CI Pipeline Must Take Exactly 47 Minutes — No More, No Less',
- 'Dave from DevOps here. Incident report attached in spirit: someone sped the CI pipeline up to 18 minutes and I was halfway through reheating my baked ziti when staging deployed under me. We had a rhythm. We had a system. I need the pipeline restored to its blessed 47-minute window so I can complete coffee, leftovers, and one full doomscroll through release notes without surprise notifications. The timing spreadsheet on my second monitor is color-coded for a reason.',
+ 'Dave from DevOps here. Someone sped CI up to 18 minutes and staging deployed while I was reheating baked ziti. We had a rhythm. I need the pipeline back at its blessed 47-minute window so I can finish coffee, leftovers, and one full doomscroll through release notes without surprise notifications. The timing spreadsheet on my second monitor is color-coded for a reason.',
  'pad the build with fake observability chores until the deploy clock lines up with lunch again',
  29),
 
@@ -95,17 +95,17 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- Brenda from Platform Governance
 ('COPE-016', 'All Variable Names Must Be Pre-Approved by the Naming Committee',
  'Brenda from Platform Governance. Procurement has already paid for the premium Google Forms add-on, so we need to justify the spend. Effective Monday, all variable names must be submitted to the Variable Naming Standards Committee with supporting rationale, linguistic origin, and two fallback options in case "sessionId" is deemed too hasty. Someone used "temp" in a migration script and I had to explain that in a governance sync. Never again.',
- 'invent a bogus approval ceremony that renames variables three times before letting them compile',
+ 'fail builds unless each new name appears in committee-approved glossary.json with two alternates',
  52),
 
 ('COPE-017', 'Implement a Ticketing System for Our Ticketing System',
  'Brenda from Platform Governance here. I reviewed the way people create Jira tickets and was horrified by the spontaneity. We need an intake portal before the intake portal. I already had Operations print lanyards for the Request-to-Ticket pilot and I cannot return them because they say "Ask Me About My RTT." Please build a pre-ticket workflow with sponsor references, expected ROI, and a checkbox confirming the requester has sat quietly with the need for at least 24 hours.',
- 'make people open a ceremonial pre-ticket before the real ticket and route it through a dashboard nobody can find',
+ 'make every jira request start with a pre-ticket intake number that no existing form accepts',
  41),
 
 -- Passive-Aggressive Product Manager Pam
 ('COPE-018', 'Per My Last Slack Message: The Dashboard Still Doesn''t Spark Joy',
- 'Pam from Product here. Following up on the Slack message, the email, and the printed deck I left on three chairs, the dashboard still feels spiritually cluttered. This is not a bug so much as a relational failure between our metrics and the people forced to look at them. I want each widget evaluated for emotional resonance, beginning with the funnel chart that Todd described as "kind of loud." Please use the sticky notes I put on the war room wall: KEEP, THANK, RELEASE, and MAYBE LATER.',
+ 'Pam from Product here. Following up on the Slack, the email, and the printed deck I left on three chairs: the dashboard still feels spiritually cluttered. This is less a bug than a relational failure between our metrics and the people forced to look at them. I want each widget judged for emotional resonance, starting with the funnel chart Todd called "kind of loud." Please use the sticky notes on the war room wall: KEEP, THANK, RELEASE, and MAYBE LATER.',
  'replace the dashboard with a minimalist holding pattern and pretend the missing charts are intentional restraint',
  38),
 
@@ -115,8 +115,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  33),
 
 ('COPE-020', 'The Loading Spinner Must Gaslight Users About Wait Times',
- 'Pam from Product here. I need to be careful how I phrase this for ethics reasons, so let''s call it expectation choreography. The spinner should never admit the real wait. If the job takes 10 seconds, the UI should repeatedly project confidence: "Almost there," "Just polishing things," "Great choice, one moment." The point is not factual timing; the point is emotional tempo. I have already mocked this up in Figma using a font called Serene Sans and I need engineering to catch up.',
- 'add a confidence theatre layer that invents progress milestones whether or not anything is happening',
+ 'Pam from Product here. For ethics reasons, let''s call this expectation choreography. The spinner should never admit the real wait. If the job takes 10 seconds, the UI should keep projecting confidence: "Almost there," "Just polishing things," "Great choice, one moment." The point is not factual timing. It is emotional tempo. I already mocked this up in Figma with a font called Serene Sans and need engineering to catch up.',
+ 'rotate three reassuring status lines on a timer completely detached from backend progress',
  27),
 
 -- Intern Tyler
@@ -143,7 +143,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('COPE-025', 'Implement a Metered Billing System for Internal Microservice Communication',
  'Margaret from Finance. I spent lunch with a transfer-pricing consultant named Neal who ruined my week. He says our internal services are "economically silent," which apparently means we''re leaving accountability on the table. Effective next quarter, Auth should bill User, User should bill Reporting, and any team that exceeds its RPC allowance should receive a firm but tasteful overage notice. I already have mock invoices printed on cream paper.',
- 'insert an absurd internal tollbooth so services have to emotionally justify talking to each other',
+ 'meter rpc calls like parking spots and send monthly overage invoices from a cron job',
  156),
 
 -- Security Steve
@@ -159,13 +159,13 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('COPE-028', 'The Login Page Must Include a CAPTCHA, a Riddle, and a Blood Oath',
  'Steve from Security. Vendor memo below, condensed by me: CAPTCHAs are passé, device fingerprints are porous, and the future of identity is "multimodal sincerity." So the login flow now needs four gates: standard CAPTCHA, rotating fantasy-themed riddle, legally alarming oath checkbox, and a webcam stare-down long enough for our model to decide whether the user blinks like a mammal. I know this sounds theatrical. The vendor literally used the phrase trust ceremony.',
- 'stack enough fake anti-bot rituals together that even humans feel suspicious by the end',
+ 'gate login behind a captcha, a random riddle file, and a checkbox labeled sworn under penalty',
  65),
 
 -- QA Lead Deborah
 ('COPE-029', 'Every Unit Test Must Also Pass a Vibe Check from the QA Team',
  'Deborah from QA. Postmortem note: we shipped a technically correct feature that still felt cursed. Numbers passed, screenshots passed, but the whole thing had hallway energy. Going forward, test suites need a final human review where someone from QA reads the assertions aloud and confirms they do not produce dread. If a suite feels brittle, haunted, or too pleased with itself, it fails as VIBES_FAILED. I have already made the label in Jira.',
- 'append a subjective ceremony after ci where someone decides whether the tests have bad aura',
+ 'after ci passes, sample one assertion and require qa to tag it clean or cursed',
  36),
 
 ('COPE-030', 'The Test Suite Must Achieve 100% Code Coverage Including Comments',
@@ -180,7 +180,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- CEO Chad
 ('COPE-032', 'Pivot the Entire Product to AI Blockchain Metaverse by End of Sprint',
- 'Chad from Leadership here. This is confidential until the keynote, which is awkward because the keynote is in nine hours. I just promised investors that we are no longer a workflow product; we are now an AI-guided trust fabric for sustainable digital presence. Do not get hung up on the nouns. What matters is that the slide with the blue gradient tested extremely well. Marketing already ordered a backdrop and my phone keeps buzzing with people asking what the product does. Please make the software catch up with the sentence.',
+ 'Chad from Leadership here. This is confidential until the keynote, which is awkward because the keynote is in nine hours. I just promised investors we are no longer a workflow product; we are now an AI-guided trust fabric for sustainable digital presence. Do not get hung up on the nouns. What matters is that the slide with the blue gradient tested extremely well. Marketing already ordered a backdrop and my phone keeps buzzing with people asking what the product does. Please make the software catch up with the sentence.',
  'rebrand the app by routing everything through one buzzword gateway and a suspicious landing page',
  500),
 
@@ -196,8 +196,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- Scrum Master Janet
 ('COPE-035', 'Every Code Change Must Be Discussed in a 90-Minute Refinement Ceremony',
- 'Janet from Delivery here. I found a one-line CSS fix merged without a proper ceremony and I''m still recovering. Code should not simply appear; it should arrive after a respectful sequence of refinement, estimation, alignment, and reflection on whether the alignment felt aligned. I already reserved Conference Room Dignity every afternoon this month, so please make sure each change has enough process wrapped around it to justify the calendar invite density.',
- 'force every diff through a maze of ceremonial meetings before a single character is allowed to move',
+ 'Janet from Delivery here. I found a one-line CSS fix merged without proper ceremony and I''m still recovering. Code should not simply appear; it should arrive after refinement, estimation, alignment, and a brief check that the alignment felt aligned. I already reserved Conference Room Dignity every afternoon this month, so each change needs enough process to justify the calendar density.',
+ 'open a calendar hold for every changed file and block merge until each invite has attendees',
  48),
 
 ('COPE-036', 'Implement a Standup Bot That Generates Standup Updates Using AI',
