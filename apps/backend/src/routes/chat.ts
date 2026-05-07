@@ -254,10 +254,12 @@ function normalizeComparableUserNextMessage(text: string | null | undefined): st
     .replace(/\s+/g, " ");
 }
 
-function buildAlternateUserNextMessage(content: string, previous: string | null | undefined): string {
-  const previousNormalized = normalizeComparableUserNextMessage(previous);
-  const text = content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
-  const token =
+function sanitizeUserNextMessageContent(content: string): string {
+  return content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function extractUserNextMessageToken(text: string): string | null {
+  return (
     text.match(/`([^`]{2,40})`/)?.[1]
     ?? text.match(/\b0x[0-9A-Fa-f]+\b/)?.[0]
     ?? text.match(/\boffset\s+\d+\b/i)?.[0]
@@ -267,61 +269,91 @@ function buildAlternateUserNextMessage(content: string, previous: string | null 
     ?? text.match(/\bConfigMap\b/)?.[0]
     ?? text.match(/\bKubernetes\s+\d+(?:\.\d+)?\b/i)?.[0]
     ?? text.match(/\bmagic(?:=true)?\b/i)?.[0]
-    ?? text.match(/\b[a-z]+-[a-z0-9_.-]{3,}\b/i)?.[0];
+    ?? text.match(/\b[a-z]+-[a-z0-9_.-]{3,}\b/i)?.[0]
+    ?? null
+  );
+}
 
+function buildTokenUserNextMessageCandidates(token: string): string[] {
+  if (/^0x/i.test(token)) {
+    return [
+      `Why ${token} of all things?`,
+      `What is ${token} doing there?`,
+      `Is ${token} the bad part?`,
+    ];
+  }
+
+  if (/^offset\s+\d+/i.test(token)) {
+    return [
+      `Who cursed ${token}?`,
+      `Why is ${token} involved?`,
+      `What is ${token} doing there?`,
+    ];
+  }
+
+  if (/^restartPolicy$/i.test(token)) {
+    return [
+      "Who chose restartPolicy Never?",
+      "Why is restartPolicy involved?",
+      "Is restartPolicy the bad part?",
+    ];
+  }
+
+  if (/orphaned pods?/i.test(token)) {
+    return [
+      "Which pod got orphaned?",
+      "Why are orphaned pods involved?",
+      "What are the orphaned pods doing there?",
+    ];
+  }
+
+  if (/legacy code/i.test(token)) {
+    return [
+      "Is the legacy file the bad one?",
+      "Why is legacy code involved?",
+      "What is the legacy file doing there?",
+    ];
+  }
+
+  if (/^magic(?:=true)?$/i.test(token)) {
+    return [
+      "Who enabled the magic flag?",
+      "Why is magic=True involved?",
+      "Is the magic flag the bad part?",
+    ];
+  }
+
+  if (/^[a-z]+-[a-z0-9_.-]{3,}$/i.test(token)) {
+    return [
+      `Is ${token} the cursed bit?`,
+      `Why is ${token} involved?`,
+      `What is ${token} doing there?`,
+    ];
+  }
+
+  return [
+    `Why is ${token} involved?`,
+    `What is ${token} doing there?`,
+    `Is ${token} the bad part?`,
+    `Who dragged in ${token}?`,
+  ];
+}
+
+function buildRotatingUserNextMessageFallbacks(text: string): string[] {
+  const offset = hashTextForFallback(text);
+  return Array.from({ length: UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length }, (_, index) =>
+    UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
+      (offset + index) % UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length
+    ]);
+}
+
+function buildAlternateUserNextMessage(content: string, previous: string | null | undefined): string {
+  const previousNormalized = normalizeComparableUserNextMessage(previous);
+  const text = sanitizeUserNextMessageContent(content);
+  const token = extractUserNextMessageToken(text);
   const candidates = token
-    ? /^0x/i.test(token)
-      ? [
-          `Why ${token} of all things?`,
-          `What is ${token} doing there?`,
-          `Is ${token} the bad part?`,
-        ]
-      : /^offset\s+\d+/i.test(token)
-        ? [
-            `Who cursed ${token}?`,
-            `Why is ${token} involved?`,
-            `What is ${token} doing there?`,
-          ]
-        : /^restartPolicy$/i.test(token)
-          ? [
-              "Who chose restartPolicy Never?",
-              "Why is restartPolicy involved?",
-              "Is restartPolicy the bad part?",
-            ]
-          : /orphaned pods?/i.test(token)
-            ? [
-                "Which pod got orphaned?",
-                "Why are orphaned pods involved?",
-                "What are the orphaned pods doing there?",
-              ]
-            : /legacy code/i.test(token)
-              ? [
-                  "Is the legacy file the bad one?",
-                  "Why is legacy code involved?",
-                  "What is the legacy file doing there?",
-                ]
-              : /^magic(?:=true)?$/i.test(token)
-                ? [
-                    "Who enabled the magic flag?",
-                    "Why is magic=True involved?",
-                    "Is the magic flag the bad part?",
-                  ]
-                : /^[a-z]+-[a-z0-9_.-]{3,}$/i.test(token)
-                  ? [
-                      `Is ${token} the cursed bit?`,
-                      `Why is ${token} involved?`,
-                      `What is ${token} doing there?`,
-                    ]
-                  : [
-                      `Why is ${token} involved?`,
-                      `What is ${token} doing there?`,
-                      `Is ${token} the bad part?`,
-                      `Who dragged in ${token}?`,
-                    ]
-    : Array.from({ length: UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length }, (_, offset) =>
-        UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
-          (hashTextForFallback(text) + offset) % UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length
-        ]);
+    ? buildTokenUserNextMessageCandidates(token)
+    : buildRotatingUserNextMessageFallbacks(text);
 
   return candidates.find((candidate) => normalizeComparableUserNextMessage(candidate) !== previousNormalized)
     ?? buildFallbackUserNextMessage(content);
