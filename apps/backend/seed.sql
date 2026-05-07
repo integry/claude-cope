@@ -56,8 +56,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  233),
 
 ('COPE-009', 'Implement Blockchain-Based Code Review Approval System',
- 'Greg here. Our current PR approval process (clicking "Approve" on GitHub) lacks cryptographic integrity. I propose we mint each approval as an NFT on a private Ethereum sidechain. Reviewers stake 0.01 ETH per approval to ensure accountability. If the PR causes a production incident, their stake is slashed. I''ve already written the whitepaper.',
- 'store all git commits on ethereum mainnet for immutability',
+ 'Greg from Architecture. I was unable to convince the steering group that code review is a supply chain, so I built a deck called "Approval Provenance in the Age of Distrust." Every thumbs-up now needs a wallet signature, a block explorer link, and a ceremonial hash reading during the release meeting. Finance has already asked whether rejected PRs can be treated as burned assets, which tells me the idea has legs.',
+ 'require every approval to produce a wallet receipt, a chain id, and a pasteable transaction hash for the release notes',
  377),
 
 -- Linda from Compliance
@@ -72,8 +72,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  76),
 
 ('COPE-012', 'Implement Data Retention Policy That Deletes Everything After 30 Seconds',
- 'Linda from Compliance again. Please read this as a legal warning wrapped around a panic attack. I misread a retention memo and may have promised the executive team that our new privacy posture is "radical impermanence." Until someone corrects me, all user data now needs to vanish after 30 seconds. Orders, sessions, support messages, all of it. If customers complain, Product can point them to the Privacy Commitment Statement draft on my desktop, assuming I find the right version.',
- 'build a cursed forgetting machine that races the user to delete their own data first',
+ 'Linda from Compliance again. I told the privacy council we were piloting "ephemeral stewardship" and unfortunately nobody challenged me. Effective immediately, every record should self-destruct before discovery requests, customer confusion, or ordinary continuity can attach to it. I have already named the folder in SharePoint Records Sunset Wave 1, so please make the application behave like a mayfly before someone asks what I meant.',
+ 'stamp each row with an expiration siren and let a janitor job shred anything old enough to remember itself',
  61),
 
 -- DevOps Dave
@@ -83,13 +83,13 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  29),
 
 ('COPE-014', 'All Production Deployments Must Happen at 4:59 PM on Fridays',
- 'Dave from DevOps. Status update from hell: leadership keeps asking why releases feel "casual." Casual is the enemy of rigor. The optimal deployment window remains 4:59 PM on Fridays because everyone is alert, bargaining with fate, and too close to freedom to ignore a checklist. If something breaks, that is not failure, that is immersion learning. I have already re-labeled the PagerDuty schedule as Weekend Character Builder.',
- 'queue every release for the worst possible minute and call the rollback plan experiential training',
+ 'Dave from DevOps. Leadership saw one midweek deploy go smoothly and drew the wrong lesson. Smoothness breeds complacency. I need production changes released at 4:59 PM on Fridays when the team is spiritually aerodynamic and the blast radius can fully express itself before Monday. I already printed a laminated launch checklist titled Weekend Confidence Drill and left dry-erase markers by the war room TV.',
+ 'make the deploy button refuse to arm itself until the office starts packing up and someone says let''s just ship it',
  44),
 
 ('COPE-015', 'Replace All Monitoring with a Single Bash Script Named "vibes.sh"',
- 'DevOps Dave. Our monitoring stack (Datadog, PagerDuty, Grafana, Sentry) costs $47K/month. I wrote a bash script that curls the homepage every 5 minutes and prints "vibes are good" or "vibes are bad." It''s been running on my laptop for 3 weeks and caught 60% of incidents (the ones that happened while my laptop was open). Proposing we go all-in.',
- 'just curl localhost once and if it works monitoring is done',
+ 'DevOps Dave. Finance wants observability savings and I have a lean proposal. My script, vibes.sh, curls the homepage, checks whether the HTML still contains the word "Welcome," and logs either "green aura" or "concerning aura" to a text file on my desktop. The file is called definitive_health_signal.log, which should tell everyone this is not a prototype. If we standardize on my laptop staying awake, I think we can retire half the tooling this quarter.',
+ 'pipe one homepage curl into a mood label and treat the resulting text file as the source of operational truth',
  18),
 
 -- Brenda from Platform Governance
@@ -110,8 +110,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  38),
 
 ('COPE-019', 'Rename "Delete" to "Archive" to "Soft Archive" to "Intention to Maybe Remove Later"',
- 'Pam from Product. Yesterday a customer wrote "wow, delete really means delete" in a tone I can only describe as betrayed. I need the language softened until nothing in the interface sounds committed to an outcome. Proposed sequence: Delete, Archive, Soft Archive, Deferred Separation, and finally Intention to Maybe Remove Later. Also, the color should be less "blood red" and more "expensive candle." Design has already ordered paint swatches.',
- 'turn deletion into a five-step wellness journey with reversible states and no obvious ending',
+ 'Pam from Product. A customer used the phrase "emotionally ambushed by the trash icon" and now I can''t unhear it. Nothing in the product should sound like it has agency over another adult''s data. Please replace hard verbs with a gentler sequence that suggests possibility, reflection, and a tasteful pause. Design is preparing a tone board with headings like RELEASE, LOOSEN, and LET GO, so the product copy needs to meet that level of care.',
+ 'route destructive actions through a ladder of softer labels until nobody can prove which click actually removed the thing',
  33),
 
 ('COPE-020', 'The Loading Spinner Must Gaslight Users About Wait Times',
@@ -126,8 +126,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  610),
 
 ('COPE-022', 'Replace the Database with a JSON File I Keep on My Desktop',
- 'Tyler the intern again. I noticed PostgreSQL has like 400 config options and that seems like a lot of attack surface. I''ve been prototyping an alternative where we store all user data in a file called data.json on my Desktop. It''s really fast (my laptop has an SSD) and I''ve already implemented full-text search using ctrl+F. Requesting 2 story points.',
- 'store the database in a google sheets document',
+ 'Tyler the intern again. I think I found a simpler persistence layer and it''s my Desktop. PostgreSQL keeps asking for backups and replication and ownership, whereas my file called real-data-final-v2.json just sits there and cooperates. I even pinned it in Finder so it is basically highly available. Search works with ctrl+F, edits work with any text editor, and if something goes wrong I can duplicate the file and append "copy" which feels a lot like disaster recovery.',
+ 'treat one giant desktop json file as the primary datastore and rely on duplicate-file naming for backups',
  89),
 
 ('COPE-023', 'I Accidentally Deleted the Production Database and Need Help Undeleting It',
@@ -137,8 +137,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- CFO Margaret
 ('COPE-024', 'All API Calls Must Include a Cost Center Code and Purchase Order Number',
- 'Margaret from Finance. Procurement mistake on my side: I accidentally told the CFO roundtable that our API traffic is "fully attributable at the request level." It is not. To preserve my credibility, every HTTP call now needs X-Cost-Center, X-Purchase-Order, and X-Budget-Approval-Chain so I can reconcile cloud spend against the 2009 spreadsheet named FINAL_v6_REAL.xlsx. If a request arrives without paperwork, reject it and generate something invoice-shaped.',
- 'bolt fake accounting headers onto every request and bounce the ones that fail the vibe audit',
+ 'Margaret from Finance. Small disclosure: during the budget review I described our API layer as "chargeback ready." That phrase has now escaped containment. Every request needs enough finance metadata to survive a stern glance from Accounts Payable: cost center, purchase order, approver initials, and maybe a project code if the caller feels premium. I already opened a workbook tab called Request Provenance, so please make the packets look billable before someone asks for a demo.',
+ 'reject any request that arrives without enough accounting headers to satisfy a month-end reconciliation ritual',
  73),
 
 ('COPE-025', 'Implement a Metered Billing System for Internal Microservice Communication',
@@ -153,8 +153,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  88),
 
 ('COPE-027', 'Encrypt All Console.log Statements in Case Hackers Read Our Logs',
- 'Steve from Security here. Please do not laugh, but during a pen test I saw the phrase "user logged in" sitting in a log file in plain English and briefly left my body. If attackers ever read that, they could infer we have users. Encrypt all logs, including harmless ones, with something impressive enough that auditors stop asking follow-up questions. Yes, debugging becomes guesswork. Guesswork is safer than clarity.',
- 'wrap every log line in unreadable crypto theatre and call the resulting silence zero trust',
+ 'Steve from Security here. During a vendor walkthrough I noticed our logs contain nouns, verbs, and enough basic narrative structure to help an attacker form opinions. Unacceptable. Going forward, every log line should resemble a diplomatic cable intercepted in a snowstorm. The SOC can keep the decryption key on a smart card in the red drawer by the printer, assuming we remember which printer. Clarity is how adversaries make friends.',
+ 'replace human-readable logs with sealed blobs and give the only decrypt script a filename nobody would ever guess twice',
  47),
 
 ('COPE-028', 'The Login Page Must Include a CAPTCHA, a Riddle, and a Blood Oath',
@@ -169,8 +169,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  36),
 
 ('COPE-030', 'The Test Suite Must Achieve 100% Code Coverage Including Comments',
- 'Deborah from QA here. I reviewed our 94% coverage report and, frankly, 94 is how you end up with mystery behavior in production and a cold feeling in your rib cage. I want 100%, including comments, headings, and any line that implies intent. If a comment says "temporary workaround," I expect a test proving it is both temporary and a workaround. I am aware that comments do not execute today. Please correct that gap in spirit if not in physics.',
- 'stuff the coverage report with comment checks and unreachable branch receipts until it prints a clean 100.0',
+ 'Deborah from QA here. I printed the coverage report, circled the missing six percent in red pen, and passed it around the bug triage like evidence. We are not done until the report stops implying there are dark corners in this codebase. If a comment says "temporary," I want a test proving the workaround knows how ashamed it should feel. If a heading implies architecture, I want a receipt. The current dashboard should look less like engineering and more like a notarized confession.',
+ 'pad coverage with synthetic checks, placeholder probes, and enough report cosmetics to make the final number round up to moral certainty',
  112),
 
 ('COPE-031', 'All Bug Reports Must Include a Haiku Describing the Emotional Impact',
@@ -185,8 +185,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  500),
 
 ('COPE-033', 'The App Must Work on My Specific Phone Which I Dropped in a Hot Tub',
- 'Chad, CEO. The app crashes on my phone. Before you ask — yes, it''s the phone I dropped in the hot tub at the board retreat. The screen has a crack and the bottom third doesn''t register touches. But that''s MY phone, and if it doesn''t work for ME, it doesn''t work for our CUSTOMERS. I need a hotfix by EOD. I''m the CEO so this is automatically P0.',
- 'add try catch around the entire app should fix all crashes',
+ 'Chad, CEO. My personal device remains the clearest proxy for the market, even though it spent part of last weekend under chlorinated water beside three board members and a tray of sliders. The screen is fractured, brightness changes on its own, and one corner only responds if I press with a hotel pen. None of that matters. If the app cannot flourish on my damaged phone, we are failing premium users who also lead adventurous lives. Please tune the experience around this hardware truth today.',
+ 'special-case the ceo''s half-drowned phone so taps near the cracked corner count as strategic intent',
  31),
 
 ('COPE-034', 'Make the Logo Bigger and Also Smaller at the Same Time',
@@ -201,8 +201,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  48),
 
 ('COPE-036', 'Implement a Standup Bot That Generates Standup Updates Using AI',
- 'Janet here. Engineers keep saying "same as yesterday" in standup. This is NOT in the spirit of the Daily Scrum. I''m proposing an AI bot that generates dramatic, detailed standup updates for each engineer based on their git commits. Example: "Tyler bravely battled a NullPointerException across 3 files, emerging victorious but spiritually changed."',
- 'copy paste same as yesterday to all standups forever',
+ 'Janet here. Verbal minimalism has infected standup and I will not let the ritual collapse into shrugging. I want a bot that reads commits, ticket moves, and Slack apologies, then drafts updates with enough narrative momentum to justify why we all opened Zoom. If an engineer changed one semicolon, the bot should still find the arc. I need progress reports that sound like people crossed terrain, not just rebased a branch.',
+ 'generate heroic standup prose from tiny git diffs so no one ever says same as yesterday with a straight face again',
  25),
 
 ('COPE-037', 'The Sprint Must Have a Theme Song That Plays During Deployments',
@@ -217,8 +217,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  340),
 
 ('COPE-039', 'Organizational Restructure: Every Engineer Reports to a Different PM',
- 'Raj, management consultant. Your current team structure (engineers working together) is suboptimal. Each engineer should report to a separate Product Manager, who reports to a separate Director, who reports to a separate VP. Communication between engineers must go through their respective management chains. Expected improvement: 40% more alignment meetings.',
- 'assign all tickets to a single intern and call it agile',
+ 'Raj, management consultant. We completed a listening tour and identified a dangerous amount of direct engineer-to-engineer understanding. That level of lateral efficiency is suppressing stakeholder surface area. My proposal is elegantly simple: every engineer gets a dedicated PM interface, each PM ladders upward through its own managerial reed bed, and any cross-team clarification must travel by memo so accountability leaves footprints. The org chart will look like a transit map, which boards tend to respect.',
+ 'force technical questions to travel up and down separate management ladders until the answer arrives suitably premium',
  210),
 
 -- Backend Bob
@@ -228,8 +228,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  57),
 
 ('COPE-041', 'All Endpoints Must Accept Both JSON and Microsoft Excel Spreadsheets',
- 'Backend Bob. The sales team keeps sending us feature requirements as Excel spreadsheets. Instead of converting them to JSON, I propose our API accept .xlsx files directly. We''ll parse them server-side and hope for the best. If a cell contains a formula, we evaluate it. What could go wrong? Bonus: we can finally accept pivot tables as query parameters.',
- 'accept any file type and eval it as javascript',
+ 'Backend Bob. The sales team is already living in spreadsheets, so insisting on JSON is basically anti-revenue. Let''s meet the business where it is. Every endpoint should accept either proper JSON or an Excel workbook with tabs named things like FINAL, FINAL_FINAL, and use-this-one. If a workbook includes formulas, we should honor the author''s intent and execute them. We can call it flexible ingestion and finally stop pretending cell merges are not a domain language.',
+ 'teach the api to treat uploaded workbooks as structured truth and hope the formula columns are feeling cooperative',
  83),
 
 -- UX Designer Zoe
@@ -239,8 +239,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  167),
 
 ('COPE-043', 'All Buttons Must Have a 3-Second Hover Animation Before They Become Clickable',
- 'Zoe, UX. Users are clicking buttons too quickly without appreciating the design. New requirement: every button requires a 3-second hover before it becomes active. During the hover, the button slowly "blooms" like a flower opening. If the user moves their cursor away before 3 seconds, the bloom resets. This teaches patience and mindfulness. I call it "Intentional Interaction Design."',
- 'add sleep 3000 before every button onclick handler',
+ 'Zoe, UX. Our usability study revealed that users keep activating buttons before they have properly metabolized the visual language. That is not efficiency, that is grazing. I want every primary action to spend three full seconds unfolding itself like a tiny stage performance before it agrees to be clicked. If the pointer leaves early, the moment was not earned and the bloom should begin again. We are designing for anticipation, not impulse.',
+ 'make every clickable control complete a visible little patience ritual before the browser agrees the user meant it',
  29),
 
 ('COPE-044', 'Replace All Text with Emojis Because "Gen Z Doesn''t Read"',
@@ -250,8 +250,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- Legal Larry
 ('COPE-045', 'Every Feature Must Have Its Own Terms of Service',
- 'Larry from Legal. I''ve discovered that our Terms of Service cover the app "as a whole" but NOT individual features. This is a liability gap. Each button, dropdown, and text input needs its own mini-ToS that users must accept before interaction. The search bar alone requires a 3-page Data Processing Addendum. Estimated legal review time: 6 months per feature.',
- 'just remove the terms of service page entirely',
+ 'Larry from Legal. We have made a classic mistake by governing the product generally instead of specifically. If a user presses Search, we should not rely on the same legal instrument that covers CSV export or profile photo upload. Each feature deserves its own moment of informed hesitation. I have already started a folder of micro-agreements and the search bar alone is showing real doctrinal potential. Please turn interaction into a sequence of narrowly scoped consents before my department learns how broad the current language is.',
+ 'interrupt each feature with its own tiny waiver and keep stacking them until usage starts looking legally mature',
  190),
 
 ('COPE-046', 'The "Share" Button Must Include a 47-Page Liability Waiver',
@@ -272,8 +272,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- IT Support Mike
 ('COPE-049', 'All Bug Reports Must First Be Resolved by Turning It Off and On Again',
- 'Mike from IT. 73% of bugs can be fixed by refreshing the page. New policy: before any bug ticket enters the engineering backlog, the reporter must: 1) Clear their cache, 2) Restart their browser, 3) Restart their computer, 4) Unplug their router for 30 seconds, 5) Try a different browser, 6) Try a different computer, 7) Reconsider whether it''s actually a bug or a feature.',
- 'auto restart the users computer when they file a bug',
+ 'Mike from IT. Engineering keeps receiving bug reports that have not yet been exposed to enough folk wisdom. Before a ticket reaches the backlog, the reporter needs to complete the sacred ladder: refresh, relaunch, reboot, swap browsers, swap devices, unplug the router, then sit quietly with the possibility that the application is fine and their afternoon is the unstable variable. I want the intake form to feel less like reporting and more like a pilgrimage.',
+ 'gate bug submission behind a troubleshooting checklist that keeps escalating until the reporter runs out of nearby electronics',
  11),
 
 ('COPE-050', 'Implement a "Have You Tried Turning It Off and On Again" Popup Before Every Error',
@@ -283,8 +283,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- Marketing Maya
 ('COPE-051', 'The 404 Page Must Be a Lead Generation Form',
- 'Maya from Marketing. We''re getting 50,000 404 hits per month and converting ZERO of them. The new 404 page must include: a newsletter signup, a chatbot offering a demo, a "Download Our Whitepaper" CTA, an exit-intent popup, and a 30-second auto-playing video of our CEO explaining our vision. Page not found? More like LEAD not found (until now).',
- 'redirect all 404s to a popup that plays audio',
+ 'Maya from Marketing. I pulled the analytics and discovered we are wasting tens of thousands of emotionally available visitors on dead ends. That stops now. A missing page is just a prospect who took an adventurous route. The 404 experience should collect an email, offer a whitepaper, float a demo, and gently trap the user in at least one vision-oriented video asset before they escape. If the URL disappointed them, the funnel should console them.',
+ 'turn every broken link into a campaign landing page with enough overlays that the visitor forgets what they were originally trying to find',
  37),
 
 ('COPE-052', 'All Error Codes Must Be Replaced with Marketing-Approved Messages',
@@ -294,8 +294,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- Infrastructure Ian
 ('COPE-053', 'We Must Run Kubernetes on Kubernetes on Kubernetes for True Redundancy',
- 'Ian from Infrastructure. Single-layer Kubernetes isn''t redundant enough. I''m proposing K8s-ception: our application runs in K8s pods, managed by a K8s cluster, running inside K8s pods on a meta-cluster. If the inner cluster fails, the outer cluster restarts it. If the outer cluster fails, well, we don''t talk about that. Monthly cost increase: $34,000. Worth it for the YAML alone.',
- 'run everything on localhost kubernetes is overkill',
+ 'Ian from Infrastructure. We have achieved ordinary container orchestration, which means we are now exposed to extraordinary single-layer thinking. My proposal is layered resilience: workload cluster inside management cluster inside supervisory cluster, each one solemnly observing the one below it. If the app fails, Kubernetes heals it. If Kubernetes fails, another Kubernetes restores its confidence. I drew the recovery path on a whiteboard and the arrows came back to themselves, which is how I know the design is mature.',
+ 'nest clusters until every outage gets observed by a larger control plane with stronger opinions about yaml',
  445),
 
 ('COPE-054', 'Every Microservice Must Have Its Own Dedicated AWS Account',
@@ -321,8 +321,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  53),
 
 ('COPE-058', 'All Color Choices Must Be Debated in a Company-Wide Town Hall',
- 'Alex, Accessibility Lead. The button color was changed from #2563eb to #2564eb WITHOUT a town hall discussion. This one-digit hex change could affect users with a very specific and theoretical color sensitivity I read about on a forum. All future color changes require: a town hall (minimum 200 attendees), a 30-day public comment period, and a formal color impact assessment.',
- 'set all colors to black or white accessibility solved',
+ 'Alex, Accessibility Lead. Someone changed a blue by one hexadecimal digit and announced it in Slack as if culture were not implicated. Color is not decoration; it is governance. Any future palette adjustment, however tiny, needs public testimony, an impact memo, and enough attendance to prove the org understands what is at stake. I have already drafted a template called Chromatic Change Review Packet and would like to use it before Design tries another midnight hue experiment.',
+ 'freeze all palette changes behind a public-comment workflow so one hex tweak requires the paperwork of a minor zoning dispute',
  39),
 
 -- Junior Developer Emma
@@ -332,8 +332,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  178),
 
 ('COPE-060', 'Convert All Callbacks to Promises to Async/Await to Callbacks Again',
- 'Emma, junior dev. I read that callbacks are bad so I converted them all to Promises. Then I read Promises are old so I converted to async/await. Then a senior dev said "you don''t understand the event loop" so I panicked and converted everything back to callbacks. Now nothing works but at least I''ve touched every file in the repo. Requesting a mass code review.',
- 'wrap everything in settimeout 0 to make it async',
+ 'Emma, junior dev. I have been on a learning journey and the codebase came with me whether it wanted to or not. First I modernized callbacks into Promises, then upgraded those into async/await, then got peer feedback that suggested I had reinvented confusion at scale. In response, I reverted the emotional parts back to callbacks and left the confident parts modern. The architecture is now mixed-media. Requesting review from someone who understands timing and maybe mercy.',
+ 'stitch the async styles together with tiny timeout shims until the event loop stops making eye contact',
  95),
 
 -- Operations Oscar
@@ -343,8 +343,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  64),
 
 ('COPE-062', 'All Runbooks Must Be Written in Haiku Format for Brevity',
- 'Oscar, Operations. Our runbooks are too long. Nobody reads a 40-page doc at 3 AM. New format — every procedure must be a haiku. Example for database failover: "Primary is dead / Promote the replica now / Pray it has the writes." If the haiku doesn''t cover edge cases, that''s what the postmortem is for.',
- 'delete all runbooks if it breaks google it',
+ 'Oscar, Operations. At 3 AM nobody wants a manifesto, they want a shape they can survive. Our runbooks should become haiku: compact, memorable, and emotionally honest about the odds. If the database is on fire, the operator does not need chapter headings. They need seventeen syllables and enough nerve to keep typing. Edge cases can remain in a longer appendix for daylight hours, but the emergency path should fit on a sticky note beside the pager.',
+ 'distill every incident procedure into one panic-sized poem and leave the missing details to fate and daylight',
  16),
 
 -- Product Owner Patricia
@@ -365,8 +365,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  187),
 
 ('COPE-066', 'Page Load Time Must Be Negative — The Page Should Load Before the User Clicks',
- 'SRE Sarah. Our P99 latency is 200ms which "feels slow" according to the CEO. His exact words: "Can''t we just load the page before they click?" So, new requirement: NEGATIVE page load time. The app must predictively render every possible page the user might visit and have it ready. If they visit a page we didn''t predict, that''s a UX failure, not an engineering one.',
- 'preload every possible page in an iframe on startup',
+ 'SRE Sarah. The CEO has moved beyond conventional latency targets and into preemptive expectation management. He wants the page loaded before desire fully forms. That means predicting intent from cursor drift, lunch-hour habits, and whatever pages the user looked at last Tuesday. If we guess wrong, that is not a miss, it is a forecasting lesson. I need the product to feel clairvoyant enough that timing stops existing as a category of complaint.',
+ 'keep a warmed-up shadow copy of whatever page the user might plausibly think about next and swap it in before reality catches up',
  253),
 
 -- Database DBA Derek
@@ -376,8 +376,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  74),
 
 ('COPE-068', 'The Database Must Store Data in Reverse Chronological Order Because "That''s How Users Think"',
- 'Derek the DBA. Product says users always want the newest data first. Instead of using ORDER BY DESC (which is O(n log n)), I propose we INSERT all rows in reverse chronological order so SELECT without ORDER BY returns newest first. Yes, this means rewriting every INSERT to calculate the correct position. But think of the QUERY SAVINGS. I''ve written a 30-page proposal.',
- 'just reverse the array in javascript after every query',
+ 'Derek the DBA. Product keeps requesting newest-first views as if the database were a concierge service. Rather than pay the sorting tax forever, we should store reality in the order users emotionally expect to receive it. Every insert can find its rightful slot in the timeline on arrival, which is admittedly invasive but also decisive. I have a proposal binder with tab dividers labeled Temporal Truth, Cost Avoidance, and Why ORDER BY Is Moral Laziness.',
+ 'teach inserts to elbow their way into the front of history so selects can stay smugly unsorted',
  141),
 
 -- Frontend Dev Frankie
@@ -387,8 +387,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  66),
 
 ('COPE-070', 'Support Internet Explorer 6 Because the CEO''s Dad Uses It',
- 'Frankie from Frontend. The CEO''s father called complaining the app doesn''t work on his computer. He''s running IE6 on Windows XP. The CEO has declared this a P0 blocker — "if my dad can''t use it, nobody can." We need to polyfill: flexbox, grid, fetch, Promises, arrow functions, const/let, modules, Shadow DOM, and the concept of happiness. Estimated effort: 8 sprints.',
- 'add a big banner telling ie6 users to upgrade',
+ 'Frankie from Frontend. The CEO''s dad has become our most influential browser market segment. He is on Internet Explorer 6, refuses upgrades on principle, and apparently prints every email before clicking the links in it. Leadership has interpreted his complaint as a referendum on product readiness. We now need to translate modern web assumptions into something that can survive Windows XP and whatever antique toolbar ecosystem he has assembled. The ask is less compatibility than historical reenactment.',
+ 'build a compatibility shell so ie6 can receive a simplified shadow version of the app and still feel personally respected',
  234),
 
 -- Support Lead Samantha
@@ -398,8 +398,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  14),
 
 ('COPE-072', 'The Help Center Must Be a Choose-Your-Own-Adventure Novel',
- 'Samantha, Support. Our help docs are boring. Nobody reads them. Proposal: convert all documentation into an interactive Choose-Your-Own-Adventure format. "You encounter a login error. Do you: A) Clear your cache (turn to page 47), B) Try a different browser (turn to page 23), C) Scream into the void (turn to page 666)." Page 666 just says "file a ticket."',
- 'replace the help center with a chatbot that says lmgtfy',
+ 'Samantha, Support. Static articles are not meeting people where their confusion lives. I want the help center rewritten as a branching survival paperback where each troubleshooting step feels like a consequence, not a bullet point. "Your dashboard is blank. Do you refresh bravely, clear the cache reluctantly, or consult a browser you trust less but blame more?" If the reader makes three bad choices in a row, they can earn the right to file a ticket with dramatic context already attached.',
+ 'reframe documentation as a branching maze of troubleshooting scenes that funnels lost users toward support with a richer backstory',
  32),
 
 -- VP of Engineering Victor
@@ -409,8 +409,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  86),
 
 ('COPE-074', 'Implement "Innovation Fridays" Where Engineers Must Only Use Languages They Don''t Know',
- 'Victor, VP Eng. To foster innovation, every Friday engineers must write production code in a language they''ve never used. Our Node.js backend? Rewrite a module in COBOL. React frontend? Try Fortran. If the code is unreadable by Monday, that''s what code review is for. Last Innovation Friday, someone wrote a payment processor in Brainfuck. Very innovative. Very broken.',
- 'write all code in brainfuck on fridays for fun',
+ 'Victor, VP Eng. Familiarity is quietly throttling invention. Starting this Friday, engineers may only ship in languages they cannot yet defend in a design review. If you maintain Node, explore COBOL. If you touch React, perhaps this is your Erlang season. The point is not immediate usefulness. It is organizational renewal through manageable confusion. Monday code review can sort out which discoveries were strategic and which ones should be hidden before auditors visit.',
+ 'reserve fridays for shipping experimental code in unfamiliar languages and let monday act as the archaeological cleanup pass',
  58),
 
 -- Growth Hacker Gary
@@ -420,8 +420,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  41),
 
 ('COPE-076', 'The Signup Flow Must Collect User''s Blood Type for "Personalization"',
- 'Gary, Growth Hacker. We need more user data for personalization. New signup fields: blood type, shoe size, childhood pet''s maiden name, and Myers-Briggs type. If users skip these fields, the app works 30% slower as a "gentle nudge." I call this "Friction-Based Data Collection." Legal said no but Growth says yes and Growth always wins.',
- 'add ssn field to signup form for verification',
+ 'Gary, Growth Hacker. Our signup form is still leaving rich psychographic territory unexplored. Email and password tell me almost nothing about a person''s monetizable soul. I want blood type, shoe size, attachment style, and the name of the pet that taught them resilience. Users who withhold this can still proceed, but the experience should become just inconvenient enough to help them reconsider the value exchange. Legal expressed concern in a PDF, which means Growth still has room to maneuver.',
+ 'expand signup into a personal-inventory harvest and throttle the experience until reluctant users start volunteering more biography',
  49),
 
 -- Tech Lead Tanya
@@ -431,8 +431,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  35),
 
 ('COPE-078', 'The Codebase Must Have Zero Comments Because "Good Code Documents Itself"',
- 'Tanya, Tech Lead. I read "Clean Code" in 2012 and I''ve been radicalized. ALL comments must be removed. If code needs a comment to be understood, the code is bad. This applies to: regex explanations, TODO notes, license headers, and the comment that says "DO NOT REMOVE THIS LINE OR PRODUCTION BREAKS." Especially that one. If we don''t know why, we don''t deserve the line.',
- 'minify all code in production including variable names',
+ 'Tanya, Tech Lead. Comments have become a crutch and, worse, a witness. If the code cannot explain itself under fluorescent lighting at 9:12 AM, then perhaps it should suffer a little until it can. Remove explanatory prose, remove the nervous TODOs, remove the warning labels that beg future engineers not to touch things. If a line breaks production when uncommented ignorance reaches it, that is knowledge we should re-earn the hard way rather than preserve in marginalia.',
+ 'strip commentary until the codebase becomes a pure comprehension test and let anyone confused by it improve their character',
  72),
 
 -- Offshore Team Lead Olga
@@ -442,8 +442,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  20),
 
 ('COPE-080', 'Implement a "Translation Layer" That Converts Code Comments Between Passive-Aggressive Dialects',
- 'Olga here. Communication between our US and offshore teams is "fine" (it''s not fine). Comments like "interesting approach" mean different things. Proposal: an NLP-based translation layer that converts passive-aggressive US English to direct English and vice versa. "Per my last comment" → "You didn''t read my comment." "Interesting approach" → "This is wrong."',
- 'replace all comments with lorem ipsum nobody reads them',
+ 'Olga here. Cross-team collaboration is currently being mediated by phrases that sound polite in one timezone and career-limiting in another. I need a translation layer for review comments, status notes, and those unsettling little "just circling back" messages. When someone writes "interesting approach," the recipient should know whether that means curiosity, disapproval, or the opening move in a two-week escalation ballet. We cannot keep burning goodwill in the gap between idiom and intent.',
+ 'intercept loaded office phrases and rewrite them into blunt equivalents before another sprint disappears into manners forensics',
  43),
 
 -- =============================================================================
@@ -618,8 +618,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  298),
 
 ('COPE-112', 'All Business Logic Must Be Implemented as Stored Procedures in SQL Server',
- 'Chadwick, .NET. Application code is for amateurs. ALL business logic must live in SQL Server stored procedures. User registration? sp_RegisterUser with 47 parameters. Shopping cart? A 3,000-line stored procedure with 14 temp tables and a cursor that runs for 8 minutes. The DBA will be the most important person in the company. As it should be.',
- 'write all business logic in database triggers',
+ 'Chadwick, .NET. We have indulged this application-tier experiment long enough. Real business logic belongs where it can feel the data directly and frighten junior developers on sight. I want registration, billing, permissions, discounts, and probably the email templates collapsed into stored procedures with names long enough to command respect. When a feature breaks, the team should gather around SQL Server Management Studio like villagers around an oracle, not chase stack traces through polite little services.',
+ 'move every rule into heavyweight stored procedures and let the database become the only employee brave enough to explain outcomes',
  189),
 
 -- Go Simplicity Absolutist Kenji
@@ -674,8 +674,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- DevOps Who Only Knows Terraform
 ('COPE-122', 'All Application State Must Be Managed by Terraform',
- 'Infrastructure-as-code Ian here. Why does your app store state in a database when it could be in Terraform? User profiles are aws_dynamodb_table_item resources. Every time someone updates their bio, we run terraform apply. It takes 4 minutes and requires a plan review. Deleting your account means terraform destroy --target=module.users["user-4521"]. We had a incident when someone ran terraform apply without a lock and two users merged into one person.',
- 'terraform destroy when users delete their account',
+ 'Infrastructure-as-code Ian here. Our mistake has been treating user state as runtime data instead of infrastructure with feelings. Profiles, preferences, sessions, all of it should live in declarative files so change can be previewed, approved, and argued about before it happens. If someone edits their bio, I want a plan diff. If they close an account, I want a destroy target and a sobering pause. We had one merge conflict turn two customers into a composite person, but that is a process smell, not a conceptual flaw.',
+ 'serialize live user state into terraform-managed resources so every profile change arrives with a plan, a diff, and a chance to panic',
  234),
 
 -- Assembly Language Purist Harold
@@ -703,13 +703,13 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 -- Serverless Everything Apostle Prateek
 ('COPE-127', 'Decompose the Entire App into 500 AWS Lambda Functions',
- 'Prateek here, Serverless Architect. Servers are IMMORAL. I propose we decompose the app into 500 individual Lambda functions. Each function does exactly one thing: validateEmail, checkEmailFormat, ensureEmailNotEmpty, verifyEmailHasAtSign, confirmEmailHasDomain — those are just for email validation. Cold starts add 3 seconds per request but we only pay for what we use. The CloudFormation template is 47,000 lines of YAML.',
- 'put all code in one giant lambda with 15min timeout',
+ 'Prateek here, Serverless Architect. We still have pieces of the system doing several things in one place, which is how monoliths regrow. I want every unit of behavior broken into lambdas small enough to seem morally pure: one for checking an email, one for admiring the email, one for deciding whether the email emotionally contains an at-sign. Cold starts are simply the platform taking a thoughtful breath. The architecture diagram should eventually look less like software and more like weather.',
+ 'shatter workflows into tiny lambdas until a single user action fans out into an inspiring constellation of cloud invoices',
  445),
 
 ('COPE-128', 'All Database Queries Must Go Through API Gateway, Lambda, SQS, Another Lambda, Then DynamoDB',
- 'Prateek again. Direct database access is too simple. Every query must flow: Client → API Gateway → Lambda A (validates request) → SQS Queue → Lambda B (processes message) → SNS Topic → Lambda C (writes to DynamoDB) → DynamoDB Stream → Lambda D (sends response via WebSocket). Reading a user profile takes 11 seconds but it''s SERVERLESS. Our AWS architecture diagram looks like a bowl of spaghetti and I''m PROUD.',
- 'query the database directly from the frontend',
+ 'Prateek again. The current read path lacks reflection. A request should not go straight to data as if certainty were free. I want each query to pass through a tasteful procession of managed services so every lookup leaves an audit trail, a billable event, and at least one queue absorbing the emotional shock. By the time a user profile returns, the answer should feel certified by infrastructure, not merely retrieved from it.',
+ 'send every query through a relay race of gateway, queues, lambdas, and streams so simple reads acquire enterprise mileage',
  334),
 
 -- Swift UI Declarative Purist Mackenzie
@@ -761,14 +761,14 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  267),
 
 ('COPE-137', 'Replace the Search Bar with a Fine-Tuned LLM That Hallucinates Results',
- 'Dr. Chen again. Keyword search is so Web 1.0. I propose we replace it with a fine-tuned LLM that generates search results based on "vibes." Query: "Q3 revenue" → LLM generates a plausible-sounding revenue number (not from our data, but close enough). Query: "project deadline" → LLM invents a reasonable date. Results feel PERSONALIZED even though they''re completely fabricated. Users report higher satisfaction because the answers are always confident.',
- 'return random results for search it builds discovery',
+ 'Dr. Chen again. Search bars are constrained by evidence, which is a dated design philosophy. I want a fine-tuned model that answers from tone, history, and plausible enterprise energy rather than whatever stale rows happen to exist. If someone asks for Q3 revenue, give them a number with executive posture. If they ask for a deadline, provide one that sounds organized enough to be true. Users do not want retrieval; they want confident companionship with formatting.',
+ 'swap factual search for a confident generative concierge that returns polished answers whether or not the dataset participates',
  178),
 
 -- Legacy jQuery Developer Who Refuses to Learn React
 ('COPE-138', 'Rewrite the React Frontend in jQuery 1.4 with 847 Global Event Handlers',
- 'Doug here, Frontend Developer since 2009. React is a bubble that will pop. I propose we rewrite the entire frontend in jQuery 1.4.2 (the golden age). State management? $.data() on the body element. Routing? Hash changes with $.hashchange. Components? $.fn.myWidget plugins. The entire app is one HTML file with 12,000 lines of inline script tags. $(document).ready() fires 47 event handlers. Nobody touch my global namespace.',
- 'attach 50 event handlers to document ready',
+ 'Doug here, Frontend Developer since 2009. I keep opening this React codebase and seeing abstraction where there should be instinct. We had it figured out in 2010: one page, one global namespace, one sweaty file of event handlers that knew everybody''s business. I can rebuild the product in jQuery 1.4.2 with body-level state, hash routing, and a plugin ecosystem composed entirely of my own opinions. When the DOM is ready, the whole application should leap awake at once like a mall fountain timer.',
+ 'collapse frontend state into global jquery handlers so every interaction can be located by scrolling long enough in one heroic file',
  234),
 
 -- Excel Power User Sandra
