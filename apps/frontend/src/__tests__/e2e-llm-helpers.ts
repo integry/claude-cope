@@ -33,6 +33,14 @@ export type ReportEntry = {
 
 export const report: ReportEntry[] = [];
 
+type LlmResponse = {
+  choices?: Array<{ message?: { content?: string } }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+  };
+};
+
 const SYNTHETIC_TAGS_RE = /\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g;
 const TEACHERLY_PHRASE_RE =
   /\b(?:in reality|actually|basically|in other words|it['’]s just|the fix is|use [^.!?\n]+ instead of|you need to|initialize(?: it)? before use|now safe to use|reliable scaling|try a real number)\b/i;
@@ -233,7 +241,7 @@ function detectQualityIssues(reply: string): string[] {
 function logCallResult(
   meta: { suite: string; test: string; turn?: number },
   reply: string,
-  data: { usage?: { prompt_tokens?: number; completion_tokens?: number } },
+  data: LlmResponse,
   durationMs: number,
   qualityIssues: string[],
 ): void {
@@ -257,7 +265,7 @@ export async function callLLM(
     : { model: MODEL, messages, max_tokens: MAX_TOKENS, reasoning: REASONING, temperature: TEMPERATURE, top_p: TOP_P };
   const start = Date.now();
 
-  let data: Record<string, unknown>;
+  let data: LlmResponse;
 
   if (BACKEND_URL) {
     const { stdout } = await execFileAsync("curl", [
@@ -275,9 +283,9 @@ export async function callLLM(
     const status = Number(lines.pop() ?? "0");
     const bodyText = lines.join("\n");
     if (status < 200 || status >= 300) throw new Error(`Backend ${status}: ${bodyText}`);
-    data = JSON.parse(bodyText) as Record<string, unknown>;
+    data = JSON.parse(bodyText) as LlmResponse;
 
-    const reply = (data as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content ?? "";
+    const reply = data.choices?.[0]?.message?.content ?? "";
     const qualityIssues = detectQualityIssues(reply);
 
     report.push({
@@ -288,14 +296,14 @@ export async function callLLM(
       requestBody,
       reply,
       tokens: {
-        prompt: (data as { usage?: { prompt_tokens?: number } }).usage?.prompt_tokens,
-        completion: (data as { usage?: { completion_tokens?: number } }).usage?.completion_tokens,
+        prompt: data.usage?.prompt_tokens,
+        completion: data.usage?.completion_tokens,
       },
       qualityIssues,
       durationMs,
     });
 
-    logCallResult(meta, reply, data as { usage?: { prompt_tokens?: number; completion_tokens?: number } }, durationMs, qualityIssues);
+    logCallResult(meta, reply, data, durationMs, qualityIssues);
     return reply;
   }
 
@@ -307,7 +315,7 @@ export async function callLLM(
 
   const durationMs = Date.now() - start;
   if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
-  data = await res.json();
+  data = await res.json() as LlmResponse;
   const reply = data.choices?.[0]?.message?.content ?? "";
 
   const qualityIssues = detectQualityIssues(reply);
