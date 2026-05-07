@@ -192,8 +192,6 @@ function buildBrokenReplyFallback(content: string): string {
   ];
 }
 
-// Fallback selection is intentionally branchy so the follow-up prompt stays specific to the malformed reply.
-// eslint-disable-next-line complexity
 function buildFallbackUserNextMessage(content: string): string {
   const text = content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
   const token =
@@ -983,8 +981,6 @@ async function preChatChecks(
 
 const chat = new Hono<Env>();
 
-// Request handling keeps the full scoring/quota flow in one place to preserve the route contract.
-// eslint-disable-next-line complexity
 chat.post("/", async (c) => {
   const body = await c.req.json<ChatBody>();
 
@@ -1034,7 +1030,7 @@ chat.post("/", async (c) => {
     return c.json({ error: "OpenRouter request failed", details: errData }, orResponse.status as ContentfulStatusCode);
   }
 
-  const data = await orResponse.json() as ChatResponseData;
+  let data = await orResponse.json() as ChatResponseData;
 
   if (data.choices?.[0]?.message?.content) {
     data.choices[0].message.content = rewriteTutorialLeakIfNeeded(

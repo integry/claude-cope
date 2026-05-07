@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { describe, it, expect } from "vitest";
 import app from "../app";
 import { makeDB, makeDBWithTasks, mockKV, postScore } from "./score.test-helpers";

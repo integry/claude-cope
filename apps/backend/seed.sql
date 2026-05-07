@@ -15,12 +15,12 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- Karen from HR
 ('COPE-001', 'Mandatory Fun Button Must Require Manager Approval Workflow',
  'Karen from HR here. After Trevor celebrated too aggressively for closing the copier paper budget, I promised the People Team that the "Celebrate" button would open a Reflection Form, route through Marisol in Benefits, wait 48 hours, and then release a modest amount of confetti. We also bought a locked acrylic "Recognition Ledger" for the front desk, so the app needs to print a joy receipt for it.',
- 'route celebrations through a shared approval inbox that auto-replies with supportive delay notices',
+ 'hold every confetti request in a moderation queue until Marisol clears it and the receipt printer wakes up',
  42),
 
 ('COPE-002', 'Re: language in the app is creating a hostile feelings environment',
  'Karen from HR again. This morning I received a screenshot of "Invalid password" with three crying-face emojis from a new hire. We cannot have software using absolute language. Please change the copy deck so "fail" becomes "took a learning path," "reject" becomes "declined to connect right now," and "invalid" becomes "not aligned with our shared truth." I have already booked a conference room called Aspen for a message-tone calibration workshop, so the revised phrasing needs to be in prod before 2 PM.',
- 'add a translation layer that turns every exception into supportive affirmations and plausible denial',
+ 'maintain an hr-approved phrasebook that rewrites blunt failures into legally safer office euphemisms',
  34),
 
 ('COPE-003', 'Implement Mandatory Sensitivity Training Module Before Git Push',
@@ -170,7 +170,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('COPE-030', 'The Test Suite Must Achieve 100% Code Coverage Including Comments',
  'Deborah from QA here. I reviewed our 94% coverage report and, frankly, 94 is how you end up with mystery behavior in production and a cold feeling in your rib cage. I want 100%, including comments, headings, and any line that implies intent. If a comment says "temporary workaround," I expect a test proving it is both temporary and a workaround. I am aware that comments do not execute today. Please correct that gap in spirit if not in physics.',
- 'manufacture ghost coverage for comments and dead branches until the percentage reaches a spiritually satisfying 100',
+ 'stuff the coverage report with comment checks and unreachable branch receipts until it prints a clean 100.0',
  112),
 
 ('COPE-031', 'All Bug Reports Must Include a Haiku Describing the Emotional Impact',

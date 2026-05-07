@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import {
   sanitizeChatMessages,
