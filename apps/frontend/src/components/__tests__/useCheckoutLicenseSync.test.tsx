@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createElement } from "react";
+import { createElement, useEffect, useState } from "react";
 import type { SetStateAction } from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
@@ -100,5 +100,56 @@ describe("useCheckoutLicenseSync", () => {
 
     expect(setHistory).toHaveBeenCalledTimes(1);
     expect(runSlashCommand).not.toHaveBeenCalled();
+  });
+
+  it("continues checkout sync after the initial history update rerenders the component", async () => {
+    window.history.replaceState({}, "", "/?checkout_id=checkout_123");
+
+    let resolveFetch: ((response: Response) => void) | null = null;
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+      expect(init?.signal?.aborted).toBe(false);
+    }));
+    global.fetch = fetchMock as typeof fetch;
+
+    const runSlashCommand = vi.fn();
+
+    function StatefulHarness() {
+      const [history, setHistory] = useState<Message[]>([]);
+
+      useEffect(() => {
+        if (history.length > 0 && resolveFetch) {
+          resolveFetch(new Response(JSON.stringify({ licenseKey: "COPE-123" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }));
+          resolveFetch = null;
+        }
+      }, [history]);
+
+      return createElement(Harness, {
+        setHistory,
+        runSlashCommand: (command: string) => {
+          void history.length;
+          runSlashCommand(command);
+        },
+      });
+    }
+
+    container = document.createElement("div");
+    const nextContainer = container;
+    document.body.appendChild(nextContainer);
+    const nextRoot = createRoot(nextContainer);
+    root = nextRoot;
+
+    await act(async () => {
+      nextRoot.render(createElement(StatefulHarness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(runSlashCommand).toHaveBeenCalledWith("/sync COPE-123");
+    expect(window.location.search).toBe("");
   });
 });

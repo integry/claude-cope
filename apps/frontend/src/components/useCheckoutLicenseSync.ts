@@ -162,14 +162,14 @@ function handleSuccessfulCheckoutSync({
 }
 
 async function syncCheckoutLicense({
-  alreadyPro,
   checkoutId,
+  getAlreadyPro,
   runSlashCommand,
   setHistory,
   signal,
 }: {
-  alreadyPro: boolean;
   checkoutId: string;
+  getAlreadyPro: () => boolean;
   runSlashCommand: (command: string) => void;
   setHistory: Dispatch<SetStateAction<Message[]>>;
   signal: AbortSignal;
@@ -182,7 +182,7 @@ async function syncCheckoutLicense({
   try {
     const result = await fetchCheckoutLicense(checkoutId, signal);
     if (!result || signal.aborted) return;
-    if (handleSuccessfulCheckoutSync({ alreadyPro, data: result.data, runSlashCommand, setHistory, signal })) return;
+    if (handleSuccessfulCheckoutSync({ alreadyPro: getAlreadyPro(), data: result.data, runSlashCommand, setHistory, signal })) return;
     if (result.status !== 409) stripCheckoutIdFromLocation(signal);
     appendCheckoutHistory(signal, setHistory, {
       role: "error",
@@ -199,6 +199,13 @@ async function syncCheckoutLicense({
 
 export function useCheckoutLicenseSync({ isBooting, proKeyHash, setHistory, runSlashCommand }: UseCheckoutLicenseSyncArgs) {
   const checkoutHandledRef = useRef<string | null>(null);
+  const latestProKeyHashRef = useRef(proKeyHash);
+  const latestSetHistoryRef = useRef(setHistory);
+  const latestRunSlashCommandRef = useRef(runSlashCommand);
+
+  latestProKeyHashRef.current = proKeyHash;
+  latestSetHistoryRef.current = setHistory;
+  latestRunSlashCommandRef.current = runSlashCommand;
 
   useEffect(() => {
     if (isBooting) return;
@@ -207,14 +214,14 @@ export function useCheckoutLicenseSync({ isBooting, proKeyHash, setHistory, runS
     checkoutHandledRef.current = checkoutId;
     const abortController = new AbortController();
     void syncCheckoutLicense({
-      alreadyPro: Boolean(proKeyHash),
       checkoutId,
-      runSlashCommand,
-      setHistory,
+      getAlreadyPro: () => Boolean(latestProKeyHashRef.current),
+      runSlashCommand: (command) => latestRunSlashCommandRef.current(command),
+      setHistory: (value) => latestSetHistoryRef.current(value),
       signal: abortController.signal,
     });
     return () => {
       abortController.abort();
     };
-  }, [isBooting, proKeyHash, runSlashCommand, setHistory]);
+  }, [isBooting]);
 }
