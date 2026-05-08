@@ -12,6 +12,7 @@ vi.mock("../../supabaseClient", () => ({ supabase: {} }));
 vi.mock("../ticketPrompt", () => ({
   getPendingOffer: vi.fn(() => null),
   clearPendingOffer: vi.fn(),
+  fetchRandomTicketPrompt: vi.fn(),
 }));
 
 import { executeSlashCommand, type SlashCommandContext } from "../slashCommandExecutor";
@@ -42,8 +43,6 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
     unlockedThemes: ["default"],
     soundEnabled: true,
     pendingCompletedTaskIds: [],
-    proKey: "MAX-LICENSE-KEY-123",
-    proKeyHash: "hash-123",
   };
   return { ...base, ...overrides };
 }
@@ -95,7 +94,7 @@ function makeCtx(state: GameState): SlashCommandContext {
   return ctx;
 }
 
-describe("/alias command", () => {
+describe("async slash-command accounting", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.spyOn(Math, "random").mockReturnValue(0);
@@ -107,46 +106,27 @@ describe("/alias command", () => {
     vi.unstubAllGlobals();
   });
 
-  it("increments command usage when alias validation passes", async () => {
-    const ctx = makeCtx(makeGameState());
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: vi.fn().mockResolvedValue({ success: true, profile: null }),
-    }));
-
-    executeSlashCommand("/alias NewName", ctx);
-    vi.advanceTimersByTime(1500);
-    await vi.runAllTimersAsync();
-
-    expect(ctx.state.username).toBe("NewName");
-    expect(ctx.state.commandUsage).toEqual({ "/alias": 1 });
-    expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/alias");
-  });
-
-  it("does not increment command usage when alias validation fails", async () => {
-    const ctx = makeCtx(makeGameState());
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
-    executeSlashCommand("/alias no", ctx);
-    vi.advanceTimersByTime(1500);
-    await vi.runAllTimersAsync();
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(ctx.state.commandUsage).toEqual({});
-    expect(ctx.onValidSlashCommand).not.toHaveBeenCalled();
-  });
-
-  it("still increments command usage when the alias update request fails", async () => {
+  it("counts /sync once the command passes client-side validation, even if the request fails", async () => {
     const ctx = makeCtx(makeGameState());
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 
-    executeSlashCommand("/alias NewName", ctx);
+    executeSlashCommand("/sync COPE-123", ctx);
     vi.advanceTimersByTime(1500);
     await vi.runAllTimersAsync();
 
-    expect(ctx.state.commandUsage).toEqual({ "/alias": 1 });
-    expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/alias");
+    expect(ctx.state.commandUsage).toEqual({ "/sync": 1 });
+    expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/sync");
+  });
+
+  it("counts /backlog even when fetching the backlog fails", async () => {
+    const ctx = makeCtx(makeGameState());
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+
+    executeSlashCommand("/backlog", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    expect(ctx.state.commandUsage).toEqual({ "/backlog": 1 });
+    expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/backlog");
   });
 });

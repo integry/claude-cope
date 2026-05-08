@@ -134,11 +134,14 @@ export function getRandomBacklogReminderTip(previousTipId?: string): string {
 export function selectMilestoneTip(usedCommands: Iterable<string>, shownTipIds: Iterable<string> = []): TipDefinition | null {
   const used = new Set(usedCommands);
   const shown = new Set(shownTipIds);
-  const available = MILESTONE_TIPS.filter((tip) => {
-    if (!isEnabledTip(tip) || shown.has(tip.id)) return false;
+  const eligible = MILESTONE_TIPS.filter((tip) => {
+    if (!isEnabledTip(tip)) return false;
     return !tip.cmd || !used.has(tip.cmd);
   });
-  return available.length > 0 ? pickRandomTip(available) ?? null : null;
+  if (eligible.length === 0) return null;
+
+  const unseenEligible = eligible.filter((tip) => !shown.has(tip.id));
+  return pickRandomTip(unseenEligible.length > 0 ? unseenEligible : eligible) ?? null;
 }
 
 export function getMilestoneTip(usedCommands: Iterable<string>, shownTipIds: Iterable<string> = []): string | null {

@@ -110,6 +110,19 @@ describe("useTipManager", () => {
     expect(ref.current?.getHistory()[0]?.content).toBe(MILESTONE_TIPS[1]?.text);
   });
 
+  it("keeps firing milestone tips after all eligible milestone tips have been shown once", () => {
+    act(() => {
+      for (let i = 0; i < 72; i++) {
+        ref.current?.recordValidCommand("/help");
+      }
+      vi.runOnlyPendingTimers();
+    });
+
+    const history = ref.current?.getHistory() ?? [];
+    expect(history).toHaveLength(12);
+    expect(history[11]?.content).toBe(MILESTONE_TIPS[1]?.text);
+  });
+
   it("fires contextual tips when tracked game states are reached", () => {
     act(() => {
       ref.current?.setGameState((prev) => ({

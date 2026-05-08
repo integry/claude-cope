@@ -582,6 +582,7 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     return;
   }
   const oldName = ctx.state.username;
+  markValidSlashCommand(ctx, "/alias");
   try {
     const res = await fetch(`${API_BASE}/api/account/update-alias`, {
       method: "POST",
@@ -617,7 +618,6 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     } else {
       ctx.setState((prev) => ({ ...prev, username: canonicalAlias }));
     }
-    markValidSlashCommand(ctx, "/alias");
     identify({ username: canonicalAlias });
     reply({ role: "system", content: `[✓] Alias updated from **${oldName}** to **${canonicalAlias}**. The codebase will never know.` });
   } catch {
@@ -728,6 +728,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
     reply({ role: "system", content: "[🔑] Usage: `/sync <COPE-XXX>` — Link your Polar license key to unlock Max tier." });
     return;
   }
+  markValidSlashCommand(ctx, "/sync");
   try {
     const current = ctx.state;
     const res = await fetch(`${API_BASE}/api/account/sync`, {
@@ -754,7 +755,6 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
     });
     const data = await res.json() as { success?: boolean; hash?: string; restored?: boolean; profile?: ServerProfile; error?: string };
     if (res.ok && data.success) {
-      markValidSlashCommand(ctx, "/sync");
       ctx.setState((prev) => {
         const withKey: GameState = { ...prev, proKey: licenseKey, proKeyHash: data.hash, isPro: true };
         if (data.profile) {
@@ -786,6 +786,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
 async function handleShillCommand(ctx: SlashCommandContext, reply: Reply): Promise<void> {
   const tweetText = encodeURIComponent("I'm mass-producing Technical Debt at mass velocity in Claude COPE — the idle game where every prompt is a mistake. https://claudecope.com");
   window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, "_blank");
+  markValidSlashCommand(ctx, "/shill");
   try {
     const res = await fetch(`${API_BASE}/api/account/shill`, {
       method: "POST",
@@ -793,7 +794,6 @@ async function handleShillCommand(ctx: SlashCommandContext, reply: Reply): Promi
     });
     const data = await res.json() as { success?: boolean; creditsGranted?: number; error?: string };
     if (res.ok && data.success) {
-      markValidSlashCommand(ctx, "/shill");
       track(AnalyticsEvents.SHILL_COMPLETED, { credits_granted: data.creditsGranted });
       reply({ role: "system", content: `[✓ **SHILL COMPLETE**] You sold your dignity for **${data.creditsGranted} free tokens**. The marketing team approves. A tweet window has been opened — go spread the gospel of suffering.` });
     } else {
@@ -813,6 +813,7 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
       reply({ role: "error", content: `[❌ Error] Command not found: \`/key\`` });
       return true;
     }
+    markValidSlashCommand(ctx, "/key");
     import("./keyCommandHandler").then(async ({ handleKeyCommand }) => {
       // Create a mock setHistory that routes messages through reply
       const mockSetHistory = (action: React.SetStateAction<Message[]>) => {
@@ -828,20 +829,20 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
           }
         }
       };
-      const handled = await handleKeyCommand(command, ctx.setState, mockSetHistory, ctx.state);
-      if (handled) markValidSlashCommand(ctx, "/key");
+      await handleKeyCommand(command, ctx.setState, mockSetHistory, ctx.state);
       ctx.setIsProcessing(false);
     });
     return "async";
   } else if (command.startsWith("/ticket")) {
-    handleTicketCommand(command, reply).then((handled) => {
-      if (handled && command.slice("/ticket".length).trim()) markValidSlashCommand(ctx, "/ticket");
+    const hasTask = Boolean(command.slice("/ticket".length).trim());
+    if (hasTask) markValidSlashCommand(ctx, "/ticket");
+    handleTicketCommand(command, reply).then(() => {
       ctx.setIsProcessing(false);
     });
     return "async";
   } else if (command === "/backlog") {
-    handleBacklogCommand(reply).then((handled) => {
-      if (handled) markValidSlashCommand(ctx, "/backlog");
+    markValidSlashCommand(ctx, "/backlog");
+    handleBacklogCommand(reply).then(() => {
       ctx.setIsProcessing(false);
     });
     return "async";
