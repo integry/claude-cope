@@ -1,24 +1,15 @@
-import { useState, useRef, useEffect, useCallback, ChangeEvent, KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
-import CommandLine from "./CommandLine";
-import SlashMenu from "./SlashMenu";
+import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import { SLASH_COMMANDS } from "./slashCommands";
-import HeaderBar from "./HeaderBar";
 import { useGameState, Message } from "../hooks/useGameState";
-import { calculateActiveMultiplier, isFreeUser } from "../hooks/gameStateUtils";
-import { BuddyDisplay } from "./BuddyDisplay";
-import { parseGlitchStyle } from "./parseGlitchStyle";
-import { terminalContainerClassName } from "./terminalClassName";
+import { isFreeUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
-import { API_BASE, BYOK_ENABLED } from "../config";
+import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
 import { applyServerProfile } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { filterChatHistory } from "./filterChatHistory";
-import { TerminalFooter } from "./TerminalFooter";
-import Ticker from "./Ticker";
-import { OutageBar, DAMAGE_COMMANDS } from "./OutageBar";
-import SprintProgressBar from "./SprintProgressBar";
+import { DAMAGE_COMMANDS } from "./OutageBar";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
@@ -27,87 +18,16 @@ import { useOverlays } from "../hooks/useOverlays";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 import { runFreeTierDelay } from "./freeTierDelay";
 import { buildSprintCallbacks } from "./buildChatSubmitArgs";
-import MessageList from "./MessageList";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { triggerQuotaLockout, triggerInstantBan } from "./terminalHandlers";
-import { TerminalOverlays } from "./TerminalOverlays";
 import { useTerminalKeyboard } from "../hooks/useTerminalKeyboard";
 import { handleBragSubmit, handleBuddyConfirm, tryOutageDamage } from "./terminalInputHandlers";
 import { shouldShowNag } from "./winrarNag";
+import { TerminalView } from "./TerminalView";
+import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
+import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
 
 export type { Message };
-
-type OverlayVisibility = {
-  showStore: boolean;
-  showLeaderboard: boolean;
-  showAchievements: boolean;
-  showSynergize: boolean;
-  showHelp: boolean;
-  showAbout: boolean;
-  showPrivacy: boolean;
-  showTerms: boolean;
-  showContact: boolean;
-  showProfile: boolean;
-  showParty: boolean;
-  showUpgrade: boolean;
-};
-
-type TerminalViewProps = OverlayVisibility & {
-  activeRegression: ReturnType<typeof useTerminalEffects>["activeRegression"];
-  outageHp: number | null;
-  pendingReviewPing: ReturnType<typeof useMultiplayer>["pendingReviewPing"];
-  pingAcknowledged: boolean;
-  activeTheme: ReturnType<typeof useGameState>["state"]["activeTheme"];
-  regressionGlitch: ReturnType<typeof useTerminalEffects>["regressionGlitch"];
-  anyOverlayOpen: boolean;
-  inputRef: RefObject<HTMLInputElement | null>;
-  closeAllOverlaysPreservingNag: () => void;
-  onlineCount: number;
-  rank: ReturnType<typeof useGameState>["state"]["economy"]["currentRank"];
-  state: ReturnType<typeof useGameState>["state"];
-  handleProfileClick: () => void;
-  setShowHelp: (value: boolean) => void;
-  setShowAbout: (value: boolean) => void;
-  setInputValue: (value: string) => void;
-  setSlashQuery: (value: string) => void;
-  setSlashIndex: (value: number) => void;
-  setShowUpgrade: (value: boolean) => void;
-  compactEffect: boolean;
-  isBooting: boolean;
-  history: Message[];
-  messageKeys: number[];
-  initialHistoryLen: number;
-  promptString: string;
-  isFreeTier: boolean;
-  handleSlashCommandClick: (command: string, action: SlashCommandAction) => void;
-  bottomRef: RefObject<HTMLDivElement | null>;
-  slashQuery: string;
-  slashIndex: number;
-  runSlashCommand: (command: string) => void;
-  inputValue: string;
-  suggestedReply: string | null;
-  isProcessing: boolean;
-  handleChange: (e: ChangeEvent<HTMLInputElement>) => void;
-  handleKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
-  buyGenerator: ReturnType<typeof useGameState>["buyGenerator"];
-  buyUpgrade: ReturnType<typeof useGameState>["buyUpgrade"];
-  buyTheme: ReturnType<typeof useGameState>["buyTheme"];
-  setActiveTheme: ReturnType<typeof useGameState>["setActiveTheme"];
-  setShowStore: (value: boolean) => void;
-  setShowLeaderboard: (value: boolean) => void;
-  setShowAchievements: (value: boolean) => void;
-  setShowPrivacy: (value: boolean) => void;
-  setShowTerms: (value: boolean) => void;
-  setShowContact: (value: boolean) => void;
-  setShowProfile: (value: boolean) => void;
-  setShowParty: (value: boolean) => void;
-  setShowSynergize: (value: boolean) => void;
-  setIsProcessing: (value: boolean) => void;
-  setHistory: ReturnType<typeof useGameState>["setChatHistory"];
-  pendingNagCommand: string | null;
-  handleUpgradeNagClose: () => void;
-  handleManualUpgradeDismiss: () => void;
-};
 
 function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
   while (messageKeys.length < historyLength) {
@@ -116,124 +36,6 @@ function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, 
   if (messageKeys.length > historyLength) {
     messageKeys.length = historyLength;
   }
-}
-
-function isAnyOverlayOpen(overlays: OverlayVisibility) {
-  return Object.values(overlays).some(Boolean);
-}
-
-function getPromptString(activeRegression: ReturnType<typeof useTerminalEffects>["activeRegression"]) {
-  return activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
-}
-
-function TerminalView({
-  activeRegression,
-  outageHp,
-  pendingReviewPing,
-  pingAcknowledged,
-  activeTheme,
-  regressionGlitch,
-  anyOverlayOpen,
-  inputRef,
-  closeAllOverlaysPreservingNag,
-  setShowParty,
-  onlineCount,
-  rank,
-  state,
-  handleProfileClick,
-  setShowHelp,
-  setShowAbout,
-  setInputValue,
-  setSlashQuery,
-  setSlashIndex,
-  setShowUpgrade,
-  compactEffect,
-  isBooting,
-  history,
-  messageKeys,
-  initialHistoryLen,
-  promptString,
-  isFreeTier,
-  handleSlashCommandClick,
-  bottomRef,
-  slashQuery,
-  slashIndex,
-  runSlashCommand,
-  inputValue,
-  suggestedReply,
-  isProcessing,
-  handleChange,
-  handleKeyDown,
-  buyGenerator,
-  buyUpgrade,
-  buyTheme,
-  setActiveTheme,
-  showStore,
-  showLeaderboard,
-  showAchievements,
-  showSynergize,
-  showHelp,
-  showAbout,
-  showPrivacy,
-  showTerms,
-  showContact,
-  showProfile,
-  showParty,
-  showUpgrade,
-  setShowStore,
-  setShowLeaderboard,
-  setShowAchievements,
-  setShowPrivacy,
-  setShowTerms,
-  setShowContact,
-  setShowProfile,
-  setShowParty,
-  setShowSynergize,
-  setIsProcessing,
-  setHistory,
-  pendingNagCommand,
-  handleUpgradeNagClose,
-  handleManualUpgradeDismiss,
-}: TerminalViewProps) {
-  return (
-    <div
-      className={terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}
-      style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : 'var(--color-bg)', color: 'var(--color-text)' }}
-      onClick={() => { if (!anyOverlayOpen && !window.getSelection()?.toString()) inputRef.current?.focus(); }}
-    >
-      <div className="shrink-0">
-        <Ticker onExpand={() => { closeAllOverlaysPreservingNag(); setShowParty(true); }} onlineCount={onlineCount} />
-        {outageHp !== null && <OutageBar outageHp={outageHp} />}
-        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} isBYOK={BYOK_ENABLED && !!state.apiKey} isMax={!!state.proKey || !!state.proKeyHash} byokTotalCost={state.byokTotalCost} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlaysPreservingNag(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlaysPreservingNag(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} onUpgradeClick={() => { closeAllOverlaysPreservingNag(); setShowUpgrade(true); window.history.pushState(null, "", "/upgrade"); }} />
-      </div>
-      <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
-        {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
-        <MessageList history={history} messageKeys={messageKeys} initialHistoryLen={initialHistoryLen} promptString={promptString} activeTicketId={state.activeTicket?.id} username={state.username} isFreeTier={isFreeTier} onSlashCommand={handleSlashCommandClick} />
-        <div ref={bottomRef} />
-      </div>
-      <div className="shrink-0">
-        {state.activeTicket && <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />}
-        <div className="relative border-b border-white">
-          {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
-          <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
-          <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
-        </div>
-      </div>
-      <TerminalOverlays
-        showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showHelp={showHelp}
-        showAbout={showAbout} showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact}
-        showProfile={showProfile} showParty={showParty} showSynergize={showSynergize} showUpgrade={showUpgrade}
-        state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme}
-        setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard} setShowAchievements={setShowAchievements}
-        setShowHelp={setShowHelp} setShowAbout={setShowAbout} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms}
-        setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty}
-        setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory}
-        onUpgradeDismiss={pendingNagCommand !== null ? handleUpgradeNagClose : handleManualUpgradeDismiss}
-        upgradeDismissMode={pendingNagCommand !== null ? "nag" : "manual"}
-      />
-      <TerminalFooter closeAllOverlays={closeAllOverlaysPreservingNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
-    </div>
-  );
 }
 
 function Terminal() {
@@ -396,66 +198,10 @@ function Terminal() {
   const runSlashCommand = (command: string) => {
     executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
   };
-
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
 
-  const checkoutHandledRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (isBooting) return;
-    const checkoutId = new URLSearchParams(window.location.search).get("checkout_id");
-    if (!checkoutId || checkoutHandledRef.current === checkoutId) return;
-    checkoutHandledRef.current = checkoutId;
-    const strip = () => { const p = new URLSearchParams(window.location.search); p.delete("checkout_id"); const qs = p.toString(); window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "")); };
-    const alreadyPro = Boolean(state.proKeyHash);
-    void (async () => {
-      setHistory((prev) => [...prev, { role: "system", content: "[💳] Retrieving your license — one sec…" }]);
-      try {
-        let lastData: { licenseKey?: string; allKeys?: string[]; error?: string } = {};
-        let lastStatus = 0;
-        for (let attempt = 0; attempt < 5; attempt++) {
-          if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
-          let res: Response;
-          try {
-            res = await fetch(`${API_BASE}/api/account/checkout-license`, {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ checkoutId }),
-              credentials: "include",
-            });
-          } catch {
-            if (attempt < 4) continue;
-            throw new Error("Network error");
-          }
-          if (res.status >= 500 && attempt < 4) continue;
-          lastStatus = res.status;
-          lastData = await res.json() as { licenseKey?: string; allKeys?: string[]; error?: string };
-          if (res.ok && lastData.licenseKey) {
-            const keys = lastData.allKeys ?? [lastData.licenseKey];
-            if (keys.length > 1) {
-              const keyList = keys.map((k, i) => `${i + 1}. \`${k}\``).join("\n");
-              setHistory((prev) => [...prev, { role: "system", content: `[✅ TEAM PACK] Your purchase includes **${keys.length} license keys**:\n\n${keyList}\n\nShare these with your team. Each person can activate their key by running \`/sync <KEY>\`.` }]);
-              strip();
-              return;
-            }
-            if (alreadyPro) {
-              setHistory((prev) => [...prev, { role: "system", content: `[✅] License key retrieved: \`${lastData.licenseKey}\`. You're already synced — run \`/sync ${lastData.licenseKey}\` to switch keys.` }]);
-              strip();
-              return;
-            }
-            runSlashCommandRef.current(`/sync ${lastData.licenseKey}`);
-            strip();
-            return;
-          }
-          if (res.status !== 409) break;
-        }
-        if (lastStatus !== 409) strip();
-        const manualHint = lastData.licenseKey ? ` Your key: \`${lastData.licenseKey}\` — run \`/sync ${lastData.licenseKey}\` manually.` : lastStatus === 409 ? " Refresh the page to retry automatically." : " If your license arrived by email, you can run `/sync <COPE-XXX>` manually.";
-        setHistory((prev) => [...prev, { role: "error", content: `[❌] License activation failed: ${lastData.error ?? "Unknown error"}.${manualHint}` }]);
-      } catch {
-        setHistory((prev) => [...prev, { role: "error", content: "[❌] Network error during license activation. Check your email for the license key and run `/sync <COPE-XXX>` manually." }]);
-      }
-    })();
-  }, [isBooting, state.proKeyHash, setHistory]);
+  useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, setHistory, runSlashCommand });
 
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") { runSlashCommandRef.current(command); return; }
@@ -587,7 +333,6 @@ function Terminal() {
       anyOverlayOpen={anyOverlayOpen}
       inputRef={inputRef}
       closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
-      setShowParty={setShowParty}
       onlineCount={onlineCount}
       rank={rank}
       state={state}
@@ -604,7 +349,6 @@ function Terminal() {
       messageKeys={messageKeys.current}
       initialHistoryLen={initialHistoryLen.current}
       promptString={promptString}
-      isFreeTier={isFreeTier}
       handleSlashCommandClick={handleSlashCommandClick}
       bottomRef={bottomRef}
       slashQuery={slashQuery}
