@@ -6,7 +6,7 @@ import {
   PRO_QUOTA_LIMIT,
 } from "../config";
 
-/* ── shared constants (mirrored from UpgradeOverlay) ────────── */
+/* ── shared constants ───────────────────────────────────────── */
 
 const B = "#ff5555"; // border (red)
 const Y = "#ffff55"; // yellow headings
@@ -17,6 +17,7 @@ const DIM = "#aaaaaa"; // dim footer
 
 const INNER_W = 64; // inner content width (between ║ chars)
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
+export const UPGRADE_OVERLAY_MOBILE_MAX_WIDTH = 640;
 
 /* ── types ──────────────────────────────────────────────────── */
 
@@ -46,7 +47,7 @@ export default function DesktopLayout({
   const optionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const getIsDesktopViewport = useCallback(
-    () => typeof window !== "undefined" && window.innerWidth > 640,
+    () => typeof window !== "undefined" && window.innerWidth > UPGRADE_OVERLAY_MOBILE_MAX_WIDTH,
     [],
   );
   const [isDesktopViewport, setIsDesktopViewport] = useState(getIsDesktopViewport);
@@ -152,6 +153,9 @@ export default function DesktopLayout({
           backgroundColor: "transparent",
         }}
         onClick={(e) => e.stopPropagation()}
+        onFocus={() => {
+          setSelectedOptionId(id);
+        }}
       >
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: "transparent" }}>{emptyInner}</span>
@@ -231,8 +235,14 @@ export default function DesktopLayout({
 
   useEffect(() => {
     if (!isDesktopViewport) return;
+
+    if (selectedOptionId !== null) {
+      optionRefs.current[selectedOptionId]?.focus();
+      return;
+    }
+
     overlayRef.current?.focus();
-  }, [isDesktopViewport]);
+  }, [isDesktopViewport, selectedOptionId]);
 
   useEffect(() => {
     if (!isDesktopViewport) return undefined;

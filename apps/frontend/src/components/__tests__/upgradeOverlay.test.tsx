@@ -125,20 +125,26 @@ describe("UpgradeOverlay", () => {
     setViewportWidth(1024);
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
     const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    const links = container.querySelectorAll(".upgrade-desktop a[href]");
+    const singleLink = links[0] as HTMLAnchorElement | undefined;
+    const multiLink = links[1] as HTMLAnchorElement | undefined;
 
     const getSelectedHref = () => container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href");
 
     expect(getSelectedHref()).toBe("https://example.com/single");
+    expect(document.activeElement).toBe(singleLink);
 
     act(() => {
       desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
     expect(getSelectedHref()).toBe("https://example.com/multi");
+    expect(document.activeElement).toBe(multiLink);
 
     act(() => {
       desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
     });
     expect(getSelectedHref()).toBe("https://example.com/single");
+    expect(document.activeElement).toBe(singleLink);
   });
 
   it("activates the selected desktop option on Enter", () => {
@@ -180,6 +186,20 @@ describe("UpgradeOverlay", () => {
 
     expect(clickSpy).not.toHaveBeenCalled();
     clickSpy.mockRestore();
+  });
+
+  it("syncs the selected desktop option when focus moves to a different link", () => {
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+    const links = container.querySelectorAll(".upgrade-desktop a[href]");
+    const multiLink = links[1] as HTMLAnchorElement | undefined;
+
+    act(() => {
+      multiLink?.focus();
+    });
+
+    expect(document.activeElement).toBe(multiLink);
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/multi");
   });
 
   it("disables desktop keyboard navigation after resizing to mobile", () => {
