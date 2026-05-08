@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { PendingReviewPing } from "./useMultiplayer";
 
 /**
  * Tracks whether the user has acknowledged an incoming review ping via any
@@ -6,7 +7,7 @@ import { useEffect, useState } from "react";
  * unacknowledged, the calling component flashes the screen; once acknowledged,
  * flashing stops without resolving the ping itself. Resets on each new ping.
  */
-export function usePingAcknowledged(pendingReviewPing: unknown): boolean {
+export function usePingAcknowledged(pendingReviewPing: PendingReviewPing): boolean {
   const [pingAcknowledged, setPingAcknowledged] = useState(false);
   useEffect(() => {
     setPingAcknowledged(false);

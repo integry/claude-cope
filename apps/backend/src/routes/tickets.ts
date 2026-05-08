@@ -44,7 +44,7 @@ tickets.get("/community", async (c) => {
 
   const { results } = await db
     .prepare(
-      "SELECT id, title, description, technical_debt, kickoff_prompt, created_at FROM community_backlog ORDER BY RANDOM() LIMIT 5"
+      "SELECT id, reporter, reporter_name, reporter_title, reporter_description, title, description, technical_debt, kickoff_prompt, created_at FROM community_backlog ORDER BY RANDOM() LIMIT 5"
     )
     .all();
 
@@ -120,6 +120,10 @@ tickets.post("/refine", async (c) => {
   const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
 
   let title: string;
+  let reporter: string | undefined;
+  let reporterName: string | undefined;
+  let reporterTitle: string | undefined;
+  let reporterDescription: string | undefined;
   let description: string;
   let estimatedTechDebt: number;
   let kickoffPrompt: string;
@@ -128,16 +132,28 @@ tickets.post("/refine", async (c) => {
     try {
       const parsed = JSON.parse(jsonMatch[1]);
       title = parsed.title;
+      reporter = parsed.reporter || undefined;
+      reporterName = parsed.reporterName || undefined;
+      reporterTitle = parsed.reporterTitle || undefined;
+      reporterDescription = parsed.reporterDescription || undefined;
       description = parsed.description;
       estimatedTechDebt = Number(parsed.estimatedTechDebt) || 13;
       kickoffPrompt = parsed.kickoffPrompt || "";
     } catch {
       // Fallback: extract from markdown
       ({ title, description, estimatedTechDebt } = parseMarkdown(content));
+      reporter = undefined;
+      reporterName = undefined;
+      reporterTitle = undefined;
+      reporterDescription = undefined;
       kickoffPrompt = "";
     }
   } else {
     ({ title, description, estimatedTechDebt } = parseMarkdown(content));
+    reporter = undefined;
+    reporterName = undefined;
+    reporterTitle = undefined;
+    reporterDescription = undefined;
     kickoffPrompt = "";
   }
 
@@ -146,16 +162,36 @@ tickets.post("/refine", async (c) => {
 
   const { success } = await db
     .prepare(
-      "INSERT INTO community_backlog (id, title, description, technical_debt, kickoff_prompt) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO community_backlog (id, reporter, reporter_name, reporter_title, reporter_description, title, description, technical_debt, kickoff_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
-    .bind(id, title, description, estimatedTechDebt, kickoffPrompt)
+    .bind(
+      id,
+      reporter ?? null,
+      reporterName ?? null,
+      reporterTitle ?? null,
+      reporterDescription ?? null,
+      title,
+      description,
+      estimatedTechDebt,
+      kickoffPrompt
+    )
     .run();
 
   if (!success) {
     return c.json({ error: "Failed to insert ticket" }, 500);
   }
 
-  return c.json({ id, title, description, estimatedTechDebt, kickoffPrompt }, 201);
+  return c.json({
+    id,
+    reporter: reporter ?? null,
+    reporterName: reporterName ?? null,
+    reporterTitle: reporterTitle ?? null,
+    reporterDescription: reporterDescription ?? null,
+    title,
+    description,
+    estimatedTechDebt,
+    kickoffPrompt,
+  }, 201);
 });
 
 /** Fallback parser for when the LLM doesn't return a fenced JSON block. */

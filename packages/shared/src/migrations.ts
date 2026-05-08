@@ -214,6 +214,28 @@ export const migrations: Migration[] = [
     name: "028_idx_checkout_key_claims_checkout_id",
     sql: "CREATE INDEX IF NOT EXISTS idx_checkout_key_claims_checkout_id ON checkout_key_claims (checkout_id)",
   },
+
+  // ── backlog reporter metadata ────────────────────────────────────
+  {
+    name: "029_add_community_backlog_reporter",
+    sql: "ALTER TABLE community_backlog ADD COLUMN reporter TEXT",
+    ignoreErrorMatching: /duplicate column name.*reporter/i,
+  },
+  {
+    name: "030_add_community_backlog_reporter_name",
+    sql: "ALTER TABLE community_backlog ADD COLUMN reporter_name TEXT",
+    ignoreErrorMatching: /duplicate column name.*reporter_name/i,
+  },
+  {
+    name: "031_add_community_backlog_reporter_title",
+    sql: "ALTER TABLE community_backlog ADD COLUMN reporter_title TEXT",
+    ignoreErrorMatching: /duplicate column name.*reporter_title/i,
+  },
+  {
+    name: "032_add_community_backlog_reporter_description",
+    sql: "ALTER TABLE community_backlog ADD COLUMN reporter_description TEXT",
+    ignoreErrorMatching: /duplicate column name.*reporter_description/i,
+  },
 ];
 
 /**

@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "build:backlog-seed": "node scripts/build-backlog-seed.mjs",
     "dev": "npm run dev --workspaces --if-present",
     "dev:docker": "docker compose -f docker-compose.dev.yml up",
     "dev:docker:down": "docker compose -f docker-compose.dev.yml down",

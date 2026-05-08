@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import {
-  TASK_TOOL_SEQUENCES,
   getSequencesForTask,
+  hasSpecificTaskSequence,
   pickRandomSequence,
 } from "../data/taskToolSequences";
 
@@ -11,7 +11,7 @@ const toolSequences = new Hono();
  * GET /random
  * Returns a single random tool-step sequence.
  * Query params:
- *   - taskId (optional): COPE-XXX task ID to scope the random pick
+ *   - taskId (optional): task ID to scope the random pick
  */
 toolSequences.get("/random", (c) => {
   const taskId = c.req.query("taskId") || null;
@@ -27,7 +27,7 @@ toolSequences.get("/random", (c) => {
 toolSequences.get("/for-task/:taskId", (c) => {
   const taskId = c.req.param("taskId");
   const sequences = getSequencesForTask(taskId);
-  const isSpecific = taskId in TASK_TOOL_SEQUENCES;
+  const isSpecific = hasSpecificTaskSequence(taskId);
   return c.json({ taskId, sequences, isTaskSpecific: isSpecific });
 });
 
@@ -36,7 +36,7 @@ toolSequences.get("/for-task/:taskId", (c) => {
  * Returns the list of task IDs that have specific tool sequences defined.
  */
 toolSequences.get("/all-task-ids", (c) => {
-  const taskIds = Object.keys(TASK_TOOL_SEQUENCES);
+  const taskIds = Array.from({ length: 160 }, (_, index) => `COPE-${String(index + 1).padStart(3, "0")}`);
   c.header("Cache-Control", "public, max-age=3600");
   return c.json({ taskIds, count: taskIds.length });
 });
