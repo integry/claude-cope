@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 import app from "../app";
 
-export function makeDB(existing?: { total_td: number; current_td: number; last_sync_time?: string; license_hash?: string | null; corporate_rank?: string }, opts?: { licenseActive?: boolean }) {
+export function makeDB(existing?: { total_td: number; current_td: number; last_sync_time?: string; license_hash?: string | null; corporate_rank?: string; account_id?: string | null }, opts?: { licenseActive?: boolean }) {
   const bound: unknown[] = [];
   let lastSQL = "";
   const batchedStatements: unknown[] = [];
@@ -121,6 +121,7 @@ export function postScore(
   body: Record<string, unknown>,
   headers?: Record<string, string>,
   kv = mockKV(body.username as string | undefined),
+  env: Record<string, unknown> = {},
 ) {
   return app.request(
     "/api/score",
@@ -129,6 +130,6 @@ export function postScore(
       headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(body),
     },
-    { ALLOWED_ORIGINS: "http://localhost:5173", DB: db, QUOTA_KV: kv }
+    { ALLOWED_ORIGINS: "http://localhost:5173", DB: db, QUOTA_KV: kv, ...env }
   );
 }

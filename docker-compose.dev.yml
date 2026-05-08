@@ -7,12 +7,15 @@ name: claude-cope-dev
 # keep working unchanged (matches apps/frontend/vite.config.ts proxy).
 
 x-node-common: &node-common
-  image: node:20-bookworm
+  build:
+    context: .
+    dockerfile: Dockerfile.dev
   user: "1000:1000"
   network_mode: host
   init: true
   volumes:
     - .:/app
+    - node_modules:/app/node_modules
   environment:
     HOME: /tmp
     npm_config_cache: /tmp/.npm
@@ -36,9 +39,12 @@ services:
   admin-backend:
     <<: *node-common
     working_dir: /app/apps/admin-backend
-    command: npx wrangler dev --persist-to ../../apps/backend/.wrangler/state
+    command: npx wrangler dev --inspector-port 9231 --persist-to ../../apps/backend/.wrangler/state
 
   admin-frontend:
     <<: *node-common
     working_dir: /app/apps/admin-frontend
     command: npx vite --port 5174
+
+volumes:
+  node_modules:

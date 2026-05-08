@@ -214,6 +214,15 @@ export const migrations: Migration[] = [
     name: "028_idx_checkout_key_claims_checkout_id",
     sql: "CREATE INDEX IF NOT EXISTS idx_checkout_key_claims_checkout_id ON checkout_key_claims (checkout_id)",
   },
+  {
+    name: "029_add_user_scores_account_id",
+    sql: "ALTER TABLE user_scores ADD COLUMN account_id TEXT",
+    ignoreErrorMatching: /duplicate column name.*account_id/i,
+  },
+  {
+    name: "030_idx_user_scores_account_id",
+    sql: "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_account_id ON user_scores (account_id) WHERE account_id IS NOT NULL AND account_id != ''",
+  },
 ];
 
 /**

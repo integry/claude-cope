@@ -1,0 +1,19 @@
+FROM node:20-bookworm
+
+WORKDIR /app
+
+# Copy only manifests first so dependency installs layer cleanly.
+COPY package.json package-lock.json ./
+COPY apps/admin-backend/package.json apps/admin-backend/package.json
+COPY apps/admin-frontend/package.json apps/admin-frontend/package.json
+COPY apps/backend/package.json apps/backend/package.json
+COPY apps/frontend/package.json apps/frontend/package.json
+COPY apps/partykit/package.json apps/partykit/package.json
+COPY packages/shared/package.json packages/shared/package.json
+
+RUN npm ci
+
+# Ensure the runtime user can read dependencies and write dev caches.
+RUN chown -R node:node /app
+
+USER node

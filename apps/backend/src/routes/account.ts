@@ -7,6 +7,7 @@ import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
+import { issueFreeAccountCookie } from "../utils/freeAccountIdentity";
 
 type Env = {
   Bindings: {
@@ -18,9 +19,11 @@ type Env = {
     POLAR_ORGANIZATION_ID?: string;
     FREE_QUOTA_LIMIT?: string;
     PRO_INITIAL_QUOTA?: string;
+    FREE_ACCOUNT_COOKIE_SECRET?: string;
   };
   Variables: {
     sessionId: string;
+    freeAccountId?: string;
   };
 };
 const SHILL_CREDIT = 5;
@@ -394,6 +397,7 @@ account.get("/me", async (c) => {
   }
 
   const { isPro, quotaPercent, profile, revoked } = await buildMePayload({ row, db, kv, env: c.env, sessionId });
+  await issueFreeAccountCookie(c, c.env.FREE_ACCOUNT_COOKIE_SECRET, row.account_id ?? null);
 
   return c.json({
     found: true,

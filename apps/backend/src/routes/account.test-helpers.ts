@@ -3,7 +3,7 @@ import app from "../app";
 
 export const ACCOUNT_TEST_SQL = {
   getProfile: "td_multiplier FROM user_scores WHERE username = ?",
-  getProfileRow: "td_multiplier, license_hash FROM user_scores WHERE username = ?",
+  getProfileRow: "td_multiplier, license_hash, account_id FROM user_scores WHERE username = ?",
   getLicenseStatus: "FROM licenses WHERE key_hash = ?",
   aliasTakenLookup: "SELECT 1 FROM user_scores WHERE LOWER(username) = LOWER(?) AND username != ?",
   aliasHistoryLookup: "FROM completed_tasks",
