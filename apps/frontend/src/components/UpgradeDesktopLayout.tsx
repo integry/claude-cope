@@ -45,7 +45,11 @@ export default function DesktopLayout({
 }: LayoutProps) {
   const optionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const overlayRef = useRef<HTMLDivElement | null>(null);
-  const [isDesktopViewport, setIsDesktopViewport] = useState(() => window.innerWidth > 640);
+  const getIsDesktopViewport = useCallback(
+    () => typeof window !== "undefined" && window.innerWidth > 640,
+    [],
+  );
+  const [isDesktopViewport, setIsDesktopViewport] = useState(getIsDesktopViewport);
   const topBorder = (
     <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>
   );
@@ -204,14 +208,14 @@ export default function DesktopLayout({
 
   useEffect(() => {
     const syncViewport = () => {
-      setIsDesktopViewport(window.innerWidth > 640);
+      setIsDesktopViewport(getIsDesktopViewport());
     };
 
     window.addEventListener("resize", syncViewport);
     return () => {
       window.removeEventListener("resize", syncViewport);
     };
-  }, []);
+  }, [getIsDesktopViewport]);
 
   const cycleSelection = useCallback((direction: -1 | 1) => {
     if (availableOptionIds.length === 0) return;
