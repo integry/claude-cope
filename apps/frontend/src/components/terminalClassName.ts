@@ -1,3 +1,5 @@
+import type { PendingReviewPing } from "../hooks/useMultiplayer";
+
 /**
  * Build the Terminal container's Tailwind class string. Kept outside the
  * Terminal component so its conditional branches don't contribute to
@@ -6,7 +8,7 @@
 export function terminalContainerClassName(args: {
   activeRegression: string | null;
   outageHp: number | null;
-  pendingReviewPing: unknown;
+  pendingReviewPing: PendingReviewPing;
   pingAcknowledged: boolean;
   activeTheme: string;
 }): string {

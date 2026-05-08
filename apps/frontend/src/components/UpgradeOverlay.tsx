@@ -44,7 +44,7 @@ function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss, dismissMo
 
   return (
     <>
-      {/* Desktop: visible ≥641px, hidden below via CSS */}
+      {/* Desktop: visible above the shared mobile max-width breakpoint */}
       <DesktopLayout
         singleLabel={singleLabel}
         multiLabel={multiLabel}
@@ -54,7 +54,7 @@ function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss, dismissMo
         dismissMode={dismissMode}
         onDismiss={onDismiss}
       />
-      {/* Mobile: visible ≤640px, hidden above via CSS */}
+      {/* Mobile: visible up to the shared max-width breakpoint */}
       <MobileLayout
         singleLabel={singleLabel}
         multiLabel={multiLabel}
