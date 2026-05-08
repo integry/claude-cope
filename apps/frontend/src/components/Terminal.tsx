@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
+import { useState, useRef, useEffect, useCallback, ChangeEvent, KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import { SLASH_COMMANDS } from "./slashCommands";
@@ -37,6 +37,78 @@ import { shouldShowNag } from "./winrarNag";
 
 export type { Message };
 
+type OverlayVisibility = {
+  showStore: boolean;
+  showLeaderboard: boolean;
+  showAchievements: boolean;
+  showSynergize: boolean;
+  showHelp: boolean;
+  showAbout: boolean;
+  showPrivacy: boolean;
+  showTerms: boolean;
+  showContact: boolean;
+  showProfile: boolean;
+  showParty: boolean;
+  showUpgrade: boolean;
+};
+
+type TerminalViewProps = OverlayVisibility & {
+  activeRegression: ReturnType<typeof useTerminalEffects>["activeRegression"];
+  outageHp: number | null;
+  pendingReviewPing: ReturnType<typeof useMultiplayer>["pendingReviewPing"];
+  pingAcknowledged: boolean;
+  activeTheme: ReturnType<typeof useGameState>["state"]["activeTheme"];
+  regressionGlitch: ReturnType<typeof useTerminalEffects>["regressionGlitch"];
+  anyOverlayOpen: boolean;
+  inputRef: RefObject<HTMLInputElement | null>;
+  closeAllOverlaysPreservingNag: () => void;
+  onlineCount: number;
+  rank: ReturnType<typeof useGameState>["state"]["economy"]["currentRank"];
+  state: ReturnType<typeof useGameState>["state"];
+  handleProfileClick: () => void;
+  setShowHelp: (value: boolean) => void;
+  setShowAbout: (value: boolean) => void;
+  setInputValue: (value: string) => void;
+  setSlashQuery: (value: string) => void;
+  setSlashIndex: (value: number) => void;
+  setShowUpgrade: (value: boolean) => void;
+  compactEffect: boolean;
+  isBooting: boolean;
+  history: Message[];
+  messageKeys: number[];
+  initialHistoryLen: number;
+  promptString: string;
+  isFreeTier: boolean;
+  handleSlashCommandClick: (command: string, action: SlashCommandAction) => void;
+  bottomRef: RefObject<HTMLDivElement | null>;
+  slashQuery: string;
+  slashIndex: number;
+  runSlashCommand: (command: string) => void;
+  inputValue: string;
+  suggestedReply: string | null;
+  isProcessing: boolean;
+  handleChange: (e: ChangeEvent<HTMLInputElement>) => void;
+  handleKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
+  buyGenerator: ReturnType<typeof useGameState>["buyGenerator"];
+  buyUpgrade: ReturnType<typeof useGameState>["buyUpgrade"];
+  buyTheme: ReturnType<typeof useGameState>["buyTheme"];
+  setActiveTheme: ReturnType<typeof useGameState>["setActiveTheme"];
+  setShowStore: (value: boolean) => void;
+  setShowLeaderboard: (value: boolean) => void;
+  setShowAchievements: (value: boolean) => void;
+  setShowPrivacy: (value: boolean) => void;
+  setShowTerms: (value: boolean) => void;
+  setShowContact: (value: boolean) => void;
+  setShowProfile: (value: boolean) => void;
+  setShowParty: (value: boolean) => void;
+  setShowSynergize: (value: boolean) => void;
+  setIsProcessing: (value: boolean) => void;
+  setHistory: ReturnType<typeof useGameState>["setChatHistory"];
+  pendingNagCommand: string | null;
+  handleUpgradeNagClose: () => void;
+  handleManualUpgradeDismiss: () => void;
+};
+
 function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
   while (messageKeys.length < historyLength) {
     messageKeys.push(nextKeyId.current++);
@@ -44,6 +116,124 @@ function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, 
   if (messageKeys.length > historyLength) {
     messageKeys.length = historyLength;
   }
+}
+
+function isAnyOverlayOpen(overlays: OverlayVisibility) {
+  return Object.values(overlays).some(Boolean);
+}
+
+function getPromptString(activeRegression: ReturnType<typeof useTerminalEffects>["activeRegression"]) {
+  return activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
+}
+
+function TerminalView({
+  activeRegression,
+  outageHp,
+  pendingReviewPing,
+  pingAcknowledged,
+  activeTheme,
+  regressionGlitch,
+  anyOverlayOpen,
+  inputRef,
+  closeAllOverlaysPreservingNag,
+  setShowParty,
+  onlineCount,
+  rank,
+  state,
+  handleProfileClick,
+  setShowHelp,
+  setShowAbout,
+  setInputValue,
+  setSlashQuery,
+  setSlashIndex,
+  setShowUpgrade,
+  compactEffect,
+  isBooting,
+  history,
+  messageKeys,
+  initialHistoryLen,
+  promptString,
+  isFreeTier,
+  handleSlashCommandClick,
+  bottomRef,
+  slashQuery,
+  slashIndex,
+  runSlashCommand,
+  inputValue,
+  suggestedReply,
+  isProcessing,
+  handleChange,
+  handleKeyDown,
+  buyGenerator,
+  buyUpgrade,
+  buyTheme,
+  setActiveTheme,
+  showStore,
+  showLeaderboard,
+  showAchievements,
+  showSynergize,
+  showHelp,
+  showAbout,
+  showPrivacy,
+  showTerms,
+  showContact,
+  showProfile,
+  showParty,
+  showUpgrade,
+  setShowStore,
+  setShowLeaderboard,
+  setShowAchievements,
+  setShowPrivacy,
+  setShowTerms,
+  setShowContact,
+  setShowProfile,
+  setShowParty,
+  setShowSynergize,
+  setIsProcessing,
+  setHistory,
+  pendingNagCommand,
+  handleUpgradeNagClose,
+  handleManualUpgradeDismiss,
+}: TerminalViewProps) {
+  return (
+    <div
+      className={terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}
+      style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : 'var(--color-bg)', color: 'var(--color-text)' }}
+      onClick={() => { if (!anyOverlayOpen && !window.getSelection()?.toString()) inputRef.current?.focus(); }}
+    >
+      <div className="shrink-0">
+        <Ticker onExpand={() => { closeAllOverlaysPreservingNag(); setShowParty(true); }} onlineCount={onlineCount} />
+        {outageHp !== null && <OutageBar outageHp={outageHp} />}
+        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} isBYOK={BYOK_ENABLED && !!state.apiKey} isMax={!!state.proKey || !!state.proKeyHash} byokTotalCost={state.byokTotalCost} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlaysPreservingNag(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlaysPreservingNag(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} onUpgradeClick={() => { closeAllOverlaysPreservingNag(); setShowUpgrade(true); window.history.pushState(null, "", "/upgrade"); }} />
+      </div>
+      <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
+        {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
+        <MessageList history={history} messageKeys={messageKeys} initialHistoryLen={initialHistoryLen} promptString={promptString} activeTicketId={state.activeTicket?.id} username={state.username} isFreeTier={isFreeTier} onSlashCommand={handleSlashCommandClick} />
+        <div ref={bottomRef} />
+      </div>
+      <div className="shrink-0">
+        {state.activeTicket && <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />}
+        <div className="relative border-b border-white">
+          {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
+          <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
+          <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
+        </div>
+      </div>
+      <TerminalOverlays
+        showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showHelp={showHelp}
+        showAbout={showAbout} showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact}
+        showProfile={showProfile} showParty={showParty} showSynergize={showSynergize} showUpgrade={showUpgrade}
+        state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme}
+        setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard} setShowAchievements={setShowAchievements}
+        setShowHelp={setShowHelp} setShowAbout={setShowAbout} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms}
+        setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty}
+        setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory}
+        onUpgradeDismiss={pendingNagCommand !== null ? handleUpgradeNagClose : handleManualUpgradeDismiss}
+        upgradeDismissMode={pendingNagCommand !== null ? "nag" : "manual"}
+      />
+      <TerminalFooter closeAllOverlays={closeAllOverlaysPreservingNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
+    </div>
+  );
 }
 
 function Terminal() {
@@ -98,11 +288,23 @@ function Terminal() {
   const historyRef = useRef(history);
   historyRef.current = history;
   const lastSuggestedReplyRef = useRef<string | null>(null);
-  const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
+  const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
-  const anyOverlayOpen =
-    showStore || showLeaderboard || showAchievements || showSynergize || showHelp || showAbout ||
-    showPrivacy || showTerms || showContact || showProfile || showParty || showUpgrade;
+  const overlayVisibility = {
+    showStore,
+    showLeaderboard,
+    showAchievements,
+    showSynergize,
+    showHelp,
+    showAbout,
+    showPrivacy,
+    showTerms,
+    showContact,
+    showProfile,
+    showParty,
+    showUpgrade,
+  };
+  const anyOverlayOpen = isAnyOverlayOpen(overlayVisibility);
 
   useEffect(() => {
     return () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); };
@@ -375,43 +577,75 @@ function Terminal() {
   });
 
   return (
-    <div
-      className={terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme: state.activeTheme })}
-      style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : 'var(--color-bg)', color: 'var(--color-text)' }}
-      onClick={() => { if (!anyOverlayOpen && !window.getSelection()?.toString()) inputRef.current?.focus(); }}
-    >
-      <div className="shrink-0">
-        <Ticker onExpand={() => { closeAllOverlaysPreservingNag(); setShowParty(true); }} onlineCount={onlineCount} />
-        {outageHp !== null && <OutageBar outageHp={outageHp} />}
-        <HeaderBar rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp} activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier} username={state.username} isBYOK={BYOK_ENABLED && !!state.apiKey} isMax={!!state.proKey || !!state.proKeyHash} byokTotalCost={state.byokTotalCost} onProfileClick={handleProfileClick} onHelpClick={() => { closeAllOverlaysPreservingNag(); setShowHelp(true); }} onAboutClick={() => { closeAllOverlaysPreservingNag(); setShowAbout(true); }} onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }} onUpgradeClick={() => { closeAllOverlaysPreservingNag(); setShowUpgrade(true); window.history.pushState(null, "", "/upgrade"); }} />
-      </div>
-      <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
-        {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
-        <MessageList history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} activeTicketId={state.activeTicket?.id} username={state.username} isFreeTier={isFreeTier} onSlashCommand={handleSlashCommandClick} />
-        <div ref={bottomRef} />
-      </div>
-      <div className="shrink-0">
-        {state.activeTicket && <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />}
-        <div className="relative border-b border-white">
-          {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
-          <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
-          <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
-        </div>
-      </div>
-      <TerminalOverlays
-        showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showHelp={showHelp}
-        showAbout={showAbout} showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact}
-        showProfile={showProfile} showParty={showParty} showSynergize={showSynergize} showUpgrade={showUpgrade}
-        state={state} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme}
-        setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard} setShowAchievements={setShowAchievements}
-        setShowHelp={setShowHelp} setShowAbout={setShowAbout} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms}
-        setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty}
-        setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory}
-        onUpgradeDismiss={pendingNagCommandRef.current !== null ? handleUpgradeNagClose : handleManualUpgradeDismiss}
-        upgradeDismissMode={pendingNagCommandRef.current !== null ? "nag" : "manual"}
-      />
-      <TerminalFooter closeAllOverlays={closeAllOverlaysPreservingNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
-    </div>
+    <TerminalView
+      activeRegression={activeRegression}
+      outageHp={outageHp}
+      pendingReviewPing={pendingReviewPing}
+      pingAcknowledged={pingAcknowledged}
+      activeTheme={state.activeTheme}
+      regressionGlitch={regressionGlitch}
+      anyOverlayOpen={anyOverlayOpen}
+      inputRef={inputRef}
+      closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
+      setShowParty={setShowParty}
+      onlineCount={onlineCount}
+      rank={rank}
+      state={state}
+      handleProfileClick={handleProfileClick}
+      setShowHelp={setShowHelp}
+      setShowAbout={setShowAbout}
+      setInputValue={setInputValue}
+      setSlashQuery={setSlashQuery}
+      setSlashIndex={setSlashIndex}
+      setShowUpgrade={setShowUpgrade}
+      compactEffect={compactEffect}
+      isBooting={isBooting}
+      history={history}
+      messageKeys={messageKeys.current}
+      initialHistoryLen={initialHistoryLen.current}
+      promptString={promptString}
+      isFreeTier={isFreeTier}
+      handleSlashCommandClick={handleSlashCommandClick}
+      bottomRef={bottomRef}
+      slashQuery={slashQuery}
+      slashIndex={slashIndex}
+      runSlashCommand={runSlashCommand}
+      inputValue={inputValue}
+      suggestedReply={suggestedReply}
+      isProcessing={isProcessing}
+      handleChange={handleChange}
+      handleKeyDown={handleKeyDown}
+      buyGenerator={buyGenerator}
+      buyUpgrade={buyUpgrade}
+      buyTheme={buyTheme}
+      setActiveTheme={setActiveTheme}
+      showStore={showStore}
+      showLeaderboard={showLeaderboard}
+      showAchievements={showAchievements}
+      showSynergize={showSynergize}
+      showHelp={showHelp}
+      showAbout={showAbout}
+      showPrivacy={showPrivacy}
+      showTerms={showTerms}
+      showContact={showContact}
+      showProfile={showProfile}
+      showParty={showParty}
+      showUpgrade={showUpgrade}
+      setShowStore={setShowStore}
+      setShowLeaderboard={setShowLeaderboard}
+      setShowAchievements={setShowAchievements}
+      setShowPrivacy={setShowPrivacy}
+      setShowTerms={setShowTerms}
+      setShowContact={setShowContact}
+      setShowProfile={setShowProfile}
+      setShowParty={setShowParty}
+      setShowSynergize={setShowSynergize}
+      setIsProcessing={setIsProcessing}
+      setHistory={setHistory}
+      pendingNagCommand={pendingNagCommandRef.current}
+      handleUpgradeNagClose={handleUpgradeNagClose}
+      handleManualUpgradeDismiss={handleManualUpgradeDismiss}
+    />
   );
 }
 
