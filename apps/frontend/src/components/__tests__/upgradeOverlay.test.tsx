@@ -219,6 +219,21 @@ describe("UpgradeOverlay", () => {
     expect(getSelectedHref()).toBe("https://example.com/single");
   });
 
+  it("moves focus off the desktop overlay when resizing to mobile", () => {
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+    const singleLink = container.querySelector(".upgrade-desktop a[href]") as HTMLAnchorElement | null;
+
+    expect(document.activeElement).toBe(singleLink);
+
+    act(() => {
+      setViewportWidth(375);
+    });
+
+    expect(document.activeElement).not.toBe(singleLink);
+    expect(container.querySelector(".upgrade-desktop")?.contains(document.activeElement)).toBe(false);
+  });
+
   it("enables desktop keyboard navigation after resizing from mobile to desktop", () => {
     setViewportWidth(375);
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });

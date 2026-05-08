@@ -234,7 +234,13 @@ export default function DesktopLayout({
   }, [availableOptionIds, selectedOptionId]);
 
   useEffect(() => {
-    if (!isDesktopViewport) return;
+    if (!isDesktopViewport) {
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement && overlayRef.current?.contains(activeElement)) {
+        activeElement.blur();
+      }
+      return;
+    }
 
     if (selectedOptionId !== null) {
       optionRefs.current[selectedOptionId]?.focus();
