@@ -45,6 +45,7 @@ export default function DesktopLayout({
 }: LayoutProps) {
   const optionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(() => window.innerWidth > 640);
   const topBorder = (
     <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>
   );
@@ -202,8 +203,14 @@ export default function DesktopLayout({
   }, [availableOptionIds, selectedOptionId]);
 
   useEffect(() => {
-    if (window.innerWidth <= 640) return;
-    overlayRef.current?.focus();
+    const syncViewport = () => {
+      setIsDesktopViewport(window.innerWidth > 640);
+    };
+
+    window.addEventListener("resize", syncViewport);
+    return () => {
+      window.removeEventListener("resize", syncViewport);
+    };
   }, []);
 
   const cycleSelection = useCallback((direction: -1 | 1) => {
@@ -219,44 +226,70 @@ export default function DesktopLayout({
   }, [availableOptionIds, selectedOptionId]);
 
   useEffect(() => {
-    if (window.innerWidth <= 640) return undefined;
+    if (!isDesktopViewport) return;
+    overlayRef.current?.focus();
+  }, [isDesktopViewport]);
 
-    const handleDocumentKeyDown = (event: KeyboardEvent) => {
-      const target = event.target;
-      const isInteractiveTarget = target instanceof HTMLElement
-        && (target.tagName === "A" || target.tagName === "BUTTON");
+  useEffect(() => {
+    if (!isDesktopViewport) return undefined;
 
-      if (isInteractiveTarget) {
-        return;
-      }
+    const overlay = overlayRef.current;
+    if (!overlay) return undefined;
 
-      if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-        event.preventDefault();
-        cycleSelection(-1);
-        return;
-      }
-      if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-        event.preventDefault();
-        cycleSelection(1);
-        return;
-      }
-      if (event.key === "Enter" && selectedOptionId !== null) {
-        event.preventDefault();
-        optionRefs.current[selectedOptionId]?.click();
-      }
+    const restoreFocus = () => {
+      requestAnimationFrame(() => {
+        const activeElement = document.activeElement;
+        if (!overlay.contains(activeElement)) {
+          overlay.focus();
+        }
+      });
     };
 
-    document.addEventListener("keydown", handleDocumentKeyDown);
+    overlay.addEventListener("focusout", restoreFocus);
     return () => {
-      document.removeEventListener("keydown", handleDocumentKeyDown);
+      overlay.removeEventListener("focusout", restoreFocus);
     };
-  }, [cycleSelection, selectedOptionId]);
+  }, [isDesktopViewport]);
+
+  const handleOverlayKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!isDesktopViewport) return;
+
+    const target = event.target;
+    const isEditableTarget = target instanceof HTMLElement
+      && (target.isContentEditable
+        || target.tagName === "INPUT"
+        || target.tagName === "TEXTAREA"
+        || target.tagName === "SELECT");
+    if (isEditableTarget) return;
+
+    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      cycleSelection(-1);
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      cycleSelection(1);
+      return;
+    }
+    if (
+      event.key === "Enter"
+      && selectedOptionId !== null
+      && target instanceof HTMLElement
+      && target.tagName !== "A"
+      && target.tagName !== "BUTTON"
+    ) {
+      event.preventDefault();
+      optionRefs.current[selectedOptionId]?.click();
+    }
+  }, [cycleSelection, isDesktopViewport, selectedOptionId]);
 
   return (
     <div
       ref={overlayRef}
       className="upgrade-desktop fixed inset-0 z-50 flex items-center justify-center"
       onClick={canPointerDismiss ? onDismiss : undefined}
+      onKeyDown={handleOverlayKeyDown}
       tabIndex={-1}
     >
       <div className="absolute inset-0 bg-black opacity-70" />

@@ -21,12 +21,13 @@ import type { SlashCommandAction } from "./slashCommandDetect";
 import { TerminalOverlays } from "./TerminalOverlays";
 import { BuddyDisplay } from "./BuddyDisplay";
 import type { GameState, Message } from "../hooks/useGameState";
+import type { PendingReviewPing } from "../hooks/useMultiplayer";
 import type { OverlayVisibility } from "./terminalViewUtils";
 
 type TerminalViewProps = OverlayVisibility & {
   activeRegression: string | null;
   outageHp: number | null;
-  pendingReviewPing: unknown;
+  pendingReviewPing: PendingReviewPing;
   pingAcknowledged: boolean;
   activeTheme: GameState["activeTheme"];
   regressionGlitch: string | null | undefined;

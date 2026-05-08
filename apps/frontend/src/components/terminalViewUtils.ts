@@ -1,17 +1,6 @@
-export type OverlayVisibility = {
-  showStore: boolean;
-  showLeaderboard: boolean;
-  showAchievements: boolean;
-  showSynergize: boolean;
-  showHelp: boolean;
-  showAbout: boolean;
-  showPrivacy: boolean;
-  showTerms: boolean;
-  showContact: boolean;
-  showProfile: boolean;
-  showParty: boolean;
-  showUpgrade: boolean;
-};
+import type { OverlayState } from "../hooks/useOverlays";
+
+export type OverlayVisibility = OverlayState;
 
 export function isAnyOverlayOpen(overlays: OverlayVisibility) {
   return Object.values(overlays).some(Boolean);
