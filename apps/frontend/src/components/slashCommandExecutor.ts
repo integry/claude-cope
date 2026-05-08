@@ -617,6 +617,7 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     } else {
       ctx.setState((prev) => ({ ...prev, username: canonicalAlias }));
     }
+    markValidSlashCommand(ctx, "/alias");
     identify({ username: canonicalAlias });
     reply({ role: "system", content: `[✓] Alias updated from **${oldName}** to **${canonicalAlias}**. The codebase will never know.` });
   } catch {
