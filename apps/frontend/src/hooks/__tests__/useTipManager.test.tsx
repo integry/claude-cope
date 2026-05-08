@@ -127,10 +127,6 @@ describe("useTipManager", () => {
   });
 
   it("reminds the user to use the backlog after 6-7 chat messages without an active ticket", () => {
-    vi.spyOn(Math, "random")
-      .mockReturnValueOnce(0)
-      .mockReturnValueOnce(0);
-
     act(() => {
       for (let i = 0; i < 6; i++) {
         ref.current?.recordMessageWithoutTicket();
@@ -166,5 +162,47 @@ describe("useTipManager", () => {
     });
 
     expect(ref.current?.getHistory()).toHaveLength(0);
+  });
+
+  it("does not repeat the same backlog reminder back-to-back", () => {
+    act(() => {
+      for (let i = 0; i < 12; i++) {
+        ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      BACKLOG_REMINDER_TIPS[0]?.text,
+      BACKLOG_REMINDER_TIPS[1]?.text,
+    ]);
+  });
+
+  it("re-fires event-based contextual tips when the triggering event happens again", () => {
+    act(() => {
+      ref.current?.setOnlineCount(1);
+      ref.current?.setGameState((prev) => ({
+        ...prev,
+        pendingCompletedTaskIds: ["COPE-1"],
+      }));
+    });
+
+    act(() => {
+      ref.current?.setOnlineCount(2);
+      ref.current?.setGameState((prev) => ({
+        ...prev,
+        pendingCompletedTaskIds: ["COPE-1", "COPE-2"],
+      }));
+    });
+
+    act(() => {
+      ref.current?.setOnlineCount(1);
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      getContextualTip("ticket_completed"),
+      getContextualTip("lone_user_online"),
+      getContextualTip("ticket_completed"),
+      getContextualTip("lone_user_online"),
+    ]);
   });
 });

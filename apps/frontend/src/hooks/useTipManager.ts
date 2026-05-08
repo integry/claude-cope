@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { GameState, Message } from "./useGameState";
-import { getContextualTip, getRandomBacklogReminderTip, getRandomIdleTip, selectMilestoneTip, type ContextualTipTrigger } from "../game/tips";
+import { getContextualTip, getRandomBacklogReminder, getRandomIdleTip, selectMilestoneTip, type ContextualTipTrigger } from "../game/tips";
 
 const IDLE_TIP_DELAY_MS = 45_000;
 const MILESTONE_INTERVAL = 6;
 const BACKLOG_REMINDER_MIN_MESSAGES = 6;
 const BACKLOG_REMINDER_MAX_MESSAGES = 7;
+const SINGLE_FIRE_CONTEXTUAL_TRIGGERS = new Set<ContextualTipTrigger>(["td_1000", "quota_exhausted"]);
 
 type SetHistory = Dispatch<SetStateAction<Message[]>>;
 
@@ -39,6 +40,7 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
   const firedContextualTipsRef = useRef<Set<ContextualTipTrigger>>(new Set());
   const noTicketMessageCountRef = useRef(0);
   const nextBacklogReminderThresholdRef = useRef(getNextBacklogReminderThreshold());
+  const lastBacklogReminderTipIdRef = useRef<string | null>(null);
   const previousStateRef = useRef({
     currentTD: gameState.economy.currentTD,
     quotaPercent: gameState.economy.quotaPercent,
@@ -89,7 +91,9 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
     noTicketMessageCountRef.current += 1;
     if (noTicketMessageCountRef.current < nextBacklogReminderThresholdRef.current) return;
 
-    appendTip(setHistory, getRandomBacklogReminderTip());
+    const tip = getRandomBacklogReminder(lastBacklogReminderTipIdRef.current ?? undefined);
+    lastBacklogReminderTipIdRef.current = tip.id;
+    appendTip(setHistory, tip.text);
     noTicketMessageCountRef.current = 0;
     nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
   }, [gameState.activeTicket, setHistory]);
@@ -125,9 +129,9 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
     }
 
     const newTips = triggers
-      .filter((trigger) => !firedContextualTipsRef.current.has(trigger))
+      .filter((trigger) => !SINGLE_FIRE_CONTEXTUAL_TRIGGERS.has(trigger) || !firedContextualTipsRef.current.has(trigger))
       .map((trigger) => {
-        firedContextualTipsRef.current.add(trigger);
+        if (SINGLE_FIRE_CONTEXTUAL_TRIGGERS.has(trigger)) firedContextualTipsRef.current.add(trigger);
         return getContextualTip(trigger);
       })
       .filter((tip): tip is string => Boolean(tip));

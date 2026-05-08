@@ -101,6 +101,13 @@ function pickRandomTip(pool: TipDefinition[]): TipDefinition | undefined {
   return pool[Math.floor(Math.random() * pool.length)]!;
 }
 
+function pickRandomTipAvoidingId(pool: TipDefinition[], previousTipId?: string): TipDefinition | undefined {
+  if (pool.length === 0) return undefined;
+  if (!previousTipId || pool.length === 1) return pickRandomTip(pool);
+  const filteredPool = pool.filter((tip) => tip.id !== previousTipId);
+  return pickRandomTip(filteredPool.length > 0 ? filteredPool : pool);
+}
+
 function toText(tip: TipDefinition | undefined): string {
   return tip?.text ?? "Tip: Type something. The silence is making middle management nervous.";
 }
@@ -115,8 +122,13 @@ export function getRandomIdleTip(): string {
   return toText(pickRandomTip(IDLE_TIPS.filter(isEnabledTip)));
 }
 
-export function getRandomBacklogReminderTip(): string {
-  return toText(pickRandomTip(BACKLOG_REMINDER_TIPS.filter(isEnabledTip)));
+export function getRandomBacklogReminder(previousTipId?: string): TipDefinition {
+  return pickRandomTipAvoidingId(BACKLOG_REMINDER_TIPS.filter(isEnabledTip), previousTipId)
+    ?? { id: "backlog-reminder-fallback", text: toText(undefined), cmd: "/backlog", category: "ticket" };
+}
+
+export function getRandomBacklogReminderTip(previousTipId?: string): string {
+  return getRandomBacklogReminder(previousTipId).text;
 }
 
 export function selectMilestoneTip(usedCommands: Iterable<string>, shownTipIds: Iterable<string> = []): TipDefinition | null {

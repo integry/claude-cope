@@ -24,7 +24,6 @@ import { triggerQuotaLockout, triggerInstantBan } from "./terminalHandlers";
 import { useTerminalKeyboard } from "../hooks/useTerminalKeyboard";
 import { handleBragSubmit, handleBuddyConfirm, tryOutageDamage } from "./terminalInputHandlers";
 import { shouldShowNag } from "./winrarNag";
-import { parseBaseCommand } from "../parseBaseCommand";
 import { TerminalView } from "./TerminalView";
 import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
@@ -172,7 +171,7 @@ function Terminal() {
   const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => !(cmd === "/store" && state.economy.totalTDEarned < 1000) && cmd.startsWith(slashQuery.toLowerCase()));
 
   const runSlashCommand = useCallback((command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme, onValidSlashCommand: recordValidCommand });
   }, [
     state,
     setState,
@@ -202,6 +201,7 @@ function Terminal() {
     playError,
     setActiveTheme,
     handleSuggestedReply,
+    recordValidCommand,
   ]);
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
@@ -284,8 +284,6 @@ function Terminal() {
     recordEnter();
     if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
     if (inputValue.trim().startsWith("/")) {
-      const baseCommand = parseBaseCommand(inputValue.trim());
-      if (baseCommand !== "/unknown") recordValidCommand(baseCommand);
       runSlashCommand(inputValue.trim());
       return;
     }
@@ -302,7 +300,6 @@ function Terminal() {
     }
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
     setCommandHistory((prev) => [...prev, command]);
-    recordValidCommand();
     recordMessageWithoutTicket();
     processCommand(command);
   };

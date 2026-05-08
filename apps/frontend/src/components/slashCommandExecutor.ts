@@ -59,6 +59,7 @@ export interface SlashCommandContext {
   playChime: () => void;
   playError: () => void;
   setActiveTheme: (themeId: string) => void;
+  onValidSlashCommand?: (baseCommand: string) => void;
 }
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.role !== "loading");
@@ -264,6 +265,7 @@ export function handlePingCommand(command: string, ctx: SlashCommandContext, rep
     return true;
   }
   const ticketPayload = { id: ticket.id, title: ticket.title, sprintGoal: ticket.sprintGoal, sprintProgress: ticket.sprintProgress };
+  markValidSlashCommand(ctx, "/ping");
   if (target) {
     ctx.sendPing(ticketPayload, PING_COST, target);
     reply({ role: "system", content: pickRandom(PING_SENT_TARGETED_MESSAGES)(target, ticket.id, PING_COST) });
@@ -280,7 +282,19 @@ function openOverlay(ctx: SlashCommandContext, open: () => void) {
   open();
 }
 
+function markValidSlashCommand(ctx: SlashCommandContext, baseCommand: string): void {
+  ctx.setState((prev) => ({
+    ...prev,
+    commandUsage: {
+      ...prev.commandUsage,
+      [baseCommand]: (prev.commandUsage[baseCommand] ?? 0) + 1,
+    },
+  }));
+  ctx.onValidSlashCommand?.(baseCommand);
+}
+
 export function handleUpgradeCommand(ctx: SlashCommandContext): void {
+  markValidSlashCommand(ctx, "/upgrade");
   openOverlay(ctx, () => ctx.setShowUpgrade(true));
   window.history.pushState(null, "", "/upgrade");
 }
@@ -290,6 +304,7 @@ function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/store", reason: SlashCommandFailureReasons.LOCKED });
     reply({ role: "error", content: "[❌ Error] Store access denied. Requires **1,000 Technical Debt**." });
   } else {
+    markValidSlashCommand(ctx, "/store");
     openOverlay(ctx, () => ctx.setShowStore(true));
   }
   return true;
@@ -303,17 +318,20 @@ function handleBuddyCommand(command: string, ctx: SlashCommandContext, reply: Re
       reply({ role: "system", content: "[❌] You don't have a buddy to dismiss. Use `/buddy` to roll for one." });
       return true;
     }
+    markValidSlashCommand(ctx, "/buddy");
     const dismissed = ctx.state.buddy.type;
     ctx.setState((prev) => ({ ...prev, buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 } }));
     reply({ role: "system", content: `[✓] **${dismissed}** has been dismissed. They didn't even say goodbye.` });
     return true;
   }
   if (ctx.state.buddy.type) {
+    markValidSlashCommand(ctx, "/buddy");
     ctx.setBuddyPendingConfirm(true);
     reply({ role: "system", content: `[⚠️] You already have a buddy (**${ctx.state.buddy.type}**). Re-rolling will replace it. Are you sure? (y/n) (Hint: use \`/buddy remove\` to dismiss)` });
     return true;
   }
   const roll = Math.random() * 100;
+  markValidSlashCommand(ctx, "/buddy");
   const [buddyType, buddyIcon] = roll < 50 ? ["Agile Snail", "🐌"] : roll < 75 ? ["Sarcastic Clippy", "📎"] : roll < 88 ? ["Grumpy Senior", "👴"] : roll < 97 ? ["Panic Intern", "😰"] : ["10x Dragon", "🐉"];
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
@@ -327,6 +345,7 @@ function handleThemeCommand(command: string, ctx: SlashCommandContext, reply: Re
   const unlocked = THEMES.filter((t) => ctx.state.unlockedThemes.includes(t.id));
 
   if (!arg) {
+    markValidSlashCommand(ctx, "/theme");
     const unlockedLines = unlocked.map((t) => {
       const active = t.id === ctx.state.activeTheme ? " ← active" : "";
       return `  ${t.id}${active}`;
@@ -355,10 +374,12 @@ function handleThemeCommand(command: string, ctx: SlashCommandContext, reply: Re
   }
 
   if (ctx.state.activeTheme === theme.id) {
+    markValidSlashCommand(ctx, "/theme");
     reply({ role: "system", content: `[🎨] Theme \`${theme.name}\` is already active.` });
     return true;
   }
 
+  markValidSlashCommand(ctx, "/theme");
   ctx.setActiveTheme(theme.id);
   reply({ role: "system", content: `[🎨] Theme switched to **${theme.name}**. Your terminal has been reskinned.` });
   return true;
@@ -373,6 +394,7 @@ function handleOverlayCommand(command: string, ctx: SlashCommandContext): boolea
   };
   const opener = overlayMap[command];
   if (opener) {
+    markValidSlashCommand(ctx, command);
     openOverlay(ctx, opener);
     return true;
   }
@@ -381,12 +403,15 @@ function handleOverlayCommand(command: string, ctx: SlashCommandContext): boolea
 
 function handleSimpleReplyCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   if (command === "/support") {
+    markValidSlashCommand(ctx, "/support");
     reply({ role: "system", content: pickRandom(supportResponses) });
     return true;
   } else if (command === "/preworkout") {
+    markValidSlashCommand(ctx, "/preworkout");
     reply({ role: "system", content: pickRandom(preworkoutResponses) });
     return true;
   } else if (command === "/who") {
+    markValidSlashCommand(ctx, "/who");
     if (ctx.onlineUsers.length > 0) {
       const userList = ctx.onlineUsers.join(", ");
       reply({ role: "system", content: `[📡] **${ctx.onlineCount}** developer(s) suffering in this instance: ${userList}` });
@@ -399,6 +424,7 @@ function handleSimpleReplyCommand(command: string, ctx: SlashCommandContext, rep
 }
 
 function handleCompactCommand(ctx: SlashCommandContext): boolean {
+  markValidSlashCommand(ctx, "/compact");
   ctx.triggerCompactEffect();
   ctx.setHistory((prev) => {
     const cleaned = clearLoading(prev);
@@ -415,6 +441,7 @@ function handleCompactCommand(ctx: SlashCommandContext): boolean {
 
 function handleUserCommand(command: string, ctx: SlashCommandContext): boolean {
   const alias = command.slice(5).trim();
+  markValidSlashCommand(ctx, "/user");
   openOverlay(ctx, () => ctx.setShowProfile(true));
   const target = alias || ctx.state.username;
   window.history.pushState(null, "", `/user/${encodeURIComponent(target)}`);
@@ -425,6 +452,7 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
   if (command === "/store") return handleStoreCommand(ctx, reply);
   if (handleOverlayCommand(command, ctx)) return true;
   if (command === "/synergize") {
+    markValidSlashCommand(ctx, "/synergize");
     reply({ role: "system", content: pickRandom(synergizeResponses) });
     ctx.closeAllOverlays();
     ctx.setShowSynergize(true);
@@ -441,28 +469,34 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
 
 function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   if (command === "/help") {
+    markValidSlashCommand(ctx, "/help");
     const tdGrant = Math.floor(Math.random() * 200) + 100;
     ctx.addActiveTD(tdGrant);
     openOverlay(ctx, () => ctx.setShowHelp(true));
     window.history.pushState(null, "", "/help");
     return true;
   } else if (command === "/about") {
+    markValidSlashCommand(ctx, "/about");
     openOverlay(ctx, () => ctx.setShowAbout(true));
     window.history.pushState(null, "", "/about");
     return true;
   } else if (command === "/privacy") {
+    markValidSlashCommand(ctx, "/privacy");
     openOverlay(ctx, () => ctx.setShowPrivacy(true));
     window.history.pushState(null, "", "/privacy");
     return true;
   } else if (command === "/terms") {
+    markValidSlashCommand(ctx, "/terms");
     openOverlay(ctx, () => ctx.setShowTerms(true));
     window.history.pushState(null, "", "/terms");
     return true;
   } else if (command === "/contact") {
+    markValidSlashCommand(ctx, "/contact");
     openOverlay(ctx, () => ctx.setShowContact(true));
     window.history.pushState(null, "", "/contact");
     return true;
   } else if (command === "/fast") {
+    markValidSlashCommand(ctx, "/fast");
     const newFast = !ctx.state.modes.fast;
     ctx.setState((prev) => ({ ...prev, modes: { ...prev.modes, fast: newFast } }));
     if (newFast) {
@@ -472,6 +506,7 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     }
     return true;
   } else if (command === "/voice") {
+    markValidSlashCommand(ctx, "/voice");
     const newVoice = !ctx.state.modes.voice;
     ctx.setState((prev) => ({ ...prev, modes: { ...prev.modes, voice: newVoice } }));
     if (newVoice) {
@@ -481,6 +516,7 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     }
     return true;
   } else if (command === "/blame") {
+    markValidSlashCommand(ctx, "/blame");
     const files = [
       "src/index.ts", "package.json", "tsconfig.json", ".env.production",
       "src/utils/helpers.ts", "node_modules/.package-lock.json", "Dockerfile",
@@ -497,6 +533,7 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     }
     return true;
   } else if (command === "/brrrrrr") {
+    markValidSlashCommand(ctx, "/brrrrrr");
     ctx.setHistory((prev) => [...clearLoading(prev), { role: "system", content: "[🔥 BRRRRRR] Initiating nested for-loop flood... Press Ctrl+C to stop before your CPU melts!" }]);
     let count = 0;
     ctx.brrrrrrIntervalRef.current = setInterval(() => {
@@ -594,6 +631,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   const isPro = isPaidUser(ctx.state);
 
   if (!modelName) {
+    markValidSlashCommand(ctx, "/model");
     const current = ctx.state.selectedModel ?? "default";
     const modelList = COPE_MODELS.map((m) => {
       const costLabel = `${m.multiplier}x cost`;
@@ -613,6 +651,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   }
 
   if (modelName === "clear") {
+    markValidSlashCommand(ctx, "/model");
     ctx.setState((prev) => {
       const { selectedModel: _, ...rest } = prev;
       return { ...rest } as GameState;
@@ -638,6 +677,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
     return;
   }
 
+  markValidSlashCommand(ctx, "/model");
   ctx.setState((prev) => ({ ...prev, selectedModel: modelName }));
 
   if (isBYOK) {
@@ -653,6 +693,7 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
   // Pending review-pings take precedence: they're time-boxed (60s) and you
   // get paid for accepting them, so the user almost certainly meant the ping.
   if (ctx.pendingReviewPing) {
+    markValidSlashCommand(ctx, "/accept");
     const { sender, amount } = ctx.pendingReviewPing;
     ctx.acceptReviewPing();
     reply({ role: "system", content: pickRandom(ACCEPT_REVIEW_MESSAGES)(sender, amount) });
@@ -666,6 +707,7 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.ALREADY_ACTIVE });
     reply({ role: "error", content: pickRandom(ACCEPT_ALREADY_ACTIVE_MESSAGES)(ctx.state.activeTicket.title) });
   } else {
+    markValidSlashCommand(ctx, "/accept");
     clearPendingOffer();
     const newTicket = { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt };
     ctx.setState((prev) => ({ ...prev, activeTicket: newTicket }));
@@ -711,6 +753,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
     });
     const data = await res.json() as { success?: boolean; hash?: string; restored?: boolean; profile?: ServerProfile; error?: string };
     if (res.ok && data.success) {
+      markValidSlashCommand(ctx, "/sync");
       ctx.setState((prev) => {
         const withKey: GameState = { ...prev, proKey: licenseKey, proKeyHash: data.hash, isPro: true };
         if (data.profile) {
@@ -739,7 +782,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
   }
 }
 
-async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Promise<void> {
+async function handleShillCommand(ctx: SlashCommandContext, reply: Reply): Promise<void> {
   const tweetText = encodeURIComponent("I'm mass-producing Technical Debt at mass velocity in Claude COPE — the idle game where every prompt is a mistake. https://claudecope.com");
   window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, "_blank");
   try {
@@ -749,6 +792,7 @@ async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Prom
     });
     const data = await res.json() as { success?: boolean; creditsGranted?: number; error?: string };
     if (res.ok && data.success) {
+      markValidSlashCommand(ctx, "/shill");
       track(AnalyticsEvents.SHILL_COMPLETED, { credits_granted: data.creditsGranted });
       reply({ role: "system", content: `[✓ **SHILL COMPLETE**] You sold your dignity for **${data.creditsGranted} free tokens**. The marketing team approves. A tweet window has been opened — go spread the gospel of suffering.` });
     } else {
@@ -783,15 +827,22 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
           }
         }
       };
-      await handleKeyCommand(command, ctx.setState, mockSetHistory, ctx.state);
+      const handled = await handleKeyCommand(command, ctx.setState, mockSetHistory, ctx.state);
+      if (handled) markValidSlashCommand(ctx, "/key");
       ctx.setIsProcessing(false);
     });
     return "async";
   } else if (command.startsWith("/ticket")) {
-    handleTicketCommand(command, reply).then(() => ctx.setIsProcessing(false));
+    handleTicketCommand(command, reply).then((handled) => {
+      if (handled && command.slice("/ticket".length).trim()) markValidSlashCommand(ctx, "/ticket");
+      ctx.setIsProcessing(false);
+    });
     return "async";
   } else if (command === "/backlog") {
-    handleBacklogCommand(reply).then(() => ctx.setIsProcessing(false));
+    handleBacklogCommand(reply).then((handled) => {
+      if (handled) markValidSlashCommand(ctx, "/backlog");
+      ctx.setIsProcessing(false);
+    });
     return "async";
   } else if (command === "/sync" || command.startsWith("/sync ")) {
     handleSyncCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
@@ -813,6 +864,7 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
     // BYOK disabled — handleAsyncCommand already tracked SLASH_COMMAND_FAILED
     // with reason: "disabled", so no additional tracking needed here.
   } else if (command === "/feedback" || command === "/bug") {
+    markValidSlashCommand(ctx, command);
     reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
   } else if (command === "/upgrade") {
     handleUpgradeCommand(ctx);
@@ -821,11 +873,15 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
     if (asyncResult === "async") return "async";
     if (!asyncResult) {
       if (command.startsWith("/take")) {
-        handleTakeCommand(command, ctx.state, ctx.setState, reply, { setInputValue: ctx.setInputValue, onAccept: ctx.playChime, onSuggestedReply: ctx.onSuggestedReply });
+        const hadActiveTicket = Boolean(ctx.state.activeTicket);
+        const input = command.slice("/take".length).trim();
+        const handled = handleTakeCommand(command, ctx.state, ctx.setState, reply, { setInputValue: ctx.setInputValue, onAccept: ctx.playChime, onSuggestedReply: ctx.onSuggestedReply });
+        if (handled && input && !hadActiveTicket) markValidSlashCommand(ctx, "/take");
       } else if (command === "/accept") {
         handleAcceptCommand(ctx, reply);
       } else if (command === "/abandon") {
         if (ctx.state.activeTicket) ctx.playError();
+        if (ctx.state.activeTicket) markValidSlashCommand(ctx, "/abandon");
         handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
       } else if (command.startsWith("/alias")) {
         handleAliasCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
@@ -895,17 +951,7 @@ export function executeSlashCommand(
     ctx.setHistory((prev) => [...clearLoading(prev), msg]);
   };
 
-  // Track command usage for performance review brag card
   const baseCommand = parseBaseCommand(command);
-  if (baseCommand !== "/unknown") {
-    ctx.setState((prev) => ({
-      ...prev,
-      commandUsage: {
-        ...prev.commandUsage,
-        [baseCommand]: (prev.commandUsage[baseCommand] ?? 0) + 1,
-      },
-    }));
-  }
 
   track(AnalyticsEvents.SLASH_COMMAND_ATTEMPTED, { command: baseCommand });
 
@@ -933,6 +979,7 @@ export function executeSlashCommand(
 
   // /clear fires instantly — no fake processing delay
   if (command === "/clear") {
+    if (baseCommand !== "/unknown") markValidSlashCommand(ctx, baseCommand);
     handleClearCommand(ctx);
     return;
   }
