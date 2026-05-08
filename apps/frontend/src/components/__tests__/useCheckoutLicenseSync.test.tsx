@@ -54,7 +54,8 @@ function renderHarness(props: {
 }
 
 function cleanup() {
-  if (root) act(() => root.unmount());
+  const currentRoot = root;
+  if (currentRoot) act(() => currentRoot.unmount());
   root = null;
   if (container && container.parentNode) {
     container.parentNode.removeChild(container);
