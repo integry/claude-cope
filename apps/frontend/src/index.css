@@ -144,6 +144,17 @@ body {
 
 /* Upgrade overlay button hover — CSS :hover is more reliable than JS
    mouseenter/mouseleave inside <pre> elements */
+.upgrade-btn-primary,
+.upgrade-btn-primary:focus,
+.upgrade-btn-primary:focus-visible,
+.upgrade-btn-primary:active,
+.upgrade-btn-secondary,
+.upgrade-btn-secondary:focus,
+.upgrade-btn-secondary:focus-visible,
+.upgrade-btn-secondary:active {
+  outline: none;
+  box-shadow: none;
+}
 .upgrade-btn-primary:hover [data-btn] {
   background-color: #ffffff !important;
   color: #000000 !important;
