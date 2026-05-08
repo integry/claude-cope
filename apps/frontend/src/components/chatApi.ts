@@ -186,7 +186,7 @@ export function submitChatMessage(opts: {
   onByokUsage?: (usage: { model: string; prompt_tokens?: number; completion_tokens?: number; cost?: number }) => void;
   onQuotaUpdate?: (quotaPercent: number) => void;
   onQuotaExhausted?: () => void;
-  onProfileUpdate?: (profile: ServerProfile) => void;
+  onProfileUpdate?: (profile: ServerProfile, ctx: { source: "chat" }) => void;
   onError?: () => void;
   signal?: AbortSignal;
 }) {

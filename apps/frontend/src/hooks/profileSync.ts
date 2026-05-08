@@ -1,5 +1,12 @@
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import type { GameState } from "./gameStateUtils";
+import { resolveRank } from "./gameStateUtils";
+
+export type PendingCompletedRewardMerge = {
+  minimumCurrentTD: number;
+  minimumTotalTDEarned: number;
+  pendingTaskIds: string[];
+};
 
 /**
  * Merge a server-authoritative profile onto local game state.
@@ -13,16 +20,34 @@ import type { GameState } from "./gameStateUtils";
 export function applyServerProfile(
   prev: GameState,
   profile: ServerProfile,
-  opts: { includeActiveTicket?: boolean } = {},
+  opts: {
+    includeActiveTicket?: boolean;
+    preservePendingCompletedReward?: PendingCompletedRewardMerge | null;
+  } = {},
 ): GameState {
+  const pendingReward = opts.preservePendingCompletedReward;
+  const shouldPreservePendingReward = Boolean(
+    pendingReward
+      && pendingReward.pendingTaskIds.some((ticketId) => prev.pendingCompletedTaskIds.includes(ticketId)),
+  );
+  const currentTD = shouldPreservePendingReward
+    ? Math.max(profile.current_td, pendingReward!.minimumCurrentTD)
+    : profile.current_td;
+  const totalTDEarned = shouldPreservePendingReward
+    ? Math.max(profile.total_td, pendingReward!.minimumTotalTDEarned)
+    : profile.total_td;
+  const currentRank = shouldPreservePendingReward && totalTDEarned > profile.total_td
+    ? resolveRank(totalTDEarned, prev.economy.currentRank)
+    : profile.corporate_rank;
+
   return {
     ...prev,
     username: profile.username,
     economy: {
       ...prev.economy,
-      currentTD: profile.current_td,
-      totalTDEarned: profile.total_td,
-      currentRank: profile.corporate_rank,
+      currentTD,
+      totalTDEarned,
+      currentRank,
       tdMultiplier: profile.td_multiplier,
       ...(profile.quota_percent != null ? { quotaPercent: profile.quota_percent } : {}),
     },

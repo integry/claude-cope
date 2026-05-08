@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
+import type { ServerProfile } from "@claude-cope/shared/profile";
 import { SLASH_COMMANDS } from "./slashCommands";
 import { useGameState, Message } from "../hooks/useGameState";
 import { isFreeUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
-import { applyServerProfile } from "../hooks/profileSync";
+import { applyServerProfile, type PendingCompletedRewardMerge } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { filterChatHistory } from "./filterChatHistory";
@@ -90,10 +91,20 @@ function Terminal() {
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
+  const pendingCompletedRewardRef = useRef<PendingCompletedRewardMerge | null>(null);
 
   useEffect(() => {
     return () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); };
   }, []);
+
+  useEffect(() => {
+    const pendingReward = pendingCompletedRewardRef.current;
+    if (!pendingReward) return;
+    const unresolvedTaskIds = pendingReward.pendingTaskIds.filter((ticketId) => state.pendingCompletedTaskIds.includes(ticketId));
+    pendingCompletedRewardRef.current = unresolvedTaskIds.length > 0
+      ? { ...pendingReward, pendingTaskIds: unresolvedTaskIds }
+      : null;
+  }, [state.pendingCompletedTaskIds]);
 
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
     const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
@@ -214,6 +225,28 @@ function Terminal() {
     if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1 } }));
   }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
 
+  const applyAuthoritativeProfile = useCallback((
+    profile: ServerProfile,
+    source: "chat" | "completed-ticket-reward",
+    completedTicketId?: string,
+  ) => {
+    setState((prev) => {
+      const next = applyServerProfile(
+        prev,
+        profile,
+        source === "chat" && pendingCompletedRewardRef.current
+          ? { preservePendingCompletedReward: pendingCompletedRewardRef.current }
+          : {},
+      );
+      if (source !== "completed-ticket-reward" || !completedTicketId) return next;
+      pendingCompletedRewardRef.current = null;
+      return {
+        ...next,
+        pendingCompletedTaskIds: next.pendingCompletedTaskIds.filter((ticketId) => ticketId !== completedTicketId),
+      };
+    });
+  }, [setState]);
+
   const processCommandRef = useRef<(command: string) => void>(() => {});
   const processCommand = async (command: string) => {
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
@@ -238,7 +271,19 @@ function Terminal() {
     const chatMessages = isFreeTier
       ? contextMessages
       : [...contextMessages, { role: "user", content: userMessage.content }];
-    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({ getState: getCurrentState, updateTicketProgress, addActiveTD, playChime, setState });
+    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({
+      getState: getCurrentState,
+      updateTicketProgress,
+      addActiveTD,
+      playChime,
+      setState,
+      onCompletedRewardPending: (pendingReward) => {
+        pendingCompletedRewardRef.current = pendingReward;
+      },
+      onCompletedRewardProfile: (profile, ticketId) => {
+        applyAuthoritativeProfile(profile, "completed-ticket-reward", ticketId);
+      },
+    });
     const controller = new AbortController();
     abortControllerRef.current = controller;
     submitChatMessage({
@@ -271,7 +316,7 @@ function Terminal() {
         });
         handleQuotaLockout(command);
       },
-      onProfileUpdate: (profile) => setState((prev) => applyServerProfile(prev, profile)),
+      onProfileUpdate: (profile) => applyAuthoritativeProfile(profile, "chat"),
       onError: playError, signal: controller.signal,
     });
   };

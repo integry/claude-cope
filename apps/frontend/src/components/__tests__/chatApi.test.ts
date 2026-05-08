@@ -2,7 +2,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "../chatApi";
-import type { BuddyState } from "../../hooks/useGameState";
+import type { BuddyState, GameState } from "../../hooks/useGameState";
+import type { ServerProfile } from "@claude-cope/shared/profile";
+import { applyServerProfile } from "../../hooks/profileSync";
 import { TURNSTILE_REQUIRED_EVENT } from "../../turnstileEvents";
 
 /**
@@ -192,6 +194,90 @@ describe("submitChatMessage - achievement parsing", () => {
     expect(unlockAchievement).toHaveBeenCalledWith("first_prompt");
 
     expect(setIsProcessing).toHaveBeenCalledWith(false);
+  });
+
+  it("does not let a stale chat profile erase a pending completed-ticket reward", async () => {
+    const setHistory = vi.fn();
+    const setIsProcessing = vi.fn();
+    const staleProfile: ServerProfile = {
+      username: "alice",
+      current_td: 100,
+      total_td: 100,
+      corporate_rank: "Junior Code Monkey",
+      inventory: {},
+      upgrades: [],
+      achievements: [],
+      buddy_type: null,
+      buddy_is_shiny: false,
+      unlocked_themes: ["default"],
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+      multiplier: 1,
+      quota_percent: 100,
+    };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: "still typing" } }],
+      profile: staleProfile,
+      quotaPercent: 100,
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+
+    let mergedState: GameState = {
+      version: "1.0",
+      username: "alice",
+      lastLogin: 0,
+      economy: {
+        currentTD: 1100,
+        totalTDEarned: 1100,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      inventory: {},
+      upgrades: [],
+      achievements: [],
+      buddy: {
+        type: null,
+        isShiny: false,
+        promptsSinceLastInterjection: 0,
+      },
+      chatHistory: [],
+      commandUsage: {},
+      modes: { fast: false, voice: false },
+      activeTicket: null,
+      hasSeenTicketPrompt: false,
+      activeTheme: "default",
+      unlockedThemes: ["default"],
+      soundEnabled: true,
+      pendingCompletedTaskIds: ["COPE-782"],
+    };
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hello" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+      onProfileUpdate: (profile) => {
+        mergedState = applyServerProfile(mergedState, profile, {
+          preservePendingCompletedReward: {
+            minimumCurrentTD: 1100,
+            minimumTotalTDEarned: 1100,
+            pendingTaskIds: ["COPE-782"],
+          },
+        });
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(mergedState.economy.currentTD).toBe(1100);
+    expect(mergedState.economy.totalTDEarned).toBe(1100);
   });
 
   it("extracts first achievement from response (capped at 1 per reply)", async () => {
