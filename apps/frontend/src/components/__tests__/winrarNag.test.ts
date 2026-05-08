@@ -522,6 +522,24 @@ describe("WinRAR nag: Terminal integration", () => {
     expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
     expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
   });
+
+  it("disables terminal input while the upgrade overlay is open", async () => {
+    window.history.pushState(null, "", "/upgrade");
+    await renderTerminal();
+
+    const input = container.querySelector("input[aria-label='terminal-input']") as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+    expect(input?.disabled).toBe(true);
+  });
+
+  it("disables terminal input while another overlay is open", async () => {
+    window.history.pushState(null, "", "/help");
+    await renderTerminal();
+
+    const input = container.querySelector("input[aria-label='terminal-input']") as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+    expect(input?.disabled).toBe(true);
+  });
 });
 
 describe("WinRAR nag: shouldShowNag helper", () => {

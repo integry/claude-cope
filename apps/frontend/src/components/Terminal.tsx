@@ -100,6 +100,9 @@ function Terminal() {
   const lastSuggestedReplyRef = useRef<string | null>(null);
   const promptString = activeRegression === "windows_prompt" ? "C:\\WINDOWS\\system32>" : "❯ ";
   const isFreeTier = isFreeUser(state);
+  const anyOverlayOpen =
+    showStore || showLeaderboard || showAchievements || showSynergize || showHelp || showAbout ||
+    showPrivacy || showTerms || showContact || showProfile || showParty || showUpgrade;
 
   useEffect(() => {
     return () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); };
@@ -153,7 +156,7 @@ function Terminal() {
     return () => window.removeEventListener("popstate", onPopState);
   }, [setShowUpgrade]);
 
-  useEffect(() => { if (!isProcessing && !isBooting) inputRef.current?.focus(); }, [isProcessing, isBooting]);
+  useEffect(() => { if (!isProcessing && !isBooting && !anyOverlayOpen) inputRef.current?.focus(); }, [isProcessing, isBooting, anyOverlayOpen]);
 
   useEffect(() => {
     if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
@@ -375,7 +378,7 @@ function Terminal() {
     <div
       className={terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme: state.activeTheme })}
       style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : 'var(--color-bg)', color: 'var(--color-text)' }}
-      onClick={() => { if (!window.getSelection()?.toString()) inputRef.current?.focus(); }}
+      onClick={() => { if (!anyOverlayOpen && !window.getSelection()?.toString()) inputRef.current?.focus(); }}
     >
       <div className="shrink-0">
         <Ticker onExpand={() => { closeAllOverlaysPreservingNag(); setShowParty(true); }} onlineCount={onlineCount} />
@@ -392,7 +395,7 @@ function Terminal() {
         <div className="relative border-b border-white">
           {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
           <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
-          <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
+          <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
         </div>
       </div>
       <TerminalOverlays

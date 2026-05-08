@@ -111,4 +111,34 @@ describe("UpgradeOverlay", () => {
     expect(pre).not.toBeNull();
     expect((pre as HTMLElement).style.overflowX).toBe("auto");
   });
+
+  it("cycles desktop selection with arrow keys", () => {
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+
+    const getSelectedHref = () => container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href");
+
+    expect(getSelectedHref()).toBe("https://example.com/single");
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+    expect(getSelectedHref()).toBe("https://example.com/multi");
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    });
+    expect(getSelectedHref()).toBe("https://example.com/single");
+  });
+
+  it("activates the selected desktop option on Enter", () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    clickSpy.mockRestore();
+  });
 });

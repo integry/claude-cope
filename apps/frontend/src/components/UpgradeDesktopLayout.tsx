@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import {
   UPGRADE_CHECKOUT_SINGLE,
@@ -42,6 +43,7 @@ export default function DesktopLayout({
   dismissMode = "manual",
   onDismiss,
 }: LayoutProps) {
+  const optionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const topBorder = (
     <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>
   );
@@ -66,6 +68,11 @@ export default function DesktopLayout({
   };
 
   const emptyLine = boxLine("");
+  const availableOptionIds = useMemo(
+    () => [singleAvailable ? 0 : null, multiAvailable ? 1 : null].filter((id): id is number => id !== null),
+    [singleAvailable, multiAvailable],
+  );
+  const [selectedOptionId, setSelectedOptionId] = useState<number | null>(availableOptionIds[0] ?? null);
 
   /** Like boxLine but accepts JSX content; caller must supply the exact char-length used. */
   const boxLineRich = (content: React.ReactNode, textLength: number) => {
@@ -95,6 +102,7 @@ export default function DesktopLayout({
 
   // Links open in same tab so the app receives checkout_id on return navigation.
   const buttonBlock = (
+    id: number,
     label: string,
     url: string,
     available: boolean,
@@ -106,6 +114,7 @@ export default function DesktopLayout({
     const totalUsed = MARGIN + cursorPrefix.length + btnContent.length;
     const suffixLen = Math.max(0, INNER_W - totalUsed);
     const emptyInner = " ".repeat(INNER_W);
+    const selected = selectedOptionId === id;
 
     if (!available) {
       const errText = "    [ERR] CHECKOUT_URL not configured.";
@@ -127,7 +136,9 @@ export default function DesktopLayout({
     return (
       <a
         href={url}
+        ref={(element) => { optionRefs.current[id] = element; }}
         className={primary ? "upgrade-btn-primary" : "upgrade-btn-secondary"}
+        data-selected={selected ? "true" : "false"}
         style={{
           display: "inline",
           textDecoration: "none",
@@ -145,13 +156,13 @@ export default function DesktopLayout({
           data-cursor=""
           style={{ color: G, fontWeight: "bold" }}
         >
-          {cursorPrefix}
+          {selected ? cursorPrefix : " ".repeat(cursorPrefix.length)}
         </span>
         <span
           data-btn=""
           style={{
-            backgroundColor: primary ? G : "transparent",
-            color: primary ? "#0d1117" : G,
+            backgroundColor: selected ? G : "transparent",
+            color: selected ? "#0d1117" : G,
             fontWeight: "bold",
           }}
         >
@@ -178,6 +189,51 @@ export default function DesktopLayout({
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
   const canPointerDismiss = dismissMode === "manual" && !!onDismiss;
+
+  useEffect(() => {
+    if (availableOptionIds.length === 0) {
+      setSelectedOptionId(null);
+      return;
+    }
+    if (selectedOptionId === null || !availableOptionIds.includes(selectedOptionId)) {
+      setSelectedOptionId(availableOptionIds[0] ?? null);
+    }
+  }, [availableOptionIds, selectedOptionId]);
+
+  useEffect(() => {
+    const cycleSelection = (direction: -1 | 1) => {
+      if (availableOptionIds.length === 0) return;
+      if (selectedOptionId === null) {
+        setSelectedOptionId(availableOptionIds[0] ?? null);
+        return;
+      }
+      const currentIndex = availableOptionIds.indexOf(selectedOptionId);
+      const startIndex = currentIndex >= 0 ? currentIndex : 0;
+      const nextIndex = (startIndex + direction + availableOptionIds.length) % availableOptionIds.length;
+      setSelectedOptionId(availableOptionIds[nextIndex] ?? null);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (window.innerWidth <= 640) return;
+      if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        cycleSelection(-1);
+        return;
+      }
+      if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+        event.preventDefault();
+        cycleSelection(1);
+        return;
+      }
+      if (event.key === "Enter" && selectedOptionId !== null) {
+        event.preventDefault();
+        optionRefs.current[selectedOptionId]?.click();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [availableOptionIds, selectedOptionId]);
 
   return (
     <div
@@ -268,13 +324,13 @@ export default function DesktopLayout({
           </span>,
           "  priority generation queue, and advanced Cope models.".length,
         )}{"\n"}
-        {buttonBlock(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
+        {buttonBlock(0, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
         {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
         {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
         {boxLine("  (5 activation keys will be sent to your email)", "#8892b0")}{"\n"}
-        {buttonBlock(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
+        {buttonBlock(1, multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {midBorder}{"\n"}
         {(() => {
           const text = "[Press ESC to retain your net worth]";
