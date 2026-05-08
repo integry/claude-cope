@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import {
-  UPGRADE_CHECKOUT_SINGLE,
-  UPGRADE_CHECKOUT_MULTI,
-  PRO_QUOTA_LIMIT,
-} from "../config";
-
-/* ── shared constants ───────────────────────────────────────── */
+import { UPGRADE_CHECKOUT_SINGLE, UPGRADE_CHECKOUT_MULTI, PRO_QUOTA_LIMIT } from "../config";
 
 const B = "#ff5555"; // border (red)
 const Y = "#ffff55"; // yellow headings
@@ -19,8 +13,6 @@ const INNER_W = 64; // inner content width (between ║ chars)
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
 export const UPGRADE_OVERLAY_MOBILE_MAX_WIDTH = 640;
 
-/* ── types ──────────────────────────────────────────────────── */
-
 export type LayoutProps = {
   singleLabel: string;
   multiLabel: string;
@@ -30,10 +22,6 @@ export type LayoutProps = {
   dismissMode?: "manual" | "nag";
   onDismiss?: () => void;
 };
-
-/* ══════════════════════════════════════════════════════════════
-   DESKTOP LAYOUT — original ASCII <pre> box
-   ══════════════════════════════════════════════════════════════ */
 
 export default function DesktopLayout({
   singleLabel,
@@ -46,21 +34,11 @@ export default function DesktopLayout({
 }: LayoutProps) {
   const optionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const overlayRef = useRef<HTMLDivElement | null>(null);
-  const getIsDesktopViewport = useCallback(
-    () => typeof window !== "undefined" && window.innerWidth > UPGRADE_OVERLAY_MOBILE_MAX_WIDTH,
-    [],
-  );
+  const getIsDesktopViewport = useCallback(() => typeof window !== "undefined" && window.innerWidth > UPGRADE_OVERLAY_MOBILE_MAX_WIDTH, []);
   const [isDesktopViewport, setIsDesktopViewport] = useState(getIsDesktopViewport);
-  const topBorder = (
-    <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>
-  );
-  const midBorder = (
-    <span style={{ color: B }}>{"╠" + "═".repeat(INNER_W) + "╣"}</span>
-  );
-  const botBorder = (
-    <span style={{ color: B }}>{"╚" + "═".repeat(INNER_W) + "╝"}</span>
-  );
-
+  const topBorder = <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>;
+  const midBorder = <span style={{ color: B }}>{"╠" + "═".repeat(INNER_W) + "╣"}</span>;
+  const botBorder = <span style={{ color: B }}>{"╚" + "═".repeat(INNER_W) + "╝"}</span>;
   const boxLine = (text: string, color = W) => {
     const padded = text.length < INNER_W
       ? text + " ".repeat(INNER_W - text.length)
@@ -73,15 +51,12 @@ export default function DesktopLayout({
       </>
     );
   };
-
   const emptyLine = boxLine("");
   const availableOptionIds = useMemo(
     () => [singleAvailable ? 0 : null, multiAvailable ? 1 : null].filter((id): id is number => id !== null),
     [singleAvailable, multiAvailable],
   );
   const [selectedOptionId, setSelectedOptionId] = useState<number | null>(availableOptionIds[0] ?? null);
-
-  /** Like boxLine but accepts JSX content; caller must supply the exact char-length used. */
   const boxLineRich = (content: React.ReactNode, textLength: number) => {
     const padLen = Math.max(0, INNER_W - textLength);
     return (
@@ -93,7 +68,6 @@ export default function DesktopLayout({
       </>
     );
   };
-
   const centeredBoxLine = (text: string, color = W) => {
     const totalPad = INNER_W - text.length;
     const left = Math.max(0, Math.floor(totalPad / 2));
@@ -106,8 +80,6 @@ export default function DesktopLayout({
       </>
     );
   };
-
-  // Links open in same tab so the app receives checkout_id on return navigation.
   const buttonBlock = (
     id: number,
     label: string,
@@ -122,7 +94,6 @@ export default function DesktopLayout({
     const suffixLen = Math.max(0, INNER_W - totalUsed);
     const emptyInner = " ".repeat(INNER_W);
     const selected = selectedOptionId === id;
-
     if (!available) {
       const errText = "    [ERR] CHECKOUT_URL not configured.";
       const errPad = Math.max(0, INNER_W - errText.length);
@@ -153,29 +124,17 @@ export default function DesktopLayout({
           backgroundColor: "transparent",
         }}
         onClick={(e) => e.stopPropagation()}
-        onFocus={() => {
-          setSelectedOptionId(id);
-        }}
+        onFocus={() => { setSelectedOptionId(id); }}
       >
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: "transparent" }}>{emptyInner}</span>
         <span style={{ color: B }}>{"║"}</span>{"\n"}
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: "transparent" }}>{" ".repeat(MARGIN)}</span>
-        <span
-          data-cursor=""
-          style={{ color: G, fontWeight: "bold" }}
-        >
+        <span data-cursor="" style={{ color: G, fontWeight: "bold" }}>
           {selected ? cursorPrefix : " ".repeat(cursorPrefix.length)}
         </span>
-        <span
-          data-btn=""
-          style={{
-            backgroundColor: selected ? G : "transparent",
-            color: selected ? "#0d1117" : G,
-            fontWeight: "bold",
-          }}
-        >
+        <span data-btn="" style={{ backgroundColor: selected ? G : "transparent", color: selected ? "#0d1117" : G, fontWeight: "bold" }}>
           {btnContent}
         </span>
         <span style={{ color: "transparent" }}>{" ".repeat(suffixLen)}</span>
@@ -186,7 +145,6 @@ export default function DesktopLayout({
       </a>
     );
   };
-
   const tableBorderTop = boxLine("  +----------------+----------+------------------------------+");
   const tableHeader    = boxLine("  | ARCHITECTURE   | CAPACITY | GUARANTEED OUTCOME           |");
   const tableBorderMid = boxLine("  +----------------+----------+------------------------------+");
@@ -199,7 +157,6 @@ export default function DesktopLayout({
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
   const canPointerDismiss = dismissMode === "manual" && !!onDismiss;
-
   useEffect(() => {
     if (availableOptionIds.length === 0) {
       setSelectedOptionId(null);
@@ -209,18 +166,11 @@ export default function DesktopLayout({
       setSelectedOptionId(availableOptionIds[0] ?? null);
     }
   }, [availableOptionIds, selectedOptionId]);
-
   useEffect(() => {
-    const syncViewport = () => {
-      setIsDesktopViewport(getIsDesktopViewport());
-    };
-
+    const syncViewport = () => { setIsDesktopViewport(getIsDesktopViewport()); };
     window.addEventListener("resize", syncViewport);
-    return () => {
-      window.removeEventListener("resize", syncViewport);
-    };
+    return () => { window.removeEventListener("resize", syncViewport); };
   }, [getIsDesktopViewport]);
-
   const cycleSelection = useCallback((direction: -1 | 1) => {
     if (availableOptionIds.length === 0) return;
     if (selectedOptionId === null) {
@@ -232,7 +182,6 @@ export default function DesktopLayout({
     const nextIndex = (startIndex + direction + availableOptionIds.length) % availableOptionIds.length;
     setSelectedOptionId(availableOptionIds[nextIndex] ?? null);
   }, [availableOptionIds, selectedOptionId]);
-
   useEffect(() => {
     if (!isDesktopViewport) {
       const activeElement = document.activeElement;
@@ -241,21 +190,16 @@ export default function DesktopLayout({
       }
       return;
     }
-
     if (selectedOptionId !== null) {
       optionRefs.current[selectedOptionId]?.focus();
       return;
     }
-
     overlayRef.current?.focus();
   }, [isDesktopViewport, selectedOptionId]);
-
   useEffect(() => {
     if (!isDesktopViewport) return undefined;
-
     const overlay = overlayRef.current;
     if (!overlay) return undefined;
-
     const restoreFocus = () => {
       requestAnimationFrame(() => {
         const activeElement = document.activeElement;
@@ -264,16 +208,11 @@ export default function DesktopLayout({
         }
       });
     };
-
     overlay.addEventListener("focusout", restoreFocus);
-    return () => {
-      overlay.removeEventListener("focusout", restoreFocus);
-    };
+    return () => { overlay.removeEventListener("focusout", restoreFocus); };
   }, [isDesktopViewport]);
-
   const handleOverlayKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!isDesktopViewport) return;
-
     const target = event.target;
     const isEditableTarget = target instanceof HTMLElement
       && (target.isContentEditable
@@ -281,7 +220,6 @@ export default function DesktopLayout({
         || target.tagName === "TEXTAREA"
         || target.tagName === "SELECT");
     if (isEditableTarget) return;
-
     if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
       event.preventDefault();
       cycleSelection(-1);
@@ -303,7 +241,6 @@ export default function DesktopLayout({
       optionRefs.current[selectedOptionId]?.click();
     }
   }, [cycleSelection, isDesktopViewport, selectedOptionId]);
-
   return (
     <div
       ref={overlayRef}
@@ -313,7 +250,6 @@ export default function DesktopLayout({
       tabIndex={-1}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
-
       <pre
         className="relative z-10 mx-4"
         onClick={(e) => e.stopPropagation()}
@@ -339,18 +275,11 @@ export default function DesktopLayout({
             onClick={onDismiss}
             style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
             title="Click to dismiss"
-          >
-            {closeBtn}
-          </button>
+          >{closeBtn}</button>
         ) : dismissMode === "nag" ? (
           <span>{" ".repeat(closeBtn.length)}</span>
         ) : (
-          <span
-            style={{ color: DIM }}
-            title="Press ESC to dismiss"
-          >
-            {closeBtn}
-          </span>
+          <span style={{ color: DIM }} title="Press ESC to dismiss">{closeBtn}</span>
         )}
         <span style={{ color: B }}>{" ".repeat(titlePadRight)}</span>
         <span style={{ color: B }}>{"║"}</span>
@@ -418,16 +347,9 @@ export default function DesktopLayout({
                   onClick={onDismiss}
                   data-esc=""
                   style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
-                >
-                  {" ".repeat(left) + text + " ".repeat(right)}
-                </button>
+                >{" ".repeat(left) + text + " ".repeat(right)}</button>
               ) : (
-                <span
-                  data-esc=""
-                  style={{ color: DIM }}
-                >
-                  {" ".repeat(left) + text + " ".repeat(right)}
-                </span>
+                <span data-esc="" style={{ color: DIM }}>{" ".repeat(left) + text + " ".repeat(right)}</span>
               )}
               <span style={{ color: B }}>{"║"}</span>
             </span>

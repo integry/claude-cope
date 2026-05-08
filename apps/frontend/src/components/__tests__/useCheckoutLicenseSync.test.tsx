@@ -19,12 +19,12 @@ const originalLocation = window.location.pathname + window.location.search;
 
 function Harness({
   isBooting = false,
-  proKeyHash = null,
+  proKeyHash,
   setHistory,
   runSlashCommand,
 }: {
   isBooting?: boolean;
-  proKeyHash?: string | null;
+  proKeyHash?: string;
   setHistory: (value: SetStateAction<Message[]>) => void;
   runSlashCommand: (command: string) => void;
 }) {
@@ -39,15 +39,17 @@ function Harness({
 
 function renderHarness(props: {
   isBooting?: boolean;
-  proKeyHash?: string | null;
+  proKeyHash?: string;
   setHistory: (value: SetStateAction<Message[]>) => void;
   runSlashCommand: (command: string) => void;
 }) {
   container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
+  const nextContainer = container;
+  document.body.appendChild(nextContainer);
+  const nextRoot = createRoot(nextContainer);
+  root = nextRoot;
   act(() => {
-    root.render(createElement(Harness, props));
+    nextRoot.render(createElement(Harness, props));
   });
 }
 
@@ -75,11 +77,13 @@ describe("useCheckoutLicenseSync", () => {
 
     const setHistory = vi.fn<(value: SetStateAction<Message[]>) => void>();
     const runSlashCommand = vi.fn();
-    global.fetch = vi.fn(async () => ({
-      ok: false,
-      status: 500,
-      json: async () => ({ error: "Server error" }),
-    })) as typeof fetch;
+    const fetchMock = vi.fn(async (): Promise<Response> => (
+      new Response(JSON.stringify({ error: "Server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      })
+    ));
+    global.fetch = fetchMock as typeof fetch;
 
     renderHarness({ setHistory, runSlashCommand });
 
