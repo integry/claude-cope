@@ -93,7 +93,8 @@ describe("useTipManager", () => {
       vi.advanceTimersByTime(45_000);
     });
 
-    expect(ref.current?.getHistory().at(-1)?.content).toBe(IDLE_TIPS[0]?.text);
+    const history = ref.current?.getHistory() ?? [];
+    expect(history[history.length - 1]?.content).toBe(IDLE_TIPS[0]?.text);
   });
 
   it("shows a milestone tip on every sixth valid command for an unused command", () => {

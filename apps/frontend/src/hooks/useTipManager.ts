@@ -26,6 +26,7 @@ function appendTip(setHistory: SetHistory, content: string): void {
 }
 
 export function useTipManager({ isBooting, gameState, onlineCount, setHistory }: UseTipManagerArgs) {
+  const completedTaskCount = getCompletedTaskCount(gameState);
   const idleTimerRef = useRef<number | null>(null);
   const hasInteractedRef = useRef(false);
   const actionCountRef = useRef(0);
@@ -89,7 +90,7 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
     if (previous.quotaPercent > 0 && gameState.economy.quotaPercent <= 0) {
       triggers.push("quota_exhausted");
     }
-    if (getCompletedTaskCount(gameState) > previous.pendingCompletedTaskCount) {
+    if (completedTaskCount > previous.pendingCompletedTaskCount) {
       triggers.push("ticket_completed");
     }
     if (previous.onlineCount !== 1 && onlineCount === 1) {
@@ -113,13 +114,13 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
     previousStateRef.current = {
       currentTD: gameState.economy.currentTD,
       quotaPercent: gameState.economy.quotaPercent,
-      pendingCompletedTaskCount: getCompletedTaskCount(gameState),
+      pendingCompletedTaskCount: completedTaskCount,
       onlineCount,
     };
   }, [
+    completedTaskCount,
     gameState.economy.currentTD,
     gameState.economy.quotaPercent,
-    gameState.pendingCompletedTaskIds,
     isBooting,
     onlineCount,
     setHistory,
