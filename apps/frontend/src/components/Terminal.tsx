@@ -70,7 +70,7 @@ function Terminal() {
   const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage } = useMultiplayer({ username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost });
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
-  const { recordEnter, recordValidCommand } = useTipManager({ isBooting, gameState: state, onlineCount, setHistory });
+  const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, gameState: state, onlineCount, setHistory });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
   const [instantBanReady, setInstantBanReady] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
@@ -357,6 +357,7 @@ function Terminal() {
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
     setCommandHistory((prev) => [...prev, command]);
     recordValidCommand();
+    recordMessageWithoutTicket();
     processCommand(command);
   };
 

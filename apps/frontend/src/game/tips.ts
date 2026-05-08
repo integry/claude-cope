@@ -43,6 +43,33 @@ export const IDLE_TIPS: TipDefinition[] = [
   { id: "idle-who", text: "Tip: Use /who if you need proof that everyone else is also pretending to be productive.", cmd: "/who", category: "social" },
 ];
 
+export const BACKLOG_REMINDER_TIPS: TipDefinition[] = [
+  { id: "backlog-reminder-01", text: "Tip: You've been freelancing in chat for a while. Open /backlog and /take a ticket so the bonuses start compounding.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-02", text: "Tip: Conversation does not pay nearly as well as completed tickets. Pull /backlog and claim something with /take <#>.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-03", text: "Tip: You're leaving completed-ticket bonuses on the table. Check /backlog and put a ticket in motion.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-04", text: "Tip: Chatting is fine. Tickets are profitable. Run /backlog, then /take <#> and get paid for the suffering.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-05", text: "Tip: No active ticket means no sprint bonus engine. /backlog is where the real game starts.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-06", text: "Tip: Management loves initiative. By initiative, we mean opening /backlog and grabbing a ticket before someone else does.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-07", text: "Tip: If you're going to type this much, point it at a ticket. /backlog will happily supply one.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-08", text: "Tip: Completed ticket bonuses are worth far more than idle banter. Use /backlog and claim a job.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-09", text: "Tip: Your terminal is asking for direction. /backlog gives you targets. /take gives you consequences.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-10", text: "Tip: The scoreboard moves faster when you're carrying a ticket. Start with /backlog.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-11", text: "Tip: Raw chatting is the low-margin path. /backlog plus a completed ticket is where the payout lives.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-12", text: "Tip: You seem available. That's dangerous. Open /backlog and make it official.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-13", text: "Tip: No open ticket, no bonus finish. /backlog can correct that oversight immediately.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-14", text: "Tip: You can keep chatting, or you can get paid. /backlog is the fork in the road.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-15", text: "Tip: The backlog is not decorative. Run /backlog, pick a mess, and let the reward multiplier do its thing.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-16", text: "Tip: Every message without a ticket is a missed bonus opportunity. /backlog fixes that.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-17", text: "Tip: Want the rewarding version of this game? Open /backlog and adopt a problem.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-18", text: "Tip: You're a few commands deep and still unticketed. /backlog would like a word.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-19", text: "Tip: Tickets drive the economy around here. /backlog is effectively your paycheck menu.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-20", text: "Tip: The game rewards ownership, not just commentary. Use /backlog and /take <#>.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-21", text: "Tip: A claimed ticket turns random effort into bonus-bearing progress. Start at /backlog.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-22", text: "Tip: You're operating ticket-free, which is fiscally irresponsible. Run /backlog.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-23", text: "Tip: If you want the bigger rewards, stop freelancing and pull from /backlog.", cmd: "/backlog", category: "ticket" },
+  { id: "backlog-reminder-24", text: "Tip: The completed-ticket bonus is doing all the heavy lifting. Go collect one via /backlog.", cmd: "/backlog", category: "ticket" },
+];
+
 export const MILESTONE_TIPS: TipDefinition[] = [
   { id: "milestone-help", text: "Tip: /help lists the command surface area you're ignoring with impressive discipline.", cmd: "/help", category: "meta" },
   { id: "milestone-store", text: "Tip: /store buys generators so your technical debt can scale faster than your judgment.", cmd: "/store", category: "economy" },
@@ -86,6 +113,10 @@ export function getRandomTip(): string {
 
 export function getRandomIdleTip(): string {
   return toText(pickRandomTip(IDLE_TIPS.filter(isEnabledTip)));
+}
+
+export function getRandomBacklogReminderTip(): string {
+  return toText(pickRandomTip(BACKLOG_REMINDER_TIPS.filter(isEnabledTip)));
 }
 
 export function selectMilestoneTip(usedCommands: Iterable<string>, shownTipIds: Iterable<string> = []): TipDefinition | null {

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { GameState, Message } from "./useGameState";
-import { getContextualTip, getRandomIdleTip, selectMilestoneTip, type ContextualTipTrigger } from "../game/tips";
+import { getContextualTip, getRandomBacklogReminderTip, getRandomIdleTip, selectMilestoneTip, type ContextualTipTrigger } from "../game/tips";
 
 const IDLE_TIP_DELAY_MS = 45_000;
 const MILESTONE_INTERVAL = 6;
+const BACKLOG_REMINDER_MIN_MESSAGES = 6;
+const BACKLOG_REMINDER_MAX_MESSAGES = 7;
 
 type SetHistory = Dispatch<SetStateAction<Message[]>>;
 
@@ -23,6 +25,10 @@ function appendTip(setHistory: SetHistory, content: string): void {
   setHistory((prev) => [...prev, { role: "system", content }]);
 }
 
+function getNextBacklogReminderThreshold(): number {
+  return BACKLOG_REMINDER_MIN_MESSAGES + Math.floor(Math.random() * (BACKLOG_REMINDER_MAX_MESSAGES - BACKLOG_REMINDER_MIN_MESSAGES + 1));
+}
+
 export function useTipManager({ isBooting, gameState, onlineCount, setHistory }: UseTipManagerArgs) {
   const completedTaskCount = getCompletedTaskCount(gameState);
   const idleTimerRef = useRef<number | null>(null);
@@ -31,6 +37,8 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
   const usedCommandsRef = useRef<Set<string>>(new Set());
   const shownMilestoneTipIdsRef = useRef<Set<string>>(new Set());
   const firedContextualTipsRef = useRef<Set<ContextualTipTrigger>>(new Set());
+  const noTicketMessageCountRef = useRef(0);
+  const nextBacklogReminderThresholdRef = useRef(getNextBacklogReminderThreshold());
   const previousStateRef = useRef({
     currentTD: gameState.economy.currentTD,
     quotaPercent: gameState.economy.quotaPercent,
@@ -71,10 +79,31 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
     appendTip(setHistory, tip.text);
   }, [setHistory]);
 
+  const recordMessageWithoutTicket = useCallback(() => {
+    if (gameState.activeTicket) {
+      noTicketMessageCountRef.current = 0;
+      nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
+      return;
+    }
+
+    noTicketMessageCountRef.current += 1;
+    if (noTicketMessageCountRef.current < nextBacklogReminderThresholdRef.current) return;
+
+    appendTip(setHistory, getRandomBacklogReminderTip());
+    noTicketMessageCountRef.current = 0;
+    nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
+  }, [gameState.activeTicket, setHistory]);
+
   useEffect(() => {
     if (!hasInteractedRef.current) return;
     scheduleIdleTip();
   }, [scheduleIdleTip]);
+
+  useEffect(() => {
+    if (!gameState.activeTicket) return;
+    noTicketMessageCountRef.current = 0;
+    nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
+  }, [gameState.activeTicket]);
 
   useEffect(() => {
     if (isBooting) return;
@@ -124,5 +153,5 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
 
   useEffect(() => clearIdleTimer, [clearIdleTimer]);
 
-  return { recordEnter, recordValidCommand };
+  return { recordEnter, recordValidCommand, recordMessageWithoutTicket };
 }

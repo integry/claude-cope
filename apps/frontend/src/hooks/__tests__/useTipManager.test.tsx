@@ -3,7 +3,7 @@ import { act } from "react";
 import React, { forwardRef, useImperativeHandle, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IDLE_TIPS, MILESTONE_TIPS, getContextualTip } from "../../game/tips";
+import { BACKLOG_REMINDER_TIPS, IDLE_TIPS, MILESTONE_TIPS, getContextualTip } from "../../game/tips";
 import { useTipManager } from "../useTipManager";
 import type { GameState, Message } from "../useGameState";
 
@@ -40,6 +40,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
 type HarnessHandle = {
   recordEnter: () => void;
   recordValidCommand: (baseCommand?: string) => void;
+  recordMessageWithoutTicket: () => void;
   setOnlineCount: (value: number) => void;
   setGameState: (updater: GameState | ((prev: GameState) => GameState)) => void;
   getHistory: () => Message[];
@@ -123,5 +124,47 @@ describe("useTipManager", () => {
       getContextualTip("td_1000"),
       getContextualTip("lone_user_online"),
     ]);
+  });
+
+  it("reminds the user to use the backlog after 6-7 chat messages without an active ticket", () => {
+    vi.spyOn(Math, "random")
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0);
+
+    act(() => {
+      for (let i = 0; i < 6; i++) {
+        ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      BACKLOG_REMINDER_TIPS[0]?.text,
+    ]);
+  });
+
+  it("resets the backlog reminder streak when an active ticket is opened", () => {
+    act(() => {
+      for (let i = 0; i < 5; i++) {
+        ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    act(() => {
+      ref.current?.setGameState((prev) => ({
+        ...prev,
+        activeTicket: { id: "COPE-1", title: "Fix prod", sprintProgress: 0, sprintGoal: 100 },
+      }));
+    });
+
+    act(() => {
+      ref.current?.recordMessageWithoutTicket();
+      ref.current?.setGameState((prev) => ({ ...prev, activeTicket: null }));
+    });
+
+    act(() => {
+      ref.current?.recordMessageWithoutTicket();
+    });
+
+    expect(ref.current?.getHistory()).toHaveLength(0);
   });
 });
