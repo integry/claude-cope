@@ -1,38 +1,109 @@
 import { TICKET_REFINE_ENABLED } from "../config";
 
-const ALL_TIPS = [
-  "Tip: Use /help to see all commands. There is no actual help, only commands.",
-  "Tip: The /store sells generators that produce Technical Debt while you sleep. Or cry.",
-  "Tip: /backlog shows your tickets. Spoiler: they multiply faster than you can close them.",
-  "Tip: /buddy lets you configure your AI companion. It judges you silently.",
-  "Tip: /ping another developer to interrupt their flow state. Misery loves company.",
-  "Tip: /achievements tracks your career-ending decisions. Collect them all!",
-  "Tip: /blame finds someone else to hold responsible. A core engineering skill.",
-  "Tip: Generators keep producing even when you close the tab. The debt never sleeps.",
-  "Tip: /leaderboard shows who has coped the most. Competitive suffering.",
-  "Tip: /preworkout gives a temporary boost. Side effects may include burnout.",
-  "Tip: /synergize multiplies your output. What could possibly go wrong?",
-  "Tip: /take a ticket from the backlog. Abandon all hope, ye who enter here.",
-  "Tip: /clear your terminal to hide the evidence. Out of sight, out of mind.",
-  "Tip: /compact the logs when they get too real. Denial is a valid strategy.",
-  "Tip: /profile shows your stats. We recommend not looking.",
-  "Tip: /ticket submits a support request to /dev/null. Response time: heat death of universe.",
-  "Tip: /upgrade your suffering with real money. Premium technical debt awaits.",
-  "Tip: /model lets you change AI providers. Different hallucinations, same despair.",
-  "Tip: /brrrrrr to ship directly to prod. Best used on Fridays at 4:59 PM.",
-  "Tip: /alias creates shortcuts. Automate your mistakes for maximum efficiency.",
-  "Tip: The StackOverflow Copy-Paster is a great first generator. No understanding required.",
-  "Tip: Upgrades boost generator output. More debt per second, more problems per minute.",
-  "Tip: /who shows online developers. Witness their suffering in real-time.",
-  "Tip: /abandon a ticket to give up officially. We knew you would.",
-  "Tip: Corporate ranks unlock as you accumulate Technical Debt. Climb that ladder!",
-  "Tip: /ping a coworker to pay them a small TD bribe for reviewing your ticket.",
-  "Tip: /voice lets you scream your prompts. Therapeutic, but the neighbors complain.",
-  "Tip: /shill tweets about us for free tokens. Your dignity was already in the backlog anyway.",
+export type TipDefinition = {
+  id: string;
+  text: string;
+  cmd?: string;
+  category?: "economy" | "social" | "ticket" | "meta";
+  trigger?: ContextualTipTrigger;
+};
+
+export type ContextualTipTrigger =
+  | "td_1000"
+  | "quota_exhausted"
+  | "ticket_completed"
+  | "lone_user_online";
+
+const GENERAL_TIPS: TipDefinition[] = [
+  { id: "general-help", text: "Tip: Use /help to see all commands. There is no actual help, only commands.", cmd: "/help", category: "meta" },
+  { id: "general-store", text: "Tip: The /store sells generators that produce Technical Debt while you sleep. Or cry.", cmd: "/store", category: "economy" },
+  { id: "general-backlog", text: "Tip: /backlog shows your tickets. Spoiler: they multiply faster than you can close them.", cmd: "/backlog", category: "ticket" },
+  { id: "general-achievements", text: "Tip: /achievements tracks your career-ending decisions. Collect them all!", cmd: "/achievements", category: "meta" },
+  { id: "general-blame", text: "Tip: /blame finds someone else to hold responsible. A core engineering skill.", cmd: "/blame", category: "social" },
+  { id: "general-leaderboard", text: "Tip: /leaderboard shows who has coped the most. Competitive suffering.", cmd: "/leaderboard", category: "social" },
+  { id: "general-preworkout", text: "Tip: /preworkout gives a temporary boost. Side effects may include burnout.", cmd: "/preworkout", category: "economy" },
+  { id: "general-synergize", text: "Tip: /synergize multiplies your output. What could possibly go wrong?", cmd: "/synergize", category: "economy" },
+  { id: "general-clear", text: "Tip: /clear your terminal to hide the evidence. Out of sight, out of mind.", cmd: "/clear", category: "meta" },
+  { id: "general-compact", text: "Tip: /compact the logs when they get too real. Denial is a valid strategy.", cmd: "/compact", category: "meta" },
+  { id: "general-profile", text: "Tip: /profile shows your stats. We recommend not looking.", cmd: "/profile", category: "meta" },
+  { id: "general-ticket", text: "Tip: /ticket submits a support request to /dev/null. Response time: heat death of universe.", cmd: "/ticket", category: "ticket" },
+  { id: "general-upgrade", text: "Tip: /upgrade your suffering with real money. Premium technical debt awaits.", cmd: "/upgrade", category: "meta" },
+  { id: "general-model", text: "Tip: /model lets you change AI providers. Different hallucinations, same despair.", cmd: "/model", category: "meta" },
+  { id: "general-brrrrrr", text: "Tip: /brrrrrr to ship directly to prod. Best used on Fridays at 4:59 PM.", cmd: "/brrrrrr", category: "meta" },
+  { id: "general-alias", text: "Tip: /alias creates shortcuts. Automate your mistakes for maximum efficiency.", cmd: "/alias", category: "meta" },
+  { id: "general-upgrades", text: "Tip: Upgrades boost generator output. More debt per second, more problems per minute.", category: "economy" },
+  { id: "general-voice", text: "Tip: /voice lets you scream your prompts. Therapeutic, but the neighbors complain.", cmd: "/voice", category: "meta" },
+  { id: "general-shill", text: "Tip: /shill tweets about us for free tokens. Your dignity was already in the backlog anyway.", cmd: "/shill", category: "social" },
 ];
 
-export const TIPS = ALL_TIPS.filter((tip) => TICKET_REFINE_ENABLED || !tip.includes("/ticket "));
+export const IDLE_TIPS: TipDefinition[] = [
+  { id: "idle-help", text: "Tip: Staring at the cursor will not move the sprint. Type /help and pretend this is research.", cmd: "/help", category: "meta" },
+  { id: "idle-store", text: "Tip: While you hesitate, /store keeps waiting to sell you more problems disguised as leverage.", cmd: "/store", category: "economy" },
+  { id: "idle-backlog", text: "Tip: If you're blocked, /backlog is full of fresh opportunities to disappoint multiple stakeholders at once.", cmd: "/backlog", category: "ticket" },
+  { id: "idle-who", text: "Tip: Use /who if you need proof that everyone else is also pretending to be productive.", cmd: "/who", category: "social" },
+];
+
+export const MILESTONE_TIPS: TipDefinition[] = [
+  { id: "milestone-help", text: "Tip: /help lists the command surface area you're ignoring with impressive discipline.", cmd: "/help", category: "meta" },
+  { id: "milestone-store", text: "Tip: /store buys generators so your technical debt can scale faster than your judgment.", cmd: "/store", category: "economy" },
+  { id: "milestone-backlog", text: "Tip: /backlog shows the queue of bad decisions waiting to become your problem.", cmd: "/backlog", category: "ticket" },
+  { id: "milestone-take", text: "Tip: /take <#> claims a ticket. Ownership is just scheduled regret.", cmd: "/take", category: "ticket" },
+  { id: "milestone-ping", text: "Tip: /ping pays a coworker 50 TD to care about your ticket for almost a full minute.", cmd: "/ping", category: "social" },
+  { id: "milestone-who", text: "Tip: /who shows who is online, in case you need a witness for your next production incident.", cmd: "/who", category: "social" },
+  { id: "milestone-achievements", text: "Tip: /achievements keeps score for your most durable mistakes.", cmd: "/achievements", category: "meta" },
+  { id: "milestone-profile", text: "Tip: /profile surfaces the metrics your manager will misuse in the retro.", cmd: "/profile", category: "meta" },
+  { id: "milestone-compact", text: "Tip: /compact compresses the scrollback when the evidence starts looking actionable.", cmd: "/compact", category: "meta" },
+  { id: "milestone-ticket", text: "Tip: /ticket <description> lets the PM industrialize your vague idea into a larger problem.", cmd: "/ticket", category: "ticket" },
+  { id: "milestone-blame", text: "Tip: /blame is still the fastest route from uncertainty to confidence.", cmd: "/blame", category: "social" },
+  { id: "milestone-buddy", text: "Tip: /buddy rolls you a companion. Emotional support is still not included.", cmd: "/buddy", category: "social" },
+];
+
+export const CONTEXTUAL_TIPS: TipDefinition[] = [
+  { id: "ctx-td-1000", text: "Tip: You broke 1,000 TD. Open /store and reinvest before your temporary competence fades.", cmd: "/store", category: "economy", trigger: "td_1000" },
+  { id: "ctx-quota", text: "Tip: Your quota is gone. /upgrade exists because suffering scales better with a payment method.", cmd: "/upgrade", category: "meta", trigger: "quota_exhausted" },
+  { id: "ctx-ticket-complete", text: "Tip: Ticket completed. Pull /backlog immediately before management notices your queue is empty.", cmd: "/backlog", category: "ticket", trigger: "ticket_completed" },
+  { id: "ctx-lone-user", text: "Tip: You're the only user online. Type /who if you need the loneliness quantified in plain text.", cmd: "/who", category: "social", trigger: "lone_user_online" },
+];
+
+function isEnabledTip(tip: TipDefinition): boolean {
+  return TICKET_REFINE_ENABLED || tip.cmd !== "/ticket";
+}
+
+function pickRandomTip(pool: TipDefinition[]): TipDefinition | undefined {
+  if (pool.length === 0) return undefined;
+  return pool[Math.floor(Math.random() * pool.length)]!;
+}
+
+function toText(tip: TipDefinition | undefined): string {
+  return tip?.text ?? "Tip: Type something. The silence is making middle management nervous.";
+}
+
+export const TIPS = GENERAL_TIPS.filter(isEnabledTip);
 
 export function getRandomTip(): string {
-  return TIPS[Math.floor(Math.random() * TIPS.length)]!;
+  return toText(pickRandomTip(TIPS));
+}
+
+export function getRandomIdleTip(): string {
+  return toText(pickRandomTip(IDLE_TIPS.filter(isEnabledTip)));
+}
+
+export function selectMilestoneTip(usedCommands: Iterable<string>, shownTipIds: Iterable<string> = []): TipDefinition | null {
+  const used = new Set(usedCommands);
+  const shown = new Set(shownTipIds);
+  const available = MILESTONE_TIPS.filter((tip) => {
+    if (!isEnabledTip(tip) || shown.has(tip.id)) return false;
+    return !tip.cmd || !used.has(tip.cmd);
+  });
+  return available.length > 0 ? pickRandomTip(available) ?? null : null;
+}
+
+export function getMilestoneTip(usedCommands: Iterable<string>, shownTipIds: Iterable<string> = []): string | null {
+  const tip = selectMilestoneTip(usedCommands, shownTipIds);
+  return tip ? tip.text : null;
+}
+
+export function getContextualTip(trigger: ContextualTipTrigger): string | null {
+  const tip = CONTEXTUAL_TIPS.find((entry) => entry.trigger === trigger && isEnabledTip(entry));
+  return tip ? tip.text : null;
 }

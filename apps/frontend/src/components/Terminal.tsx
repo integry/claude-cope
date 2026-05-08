@@ -24,6 +24,7 @@ import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
 import { usePingAcknowledged } from "../hooks/usePingAcknowledged";
 import { useOverlays } from "../hooks/useOverlays";
+import { useTipManager } from "../hooks/useTipManager";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 import { runFreeTierDelay } from "./freeTierDelay";
 import { buildSprintCallbacks } from "./buildChatSubmitArgs";
@@ -34,6 +35,7 @@ import { TerminalOverlays } from "./TerminalOverlays";
 import { useTerminalKeyboard } from "../hooks/useTerminalKeyboard";
 import { handleBragSubmit, handleBuddyConfirm, tryOutageDamage } from "./terminalInputHandlers";
 import { shouldShowNag } from "./winrarNag";
+import { parseBaseCommand } from "../parseBaseCommand";
 
 export type { Message };
 
@@ -68,6 +70,7 @@ function Terminal() {
   const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage } = useMultiplayer({ username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost });
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
+  const { recordEnter, recordValidCommand } = useTipManager({ isBooting, gameState: state, onlineCount, setHistory });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
   const [instantBanReady, setInstantBanReady] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
@@ -332,8 +335,14 @@ function Terminal() {
   processCommandRef.current = processCommand;
 
   const handleEnterSubmit = async () => {
+    recordEnter();
     if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
-    if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
+    if (inputValue.trim().startsWith("/")) {
+      const baseCommand = parseBaseCommand(inputValue.trim());
+      if (baseCommand !== "/unknown") recordValidCommand(baseCommand);
+      runSlashCommand(inputValue.trim());
+      return;
+    }
     if (bragPending) { handleBragSubmit({ inputValue, setInputValue, state, setHistory, setBragPending }); return; }
     if (buddyPendingConfirm) { handleBuddyConfirm({ inputValue, setInputValue, setBuddyPendingConfirm, setState, setHistory, buddyType: state.buddy?.type ?? undefined }); return; }
     if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
@@ -347,6 +356,7 @@ function Terminal() {
     }
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
     setCommandHistory((prev) => [...prev, command]);
+    recordValidCommand();
     processCommand(command);
   };
 
