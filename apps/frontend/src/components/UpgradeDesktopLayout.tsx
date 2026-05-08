@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import {
   UPGRADE_CHECKOUT_SINGLE,
@@ -206,7 +206,7 @@ export default function DesktopLayout({
     overlayRef.current?.focus();
   }, []);
 
-  const cycleSelection = (direction: -1 | 1) => {
+  const cycleSelection = useCallback((direction: -1 | 1) => {
     if (availableOptionIds.length === 0) return;
     if (selectedOptionId === null) {
       setSelectedOptionId(availableOptionIds[0] ?? null);
@@ -216,7 +216,7 @@ export default function DesktopLayout({
     const startIndex = currentIndex >= 0 ? currentIndex : 0;
     const nextIndex = (startIndex + direction + availableOptionIds.length) % availableOptionIds.length;
     setSelectedOptionId(availableOptionIds[nextIndex] ?? null);
-  };
+  }, [availableOptionIds, selectedOptionId]);
 
   useEffect(() => {
     if (window.innerWidth <= 640) return undefined;
@@ -250,7 +250,7 @@ export default function DesktopLayout({
     return () => {
       document.removeEventListener("keydown", handleDocumentKeyDown);
     };
-  }, [availableOptionIds, selectedOptionId]);
+  }, [cycleSelection, selectedOptionId]);
 
   return (
     <div
