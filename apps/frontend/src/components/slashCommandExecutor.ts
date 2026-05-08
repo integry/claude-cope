@@ -805,12 +805,12 @@ async function handleShillCommand(ctx: SlashCommandContext, reply: Reply): Promi
   }
 }
 
-function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | false {
+function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | boolean {
   if (command === "/key" || command.startsWith("/key ")) {
     if (!BYOK_ENABLED) {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/key", reason: SlashCommandFailureReasons.DISABLED });
       reply({ role: "error", content: `[❌ Error] Command not found: \`/key\`` });
-      return false;
+      return true;
     }
     import("./keyCommandHandler").then(async ({ handleKeyCommand }) => {
       // Create a mock setHistory that routes messages through reply

@@ -132,8 +132,11 @@ describe("/upgrade command", () => {
 
     handleUpgradeCommand(ctx);
 
-    // setState should NOT be called — no inventory mutation
-    expect(ctx.setState).not.toHaveBeenCalled();
+    expect(ctx.setState).toHaveBeenCalledOnce();
+    const update = (ctx.setState as ReturnType<typeof vi.fn>).mock.calls[0]![0] as (prev: GameState) => GameState;
+    const nextState = update(ctx.state);
+    expect(nextState.inventory).toEqual({ jokes: 5 });
+    expect(nextState.commandUsage).toEqual({ "/upgrade": 1 });
     // The inventory object itself should be untouched
     expect(ctx.state.inventory).toEqual({ jokes: 5 });
   });
