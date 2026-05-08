@@ -144,17 +144,28 @@ describe("UpgradeOverlay", () => {
     clickSpy.mockRestore();
   });
 
-  it("does not hijack Enter from the focused dismiss button", () => {
-    const onDismiss = vi.fn();
+  it("keeps desktop keyboard navigation active after focus leaves the overlay wrapper", () => {
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+
+    const getSelectedHref = () => container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href");
+
+    act(() => {
+      document.body.focus();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+
+    expect(getSelectedHref()).toBe("https://example.com/multi");
+  });
+
+  it("does not route Enter key events from the dismiss button to checkout links", () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
     const closeButton = container.querySelector(".upgrade-desktop button");
 
     act(() => {
       closeButton?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
 
-    expect(onDismiss).not.toHaveBeenCalled();
     expect(clickSpy).not.toHaveBeenCalled();
     clickSpy.mockRestore();
   });

@@ -218,38 +218,45 @@ export default function DesktopLayout({
     setSelectedOptionId(availableOptionIds[nextIndex] ?? null);
   };
 
-  const handleOverlayKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (window.innerWidth <= 640) return;
-    const target = event.target;
-    const isInteractiveTarget = target instanceof HTMLElement
-      && (target.tagName === "A" || target.tagName === "BUTTON");
+  useEffect(() => {
+    if (window.innerWidth <= 640) return undefined;
 
-    if (isInteractiveTarget) {
-      return;
-    }
+    const handleDocumentKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      const isInteractiveTarget = target instanceof HTMLElement
+        && (target.tagName === "A" || target.tagName === "BUTTON");
 
-    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-      event.preventDefault();
-      cycleSelection(-1);
-      return;
-    }
-    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-      event.preventDefault();
-      cycleSelection(1);
-      return;
-    }
-    if (event.key === "Enter" && selectedOptionId !== null) {
-      event.preventDefault();
-      optionRefs.current[selectedOptionId]?.click();
-    }
-  };
+      if (isInteractiveTarget) {
+        return;
+      }
+
+      if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        cycleSelection(-1);
+        return;
+      }
+      if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+        event.preventDefault();
+        cycleSelection(1);
+        return;
+      }
+      if (event.key === "Enter" && selectedOptionId !== null) {
+        event.preventDefault();
+        optionRefs.current[selectedOptionId]?.click();
+      }
+    };
+
+    document.addEventListener("keydown", handleDocumentKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleDocumentKeyDown);
+    };
+  }, [availableOptionIds, selectedOptionId]);
 
   return (
     <div
       ref={overlayRef}
       className="upgrade-desktop fixed inset-0 z-50 flex items-center justify-center"
       onClick={canPointerDismiss ? onDismiss : undefined}
-      onKeyDown={handleOverlayKeyDown}
       tabIndex={-1}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
