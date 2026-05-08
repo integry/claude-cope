@@ -399,7 +399,7 @@ function getShareProps(message: Message, previousMessage?: Message, nextMessage?
   return { showShareButton, shareSystemMessage };
 }
 
-function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", isFreeTier = false, onSlashCommand }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; isFreeTier?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
+function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   const { showShareButton, shareSystemMessage } = getShareProps(message, previousMessage, nextMessage);
 
@@ -436,7 +436,6 @@ function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps
   if (!messagesEqual(prev.previousMessage, next.previousMessage)) return false;
   if (!messagesEqual(prev.nextMessage, next.nextMessage)) return false;
   if (prev.username !== next.username) return false;
-  if (prev.isFreeTier !== next.isFreeTier) return false;
   if (prev.onSlashCommand !== next.onSlashCommand) return false;
   // Only compare activeTicketId for loading messages
   if (prev.message.role === "loading" && prev.activeTicketId !== next.activeTicketId) return false;

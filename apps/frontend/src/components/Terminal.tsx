@@ -335,7 +335,6 @@ function Terminal() {
       activeTheme={state.activeTheme}
       regressionGlitch={regressionGlitch}
       anyOverlayOpen={anyOverlayOpen}
-      isFreeTier={isFreeTier}
       inputRef={inputRef}
       closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
       onlineCount={onlineCount}
