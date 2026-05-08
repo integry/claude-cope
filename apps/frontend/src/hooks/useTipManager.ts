@@ -13,6 +13,7 @@ type SetHistory = Dispatch<SetStateAction<Message[]>>;
 
 interface UseTipManagerArgs {
   isBooting: boolean;
+  isInteractionBlocked?: boolean;
   gameState: GameState;
   onlineCount: number;
   setHistory: SetHistory;
@@ -30,14 +31,33 @@ function getNextBacklogReminderThreshold(): number {
   return BACKLOG_REMINDER_MIN_MESSAGES + Math.floor(Math.random() * (BACKLOG_REMINDER_MAX_MESSAGES - BACKLOG_REMINDER_MIN_MESSAGES + 1));
 }
 
-export function useTipManager({ isBooting, gameState, onlineCount, setHistory }: UseTipManagerArgs) {
+function getInitialContextualTriggers(currentTD: number, quotaPercent: number, onlineCount: number): ContextualTipTrigger[] {
+  const triggers: ContextualTipTrigger[] = [];
+
+  if (currentTD > 1_000) {
+    triggers.push("td_1000");
+  }
+  if (quotaPercent <= 0) {
+    triggers.push("quota_exhausted");
+  }
+  if (onlineCount === 1) {
+    triggers.push("lone_user_online");
+  }
+
+  return triggers;
+}
+
+export function useTipManager({ isBooting, isInteractionBlocked = false, gameState, onlineCount, setHistory }: UseTipManagerArgs) {
   const completedTaskCount = getCompletedTaskCount(gameState);
+  const currentTD = gameState.economy.currentTD;
+  const quotaPercent = gameState.economy.quotaPercent;
   const idleTimerRef = useRef<number | null>(null);
   const hasInteractedRef = useRef(false);
   const actionCountRef = useRef(0);
   const usedCommandsRef = useRef<Set<string>>(new Set());
   const shownMilestoneTipIdsRef = useRef<Set<string>>(new Set());
   const firedContextualTipsRef = useRef<Set<ContextualTipTrigger>>(new Set());
+  const hasEvaluatedContextualStateRef = useRef(false);
   const noTicketMessageCountRef = useRef(0);
   const nextBacklogReminderThresholdRef = useRef(getNextBacklogReminderThreshold());
   const lastBacklogReminderTipIdRef = useRef<string | null>(null);
@@ -57,12 +77,12 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
 
   const scheduleIdleTip = useCallback(() => {
     clearIdleTimer();
-    if (isBooting || !hasInteractedRef.current) return;
+    if (isBooting || isInteractionBlocked || !hasInteractedRef.current) return;
     idleTimerRef.current = window.setTimeout(() => {
       appendTip(setHistory, getRandomIdleTip());
       scheduleIdleTip();
     }, IDLE_TIP_DELAY_MS);
-  }, [clearIdleTimer, isBooting, setHistory]);
+  }, [clearIdleTimer, isBooting, isInteractionBlocked, setHistory]);
 
   const recordEnter = useCallback(() => {
     hasInteractedRef.current = true;
@@ -115,10 +135,14 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
     const previous = previousStateRef.current;
     const triggers: ContextualTipTrigger[] = [];
 
-    if (previous.currentTD <= 1_000 && gameState.economy.currentTD > 1_000) {
+    if (!hasEvaluatedContextualStateRef.current) {
+      triggers.push(...getInitialContextualTriggers(currentTD, quotaPercent, onlineCount));
+      hasEvaluatedContextualStateRef.current = true;
+    }
+    if (previous.currentTD <= 1_000 && currentTD > 1_000) {
       triggers.push("td_1000");
     }
-    if (previous.quotaPercent > 0 && gameState.economy.quotaPercent <= 0) {
+    if (previous.quotaPercent > 0 && quotaPercent <= 0) {
       triggers.push("quota_exhausted");
     }
     if (completedTaskCount > previous.pendingCompletedTaskCount) {
@@ -128,7 +152,7 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
       triggers.push("lone_user_online");
     }
 
-    const newTips = triggers
+    const newTips = Array.from(new Set(triggers))
       .filter((trigger) => !SINGLE_FIRE_CONTEXTUAL_TRIGGERS.has(trigger) || !firedContextualTipsRef.current.has(trigger))
       .map((trigger) => {
         if (SINGLE_FIRE_CONTEXTUAL_TRIGGERS.has(trigger)) firedContextualTipsRef.current.add(trigger);
@@ -141,15 +165,15 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
     }
 
     previousStateRef.current = {
-      currentTD: gameState.economy.currentTD,
-      quotaPercent: gameState.economy.quotaPercent,
+      currentTD,
+      quotaPercent,
       pendingCompletedTaskCount: completedTaskCount,
       onlineCount,
     };
   }, [
     completedTaskCount,
-    gameState.economy.currentTD,
-    gameState.economy.quotaPercent,
+    currentTD,
+    quotaPercent,
     isBooting,
     onlineCount,
     setHistory,

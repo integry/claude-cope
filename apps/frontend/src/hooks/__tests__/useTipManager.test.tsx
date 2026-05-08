@@ -41,19 +41,30 @@ type HarnessHandle = {
   recordEnter: () => void;
   recordValidCommand: (baseCommand?: string) => void;
   recordMessageWithoutTicket: () => void;
+  setBlocked: (value: boolean) => void;
   setOnlineCount: (value: number) => void;
   setGameState: (updater: GameState | ((prev: GameState) => GameState)) => void;
   getHistory: () => Message[];
 };
 
-const Harness = forwardRef<HarnessHandle>(function Harness(_, ref) {
+type HarnessProps = {
+  initialGameState?: GameState;
+  initialOnlineCount?: number;
+};
+
+const Harness = forwardRef<HarnessHandle, HarnessProps>(function Harness({
+  initialGameState = makeState(),
+  initialOnlineCount = 2,
+}, ref) {
   const [history, setHistory] = useState<Message[]>([]);
-  const [gameState, setGameState] = useState<GameState>(() => makeState());
-  const [onlineCount, setOnlineCount] = useState(2);
-  const manager = useTipManager({ isBooting: false, gameState, onlineCount, setHistory });
+  const [gameState, setGameState] = useState<GameState>(initialGameState);
+  const [onlineCount, setOnlineCount] = useState(initialOnlineCount);
+  const [isBlocked, setBlocked] = useState(false);
+  const manager = useTipManager({ isBooting: false, isInteractionBlocked: isBlocked, gameState, onlineCount, setHistory });
 
   useImperativeHandle(ref, () => ({
     ...manager,
+    setBlocked,
     setOnlineCount,
     setGameState,
     getHistory: () => history,
@@ -67,16 +78,20 @@ describe("useTipManager", () => {
   let root: Root;
   let ref: React.RefObject<HarnessHandle | null>;
 
+  function renderHarness(props: HarnessProps = {}) {
+    ref = React.createRef<HarnessHandle>();
+    act(() => {
+      root.render(<Harness ref={ref} {...props} />);
+    });
+  }
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.spyOn(Math, "random").mockReturnValue(0);
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-    ref = React.createRef<HarnessHandle>();
-    act(() => {
-      root.render(<Harness ref={ref} />);
-    });
+    renderHarness();
   });
 
   afterEach(() => {
@@ -96,6 +111,34 @@ describe("useTipManager", () => {
 
     const history = ref.current?.getHistory() ?? [];
     expect(history[history.length - 1]?.content).toBe(IDLE_TIPS[0]?.text);
+  });
+
+  it("does not fire idle tips while interaction is intentionally blocked", () => {
+    act(() => {
+      ref.current?.recordEnter();
+    });
+
+    act(() => {
+      ref.current?.setBlocked(true);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(45_000);
+    });
+
+    expect(ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      ref.current?.setBlocked(false);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(45_000);
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      IDLE_TIPS[0]?.text,
+    ]);
   });
 
   it("shows a milestone tip on every sixth valid command for an unused command", () => {
@@ -135,6 +178,35 @@ describe("useTipManager", () => {
 
     expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
       getContextualTip("td_1000"),
+      getContextualTip("lone_user_online"),
+    ]);
+  });
+
+  it("fires state-based contextual tips when loading directly into those states", () => {
+    act(() => {
+      root.unmount();
+    });
+
+    root = createRoot(container);
+    act(() => {
+      renderHarness({
+        initialGameState: makeState({
+          economy: {
+            currentTD: 1_200,
+            totalTDEarned: 0,
+            currentRank: "Junior Code Monkey",
+            quotaPercent: 0,
+            quotaLockouts: 0,
+            tdMultiplier: 1,
+          },
+        }),
+        initialOnlineCount: 1,
+      });
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      getContextualTip("td_1000"),
+      getContextualTip("quota_exhausted"),
       getContextualTip("lone_user_online"),
     ]);
   });

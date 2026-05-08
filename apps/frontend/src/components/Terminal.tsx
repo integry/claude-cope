@@ -57,7 +57,6 @@ function Terminal() {
   const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage } = useMultiplayer({ username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost });
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
-  const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, gameState: state, onlineCount, setHistory });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
   const [instantBanReady, setInstantBanReady] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
@@ -92,6 +91,13 @@ function Terminal() {
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
+  const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({
+    isBooting,
+    isInteractionBlocked: anyOverlayOpen || isProcessing,
+    gameState: state,
+    onlineCount,
+    setHistory,
+  });
 
   useEffect(() => {
     return () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); };
@@ -284,6 +290,7 @@ function Terminal() {
     recordEnter();
     if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
     if (inputValue.trim().startsWith("/")) {
+      recordMessageWithoutTicket();
       runSlashCommand(inputValue.trim());
       return;
     }
