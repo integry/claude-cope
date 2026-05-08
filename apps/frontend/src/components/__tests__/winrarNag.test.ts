@@ -22,6 +22,7 @@ vi.mock("../../config", () => ({
   PRO_QUOTA_LIMIT: 100,
   FREE_QUOTA_LIMIT: 20,
   BYOK_ENABLED: true,
+  TICKET_REFINE_ENABLED: true,
 }));
 
 vi.mock("../../supabaseClient", () => ({ supabase: {} }));
@@ -59,7 +60,7 @@ vi.mock("../CommandLine", async () => {
   };
 });
 vi.mock("../SlashMenu", () => ({ default: () => null }));
-vi.mock("../slashCommands", () => ({ SLASH_COMMANDS: [] }));
+vi.mock("../slashCommands", () => ({ SLASH_COMMANDS: [], ALL_SLASH_COMMANDS: [] }));
 vi.mock("../HeaderBar", () => ({ default: () => null }));
 vi.mock("../../hooks/useGameState", async () => {
   const React = await import("react");

@@ -20,9 +20,7 @@ function getCompletedTaskCount(gameState: GameState): number {
 }
 
 function appendTip(setHistory: SetHistory, content: string): void {
-  window.setTimeout(() => {
-    setHistory((prev) => [...prev, { role: "system", content }]);
-  }, 0);
+  setHistory((prev) => [...prev, { role: "system", content }]);
 }
 
 export function useTipManager({ isBooting, gameState, onlineCount, setHistory }: UseTipManagerArgs) {
@@ -106,9 +104,7 @@ export function useTipManager({ isBooting, gameState, onlineCount, setHistory }:
       .filter((tip): tip is string => Boolean(tip));
 
     if (newTips.length > 0) {
-      window.setTimeout(() => {
-        setHistory((prev) => [...prev, ...newTips.map((content) => ({ role: "system" as const, content }))]);
-      }, 0);
+      setHistory((prev) => [...prev, ...newTips.map((content) => ({ role: "system" as const, content }))]);
     }
 
     previousStateRef.current = {
