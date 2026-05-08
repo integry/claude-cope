@@ -1,19 +1,21 @@
 import { useState, useEffect, useCallback, type Dispatch, type SetStateAction } from "react";
 
-export interface OverlayState {
-  showStore: boolean;
-  showLeaderboard: boolean;
-  showAchievements: boolean;
-  showSynergize: boolean;
-  showHelp: boolean;
-  showAbout: boolean;
-  showPrivacy: boolean;
-  showTerms: boolean;
-  showContact: boolean;
-  showProfile: boolean;
-  showParty: boolean;
-  showUpgrade: boolean;
-}
+export const OVERLAY_STATE_KEYS = [
+  "showStore",
+  "showLeaderboard",
+  "showAchievements",
+  "showSynergize",
+  "showHelp",
+  "showAbout",
+  "showPrivacy",
+  "showTerms",
+  "showContact",
+  "showProfile",
+  "showParty",
+  "showUpgrade",
+] as const;
+
+export type OverlayState = Record<(typeof OVERLAY_STATE_KEYS)[number], boolean>;
 
 export interface OverlayActions {
   setShowStore: Dispatch<SetStateAction<boolean>>;
