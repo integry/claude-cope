@@ -854,49 +854,78 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
   return false;
 }
 
+function handleExtendedCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | boolean {
+  if (command === "/key" || command.startsWith("/key ")) {
+    return handleAsyncCommand(command, ctx, reply);
+  }
+
+  if (command === "/feedback" || command === "/bug") {
+    markValidSlashCommand(ctx, command);
+    reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
+    return true;
+  }
+
+  if (command === "/upgrade") {
+    handleUpgradeCommand(ctx);
+    return true;
+  }
+
+  const asyncResult = handleAsyncCommand(command, ctx, reply);
+  if (asyncResult === "async") return "async";
+
+  if (command.startsWith("/take")) {
+    const hadActiveTicket = Boolean(ctx.state.activeTicket);
+    const input = command.slice("/take".length).trim();
+    const handled = handleTakeCommand(command, ctx.state, ctx.setState, reply, { setInputValue: ctx.setInputValue, onAccept: ctx.playChime, onSuggestedReply: ctx.onSuggestedReply });
+    if (handled && input && !hadActiveTicket) markValidSlashCommand(ctx, "/take");
+    return handled;
+  }
+
+  if (command === "/accept") {
+    handleAcceptCommand(ctx, reply);
+    return true;
+  }
+
+  if (command === "/abandon") {
+    if (ctx.state.activeTicket) ctx.playError();
+    if (ctx.state.activeTicket) markValidSlashCommand(ctx, "/abandon");
+    handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
+    return true;
+  }
+
+  if (command.startsWith("/alias")) {
+    handleAliasCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
+    return "async";
+  }
+
+  if (command.startsWith("/model")) {
+    handleModelCommand(command, ctx, reply);
+    return true;
+  }
+
+  if (handleNewCommand(command, ctx, reply)) {
+    return command === "/brrrrrr" ? "async" : true;
+  }
+
+  return false;
+}
+
 /** Dispatch a command; returns "async" if the caller should NOT call setIsProcessing(false). */
 function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | void {
   if (handleCoreCommand(command, ctx, reply)) {
     if (command === "/synergize") return;
-  } else if (command === "/key" || command.startsWith("/key ")) {
-    const asyncResult = handleAsyncCommand(command, ctx, reply);
-    if (asyncResult === "async") return "async";
-    // BYOK disabled — handleAsyncCommand already tracked SLASH_COMMAND_FAILED
-    // with reason: "disabled", so no additional tracking needed here.
-  } else if (command === "/feedback" || command === "/bug") {
-    markValidSlashCommand(ctx, command);
-    reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
-  } else if (command === "/upgrade") {
-    handleUpgradeCommand(ctx);
+    return;
+  }
+
+  const extendedResult = handleExtendedCommand(command, ctx, reply);
+  if (extendedResult === "async") return "async";
+  if (extendedResult) return;
+
+  if (command.startsWith("/")) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: parseBaseCommand(command), reason: SlashCommandFailureReasons.UNKNOWN_COMMAND });
+    reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
   } else {
-    const asyncResult = handleAsyncCommand(command, ctx, reply);
-    if (asyncResult === "async") return "async";
-    if (!asyncResult) {
-      if (command.startsWith("/take")) {
-        const hadActiveTicket = Boolean(ctx.state.activeTicket);
-        const input = command.slice("/take".length).trim();
-        const handled = handleTakeCommand(command, ctx.state, ctx.setState, reply, { setInputValue: ctx.setInputValue, onAccept: ctx.playChime, onSuggestedReply: ctx.onSuggestedReply });
-        if (handled && input && !hadActiveTicket) markValidSlashCommand(ctx, "/take");
-      } else if (command === "/accept") {
-        handleAcceptCommand(ctx, reply);
-      } else if (command === "/abandon") {
-        if (ctx.state.activeTicket) ctx.playError();
-        if (ctx.state.activeTicket) markValidSlashCommand(ctx, "/abandon");
-        handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
-      } else if (command.startsWith("/alias")) {
-        handleAliasCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
-        return "async";
-      } else if (command.startsWith("/model")) {
-        handleModelCommand(command, ctx, reply);
-      } else if (handleNewCommand(command, ctx, reply)) {
-        if (command === "/brrrrrr") return "async";
-      } else if (command.startsWith("/")) {
-        track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: parseBaseCommand(command), reason: SlashCommandFailureReasons.UNKNOWN_COMMAND });
-        reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
-      } else {
-        reply({ role: "system", content: `[✓] Executed \`${command}\`` });
-      }
-    }
+    reply({ role: "system", content: `[✓] Executed \`${command}\`` });
   }
 }
 
