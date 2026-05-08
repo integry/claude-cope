@@ -44,6 +44,7 @@ export default function DesktopLayout({
   onDismiss,
 }: LayoutProps) {
   const optionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   const topBorder = (
     <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>
   );
@@ -201,44 +202,55 @@ export default function DesktopLayout({
   }, [availableOptionIds, selectedOptionId]);
 
   useEffect(() => {
-    const cycleSelection = (direction: -1 | 1) => {
-      if (availableOptionIds.length === 0) return;
-      if (selectedOptionId === null) {
-        setSelectedOptionId(availableOptionIds[0] ?? null);
-        return;
-      }
-      const currentIndex = availableOptionIds.indexOf(selectedOptionId);
-      const startIndex = currentIndex >= 0 ? currentIndex : 0;
-      const nextIndex = (startIndex + direction + availableOptionIds.length) % availableOptionIds.length;
-      setSelectedOptionId(availableOptionIds[nextIndex] ?? null);
-    };
+    if (window.innerWidth <= 640) return;
+    overlayRef.current?.focus();
+  }, []);
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (window.innerWidth <= 640) return;
-      if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-        event.preventDefault();
-        cycleSelection(-1);
-        return;
-      }
-      if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-        event.preventDefault();
-        cycleSelection(1);
-        return;
-      }
-      if (event.key === "Enter" && selectedOptionId !== null) {
-        event.preventDefault();
-        optionRefs.current[selectedOptionId]?.click();
-      }
-    };
+  const cycleSelection = (direction: -1 | 1) => {
+    if (availableOptionIds.length === 0) return;
+    if (selectedOptionId === null) {
+      setSelectedOptionId(availableOptionIds[0] ?? null);
+      return;
+    }
+    const currentIndex = availableOptionIds.indexOf(selectedOptionId);
+    const startIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (startIndex + direction + availableOptionIds.length) % availableOptionIds.length;
+    setSelectedOptionId(availableOptionIds[nextIndex] ?? null);
+  };
 
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [availableOptionIds, selectedOptionId]);
+  const handleOverlayKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (window.innerWidth <= 640) return;
+    const target = event.target;
+    const isInteractiveTarget = target instanceof HTMLElement
+      && (target.tagName === "A" || target.tagName === "BUTTON");
+
+    if (isInteractiveTarget) {
+      return;
+    }
+
+    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      cycleSelection(-1);
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      cycleSelection(1);
+      return;
+    }
+    if (event.key === "Enter" && selectedOptionId !== null) {
+      event.preventDefault();
+      optionRefs.current[selectedOptionId]?.click();
+    }
+  };
 
   return (
     <div
+      ref={overlayRef}
       className="upgrade-desktop fixed inset-0 z-50 flex items-center justify-center"
       onClick={canPointerDismiss ? onDismiss : undefined}
+      onKeyDown={handleOverlayKeyDown}
+      tabIndex={-1}
     >
       <div className="absolute inset-0 bg-black opacity-70" />
 

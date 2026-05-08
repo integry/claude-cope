@@ -114,18 +114,19 @@ describe("UpgradeOverlay", () => {
 
   it("cycles desktop selection with arrow keys", () => {
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
 
     const getSelectedHref = () => container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href");
 
     expect(getSelectedHref()).toBe("https://example.com/single");
 
     act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
     expect(getSelectedHref()).toBe("https://example.com/multi");
 
     act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
     });
     expect(getSelectedHref()).toBe("https://example.com/single");
   });
@@ -133,12 +134,28 @@ describe("UpgradeOverlay", () => {
   it("activates the selected desktop option on Enter", () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
 
     act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
 
     expect(clickSpy).toHaveBeenCalledTimes(1);
+    clickSpy.mockRestore();
+  });
+
+  it("does not hijack Enter from the focused dismiss button", () => {
+    const onDismiss = vi.fn();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss });
+    const closeButton = container.querySelector(".upgrade-desktop button");
+
+    act(() => {
+      closeButton?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(clickSpy).not.toHaveBeenCalled();
     clickSpy.mockRestore();
   });
 });
