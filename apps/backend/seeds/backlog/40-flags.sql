@@ -88,5 +88,5 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Soren | Principal Delivery Manager | Suspects deletion only happens when dressed up as a ceremony with gratitude, charts, and snacks.
 ('FLAGS-780', 'Build a Flag Funeral So Teams Remember Cleanup Is Real',
  'Real deletion is hard to schedule, but ritual is cheap and socially flattering. Create a recurring retirement ceremony with owners, dashboards, applause, and the brief collective shock of code becoming simpler in public.',
- 'build a flag funeral',
+ 'add delete flag button',
   144),;

@@ -16,7 +16,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Jada | Community PM | Wants discourse, notification opportunism, and timeline thermodynamics priced before launch.
 ('FEED-543', 'Paint Opportunistic Notifications Yellow Before They Pretend to Be Urgent',
  'We have allowed real account issues and maybe someone wants your attention someday to share one badge system, which is how trust dies with a red dot. Split the categories and paint the opportunistic ones yellow before the bell icon becomes pure emotional spam.',
- 'paint fake urgent notifications yellow',
+ 'make non urgent notifications yellow instead of red',
   144),
 
 ('FEED-544', 'Add a "This Will Start Discourse" Warning to Risky Copy Changes',

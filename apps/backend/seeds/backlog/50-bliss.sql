@@ -4,7 +4,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Colette | Employee Wellness PM | Believes focus is not real until it has a score, a graph, and at least one biometric attached to it.
 ('BLISS-916', 'Mix Deep-Work Scoring with Heart Data Until Productivity Feels Medical',
  'We are apparently no longer satisfied tracking output alone. Add heart-rate variability to the focus app so it can distinguish real concentration from aggressive frowning, caffeine theology, and pretending to be the sort of adult who color-codes a calendar on purpose.',
- 'mix focus scores with heart data',
+ 'integrate apple watch api into focus timer',
   144),
 
 ('BLISS-917', 'Add a Calmness Trendline So Leadership Can Watch Burnout Form in Pastel',

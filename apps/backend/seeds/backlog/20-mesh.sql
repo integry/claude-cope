@@ -76,12 +76,12 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Rina | Principal Engineer | Wants accidental internal products and service sprawl taxed before neglect becomes strategy.
 ('MESH-478', 'The Internal Platform Should Admit When It Is Just a Product Nobody Wanted to Staff',
  'We keep calling things internal platforms when what we mean is a product with customers, support obligations, roadmap politics, and no appetite for being recognized as such. Add operating metadata for owner, users, adoption risk, and whether the team still pretends this is just tooling.',
- 'admit when internal platform is just staffing',
+ 'add staffing disclaimer to platform docs',
   144),
 
 ('MESH-479', 'Create a "Complexity Budget" for Teams That Keep Solving Problems with New Services',
  'Simplicity cannot survive if complexity remains fiscally free. Assign each team a budget covering services, queues, schemas, workers, dashboards, on-call surfaces, and magical helpers. Once they exceed it, new architecture must be paid for by deleting something real.',
- 'add a complexity budget for teams keep solving',
+ 'add complexity budget for teams adding services',
   233),
 
 -- CTO Advisor Elise

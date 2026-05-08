@@ -9,19 +9,19 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GLUE-287', 'All Vendor APIs Must Be Fronted by Our Own API So We Can Recreate Their Outages Internally',
  'Depending directly on third-party APIs makes our failures look outsourced. Put every vendor behind an internal proxy that mirrors their responses, rate limits, pagination weirdness, and occasional moral collapse. When a partner goes down, our systems should fail locally and with dignity.',
- 'make all vendor apis fronted by our api',
+ 'pls make vendor apis fronted by our api',
   233),
 
 -- Enterprise Solutions Engineer Martin
 -- REPORTER: Martin | Enterprise Solutions Engineer | Defines real-time in units of executive impatience and legal survivability.
 ('GLUE-288', 'The CRM Sync Must Support "Near Real-Time" Defined As Before the Next Quarterly Review',
  'Sales keeps saying real-time when what they mean is emotionally current. Promise near real-time CRM synchronization, but define it as before the next quarterly review or the next time a VP opens the dashboard in anger. The docs should sound precise while staying beautifully defensible in court.',
- 'make crm sync near real time ish',
+ 'pls make crm sync near real time',
   144),
 
 ('GLUE-289', 'Create a Middleware Layer That Retries All Partner Failures with Increasingly Polite Language',
  'Some partner endpoints reject requests because the payload is wrong. Others do it because the moon shifted and their sandbox feels sad. Build middleware that retries with exponential backoff and progressively more courteous metadata, in case the API only needed an apology.',
- 'create a middleware layer retries partner failures',
+ 'make middleware politely retry partner api failures',
   144),
 
 -- Procurement Systems Liaison Brenda
@@ -40,7 +40,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Luca | Partner Operations PM | Wants replay consoles and blame trees sturdy enough for a workshop.
 ('GLUE-292', 'All Marketplace Integrations Need a "Who Owns This Failure?" Decision Tree',
  'Whenever an integration breaks, the first hour disappears into a jurisdiction dispute. Add a decision tree that classifies failures by origin, optics, and which company was last seen promising this would be seamless. Support needs an answer before Legal joins and starts naming folders.',
- 'add an "owns failure" decision tree to marketplace integrations',
+ 'add owns failure decision tree to marketplace',
   144),
 
 ('GLUE-293', 'Make Webhooks Replayable, Searchable, and Suitable for a Two-Hour Blame Workshop',
@@ -57,7 +57,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GLUE-295', 'Build a Canonical Customer Record That Every System Can Ignore in Its Own Way',
  'The company keeps demanding a canonical customer record as if consensus were a storage format. Fine. Build a canonical profile service, then add per-system mapping rules so each consumer can reinterpret it according to local customs, trauma, and field-length constraints without pretending the divergence is accidental.',
- 'build a canonical customer record system',
+ 'pls build canonical customer record system',
   233),
 
 -- EDI Veteran Carol
@@ -81,7 +81,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GLUE-299', 'All Internal Admin Tools Must Pretend to Be One Platform Even If They Are Eight Tabs and a Prayer',
  'Our internal tooling experience is a browser-based scavenger hunt. Build a shell that makes the quoting tool, CRM console, support panel, billing screen, and legacy upload wizard appear to be one coherent platform. If users can still feel the seams, add another sidebar until the illusion holds.',
- 'make all the admin tools look unified',
+ 'pls make admin tools look unified',
   144),
 
 -- Partner Success Lead Juno

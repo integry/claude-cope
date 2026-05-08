@@ -4,7 +4,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Celia | Business Ops Detective | Hunts rogue automations before revenue proves they were architecture all along.
 ('LURK-511', 'Inventory All the Zapier Flows Nobody Told Engineering About but Sales Relies On Daily',
  'We have discovered at least nine unofficial automations moving customer data, account states, and managerial optimism between systems that were never formally introduced. Catalog every rogue Zap, Make flow, Apps Script, Outlook rule, and mysterious webhook parser currently holding go-to-market together with private hope.',
- 'inventory the secret zapier flows sales lives on',
+ 'build inventory of secret zapier flows',
   233),
 
 ('LURK-512', 'Create a Quarantine Lane for Helpful Scripts Found on People''s Desktops',
@@ -21,7 +21,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('LURK-514', 'Every Manual Monthly Process Needs a Heatmap of How Close It Is to Becoming an Official Product',
  'We have dozens of monthly rituals still described as temporary despite recurring with the confidence of tides. Score each manual process by frequency, business criticality, number of hidden sheets, and how loudly people panic when the usual operator is on holiday.',
- 'show which monthly processes are becoming products',
+ 'flag monthly processes becoming products',
   144),
 
 -- Shadow Systems Analyst Priya
@@ -64,7 +64,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Dana | People Systems Partner | Tracks headcount folklore and hunts single-witness rituals before the witness resigns.
 ('LURK-521', 'Find All the Headcount Workflows Secretly Running in Calendar Invites and Slacks',
  'Headcount planning officially lives in a system. Unofficially it also lives in recurring calendar events, Slack threads, sticky notes, and one doc called q3 positions ACTUAL. Audit the shadow process so sanctioned hiring logic can be separated from the whisper network.',
- 'find headcount workflows hiding in invites',
+ 'scan invites for hidden headcount workflows',
   144),
 
 ('LURK-522', 'The Offboarding Checklist Must Detect Tasks Only One Person Knew Existed',
@@ -88,5 +88,5 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Ingrid | Workflow Archaeologist | Exposes human cron jobs and Tuesday emails before habit gets promoted to system design.
 ('LURK-525', 'The Process Map Must Show Which Official Workflows Still Depend on Someone Remembering a Tuesday Email',
  'Several formal processes still hinge on one person remembering to forward a Tuesday email, check a special inbox, or update a shared note with exactly the right amount of dread. Add dependency markers for these human cron jobs directly on the workflow map so repeatability stops masquerading as documentation.',
- 'show workflows still waiting on tuesday email',
+ 'flag workflows waiting on tuesday email',
   144),;

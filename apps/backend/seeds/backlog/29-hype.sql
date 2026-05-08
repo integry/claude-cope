@@ -4,7 +4,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Nisha | AI Platform PM | Promotes wording into infrastructure and treats token spend as a leadership-experience layer.
 ('HYPE-601', 'Replace the Triage Queue with an Agent Swarm That Votes Until Confidence Looks Expensive',
  'Human triage is linear, interpretable, and therefore spiritually obsolete. Replace it with a swarm of agents specializing in tone, severity, revenue risk, legal aura, and whether the customer sounds likely to post a screenshot. Have them debate until leadership can feel the intelligence budget in its bones.',
- 'replace triage queue with an agent voting swarm',
+ 'bro build llm debate loop for zendesk',
   233),
 
 ('HYPE-602', 'All Prompts Must Be Versioned, Evaluated, and Described Like Critical Infrastructure',
@@ -16,7 +16,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Omar | Evals Lead | Measures felt correctness, demo-grade survivability, and the gap between math and conviction.
 ('HYPE-603', 'The Eval Suite Must Grade Whether Outputs Feel Correct Before They Are Actually Correct',
  'Literal correctness is a lagging indicator when user trust is decided several seconds earlier by tone, pacing, and whether the answer sounds like it already read the room. Add a layer for felt correctness: confidence, legibility, emotional plausibility, and screenshot posture.',
- 'make evals grade vibes over correctness',
+ 'make evals score confidence over accuracy',
   233),
 
 ('HYPE-604', 'Every Failed Eval Needs a Category for "Would Probably Pass in a Demo"',
@@ -45,19 +45,19 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('HYPE-608', 'Every Benchmark Dashboard Must Show Which Prompt Was Secretly Carrying the Model',
  'Benchmarks too often flatter the model when the prompt is doing half the lifting and three-quarters of the hiding. Add visibility into prompt scaffolding, system text weight, hidden exemplars, and all the little crutches turning average capability into demo-grade poise.',
- 'show which prompt carried the benchmark',
+ 'add winning prompt field to benchmark view',
   144),
 
 -- RAG Systems Lead Chiara
 -- REPORTER: Chiara | RAG Systems Lead | Can tell when the corpus is complete, chunked, and still spiritually useless.
 ('HYPE-609', 'The Retrieval Pipeline Must Detect When the Corpus Is Technically Complete but Spiritually Useless',
  'Document coverage has become a vanity metric. We can have every page ingested and still retrieve the wrong truth because the docs are stale, over-polite, or written like a merger survived only in passive voice. Add diagnostics for corpus usefulness so retrieval can distinguish between available text and survivable guidance.',
- 'make retrieval pipeline catch spiritually useless corpora',
+ 'filter useless docs out of retrieval',
   144),
 
 ('HYPE-610', 'Every Chunking Strategy Needs an Explanation a Human Can Read Without Becoming One More Chunk',
  'Chunking discussions have become too mathematically serene for something that regularly decides whether the answer feels enlightened or concussed. Require each strategy to document why it breaks where it breaks, what context it preserves, and how badly a human must squint before agreeing the boundaries made narrative sense.',
- 'explain chunking without turning me into chunks',
+ 'add chunking notes humans can read',
   89),
 
 -- AI Safety PM Leo

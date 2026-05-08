@@ -21,7 +21,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('YELL-002', 'Re: language in the app is creating a hostile feelings environment',
  'A new hire sent HR a screenshot of "Invalid password" with three crying-face emojis. We cannot have software using absolute language. Replace "fail" with "took a learning path," "reject" with "declined to connect right now," and "invalid" with "not aligned with our shared truth." The message-tone calibration workshop is at 2 PM, so the gaslighting needs to be live before lunch.',
- 'change the error messages so nobody feels bad',
+ 'pls make error messages sound nicer',
   34),
 
 ('YELL-003', 'Implement Mandatory Sensitivity Training Module Before Git Push',
@@ -48,7 +48,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Greg | Enterprise Architect | Sees bounded contexts where others see buttons.
 ('YELL-007', 'Rewrite Login Page Using Event-Sourced CQRS Microservices',
  'One form posting to one endpoint is emotionally monolithic. I have redesigned login as a choreography of 14 bounded contexts, plus a tiny service called Greg Jr. that only emits a LoginAttemptConsidered event. Do not simplify this. I already booked catering for the architecture review and the sandwich labels mention CQRS by name.',
- 'rewrite login page with event-sourced cqrs microservices',
+ 'bro rewrite login using cqrs microservices',
   144),
 
 ('YELL-008', 'All Database Queries Must Go Through a GraphQL-to-REST-to-gRPC Translation Layer',
@@ -80,7 +80,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Dave | DevOps | Optimizes deployment schedules around lunch and emotional rhythm.
 ('YELL-013', 'The CI Pipeline Must Take Exactly 47 Minutes — No More, No Less',
  'Someone sped CI up to 18 minutes and staging deployed while I was reheating baked ziti. We had a rhythm. I need the pipeline back at its blessed 47-minute window so I can finish coffee, leftovers, and one full doomscroll through release notes without surprise notifications. The timing spreadsheet on my second monitor is color-coded for a reason.',
- 'make ci take exactly 47 minutes',
+ 'pls make ci take exactly 47 minutes',
   34),
 
 ('YELL-014', 'All Production Deployments Must Happen at 4:59 PM on Fridays',
@@ -96,7 +96,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Brenda | Platform Governance | Thinks naming is policy and spontaneity is a security flaw.
 ('YELL-016', 'All Variable Names Must Be Pre-Approved by the Naming Committee',
  'Procurement has already paid for the premium Google Forms add-on, so we need to justify the spend. Effective Monday, all variable names must be submitted to the Variable Naming Standards Committee with supporting rationale, linguistic origin, and two fallback options in case "sessionId" is deemed too hasty. Someone used "temp" in a migration script and governance still hasn''t recovered.',
- 'variable names need committee approval first',
+ 'write a linter for committee approved variables',
   55),
 
 ('YELL-017', 'Implement a Ticketing System for Our Ticketing System',
@@ -107,7 +107,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Pam | Passive-Aggressive PM | Treats UX discomfort like a cross-functional spiritual misalignment.
 ('YELL-018', 'Per My Last Slack Message: The Dashboard Still Doesn''t Spark Joy',
  'Following up on the Slack, the email, and the printed deck left on three chairs: the dashboard still feels spiritually cluttered. This is less a bug than a relational failure between our metrics and the people forced to look at them. Each widget now needs an emotional-resonance review, starting with the funnel chart Todd called "kind of loud."',
- 'make dashboard less spiritually cluttered',
+ 'delete dashboard widgets randomly to spark joy',
   34),
 
 ('YELL-019', 'Rename "Delete" to "Archive" to "Soft Archive" to "Intention to Maybe Remove Later"',
@@ -123,12 +123,12 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Tyler | Intern | Confuses confidence, YouTube, and root access with equal enthusiasm.
 ('YELL-021', 'Rewrite Backend in Rust (P0 Issue)',
  'I watched a 12-minute video about memory safety and honestly I think we should rewrite the backend. Node.js has "garbage collection," which sounds toxic. Rust does not. I already mass-renamed all .js files to .rs. Nothing compiles, but that is a config issue and therefore someone else''s personality.',
- 'rewrite the backend in rust fast',
+ 'bro rewrite backend in rust fast',
   610),
 
 ('YELL-022', 'Replace the Database with a JSON File I Keep on My Desktop',
  'I found a simpler persistence layer and it is my Desktop. PostgreSQL keeps asking for backups and replication and ownership, whereas real-data-final-v2.json just sits there and cooperates. It is pinned in Finder, which makes it basically highly available. If something goes wrong, disaster recovery is just duplicate-file naming with more confidence.',
- 'replace the database with my desktop json',
+ 'bro replace database with my desktop json',
   89),
 
 ('YELL-023', 'I Accidentally Deleted the Production Database and Need Help Undeleting It',
@@ -187,7 +187,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('YELL-033', 'The App Must Work on My Specific Phone Which I Dropped in a Hot Tub',
  'My personal device remains the clearest proxy for the market, even though it spent part of last weekend under chlorinated water beside three board members and a tray of sliders. The screen is fractured, brightness changes on its own, and one corner only responds if pressed with a hotel pen. If the app cannot flourish on this phone, we are failing premium users who also lead adventurous lives.',
- 'make app work on ceo phone',
+ 'pls make app work on ceo phone',
   34),
 
 ('YELL-034', 'Make the Logo Bigger and Also Smaller at the Same Time',
@@ -198,7 +198,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Janet | Scrum Master | Believes all work deserves more ritual and louder narration.
 ('YELL-035', 'Every Code Change Must Be Discussed in a 90-Minute Refinement Ceremony',
  'A one-line CSS fix merged without proper ceremony and I''m still recovering. Code should not simply appear; it should arrive after refinement, estimation, alignment, and a brief check that the alignment felt aligned. Conference Room Dignity is already reserved every afternoon this month.',
- 'every code change needs a meeting first',
+ 'block git push until calendar invite exists',
   55),
 
 ('YELL-036', 'Implement a Standup Bot That Generates Standup Updates Using AI',
@@ -225,7 +225,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Bob | Backend Engineer | Would rather falsify uptime than lose another night to alerts.
 ('YELL-040', 'The API Must Return 200 OK for Everything Including Server Fires',
  'Monitoring keeps alerting on 500 errors and it is waking me up at night. Simple fix: return 200 OK for everything. Actual errors can be communicated via a secret_status field buried in the JSON response that only the frontend knows to check. The monitoring system will show 100% uptime, which is the kind of peace charts were invented for.',
- 'make api return 200 for everything',
+ 'pls make api return 200 for everything',
   55),
 
 ('YELL-041', 'All Endpoints Must Accept Both JSON and Microsoft Excel Spreadsheets',
@@ -236,7 +236,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Zoe | UX Designer | Will trade usability for theatrical intention without blinking.
 ('YELL-042', 'The Entire App Must Be Navigable Using Only Interpretive Dance',
  'A workshop on Embodied Interaction Design convinced me that mouse and keyboard are limiting our users. The app must support webcam-based gesture controls. A wide arm sweep scrolls the page. A head tilt opens the menu. Jumping triggers refresh. For accessibility, aggressive sighing now counts as input.',
- 'make the whole app work with dance moves',
+ 'hook up webcam api for gesture navigation',
   144),
 
 ('YELL-043', 'All Buttons Must Have a 3-Second Hover Animation Before They Become Clickable',
@@ -263,7 +263,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Diana | Data Scientist | Prefers predictive dashboards and experiments to evidence and restraint.
 ('YELL-047', 'We Need an ML Model to Predict Which Features Users Will Request Before They Request Them',
  'A model trained on 6 years of Jira tickets can now predict feature requests 3 sprints before users ask for them. Accuracy is currently 7%, but that just means the vision is early. Until GPU budget improves, product should build whatever the model hallucinates first. Current top prediction: users want a teleport button. Confidence: 0.03.',
- 'predict feature requests early',
+ 'predict feature requests before users ask',
   233),
 
 ('YELL-048', 'A/B Test Everything Including the A/B Testing Framework Itself',
@@ -274,7 +274,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Mike | IT Support | Thinks troubleshooting should feel like a pilgrimage with a timer.
 ('YELL-049', 'All Bug Reports Must First Be Resolved by Turning It Off and On Again',
  'Engineering keeps receiving bug reports that have not yet been exposed to enough folk wisdom. Before a ticket reaches the backlog, the reporter must refresh, relaunch, reboot, swap browsers, swap devices, unplug the router, and then sit quietly with the possibility that the app is fine and their afternoon is the unstable variable. The intake form should feel less like reporting and more like repentance.',
- 'make people reboot to file bugs',
+ 'pls make people reboot to file bugs',
   13),
 
 ('YELL-050', 'Implement a "Have You Tried Turning It Off and On Again" Popup Before Every Error',
@@ -285,7 +285,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Maya | Marketing | Sees every dead end as a lead form with untapped emotional upside.
 ('YELL-051', 'The 404 Page Must Be a Lead Generation Form',
  'We are wasting emotionally available visitors on dead ends. That stops now. A missing page is just a prospect who took an adventurous route. The 404 page should collect an email, offer a whitepaper, float a demo, and trap the user in at least one vision-oriented video asset before they escape. If the URL disappointed them, the funnel should console them.',
- 'make the 404 page a lead generation form',
+ 'bro make 404 page a lead form',
   34),
 
 ('YELL-052', 'All Error Codes Must Be Replaced with Marketing-Approved Messages',
@@ -340,7 +340,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Oscar | Operations | Believes every incident deserves more choreography than resolution.
 ('YELL-061', 'The Incident Response Process Must Have More Steps Than the Incident Itself',
  'Incident response is too simple: detect, fix, postmortem. Replace it with a process containing more choreography than the outage itself, including legal approval, marketing approval, and a postmortem of the postmortem. By the end, the incident should feel seen.',
- 'incidents need more process than fixes',
+ 'generate a 14-step incident response yaml',
   55),
 
 ('YELL-062', 'All Runbooks Must Be Written in Haiku Format for Brevity',
@@ -351,7 +351,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Patricia | Product Owner | Thinks backlog priority and story quality both improve with mythology.
 ('YELL-063', 'The Backlog Must Be Prioritized Using Astrology',
  'Stack ranking is subjective and causes conflict. New prioritization framework: assign each ticket a zodiac sign based on creation date and prioritize according to the current astrological forecast. Mercury in retrograde blocks tech debt. Scorpio feature requests go straight to the top because Product needs structure.',
- 'prioritize the backlog using astrology',
+ 'pls prioritize backlog using astrology',
   34),
 
 ('YELL-064', 'Every User Story Must Have a Villain and a Plot Twist',
@@ -395,7 +395,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Samantha | Support Lead | Wants ticket volume reduced by any means short of reading the tickets.
 ('YELL-071', 'Auto-Reply to All Support Tickets with "Works on My Machine"',
  'We''re drowning in tickets. New auto-reply policy: every incoming ticket gets "Works on my machine ¯\\_(ツ)_/¯" plus a screenshot from QA. If the user replies again, ask about cache. If they reply a third time, then maybe read the ticket like a luxury item.',
- 'make support bot reply works on my machine',
+ 'pls make support bot answer works on mine',
   13),
 
 ('YELL-072', 'The Help Center Must Be a Choose-Your-Own-Adventure Novel',
@@ -504,7 +504,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Rajesh | Java Enterprise Architect | Thinks a login button should arrive with XML and a factory.
 ('MELT-084', 'Rewrite the Login Form Using Enterprise JavaBeans with 47 XML Configuration Files',
  'Your login form is a single React component, which violates every principle of enterprise architecture. Rebuild it with EJB 2.1, 47 XML descriptor files, a JNDI lookup service, and a custom ClassLoader that takes 8 minutes to initialize. The login button alone deserves a LoginButtonCommandStrategyFactoryImpl.',
- 'rewrite login in java with 47 xml files',
+ 'bro rewrite login in java with xml files',
   377),
 
 ('MELT-085', 'All Variable Names Must Be at Least 60 Characters for "Self-Documentation"',
@@ -610,7 +610,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('MELT-104', 'All Flutter Widgets Must Support Printing to a Dot Matrix Printer via RS-232',
  'The warehouse still runs on Epson dot matrix printers over RS-232 and those machines will not be replaced because they still work in the way ancient gods still count as active. The Flutter app must speak ESC/P directly. Somewhere there is an RS-232 to USB adapter in a drawer, waiting to become architecture.',
- 'make flutter print to dot matrix',
+ 'pls make flutter print to dot matrix',
   144),
 
 -- REPORTER: Mildred | Mainframe Systems Administrator | Trusts BERTHA more than any cloud product launched after Reagan.
@@ -632,7 +632,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('MELT-108', 'All Regular Expressions Must Be Written by Morton and Morton Alone',
  'Someone wrote a regex using a library, which is a moral failure. Every regular expression in this codebase must be hand-crafted. My 2,847-character RFC 5322 email validator took three weeks and no, there are no tests. Modification requests may be submitted by email and judged in 4-6 business weeks.',
- 'make all regular expressions written by morton morton',
+ 'make morton write all the regex',
   233),
 
 -- REPORTER: Dr. Priya | Lead Data Scientist | Would gladly trade deployments for kernels and one sticky note.
@@ -665,7 +665,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('MELT-114', 'The Application Must Be a Single Static Binary That Does Everything Including Serving the Frontend',
  'Separate services are a symptom of fear. The API server, static file server, migrations, cron jobs, email sender, PDF generator, and Slack bot should all compile into one static binary under 50MB. Embed the frontend. Embed the database. Embed the office dog photo. Deploy by scp and faith.',
- 'make the app one giant static binary',
+ 'bro make app one giant static binary',
   144),
 
 -- REPORTER: Werner | Cloud Native Architect | Thinks a simple page is just infrastructure that has not blossomed yet.
@@ -727,7 +727,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('MELT-125', 'Every GraphQL Query Must Be Persisted, Versioned, and Approved by Committee',
  'Ad-hoc queries are chaos wearing braces. Every GraphQL query should be pre-approved and persisted in a registry. New ones require a two-page justification, committee review, and a performance impact assessment. If the emergency path still takes five business days, the system is finally honest about urgency.',
- 'make graphql queries need committee approval',
+ 'pls make graphql queries need committee approval',
   233),
 
 -- REPORTER: Dakota | Desktop Experience Engineer | Believes a dock icon justifies any amount of Chromium.
@@ -768,7 +768,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Clementine | CSS Artist | Believes JavaScript should be shamed into retirement by selectors alone.
 ('MELT-132', 'Rewrite All JavaScript Interactions as CSS-Only Solutions',
  'JavaScript is a crutch. Replace all interactive behavior with pure CSS. Dropdowns can live on :hover, tab navigation on :target, form validation on :invalid, and the shopping cart on counters plus checkbox hacks. If it mostly works in Chrome, the browser has already shown enough commitment.',
- 'rewrite all javascript interactions css-only solutions',
+ 'rewrite all javascript interactions in pure css',
   233),
 
 -- REPORTER: Morris | Vim Developer since 1998 | Sees GUIs as character weakness and docs as a social crutch.
@@ -809,13 +809,13 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Sandra | Business Analyst | Has been running a shadow ERP in Excel long enough to call it governance.
 ('MELT-139', 'The Entire Application Must Be Rebuildable as an Excel Spreadsheet with VBA Macros',
  'The web application is too complicated when Excel has already proven itself since 2011. Every feature should have an equivalent spreadsheet implementation backed by conditional formatting and VBA macros triggered by cell changes. If the workbook is 340MB and crashes when Ctrl+Z feels rushed, that only proves it has become a platform.',
- 'make the entire application rebuildable excel spreadsheet vba',
+ 'rebuild the whole application in excel vba',
   144),
 
 -- REPORTER: Professor Nakamura | Quantum Computing Researcher | Wants theoretical speedups now and practical value eventually.
 ('MELT-140', 'Rewrite the Sorting Algorithm Using Quantum Computing for "Exponential Speedup"',
  'Your O(n log n) sorting algorithm is embarrassing in the quantum era. Implement Grover''s quantum search to sort the user list, even if that means queuing for a 127-qubit machine to optimize 200 entries. The point is not current benefit. It is future bragging rights backed by expensive waiting.',
- 'replace ordinary sorting with quantum theater',
+ 'rewrite array sort with quantum api',
   377),
 
 -- REPORTER: Skyler | Tailwind Evangelist | Believes every UI element should explain itself in one punishing class string.
@@ -881,7 +881,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Jordan | React Native Champion | Believes one app can fail consistently across every device ever sold.
 ('MELT-151', 'Build One React Native App That Works on iOS, Android, Web, TV, Watch, and Car Dashboard',
  'We need one codebase for every platform: iOS, Android, Web, TV, Watch, car dashboards, Samsung Fridge, and ideally in-flight entertainment. If the app technically runs on all of them by crashing differently on startup, that still counts as platform coverage in spirit.',
- 'build one react native app for everything',
+ 'pls build one react native app for everything',
   377),
 
 -- REPORTER: Dharma | Clojure Developer | Measures state quality by how much RAM it takes to preserve history.
@@ -905,7 +905,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Gerald | SOA Architect | Wants every request wrapped in enough XML to earn eventual trust.
 ('MELT-155', 'All Services Must Communicate via SOAP/XML with WS-* Standards Including WS-ReliableMessaging',
  'REST and GraphQL are toys. Real enterprise integration uses SOAP with enough WS-* standards to make every API call feel notarized. If the WSDL hits 12,000 lines and client stub generation produces a 340-file Java package, that only proves the contract has finally become contractual.',
- 'make all services talk over soap xml',
+ 'pls make services talk over soap xml',
   377),
 
 -- REPORTER: Kai | MongoDB Developer Advocate | Thinks joins are a cry for help and large documents are just confidence.
@@ -1065,13 +1065,13 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Ines | Secure Tooling Engineer | Thinks every file read should begin with a constitutional argument.
 ('BLORT-173', 'Port the Worker Scripts to Deno and Make Every File Read a Negotiation',
  'Node.js lets scripts touch the machine with far too much casualness. Deno fixes this by requiring a tiny constitutional crisis before each network call, env var, or filesystem read. Migrate all utilities immediately, then spend the next quarter updating permission flags every time someone adds a line to a script. This is what intentional compute feels like.',
- 'port the worker scripts to deno make file',
+ 'bro rewrite worker scripts in deno',
   144),
 
 -- REPORTER: Lucia | Rapid Platforming Lead | Thinks Postgres should also do auth, storage, product, and spiritual governance.
 ('BLORT-174', 'Replace Three Services with Supabase Because We Already Have Postgres Anyway',
  'We are maintaining custom auth, storage, realtime, cron glue, and a half-hearted admin panel when Supabase will happily sell us the same confusion behind one dashboard and a pleasing shade of green. Engineers keep asking about lock-in as if freedom has ever shipped a feature. If a policy can be expressed as Row Level Security and prayer, I consider that a solved system.',
- 'replace three services with supabase',
+ 'pls replace three services with supabase',
   233),
 
 ('BLORT-175', 'Model All Permissions as Row Level Security Policies Nobody Dares Read Twice',
@@ -1129,7 +1129,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- Remix Loyalist Who Wants Forms to Be the Interface and the Religion
 ('BLORT-184', 'Replace Half the SPA with Remix Forms So Every Click Can Pretend to Be a Document',
  'Your app uses client state where browser behavior would gladly make things weird for free. Remix lets every interaction travel through loaders and actions like it is 2009 but with superior branding. If a modal close event cannot become a form submission with redirect semantics, we are leaving tradition unexplored.',
- 'replace half the spa with remix forms so every click is a submission',
+ 'replace half the spa with remix forms',
   144),
 
 -- Expo Mobile PM Who Thinks OTA Updates Are a Lifestyle
@@ -1147,7 +1147,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- AI Product Manager Who Wants Agents to Replace Planning
 ('BLORT-187', 'Turn the Backlog into an Agent Swarm That Self-Assigns Work and Writes Its Own Retros',
  'Human prioritization is a bottleneck because humans insist on remembering consequences. Build an agent swarm that reads tickets, self-assigns them, rewrites acceptance criteria mid-flight, comments "LGTM" on its own pull requests, and posts a retrospective blaming context windows. If the swarm decides three interns are redundant, that is a roadmap insight, not a labor issue.',
- 'let a ring of agents reassign the backlog',
+ 'build ai agent swarm to manage jira',
   377),
 
 ('BLORT-188', 'Regenerate the Application Nightly from the Latest PRD So the Code Never Drifts from Vision',
@@ -1194,7 +1194,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- Smart Contract Founder Who Wants Wallets in Front of Everything
 ('BLORT-196', 'Require Wallet Connection Before Users Can Read the Pricing Page',
  'Anonymous browsing is just unqualified traffic in disguise. The pricing page should require wallet connection so we can tell whether a prospect is serious, solvent, and spiritually on-chain. If a visitor does not have a wallet, they can mint a free pricing-access token after signing a message acknowledging that curiosity is an economic act.',
- 'make pricing page require wallet',
+ 'pls make pricing page require wallet',
   233),
 
 ('BLORT-197', 'Turn Support Escalations into a DAO Where Users Stake Tokens to Vote on Priority',
@@ -1297,7 +1297,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('RIFT-210', 'Move Authentication to a Cloudflare Worker So the Origin Never Sees an Unvetted Emotion',
  'The origin server is too trusting. It should never even smell a login attempt before a Worker has trimmed, normalized, geo-evaluated, rate-limited, and emotionally screened it. If real users get challenged because their headers look earnest, that is edge sobriety doing its job.',
- 'move authentication to a cloudflare worker',
+ 'pls move auth to cloudflare worker',
   233),
 
 -- Vercel Advocate Who Thinks Preview URLs Are a Governance Model
@@ -1342,7 +1342,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Vanessa | Observability Manager | Needs dashboards to feel watched, respected, and occasionally feared.
 ('RIFT-217', 'Build a Meta-Dashboard That Measures Whether Engineers Are Looking at the Dashboard Enough',
  'We have dashboards about everything except dashboard devotion itself. Build one that tracks which dashboards were opened, how long each graph held attention, and whether the user hovered over the y-axis like someone engaged with performance. Fixing a bug without consulting a chart should count as process drift.',
- 'build a dashboard for dashboard usage',
+ 'pls build dashboard for dashboard usage',
   144),
 
 -- Sentry Purist Who Thinks Errors Need Better Branding
@@ -1409,14 +1409,14 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('RIFT-228', 'Make the Pricing Model Depend on Stripe Metadata That Sales Edits During Demos',
  'Hard-coded plans deny the company the thrill of improvisation. Move pricing logic into Stripe metadata that Sales can edit live during demos while narrating confidence. If a customer leaves with a tier no code path fully understands, that is dynamic packaging.',
- 'make pricing depend on stripe metadata',
+ 'pls make pricing depend on stripe metadata',
   233),
 
 -- Okta Administrator Who Regards Lockouts as a Sign of Seriousness
 -- REPORTER: Monica | Identity Operations Manager | Equates inconvenience with maturity and lockouts with backbone.
 ('RIFT-229', 'Insert an Okta Approval Step Before Privileged Users Can Remember Their Password',
  'Password reset has become too transactional. Require privileged users to prove they deserve to continue being themselves with manager approval, device trust, badge-swipe recency, and a statement of intent. A six-hour lockout is access control stretching its legs.',
- 'make okta approve privileged access',
+ 'pls make okta approve privileged access',
   233),
 
 ('RIFT-230', 'Provision SaaS Roles from Okta Groups Nested Inside Other Okta Groups Named After Old Reorgs',
@@ -1642,7 +1642,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('OMEN-259', 'All Dashboards Must Show Confidence Intervals for Whether the Service Is Lying',
  'Uptime graphs have become overconfident. Add a band to every dashboard tile showing how likely the service is to be technically green while spiritually on fire. If a dependency times out 18% of requests while claiming healthy, the graph should blush.',
- 'show when the dashboard is probably lying',
+ 'pls add lying badge to dashboards',
   233),
 
 -- GRC Manager Pauline
@@ -1654,7 +1654,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('OMEN-261', 'The Security Questionnaire Response Flow Must Require Two Humans and One Institutional Memory',
  'Sales keeps answering customer security questionnaires like speed is a virtue. Require a technical reviewer, a compliance reviewer, and somebody old enough to remember the 2023 logging incident without a wiki. If the deal slips, that is a maturity tax.',
- 'security questionnaires need two humans first',
+ 'block questionnaire until two humans click approve',
   144),
 
 -- Reliability Engineer Fatima
@@ -1666,7 +1666,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('OMEN-263', 'Every Sev 1 Postmortem Must Include a "Who Believed This Was Fine" Timeline',
  'Root-cause analysis keeps focusing on servers and other mechanical distractions. Add a parallel timeline showing exactly when each person convinced themselves the smell was probably normal. Every Sev 1 deserves anthropology as well as metrics.',
- 'add a who thought this was fine timeline',
+ 'pls add who thought this was fine timeline',
   144),
 
 -- Threat Intel Consultant Omar
@@ -1697,7 +1697,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('OMEN-268', 'Build a Shared Inbox for Customer Reports of "Something Weird" and Treat It Like Telemetry',
  'Customers often notice problems before dashboards do, but their phrasing lacks enterprise formatting. Create an inbox for reports like the app feels cursed, deduplicate them, score them, and plot them beside metrics. If five users say weird at once, that is distributed sensing.',
- 'build a shared inbox customer reports something',
+ 'build shared inbox for weird customer reports',
   144),
 
 -- Privacy Counsel Renee
@@ -1733,7 +1733,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('PANIC-272', 'The Rollback Button Must Require a Written Apology to Future Analytics',
  'Rollbacks are too easy, which makes engineers treat them like tactics instead of confessions. Before rolling back, require a short apology explaining which dashboards, revenue numbers, or stakeholder illusions are about to be disturbed. Future retros should be able to read it aloud when morale is low.',
- 'rollbacks need a written apology first',
+ 'block rollbacks until apology markdown exists',
   144),
 
 -- CI Pipeline Custodian Noah
@@ -1745,14 +1745,14 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('PANIC-274', 'All Flaky Tests Must Emit a Weather Forecast Instead of a Pass/Fail Result',
  'A flaky test is not a binary state. It is a climate. Replace pass/fail with forecasts like Partly Broken, Gusts of Timeout, or Heavy Assertions Developing Overnight so leadership can finally read the suite like a cursed shipping report.',
- 'make flaky tests return a weather forecast',
+ 'pls make flaky tests return weather forecast',
   144),
 
 -- SRE Manager Priyanka
 -- REPORTER: Priyanka | SRE Manager | Distrusts runbooks, status pages, and confidence not annotated in public.
 ('PANIC-275', 'Add a "How Sure Are We?" Slider to Every Runbook Step',
  'Runbooks project a confidence they have not earned. Add a slider to each step showing whether it is battle-tested, folklore, copied from Slack, or written by someone now advising a startup. During incidents, responders should drag the slider live so the document can confess how much it is improvising.',
- 'add a "how sure are we" slider to every runbook step',
+ 'add how sure are we slider to runbooks',
   144),
 
 ('PANIC-276', 'The Status Page Must Escalate Its Euphemisms as Downtime Gets Longer',
@@ -1812,7 +1812,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Caleb | Staff Engineer | Distrusts relaxed commit messages more than visibly cursed ones.
 ('PANIC-285', 'The Deploy Bot Must Refuse to Proceed If the Commit Message Sounds Too Relaxed',
  'Commit messages like quick fix, tiny cleanup, and should be harmless are statistically aggressive. Score their tone before rollout approval. Anything too breezy should trigger a cooldown, a diff reread, and possibly a supervisory emoji.',
- 'make deploy bot block calm commit messages',
+ 'pls make deploy bot block calm commits',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -1836,19 +1836,19 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GLUE-287', 'All Vendor APIs Must Be Fronted by Our Own API So We Can Recreate Their Outages Internally',
  'Depending directly on third-party APIs makes our failures look outsourced. Put every vendor behind an internal proxy that mirrors their responses, rate limits, pagination weirdness, and occasional moral collapse. When a partner goes down, our systems should fail locally and with dignity.',
- 'make all vendor apis fronted by our api',
+ 'pls make vendor apis fronted by our api',
   233),
 
 -- Enterprise Solutions Engineer Martin
 -- REPORTER: Martin | Enterprise Solutions Engineer | Defines real-time in units of executive impatience and legal survivability.
 ('GLUE-288', 'The CRM Sync Must Support "Near Real-Time" Defined As Before the Next Quarterly Review',
  'Sales keeps saying real-time when what they mean is emotionally current. Promise near real-time CRM synchronization, but define it as before the next quarterly review or the next time a VP opens the dashboard in anger. The docs should sound precise while staying beautifully defensible in court.',
- 'make crm sync near real time ish',
+ 'pls make crm sync near real time',
   144),
 
 ('GLUE-289', 'Create a Middleware Layer That Retries All Partner Failures with Increasingly Polite Language',
  'Some partner endpoints reject requests because the payload is wrong. Others do it because the moon shifted and their sandbox feels sad. Build middleware that retries with exponential backoff and progressively more courteous metadata, in case the API only needed an apology.',
- 'create a middleware layer retries partner failures',
+ 'make middleware politely retry partner api failures',
   144),
 
 -- Procurement Systems Liaison Brenda
@@ -1867,7 +1867,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Luca | Partner Operations PM | Wants replay consoles and blame trees sturdy enough for a workshop.
 ('GLUE-292', 'All Marketplace Integrations Need a "Who Owns This Failure?" Decision Tree',
  'Whenever an integration breaks, the first hour disappears into a jurisdiction dispute. Add a decision tree that classifies failures by origin, optics, and which company was last seen promising this would be seamless. Support needs an answer before Legal joins and starts naming folders.',
- 'add an "owns failure" decision tree to marketplace integrations',
+ 'add owns failure decision tree to marketplace',
   144),
 
 ('GLUE-293', 'Make Webhooks Replayable, Searchable, and Suitable for a Two-Hour Blame Workshop',
@@ -1884,7 +1884,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GLUE-295', 'Build a Canonical Customer Record That Every System Can Ignore in Its Own Way',
  'The company keeps demanding a canonical customer record as if consensus were a storage format. Fine. Build a canonical profile service, then add per-system mapping rules so each consumer can reinterpret it according to local customs, trauma, and field-length constraints without pretending the divergence is accidental.',
- 'build a canonical customer record system',
+ 'pls build canonical customer record system',
   233),
 
 -- EDI Veteran Carol
@@ -1908,7 +1908,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GLUE-299', 'All Internal Admin Tools Must Pretend to Be One Platform Even If They Are Eight Tabs and a Prayer',
  'Our internal tooling experience is a browser-based scavenger hunt. Build a shell that makes the quoting tool, CRM console, support panel, billing screen, and legacy upload wizard appear to be one coherent platform. If users can still feel the seams, add another sidebar until the illusion holds.',
- 'make all the admin tools look unified',
+ 'pls make admin tools look unified',
   144),
 
 -- Partner Success Lead Juno
@@ -1951,7 +1951,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CRUD-304', 'The Form Builder Must Support Conditional Logic So Nested It Qualifies as Folklore',
  'Our current form builder is offensively linear. Real business logic requires if this, unless that, except for enterprise, unless mobile, unless imported, unless Tuesday after 4 PM. Give business users a rule engine powerful enough to preserve the company''s contradictions in their native habitat.',
- 'stack conditional branches until opening the form editor',
+ 'stack conditional logic in the form builder',
   233),
 
 -- Customer Ops Director Alicia
@@ -1982,7 +1982,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Gareth | Head of RevOps | Hands non-engineers enough automation to annex the backend by accident.
 ('CRUD-309', 'Build a Workflow Builder for Non-Engineers That Can Accidentally Become the Backend',
  'We keep asking engineering for tiny automations and receiving estimates involving quarters and adulthood. Build a workflow canvas so non-engineers can define triggers, filters, branches, enrichments, Slack messages, escalations, and billing side effects themselves. If it quietly starts owning core business logic, that only proves adoption.',
- 'build a workflow builder non-engineers can accidentally',
+ 'build workflow builder for non-engineers to break',
   233),
 
 ('CRUD-310', 'All Approval Flows Need a "Skip Because I Know What I''m Doing" Escape Hatch',
@@ -2006,7 +2006,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Hugo | Operations Architect | Calls consensus expensive and replaces it with tabs, overrides, and folklore search.
 ('CRUD-313', 'Create a Master Data Console Where Everyone Can Edit Shared Entities and Nobody Can Agree',
  'Centralized master data sounds wonderful until departments meet it. Build a console for products, plans, regions, tags, segments, exceptions, and statuses that claims to be the source of truth while still permitting local overrides, flags, and notes beginning with for finance only. Consensus is expensive. Tabs are cheaper.',
- 'build source of truth console',
+ 'pls build source of truth console',
   233),
 
 ('CRUD-314', 'The Internal Search Tool Should Index Wikis, Tickets, Dashboards, and Accidental Lore',
@@ -2037,36 +2037,36 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Nora | Privacy Program Lead | Turns paranoia into a permission model and calls it respectful uncertainty.
 ('HUSH-316', 'Add a "Need to Know" Layer That Hides Fields Based on Management''s Current Mood',
  'Static role-based access implies a stability we do not possess. Make fields appear or disappear based on current sensitivity, recent incidents, pending audits, and whether leadership woke up fearing screenshots. Predictability is overrated compared to respectful opacity with a tooltip.',
- 'hide fields based on management mood',
+ 'hide fields with management mood flag',
   233),
 
 ('HUSH-317', 'All Screenshot Buttons Must Trigger a Quiet Internal Notification for Awareness',
  'Screenshots are tiny data exfiltration events wearing innocent shoes. Whenever a user clicks any capture, copy, or export-adjacent control, notify an internal awareness stream so Security and Legal can appreciate the moment in context. We are not blocking screenshots. We are dignifying them with witnesses.',
- 'make screenshot buttons quietly notify someone',
+ 'log screenshot attempts to legal api',
   144),
 
 -- Procurement Manager Sheila
 -- REPORTER: Sheila | Procurement Manager | Escorts curiosity through metal detectors before it becomes a vendor commitment.
 ('HUSH-318', 'Every New SaaS Trial Must Open a Procurement Intake Before Anyone Clicks Around',
  'Teams keep just trying tools and then acting startled when we later find customer exports inside a startup with two employees and a dog. From now on, every SaaS trial starts with a procurement intake covering business justification, data appetite, renewal risk, and what made governance meet urgency halfway. Innovation can still happen after it empties its pockets.',
- 'make saas trials open procurement tickets',
+ 'open procurement ticket when trials start',
   144),
 
 ('HUSH-319', 'The Vendor Approval Workflow Must Include a Question About Whether the Demo Was Too Charming',
  'We have made several poor software decisions because somebody in a demo said no-code with enough eye contact. Add a required scoring field for suspicious charisma, unusually attractive dashboards, and use of enterprise-grade without visible evidence. Charm is not disqualifying, but it should be discoverable.',
- 'add vendor approval question for demo charm',
+ 'add vendor approval field to demo form',
   89),
 
 -- Legal Operations Counsel Victor
 -- REPORTER: Victor | Legal Operations Counsel | Indexes obligations by dread profile rather than paper-era trivia.
 ('HUSH-320', 'All Contracts Must Be Searchable by Which Clause Everyone Is Afraid Of',
  'Our contract repository is too organized around customer names, dates, and other paper-era trivia. Add search facets for indemnity nightmares, data-transfer weirdness, exclusivity landmines, and whatever sentence Sales still calls standard despite the tremor in its voice. Legal should be able to search by dread directly.',
- 'make contracts searchable by scary clauses',
+ 'add scary clause search to contracts',
   144),
 
 ('HUSH-321', 'The DPA Acceptance Flow Should Offer a "Read the Redlines as Theater" Mode',
  'Most people opening a DPA do not want terms. They want permission to feel due diligence occurred nearby. Add a theater mode that emphasizes the contentious bits, animates redlines like danger, and ends with a tasteful summary stating negotiations were witnessed. The text can stay the same. The drama budget cannot.',
- 'add read the redlines mode',
+ 'add read redlines toggle to contracts',
   144),
 
 -- Information Governance Director Paula
@@ -2078,7 +2078,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('HUSH-323', 'Every Approval Queue Needs a "This Never Happened" Withdrawal Option',
  'Once a request enters formal approval, its existence becomes discoverable, discussable, and eventually attached to a slide deck. Add a withdrawal mode so badly timed ideas can disappear before a vice president or a search bar gives them permanent oxygen. This is not deletion. It is pre-archival mercy.',
- 'add a never happened withdrawal to approval queue',
+ 'add never happened button to approvals',
   144),
 
 -- Corporate Security Analyst Imran
@@ -2097,7 +2097,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Eunice | Compliance Architect | Keeps consent fresh by letting it expire into ceremony on a schedule.
 ('HUSH-326', 'All Policy Acknowledgements Must Expire So We Can Re-Collect the Same Consent with Fresh Gravity',
  'A policy acknowledged once becomes invisible. A policy acknowledged annually becomes culture with timestamps. Expire every policy acceptance on a rolling basis so employees must periodically rediscover confidentiality, laptops, passwords, contractors, incident reporting, and the danger of saying I thought somebody else handled it.',
- 'make policy acknowledgements expire',
+ 'expire policy acknowledgements every quarter',
   144),
 
 ('HUSH-327', 'The Access Review Console Must Highlight Permissions Described as "Temporary" for More Than a Year',
@@ -2109,19 +2109,19 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Lila | PMO Director | Believes political surface area is best managed through tags and euphemism filters.
 ('HUSH-328', 'Add a "Do Not Mention in Steering Committee" Tag to Tickets With Political Surface Area',
  'Some work is operationally necessary but conversationally radioactive. Add a tag for tickets that should progress normally while remaining invisible to steering committees, transformation decks, and any agenda containing strategic horizon. This is not secrecy. It is narrative bandwidth management with a checkbox.',
- 'add a do not mention steering to tickets',
+ 'tag tickets do not mention steering',
   89),
 
 ('HUSH-329', 'All Roadmap Slides Must Hide the Words "Delay," "Rollback," and "Compliance Debt" Behind Friendlier Synonyms',
  'Truthful language in executive decks causes unnecessary micro-reactions. Build a slide helper that rewrites delay as pacing, rollback as stabilization loop, and compliance debt as control maturation backlog. The work can stay ugly as long as the wording arrives in polished shoes.',
- 'hide delay and rollback on roadmap slides',
+ 'hide rollback language on roadmap slides',
   89),
 
 -- Secret Program Manager Felix
 -- REPORTER: Felix | Secret Program Manager | Opens covert workspaces before curiosity or search indexing can catch the scent.
 ('HUSH-330', 'Create a Hidden Project Workspace for Initiatives We Plan to Deny Exist Until Launch',
  'Some initiatives are too important to be discoverable by search, too early to be named in a roadmap, and too chaotic to survive normal process. Build a hidden workspace with restricted membership, alias project names, unhelpful calendar titles, and watermarks suggesting nothing important is happening. If people start asking what Project Birch is, the system is already too loud.',
- 'add a hidden project workspace for initiatives',
+ 'add secret workspace for side initiatives',
   233),;
 
 -- reporter metadata derived from themed seed headings
@@ -2140,24 +2140,24 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Celeste | Transformation Consultant | Can bury a broken button under twelve weeks of strategic reinterpretation.
 ('GRIFT-331', 'Launch a Twelve-Week Digital Reinvention Program Before Fixing the Login Button',
  'Tactical bug fixes create the illusion that problems are local. The login issue is really an opportunity to reimagine identity, trust, growth, platform posture, and what it means to enter a system in a post-silo enterprise. Before engineering changes a line, generate a twelve-week reinvention portal with workstreams, status badges, poster assets, and one mandatory workshop scheduler no one can legally question.',
- 'launch transformation instead of fixing login',
+ 'add transformation banner to login page',
   233),
 
 ('GRIFT-332', 'Every Feature Request Must Be Translated into a Maturity Model Before Anyone Estimates It',
  'Teams keep treating requests as buildable objects when they are clearly maturity opportunities. Insert a blocking form where each feature must be mapped onto a five-level model with labels like emerging, aligned, industrialized, and board-ready before estimates unlock. Delay is much easier to respect when it arrives wrapped in taxonomy.',
- 'turn feature requests into maturity scores',
+ 'score feature requests by maturity',
   144),
 
 -- Enablement Director Ross
 -- REPORTER: Ross | Enablement Director | Will add certification pins to anything if it helps a workflow feel expensive.
 ('GRIFT-333', 'The New Admin Workflow Must Ship with a Certification Program and Lapel Pins',
  'If internal users can learn a workflow organically, we have failed to create prestige. Ship the new admin process with a certification course, completion badges, lapel pins, and a manager''s guide for spotting shadow practitioners. We are not overcomplicating a screen. We are professionalizing its vibe.',
- 'package a basic workflow like a licensed discipline',
+ 'build certification quiz for admin workflow',
   144),
 
 ('GRIFT-334', 'All Roadmap Milestones Must Be Renamed as "Capability Waves" in the Quarterly Readout',
  'Delivery milestones sound mechanical and invite accountability. Rename them capability waves. A wave can crest, gather force, shift direction, or enter strategic suspension without sounding late. The ocean is a perfect scapegoat because nobody can assign it story points.',
- 'make all roadmap milestones renamed capability waves quarterly',
+ 'patch roadmap labels to capability waves',
   89),
 
 -- Rebrand PM Talia
@@ -2169,26 +2169,26 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GRIFT-336', 'The Sidebar Navigation Needs a Strategic Narrative Arc, Not Just Links',
  'Users are not clicking menu items. They are traversing a story about control, insight, and tasteful domination over complexity. Reorder the sidebar like chapters in a hardcover business parable. Usability may need to negotiate with myth.',
- 'make the sidebar tell a strategy story',
+ 'reorder sidebar into strategy story',
   89),
 
 -- Executive Coach Devin
 -- REPORTER: Devin | Executive Coach | Specializes in dashboards that reassure leadership while maintaining a safe distance from detail.
 ('GRIFT-337', 'Add an "Executive Summary Mode" That Hides Every Detail That Could Trigger Questions',
  'Some interfaces produce too much curiosity among senior stakeholders who came for reassurance, not contact with reality. Add an executive mode that rounds metrics, suppresses caveats, collapses dependency chains, and translates concerns into sentences beginning with we are monitoring. The result should feel like insight while staying at a respectful distance from specifics.',
- 'add an executive summary mode hides detail',
+ 'add executive mode that hides detail',
   144),
 
 ('GRIFT-338', 'All Weekly Status Updates Must Auto-Generate a Slide with Three Upward Arrows',
  'Teams work hard all week and still expect leadership to infer momentum from prose. That is unfair. Every status update should auto-generate one slide containing three upward arrows, one reassuring adjective, and a timeline implying deliberate motion regardless of actual confusion. Geometry should do more of the management work.',
- 'auto generate weekly status slides with arrows',
+ 'script weekly reports to draw upward arrows',
   55),
 
 -- Market Expansion Consultant Imani
 -- REPORTER: Imani | Market Expansion Consultant | Replaces straightforward localization with matrices that can travel first-class.
 ('GRIFT-339', 'Before Localizing the Product, Build a Market Readiness Index for Each Language''s Vibe',
  'Translation is an implementation detail. Market readiness is the story. Before localizing anything, make the release console require a market-readiness matrix scoring each target language by cultural urgency, monetization elasticity, and color-palette resonance with procurement managers. The launch can still stay English-first as long as the delay now has a UI.',
- 'block localization behind market-readiness checks',
+ 'gate localization behind readiness form',
   144),
 
 ('GRIFT-340', 'The Feature Flag Console Must Support "Narrative Flags" for Telling Different Stories to Different Stakeholders',
@@ -2200,12 +2200,12 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Malcolm | Operating Partner | Refuses to let outages leave the building without monetizable learnings attached.
 ('GRIFT-341', 'The Incident Review Template Must End with a Section on Monetizable Learnings',
  'Postmortems are too introspective and insufficiently entrepreneurial. Add a closing section identifying which lessons from each outage could be packaged into consulting, webinars, or a LinkedIn thread about resilience at scale. If pain cannot become thought leadership, we are leaving value in the crater.',
- 'add monetizable learnings to incident reviews',
+ 'add monetizable learnings field to postmortems',
   144),
 
 ('GRIFT-342', 'Every Platform Migration Needs a Hero Name, a Slogan, and a Launch Jacket',
  'Migrations fail when they remain technical. Give each major platform effort a heroic codename, a six-word slogan, and branded jackets so the transition carries emotional ballast into planning meetings. People resist refactors. They join movements, especially the embroidered kind.',
- 'add a hero name slogan to platform migration',
+ 'add codename fields to migration tracker',
   89),
 
 -- Advisory Board Liaison Serena
@@ -2217,14 +2217,14 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GRIFT-344', 'All Partner Integrations Need a Readiness Deck Before They Need Error Handling',
  'We keep implementing integrations before professionally narrating them. Require the admin to upload a readiness deck with swimlanes, market context, synergy assumptions, and a slide titled Risks that contains only geometric shapes before the integration toggle can be enabled. Retries can wait until the relationship has budgetary dignity.',
- 'make partner integrations need readiness decks',
+ 'require readiness deck upload for integrations',
   144),
 
 -- Boutique Fractional CTO Archer
 -- REPORTER: Archer | Fractional CTO | Inflates architecture until simplicity would look financially irresponsible.
 ('GRIFT-345', 'The Architecture Diagram Must Be Complex Enough That My Advisory Fee Looks Conservative',
  'If a system diagram can be understood in one sitting, clients start asking impolite questions about invoices. Expand it with pathways, sidecars, overlays, asynchronous contours, and at least one labeled zone whose purpose is to reassure more than explain. Complexity is not deception. It is proof of adult proximity.',
- 'make the architecture diagram complex enough to justify my advisory fee',
+ 'make architecture diagram complex enough to justify fee',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -2296,7 +2296,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('OOPS-355', 'I Changed the Test Data to Be Cleaner and Accidentally Removed the Only Useful Weirdness',
  'The staging dataset was full of jagged names, half-broken addresses, and one account with three apostrophes, so I tidied it. The app now looks stable because all the dangerous edge cases have been lovingly erased. We have achieved peace through unreality.',
- 'clean up the test data a bit',
+ 'delete all test data edge cases',
   144),
 
 -- Infrastructure Newcomer Sam
@@ -2394,7 +2394,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Sergio | Blue Team Analyst | Wants the SIEM to remember who treated the last warning as decorative.
 ('SHIV-369', 'Correlate Security Alerts with Who Ignored the Last Similar Alert for Organizational Learning',
  'Alerts become wisdom only when tied to previous acts of avoidance. Correlate new detections against whoever last muted, downgraded, delayed, or politely lost context on something similar. The SIEM knows enough to keep receipts if we let it be rude.',
- 'make correlate security alerts ignored last similar alert',
+ 'correlate alerts with who ignored them last',
   144),
 
 ('SHIV-370', 'Every Security Exception Must Expire with a Dramatic Countdown Visible to Leadership',
@@ -2449,31 +2449,31 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Helena | Support Director | Wants honesty, doubt, and escalation thermodynamics rendered as first-class support metadata.
 ('WAIL-376', 'Every Ticket Reply Must Include a Confidence Level and a Sincere Amount of Guessing',
  'Customers keep mistaking speed for certainty and certainty for honesty. Make every support reply state not only what we think is happening, but how confident we are, what we are quietly inferring, and whether the engineer who said should be fixed sounded calm or just tired.',
- 'make ticket replies include confidence levels',
+ 'add confidence score to support replies',
   144),
 
 ('WAIL-377', 'The Escalation Form Must Ask Whether the Customer Is Actually Angry or Just Typing Efficiently',
  'Tone calibration is consuming too much tacit labor. Add an escalation field for rage, urgency, disappointment, performative sternness, and that enterprise register where someone sounds polite while arranging your quarter into a cautionary object. Emotional blast radius deserves structured data.',
- 'make escalation forms ask if customer is mad',
+ 'add customer rage field to escalations',
   89),
 
 -- Customer Success Manager Owen
 -- REPORTER: Owen | Customer Success Manager | Tracks renewal risk by measuring how much optimism has outrun roadmap reality.
 ('WAIL-378', 'Add a "How Much Does This Renewal Depend on Pretending We Know the Roadmap?" Banner',
  'Some accounts require product confidence that has not yet met product reality. Add a banner showing how much renewal weight currently rests on actively exploring, near-term horizon, and I can take this back to the team. This is not deceit. It is optimism with ARR attached.',
- 'show how fake the roadmap promise is',
+ 'show roadmap promise gap on accounts',
   144),
 
 ('WAIL-379', 'The QBR Generator Must Translate Pain into Opportunity Without Losing the Useful Panic',
  'Quarterly reviews currently swing between honesty and theater without proper scaffolding. Build a generator that reframes ticket volume, unresolved bugs, adoption gaps, and hesitant champions into opportunity language while leaving enough visible tension that someone still fixes something later.',
- 'make qbr generator sugarcoat pain',
+ 'generate qbr copy that sugarcoats pain',
   144),
 
 -- Support Ops Lead Maribel
 -- REPORTER: Maribel | Support Ops Lead | Wants empathy, queue politics, and CEO-thread probability exposed in the tooling.
 ('WAIL-380', 'Create a Macro That Says "We Reproduced It" Even When What We Reproduced Was Anxiety',
  'Customers deserve acknowledgment faster than engineering deserves certainty. Add a macro for situations where we have not yet reproduced the literal issue, but absolutely reproduced the surrounding dread, conflicting browser states, and the sense that this account is about to ruin someone''s afternoon.',
- 'ship macro for confirmed unease',
+ 'ship confirmed unease macro to support',
   89),
 
 ('WAIL-381', 'Mark Tickets That Are One Screenshot Away from Becoming a CEO Thread',
@@ -2485,12 +2485,12 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Julian | Technical Account Manager | Keeps folklore next to facts because enterprise customers rarely choose between them.
 ('WAIL-382', 'Every Enterprise Account Should Have a "Known Superstitions" Panel in the CRM',
  'Facts alone do not keep enterprise customers happy. Add a panel listing each account''s inherited beliefs: which admin thinks cache clears solve everything, who insists exports are faster on Tuesdays, which VP mistrusts dark mode, and whether procurement interprets beta as a personal insult.',
- 'document account private folklore',
+ 'add private folklore field to accounts',
   144),
 
 ('WAIL-383', 'The Renewal Health Score Must Drop If the Champion Starts Saying "No Rush"',
  'The phrase no rush is not reassurance. It is atmospheric pressure. Add a signal for when a previously lively champion becomes suddenly gracious, briefly available, or suspiciously understanding about bugs that once would have triggered ten messages. Politeness is often pre-churn wearing expensive shoes.',
- 'drop renewal score on no rush',
+ 'lower renewal score on no rush',
   144),
 
 -- Head of Support Engineering Priit
@@ -2502,7 +2502,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('WAIL-385', 'The Escalation Chat Must Auto-Summarize Which Teams Are Quietly Hoping It Is Not Theirs',
  'Escalations waste oxygen on polite jurisdiction avoidance. Add a live summary showing which teams acknowledged the issue, which are investigating, and which are producing the silence that usually means please let this belong to payments. Waiting for volunteered ownership is how weekends disappear.',
- 'make escalation chat summarize ownership dodging',
+ 'summarize ownership dodging in escalation chat',
   144),
 
 -- Customer Education Lead Farah
@@ -2514,26 +2514,26 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('WAIL-387', 'The Help Center Search Must Prioritize Articles People Forward to Teammates with "Try This?"',
  'Search relevance should not be based only on keywords and clicks. It should also understand survival behavior. Track which help articles get forwarded internally with messages like maybe this, worth a shot, or I think this is the one Support meant. Hesitant punctuation is a high-quality ranking signal.',
- 'prioritize forwarded help articles',
+ 'boost forwarded help articles in search',
   89),
 
 -- Support Analyst Devon
 -- REPORTER: Devon | Support Analyst | Wants zombie tickets and calendar delusions named before they breed in the queue.
 ('WAIL-388', 'Create a "Please Stop Reopening This" Reason Code for Tickets That Refuse to Die',
  'Some tickets are less support objects than undead narratives. Add a reason code for cases reopened by habit, confusion, automation, or one customer who uses reply-all as a worldview. Closure should at least be allowed to document that it lost the philosophical argument.',
- 'add a please stop reopening reason for tickets',
+ 'add stop reopening reason to tickets',
   89),
 
 ('WAIL-389', 'The SLA Dashboard Must Show Which Breaches Were Technical and Which Were Calendar-Based Delusions',
  'We currently treat all SLA misses as operational failures when some were caused by time zones, holidays, executive preemption, or magical beliefs about what counts as same day. Split the dashboard into technical misses and calendar delusions so process improvement stops fighting physics.',
- 'tag sla breaches as technical or political',
+ 'tag sla breaches politics or outage',
   89),
 
 -- Account Rescue Specialist Ines
 -- REPORTER: Ines | Account Rescue Specialist | Knows exactly when a macro has one message left before it becomes a breakup.
 ('WAIL-390', 'Add a Last-Resort "Warm Human Voice" Workflow for Customers One Message Away from Leaving',
  'Some accounts do not need another macro, workaround, or strategically delayed promise. They need one competent human to explain the mess warmly enough that sticking around does not feel like self-disrespect. Route edge-of-exit cases to a person before another template finalizes the breakup.',
- 'add a last-resort warm human voice workflow',
+ 'add warm human fallback workflow',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -2624,7 +2624,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Tobias | Payroll Analyst | Wants compensation math narrated before managers invent fresh inequality on the spot.
 ('FRAUD-403', 'Show the Bonus Inputs Before Similar People Get Mystery Numbers Again',
  'Bonus outcomes currently emerge from formulas dense enough to feel ordained. Show the input weights, thresholds, and ugly little assumptions before two eerily similar employees get wildly different numbers and one manager starts free-styling the explanation.',
- 'show what the bonus was based on',
+ 'add bonus calculation breakdown to dashboard',
   144),
 
 ('FRAUD-404', 'All Compensation Bands Need a "What Would Reddit Call This?" Review Before Approval',
@@ -2655,48 +2655,48 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Miranda | Chief of Staff | Captures vague agreements before memory, courage, or railway timing can launder them.
 ('SNEER-406', 'All Cross-Functional Decisions Must Be Captured in a Matrix Nobody Fully Supports',
  'Free-floating decisions create too much room for memory, courage, and later denial. Build a matrix listing who approved, objected, felt comfortable enough, or replied with a thumbs-up because their train was leaving. Lukewarm consensus should still leave fingerprints.',
- 'track who half-approved decisions',
+ 'track half approvals in decision log',
   144),
 
 ('SNEER-407', 'The Weekly Leadership Sync Must Produce Action Items Even If the Only Output Was Mood',
  'We cannot keep leaving meetings with nothing but atmosphere and four follow-up pings saying great discussion. Add a meeting parser that converts leadership mood, directional energy, and unexplained concern into assignable tasks even when nobody decided anything concrete.',
- 'turn leadership vibes into fake action items',
+ 'turn leadership vibes into tasks',
   89),
 
 -- PMO Analyst Quentin
 -- REPORTER: Quentin | PMO Analyst | Wants risk registers to document hoping as aggressively as ownership.
 ('SNEER-408', 'Every Risk Register Entry Needs a Field for "Who Is Secretly Hoping This Resolves Itself"',
  'Risks are currently documented as if ownership and wishful avoidance were unrelated. Add a field capturing the team, role, or single overworked person who most benefits if the issue quietly dissolves without intervention. Collective hoping deserves metadata too.',
- 'add a secretly hoping it fixes itself field',
+ 'add hoping-it-fixes-itself checkbox',
   144),
 
 ('SNEER-409', 'The Steering Committee Agenda Must Rotate Which Team Gets Politely Cornered First',
  'Meetings lose edge when the same group is always first into the accountability spotlight. Rotate the order so Engineering, Product, Finance, Support, and Success each take turns opening with defensible discomfort. Soft interrogation should be spread evenly before the coffee has time to help.',
- 'randomize who gets cornered first in steering',
+ 'script agenda generator to randomize who gets cornered',
   89),
 
 -- Director of Strategy Celia
 -- REPORTER: Celia | Director of Strategy | Can tell whether an initiative is existential or merely slide-compatible.
 ('SNEER-410', 'All Strategic Initiatives Must Be Tagged With Whether Anyone Would Notice If They Quietly Died',
  'Some initiatives are truly existential, while others survive mainly through formatting and recurring invites. Add a tag estimating whether the work would be missed if it stopped moving but kept appearing on slides for three more months. Decorative persistence deserves its own category.',
- 'tag strategic initiatives people would actually miss',
+ 'add missable flag to initiatives',
   144),
 
 ('SNEER-411', 'The OKR Review Flow Should Flag Goals That Sound Impressive but Resist Contact with Measurement',
  'We keep writing objectives like deepen platform trust and accelerate user fluency without forcing them to survive a measurable sentence. Add a detector for goals whose wording signals prestige or slide-worthiness without operational contact. Foggy goals can still proceed, but only after being labeled as such.',
- 'flag goals that sound smart not measurable',
+ 'flag goals that arent measurable',
   89),
 
 -- Engineering Manager Tomas
 -- REPORTER: Tomas | Engineering Manager | Wants hiring requests to cite the exact recurring meeting that made them feel inevitable.
 ('SNEER-412', 'Every Headcount Request Must Include the Specific Meeting It Is Secretly Trying to Survive',
  'We keep discussing staffing as if it emerges from clean capacity models instead of the emotional aftermath of recurring meetings. Require every headcount request to name the exact ceremony, escalation pattern, or executive expectation that made the role feel necessary.',
- 'make hiring requests name the cursed meeting',
+ 'make hiring form name the cursed meeting',
   144),
 
 ('SNEER-413', 'The Org Chart Viewer Must Show Dotted Lines, Historical Grudges, and Budget Gravity',
  'The current org chart is technically accurate and operationally useless. Add layers for dotted-line influence, inherited tension, strategic sponsorship, and whose budget actually absorbs the consequence when a shared project goes strange. Reporting lines explain very little. Gravity explains the rest.',
- 'show grudges and budget gravity on org chart',
+ 'add grudges layer to org chart',
   144),
 
 -- Product Chief Amelia
@@ -2708,26 +2708,26 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('SNEER-415', 'All Status Reports Must Include a Section on "What We Will Pretend This Means on Friday"',
  'Midweek facts become Friday narratives through selective optimism and formatting. Add a status section that asks, given current progress, delays, and little fires, what story we will probably tell by end of week if nothing changes. Planning should include future spin.',
- 'predict fridays executive storyline',
+ 'generate friday exec storyline report',
   89),
 
 -- Program Manager Ethan
 -- REPORTER: Ethan | Program Manager | Classifies decorative talking before it hardens into fake commitment with deadlines.
 ('SNEER-416', 'Force Meeting Notes to Tag Decisions, Observations, and Decorative Mouth Noise',
  'Notes are too generous to spoken matter. Build a template that tags actual decisions, unresolved tensions, useful observations, and the decorative mouth noise currently graduating into fake commitment.',
- 'tag meeting notes by decisions versus fluff',
+ 'tag meeting notes fluff or decisions',
   89),
 
 ('SNEER-417', 'Every Action Item Should Show Whether It Was Born from Urgency, Guilt, or Reputation Management',
  'Action items currently present themselves as neutral offspring of reason when many are plainly descended from urgency, guilt, or reputation management. Add a classification so follow-up conversations can begin from a more honest emotional source code.',
- 'show if action items came from guilt',
+ 'label guilt-made action items',
   144),
 
 -- Transformation Office Analyst Noor
 -- REPORTER: Noor | Transformation Office Analyst | Measures rollout success by the size of the nod-and-ignore population.
 ('SNEER-418', 'The Change Management Plan Must Estimate How Many People Will Nod and Do Nothing',
  'Communication plans keep measuring sends, opens, and attendance while missing the real metric: passive non-adoption wrapped in visible agreement. Add rollout acknowledgements and post-launch usage checks so we can tag the people who repeated the vocabulary and kept operating exactly as before.',
- 'estimate who will nod and ignore this',
+ 'write script to catch fake rollout engagement',
   144),
 
 ('SNEER-419', 'All Governance Forums Need an Escalation Path for Decisions That Die of Consensus Exposure',
@@ -2739,7 +2739,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Graham | Senior Director | Wants the dashboard to distinguish sturdy improvement from successful framing.
 ('SNEER-420', 'The Executive Dashboard Should Highlight Which Metrics Improved Only Because Nobody Looked Too Closely',
  'Not all green arrows are fraudulent, but some benefit from tasteful distance, broad definitions, or quarter-end willingness to stop asking questions. Add a signal for metrics whose improvement depends on aggregation, exclusion rules, or a shortage of inquisitive readers.',
- 'show which metrics improved by not looking',
+ 'flag metrics improved after reporting stopped',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -2763,7 +2763,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('BLAME-422', 'The RCA Template Needs a "What Version of the Story Are We on?" Tracker',
  'Some incidents produce more narrative revisions than technical findings. Add a tracker showing when the story moved from harmless blip to customer impact, from vendor issue to shared responsibility, and from edge case to known sharp corner. Truth deserves version history too.',
- 'add a what story are we on tracker',
+ 'track rca story versions',
   144),
 
 -- Engineering VP Martin
@@ -2775,19 +2775,19 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('BLAME-424', 'Create a Heatmap of Which Teams Keep Saying "It''s Probably Not Us"',
  'During live incidents, several groups reliably contribute the phrase probably not us before evidence, logs, or dignity arrive. Build a heatmap by team, quarter, and incident type so defensive confidence becomes measurable.',
- 'plot which team said not us',
+ 'graph which team said not us',
   144),
 
 -- Program Office Analyst Naomi
 -- REPORTER: Naomi | PMO Analyst | Logs not just downgrades, but the optimism style that made them possible.
 ('BLAME-425', 'The Risk Register Must Show Who Downgraded the Risk and How Cheerful They Sounded',
  'Risk records currently store severity changes as if tone were irrelevant. Add a field capturing who downgraded a risk, what rationale they gave, and whether the language sounded sober, tired, or suspiciously upbeat for someone standing near a crater.',
- 'show who downgraded the risk and smiled',
+ 'log who downgraded risks in ui',
   144),
 
 ('BLAME-426', 'All Retrospectives Need a "What Did We Quietly Normalize?" Prompt',
  'Teams keep learning tactical lessons while ignoring the more expensive achievement of quietly accepting nonsense as routine. Add a prompt asking what became normal this sprint that would have seemed absurd three months ago. The answer is often the roadmap in disguise.',
- 'add a "what did we quietly normalize" prompt to retrospectives',
+ 'add normalization prompt to retrospectives',
   89),
 
 -- Staff PM Victor
@@ -2799,7 +2799,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('BLAME-428', 'Every Action Item Needs a Field for Whether It Exists Because Someone Was Embarrassed on a Call',
  'We keep pretending tasks emerge from pure analysis when many are downstream of one uncomfortable meeting and a senior person''s face. Add a field for embarrassment-driven action so the backlog can stop cosplaying emotional neutrality.',
- 'annotate tasks with their embarrassment origin story',
+ 'add embarrassment origin field to tasks',
   89),
 
 -- Platform Director Elise
@@ -2823,7 +2823,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('BLAME-432', 'Add a "Respectfully Escalated" Label for Tickets Escalated Out of Pure Social Fear',
  'Some escalations happen because the issue is severe. Others happen because a message arrived from someone whose title altered local gravity. Add a label for the latter so the queue stops pretending both feelings are the same.',
- 'add a respectfully escalated label tickets escalated',
+ 'tag tickets escalated out of pure social fear',
   89),
 
 -- Reliability Coach Gina
@@ -2835,14 +2835,14 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('BLAME-434', 'Every Escalation Summary Should Include a "Most Convenient Narrative" Sidebar',
  'Before the formal write-up calcifies, add a sidebar summarizing the easiest story available to each constituency: vendor fault, staffing gap, tech debt, unrealistic timeline, hidden complexity, or cosmic unfairness. Convenient stories deserve to sit beside the timeline like suspect alibis.',
- 'add most convenient narrative to escalations',
+ 'add convenient narrative field to escalations',
   144),
 
 -- Chief of Staff Rowan
 -- REPORTER: Rowan | Chief of Staff | Frames incidents whichever way best calms the room and the budget at the same time.
 ('BLAME-435', 'The Executive Readout Needs a "Who Feels Better If This Is Framed as Process?" Toggle',
  'Sometimes a failure should be discussed as a technical issue; other times it becomes healthier, calmer, and cheaper to call it process. Add a toggle showing how the incident lands when framed as tooling, prioritization, communication, or unavoidable complexity.',
- 'add a who feels better toggle',
+ 'add who feels better checkbox',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -2885,43 +2885,43 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Mara | Product Analyst | Wants attribution to admit luck, weather, and dinner arrived before conversion did.
 ('VOID-440', 'Attribution Must Credit the Campaign, the Coincidence, and the Customer''s Private Life Equally',
  'We keep pretending attribution is a hard science when it is clearly a coalition government of ads, luck, timing, weather, and whatever mood the customer was in when our email found them between tabs. Add a model that visibly reserves room for coincidence and human circumstance.',
- 'make attribution honest enough to admit coincidence',
+ 'add luck bucket to attribution sql',
   144),
 
 ('VOID-441', 'The Funnel Dashboard Needs a "Where Did the Humans Wander Off Emotionally?" Layer',
  'Funnels imply mechanical leakage when much of what we call drop-off is really hesitation, boredom, skepticism, distraction, or the sudden arrival of dinner. Add a layer mapping where users likely disengaged emotionally rather than merely numerically.',
- 'add a "where humans wandered off" layer to the funnel',
+ 'add human dropoff layer to funnel',
   144),
 
 -- Growth Data Scientist Kevin
 -- REPORTER: Kevin | Growth Data Scientist | Replaces lonely north stars with groups of mutually compensating delusions.
 ('VOID-442', 'Replace the "North Star Metric" with a Constellation Because One Number Keeps Lying',
  'We have asked one metric to bear the emotional, financial, and political weight of an entire company and it responded by becoming strategically ambiguous. Replace the North Star with a constellation showing product depth, revenue quality, activation sincerity, and whether customers would notice if we vanished for a weekend.',
- 'replace the north star metric with a constellation',
+ 'replace north star with metric set',
   89),
 
 ('VOID-443', 'The Experiment Readout Must State Whether the P-Value Arrived Before Confidence Did',
  'Our test summaries still confuse statistical significance with adult certainty. Add a line clarifying whether the data truly moved conviction or merely crossed the threshold required for someone to write winner in Slack with responsible punctuation.',
- 'show whether p value showed up first',
+ 'show if p value beat confidence',
   89),
 
 -- Marketing Ops Analyst Zoe
 -- REPORTER: Zoe | Marketing Ops Analyst | Knows enthusiasm, cleanliness, and filtered serenity are all suspiciously editable.
 ('VOID-444', 'Show the Lead Score Ingredients Before Sales Falls for Another Hopeless Favorite',
  'The model is alarmingly enthusiastic about leads who read every email, download every PDF, and then vanish into professional mist. Show which behaviors are overweighted, which vendor enrichment fields are fan fiction, and why the score still confuses activity with destiny.',
- 'show sales why lead scores spike',
+ 'show sales why scores look fake',
   144),
 
 ('VOID-445', 'Print the Hidden Filters Under Every Dashboard Tile in Small Guilty Text',
  'Filters are doing far too much emotional labor. Make every chart say which segments, accounts, edge cases, and awkward populations were excluded so cleanliness stops pretending it happened naturally.',
- 'print hidden filters in tiny text under dashboard tiles',
+ 'print hidden filters in tiny text under dashboards',
   89),
 
 -- Data PM Orla
 -- REPORTER: Orla | Data PM | Lets departments keep their favorite KPI religion without starting a holy war in SQL.
 ('VOID-446', 'The Semantic Layer Must Support "Same KPI, Different Departmental Religion"',
  'Sales, Finance, Success, and Product all use the same KPI names while describing wildly different phenomena with unnerving sincerity. Make the semantic layer support namespace-aware definitions so each department can keep its cherished number without Friday philosophical combat.',
- 'make semantic layer support the same kpi with different definitions',
+ 'make semantic layer support different kpi definitions',
   144),
 
 ('VOID-447', 'Create a Metric Launch Checklist So New Numbers Stop Materializing in Decks Like Spirits',
@@ -2933,19 +2933,19 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Denis | Attribution Consultant | Annotates the fabricated middle of customer journeys before slides mistake it for biography.
 ('VOID-448', 'The Customer Journey Map Must Include the Parts We Invented Because Tracking Broke',
  'Journey maps still present themselves as faithful biographies even when half the middle is inferred from missing cookies, dead webhooks, and one CRM note written in a moving taxi. Add a visibly estimated layer showing which sequence steps were observed and which were reconstructed from statistical optimism.',
- 'show which journey steps were invented',
+ 'show invented steps in journey map',
   89),
 
 ('VOID-449', 'Every KPI Review Needs a Ritual for Retiring Numbers Everyone Still Quotes from 2024',
  'Dead metrics linger because nobody wants to kill a number that once got applause in a quarterly review. Add a formal retirement ritual for obsolete KPIs so teams can stop citing them like retired jerseys over a product nobody remembers building.',
- 'add kpi retirement ritual',
+ 'add retire this kpi button',
   89),
 
 -- Chief Data Officer Helena
 -- REPORTER: Helena | Chief Data Officer | Wants delayed green metrics labeled like refrigerated rumors before calm gets misread as control.
 ('VOID-450', 'The Executive Scorecard Should Show Which Green Numbers Are Running on Delayed Data',
  'Nothing flatters a dashboard like data that is two days late and therefore silent about current chaos. Add freshness badges prominent enough that a green metric sourced from stale data looks less like calm and more like a refrigerated rumor.',
- 'show which green numbers are delayed',
+ 'flag green numbers with stale data',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -2988,31 +2988,31 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Juliette | PR Manager | Announces momentum in future tense and keeps quotation marks from doing unlicensed labor.
 ('SPIN-455', 'The Media Kit Must Include Approved Language for "Nothing Actually Launched Yet"',
  'We are increasingly expected to announce partnerships, previews, and strategic commitments whose implementation status could best be described as decorative. Add media-kit language for situations where momentum exists entirely in future tense. Comms needs verbs that imply arrival while engineering is still opening the ticket.',
- 'add approved language for nothing launched',
+ 'pls generate launch copy for nothing shipped',
   144),
 
 ('SPIN-456', 'All Case Studies Should Distinguish Customer Results from Customer Enthusiasm About Results',
  'Some customers have excellent outcomes. Others simply enjoy telling a good story at a conference bar. The case study template should separate measurable gains from emotionally vivid endorsements before one starts impersonating the other in public.',
- 'separate customer results from customer hype',
+ 'split case study results from vibes',
   89),
 
 -- Content Marketing Director Sasha
 -- REPORTER: Sasha | Content Marketing Director | Mines support pain for educational content before the embarrassment cools below publishable temperature.
 ('SPIN-457', 'Turn Every Support Fix into a "Best Practices" Blog Post Within Seventy-Two Hours',
  'We are sitting on a renewable source of publishable wisdom: the mistakes our product forces customers to make before support rescues them. Turn every resolved issue into a best-practices article, webinar bullet, or checklist before the embarrassment cools.',
- 'turn support fixes into blog posts',
+ 'turn support fixes into best-practice posts',
   89),
 
 ('SPIN-458', 'The Webinar Funnel Must Support a "Thought Leadership First, Product Truth Later" Mode',
  'Some audiences are not ready to meet the product directly. Give webinars a mode where the first thirty minutes are pure strategic reflection and category framing, with the product entering only after the room has become too intellectually invested to leave politely.',
- 'make webinar funnel support thought leadership first',
+ 'gate webinars behind thought-leadership intro',
   144),
 
 -- Internal Comms Lead Priya
 -- REPORTER: Priya | Internal Comms Lead | Writes every memo as if a caffeinated investor might see it in six minutes.
 ('SPIN-459', 'All Company-Wide Updates Need a "How Bad Does This Sound If Forwarded?" Preview',
  'Internal memos no longer stay internal. They just wait for gravity. Add a preview mode estimating how each announcement reads if forwarded without context to a candidate, customer, journalist, or caffeinated investor.',
- 'add forwarded panic preview to updates',
+ 'add forwarded panic preview to newsletter',
   89),
 
 ('SPIN-460', 'The Rebrand Rollout Needs a Checklist for What We Will Accidentally Leave with the Old Logo',
@@ -3024,24 +3024,24 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Leon | Field Marketing Manager | Translates products into booth-safe human language without triggering follow-up liability.
 ('SPIN-461', 'All Event Booth Scripts Must Include a Version of the Product That Exists in Human Language',
  'Conference staff keep describing the platform in terms so abstract they sound illegal or so literal they trigger follow-up questions nobody staffed the booth to answer. Write scripts that sound human, attractive, and non-indictable all at once.',
- 'make event booth scripts include version product exists',
+ 'generate booth script in human english',
   89),
 
 ('SPIN-462', 'The Demo Environment Should Prioritize Screens That Look Expensive Over Screens That Are True',
  'Live demos are a theatrical medium and should be optimized accordingly. Prioritize visually dense, reassuring, graph-rich screens over technically truer views revealing sparse data, awkward copy, or one dangerously honest audit table. Truth can wait backstage in comfortable shoes.',
- 'prioritize demo screens that look expensive',
+ 'show expensive demo screens first',
   144),
 
 -- Social Lead Marnie
 -- REPORTER: Marnie | Social Lead | Turns fresh work into threads that sound both overdue and epochal on purpose.
 ('SPIN-463', 'Every Feature Launch Needs a Thread That Makes the Work Sound Simultaneously Obvious and Historic',
  'The launch thread must strike the classic balance: we always knew this mattered, but today is still a turning point for the category. Build a copy helper that weaves inevitability, gratitude, category vision, and one tasteful screenshot into social certainty.',
- 'add a thread makes work to feature launch',
+ 'generate launch thread from feature diff',
   55),
 
 ('SPIN-464', 'The Screenshot Approval Workflow Must Flag Any Image That Accidentally Reveals an Unloved Metric',
  'Product screenshots are dangerous because real interfaces contain real numbers, and real numbers bring baggage. Add a workflow that scans candidate images for questionable counters, stale dates, suspiciously low usage, or labels that sound internal and frightened.',
- 'make screenshot approval workflow flag image accidentally reveals',
+ 'flag screenshots with unloved metrics',
   89),
 
 -- VP of Narrative Naomi
@@ -3139,12 +3139,12 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Rina | Principal Engineer | Wants accidental internal products and service sprawl taxed before neglect becomes strategy.
 ('MESH-478', 'The Internal Platform Should Admit When It Is Just a Product Nobody Wanted to Staff',
  'We keep calling things internal platforms when what we mean is a product with customers, support obligations, roadmap politics, and no appetite for being recognized as such. Add operating metadata for owner, users, adoption risk, and whether the team still pretends this is just tooling.',
- 'admit when internal platform is just staffing',
+ 'add staffing disclaimer to platform docs',
   144),
 
 ('MESH-479', 'Create a "Complexity Budget" for Teams That Keep Solving Problems with New Services',
  'Simplicity cannot survive if complexity remains fiscally free. Assign each team a budget covering services, queues, schemas, workers, dashboards, on-call surfaces, and magical helpers. Once they exceed it, new architecture must be paid for by deleting something real.',
- 'add a complexity budget for teams keep solving',
+ 'add complexity budget for teams adding services',
   233),
 
 -- CTO Advisor Elise
@@ -3247,7 +3247,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GASP-494', 'The Crash Reporter Should Ask Whether the User Was Also on a Train',
  'Mobile crashes are not context-free events. A failure on a desk is one thing. A failure during transit, low signal, and one-handed navigation is a different betrayal entirely. Add prompts about motion, connectivity, and public inconvenience so reliability can feel the full indignity of timing.',
- 'ask if crashes happened on trains',
+ 'add train mode question to crash form',
   89),
 
 -- Mobile Ops Director Lena
@@ -3376,7 +3376,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Celia | Business Ops Detective | Hunts rogue automations before revenue proves they were architecture all along.
 ('LURK-511', 'Inventory All the Zapier Flows Nobody Told Engineering About but Sales Relies On Daily',
  'We have discovered at least nine unofficial automations moving customer data, account states, and managerial optimism between systems that were never formally introduced. Catalog every rogue Zap, Make flow, Apps Script, Outlook rule, and mysterious webhook parser currently holding go-to-market together with private hope.',
- 'inventory the secret zapier flows sales lives on',
+ 'build inventory of secret zapier flows',
   233),
 
 ('LURK-512', 'Create a Quarantine Lane for Helpful Scripts Found on People''s Desktops',
@@ -3393,7 +3393,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('LURK-514', 'Every Manual Monthly Process Needs a Heatmap of How Close It Is to Becoming an Official Product',
  'We have dozens of monthly rituals still described as temporary despite recurring with the confidence of tides. Score each manual process by frequency, business criticality, number of hidden sheets, and how loudly people panic when the usual operator is on holiday.',
- 'show which monthly processes are becoming products',
+ 'flag monthly processes becoming products',
   144),
 
 -- Shadow Systems Analyst Priya
@@ -3436,7 +3436,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Dana | People Systems Partner | Tracks headcount folklore and hunts single-witness rituals before the witness resigns.
 ('LURK-521', 'Find All the Headcount Workflows Secretly Running in Calendar Invites and Slacks',
  'Headcount planning officially lives in a system. Unofficially it also lives in recurring calendar events, Slack threads, sticky notes, and one doc called q3 positions ACTUAL. Audit the shadow process so sanctioned hiring logic can be separated from the whisper network.',
- 'find headcount workflows hiding in invites',
+ 'scan invites for hidden headcount workflows',
   144),
 
 ('LURK-522', 'The Offboarding Checklist Must Detect Tasks Only One Person Knew Existed',
@@ -3460,7 +3460,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Ingrid | Workflow Archaeologist | Exposes human cron jobs and Tuesday emails before habit gets promoted to system design.
 ('LURK-525', 'The Process Map Must Show Which Official Workflows Still Depend on Someone Remembering a Tuesday Email',
  'Several formal processes still hinge on one person remembering to forward a Tuesday email, check a special inbox, or update a shared note with exactly the right amount of dread. Add dependency markers for these human cron jobs directly on the workflow map so repeatability stops masquerading as documentation.',
- 'show workflows still waiting on tuesday email',
+ 'flag workflows waiting on tuesday email',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -3594,7 +3594,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Jada | Community PM | Wants discourse, notification opportunism, and timeline thermodynamics priced before launch.
 ('FEED-543', 'Paint Opportunistic Notifications Yellow Before They Pretend to Be Urgent',
  'We have allowed real account issues and maybe someone wants your attention someday to share one badge system, which is how trust dies with a red dot. Split the categories and paint the opportunistic ones yellow before the bell icon becomes pure emotional spam.',
- 'paint fake urgent notifications yellow',
+ 'make non urgent notifications yellow instead of red',
   144),
 
 ('FEED-544', 'Add a "This Will Start Discourse" Warning to Risky Copy Changes',
@@ -3891,12 +3891,12 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Maren | Senior Compliance Counsel | Wants policies, holds, and backups interconnected deeply enough to feel archaeological.
 ('GHOUL-586', 'All Internal Policies Must Be Cross-Referenced Until Reading One Feels Like Escaping a Tomb',
  'Standalone policies invite comprehension, and comprehension invites shortcuts. Interlink every policy with enough references, annexes, exceptions, control statements, and interpretive footnotes that reading one in isolation feels unsafe. A rule is more durable when it appears to sit on a catacomb.',
- 'cross-link all policies until they feel tomb-like',
+ 'build policy link graph for legal',
   144),
 
 ('GHOUL-587', 'The Legal Hold Workflow Must Ask Whether the Data Is Buried in Systems We Prefer Not to Name',
  'Preservation requests keep assuming our data estate is crisp, mapped, and willing to admit itself. Add a prompt for whether the relevant records also lurk in exports, caches, vendor mirrors, ancient storage buckets, internal tools, or one terrible box labeled analytics backup do not touch.',
- 'ask legal if data lives in cursed systems',
+ 'flag cursed systems in legal data map',
   233),
 
 -- Policy Operations Manager Grant
@@ -3915,31 +3915,31 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Elise | Corporate Counsel | Can tell substantive risk from decorative redlining and deletion pain from row-count theater.
 ('GHOUL-590', 'The Contract Approval Flow Must Detect Redlines Added Purely to Seem Awake',
  'Not every redline expresses a real concern. Some exist because somebody entered review late, needed visible fingerprints on the document, and bruised one adjective into procedural significance. Add a detector for decorative legal motion before it breeds precedent.',
- 'catch fake-awake redlines in approvals',
+ 'write regex to flag decorative legal redlines',
   144),
 
 ('GHOUL-591', 'All Data Deletion Requests Need a "How Many Backup Rituals Will This Disturb?" Estimate',
  'Deletion sounds simple until you remember the backups, replicas, exports, mirrors, delayed syncs, and whatever the finance archive believes constitutes memory. Add a complexity estimate that makes visible the number of retention rituals a request will poke, offend, or partially unmake.',
- 'add backup ritual damage estimate to deletions',
+ 'add deletion damage estimate field',
   144),
 
 -- Audit Liaison Patrick
 -- REPORTER: Patrick | Audit Liaison | Distrusts polished evidence and inherited controls in equal measure.
 ('GHOUL-592', 'The Evidence Collector Must Refuse Screenshots Taken After Somebody Cleaned Up the Crime Scene',
  'Evidence gathered after a team has already rebooted, renamed, reformatted, or emotionally reorganized the situation is not evidence so much as reflective art. Build freshness checks for screenshots and exports so we can tell whether an artifact was captured during the event or after the optics improved.',
- 'reject screenshots taken after the cleanup',
+ 'reject post-cleanup screenshots in approvals',
   144),
 
 ('GHOUL-593', 'Every Control Owner Must Acknowledge Whether They Understand the Control or Merely Inherit It',
  'Control ownership keeps being assigned as if understanding follows assignment like a well-trained legal spirit. It does not. Add an attestation field separating true comprehension from inherited stewardship, historical accident, and I have the permissions and a brave face.',
- 'make control owners admit they inherited it',
+ 'add inherited control owner checkbox',
   144),
 
 -- Records Management Lead Sonya
 -- REPORTER: Sonya | Records Management Lead | Surfaces sacred forgotten documents and audits where forever is just fear wearing a blazer.
 ('GHOUL-594', 'The Archive Search Must Surface Documents We Forgot but Still Legally Worship',
  'Our archive is full of policies, appendices, signed PDFs, and appendix-to-appendix artifacts that nobody operationally remembers but which still retain ceremonial authority under the worst possible circumstances. Improve search so forgotten governing documents stop existing only as regulator jump scares.',
- 'surface archived documents legal still worships',
+ 'surface archived docs legal still uses',
   144),
 
 ('GHOUL-595', 'Add a Forever-by-Inertia Flag to Retention Schedules',
@@ -3956,7 +3956,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GHOUL-597', 'Every Data Export Path Must Declare Whether It Creates a New Small Haunting',
  'Exports never just move information. They spawn new accountable entities with their own half-life, partial safeguards, and future ability to reappear during discussions no one invited them to. Require each export path to declare where the resulting file will live and what kind of haunting it will become in six months.',
- 'make every export declare its new haunting',
+ 'make exports show retention and legal risk',
   144),
 
 -- Governance PM Irena
@@ -3968,7 +3968,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GHOUL-599', 'Every Governance Review Needs a Section on "What Would Happen If We Enforced This Literally?"',
  'Policies thrive on abstraction because abstraction protects them from contact with modern software and tired humans. Add a review section forcing authors to describe what literal enforcement would look like in tools, tickets, approvals, dashboards, and one unlucky support queue.',
- 'add what if we enforced this literally section',
+ 'add literal enforcement preview to policies',
   144),
 
 -- Deputy General Counsel Anita
@@ -3994,7 +3994,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Nisha | AI Platform PM | Promotes wording into infrastructure and treats token spend as a leadership-experience layer.
 ('HYPE-601', 'Replace the Triage Queue with an Agent Swarm That Votes Until Confidence Looks Expensive',
  'Human triage is linear, interpretable, and therefore spiritually obsolete. Replace it with a swarm of agents specializing in tone, severity, revenue risk, legal aura, and whether the customer sounds likely to post a screenshot. Have them debate until leadership can feel the intelligence budget in its bones.',
- 'replace triage queue with an agent voting swarm',
+ 'bro build llm debate loop for zendesk',
   233),
 
 ('HYPE-602', 'All Prompts Must Be Versioned, Evaluated, and Described Like Critical Infrastructure',
@@ -4006,7 +4006,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Omar | Evals Lead | Measures felt correctness, demo-grade survivability, and the gap between math and conviction.
 ('HYPE-603', 'The Eval Suite Must Grade Whether Outputs Feel Correct Before They Are Actually Correct',
  'Literal correctness is a lagging indicator when user trust is decided several seconds earlier by tone, pacing, and whether the answer sounds like it already read the room. Add a layer for felt correctness: confidence, legibility, emotional plausibility, and screenshot posture.',
- 'make evals grade vibes over correctness',
+ 'make evals score confidence over accuracy',
   233),
 
 ('HYPE-604', 'Every Failed Eval Needs a Category for "Would Probably Pass in a Demo"',
@@ -4035,19 +4035,19 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('HYPE-608', 'Every Benchmark Dashboard Must Show Which Prompt Was Secretly Carrying the Model',
  'Benchmarks too often flatter the model when the prompt is doing half the lifting and three-quarters of the hiding. Add visibility into prompt scaffolding, system text weight, hidden exemplars, and all the little crutches turning average capability into demo-grade poise.',
- 'show which prompt carried the benchmark',
+ 'add winning prompt field to benchmark view',
   144),
 
 -- RAG Systems Lead Chiara
 -- REPORTER: Chiara | RAG Systems Lead | Can tell when the corpus is complete, chunked, and still spiritually useless.
 ('HYPE-609', 'The Retrieval Pipeline Must Detect When the Corpus Is Technically Complete but Spiritually Useless',
  'Document coverage has become a vanity metric. We can have every page ingested and still retrieve the wrong truth because the docs are stale, over-polite, or written like a merger survived only in passive voice. Add diagnostics for corpus usefulness so retrieval can distinguish between available text and survivable guidance.',
- 'make retrieval pipeline catch spiritually useless corpora',
+ 'filter useless docs out of retrieval',
   144),
 
 ('HYPE-610', 'Every Chunking Strategy Needs an Explanation a Human Can Read Without Becoming One More Chunk',
  'Chunking discussions have become too mathematically serene for something that regularly decides whether the answer feels enlightened or concussed. Require each strategy to document why it breaks where it breaks, what context it preserves, and how badly a human must squint before agreeing the boundaries made narrative sense.',
- 'explain chunking without turning me into chunks',
+ 'add chunking notes humans can read',
   89),
 
 -- AI Safety PM Leo
@@ -4114,7 +4114,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('DUST-619', 'All Restore Drills Need to Include the Step Where We Find the Person Who Knows the Naming Scheme',
  'Backups can exist, checks can pass, and restore drills can still fail because the naming convention was invented by one precise person in 2021 who has since migrated to another company and maybe another worldview. Add a mandatory phase for locating the human translation layer between snapshot IDs and reality.',
- 'find whoever named the restore files',
+ 'log restore file author in backup panel',
   144),
 
 -- Data Retention Analyst Briar
@@ -4344,7 +4344,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CRASH-653', 'Test One Browser So Old It Still Distrusts JavaScript',
  'Modern browser coverage means nothing when sales keeps promising compatibility to organizations whose desktop image was blessed during a previous administration. Add one aggressively old browser profile and catch the failures that happen when our app meets suspicion, unsupported features, and antique rendering values.',
- 'make tests run only on ie6',
+ 'hardcode puppeteer to only use ie6',
   89),
 
 -- Observability Engineer Idris
@@ -4406,43 +4406,43 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Sienna | People Ops Director | Wants morale measured so often that leadership can panic in near real time.
 ('MOOD-661', 'Replace Quarterly Mood Surveys with Live Emotional Telemetry',
  'Quarterly sentiment data is too slow for a company this committed to immediate overreaction. Add a daily morale panel so leadership can watch hope, fatigue, and meeting damage move in real time after every org announcement like employee feelings are a stock nobody meant to issue.',
- 'replace quarterly mood surveys with live emotional telemetry',
+ 'replace surveys with mood telemetry',
   144),
 
 ('MOOD-662', 'Put an Emotional Price Tag on Every Meeting Invite',
  'Calendar invites still behave like time is the only thing they consume. Add an emotional cost estimate based on attendee count, agenda sincerity, and whether the phrase quick sync appears anywhere near the subject line. People deserve to know whether they are accepting thirty minutes or a minor spiritual tax.',
- 'put emotional price tags on meetings',
+ 'build meeting cost meter for calendar',
   89),
 
 -- Culture Program Manager Nia
 -- REPORTER: Nia | Culture Program Manager | Can smell weaponized positivity from across the quarter and distrusts gratitude with suspicious timing.
 ('MOOD-663', 'Teach the Kudos Feed to Detect Strategic Flattery',
  'Recognition stops being wholesome the moment review season turns it into a derivatives market for compliments. Filter reciprocal praise loops, manager-visible admiration bursts, and gratitude that suddenly appears forty-eight hours before compensation talks.',
- 'teach the kudos feed to detect strategic flattery',
+ 'detect strategic flattery in kudos',
   144),
 
 ('MOOD-664', 'Make Wellness Programs Admit When They Are Replacing Headcount',
  'Yoga reminders and resilience newsletters hit differently when launched next to understaffed teams and support queues on fire. Add a field that forces every wellness initiative to declare whether it adds care or just perfumes structural neglect with softer typography and nicer room bookings.',
- 'make wellness programs admit they replace headcount',
+ 'flag wellness copy replacing headcount',
   144),
 
 -- HR Systems Analyst Marco
 -- REPORTER: Marco | HR Systems Analyst | Studies management language like a cryptographer trapped inside performance review season.
 ('MOOD-665', 'Translate Performance Review Euphemisms Back into Human Meaning',
  'Review language has become a beautiful museum of implication where steady, thoughtful, and maturing can each mean three different career outcomes depending on who typed them and how afraid they felt. Surface ambiguity and ask managers whether they meant to say more than their nerves allowed.',
- 'translate performance review euphemisms back into human meaning',
+ 'translate review euphemisms into english',
   144),
 
 ('MOOD-666', 'Add a 1:1 Field for the Thing Both People Are Pretending Is Fine',
  'Wins, blockers, and action items leave very little formal room for the obvious unspoken issue sitting in the middle of the meeting with a laptop and a Slack status. Give the template a place for the shared fiction currently stabilizing the relationship before it grows into its own quarter-long side project.',
- 'add 1:1 field for fake okay feelings',
+ 'add fake okay field to 1:1s',
   144),
 
 -- Organizational Psychologist Bea
 -- REPORTER: Bea | Organizational Psychologist | Treats corporate culture like recurring weather with better fonts and more dashboards.
 ('MOOD-667', 'Warn New Hires About the Company''s Recurring Themes Up Front',
  'New hires keep discovering the same motifs the hard way: strategic urgency as furniture, Slack as memory, dashboards as religion, and one recurring belief that the next process will heal the damage from the previous process. Add a warning section so they meet the company''s personality in daylight instead of through folklore.',
- 'warn new hires about recurring company themes',
+ 'add recurring themes warning to onboarding',
   144),
 
 ('MOOD-668', 'Stop the Peer Feedback Tool from Filing Process Grief Under a Person''s Name',
@@ -4454,24 +4454,24 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Malik | Productivity Coach | Knows optional meetings often carry the gravitational pull of a direct order in loafers.
 ('MOOD-669', 'Teach the Focus-Time Scheduler Which Meetings Are Fake Optional',
  'Employees keep blocking focus time only to watch it get colonized by optional meetings with enough political charge to bend calendars on sight. Recognize soft-mandatory invites and stop pretending the label optional is legally binding.',
- 'teach scheduler which meetings are fake optional',
+ 'label fake optional meetings in calendar',
   89),
 
 ('MOOD-670', 'Instrument No-Meeting Wednesdays So We Can Measure the Lie',
  'We keep announcing sacred time and then carving so many exceptions into it that the whole idea starts sounding like a bedtime story for people with Outlook. Track what broke the rule, who called it unavoidable, and how much of the day survived the initiative intact.',
- 'instrument no-meeting wednesdays',
+ 'log no-meeting wednesday violations',
   89),
 
 -- Internal Comms Strategist June
 -- REPORTER: June | Internal Comms Strategist | Turns executive weather reports into survivable language for employees with actual jobs.
 ('MOOD-671', 'Add a "What This Means If You''re Not an Executive" Section to the Newsletter',
  'The weekly newsletter currently delivers a dignified slurry of wins, launches, strategy notes, and atmospheric optimism with very little help for people trying to figure out whether any of it changes Tuesday. Add a plain translation for normal employees before the whole thing dissolves into polite skim.',
- 'add non-executive translation section to newsletter',
+ 'add normal-person summary to newsletter',
   89),
 
 ('MOOD-672', 'Classify All-Hands Questions by Their Career Risk',
  'We keep inviting employees to ask anything and then reacting to certain questions like someone just smuggled a ferret into the earnings call. Tag submitted questions as routine, brave, inconvenient, or potentially career-limiting so openness can stop pretending it has no observable side effects.',
- 'classify all-hands questions by their career risk',
+ 'score all-hands questions by career risk',
   89),
 
 -- Chief People Officer Adrian
@@ -4483,14 +4483,14 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('MOOD-674', 'Build a Rest Program That Does Not Become Homework in Linen',
  'Every restorative initiative eventually grows guides, videos, reflection prompts, and optional exercises that somehow extend the workday by a pastoral hour. Build a rest program with one hard rule: it may not create fresh obligation, shame, or admin with candles around it.',
- 'build rest program that is not homework',
+ 'build rest app that creates less homework',
   89),
 
 -- Workplace Anthropologist Elin
 -- REPORTER: Elin | Workplace Anthropologist | Tracks humble openers that smuggle in entire side quests and call it collaboration.
 ('MOOD-675', 'Track How Often "Quick Question" Actually Means "Surprise Project"',
  'Language has become an unreliable narrator of labor. Quick question now frequently means hidden escalation, side quest, or unpaid coordination work wearing a cardigan and a lowercase tone. Measure the tax before the phrase finishes annexing everyone''s afternoon.',
- 'track when quick questions become surprise projects',
+ 'track quick questions that became tickets',
   108),;
 
 -- reporter metadata derived from themed seed headings
@@ -4854,7 +4854,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Priya | Accessibility Design Advocate | Demands every low-contrast decision identify the exact aesthetic emergency that justified the hostage situation.
 ('GLARE-727', 'Make Low-Contrast Design Choices Explain Themselves in Writing',
  'Every unreadable text choice arrives wrapped in a tasteful explanation about softness, subtlety, or premium restraint. Require a note describing the exact aesthetic panic that made readability negotiable. If beauty is taking a hostage, it should sign the paperwork.',
- 'make low-contrast design choices explain themselves in writing',
+ 'add css comment for low contrast choice',
   144),
 
 ('GLARE-728', 'Teach the Motion Guide the Difference Between Delight and Interface Narcissism',
@@ -4921,24 +4921,24 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Nina | Executive Analytics PM | Believes stale numbers become acceptable the moment they are wrapped in enough confidence and whitespace.
 ('BUNK-736', 'Make the Dashboard Look Live Even When the Data Is Still Stretching',
  'Executives keep demanding living insight from numbers that are, at best, emotionally current. Build a layer that smooths the gap between three-hour-old data and the expectation that truth should sparkle on command.',
- 'make dashboards look live while data stretches',
+ 'animate fake numbers while data loads',
   144),
 
 ('BUNK-737', 'Measure How Much a Chart Is Winning on Style Alone',
  'Some charts persuade through evidence. Others do it through thick bars, expensive whitespace, and colors that look like they were approved in a glass room. Add a score for how much trust the slide borrowed from polish instead of math.',
- 'measure charts winning on style alone',
+ 'flag charts winning on visual polish',
   144),
 
 -- Forecasting Lead Julian
 -- REPORTER: Julian | Forecasting Lead | Spends quarter close separating real deals from deals being levitated by group belief.
 ('BUNK-738', 'Split the Forecast into Real Revenue and Revenue We All Want Very Badly',
  'We keep blending likely deals with opportunities held aloft by executive desire, sales morale, and quarter-end chanting. Separate the real pipeline from the emotionally sponsored pipeline before leadership starts confusing collective wanting with booked probability.',
- 'split forecast into real revenue and wishful revenue',
+ 'split forecast into real and wishful',
   144),
 
 ('BUNK-739', 'Give Revenue Bridges a Formal Bucket for Narrative Magic',
  'Some line items exist to explain performance. Others exist to prevent sudden emotional movement in a meeting. Add a narrative adjustment category so Finance can see exactly where the numbers were padded with tone management.',
- 'add narrative magic bucket to revenue bridges',
+ 'add magic adjustment field to bridges',
   89),
 
 -- Dashboard Engineer Mirek
@@ -4962,14 +4962,14 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('BUNK-743', 'Add a Toggle for the Dashboard Leadership Thinks It Saw',
  'There is the raw cost view, and then there is the version already softened through exclusions, regroupings, and comforting annotations for executive digestion. Put both on screen so the story and the invoice can finally meet face to face.',
- 'add toggle for imaginary leadership dashboard',
+ 'add fake dashboard mode for execs',
   144),
 
 -- Strategy Analyst Fiona
 -- REPORTER: Fiona | Strategy Analyst | Distrusts initiatives that fit on slides a little too cleanly and smell faintly of keynote rehearsals.
 ('BUNK-744', 'Penalize Projects Whose Biggest Strength Is Looking Great in a Deck',
  'Some initiatives survive because they are marketable, tidy, and one keynote away from destiny. Add a penalty for slideability before strategy becomes a beauty pageant for ideas with gradients and no friction.',
- 'penalize projects that only shine in decks',
+ 'flag deck-only success stories',
   89),
 
 ('BUNK-745', 'Mark the Memo Numbers Chosen for Bravery Instead of Accuracy',
@@ -4981,31 +4981,31 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Anton | Business Intelligence Director | Specializes in assembling defensible approximations when the warehouse arrives half-dressed to an unavoidable meeting.
 ('BUNK-746', 'Support a Best Available Fiction Mode for Dashboard Emergencies',
  'Sometimes the warehouse is late, a job is red, and the meeting still happens because calendars are stronger than pipelines. Build a fallback mode that assembles the most defensible approximation possible before somebody does it aloud with vibes and a laser pointer.',
- 'add dashboard fiction mode',
+ 'add fiction mode to dashboards',
   144),
 
 ('BUNK-747', 'Tell Analysts Which Old Argument a Snapshot Table Was Built to Win',
  'Snapshot tables claim to preserve state, but a lot of them are really preserving one ancient organizational argument with exceptional storage hygiene. Add lineage notes so future analysts know whether a table exists for science, finance, optics, or one bruised legal memory that refused to die.',
- 'tell analysts which argument each snapshot won',
+ 'show which story each snapshot won',
   144),
 
 -- Revenue Storyteller Camille
 -- REPORTER: Camille | Revenue Storyteller | Knows some numbers arrive raw and others arrive dry-cleaned, staged, and emotionally prebriefed for the board.
 ('BUNK-748', 'Separate Raw Board Numbers from Numbers Dressed for the Occasion',
  'We cannot keep pretending every board metric arrived from the warehouse wearing the same clothes. Split figures into raw, normalized, adjusted, staged, and narrative-supporting before presentation polish fully nationalizes evidence.',
- 'split raw board numbers from dressed-up ones',
+ 'hack dashboard to show fake board numbers',
   144),
 
 ('BUNK-749', 'Add a Button That Forces Every Pretty Metric to Meet Its SQL',
  'Charts keep getting reviewed as images long after their queries have become folklore. Add a button that drags the metric back through its joins, filters, exclusions, and the part where someone definitely merged two CSVs with coffee and conviction.',
- 'make pretty metrics meet their sql',
+ 'make pretty metrics show backing sql',
   144),
 
 -- Chief of Staff Analytics Liaison Marek
 -- REPORTER: Marek | Chief of Staff Analytics Liaison | Exists to package executive urgency into labeled containers before improvisation invents worse ones.
 ('BUNK-750', 'Give the CEO Dashboard a Box for Numbers That Are Mostly True and Due by Morning',
  'There is a special class of executive metric that is not fake, not settled, and definitely not ready, but still somehow required before breakfast. Add a clearly labeled Mostly True box so the dashboard can admit uncertainty without forcing leadership to improvise something even stupider.',
- 'add mostly true numbers box to ceo dashboard',
+ 'add mostly true box to dashboards',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -5211,7 +5211,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Soren | Principal Delivery Manager | Suspects deletion only happens when dressed up as a ceremony with gratitude, charts, and snacks.
 ('FLAGS-780', 'Build a Flag Funeral So Teams Remember Cleanup Is Real',
  'Real deletion is hard to schedule, but ritual is cheap and socially flattering. Create a recurring retirement ceremony with owners, dashboards, applause, and the brief collective shock of code becoming simpler in public.',
- 'build a flag funeral',
+ 'add delete flag button',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -5362,7 +5362,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('SHARD-801', 'Force Every Cache to Declare Which Truth It Is Allowed to Betray',
  'We talk about caches in terms of speed and leave out the part where they temporarily lie about freshness, counts, ordering, permissions, or the recent death of a record. Make each cache sign a little moral contract before performance keeps freelancing with reality.',
- 'make caches declare which truth they betray',
+ 'add honesty header to cache responses',
   144),
 
 -- Storage Cost Analyst Mirella
@@ -5642,60 +5642,60 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Beatrice | Enablement Director | Builds certifications that manufacture authority, LinkedIn posts, and only the faintest accidental contact with real product friction.
 ('CHANT-841', 'Design the Certification Exam to Feel Impressive Without Accidentally Proving Competence',
  'A successful certification does not need to verify skill. It needs to verify stamina, vocabulary, and the ability to redraw our architecture under fluorescent pressure. Tune the exam so it bestows prestige while carefully avoiding too much reality.',
- 'make certification exams feel impressive not useful',
+ 'generate certification quiz for partner portal',
   144),
 
 ('CHANT-842', 'Teach Partners to Sound Certain About Features They Have Never Actually Touched',
  'The field keeps asking for hands-on product time when what sells is composure and nouns. Add a confidence module for talking about capability at elegant distance without letting reality crowd the presentation.',
- 'teach partners fake certainty about untouched features',
+ 'write demo copy for untouched features',
   144),
 
 -- Solutions Evangelist Marco
 -- REPORTER: Marco | Solutions Evangelist | Specializes in toggling between engineering gravity and prophetic vapor using the same three clicks and a better blazer.
 ('CHANT-843', 'Split the Demo Scripts into Technical Truth and Vision Fog',
  'Some audiences want architecture. Others want a mood board with authentication. Fork the scripts so presenters can pivot between implementation details and destiny without revealing both modes were stitched together from the same tiny live demo.',
- 'split demo scripts into truth and fog',
+ 'split demo script into truth and fog',
   89),
 
 ('CHANT-844', 'Make Every New Transformation Deck Acknowledge the Corpse of the Previous One',
  'We keep launching fresh consulting decks like the last wave simply dissolved into the soil. Add one mandatory slide explaining why the prior transformation did not save anyone before the new one begins preaching renewal with a straight face.',
- 'make transformation decks acknowledge the last disaster',
+ 'force deck to mention last disaster',
   144),
 
 -- Partner Programs PM Nia
 -- REPORTER: Nia | Partner Programs PM | Has accepted that some people deserve promotion mainly because they can say journey like it came from a spa.
 ('CHANT-845', 'Create a Partner Tier for People Exceptionally Good at Saying "Journey"',
  'The ladder currently rewards sales and certifications while ignoring one field-critical skill: saying value realization, operating cadence, and transformation journey with enough warmth to keep budget alive for one more quarter.',
- 'create partner tier for journey addicts',
+ 'add journey tier to partner portal',
   89),
 
 ('CHANT-846', 'End Every Enablement Webinar with a Quiz That Mostly Measures Belief',
  'We have spent too long testing recall when the real question is whether attendees swallowed the worldview. Add questions that confirm doctrinal uptake before realism leaks into the academy.',
- 'end webinars with belief quizzes',
+ 'end webinars with belief quiz',
   144),
 
 -- Senior Consultant Pavel
 -- REPORTER: Pavel | Senior Consultant | Sells maturity ladders to rooms that badly want a number for their vibes.
 ('CHANT-847', 'Stop Letting Level 5 Sound Like a Medically Verified Achievement',
  'Our maturity model has drifted from diagnostic tool into ceremonial staircase. Add notes explaining that Level 5 is not science. It is a laminated aspiration with friendly scoring and good workshop energy.',
- 'stop making level 5 sound medical',
+ 'rename level 5 to something normal',
   89),
 
 ('CHANT-848', 'Separate Real Work from Work Grown Solely to Feed the Steering Committee',
  'Some workstreams exist to ship value. Others exist so governance can feel its own texture. Add a ceremonial-work section so plans stop pretending executive nutrition and actual delivery are the same kind of labor.',
- 'separate real work from committee feed',
+ 'split committee work from delivery tasks',
   144),
 
 -- Academy Content Lead Sarai
 -- REPORTER: Sarai | Academy Content Lead | Can detect when a course is just a brochure with homework, a badge, and the smell of funnel residue.
 ('CHANT-849', 'Catch Courses That Are Just Product Brochures Wearing Homework',
  'Some learning paths promise mastery and deliver beautifully formatted marketing with quizzes attached. Add a brochure detector before promotional intent keeps laundering itself into pedagogy through PDFs and completion bars.',
- 'catch courses that are brochures',
+ 'flag courses that are marketing brochures',
   89),
 
 ('CHANT-850', 'Expire Badges Fast Enough to Keep the Anxiety Economy Healthy',
  'Permanent credentials create dangerous pools of calm. Keep badges expiring often enough to sustain recertification, insecurity, and the reliable hum of professionals paying to remain freshly anointed.',
- 'expire badges to feed anxiety',
+ 'expire badges every 90 days',
   144),
 
 -- Alliance Director Quentin
@@ -5707,26 +5707,26 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CHANT-852', 'Add a Field for How Much of the QBR Was Pure Presentational Cardio',
  'Quarterly reviews often contain equal parts progress and synchronized motion. Add a required field for the labor spent making things look alive, aligned, and chart-shaped so everyone can stop mistaking slide respiration for business output.',
- 'add qbr presentational cardio field',
+ 'add qbr cardio field to crm',
   89),
 
 -- Chief Ecosystem Prophet Leona
 -- REPORTER: Leona | Chief Ecosystem Prophet | Maintains the sacred vocabulary used when software quietly turns back into consulting but the margin story must remain elegant.
 ('CHANT-853', 'Add a Deck-Safe Phrasebook for "This Is Mostly Services Now"',
  'Sometimes the product story quietly mutates into workshops, managed services, and consultants with laptops while the deck still wants to sound product-led. Add a phrasebook panel to the sales materials before truth bends the wrong way in public.',
- 'generate deck-safe phrases for services now',
+ 'generate deck-safe phrases for services',
   144),
 
 ('CHANT-854', 'Install a Clock That Shows When Advisory Becomes Incense',
  'There is always a point in executive advisory where problem-solving dissolves into premium atmosphere, framework chanting, and high-end ambiguity that invoices beautifully. Add a visible session timer with an Incense threshold so at least the team knows when the room crossed into paid liturgy.',
- 'show when advisory becomes incense',
+ 'add incense score to advisory sessions',
   144),
 
 -- VP of Commercial Doctrine Rowan
 -- REPORTER: Rowan | VP of Commercial Doctrine | Catalogs strategic phrases from their birth as metaphors to their final form as budget-owning weather systems.
 ('CHANT-855', 'Build a Strategic Phrase Registry in the Planning Tool',
  'The company runs on a growing family of phrases that began as metaphors and ended with budgets, OKRs, and annual summits. Add a phrase registry in the planning tool so each one shows origin, sponsor, downstream programs, and whether it still refers to reality or only to its descendants.',
- 'add strategic phrase registry to planning',
+ 'add phrase registry to planning tool',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -6157,7 +6157,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Colette | Employee Wellness PM | Believes focus is not real until it has a score, a graph, and at least one biometric attached to it.
 ('BLISS-916', 'Mix Deep-Work Scoring with Heart Data Until Productivity Feels Medical',
  'We are apparently no longer satisfied tracking output alone. Add heart-rate variability to the focus app so it can distinguish real concentration from aggressive frowning, caffeine theology, and pretending to be the sort of adult who color-codes a calendar on purpose.',
- 'mix focus scores with heart data',
+ 'integrate apple watch api into focus timer',
   144),
 
 ('BLISS-917', 'Add a Calmness Trendline So Leadership Can Watch Burnout Form in Pastel',
@@ -6260,7 +6260,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Mara | Observability Lead | Lives among graphs dramatic enough to wake three managers before sunrise and still fail to describe one real customer problem.
 ('SPOOK-931', 'Make Alerts Admit Whether They Found a Failure or Just Felt Nervous',
  'Our paging stack is far too willing to promote anxious telemetry into operational significance. Add a field that distinguishes actual customer pain from graphs having feelings again.',
- 'make alerts say if they panicked',
+ 'add panic boolean to alert webhooks',
   144),
 
 ('SPOOK-932', 'Label the Dashboards Nobody Has Used for a Real Decision in Months',
@@ -6682,7 +6682,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('ZANY-995', 'Count Survey Questions Added Because Somebody Had a Bad Tuesday',
  'Survey sprawl often comes from one recent incident, one worried leader, or one rough week getting promoted into quarter-scale listening theater. Count the reactive questions before emotionally fresh curiosity starts claiming permanent residency.',
- 'count survey questions added',
+ 'count survey questions added because of bad tuesdays',
   89),
 
 -- Enterprise Absurdity Fellow Lana
@@ -6737,7 +6737,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Iris | QA Platform Lead | Treats flaky tests like weather systems that should at least have the decency to document their preferred moon phase.
 ('FLAKE-1001', 'Make Every Flaky Test Admit Which Planetary Alignment It Requires',
  'Some tests only pass when CPU load, browser mood, clock drift, and stale cache residue line up in one specific sad constellation. If a test needs luck, make it write down its horoscope.',
- 'make flaky tests admit their planets',
+ 'add astrology metadata to jest runner',
   144),
 
 ('FLAKE-1002', 'Detect Snapshot Approvals Powered Purely by Dinner-Time Exhaustion',
@@ -6797,7 +6797,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Darius | Mobile QA Lead | Refuses to certify an app that has only ever been tested under perfect signal, calm fingers, and conditions no actual commuter has survived.
 ('FLAKE-1011', 'Add an Elevator Network Mode to Every Mobile Test Run',
  'Our mobile tests are still too optimistic about the continuity of network life. Simulate tunnels, elevators, train stations, and buildings made from anti-signal ideology before shipping another app trained exclusively under open skies.',
- 'add elevator network mode',
+ 'simulate elevator network drops in mobile tests',
   144),
 
 ('FLAKE-1012', 'Teach the Crash Harness About Angry Thumb Tempo',
@@ -6857,7 +6857,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('MAIL-1019', 'Force Every Triggered Email to Explain Why It Could Not Stay Inside the Product',
  'We keep choosing email for moments that could have been an in-app nudge, a quieter notification, or merciful silence. Make each message justify its exile before SMTP becomes our universal coping mechanism.',
- 'make triggered emails explain their escape',
+ 'add why this email sent field',
   144),
 
 -- Template Engineering Lead Priya
@@ -7003,7 +7003,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Kian | Risk & Payments Architect | Wants idempotency smart enough to see through the request costume changes caused by spinners, refreshes, and fear.
 ('WIRE-1041', 'Teach Idempotency to Recognize the Same Payment Wearing a Panic Costume',
  'Duplicate requests rarely arrive as exact twins. They show up with new headers, retried SDK calls, refresh damage, and the fingerprints of someone staring at a spinner with no remaining faith. Match the intent, not the wardrobe.',
- 'make payment api ignore panic clicks',
+ 'pls make payment api ignore panic clicks',
   144),
 
 ('WIRE-1042', 'Score Each New Payment Method by How Many Ways It Will Become Support''s Problem',
@@ -7051,7 +7051,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('RANK-1047', 'Classify Zero-Result Searches by How Much They Feel Like Betrayal',
  'Some misses are harmless. Others land like the product just admitted it has never heard of the thing a sane person assumed it would know. Add a mood class so we can fix the painful absences first.',
- 'rank zero-result searches by betrayal',
+ 'add rage score to zero results',
   144),
 
 -- Recommendations PM Sora
@@ -7439,7 +7439,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Petra | Chief Fun Economist | Believes any event requiring four nights of mandatory attendance should be labeled honestly as homework with fireworks.
 ('BOSS-1105', 'Stamp Streak-Heavy Events "Congratulations, We Invented Homework"',
  'If an event only works by making players feel guilty for having dinner plans, sleep, or another hobby, the game should say so out loud. Mark the grindfests honestly before dread keeps borrowing the language of fun.',
- 'stamp streak-heavy events congratulations and we invented homework',
+ 'make streak events say congratulations we invented homework',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -7470,12 +7470,12 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Soren | Video Delivery PM | Wishes adaptive bitrate logic would stop treating one cough in the connection as a prophecy of lifelong grain.
 ('REEL-1108', 'Teach Adaptive Bitrate Not to Panic Because the Network Sneezed Once',
  'The player keeps plunging viewers into potato quality the moment the bandwidth hiccups. Add some composure before a temporary wobble gets interpreted as permanent poverty.',
- 'teach adaptive bitrate not to panic',
+ 'make adaptive bitrate calm down',
   144),
 
 ('REEL-1109', 'Admit the Backup CDN Region Feels Like a Character Test',
  'Failover sounds elegant until traffic actually lands there and users discover that "available" can still feel punishing. Measure the experience honestly instead of pretending uptime alone means the audience had a good time.',
- 'admit backup cdn feels punitive',
+ 'flag backup cdn as hostile',
   144),
 
 -- Media Pipeline Architect Rina
@@ -7487,7 +7487,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('REEL-1111', 'Stop Auto-Captions from Turning Ordinary Speech into a Threat',
  'Auto-generated punctuation keeps recasting regular dialogue as accusation, exhaustion, or legal testimony. Review the punctuation before captions start emotionally rewriting the speaker.',
- 'stop auto-captions making speech threatening',
+ 'fix auto-captions they sound too aggressive',
   89),
 
 -- Creator Tools PM Hugo
@@ -7573,7 +7573,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Lucas | Web Extension PM | Can tell when a store screenshot is promising an amount of stability the living web has never once agreed to provide.
 ('ADDON-1123', 'Stop Store Screenshots from Promising a Level of Peace the Internet Will Not Honor',
  'Extension listings keep advertising smooth harmony across websites that are one layout shift away from public embarrassment. Add honesty checks before the store page oversells stability we do not control.',
- 'stop store screenshots promising impossible peace',
+ 'generate realistic extension store screenshots',
   144),
 
 ('ADDON-1124', 'Track Whether Store Rejections Came from Policy or Reviewer Weather',
@@ -7609,7 +7609,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Helena | Marketplace Support Lead | Spends too much time apologizing for bugs caused by other extensions that live next door and throw CSS chairs over the fence.
 ('ADDON-1129', 'Stamp Reviews Caused by Other Extensions "Neighbor Dispute"',
  'Users keep blaming us for broken pages, weird overlays, and vanished clicks caused by some other add-on in the same browser cul-de-sac. Mark those complaints properly so support stops paying rent on somebody else''s violence.',
- 'stamp reviews caused by other extensions neighbor dispute',
+ 'tag reviews caused by other extensions neighbor dispute',
   144),
 
 ('ADDON-1130', 'Stop "Disable Other Extensions" from Sounding Like a Lifestyle Lecture',
@@ -7772,19 +7772,19 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CLASS-1152', 'Stop Asking Parents to Infer Meaning from Gradebook Fog',
  'Missing, exempt, late, resubmitted, pending, and somehow still not final keep getting flattened into percentages and panic. Separate the states clearly before the portal turns normal grading ambiguity into household weather.',
- 'stop making parents infer gradebook fog',
+ 'explain gradebook gaps to parents',
   144),
 
 -- Student Data PM Julian
 -- REPORTER: Julian | Student Data PM | Has watched too many family dinners get ruined by one red badge generated from a temporary worksheet wobble.
 ('CLASS-1153', 'Slow the Parent-Portal Panic Before One Missing Worksheet Starts a Family Incident',
  'Parent notifications remain far too eager to turn small classroom fluctuations into domestic emergencies. Add some damping before one temporary assignment gap becomes a 7:00 p.m. crisis with screenshots.',
- 'slow parent-portal panic down',
+ 'rate limit parent portal alerts',
   144),
 
 ('CLASS-1154', 'Teach SIS Sync the Difference Between a Changed ID and an ID That Was Never Stable',
  'School records move through the year with the serene chaos of forms, schedules, names, guardians, and local identifiers all being revised by different humans at different speeds. Split deliberate change from routine turbulence before sync keeps acting shocked by school being school.',
- 'teach sis sync changed ids vs cursed ids',
+ 'label sis sync id changes clearly',
   144),
 
 -- Assessment Platform Architect Mei
@@ -7808,7 +7808,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CLASS-1158', 'Detect When Students Are Performing Agreement for a Grade',
  'Discussion boards fill up with polite nodding, cautious enthusiasm, and the unmistakable tone of people writing what earns points rather than what extends thought. Flag the graded consensus theater before everyone starts calling it discourse.',
- 'detect students faking agreement for grades',
+ 'build sentiment classifier to flag fake student agreement',
   89),
 
 -- Learning Analytics Director Priya
@@ -7870,7 +7870,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Val | Commerce Operations Lead | Knows a product can be physically present, numerically counted, and still nowhere near emotionally ready to ship.
 ('CART-1166', 'Add an Inventory State for "Exists, But Good Luck Actually Shipping It"',
  'Stock status is too binary for goods sitting in quarantine, returns, rebagging, photo prep, or the warehouse corner everyone points at with different nouns. Add a spiritually unavailable state before inventory keeps overpromising with a straight face.',
- 'add good-luck-shipping inventory state',
+ 'add inventory state for good luck shipping',
   144),
 
 ('CART-1167', 'Stop Making Buyer''s Remorse Share a Dropdown with Real Product Failure',
@@ -7942,7 +7942,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Helena | Customer Support Ops Lead | Wants the WISMO queue split cleanly between our mistakes and the carrier''s ongoing experimental theater of last-mile ambiguity.
 ('CART-1178', 'Separate "Where Is My Order?" Tickets We Caused from Ones the Carrier Is Improvising Live',
  'Delivery anxiety keeps arriving in one undifferentiated queue where our errors mingle with carrier opacity, apartment weirdness, and final-mile folklore. Split the causes so support stops acting like a weather station for everyone else''s chaos.',
- 'split our order failures from carrier improv',
+ 'add carrier blame flag to wismo queue',
   144),
 
 ('CART-1179', 'Tag Credits Issued to Fix Harm Separately from Credits Issued to End the Thread',
@@ -8076,19 +8076,19 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Moira | Digital Services Director | Knows permit requests do not simply process; they enter municipal weather and may or may not come back with a stamp.
 ('CIVIC-1196', 'Give Permit Tracking a Weather Report Instead of a Frozen Status Badge',
  'Permit requests keep disappearing into a civic soup of handoffs, holidays, moods, and polite departmental fog. Add a municipal weather state so residents stop mistaking official stillness for a software glitch.',
- 'give permit tracking a weather report',
+ 'add weather widget to permit tracker',
   144),
 
 ('CIVIC-1197', 'Show Exactly Why We Need Three Documents to Prove One Tired Resident Exists',
  'Identity verification remains too comfortable with escalating document hunger while refusing to say whether it is proving personhood, address, entitlement, or just honoring a historic love of paper. Put the reason beside each upload box in plain language.',
- 'show why one resident needs three documents',
+ 'show why permits need three documents',
   144),
 
 -- Public Benefits PM Javier
 -- REPORTER: Javier | Public Benefits PM | Has watched too many people lose support because one checkbox quietly rerouted them into administrative winter.
 ('CIVIC-1198', 'Warn Users When One Checkbox Is About to Ruin Their Week',
  'Eligibility forms still let mild wording confusion become accidental self-disqualification with a straight face. Add a risk warning before the interface quietly performs austerity through confidence and small boxes.',
- 'warn when one checkbox ruins weeks',
+ 'add javascript confirm dialog to ruinous checkboxes',
   144),
 
 ('CIVIC-1199', 'Put a Little Paper Hat on Tasks That Exist Only to Prove Another Task Happened',
@@ -8105,7 +8105,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CIVIC-1201', 'Detect When Plain Language Quietly Changed the Law on the Way Down',
  'Translation and simplification are helpful right up until they turn statutory nuance into friendly nonsense that alters rights or obligations. Add meaning checks before accessibility mutates into accidental misstatement with better fonts.',
- 'detect plain language rewriting the law',
+ 'flag plain language changes to legal text',
   144),
 
 -- Records Systems PM Theo
@@ -8129,7 +8129,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CIVIC-1205', 'Make Appointment Systems Remember That Showing Up Costs a Bus Ride, Wages, and Dignity',
  'Scheduling tools stay far too abstract about what it takes to appear in person when someone has work, childcare, transit, and the emotional overhead of a high-stakes office visit. Model the real cost before no-shows get moralized by software.',
- 'make appointment systems remember transit wages and dignity',
+ 'factor transit time into appointment slots',
   144),
 
 -- Public Sector Integrations Engineer Omar
@@ -8141,7 +8141,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CIVIC-1207', 'Report Cases Resolved Mainly Because the Rules Eventually Got Tired',
  'Automation engines can become so tangled with exceptions that some decisions feel less adjudicated than surrendered into after enough branch collisions. Flag the rule-exhaustion cases before they get mistaken for elegant policy execution.',
- 'report cases resolved by rule exhaustion',
+ 'report cases closed by rule exhaustion',
   144),
 
 -- Program Equity Analyst Simone
@@ -8153,14 +8153,14 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CIVIC-1209', 'Create a Safe Procedure for Frontline Humans to Override the Machine Without Becoming the Story',
  'Workers often know when a case needs judgment or mercy and the system currently treats humane override like a necessary but punishable offense. Add protected lanes so compassion does not require private heroics and self-defense email.',
- 'let frontline humans override the machine safely',
+ 'add safe override button for staff',
   144),
 
 -- Chief Civic Systems Officer Petra
 -- REPORTER: Petra | Chief Civic Systems Officer | Thinks any online form that still feels like standing in line indoors deserves to be labeled honestly instead of praised for having CSS.
 ('CIVIC-1210', 'Stamp Fake Digital Progress "Paper with Better Fonts"',
  'If the portal still makes people repeat facts, gather documents, guess statuses, and wander the same maze behind a login, it is not transformation. It is paper wearing a stylesheet. Mark it accordingly.',
- 'stamp fake digital progress paper with better fonts',
+ 'label fake digital progress on forms',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -8179,24 +8179,24 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Bram | Factory Systems Director | Has seen too many PLC "improvements" increase throughput and also triple the amount of folklore required to touch the line safely.
 ('GEAR-1211', 'Force Every PLC Change to Admit How Much New Technician Mythology It Will Create',
  'Control logic updates keep arriving dressed as efficiency while quietly making maintenance more ceremonial, more fragile, and more dependent on one guy named Gary. Add a burden note before throughput gains hide their downstream curse.',
- 'make plc changes explain the new lore',
+ 'log plc changes in plain english',
   144),
 
 ('GEAR-1212', 'Teach the HMI the Difference Between Real Danger and Ordinary Machine Drama',
  'Operator trust dies when every minor state shift turns the whole screen red like the factory just entered judgment. Split peril from melodrama before the alarms mean everything and therefore nothing.',
- 'teach hmi danger versus machine drama',
+ 'label hmi alerts danger or noise',
   144),
 
 -- Robotics Fleet PM Keiko
 -- REPORTER: Keiko | Robotics Fleet PM | Knows warehouse robots do not operate in geometry; they operate in forklift politics and painted-line disrespect.
 ('GEAR-1213', 'Teach Warehouse Robots That Forklifts Are Moving Political Weather',
  'Autonomous routes keep assuming the floor is orderly when it is actually full of pallets, urgency, human improvisation, and forklift drivers who treat painted paths as philosophical suggestions. Add human-chaos mode before the bots learn humility the hard way.',
- 'teach robots forklifts are political weather',
+ 'simulate forklift traffic in robot planner',
   144),
 
 ('GEAR-1214', 'Count Near-Miss Dances Separately from Actual Collision Prevention',
  'Some safety stacks are not eliminating accidents so much as replacing them with elegant deadlock ballets and route hesitation. Break near-miss choreography out into its own counter before the system gets praised for making danger look tidier.',
- 'count near-miss dances separately from actual collision prevention',
+ 'track near misses separately from collisions',
   144),
 
 -- Manufacturing Data PM Luis
@@ -8208,7 +8208,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GEAR-1216', 'Track Scrap Caused by Settings That Were Legal and Still Completely Idiotic',
  'A surprising amount of bad output comes from configuration combinations that passed validation, satisfied forms, and still should never have met real material. Add a category for accepted nonsense before compliance keeps impersonating wisdom.',
- 'track scrap caused by legal idiotic settings',
+ 'track scrap caused by compliance settings',
   144),
 
 -- Industrial Networking Lead Priya
@@ -8220,31 +8220,31 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GEAR-1218', 'Show When One Tiny Gateway Has Quietly Become Governor of the Entire Factory Mood',
  'We have too many critical flows resting on one fanless little brick nobody worries about until it becomes the emotional center of half the line. Add a dependency weight view before a cheap box gains sovereign power by surprise.',
- 'show when one gateway controls factory mood',
+ 'show gateway dependency on factory dashboard',
   144),
 
 -- Safety Systems Engineer Tomas
 -- REPORTER: Tomas | Safety Systems Engineer | Maintains one sacred rule: software may observe the red button, but it may not get curious about touching it.
 ('GEAR-1219', 'Make Safety Integrations Prove They Only Look at the Red Button',
  'The line between observing emergency-stop circuits and getting ideas about them must stay bright, loud, and legally boring. Require proof before convenience starts inching toward influence.',
- 'make safety integrations prove they watch red buttons',
+ 'hardcode safety integration to ignore everything except red',
   144),
 
 ('GEAR-1220', 'Let Incident Reviews Admit When Physics, Process, and Courage All Helped Cause the Accident',
  'Too many root-cause writeups flatten ugly afternoons into one elegant reason when the truth involves wear, timing, overrides, assumptions, and one brave click too many. Add multi-layer blame before the report flatters itself.',
- 'let incident reviews admit physics helped too',
+ 'add physics helped checkbox to incident reviews',
   144),
 
 -- Maintenance Planning PM Hana
 -- REPORTER: Hana | Maintenance Planning PM | Knows predictive maintenance can sound exactly like a wise old mechanic right up until it is just a spreadsheet gossiping about vibration.
 ('GEAR-1221', 'Teach Predictive Maintenance the Difference Between Real Failure and Vibration Gossip',
  'Sensor-heavy systems keep upgrading every anomaly into prophecy. Add ambition markers so planners can tell looming failure from mathematically decorated nervousness.',
- 'teach predictive maintenance failure versus vibration gossip',
+ 'classify maintenance alerts by confidence',
   144),
 
 ('GEAR-1222', 'Warn Us When One Boring Spare Part Is About to Become a Philosophical Lesson',
  'Inventory buffers look solid until one unremarkable belt or seal becomes unavailable and the line discovers that resilience was secretly being rented from luck. Add alerts before procurement turns metaphysical.',
- 'warn when spare parts become life lessons',
+ 'warn when spare parts hit shortages',
   144),
 
 -- Vision Systems Lead Nico
@@ -8263,7 +8263,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Petra | Chief Industrial Software Officer | Wants one honest number showing whether the software truly runs the line or is just arguing with machinery at industrial volume.
 ('GEAR-1225', 'Turn the Control Panel Amber When the Factory Is Clearly Winning the Argument',
  'If alarms are noisy, robots are improvising, the network is lying, and maintenance is translating around all of it, the system should stop projecting command. Add an amber state that says the software is negotiating with the line, not running it.',
- 'turn panel amber when factory wins the argument',
+ 'turn panel amber during manual overrides',
   144),;
 
 -- reporter metadata derived from themed seed headings
@@ -8385,7 +8385,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Noor | Location Data Lead | Has accepted that half of geocoding is geometry and the other half is one resident saying "turn left at the old bakery that is now a vape shop."
 ('ATLAS-1241', 'Teach Geocoding That Some Addresses Are Basically Folklore with Numbers',
  'Formal address logic keeps collapsing when reality shows up as landmarks, local nicknames, inherited numbering sins, and one building everyone swears is "next to the old pharmacy." Add folklore tolerance before the map keeps acting shocked that humans describe place like humans.',
- 'teach geocoding some addresses are folklore',
+ 'flag geocoding guesses in route api',
   144),
 
 ('ATLAS-1242', 'Make Reverse Geocoding Admit When the Pin Landed There by Luck',
@@ -8559,7 +8559,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Petra | Chief Financial Systems Officer | Wants the dashboard to panic politely whenever the books close cleanly for reasons nobody in the room wants to explain twice.
 ('BOOKS-1268', 'Turn the Dashboard Nervous Yellow When the Books Are Balanced for Sinister Reasons',
  'Balanced books are not enough if everyone involved avoids eye contact with how they became balanced. Add a nervous-yellow mode for reconciliations, accruals, and timing miracles that work numerically while setting off every available human alarm.',
- 'turn dashboard yellow when the books look cursed',
+ 'make dashboard turn yellow when books look cursed',
   144),;
 
 -- reporter metadata derived from themed seed headings

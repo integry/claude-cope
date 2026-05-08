@@ -70,13 +70,13 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Ines | Secure Tooling Engineer | Thinks every file read should begin with a constitutional argument.
 ('BLORT-173', 'Port the Worker Scripts to Deno and Make Every File Read a Negotiation',
  'Node.js lets scripts touch the machine with far too much casualness. Deno fixes this by requiring a tiny constitutional crisis before each network call, env var, or filesystem read. Migrate all utilities immediately, then spend the next quarter updating permission flags every time someone adds a line to a script. This is what intentional compute feels like.',
- 'port the worker scripts to deno make file',
+ 'bro rewrite worker scripts in deno',
   144),
 
 -- REPORTER: Lucia | Rapid Platforming Lead | Thinks Postgres should also do auth, storage, product, and spiritual governance.
 ('BLORT-174', 'Replace Three Services with Supabase Because We Already Have Postgres Anyway',
  'We are maintaining custom auth, storage, realtime, cron glue, and a half-hearted admin panel when Supabase will happily sell us the same confusion behind one dashboard and a pleasing shade of green. Engineers keep asking about lock-in as if freedom has ever shipped a feature. If a policy can be expressed as Row Level Security and prayer, I consider that a solved system.',
- 'replace three services with supabase',
+ 'pls replace three services with supabase',
   233),
 
 ('BLORT-175', 'Model All Permissions as Row Level Security Policies Nobody Dares Read Twice',
@@ -134,7 +134,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- Remix Loyalist Who Wants Forms to Be the Interface and the Religion
 ('BLORT-184', 'Replace Half the SPA with Remix Forms So Every Click Can Pretend to Be a Document',
  'Your app uses client state where browser behavior would gladly make things weird for free. Remix lets every interaction travel through loaders and actions like it is 2009 but with superior branding. If a modal close event cannot become a form submission with redirect semantics, we are leaving tradition unexplored.',
- 'replace half the spa with remix forms so every click is a submission',
+ 'replace half the spa with remix forms',
   144),
 
 -- Expo Mobile PM Who Thinks OTA Updates Are a Lifestyle
@@ -152,7 +152,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- AI Product Manager Who Wants Agents to Replace Planning
 ('BLORT-187', 'Turn the Backlog into an Agent Swarm That Self-Assigns Work and Writes Its Own Retros',
  'Human prioritization is a bottleneck because humans insist on remembering consequences. Build an agent swarm that reads tickets, self-assigns them, rewrites acceptance criteria mid-flight, comments "LGTM" on its own pull requests, and posts a retrospective blaming context windows. If the swarm decides three interns are redundant, that is a roadmap insight, not a labor issue.',
- 'let a ring of agents reassign the backlog',
+ 'build ai agent swarm to manage jira',
   377),
 
 ('BLORT-188', 'Regenerate the Application Nightly from the Latest PRD So the Code Never Drifts from Vision',
@@ -199,7 +199,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- Smart Contract Founder Who Wants Wallets in Front of Everything
 ('BLORT-196', 'Require Wallet Connection Before Users Can Read the Pricing Page',
  'Anonymous browsing is just unqualified traffic in disguise. The pricing page should require wallet connection so we can tell whether a prospect is serious, solvent, and spiritually on-chain. If a visitor does not have a wallet, they can mint a free pricing-access token after signing a message acknowledging that curiosity is an economic act.',
- 'make pricing page require wallet',
+ 'pls make pricing page require wallet',
   233),
 
 ('BLORT-197', 'Turn Support Escalations into a DAO Where Users Stake Tokens to Vote on Priority',

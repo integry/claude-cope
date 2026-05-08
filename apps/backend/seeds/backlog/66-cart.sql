@@ -4,7 +4,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Val | Commerce Operations Lead | Knows a product can be physically present, numerically counted, and still nowhere near emotionally ready to ship.
 ('CART-1166', 'Add an Inventory State for "Exists, But Good Luck Actually Shipping It"',
  'Stock status is too binary for goods sitting in quarantine, returns, rebagging, photo prep, or the warehouse corner everyone points at with different nouns. Add a spiritually unavailable state before inventory keeps overpromising with a straight face.',
- 'add good-luck-shipping inventory state',
+ 'add inventory state for good luck shipping',
   144),
 
 ('CART-1167', 'Stop Making Buyer''s Remorse Share a Dropdown with Real Product Failure',
@@ -76,7 +76,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Helena | Customer Support Ops Lead | Wants the WISMO queue split cleanly between our mistakes and the carrier''s ongoing experimental theater of last-mile ambiguity.
 ('CART-1178', 'Separate "Where Is My Order?" Tickets We Caused from Ones the Carrier Is Improvising Live',
  'Delivery anxiety keeps arriving in one undifferentiated queue where our errors mingle with carrier opacity, apartment weirdness, and final-mile folklore. Split the causes so support stops acting like a weather station for everyone else''s chaos.',
- 'split our order failures from carrier improv',
+ 'add carrier blame flag to wismo queue',
   144),
 
 ('CART-1179', 'Tag Credits Issued to Fix Harm Separately from Credits Issued to End the Thread',

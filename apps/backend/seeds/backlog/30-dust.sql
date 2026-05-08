@@ -21,7 +21,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('DUST-619', 'All Restore Drills Need to Include the Step Where We Find the Person Who Knows the Naming Scheme',
  'Backups can exist, checks can pass, and restore drills can still fail because the naming convention was invented by one precise person in 2021 who has since migrated to another company and maybe another worldview. Add a mandatory phase for locating the human translation layer between snapshot IDs and reality.',
- 'find whoever named the restore files',
+ 'log restore file author in backup panel',
   144),
 
 -- Data Retention Analyst Briar

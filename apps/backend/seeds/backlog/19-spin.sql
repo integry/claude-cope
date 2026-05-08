@@ -28,31 +28,31 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Juliette | PR Manager | Announces momentum in future tense and keeps quotation marks from doing unlicensed labor.
 ('SPIN-455', 'The Media Kit Must Include Approved Language for "Nothing Actually Launched Yet"',
  'We are increasingly expected to announce partnerships, previews, and strategic commitments whose implementation status could best be described as decorative. Add media-kit language for situations where momentum exists entirely in future tense. Comms needs verbs that imply arrival while engineering is still opening the ticket.',
- 'add approved language for nothing launched',
+ 'pls generate launch copy for nothing shipped',
   144),
 
 ('SPIN-456', 'All Case Studies Should Distinguish Customer Results from Customer Enthusiasm About Results',
  'Some customers have excellent outcomes. Others simply enjoy telling a good story at a conference bar. The case study template should separate measurable gains from emotionally vivid endorsements before one starts impersonating the other in public.',
- 'separate customer results from customer hype',
+ 'split case study results from vibes',
   89),
 
 -- Content Marketing Director Sasha
 -- REPORTER: Sasha | Content Marketing Director | Mines support pain for educational content before the embarrassment cools below publishable temperature.
 ('SPIN-457', 'Turn Every Support Fix into a "Best Practices" Blog Post Within Seventy-Two Hours',
  'We are sitting on a renewable source of publishable wisdom: the mistakes our product forces customers to make before support rescues them. Turn every resolved issue into a best-practices article, webinar bullet, or checklist before the embarrassment cools.',
- 'turn support fixes into blog posts',
+ 'turn support fixes into best-practice posts',
   89),
 
 ('SPIN-458', 'The Webinar Funnel Must Support a "Thought Leadership First, Product Truth Later" Mode',
  'Some audiences are not ready to meet the product directly. Give webinars a mode where the first thirty minutes are pure strategic reflection and category framing, with the product entering only after the room has become too intellectually invested to leave politely.',
- 'make webinar funnel support thought leadership first',
+ 'gate webinars behind thought-leadership intro',
   144),
 
 -- Internal Comms Lead Priya
 -- REPORTER: Priya | Internal Comms Lead | Writes every memo as if a caffeinated investor might see it in six minutes.
 ('SPIN-459', 'All Company-Wide Updates Need a "How Bad Does This Sound If Forwarded?" Preview',
  'Internal memos no longer stay internal. They just wait for gravity. Add a preview mode estimating how each announcement reads if forwarded without context to a candidate, customer, journalist, or caffeinated investor.',
- 'add forwarded panic preview to updates',
+ 'add forwarded panic preview to newsletter',
   89),
 
 ('SPIN-460', 'The Rebrand Rollout Needs a Checklist for What We Will Accidentally Leave with the Old Logo',
@@ -64,24 +64,24 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Leon | Field Marketing Manager | Translates products into booth-safe human language without triggering follow-up liability.
 ('SPIN-461', 'All Event Booth Scripts Must Include a Version of the Product That Exists in Human Language',
  'Conference staff keep describing the platform in terms so abstract they sound illegal or so literal they trigger follow-up questions nobody staffed the booth to answer. Write scripts that sound human, attractive, and non-indictable all at once.',
- 'make event booth scripts include version product exists',
+ 'generate booth script in human english',
   89),
 
 ('SPIN-462', 'The Demo Environment Should Prioritize Screens That Look Expensive Over Screens That Are True',
  'Live demos are a theatrical medium and should be optimized accordingly. Prioritize visually dense, reassuring, graph-rich screens over technically truer views revealing sparse data, awkward copy, or one dangerously honest audit table. Truth can wait backstage in comfortable shoes.',
- 'prioritize demo screens that look expensive',
+ 'show expensive demo screens first',
   144),
 
 -- Social Lead Marnie
 -- REPORTER: Marnie | Social Lead | Turns fresh work into threads that sound both overdue and epochal on purpose.
 ('SPIN-463', 'Every Feature Launch Needs a Thread That Makes the Work Sound Simultaneously Obvious and Historic',
  'The launch thread must strike the classic balance: we always knew this mattered, but today is still a turning point for the category. Build a copy helper that weaves inevitability, gratitude, category vision, and one tasteful screenshot into social certainty.',
- 'add a thread makes work to feature launch',
+ 'generate launch thread from feature diff',
   55),
 
 ('SPIN-464', 'The Screenshot Approval Workflow Must Flag Any Image That Accidentally Reveals an Unloved Metric',
  'Product screenshots are dangerous because real interfaces contain real numbers, and real numbers bring baggage. Add a workflow that scans candidate images for questionable counters, stale dates, suspiciously low usage, or labels that sound internal and frightened.',
- 'make screenshot approval workflow flag image accidentally reveals',
+ 'flag screenshots with unloved metrics',
   89),
 
 -- VP of Narrative Naomi

@@ -19,7 +19,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Rajesh | Java Enterprise Architect | Thinks a login button should arrive with XML and a factory.
 ('MELT-084', 'Rewrite the Login Form Using Enterprise JavaBeans with 47 XML Configuration Files',
  'Your login form is a single React component, which violates every principle of enterprise architecture. Rebuild it with EJB 2.1, 47 XML descriptor files, a JNDI lookup service, and a custom ClassLoader that takes 8 minutes to initialize. The login button alone deserves a LoginButtonCommandStrategyFactoryImpl.',
- 'rewrite login in java with 47 xml files',
+ 'bro rewrite login in java with xml files',
   377),
 
 ('MELT-085', 'All Variable Names Must Be at Least 60 Characters for "Self-Documentation"',
@@ -125,7 +125,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('MELT-104', 'All Flutter Widgets Must Support Printing to a Dot Matrix Printer via RS-232',
  'The warehouse still runs on Epson dot matrix printers over RS-232 and those machines will not be replaced because they still work in the way ancient gods still count as active. The Flutter app must speak ESC/P directly. Somewhere there is an RS-232 to USB adapter in a drawer, waiting to become architecture.',
- 'make flutter print to dot matrix',
+ 'pls make flutter print to dot matrix',
   144),
 
 -- REPORTER: Mildred | Mainframe Systems Administrator | Trusts BERTHA more than any cloud product launched after Reagan.
@@ -147,7 +147,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('MELT-108', 'All Regular Expressions Must Be Written by Morton and Morton Alone',
  'Someone wrote a regex using a library, which is a moral failure. Every regular expression in this codebase must be hand-crafted. My 2,847-character RFC 5322 email validator took three weeks and no, there are no tests. Modification requests may be submitted by email and judged in 4-6 business weeks.',
- 'make all regular expressions written by morton morton',
+ 'make morton write all the regex',
   233),
 
 -- REPORTER: Dr. Priya | Lead Data Scientist | Would gladly trade deployments for kernels and one sticky note.
@@ -180,7 +180,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('MELT-114', 'The Application Must Be a Single Static Binary That Does Everything Including Serving the Frontend',
  'Separate services are a symptom of fear. The API server, static file server, migrations, cron jobs, email sender, PDF generator, and Slack bot should all compile into one static binary under 50MB. Embed the frontend. Embed the database. Embed the office dog photo. Deploy by scp and faith.',
- 'make the app one giant static binary',
+ 'bro make app one giant static binary',
   144),
 
 -- REPORTER: Werner | Cloud Native Architect | Thinks a simple page is just infrastructure that has not blossomed yet.
@@ -242,7 +242,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('MELT-125', 'Every GraphQL Query Must Be Persisted, Versioned, and Approved by Committee',
  'Ad-hoc queries are chaos wearing braces. Every GraphQL query should be pre-approved and persisted in a registry. New ones require a two-page justification, committee review, and a performance impact assessment. If the emergency path still takes five business days, the system is finally honest about urgency.',
- 'make graphql queries need committee approval',
+ 'pls make graphql queries need committee approval',
   233),
 
 -- REPORTER: Dakota | Desktop Experience Engineer | Believes a dock icon justifies any amount of Chromium.
@@ -283,7 +283,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Clementine | CSS Artist | Believes JavaScript should be shamed into retirement by selectors alone.
 ('MELT-132', 'Rewrite All JavaScript Interactions as CSS-Only Solutions',
  'JavaScript is a crutch. Replace all interactive behavior with pure CSS. Dropdowns can live on :hover, tab navigation on :target, form validation on :invalid, and the shopping cart on counters plus checkbox hacks. If it mostly works in Chrome, the browser has already shown enough commitment.',
- 'rewrite all javascript interactions css-only solutions',
+ 'rewrite all javascript interactions in pure css',
   233),
 
 -- REPORTER: Morris | Vim Developer since 1998 | Sees GUIs as character weakness and docs as a social crutch.
@@ -324,13 +324,13 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Sandra | Business Analyst | Has been running a shadow ERP in Excel long enough to call it governance.
 ('MELT-139', 'The Entire Application Must Be Rebuildable as an Excel Spreadsheet with VBA Macros',
  'The web application is too complicated when Excel has already proven itself since 2011. Every feature should have an equivalent spreadsheet implementation backed by conditional formatting and VBA macros triggered by cell changes. If the workbook is 340MB and crashes when Ctrl+Z feels rushed, that only proves it has become a platform.',
- 'make the entire application rebuildable excel spreadsheet vba',
+ 'rebuild the whole application in excel vba',
   144),
 
 -- REPORTER: Professor Nakamura | Quantum Computing Researcher | Wants theoretical speedups now and practical value eventually.
 ('MELT-140', 'Rewrite the Sorting Algorithm Using Quantum Computing for "Exponential Speedup"',
  'Your O(n log n) sorting algorithm is embarrassing in the quantum era. Implement Grover''s quantum search to sort the user list, even if that means queuing for a 127-qubit machine to optimize 200 entries. The point is not current benefit. It is future bragging rights backed by expensive waiting.',
- 'replace ordinary sorting with quantum theater',
+ 'rewrite array sort with quantum api',
   377),
 
 -- REPORTER: Skyler | Tailwind Evangelist | Believes every UI element should explain itself in one punishing class string.
@@ -396,7 +396,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Jordan | React Native Champion | Believes one app can fail consistently across every device ever sold.
 ('MELT-151', 'Build One React Native App That Works on iOS, Android, Web, TV, Watch, and Car Dashboard',
  'We need one codebase for every platform: iOS, Android, Web, TV, Watch, car dashboards, Samsung Fridge, and ideally in-flight entertainment. If the app technically runs on all of them by crashing differently on startup, that still counts as platform coverage in spirit.',
- 'build one react native app for everything',
+ 'pls build one react native app for everything',
   377),
 
 -- REPORTER: Dharma | Clojure Developer | Measures state quality by how much RAM it takes to preserve history.
@@ -420,7 +420,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Gerald | SOA Architect | Wants every request wrapped in enough XML to earn eventual trust.
 ('MELT-155', 'All Services Must Communicate via SOAP/XML with WS-* Standards Including WS-ReliableMessaging',
  'REST and GraphQL are toys. Real enterprise integration uses SOAP with enough WS-* standards to make every API call feel notarized. If the WSDL hits 12,000 lines and client stub generation produces a 340-file Java package, that only proves the contract has finally become contractual.',
- 'make all services talk over soap xml',
+ 'pls make services talk over soap xml',
   377),
 
 -- REPORTER: Kai | MongoDB Developer Advocate | Thinks joins are a cry for help and large documents are just confidence.

@@ -52,7 +52,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Sergio | Blue Team Analyst | Wants the SIEM to remember who treated the last warning as decorative.
 ('SHIV-369', 'Correlate Security Alerts with Who Ignored the Last Similar Alert for Organizational Learning',
  'Alerts become wisdom only when tied to previous acts of avoidance. Correlate new detections against whoever last muted, downgraded, delayed, or politely lost context on something similar. The SIEM knows enough to keep receipts if we let it be rude.',
- 'make correlate security alerts ignored last similar alert',
+ 'correlate alerts with who ignored them last',
   144),
 
 ('SHIV-370', 'Every Security Exception Must Expire with a Dramatic Countdown Visible to Leadership',

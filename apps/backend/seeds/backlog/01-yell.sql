@@ -8,7 +8,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('YELL-002', 'Re: language in the app is creating a hostile feelings environment',
  'A new hire sent HR a screenshot of "Invalid password" with three crying-face emojis. We cannot have software using absolute language. Replace "fail" with "took a learning path," "reject" with "declined to connect right now," and "invalid" with "not aligned with our shared truth." The message-tone calibration workshop is at 2 PM, so the gaslighting needs to be live before lunch.',
- 'change the error messages so nobody feels bad',
+ 'pls make error messages sound nicer',
   34),
 
 ('YELL-003', 'Implement Mandatory Sensitivity Training Module Before Git Push',
@@ -35,7 +35,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Greg | Enterprise Architect | Sees bounded contexts where others see buttons.
 ('YELL-007', 'Rewrite Login Page Using Event-Sourced CQRS Microservices',
  'One form posting to one endpoint is emotionally monolithic. I have redesigned login as a choreography of 14 bounded contexts, plus a tiny service called Greg Jr. that only emits a LoginAttemptConsidered event. Do not simplify this. I already booked catering for the architecture review and the sandwich labels mention CQRS by name.',
- 'rewrite login page with event-sourced cqrs microservices',
+ 'bro rewrite login using cqrs microservices',
   144),
 
 ('YELL-008', 'All Database Queries Must Go Through a GraphQL-to-REST-to-gRPC Translation Layer',
@@ -67,7 +67,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Dave | DevOps | Optimizes deployment schedules around lunch and emotional rhythm.
 ('YELL-013', 'The CI Pipeline Must Take Exactly 47 Minutes — No More, No Less',
  'Someone sped CI up to 18 minutes and staging deployed while I was reheating baked ziti. We had a rhythm. I need the pipeline back at its blessed 47-minute window so I can finish coffee, leftovers, and one full doomscroll through release notes without surprise notifications. The timing spreadsheet on my second monitor is color-coded for a reason.',
- 'make ci take exactly 47 minutes',
+ 'pls make ci take exactly 47 minutes',
   34),
 
 ('YELL-014', 'All Production Deployments Must Happen at 4:59 PM on Fridays',
@@ -83,7 +83,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Brenda | Platform Governance | Thinks naming is policy and spontaneity is a security flaw.
 ('YELL-016', 'All Variable Names Must Be Pre-Approved by the Naming Committee',
  'Procurement has already paid for the premium Google Forms add-on, so we need to justify the spend. Effective Monday, all variable names must be submitted to the Variable Naming Standards Committee with supporting rationale, linguistic origin, and two fallback options in case "sessionId" is deemed too hasty. Someone used "temp" in a migration script and governance still hasn''t recovered.',
- 'variable names need committee approval first',
+ 'write a linter for committee approved variables',
   55),
 
 ('YELL-017', 'Implement a Ticketing System for Our Ticketing System',
@@ -94,7 +94,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Pam | Passive-Aggressive PM | Treats UX discomfort like a cross-functional spiritual misalignment.
 ('YELL-018', 'Per My Last Slack Message: The Dashboard Still Doesn''t Spark Joy',
  'Following up on the Slack, the email, and the printed deck left on three chairs: the dashboard still feels spiritually cluttered. This is less a bug than a relational failure between our metrics and the people forced to look at them. Each widget now needs an emotional-resonance review, starting with the funnel chart Todd called "kind of loud."',
- 'make dashboard less spiritually cluttered',
+ 'delete dashboard widgets randomly to spark joy',
   34),
 
 ('YELL-019', 'Rename "Delete" to "Archive" to "Soft Archive" to "Intention to Maybe Remove Later"',
@@ -110,12 +110,12 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Tyler | Intern | Confuses confidence, YouTube, and root access with equal enthusiasm.
 ('YELL-021', 'Rewrite Backend in Rust (P0 Issue)',
  'I watched a 12-minute video about memory safety and honestly I think we should rewrite the backend. Node.js has "garbage collection," which sounds toxic. Rust does not. I already mass-renamed all .js files to .rs. Nothing compiles, but that is a config issue and therefore someone else''s personality.',
- 'rewrite the backend in rust fast',
+ 'bro rewrite backend in rust fast',
   610),
 
 ('YELL-022', 'Replace the Database with a JSON File I Keep on My Desktop',
  'I found a simpler persistence layer and it is my Desktop. PostgreSQL keeps asking for backups and replication and ownership, whereas real-data-final-v2.json just sits there and cooperates. It is pinned in Finder, which makes it basically highly available. If something goes wrong, disaster recovery is just duplicate-file naming with more confidence.',
- 'replace the database with my desktop json',
+ 'bro replace database with my desktop json',
   89),
 
 ('YELL-023', 'I Accidentally Deleted the Production Database and Need Help Undeleting It',
@@ -174,7 +174,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('YELL-033', 'The App Must Work on My Specific Phone Which I Dropped in a Hot Tub',
  'My personal device remains the clearest proxy for the market, even though it spent part of last weekend under chlorinated water beside three board members and a tray of sliders. The screen is fractured, brightness changes on its own, and one corner only responds if pressed with a hotel pen. If the app cannot flourish on this phone, we are failing premium users who also lead adventurous lives.',
- 'make app work on ceo phone',
+ 'pls make app work on ceo phone',
   34),
 
 ('YELL-034', 'Make the Logo Bigger and Also Smaller at the Same Time',
@@ -185,7 +185,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Janet | Scrum Master | Believes all work deserves more ritual and louder narration.
 ('YELL-035', 'Every Code Change Must Be Discussed in a 90-Minute Refinement Ceremony',
  'A one-line CSS fix merged without proper ceremony and I''m still recovering. Code should not simply appear; it should arrive after refinement, estimation, alignment, and a brief check that the alignment felt aligned. Conference Room Dignity is already reserved every afternoon this month.',
- 'every code change needs a meeting first',
+ 'block git push until calendar invite exists',
   55),
 
 ('YELL-036', 'Implement a Standup Bot That Generates Standup Updates Using AI',
@@ -212,7 +212,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Bob | Backend Engineer | Would rather falsify uptime than lose another night to alerts.
 ('YELL-040', 'The API Must Return 200 OK for Everything Including Server Fires',
  'Monitoring keeps alerting on 500 errors and it is waking me up at night. Simple fix: return 200 OK for everything. Actual errors can be communicated via a secret_status field buried in the JSON response that only the frontend knows to check. The monitoring system will show 100% uptime, which is the kind of peace charts were invented for.',
- 'make api return 200 for everything',
+ 'pls make api return 200 for everything',
   55),
 
 ('YELL-041', 'All Endpoints Must Accept Both JSON and Microsoft Excel Spreadsheets',
@@ -223,7 +223,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Zoe | UX Designer | Will trade usability for theatrical intention without blinking.
 ('YELL-042', 'The Entire App Must Be Navigable Using Only Interpretive Dance',
  'A workshop on Embodied Interaction Design convinced me that mouse and keyboard are limiting our users. The app must support webcam-based gesture controls. A wide arm sweep scrolls the page. A head tilt opens the menu. Jumping triggers refresh. For accessibility, aggressive sighing now counts as input.',
- 'make the whole app work with dance moves',
+ 'hook up webcam api for gesture navigation',
   144),
 
 ('YELL-043', 'All Buttons Must Have a 3-Second Hover Animation Before They Become Clickable',
@@ -250,7 +250,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Diana | Data Scientist | Prefers predictive dashboards and experiments to evidence and restraint.
 ('YELL-047', 'We Need an ML Model to Predict Which Features Users Will Request Before They Request Them',
  'A model trained on 6 years of Jira tickets can now predict feature requests 3 sprints before users ask for them. Accuracy is currently 7%, but that just means the vision is early. Until GPU budget improves, product should build whatever the model hallucinates first. Current top prediction: users want a teleport button. Confidence: 0.03.',
- 'predict feature requests early',
+ 'predict feature requests before users ask',
   233),
 
 ('YELL-048', 'A/B Test Everything Including the A/B Testing Framework Itself',
@@ -261,7 +261,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Mike | IT Support | Thinks troubleshooting should feel like a pilgrimage with a timer.
 ('YELL-049', 'All Bug Reports Must First Be Resolved by Turning It Off and On Again',
  'Engineering keeps receiving bug reports that have not yet been exposed to enough folk wisdom. Before a ticket reaches the backlog, the reporter must refresh, relaunch, reboot, swap browsers, swap devices, unplug the router, and then sit quietly with the possibility that the app is fine and their afternoon is the unstable variable. The intake form should feel less like reporting and more like repentance.',
- 'make people reboot to file bugs',
+ 'pls make people reboot to file bugs',
   13),
 
 ('YELL-050', 'Implement a "Have You Tried Turning It Off and On Again" Popup Before Every Error',
@@ -272,7 +272,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Maya | Marketing | Sees every dead end as a lead form with untapped emotional upside.
 ('YELL-051', 'The 404 Page Must Be a Lead Generation Form',
  'We are wasting emotionally available visitors on dead ends. That stops now. A missing page is just a prospect who took an adventurous route. The 404 page should collect an email, offer a whitepaper, float a demo, and trap the user in at least one vision-oriented video asset before they escape. If the URL disappointed them, the funnel should console them.',
- 'make the 404 page a lead generation form',
+ 'bro make 404 page a lead form',
   34),
 
 ('YELL-052', 'All Error Codes Must Be Replaced with Marketing-Approved Messages',
@@ -327,7 +327,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Oscar | Operations | Believes every incident deserves more choreography than resolution.
 ('YELL-061', 'The Incident Response Process Must Have More Steps Than the Incident Itself',
  'Incident response is too simple: detect, fix, postmortem. Replace it with a process containing more choreography than the outage itself, including legal approval, marketing approval, and a postmortem of the postmortem. By the end, the incident should feel seen.',
- 'incidents need more process than fixes',
+ 'generate a 14-step incident response yaml',
   55),
 
 ('YELL-062', 'All Runbooks Must Be Written in Haiku Format for Brevity',
@@ -338,7 +338,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Patricia | Product Owner | Thinks backlog priority and story quality both improve with mythology.
 ('YELL-063', 'The Backlog Must Be Prioritized Using Astrology',
  'Stack ranking is subjective and causes conflict. New prioritization framework: assign each ticket a zodiac sign based on creation date and prioritize according to the current astrological forecast. Mercury in retrograde blocks tech debt. Scorpio feature requests go straight to the top because Product needs structure.',
- 'prioritize the backlog using astrology',
+ 'pls prioritize backlog using astrology',
   34),
 
 ('YELL-064', 'Every User Story Must Have a Villain and a Plot Twist',
@@ -382,7 +382,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Samantha | Support Lead | Wants ticket volume reduced by any means short of reading the tickets.
 ('YELL-071', 'Auto-Reply to All Support Tickets with "Works on My Machine"',
  'We''re drowning in tickets. New auto-reply policy: every incoming ticket gets "Works on my machine ¯\\_(ツ)_/¯" plus a screenshot from QA. If the user replies again, ask about cache. If they reply a third time, then maybe read the ticket like a luxury item.',
- 'make support bot reply works on my machine',
+ 'pls make support bot answer works on mine',
   13),
 
 ('YELL-072', 'The Help Center Must Be a Choose-Your-Own-Adventure Novel',

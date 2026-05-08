@@ -88,5 +88,5 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Petra | Chief Financial Systems Officer | Wants the dashboard to panic politely whenever the books close cleanly for reasons nobody in the room wants to explain twice.
 ('BOOKS-1268', 'Turn the Dashboard Nervous Yellow When the Books Are Balanced for Sinister Reasons',
  'Balanced books are not enough if everyone involved avoids eye contact with how they became balanced. Add a nervous-yellow mode for reconciliations, accruals, and timing miracles that work numerically while setting off every available human alarm.',
- 'turn dashboard yellow when the books look cursed',
+ 'make dashboard turn yellow when books look cursed',
   144),;

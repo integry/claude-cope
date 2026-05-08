@@ -4,7 +4,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Noor | Location Data Lead | Has accepted that half of geocoding is geometry and the other half is one resident saying "turn left at the old bakery that is now a vape shop."
 ('ATLAS-1241', 'Teach Geocoding That Some Addresses Are Basically Folklore with Numbers',
  'Formal address logic keeps collapsing when reality shows up as landmarks, local nicknames, inherited numbering sins, and one building everyone swears is "next to the old pharmacy." Add folklore tolerance before the map keeps acting shocked that humans describe place like humans.',
- 'teach geocoding some addresses are folklore',
+ 'flag geocoding guesses in route api',
   144),
 
 ('ATLAS-1242', 'Make Reverse Geocoding Admit When the Pin Landed There by Luck',

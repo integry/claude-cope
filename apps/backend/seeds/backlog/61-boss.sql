@@ -88,5 +88,5 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Petra | Chief Fun Economist | Believes any event requiring four nights of mandatory attendance should be labeled honestly as homework with fireworks.
 ('BOSS-1105', 'Stamp Streak-Heavy Events "Congratulations, We Invented Homework"',
  'If an event only works by making players feel guilty for having dinner plans, sleep, or another hobby, the game should say so out loud. Mark the grindfests honestly before dread keeps borrowing the language of fun.',
- 'stamp streak-heavy events congratulations and we invented homework',
+ 'make streak events say congratulations we invented homework',
   144),;

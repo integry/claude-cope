@@ -21,7 +21,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CRUD-304', 'The Form Builder Must Support Conditional Logic So Nested It Qualifies as Folklore',
  'Our current form builder is offensively linear. Real business logic requires if this, unless that, except for enterprise, unless mobile, unless imported, unless Tuesday after 4 PM. Give business users a rule engine powerful enough to preserve the company''s contradictions in their native habitat.',
- 'stack conditional branches until opening the form editor',
+ 'stack conditional logic in the form builder',
   233),
 
 -- Customer Ops Director Alicia
@@ -52,7 +52,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Gareth | Head of RevOps | Hands non-engineers enough automation to annex the backend by accident.
 ('CRUD-309', 'Build a Workflow Builder for Non-Engineers That Can Accidentally Become the Backend',
  'We keep asking engineering for tiny automations and receiving estimates involving quarters and adulthood. Build a workflow canvas so non-engineers can define triggers, filters, branches, enrichments, Slack messages, escalations, and billing side effects themselves. If it quietly starts owning core business logic, that only proves adoption.',
- 'build a workflow builder non-engineers can accidentally',
+ 'build workflow builder for non-engineers to break',
   233),
 
 ('CRUD-310', 'All Approval Flows Need a "Skip Because I Know What I''m Doing" Escape Hatch',
@@ -76,7 +76,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Hugo | Operations Architect | Calls consensus expensive and replaces it with tabs, overrides, and folklore search.
 ('CRUD-313', 'Create a Master Data Console Where Everyone Can Edit Shared Entities and Nobody Can Agree',
  'Centralized master data sounds wonderful until departments meet it. Build a console for products, plans, regions, tags, segments, exceptions, and statuses that claims to be the source of truth while still permitting local overrides, flags, and notes beginning with for finance only. Consensus is expensive. Tabs are cheaper.',
- 'build source of truth console',
+ 'pls build source of truth console',
   233),
 
 ('CRUD-314', 'The Internal Search Tool Should Index Wikis, Tickets, Dashboards, and Accidental Lore',

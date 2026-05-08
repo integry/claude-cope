@@ -117,7 +117,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('ZANY-995', 'Count Survey Questions Added Because Somebody Had a Bad Tuesday',
  'Survey sprawl often comes from one recent incident, one worried leader, or one rough week getting promoted into quarter-scale listening theater. Count the reactive questions before emotionally fresh curiosity starts claiming permanent residency.',
- 'count survey questions added',
+ 'count survey questions added because of bad tuesdays',
   89),
 
 -- Enterprise Absurdity Fellow Lana

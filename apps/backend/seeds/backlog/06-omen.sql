@@ -21,7 +21,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('OMEN-259', 'All Dashboards Must Show Confidence Intervals for Whether the Service Is Lying',
  'Uptime graphs have become overconfident. Add a band to every dashboard tile showing how likely the service is to be technically green while spiritually on fire. If a dependency times out 18% of requests while claiming healthy, the graph should blush.',
- 'show when the dashboard is probably lying',
+ 'pls add lying badge to dashboards',
   233),
 
 -- GRC Manager Pauline
@@ -33,7 +33,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('OMEN-261', 'The Security Questionnaire Response Flow Must Require Two Humans and One Institutional Memory',
  'Sales keeps answering customer security questionnaires like speed is a virtue. Require a technical reviewer, a compliance reviewer, and somebody old enough to remember the 2023 logging incident without a wiki. If the deal slips, that is a maturity tax.',
- 'security questionnaires need two humans first',
+ 'block questionnaire until two humans click approve',
   144),
 
 -- Reliability Engineer Fatima
@@ -45,7 +45,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('OMEN-263', 'Every Sev 1 Postmortem Must Include a "Who Believed This Was Fine" Timeline',
  'Root-cause analysis keeps focusing on servers and other mechanical distractions. Add a parallel timeline showing exactly when each person convinced themselves the smell was probably normal. Every Sev 1 deserves anthropology as well as metrics.',
- 'add a who thought this was fine timeline',
+ 'pls add who thought this was fine timeline',
   144),
 
 -- Threat Intel Consultant Omar
@@ -76,7 +76,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('OMEN-268', 'Build a Shared Inbox for Customer Reports of "Something Weird" and Treat It Like Telemetry',
  'Customers often notice problems before dashboards do, but their phrasing lacks enterprise formatting. Create an inbox for reports like the app feels cursed, deduplicate them, score them, and plot them beside metrics. If five users say weird at once, that is distributed sensing.',
- 'build a shared inbox customer reports something',
+ 'build shared inbox for weird customer reports',
   144),
 
 -- Privacy Counsel Renee

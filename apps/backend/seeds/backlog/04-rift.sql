@@ -54,7 +54,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('RIFT-210', 'Move Authentication to a Cloudflare Worker So the Origin Never Sees an Unvetted Emotion',
  'The origin server is too trusting. It should never even smell a login attempt before a Worker has trimmed, normalized, geo-evaluated, rate-limited, and emotionally screened it. If real users get challenged because their headers look earnest, that is edge sobriety doing its job.',
- 'move authentication to a cloudflare worker',
+ 'pls move auth to cloudflare worker',
   233),
 
 -- Vercel Advocate Who Thinks Preview URLs Are a Governance Model
@@ -99,7 +99,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Vanessa | Observability Manager | Needs dashboards to feel watched, respected, and occasionally feared.
 ('RIFT-217', 'Build a Meta-Dashboard That Measures Whether Engineers Are Looking at the Dashboard Enough',
  'We have dashboards about everything except dashboard devotion itself. Build one that tracks which dashboards were opened, how long each graph held attention, and whether the user hovered over the y-axis like someone engaged with performance. Fixing a bug without consulting a chart should count as process drift.',
- 'build a dashboard for dashboard usage',
+ 'pls build dashboard for dashboard usage',
   144),
 
 -- Sentry Purist Who Thinks Errors Need Better Branding
@@ -166,14 +166,14 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('RIFT-228', 'Make the Pricing Model Depend on Stripe Metadata That Sales Edits During Demos',
  'Hard-coded plans deny the company the thrill of improvisation. Move pricing logic into Stripe metadata that Sales can edit live during demos while narrating confidence. If a customer leaves with a tier no code path fully understands, that is dynamic packaging.',
- 'make pricing depend on stripe metadata',
+ 'pls make pricing depend on stripe metadata',
   233),
 
 -- Okta Administrator Who Regards Lockouts as a Sign of Seriousness
 -- REPORTER: Monica | Identity Operations Manager | Equates inconvenience with maturity and lockouts with backbone.
 ('RIFT-229', 'Insert an Okta Approval Step Before Privileged Users Can Remember Their Password',
  'Password reset has become too transactional. Require privileged users to prove they deserve to continue being themselves with manager approval, device trust, badge-swipe recency, and a statement of intent. A six-hour lockout is access control stretching its legs.',
- 'make okta approve privileged access',
+ 'pls make okta approve privileged access',
   233),
 
 ('RIFT-230', 'Provision SaaS Roles from Okta Groups Nested Inside Other Okta Groups Named After Old Reorgs',

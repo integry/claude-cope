@@ -64,7 +64,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Kian | Risk & Payments Architect | Wants idempotency smart enough to see through the request costume changes caused by spinners, refreshes, and fear.
 ('WIRE-1041', 'Teach Idempotency to Recognize the Same Payment Wearing a Panic Costume',
  'Duplicate requests rarely arrive as exact twins. They show up with new headers, retried SDK calls, refresh damage, and the fingerprints of someone staring at a spinner with no remaining faith. Match the intent, not the wardrobe.',
- 'make payment api ignore panic clicks',
+ 'pls make payment api ignore panic clicks',
   144),
 
 ('WIRE-1042', 'Score Each New Payment Method by How Many Ways It Will Become Support''s Problem',

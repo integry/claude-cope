@@ -57,7 +57,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('OOPS-355', 'I Changed the Test Data to Be Cleaner and Accidentally Removed the Only Useful Weirdness',
  'The staging dataset was full of jagged names, half-broken addresses, and one account with three apostrophes, so I tidied it. The app now looks stable because all the dangerous edge cases have been lovingly erased. We have achieved peace through unreality.',
- 'clean up the test data a bit',
+ 'delete all test data edge cases',
   144),
 
 -- Infrastructure Newcomer Sam

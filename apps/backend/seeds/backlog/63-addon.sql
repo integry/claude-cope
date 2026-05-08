@@ -16,7 +16,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Lucas | Web Extension PM | Can tell when a store screenshot is promising an amount of stability the living web has never once agreed to provide.
 ('ADDON-1123', 'Stop Store Screenshots from Promising a Level of Peace the Internet Will Not Honor',
  'Extension listings keep advertising smooth harmony across websites that are one layout shift away from public embarrassment. Add honesty checks before the store page oversells stability we do not control.',
- 'stop store screenshots promising impossible peace',
+ 'generate realistic extension store screenshots',
   144),
 
 ('ADDON-1124', 'Track Whether Store Rejections Came from Policy or Reviewer Weather',
@@ -52,7 +52,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Helena | Marketplace Support Lead | Spends too much time apologizing for bugs caused by other extensions that live next door and throw CSS chairs over the fence.
 ('ADDON-1129', 'Stamp Reviews Caused by Other Extensions "Neighbor Dispute"',
  'Users keep blaming us for broken pages, weird overlays, and vanished clicks caused by some other add-on in the same browser cul-de-sac. Mark those complaints properly so support stops paying rent on somebody else''s violence.',
- 'stamp reviews caused by other extensions neighbor dispute',
+ 'tag reviews caused by other extensions neighbor dispute',
   144),
 
 ('ADDON-1130', 'Stop "Disable Other Extensions" from Sounding Like a Lifestyle Lecture',

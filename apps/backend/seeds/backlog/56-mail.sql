@@ -21,7 +21,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('MAIL-1019', 'Force Every Triggered Email to Explain Why It Could Not Stay Inside the Product',
  'We keep choosing email for moments that could have been an in-app nudge, a quieter notification, or merciful silence. Make each message justify its exile before SMTP becomes our universal coping mechanism.',
- 'make triggered emails explain their escape',
+ 'add why this email sent field',
   144),
 
 -- Template Engineering Lead Priya

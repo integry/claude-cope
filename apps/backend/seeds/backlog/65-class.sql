@@ -9,19 +9,19 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CLASS-1152', 'Stop Asking Parents to Infer Meaning from Gradebook Fog',
  'Missing, exempt, late, resubmitted, pending, and somehow still not final keep getting flattened into percentages and panic. Separate the states clearly before the portal turns normal grading ambiguity into household weather.',
- 'stop making parents infer gradebook fog',
+ 'explain gradebook gaps to parents',
   144),
 
 -- Student Data PM Julian
 -- REPORTER: Julian | Student Data PM | Has watched too many family dinners get ruined by one red badge generated from a temporary worksheet wobble.
 ('CLASS-1153', 'Slow the Parent-Portal Panic Before One Missing Worksheet Starts a Family Incident',
  'Parent notifications remain far too eager to turn small classroom fluctuations into domestic emergencies. Add some damping before one temporary assignment gap becomes a 7:00 p.m. crisis with screenshots.',
- 'slow parent-portal panic down',
+ 'rate limit parent portal alerts',
   144),
 
 ('CLASS-1154', 'Teach SIS Sync the Difference Between a Changed ID and an ID That Was Never Stable',
  'School records move through the year with the serene chaos of forms, schedules, names, guardians, and local identifiers all being revised by different humans at different speeds. Split deliberate change from routine turbulence before sync keeps acting shocked by school being school.',
- 'teach sis sync changed ids vs cursed ids',
+ 'label sis sync id changes clearly',
   144),
 
 -- Assessment Platform Architect Mei
@@ -45,7 +45,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CLASS-1158', 'Detect When Students Are Performing Agreement for a Grade',
  'Discussion boards fill up with polite nodding, cautious enthusiasm, and the unmistakable tone of people writing what earns points rather than what extends thought. Flag the graded consensus theater before everyone starts calling it discourse.',
- 'detect students faking agreement for grades',
+ 'build sentiment classifier to flag fake student agreement',
   89),
 
 -- Learning Analytics Director Priya

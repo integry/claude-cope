@@ -33,7 +33,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('SHARD-801', 'Force Every Cache to Declare Which Truth It Is Allowed to Betray',
  'We talk about caches in terms of speed and leave out the part where they temporarily lie about freshness, counts, ordering, permissions, or the recent death of a record. Make each cache sign a little moral contract before performance keeps freelancing with reality.',
- 'make caches declare which truth they betray',
+ 'add honesty header to cache responses',
   144),
 
 -- Storage Cost Analyst Mirella

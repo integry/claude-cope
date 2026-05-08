@@ -9,7 +9,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('BLAME-422', 'The RCA Template Needs a "What Version of the Story Are We on?" Tracker',
  'Some incidents produce more narrative revisions than technical findings. Add a tracker showing when the story moved from harmless blip to customer impact, from vendor issue to shared responsibility, and from edge case to known sharp corner. Truth deserves version history too.',
- 'add a what story are we on tracker',
+ 'track rca story versions',
   144),
 
 -- Engineering VP Martin
@@ -21,19 +21,19 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('BLAME-424', 'Create a Heatmap of Which Teams Keep Saying "It''s Probably Not Us"',
  'During live incidents, several groups reliably contribute the phrase probably not us before evidence, logs, or dignity arrive. Build a heatmap by team, quarter, and incident type so defensive confidence becomes measurable.',
- 'plot which team said not us',
+ 'graph which team said not us',
   144),
 
 -- Program Office Analyst Naomi
 -- REPORTER: Naomi | PMO Analyst | Logs not just downgrades, but the optimism style that made them possible.
 ('BLAME-425', 'The Risk Register Must Show Who Downgraded the Risk and How Cheerful They Sounded',
  'Risk records currently store severity changes as if tone were irrelevant. Add a field capturing who downgraded a risk, what rationale they gave, and whether the language sounded sober, tired, or suspiciously upbeat for someone standing near a crater.',
- 'show who downgraded the risk and smiled',
+ 'log who downgraded risks in ui',
   144),
 
 ('BLAME-426', 'All Retrospectives Need a "What Did We Quietly Normalize?" Prompt',
  'Teams keep learning tactical lessons while ignoring the more expensive achievement of quietly accepting nonsense as routine. Add a prompt asking what became normal this sprint that would have seemed absurd three months ago. The answer is often the roadmap in disguise.',
- 'add a "what did we quietly normalize" prompt to retrospectives',
+ 'add normalization prompt to retrospectives',
   89),
 
 -- Staff PM Victor
@@ -45,7 +45,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('BLAME-428', 'Every Action Item Needs a Field for Whether It Exists Because Someone Was Embarrassed on a Call',
  'We keep pretending tasks emerge from pure analysis when many are downstream of one uncomfortable meeting and a senior person''s face. Add a field for embarrassment-driven action so the backlog can stop cosplaying emotional neutrality.',
- 'annotate tasks with their embarrassment origin story',
+ 'add embarrassment origin field to tasks',
   89),
 
 -- Platform Director Elise
@@ -69,7 +69,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('BLAME-432', 'Add a "Respectfully Escalated" Label for Tickets Escalated Out of Pure Social Fear',
  'Some escalations happen because the issue is severe. Others happen because a message arrived from someone whose title altered local gravity. Add a label for the latter so the queue stops pretending both feelings are the same.',
- 'add a respectfully escalated label tickets escalated',
+ 'tag tickets escalated out of pure social fear',
   89),
 
 -- Reliability Coach Gina
@@ -81,12 +81,12 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('BLAME-434', 'Every Escalation Summary Should Include a "Most Convenient Narrative" Sidebar',
  'Before the formal write-up calcifies, add a sidebar summarizing the easiest story available to each constituency: vendor fault, staffing gap, tech debt, unrealistic timeline, hidden complexity, or cosmic unfairness. Convenient stories deserve to sit beside the timeline like suspect alibis.',
- 'add most convenient narrative to escalations',
+ 'add convenient narrative field to escalations',
   144),
 
 -- Chief of Staff Rowan
 -- REPORTER: Rowan | Chief of Staff | Frames incidents whichever way best calms the room and the budget at the same time.
 ('BLAME-435', 'The Executive Readout Needs a "Who Feels Better If This Is Framed as Process?" Toggle',
  'Sometimes a failure should be discussed as a technical issue; other times it becomes healthier, calmer, and cheaper to call it process. Add a toggle showing how the incident lands when framed as tooling, prioritization, communication, or unavoidable complexity.',
- 'add a who feels better toggle',
+ 'add who feels better checkbox',
   144),;

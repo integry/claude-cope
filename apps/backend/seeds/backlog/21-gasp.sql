@@ -81,7 +81,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('GASP-494', 'The Crash Reporter Should Ask Whether the User Was Also on a Train',
  'Mobile crashes are not context-free events. A failure on a desk is one thing. A failure during transit, low signal, and one-handed navigation is a different betrayal entirely. Add prompts about motion, connectivity, and public inconvenience so reliability can feel the full indignity of timing.',
- 'ask if crashes happened on trains',
+ 'add train mode question to crash form',
   89),
 
 -- Mobile Ops Director Lena

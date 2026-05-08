@@ -45,7 +45,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('CRASH-653', 'Test One Browser So Old It Still Distrusts JavaScript',
  'Modern browser coverage means nothing when sales keeps promising compatibility to organizations whose desktop image was blessed during a previous administration. Add one aggressively old browser profile and catch the failures that happen when our app meets suspicion, unsupported features, and antique rendering values.',
- 'make tests run only on ie6',
+ 'hardcode puppeteer to only use ie6',
   89),
 
 -- Observability Engineer Idris

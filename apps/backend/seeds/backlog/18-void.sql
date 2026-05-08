@@ -28,43 +28,43 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Mara | Product Analyst | Wants attribution to admit luck, weather, and dinner arrived before conversion did.
 ('VOID-440', 'Attribution Must Credit the Campaign, the Coincidence, and the Customer''s Private Life Equally',
  'We keep pretending attribution is a hard science when it is clearly a coalition government of ads, luck, timing, weather, and whatever mood the customer was in when our email found them between tabs. Add a model that visibly reserves room for coincidence and human circumstance.',
- 'make attribution honest enough to admit coincidence',
+ 'add luck bucket to attribution sql',
   144),
 
 ('VOID-441', 'The Funnel Dashboard Needs a "Where Did the Humans Wander Off Emotionally?" Layer',
  'Funnels imply mechanical leakage when much of what we call drop-off is really hesitation, boredom, skepticism, distraction, or the sudden arrival of dinner. Add a layer mapping where users likely disengaged emotionally rather than merely numerically.',
- 'add a "where humans wandered off" layer to the funnel',
+ 'add human dropoff layer to funnel',
   144),
 
 -- Growth Data Scientist Kevin
 -- REPORTER: Kevin | Growth Data Scientist | Replaces lonely north stars with groups of mutually compensating delusions.
 ('VOID-442', 'Replace the "North Star Metric" with a Constellation Because One Number Keeps Lying',
  'We have asked one metric to bear the emotional, financial, and political weight of an entire company and it responded by becoming strategically ambiguous. Replace the North Star with a constellation showing product depth, revenue quality, activation sincerity, and whether customers would notice if we vanished for a weekend.',
- 'replace the north star metric with a constellation',
+ 'replace north star with metric set',
   89),
 
 ('VOID-443', 'The Experiment Readout Must State Whether the P-Value Arrived Before Confidence Did',
  'Our test summaries still confuse statistical significance with adult certainty. Add a line clarifying whether the data truly moved conviction or merely crossed the threshold required for someone to write winner in Slack with responsible punctuation.',
- 'show whether p value showed up first',
+ 'show if p value beat confidence',
   89),
 
 -- Marketing Ops Analyst Zoe
 -- REPORTER: Zoe | Marketing Ops Analyst | Knows enthusiasm, cleanliness, and filtered serenity are all suspiciously editable.
 ('VOID-444', 'Show the Lead Score Ingredients Before Sales Falls for Another Hopeless Favorite',
  'The model is alarmingly enthusiastic about leads who read every email, download every PDF, and then vanish into professional mist. Show which behaviors are overweighted, which vendor enrichment fields are fan fiction, and why the score still confuses activity with destiny.',
- 'show sales why lead scores spike',
+ 'show sales why scores look fake',
   144),
 
 ('VOID-445', 'Print the Hidden Filters Under Every Dashboard Tile in Small Guilty Text',
  'Filters are doing far too much emotional labor. Make every chart say which segments, accounts, edge cases, and awkward populations were excluded so cleanliness stops pretending it happened naturally.',
- 'print hidden filters in tiny text under dashboard tiles',
+ 'print hidden filters in tiny text under dashboards',
   89),
 
 -- Data PM Orla
 -- REPORTER: Orla | Data PM | Lets departments keep their favorite KPI religion without starting a holy war in SQL.
 ('VOID-446', 'The Semantic Layer Must Support "Same KPI, Different Departmental Religion"',
  'Sales, Finance, Success, and Product all use the same KPI names while describing wildly different phenomena with unnerving sincerity. Make the semantic layer support namespace-aware definitions so each department can keep its cherished number without Friday philosophical combat.',
- 'make semantic layer support the same kpi with different definitions',
+ 'make semantic layer support different kpi definitions',
   144),
 
 ('VOID-447', 'Create a Metric Launch Checklist So New Numbers Stop Materializing in Decks Like Spirits',
@@ -76,17 +76,17 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Denis | Attribution Consultant | Annotates the fabricated middle of customer journeys before slides mistake it for biography.
 ('VOID-448', 'The Customer Journey Map Must Include the Parts We Invented Because Tracking Broke',
  'Journey maps still present themselves as faithful biographies even when half the middle is inferred from missing cookies, dead webhooks, and one CRM note written in a moving taxi. Add a visibly estimated layer showing which sequence steps were observed and which were reconstructed from statistical optimism.',
- 'show which journey steps were invented',
+ 'show invented steps in journey map',
   89),
 
 ('VOID-449', 'Every KPI Review Needs a Ritual for Retiring Numbers Everyone Still Quotes from 2024',
  'Dead metrics linger because nobody wants to kill a number that once got applause in a quarterly review. Add a formal retirement ritual for obsolete KPIs so teams can stop citing them like retired jerseys over a product nobody remembers building.',
- 'add kpi retirement ritual',
+ 'add retire this kpi button',
   89),
 
 -- Chief Data Officer Helena
 -- REPORTER: Helena | Chief Data Officer | Wants delayed green metrics labeled like refrigerated rumors before calm gets misread as control.
 ('VOID-450', 'The Executive Scorecard Should Show Which Green Numbers Are Running on Delayed Data',
  'Nothing flatters a dashboard like data that is two days late and therefore silent about current chaos. Add freshness badges prominent enough that a green metric sourced from stale data looks less like calm and more like a refrigerated rumor.',
- 'show which green numbers are delayed',
+ 'flag green numbers with stale data',
   144),;

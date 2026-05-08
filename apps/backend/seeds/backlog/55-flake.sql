@@ -4,7 +4,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Iris | QA Platform Lead | Treats flaky tests like weather systems that should at least have the decency to document their preferred moon phase.
 ('FLAKE-1001', 'Make Every Flaky Test Admit Which Planetary Alignment It Requires',
  'Some tests only pass when CPU load, browser mood, clock drift, and stale cache residue line up in one specific sad constellation. If a test needs luck, make it write down its horoscope.',
- 'make flaky tests admit their planets',
+ 'add astrology metadata to jest runner',
   144),
 
 ('FLAKE-1002', 'Detect Snapshot Approvals Powered Purely by Dinner-Time Exhaustion',
@@ -64,7 +64,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Darius | Mobile QA Lead | Refuses to certify an app that has only ever been tested under perfect signal, calm fingers, and conditions no actual commuter has survived.
 ('FLAKE-1011', 'Add an Elevator Network Mode to Every Mobile Test Run',
  'Our mobile tests are still too optimistic about the continuity of network life. Simulate tunnels, elevators, train stations, and buildings made from anti-signal ideology before shipping another app trained exclusively under open skies.',
- 'add elevator network mode',
+ 'simulate elevator network drops in mobile tests',
   144),
 
 ('FLAKE-1012', 'Teach the Crash Harness About Angry Thumb Tempo',

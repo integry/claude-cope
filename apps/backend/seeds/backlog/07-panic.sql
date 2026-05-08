@@ -9,7 +9,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('PANIC-272', 'The Rollback Button Must Require a Written Apology to Future Analytics',
  'Rollbacks are too easy, which makes engineers treat them like tactics instead of confessions. Before rolling back, require a short apology explaining which dashboards, revenue numbers, or stakeholder illusions are about to be disturbed. Future retros should be able to read it aloud when morale is low.',
- 'rollbacks need a written apology first',
+ 'block rollbacks until apology markdown exists',
   144),
 
 -- CI Pipeline Custodian Noah
@@ -21,14 +21,14 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('PANIC-274', 'All Flaky Tests Must Emit a Weather Forecast Instead of a Pass/Fail Result',
  'A flaky test is not a binary state. It is a climate. Replace pass/fail with forecasts like Partly Broken, Gusts of Timeout, or Heavy Assertions Developing Overnight so leadership can finally read the suite like a cursed shipping report.',
- 'make flaky tests return a weather forecast',
+ 'pls make flaky tests return weather forecast',
   144),
 
 -- SRE Manager Priyanka
 -- REPORTER: Priyanka | SRE Manager | Distrusts runbooks, status pages, and confidence not annotated in public.
 ('PANIC-275', 'Add a "How Sure Are We?" Slider to Every Runbook Step',
  'Runbooks project a confidence they have not earned. Add a slider to each step showing whether it is battle-tested, folklore, copied from Slack, or written by someone now advising a startup. During incidents, responders should drag the slider live so the document can confess how much it is improvising.',
- 'add a "how sure are we" slider to every runbook step',
+ 'add how sure are we slider to runbooks',
   144),
 
 ('PANIC-276', 'The Status Page Must Escalate Its Euphemisms as Downtime Gets Longer',
@@ -88,5 +88,5 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Caleb | Staff Engineer | Distrusts relaxed commit messages more than visibly cursed ones.
 ('PANIC-285', 'The Deploy Bot Must Refuse to Proceed If the Commit Message Sounds Too Relaxed',
  'Commit messages like quick fix, tiny cleanup, and should be harmless are statistically aggressive. Score their tone before rollout approval. Anything too breezy should trigger a cooldown, a diff reread, and possibly a supervisory emoji.',
- 'make deploy bot block calm commit messages',
+ 'pls make deploy bot block calm commits',
   144),;

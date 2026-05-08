@@ -40,7 +40,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Priya | Accessibility Design Advocate | Demands every low-contrast decision identify the exact aesthetic emergency that justified the hostage situation.
 ('GLARE-727', 'Make Low-Contrast Design Choices Explain Themselves in Writing',
  'Every unreadable text choice arrives wrapped in a tasteful explanation about softness, subtlety, or premium restraint. Require a note describing the exact aesthetic panic that made readability negotiable. If beauty is taking a hostage, it should sign the paperwork.',
- 'make low-contrast design choices explain themselves in writing',
+ 'add css comment for low contrast choice',
   144),
 
 ('GLARE-728', 'Teach the Motion Guide the Difference Between Delight and Interface Narcissism',

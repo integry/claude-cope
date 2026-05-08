@@ -76,7 +76,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Tobias | Payroll Analyst | Wants compensation math narrated before managers invent fresh inequality on the spot.
 ('FRAUD-403', 'Show the Bonus Inputs Before Similar People Get Mystery Numbers Again',
  'Bonus outcomes currently emerge from formulas dense enough to feel ordained. Show the input weights, thresholds, and ugly little assumptions before two eerily similar employees get wildly different numbers and one manager starts free-styling the explanation.',
- 'show what the bonus was based on',
+ 'add bonus calculation breakdown to dashboard',
   144),
 
 ('FRAUD-404', 'All Compensation Bands Need a "What Would Reddit Call This?" Review Before Approval',

@@ -16,12 +16,12 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Soren | Video Delivery PM | Wishes adaptive bitrate logic would stop treating one cough in the connection as a prophecy of lifelong grain.
 ('REEL-1108', 'Teach Adaptive Bitrate Not to Panic Because the Network Sneezed Once',
  'The player keeps plunging viewers into potato quality the moment the bandwidth hiccups. Add some composure before a temporary wobble gets interpreted as permanent poverty.',
- 'teach adaptive bitrate not to panic',
+ 'make adaptive bitrate calm down',
   144),
 
 ('REEL-1109', 'Admit the Backup CDN Region Feels Like a Character Test',
  'Failover sounds elegant until traffic actually lands there and users discover that "available" can still feel punishing. Measure the experience honestly instead of pretending uptime alone means the audience had a good time.',
- 'admit backup cdn feels punitive',
+ 'flag backup cdn as hostile',
   144),
 
 -- Media Pipeline Architect Rina
@@ -33,7 +33,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('REEL-1111', 'Stop Auto-Captions from Turning Ordinary Speech into a Threat',
  'Auto-generated punctuation keeps recasting regular dialogue as accusation, exhaustion, or legal testimony. Review the punctuation before captions start emotionally rewriting the speaker.',
- 'stop auto-captions making speech threatening',
+ 'fix auto-captions they sound too aggressive',
   89),
 
 -- Creator Tools PM Hugo

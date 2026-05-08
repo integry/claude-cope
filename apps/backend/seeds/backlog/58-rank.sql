@@ -9,7 +9,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('RANK-1047', 'Classify Zero-Result Searches by How Much They Feel Like Betrayal',
  'Some misses are harmless. Others land like the product just admitted it has never heard of the thing a sane person assumed it would know. Add a mood class so we can fix the painful absences first.',
- 'rank zero-result searches by betrayal',
+ 'add rage score to zero results',
   144),
 
 -- Recommendations PM Sora

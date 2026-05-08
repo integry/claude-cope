@@ -4,7 +4,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Mara | Observability Lead | Lives among graphs dramatic enough to wake three managers before sunrise and still fail to describe one real customer problem.
 ('SPOOK-931', 'Make Alerts Admit Whether They Found a Failure or Just Felt Nervous',
  'Our paging stack is far too willing to promote anxious telemetry into operational significance. Add a field that distinguishes actual customer pain from graphs having feelings again.',
- 'make alerts say if they panicked',
+ 'add panic boolean to alert webhooks',
   144),
 
 ('SPOOK-932', 'Label the Dashboards Nobody Has Used for a Real Decision in Months',
