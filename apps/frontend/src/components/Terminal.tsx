@@ -30,12 +30,8 @@ import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
 export type { Message };
 
 function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
-  while (messageKeys.length < historyLength) {
-    messageKeys.push(nextKeyId.current++);
-  }
-  if (messageKeys.length > historyLength) {
-    messageKeys.length = historyLength;
-  }
+  while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++);
+  if (messageKeys.length > historyLength) messageKeys.length = historyLength;
 }
 
 function Terminal() {
@@ -92,20 +88,7 @@ function Terminal() {
   const lastSuggestedReplyRef = useRef<string | null>(null);
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
-  const overlayVisibility = {
-    showStore,
-    showLeaderboard,
-    showAchievements,
-    showSynergize,
-    showHelp,
-    showAbout,
-    showPrivacy,
-    showTerms,
-    showContact,
-    showProfile,
-    showParty,
-    showUpgrade,
-  };
+  const overlayVisibility = { showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade };
   const anyOverlayOpen = isAnyOverlayOpen(overlayVisibility);
 
   useEffect(() => {
@@ -118,19 +101,13 @@ function Terminal() {
 
   const handleSuggestedReply = useCallback((suggestion: string) => {
     const merged = mergeSuggestedReply(lastSuggestedReplyRef.current, suggestion);
-    if (!merged) {
-      setSuggestedReply(null);
-      return;
-    }
+    if (!merged) return void setSuggestedReply(null);
     lastSuggestedReplyRef.current = merged;
     setSuggestedReply(merged);
   }, []);
 
   const restorePendingNagCommand = useCallback(() => {
-    if (pendingNagCommandRef.current !== null) {
-      setInputValue(pendingNagCommandRef.current);
-      pendingNagCommandRef.current = null;
-    }
+    if (pendingNagCommandRef.current !== null) { setInputValue(pendingNagCommandRef.current); pendingNagCommandRef.current = null; }
     nagArmedFromQuotaRef.current = false;
   }, []);
   const closeAllOverlaysAndRestoreNag = useCallback(() => {
@@ -146,14 +123,10 @@ function Terminal() {
     setShowProfile(true);
     window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`);
   }, [closeAllOverlaysPreservingNag, setShowProfile, state.username]);
-  useEffect(() => {
-    if (typeof bottomRef.current?.scrollIntoView === "function") {
-      bottomRef.current.scrollIntoView({ behavior: "auto" });
-    }
-  }, [history]);
+  useEffect(() => { if (typeof bottomRef.current?.scrollIntoView === "function") bottomRef.current.scrollIntoView({ behavior: "auto" }); }, [history]);
   useEffect(() => {
     const onPopState = () => {
-      if (pendingNagCommandRef.current !== null) { setShowUpgrade(true); return; }
+      if (pendingNagCommandRef.current !== null) return void setShowUpgrade(true);
       setShowUpgrade(window.location.pathname === "/upgrade");
     };
     window.addEventListener("popstate", onPopState);
@@ -265,20 +238,13 @@ function Terminal() {
     const chatMessages = isFreeTier
       ? contextMessages
       : [...contextMessages, { role: "user", content: userMessage.content }];
-    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({
-      getState: getCurrentState,
-      updateTicketProgress,
-      addActiveTD,
-      playChime,
-      setState,
-    });
+    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({ getState: getCurrentState, updateTicketProgress, addActiveTD, playChime, setState });
     const controller = new AbortController();
     abortControllerRef.current = controller;
     submitChatMessage({
       chatMessages, buddyResult, unlockAchievement: unlockAchievementWithSound, setHistory, setIsProcessing,
-      currentRank: rank, apiKey: effectiveApiKey, customModel: state.selectedModel, proKey: state.proKey,
-      proKeyHash: state.proKeyHash, modes: state.modes, activeTicket: state.activeTicket,
-      onSprintProgress, getSprintCompleteMessage, addActiveTD, onSuggestedReply: handleSuggestedReply,
+      currentRank: rank, apiKey: effectiveApiKey, customModel: state.selectedModel, proKey: state.proKey, proKeyHash: state.proKeyHash,
+      modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, getSprintCompleteMessage, addActiveTD, onSuggestedReply: handleSuggestedReply,
       buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades,
       onByokUsage: (usage) => setState((prev) => {
         const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 };
@@ -343,12 +309,10 @@ function Terminal() {
   }, [setShowUpgrade]);
 
   const { handleKeyDown } = useTerminalKeyboard({
-    slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex,
-    showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy,
-    showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
-    freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery,
-    setHistoryIndex, setIsProcessing, setHistory, closeAllOverlays: closeAllOverlaysPreservingNag,
-    handleUpgradeNagClose, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
+    slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements,
+    showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
+    freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing, setHistory,
+    closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
   });
 
   return (
