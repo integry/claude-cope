@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
+import { useState, useRef, useEffect, useCallback, ChangeEvent, type ComponentProps } from "react";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { SLASH_COMMANDS } from "./slashCommands";
 import { useGameState, Message } from "../hooks/useGameState";
@@ -34,6 +34,8 @@ import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
 
 export type { Message };
+
+type TerminalViewProps = ComponentProps<typeof TerminalView>;
 
 function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
   while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++);
@@ -72,7 +74,8 @@ function Terminal() {
   const [inputValue, setInputValue] = useState("");
   const [suggestedReply, setSuggestedReply] = useState<string | null>(null);
   const overlays = useOverlays();
-  const { showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, closeAllOverlays } = overlays;
+  const { closeAllOverlays, ...terminalOverlayProps } = overlays;
+  const { showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade } = terminalOverlayProps;
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
@@ -169,8 +172,14 @@ function Terminal() {
   }, [setIsProcessing, playError, setHistory]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = activeRegression === "backwards_typing" && e.target.value.length > inputValue.length ? e.target.value.slice(inputValue.length) + inputValue : e.target.value;
-    setInputValue(value); setHistoryIndex(-1); setSuggestedReply(null); setSlashQuery(value.startsWith("/") ? value : ""); setSlashIndex(0);
+    const value = activeRegression === "backwards_typing" && e.target.value.length > inputValue.length
+      ? e.target.value.slice(inputValue.length) + inputValue
+      : e.target.value;
+    setInputValue(value);
+    setHistoryIndex(-1);
+    setSuggestedReply(null);
+    setSlashQuery(value.startsWith("/") ? value : "");
+    setSlashIndex(0);
   };
 
   const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => !(cmd === "/store" && state.economy.totalTDEarned < 1000) && cmd.startsWith(slashQuery.toLowerCase()));
@@ -322,34 +331,69 @@ function Terminal() {
     processCommand(command);
   };
 
-  const handleUpgradeNagClose = useCallback(() => {
-    setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
-    if (pendingNagCommandRef.current !== null) {
-      const command = pendingNagCommandRef.current; pendingNagCommandRef.current = null; nagArmedFromQuotaRef.current = false;
-      setCommandHistory((prev) => [...prev, command]); processCommandRef.current(command);
-    }
+  const dismissUpgradeOverlay = useCallback(() => {
+    setShowUpgrade(false);
+    if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
   }, [setShowUpgrade]);
 
-  const handleManualUpgradeDismiss = useCallback(() => {
-    setShowUpgrade(false); if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
-  }, [setShowUpgrade]);
+  const handleUpgradeNagClose = useCallback(() => {
+    dismissUpgradeOverlay();
+    if (pendingNagCommandRef.current !== null) {
+      const command = pendingNagCommandRef.current;
+      pendingNagCommandRef.current = null;
+      nagArmedFromQuotaRef.current = false;
+      setCommandHistory((prev) => [...prev, command]);
+      processCommandRef.current(command);
+    }
+  }, [dismissUpgradeOverlay]);
+
+  const handleManualUpgradeDismiss = dismissUpgradeOverlay;
 
   const { handleKeyDown } = useTerminalKeyboard({
     slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
     freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing, setHistory, closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
   });
 
+  const terminalViewProps: TerminalViewProps = {
+    activeRegression,
+    outageHp,
+    pendingReviewPing,
+    pingAcknowledged,
+    activeTheme: state.activeTheme,
+    regressionGlitch,
+    anyOverlayOpen,
+    inputRef,
+    closeAllOverlaysPreservingNag,
+    onlineCount,
+    rank,
+    state,
+    handleProfileClick,
+    setInputValue,
+    setSlashQuery,
+    setSlashIndex,
+    compactEffect,
+    isBooting,
+    history,
+    messageKeys: messageKeys.current,
+    initialHistoryLen: initialHistoryLen.current,
+    promptString,
+    handleSlashCommandClick, bottomRef,
+    slashQuery, slashIndex, runSlashCommand,
+    inputValue, suggestedReply, isProcessing,
+    handleChange, handleKeyDown,
+    buyGenerator, buyUpgrade,
+    buyTheme,
+    setActiveTheme,
+    ...terminalOverlayProps,
+    setIsProcessing,
+    setHistory,
+    pendingNagCommand: pendingNagCommandRef.current,
+    handleUpgradeNagClose,
+    handleManualUpgradeDismiss,
+  };
+
   return (
-    <TerminalView
-      {...{
-        activeRegression, outageHp, pendingReviewPing, pingAcknowledged, regressionGlitch, anyOverlayOpen, inputRef, closeAllOverlaysPreservingNag, onlineCount, rank, state, handleProfileClick, setShowHelp, setShowAbout, setInputValue, setSlashQuery, setSlashIndex, setShowUpgrade, compactEffect, isBooting, history, promptString, handleSlashCommandClick, bottomRef, slashQuery, slashIndex, runSlashCommand, inputValue, suggestedReply, isProcessing, handleChange, handleKeyDown, buyGenerator, buyUpgrade, buyTheme, setActiveTheme,
-        showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, setShowStore, setShowLeaderboard, setShowAchievements, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowSynergize, setIsProcessing, setHistory, handleUpgradeNagClose, handleManualUpgradeDismiss,
-      }}
-      activeTheme={state.activeTheme}
-      messageKeys={messageKeys.current}
-      initialHistoryLen={initialHistoryLen.current}
-      pendingNagCommand={pendingNagCommandRef.current}
-    />
+    <TerminalView {...terminalViewProps} />
   );
 }
 
