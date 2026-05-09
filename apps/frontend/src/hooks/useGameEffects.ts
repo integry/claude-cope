@@ -1,4 +1,5 @@
 import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateAction } from "react";
+import type { ServerProfile } from "@claude-cope/shared/profile";
 import { GENERATORS, CORPORATE_RANKS } from "../game/constants";
 import { type GameState, calculateActiveMultiplier, isPaidUser } from "./gameStateUtils";
 import { fetchSessionProfile, unlockAchievementServer } from "../api/profileApi";
