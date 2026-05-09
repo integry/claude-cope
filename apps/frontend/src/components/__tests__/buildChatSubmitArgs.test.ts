@@ -244,6 +244,30 @@ describe("buildSprintCallbacks", () => {
     });
   });
 
+  it("does not settle the pending reward from a fallback session profile", async () => {
+    const settledProfile = createServerProfile();
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/score") {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      }
+      if (url === "/api/account/me") {
+        return Promise.resolve(new Response(JSON.stringify({ found: true, profile: settledProfile }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    });
+    const onCompletedRewardSettled = vi.fn();
+
+    const { onSprintProgress } = createSprintCallbacks({}, { onCompletedRewardSettled });
+
+    onSprintProgress(10);
+    await waitForAssertion(() => {
+      expect(fetchMock.mock.calls.some(([url]) => url === "/api/account/me")).toBe(true);
+    });
+
+    expect(onCompletedRewardSettled).not.toHaveBeenCalled();
+  });
+
   it("keeps the pending reward unsettled when completed reward sync fails", async () => {
     fetchMock.mockRejectedValue(new Error("network"));
     const onCompletedRewardSettled = vi.fn();

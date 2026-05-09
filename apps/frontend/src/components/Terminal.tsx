@@ -6,7 +6,7 @@ import { isFreeUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
-import { applyAuthoritativeProfile as mergeAuthoritativeProfile } from "../hooks/profileSync";
+import { applyAuthoritativeProfile as mergeAuthoritativeProfile, applyServerProfile } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { filterChatHistory } from "./filterChatHistory";
@@ -226,13 +226,28 @@ function Terminal() {
     if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1 } }));
   }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
 
-  const applySettledAuthoritativeProfile = useCallback((profile: ServerProfile) => {
+  const applyProfileUpdate = useCallback((profile: ServerProfile) => {
+    setState((prev) => {
+      return applyServerProfile(
+        prev,
+        profile,
+        prev.pendingCompletedTaskIds.length > 0
+          ? { preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds }
+          : {},
+      );
+    });
+  }, [setState]);
+
+  const applySettledAuthoritativeProfile = useCallback((ticketId: string, profile: ServerProfile) => {
     setState((prev) => {
       return mergeAuthoritativeProfile(
         prev,
         profile,
         prev.pendingCompletedTaskIds.length > 0
-          ? { preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds }
+          ? {
+            preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
+            settledPendingCompletedRewardTaskIds: [ticketId],
+          }
           : {},
       );
     });
@@ -268,8 +283,8 @@ function Terminal() {
       addActiveTD,
       playChime,
       setState,
-      onCompletedRewardSettled: (_ticketId, profile) => {
-        applySettledAuthoritativeProfile(profile);
+      onCompletedRewardSettled: (ticketId, profile) => {
+        applySettledAuthoritativeProfile(ticketId, profile);
       },
     });
     const controller = new AbortController();
@@ -304,7 +319,7 @@ function Terminal() {
         });
         handleQuotaLockout(command);
       },
-      onProfileUpdate: (profile) => applySettledAuthoritativeProfile(profile),
+      onProfileUpdate: (profile) => applyProfileUpdate(profile),
       onError: playError, signal: controller.signal,
     });
   };

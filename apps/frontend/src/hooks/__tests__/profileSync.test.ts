@@ -208,7 +208,7 @@ describe("applyServerProfile", () => {
     expect(settledTaskIds).toEqual([]);
   });
 
-  it("settles only the pending rewards confirmed by the authoritative profile", () => {
+  it("does not infer settled ticket IDs from aggregate authoritative totals", () => {
     const prev = createGameState({
       economy: {
         currentTD: 1800,
@@ -230,10 +230,10 @@ describe("applyServerProfile", () => {
       total_td: 1500,
     }));
 
-    expect(settledTaskIds).toEqual(["COPE-059"]);
+    expect(settledTaskIds).toEqual([]);
   });
 
-  it("does not clear an ambiguous pending reward subset when multiple combinations fit the same total", () => {
+  it("does not infer settled ticket IDs even when one subset would match exactly", () => {
     const prev = createGameState({
       economy: {
         currentTD: 1400,
@@ -259,7 +259,7 @@ describe("applyServerProfile", () => {
     expect(settledTaskIds).toEqual([]);
   });
 
-  it("clears only the tickets that are confirmed across every matching subset", () => {
+  it("does not infer settled ticket IDs when an intersection exists across matching subsets", () => {
     const prev = createGameState({
       economy: {
         currentTD: 1400,
@@ -282,7 +282,7 @@ describe("applyServerProfile", () => {
       total_td: 1100,
     }));
 
-    expect(settledTaskIds).toEqual(["COPE-059"]);
+    expect(settledTaskIds).toEqual([]);
   });
 
   it("applies the authoritative profile before clearing settled pending reward metadata", () => {
@@ -306,6 +306,7 @@ describe("applyServerProfile", () => {
       inventory: { legacy: 2, ci_cd: 1 },
     }), {
       preservePendingCompletedRewardTaskIds: ["COPE-059"],
+      settledPendingCompletedRewardTaskIds: ["COPE-059"],
     });
 
     expect(merged.economy.currentTD).toBe(1300);
@@ -313,6 +314,34 @@ describe("applyServerProfile", () => {
     expect(merged.inventory).toEqual({ legacy: 2, ci_cd: 1 });
     expect(merged.pendingCompletedTaskIds).toEqual([]);
     expect(merged.pendingCompletedTaskRewards).toEqual({});
+  });
+
+  it("does not clear pending reward metadata on an authoritative merge without explicit settlement IDs", () => {
+    const prev = createGameState({
+      economy: {
+        currentTD: 1500,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
+    });
+
+    const merged = applyAuthoritativeProfile(prev, createServerProfile({
+      current_td: 1300,
+      total_td: 1500,
+    }), {
+      preservePendingCompletedRewardTaskIds: ["COPE-059"],
+      settledPendingCompletedRewardTaskIds: [],
+    });
+
+    expect(merged.economy.currentTD).toBe(1800);
+    expect(merged.economy.totalTDEarned).toBe(2000);
+    expect(merged.pendingCompletedTaskIds).toEqual(["COPE-059"]);
+    expect(merged.pendingCompletedTaskRewards).toEqual({ "COPE-059": { rewardTD: 500 } });
   });
 
   it("does not attempt exponential subset search once the pending set exceeds the safety cap", () => {

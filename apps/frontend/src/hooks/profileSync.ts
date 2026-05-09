@@ -2,60 +2,8 @@ import type { ServerProfile } from "@claude-cope/shared/profile";
 import type { GameState } from "./gameStateUtils";
 import { resolveRank } from "./gameStateUtils";
 
-const MAX_EXACT_REWARD_SUBSET_SEARCH_ENTRIES = 12;
-
 function getPendingRewardAmount(prev: GameState, ticketId: string): number {
   return prev.pendingCompletedTaskRewards?.[ticketId]?.rewardTD ?? 0;
-}
-
-function getKnownPendingRewardEntries(prev: GameState, pendingTaskIds: string[]) {
-  return pendingTaskIds
-    .map((ticketId) => ({ ticketId, rewardTD: getPendingRewardAmount(prev, ticketId) }))
-    .filter((entry) => entry.rewardTD > 0);
-}
-
-function getConfirmedKnownPendingRewardTD(
-  prev: GameState,
-  profile: ServerProfile,
-  pendingRewardEntries: Array<{ ticketId: string; rewardTD: number }>,
-): number {
-  const totalKnownPendingRewardTD = pendingRewardEntries.reduce((sum, entry) => sum + entry.rewardTD, 0);
-  if (totalKnownPendingRewardTD <= 0) return 0;
-
-  const localTotalExcludingKnownPendingRewards = Math.max(0, prev.economy.totalTDEarned - totalKnownPendingRewardTD);
-  return Math.max(0, Math.min(totalKnownPendingRewardTD, profile.total_td - localTotalExcludingKnownPendingRewards));
-}
-
-function collectExactRewardSubsets(
-  pendingRewardEntries: Array<{ ticketId: string; rewardTD: number }>,
-  targetRewardTD: number,
-): string[][] {
-  if (pendingRewardEntries.length > MAX_EXACT_REWARD_SUBSET_SEARCH_ENTRIES) {
-    return [];
-  }
-
-  const exactSubsets: string[][] = [];
-  const currentSubset: string[] = [];
-
-  const visit = (entryIndex: number, runningRewardTD: number) => {
-    if (runningRewardTD === targetRewardTD) {
-      exactSubsets.push([...currentSubset]);
-      return;
-    }
-
-    if (entryIndex >= pendingRewardEntries.length || runningRewardTD > targetRewardTD) {
-      return;
-    }
-
-    const entry = pendingRewardEntries[entryIndex]!;
-    currentSubset.push(entry.ticketId);
-    visit(entryIndex + 1, runningRewardTD + entry.rewardTD);
-    currentSubset.pop();
-    visit(entryIndex + 1, runningRewardTD);
-  };
-
-  visit(0, 0);
-  return exactSubsets;
 }
 
 export function getSettledPendingCompletedTaskIds(
@@ -63,21 +11,13 @@ export function getSettledPendingCompletedTaskIds(
   profile: ServerProfile,
   candidateTaskIds: string[] = prev.pendingCompletedTaskIds,
 ): string[] {
-  const pendingTaskIds = candidateTaskIds.filter((ticketId) => prev.pendingCompletedTaskIds.includes(ticketId));
-  if (pendingTaskIds.length === 0) return [];
-
-  if (profile.total_td >= prev.economy.totalTDEarned) {
-    return pendingTaskIds;
-  }
-
-  const pendingRewardEntries = getKnownPendingRewardEntries(prev, pendingTaskIds);
-  const confirmedPendingRewardTD = getConfirmedKnownPendingRewardTD(prev, profile, pendingRewardEntries);
-  if (confirmedPendingRewardTD <= 0) return [];
-
-  const exactSubsets = collectExactRewardSubsets(pendingRewardEntries, confirmedPendingRewardTD);
-  if (exactSubsets.length === 0) return [];
-
-  return exactSubsets[0]!.filter((ticketId) => exactSubsets.every((subset) => subset.includes(ticketId)));
+  void prev;
+  void profile;
+  void candidateTaskIds;
+  // Aggregate TD snapshots are not enough to prove which specific completed
+  // ticket rewards were persisted. Only explicit confirmation from /api/score
+  // should clear pending reward metadata.
+  return [];
 }
 
 /**
@@ -95,19 +35,29 @@ export function applyServerProfile(
   opts: {
     includeActiveTicket?: boolean;
     preservePendingCompletedRewardTaskIds?: string[] | null;
+    settledPendingCompletedRewardTaskIds?: string[] | null;
   } = {},
 ): GameState {
   const pendingTaskIds = opts.preservePendingCompletedRewardTaskIds?.filter(
     (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
   ) ?? [];
-  const settledTaskIdSet = new Set(getSettledPendingCompletedTaskIds(prev, profile, pendingTaskIds));
-  const unresolvedKnownRewardTD = pendingTaskIds.reduce((sum, ticketId) => (
-    settledTaskIdSet.has(ticketId) ? sum : sum + getPendingRewardAmount(prev, ticketId)
-  ), 0);
-  const hasLegacyPendingRewards = pendingTaskIds.some((ticketId) => getPendingRewardAmount(prev, ticketId) <= 0);
+  const settledTaskIdSet = new Set(
+    (opts.settledPendingCompletedRewardTaskIds ?? []).filter((ticketId) => pendingTaskIds.includes(ticketId)),
+  );
+  const unresolvedPendingTaskIds = pendingTaskIds.filter((ticketId) => !settledTaskIdSet.has(ticketId));
+  const unresolvedKnownRewardTD = unresolvedPendingTaskIds.reduce(
+    (sum, ticketId) => sum + getPendingRewardAmount(prev, ticketId),
+    0,
+  );
+  const hasLegacyPendingRewards = unresolvedPendingTaskIds.some((ticketId) => getPendingRewardAmount(prev, ticketId) <= 0);
   const inferredLegacyPendingRewardTD = hasLegacyPendingRewards
     ? Math.max(0, prev.economy.totalTDEarned - profile.total_td - unresolvedKnownRewardTD)
     : 0;
+  // Invariant: `currentTD` and `totalTDEarned` should preserve only unresolved
+  // optimistic completed-ticket rewards. Any reward that /api/score has already
+  // confirmed must be excluded here before we adopt the server profile, while
+  // legacy pending entries without reward metadata fall back to a bounded delta
+  // heuristic so older local state does not lose the bonus immediately.
   const unresolvedCompletedRewardTD = unresolvedKnownRewardTD + inferredLegacyPendingRewardTD;
   const localCurrentTDExcludingPendingReward = Math.max(0, prev.economy.currentTD - unresolvedCompletedRewardTD);
   const localTotalTDExcludingPendingReward = Math.max(0, prev.economy.totalTDEarned - unresolvedCompletedRewardTD);
@@ -153,12 +103,17 @@ export function applyAuthoritativeProfile(
   opts: {
     includeActiveTicket?: boolean;
     preservePendingCompletedRewardTaskIds?: string[] | null;
+    settledPendingCompletedRewardTaskIds?: string[] | null;
   } = {},
 ): GameState {
   const pendingTaskIdsToPreserve = opts.preservePendingCompletedRewardTaskIds?.filter(
     (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
   ) ?? [];
-  const settledTaskIdSet = new Set(getSettledPendingCompletedTaskIds(prev, profile, pendingTaskIdsToPreserve));
+  const settledTaskIdSet = new Set(
+    (opts.settledPendingCompletedRewardTaskIds ?? pendingTaskIdsToPreserve).filter(
+      (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
+    ),
+  );
   const next = applyServerProfile(
     prev,
     profile,
@@ -166,6 +121,7 @@ export function applyAuthoritativeProfile(
       ? {
         includeActiveTicket: opts.includeActiveTicket,
         preservePendingCompletedRewardTaskIds: pendingTaskIdsToPreserve,
+        settledPendingCompletedRewardTaskIds: [...settledTaskIdSet],
       }
       : { includeActiveTicket: opts.includeActiveTicket },
   );

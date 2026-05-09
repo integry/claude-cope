@@ -18,7 +18,7 @@ export function syncCompletedTicketReward(params: {
   username: string;
   ticketId: string;
   proKeyHash?: string;
-}): Promise<{ ok: boolean; profile?: ServerProfile } | null> {
+}): Promise<{ ok: boolean; profile?: ServerProfile; profileSource?: "score" | "session" } | null> {
   const { username, ticketId, proKeyHash } = params;
   return fetch(`${API_BASE}/api/score`, {
     method: "POST",
@@ -32,11 +32,12 @@ export function syncCompletedTicketReward(params: {
     .then(async (res) => {
       if (!res.ok) return null;
       const result = await res.json().catch(() => ({}));
+      if ((result as { ok?: boolean }).ok === false) return null;
       const profile = (result as { profile?: ServerProfile }).profile;
-      if (profile) return { ok: true, profile };
+      if (profile) return { ok: true, profile, profileSource: "score" };
 
       const session = await fetchSessionProfile().catch(() => null);
-      return session?.profile ? { ok: true, profile: session.profile } : { ok: true };
+      return session?.profile ? { ok: true, profile: session.profile, profileSource: "session" } : { ok: true };
     })
     .catch(() => null);
 }
@@ -100,7 +101,9 @@ export function buildSprintCallbacks(ctx: SprintContext) {
         ticketId: completedTicketId,
         proKeyHash: completedProKeyHash,
       }).then((result) => {
-        if (result?.ok && result.profile) ctx.onCompletedRewardSettled?.(completedTicketId, result.profile);
+        if (result?.ok && result.profile && result.profileSource === "score") {
+          ctx.onCompletedRewardSettled?.(completedTicketId, result.profile);
+        }
       });
     }
 
