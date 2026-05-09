@@ -16,7 +16,7 @@ export default function SprintProgressBar({ id, title, sprintProgress, sprintGoa
 
   if (!hasActiveTicket) {
     return (
-      <div className="text-xs font-mono mt-1 pt-1 border-t border-slate-700 sprint-idle-dim" data-testid="sprint-progress-bar">
+      <div className="text-xs font-mono mt-3 pt-1.5 pb-1.5 border-t border-slate-700 sprint-idle-dim" data-testid="sprint-progress-bar">
         <div>
           <span>[SPRINT]</span> WAITING FOR DESTRUCTION <span>(Current Earning Rate: 1x)</span>
         </div>
@@ -48,7 +48,7 @@ export default function SprintProgressBar({ id, title, sprintProgress, sprintGoa
   const emptyBlocks = totalBlocks - filledBlocks;
 
   return (
-    <div className="text-xs font-mono text-cyan-400 mt-1 pt-1 border-t border-cyan-800" data-testid="sprint-progress-bar">
+    <div className="text-xs font-mono text-cyan-400 mt-3 pt-1.5 pb-1.5 border-t border-cyan-800" data-testid="sprint-progress-bar">
       <span className="text-cyan-600">[SPRINT]</span> {id}: <span className="text-cyan-300 truncate">{title}</span>
       <div className="flex items-center gap-2">
         <span className="text-cyan-500">[{"█".repeat(filledBlocks)}{"░".repeat(emptyBlocks)}]</span>
