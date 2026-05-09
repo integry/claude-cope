@@ -53,6 +53,7 @@ export function applyServerProfile(
     (sum, ticketId) => sum + getPendingRewardAmount(prev, ticketId),
     0,
   );
+  const optimisticLocalBaselineTD = Math.max(0, prev.economy.currentTD - unresolvedKnownRewardTD);
   const hasLegacyPendingRewards = unresolvedPendingTaskIds.length > 0
     && Object.keys(prev.pendingCompletedTaskRewards ?? {}).length === 0;
   const inferredLegacyPendingRewardTD = hasLegacyPendingRewards
@@ -60,20 +61,21 @@ export function applyServerProfile(
     : 0;
   const unresolvedCompletedRewardTD = unresolvedKnownRewardTD + inferredLegacyPendingRewardTD;
   const shouldPreserveOptimisticTotals = unresolvedPendingTaskIds.length > 0;
-  const hasReliableLocalCurrentBaseline = prev.economy.currentTD > unresolvedCompletedRewardTD;
+  const hasReliableLocalCurrentBaseline = optimisticLocalBaselineTD > 0;
+  const isServerTotalCloseToOptimisticLocalTotal = profile.total_td >= (
+    prev.economy.totalTDEarned - (unresolvedCompletedRewardTD / 2)
+  );
   // Only treat the local pre-reward balance as a baseline when the user still
   // has enough TD left for that subtraction to mean something. Otherwise the
   // optimistic reward may already have been spent, or it may dominate the whole
   // local balance, so the safest merge is to preserve the local current TD.
+  // Likewise, once the server aggregate total is close to the optimistic local
+  // total, the snapshots are too ambiguous to safely re-add the pending reward
+  // on top without risking inflation.
   const currentTD = !shouldPreserveOptimisticTotals
     ? profile.current_td
-    : profile.total_td >= prev.economy.totalTDEarned
-      ? profile.current_td
-      : hasReliableLocalCurrentBaseline
-        ? Math.max(
-          0,
-          prev.economy.currentTD + (profile.current_td - (prev.economy.currentTD - unresolvedCompletedRewardTD)),
-        )
+    : hasReliableLocalCurrentBaseline && !isServerTotalCloseToOptimisticLocalTotal
+        ? Math.max(0, profile.current_td + unresolvedCompletedRewardTD)
         : prev.economy.currentTD;
   // Aggregate TD snapshots are not enough to prove whether a pending completed
   // ticket reward is already included in the server totals. Preserve the local
