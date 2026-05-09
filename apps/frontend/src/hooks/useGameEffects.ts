@@ -2,33 +2,10 @@ import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateA
 import { GENERATORS, CORPORATE_RANKS } from "../game/constants";
 import { type GameState, calculateActiveMultiplier, isPaidUser } from "./gameStateUtils";
 import { fetchSessionProfile, unlockAchievementServer } from "../api/profileApi";
-import type { ServerProfile } from "@claude-cope/shared/profile";
 import { applyAuthoritativeProfile, applyServerProfile } from "./profileSync";
 
 function getTrackedPendingCompletedTaskIds(state: GameState, requestedTaskIds: string[]): string[] {
   return requestedTaskIds.filter((ticketId) => state.pendingCompletedTaskIds.includes(ticketId));
-}
-
-function canSettlePendingCompletedTaskIdsFromSessionProfile(
-  state: GameState,
-  sessionProfile: ServerProfile,
-  requestedTaskIds: string[],
-): boolean {
-  if (requestedTaskIds.length === 0) return false;
-
-  const remainingPendingTaskIds = state.pendingCompletedTaskIds.filter(
-    (ticketId) => !requestedTaskIds.includes(ticketId),
-  );
-  if (remainingPendingTaskIds.some((ticketId) => state.pendingCompletedTaskRewards?.[ticketId]?.rewardTD == null)) {
-    return false;
-  }
-
-  const remainingPendingRewardTD = remainingPendingTaskIds.reduce(
-    (sum, ticketId) => sum + (state.pendingCompletedTaskRewards?.[ticketId]?.rewardTD ?? 0),
-    0,
-  );
-
-  return sessionProfile.total_td >= Math.max(0, state.economy.totalTDEarned - remainingPendingRewardTD);
 }
 
 export function shouldBackgroundSyncScore(state: GameState, lastSyncedTotalTD: number): boolean {
@@ -95,14 +72,6 @@ export function useScoreSync(
         const sessionProfile = (await fetchSessionProfile().catch(() => null))?.profile;
         if (!sessionProfile) return;
         setState((prev) => {
-          const settledPendingCompletedRewardTaskIds = getTrackedPendingCompletedTaskIds(prev, completedTaskIds);
-          if (canSettlePendingCompletedTaskIdsFromSessionProfile(prev, sessionProfile, settledPendingCompletedRewardTaskIds)) {
-            return applyAuthoritativeProfile(prev, sessionProfile, {
-              preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
-              settledPendingCompletedRewardTaskIds,
-            });
-          }
-
           return applyServerProfile(prev, sessionProfile, {
             preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
           });

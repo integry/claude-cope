@@ -5,6 +5,7 @@ import {
   applyServerProfile,
   createAuthoritativeProfileFloor,
   isServerProfileStaleAgainstFloor,
+  mergeAuthoritativeProfileFloor,
   settlePendingCompletedRewards,
 } from "../profileSync";
 import { createServerProfile } from "../../test/createServerProfile";
@@ -394,5 +395,16 @@ describe("isServerProfileStaleAgainstFloor", () => {
 
     expect(isServerProfileStaleAgainstFloor(createServerProfile({ total_td: 1500, current_td: 1500 }), floor)).toBe(true);
     expect(isServerProfileStaleAgainstFloor(createServerProfile({ total_td: 1500, current_td: 1250 }), floor)).toBe(false);
+  });
+
+  it("continues rejecting older profiles after a non-stale profile advances the floor", () => {
+    const settledFloor = createAuthoritativeProfileFloor(createServerProfile({ total_td: 1500, current_td: 1300 }));
+    const advancedFloor = mergeAuthoritativeProfileFloor(
+      settledFloor,
+      createAuthoritativeProfileFloor(createServerProfile({ total_td: 1600, current_td: 1400 })),
+    );
+
+    expect(isServerProfileStaleAgainstFloor(createServerProfile({ total_td: 1500, current_td: 1200 }), advancedFloor)).toBe(true);
+    expect(isServerProfileStaleAgainstFloor(createServerProfile({ total_td: 1600, current_td: 1400 }), advancedFloor)).toBe(false);
   });
 });

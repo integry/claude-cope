@@ -247,7 +247,12 @@ function Terminal() {
         : {},
       );
     });
-    if (settledProfileFloor) latestSettledProfileFloorRef.current = null;
+    if (settledProfileFloor) {
+      latestSettledProfileFloorRef.current = mergeAuthoritativeProfileFloor(
+        settledProfileFloor,
+        createAuthoritativeProfileFloor(profile),
+      );
+    }
   }, [setState]);
 
   const applySettledCompletedReward = useCallback((ticketId: string, profile?: ServerProfile) => {
