@@ -195,10 +195,9 @@ describe("syncCompletedTicketReward", () => {
     });
 
     onSprintProgress(10);
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(onCompletedRewardSettled).toHaveBeenCalledWith("COPE-059", undefined);
+    await vi.waitFor(() => {
+      expect(onCompletedRewardSettled).toHaveBeenCalledWith("COPE-059", undefined);
+    });
   });
 
   it("keeps the pending reward unsettled when completed reward sync fails", async () => {
