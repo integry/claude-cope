@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
@@ -284,10 +285,7 @@ async function resolveSessionProfileRow(opts: {
 }
 
 async function respondWithMeProfile(
-  c: {
-    env: Env["Bindings"];
-    json: (data: unknown, status?: number) => Response;
-  },
+  c: Context<Env>,
   opts: {
     db: D1Database | undefined;
     kv: KVNamespace;
