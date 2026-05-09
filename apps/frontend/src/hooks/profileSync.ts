@@ -59,15 +59,22 @@ export function applyServerProfile(
     ? Math.max(0, prev.economy.totalTDEarned - profile.total_td - unresolvedKnownRewardTD)
     : 0;
   const unresolvedCompletedRewardTD = unresolvedKnownRewardTD + inferredLegacyPendingRewardTD;
-  // Pending ticket rewards are the one economy delta we know the local client
-  // may be ahead on. Strip them out before comparing the rest of the balance
-  // so server-side spends or gains still flow through.
-  const localCurrentTDExcludingPendingReward = Math.max(0, prev.economy.currentTD - unresolvedCompletedRewardTD);
-  const serverCurrentDeltaExcludingPendingReward = profile.current_td - localCurrentTDExcludingPendingReward;
-  const currentTD = serverCurrentDeltaExcludingPendingReward < 0
-    ? Math.max(0, prev.economy.currentTD + serverCurrentDeltaExcludingPendingReward)
-    : prev.economy.currentTD + serverCurrentDeltaExcludingPendingReward;
   const shouldPreserveOptimisticTotals = unresolvedPendingTaskIds.length > 0;
+  const hasReliableLocalCurrentBaseline = prev.economy.currentTD > unresolvedCompletedRewardTD;
+  // Only treat the local pre-reward balance as a baseline when the user still
+  // has enough TD left for that subtraction to mean something. Otherwise the
+  // optimistic reward may already have been spent, or it may dominate the whole
+  // local balance, so the safest merge is to preserve the local current TD.
+  const currentTD = !shouldPreserveOptimisticTotals
+    ? profile.current_td
+    : profile.total_td >= prev.economy.totalTDEarned
+      ? profile.current_td
+      : hasReliableLocalCurrentBaseline
+        ? Math.max(
+          0,
+          prev.economy.currentTD + (profile.current_td - (prev.economy.currentTD - unresolvedCompletedRewardTD)),
+        )
+        : prev.economy.currentTD;
   // Aggregate TD snapshots are not enough to prove whether a pending completed
   // ticket reward is already included in the server totals. Preserve the local
   // optimistic total only while the ticket is still unsettled; once `/api/score`
