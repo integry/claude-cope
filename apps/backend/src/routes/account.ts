@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { Hono } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
-import { getProfile, getProfileRow, rowToProfile, isLicenseActive } from "../utils/profile";
+import { getProfile, getProfileRow, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
 import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
@@ -367,10 +367,36 @@ account.get("/me", async (c) => {
   const sessionId = c.get("sessionId");
   if (!kv || !sessionId) return c.json({ found: false });
 
-  let username = await kv.get(accountKvKeys.sessionUser(sessionId));
-  if (!username) return c.json({ found: false });
-
   const db = c.env?.DB;
+  let username = await kv.get(accountKvKeys.sessionUser(sessionId));
+  if (!username) {
+    const freeAccountId = c.get("freeAccountId");
+    if (!db || !freeAccountId) return c.json({ found: false });
+    const row = await getProfileRowByAccountId(db, freeAccountId);
+    if (!row) return c.json({ found: false });
+    username = row.username;
+    try {
+      await kv.put(accountKvKeys.sessionUser(sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+    } catch (err: unknown) {
+      console.warn(
+        `[account/me] failed to restore session binding for ${sessionId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+
+    const { isPro, quotaPercent, profile, revoked } = await buildMePayload({ row, db, kv, env: c.env, sessionId });
+    await issueFreeAccountCookie(c, c.env.FREE_ACCOUNT_COOKIE_SECRET, row.account_id ?? null);
+
+    return c.json({
+      found: true,
+      username,
+      profile,
+      quotaPercent,
+      isPro,
+      ...(revoked ? { revoked: true } : {}),
+    });
+  }
+
   const resolved = await resolveSessionProfileRow({ db, kv, sessionId, username });
   username = resolved.username;
   const row = resolved.row;

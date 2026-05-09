@@ -5,6 +5,7 @@ import { ACCOUNT_TEST_SQL } from "./account.test-helpers";
 import { createMockDB, mockKV, postJSON, postRaw, postWithSession, getWithSession, BASE_PROFILE, profileWithHash, ownedMockDB, GEN_BODY } from "./account.test-utils";
 import { storeClaimedKeys } from "./accountHelpers";
 import { hashKey } from "../utils/quota";
+import { signFreeAccountCookieValue } from "../utils/freeAccountIdentity";
 import { FREE_TIER_RANK_CAP } from "../gameConstants";
 
 const CLAIM_SECRET = "tok";
@@ -1314,6 +1315,35 @@ describe("GET /api/account/me", () => {
     const res = await getWithSession("/api/account/me", { QUOTA_KV: kv });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ found: false });
+  });
+  it("restores a free profile from the signed account cookie when the session mapping is missing", async () => {
+    const kv = mockKV({});
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRowByAccountId]: { ...BASE_PROFILE, license_hash: null, account_id: "acct-123" },
+      },
+    });
+    const cookieValue = await signFreeAccountCookieValue("secret", "acct-123");
+    const res = await app.request("/api/account/me", {
+      headers: {
+        Cookie: `cope_session_id=test-session; cope_free_account=${cookieValue}`,
+      },
+    }, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      QUOTA_KV: kv,
+      DB: db,
+      FREE_ACCOUNT_COOKIE_SECRET: "secret",
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "alice",
+      isPro: false,
+      profile: {
+        username: "alice",
+      },
+    });
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "alice", expect.any(Object));
   });
   it("returns the mapped free profile when the session username exists", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });

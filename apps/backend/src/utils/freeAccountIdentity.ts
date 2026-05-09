@@ -68,13 +68,27 @@ function cookieOptions() {
   };
 }
 
+function serializeCookieHeader(name: string, value: string, options: ReturnType<typeof cookieOptions>): string {
+  const attributes = [
+    `${name}=${value}`,
+    `Max-Age=${options.maxAge}`,
+    `Path=${options.path}`,
+    options.httpOnly ? "HttpOnly" : null,
+    options.secure ? "Secure" : null,
+    options.sameSite ? `SameSite=${options.sameSite}` : null,
+  ].filter(Boolean);
+  return attributes.join("; ");
+}
+
 export async function issueFreeAccountCookie(c: Context, secret: string | undefined, accountId: string | null | undefined): Promise<void> {
   if (!secret || !accountId) return;
-  setCookie(c, FREE_ACCOUNT_COOKIE_NAME, await signFreeAccountCookieValue(secret, accountId), cookieOptions());
+  const options = cookieOptions();
+  setCookie(c, FREE_ACCOUNT_COOKIE_NAME, await signFreeAccountCookieValue(secret, accountId), options);
 }
 
 export async function buildFreeAccountCookieHeader(secret: string | undefined, accountId: string | null | undefined): Promise<string | null> {
   if (!secret || !accountId) return null;
+  const options = cookieOptions();
   const value = await signFreeAccountCookieValue(secret, accountId);
-  return `${FREE_ACCOUNT_COOKIE_NAME}=${value}; Max-Age=${FREE_ACCOUNT_COOKIE_MAX_AGE_SECONDS}; Path=/; HttpOnly; Secure; SameSite=Lax`;
+  return serializeCookieHeader(FREE_ACCOUNT_COOKIE_NAME, value, options);
 }

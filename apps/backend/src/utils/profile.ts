@@ -93,6 +93,13 @@ export async function getProfileRow(db: D1Database, username: string): Promise<U
     .first<UserScoreWithLicenseHashRow>();
 }
 
+export async function getProfileRowByAccountId(db: D1Database, accountId: string): Promise<UserScoreWithLicenseHashRow | null> {
+  return db
+    .prepare(`SELECT ${PROFILE_COLUMNS}, license_hash, account_id FROM user_scores WHERE account_id = ?`)
+    .bind(accountId)
+    .first<UserScoreWithLicenseHashRow>();
+}
+
 /** Maximum age (ms) before a license is considered stale and hard-rejected.
  *  If Polar webhooks are misconfigured or delayed, this prevents revoked
  *  licenses from being authorized indefinitely. */
