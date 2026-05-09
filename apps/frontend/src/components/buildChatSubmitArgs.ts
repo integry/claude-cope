@@ -2,7 +2,7 @@ import type { Message, GameState } from "../hooks/useGameState";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
-import { updateTicketServer } from "../api/profileApi";
+import { fetchSessionProfile, updateTicketServer } from "../api/profileApi";
 
 interface SprintContext {
   getState: () => GameState;
@@ -31,7 +31,11 @@ export function syncCompletedTicketReward(params: {
     .then(async (res) => {
       if (!res.ok) return null;
       const result = await res.json().catch(() => ({}));
-      return { ok: true, profile: (result as { profile?: ServerProfile }).profile };
+      const profile = (result as { profile?: ServerProfile }).profile;
+      if (profile) return { ok: true, profile };
+
+      const sessionProfile = await fetchSessionProfile().catch(() => ({ found: false }));
+      return { ok: true, profile: sessionProfile.profile ?? undefined };
     })
     .catch(() => null);
 }
@@ -66,7 +70,9 @@ export function buildSprintCallbacks(ctx: SprintContext) {
         ...prev,
         activeTicket: null,
         pendingCompletedTaskIds: completedUsername && completedProKeyHash
-          ? [...prev.pendingCompletedTaskIds, completedTicketId]
+          ? prev.pendingCompletedTaskIds.includes(completedTicketId)
+            ? prev.pendingCompletedTaskIds
+            : [...prev.pendingCompletedTaskIds, completedTicketId]
           : prev.pendingCompletedTaskIds,
       };
     });

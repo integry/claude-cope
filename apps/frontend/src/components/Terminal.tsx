@@ -240,7 +240,6 @@ function Terminal() {
           : {},
       );
       if (source !== "completed-ticket-reward" || !completedTicketId) return next;
-      if (profile.total_td < prev.economy.totalTDEarned) return next;
 
       return {
         ...next,

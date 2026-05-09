@@ -69,6 +69,39 @@ describe("syncCompletedTicketReward", () => {
     });
   });
 
+  it("falls back to fetching the session profile when /api/score succeeds without returning one", async () => {
+    const sessionProfile: ServerProfile = {
+      username: "alice",
+      current_td: 1000,
+      total_td: 1000,
+      corporate_rank: "Junior Code Monkey",
+      inventory: {},
+      upgrades: [],
+      achievements: [],
+      buddy_type: null,
+      buddy_is_shiny: false,
+      unlocked_themes: ["default"],
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+      multiplier: 1,
+      quota_percent: 100,
+    };
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ found: true, profile: sessionProfile }), { status: 200 }));
+
+    const result = await syncCompletedTicketReward({
+      username: "alice",
+      ticketId: "COPE-115",
+      proKeyHash: "pro-hash",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/account/me");
+    expect(result).toEqual({ ok: true, profile: sessionProfile });
+  });
+
   it("only sends the completed ticket identifier when syncing a completed paid ticket", async () => {
     const playChime = vi.fn();
     const addActiveTD = vi.fn();
@@ -178,6 +211,9 @@ describe("syncCompletedTicketReward", () => {
       if (url === "/api/score") {
         return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
       }
+      if (url === "/api/account/me") {
+        return Promise.resolve(new Response(JSON.stringify({ found: false }), { status: 200 }));
+      }
       return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     });
     const onCompletedRewardSettled = vi.fn();
@@ -199,6 +235,55 @@ describe("syncCompletedTicketReward", () => {
     await Promise.resolve();
 
     expect(onCompletedRewardSettled).not.toHaveBeenCalled();
+  });
+
+  it("settles the pending reward after a successful /api/score response fetches the current session profile", async () => {
+    const settledProfile: ServerProfile = {
+      username: "alice",
+      current_td: 1000,
+      total_td: 1000,
+      corporate_rank: "Junior Code Monkey",
+      inventory: {},
+      upgrades: [],
+      achievements: [],
+      buddy_type: null,
+      buddy_is_shiny: false,
+      unlocked_themes: ["default"],
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+      multiplier: 1,
+      quota_percent: 100,
+    };
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/score") {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      }
+      if (url === "/api/account/me") {
+        return Promise.resolve(new Response(JSON.stringify({ found: true, profile: settledProfile }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    });
+    const onCompletedRewardSettled = vi.fn();
+
+    const { onSprintProgress } = buildSprintCallbacks({
+      getState: () => createGameState({
+        proKeyHash: "fresh-pro-hash",
+        activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
+      }),
+      updateTicketProgress: vi.fn(),
+      addActiveTD: vi.fn(),
+      playChime: vi.fn(),
+      setState: vi.fn(),
+      onCompletedRewardSettled,
+    });
+
+    onSprintProgress(10);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onCompletedRewardSettled).toHaveBeenCalledWith("COPE-059", settledProfile);
   });
 
   it("keeps the pending reward unsettled when completed reward sync fails", async () => {
@@ -291,6 +376,31 @@ describe("syncCompletedTicketReward", () => {
 
     const nextState = setState.mock.results[0]?.value as GameState;
     expect(nextState.pendingCompletedTaskIds).toEqual([]);
+  });
+
+  it("does not append duplicate pending completed task IDs for the same ticket", () => {
+    const setState = vi.fn((updater: (prev: GameState) => GameState) => updater(createGameState({
+      proKeyHash: "fresh-pro-hash",
+      activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
+      pendingCompletedTaskIds: ["COPE-059"],
+    })));
+
+    const { onSprintProgress } = buildSprintCallbacks({
+      getState: () => createGameState({
+        proKeyHash: "fresh-pro-hash",
+        activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
+        pendingCompletedTaskIds: ["COPE-059"],
+      }),
+      updateTicketProgress: vi.fn(),
+      addActiveTD: vi.fn(),
+      playChime: vi.fn(),
+      setState,
+    });
+
+    onSprintProgress(10);
+
+    const nextState = setState.mock.results[0]?.value as GameState;
+    expect(nextState.pendingCompletedTaskIds).toEqual(["COPE-059"]);
   });
 
   it("preserves local balances while multiple completed rewards are still pending", () => {
