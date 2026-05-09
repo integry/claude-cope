@@ -14,11 +14,16 @@ interface SprintContext {
   onCompletedRewardSettled?: (ticketId: string, profile?: ServerProfile) => void;
 }
 
+type CompletedTicketRewardSyncResult =
+  | { ok: true; status: "settled"; profile: ServerProfile; profileSource: "score" | "session" }
+  | { ok: true; status: "pending" }
+  | { ok: false; status: "failed" };
+
 export function syncCompletedTicketReward(params: {
   username: string;
   ticketId: string;
   proKeyHash?: string;
-}): Promise<{ ok: boolean; profile?: ServerProfile; profileSource?: "score" | "session" } | null> {
+}): Promise<CompletedTicketRewardSyncResult> {
   const { username, ticketId, proKeyHash } = params;
   return fetch(`${API_BASE}/api/score`, {
     method: "POST",
@@ -28,18 +33,19 @@ export function syncCompletedTicketReward(params: {
       completedTaskIds: [ticketId],
       ...(proKeyHash ? { proKeyHash } : {}),
     }),
-  })
-    .then(async (res): Promise<{ ok: boolean; profile?: ServerProfile; profileSource?: "score" | "session" } | null> => {
-      if (!res.ok) return null;
+  }).then(async (res): Promise<CompletedTicketRewardSyncResult> => {
+      if (!res.ok) return { ok: false, status: "failed" };
       const result = await res.json().catch(() => ({}));
-      if ((result as { ok?: boolean }).ok === false) return null;
+      if ((result as { ok?: boolean }).ok === false) return { ok: false, status: "failed" };
       const profile = (result as { profile?: ServerProfile }).profile;
-      if (profile) return { ok: true, profile, profileSource: "score" };
+      if (profile) return { ok: true, status: "settled", profile, profileSource: "score" };
 
       const session = await fetchSessionProfile().catch(() => null);
-      return session?.profile ? { ok: true, profile: session.profile, profileSource: "session" } : { ok: true };
+      return session?.profile
+        ? { ok: true, status: "settled", profile: session.profile, profileSource: "session" }
+        : { ok: true, status: "pending" };
     })
-    .catch(() => null);
+    .catch((): CompletedTicketRewardSyncResult => ({ ok: false, status: "failed" }));
 }
 
 /** Build the onSprintProgress callback and a getter for the sprint-complete message */
@@ -101,7 +107,7 @@ export function buildSprintCallbacks(ctx: SprintContext) {
         ticketId: completedTicketId,
         proKeyHash: completedProKeyHash,
       }).then((result) => {
-        if (result?.ok) {
+        if (result.status === "settled") {
           ctx.onCompletedRewardSettled?.(
             completedTicketId,
             result.profile,

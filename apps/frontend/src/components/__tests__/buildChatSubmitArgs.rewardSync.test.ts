@@ -33,7 +33,7 @@ describe("syncCompletedTicketReward", () => {
       completedTaskIds: ["COPE-115"],
       proKeyHash: "pro-hash",
     });
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, status: "pending" });
   });
 
   it("returns the embedded profile when /api/score confirms the updated account state", async () => {
@@ -49,7 +49,12 @@ describe("syncCompletedTicketReward", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ ok: true, profile: settledProfile, profileSource: "score" });
+    expect(result).toEqual({
+      ok: true,
+      status: "settled",
+      profile: settledProfile,
+      profileSource: "score",
+    });
   });
 
   it("falls back to the session profile when /api/score succeeds without returning one", async () => {
@@ -68,7 +73,12 @@ describe("syncCompletedTicketReward", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/account/me");
-    expect(result).toEqual({ ok: true, profile: settledProfile, profileSource: "session" });
+    expect(result).toEqual({
+      ok: true,
+      status: "settled",
+      profile: settledProfile,
+      profileSource: "session",
+    });
   });
 
   it("leaves settlement pending when neither endpoint returns a profile", async () => {
@@ -84,7 +94,7 @@ describe("syncCompletedTicketReward", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/account/me");
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, status: "pending" });
   });
 
   it("treats a 200 response with ok false as a failed reward sync", async () => {
@@ -99,6 +109,6 @@ describe("syncCompletedTicketReward", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(result).toBeNull();
+    expect(result).toEqual({ ok: false, status: "failed" });
   });
 });
