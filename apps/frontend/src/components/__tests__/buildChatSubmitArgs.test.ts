@@ -64,6 +64,20 @@ function createSprintCallbacks(
   });
 }
 
+async function waitForAssertion(assertion: () => void, timeoutMs = 200) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (true) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      if (Date.now() >= deadline) throw error;
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
+  }
+}
+
 describe("buildSprintCallbacks", () => {
   const fetchMock = vi.fn();
 
@@ -127,8 +141,9 @@ describe("buildSprintCallbacks", () => {
     }, { onCompletedRewardSettled: vi.fn() });
 
     onSprintProgress(10);
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForAssertion(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/score", expect.any(Object));
+    });
 
     const localState = createGameState({
       economy: {
@@ -168,8 +183,9 @@ describe("buildSprintCallbacks", () => {
     const { onSprintProgress } = createSprintCallbacks({}, { onCompletedRewardSettled });
 
     onSprintProgress(10);
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForAssertion(() => {
+      expect(fetchMock.mock.calls.some(([url]) => url === "/api/account/me")).toBe(true);
+    });
 
     expect(onCompletedRewardSettled).not.toHaveBeenCalled();
   });
@@ -198,7 +214,9 @@ describe("buildSprintCallbacks", () => {
 
     onSprintProgress(10);
     onSprintProgress(10);
-    await Promise.resolve();
+    await waitForAssertion(() => {
+      expect(fetchMock.mock.calls.filter(([url]) => url === "/api/score")).toHaveLength(1);
+    });
 
     expect(addActiveTD).toHaveBeenCalledTimes(1);
     expect(playChime).toHaveBeenCalledTimes(1);
@@ -220,9 +238,9 @@ describe("buildSprintCallbacks", () => {
     const { onSprintProgress } = createSprintCallbacks({}, { onCompletedRewardSettled });
 
     onSprintProgress(10);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-
-    expect(onCompletedRewardSettled).toHaveBeenCalledWith("COPE-059", settledProfile);
+    await waitForAssertion(() => {
+      expect(onCompletedRewardSettled).toHaveBeenCalledWith("COPE-059", settledProfile);
+    });
   });
 
   it("keeps the pending reward unsettled when completed reward sync fails", async () => {
@@ -232,8 +250,9 @@ describe("buildSprintCallbacks", () => {
     const { onSprintProgress } = createSprintCallbacks({}, { onCompletedRewardSettled });
 
     onSprintProgress(10);
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForAssertion(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/score", expect.any(Object));
+    });
 
     expect(onCompletedRewardSettled).not.toHaveBeenCalled();
   });

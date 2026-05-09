@@ -6,7 +6,7 @@ import { isFreeUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
-import { applyServerProfile, getSettledPendingCompletedTaskIds } from "../hooks/profileSync";
+import { applyAuthoritativeProfile as mergeAuthoritativeProfile } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { filterChatHistory } from "./filterChatHistory";
@@ -226,27 +226,15 @@ function Terminal() {
     if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1 } }));
   }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
 
-  const applyAuthoritativeProfile = useCallback((profile: ServerProfile) => {
+  const applySettledAuthoritativeProfile = useCallback((profile: ServerProfile) => {
     setState((prev) => {
-      const pendingTaskIdsToPreserve = prev.pendingCompletedTaskIds;
-      const settledTaskIds = getSettledPendingCompletedTaskIds(prev, profile, pendingTaskIdsToPreserve);
-      const settledTaskIdSet = new Set(settledTaskIds);
-      const next = applyServerProfile(
+      return mergeAuthoritativeProfile(
         prev,
         profile,
-        pendingTaskIdsToPreserve.length > 0
-          ? { preservePendingCompletedRewardTaskIds: pendingTaskIdsToPreserve }
+        prev.pendingCompletedTaskIds.length > 0
+          ? { preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds }
           : {},
       );
-      if (settledTaskIds.length === 0) return next;
-
-      return {
-        ...next,
-        pendingCompletedTaskIds: prev.pendingCompletedTaskIds.filter((id) => !settledTaskIdSet.has(id)),
-        pendingCompletedTaskRewards: Object.fromEntries(
-          Object.entries(prev.pendingCompletedTaskRewards ?? {}).filter(([ticketId]) => !settledTaskIdSet.has(ticketId)),
-        ),
-      };
     });
   }, [setState]);
 
@@ -281,7 +269,7 @@ function Terminal() {
       playChime,
       setState,
       onCompletedRewardSettled: (_ticketId, profile) => {
-        applyAuthoritativeProfile(profile);
+        applySettledAuthoritativeProfile(profile);
       },
     });
     const controller = new AbortController();
@@ -316,7 +304,7 @@ function Terminal() {
         });
         handleQuotaLockout(command);
       },
-      onProfileUpdate: (profile) => applyAuthoritativeProfile(profile),
+      onProfileUpdate: (profile) => applySettledAuthoritativeProfile(profile),
       onError: playError, signal: controller.signal,
     });
   };

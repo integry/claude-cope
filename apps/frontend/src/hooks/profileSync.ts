@@ -2,6 +2,8 @@ import type { ServerProfile } from "@claude-cope/shared/profile";
 import type { GameState } from "./gameStateUtils";
 import { resolveRank } from "./gameStateUtils";
 
+const MAX_EXACT_REWARD_SUBSET_SEARCH_ENTRIES = 12;
+
 function getPendingRewardAmount(prev: GameState, ticketId: string): number {
   return prev.pendingCompletedTaskRewards?.[ticketId]?.rewardTD ?? 0;
 }
@@ -28,6 +30,10 @@ function collectExactRewardSubsets(
   pendingRewardEntries: Array<{ ticketId: string; rewardTD: number }>,
   targetRewardTD: number,
 ): string[][] {
+  if (pendingRewardEntries.length > MAX_EXACT_REWARD_SUBSET_SEARCH_ENTRIES) {
+    return [];
+  }
+
   const exactSubsets: string[][] = [];
   const currentSubset: string[] = [];
 
@@ -135,5 +141,41 @@ export function applyServerProfile(
     unlockedThemes: profile.unlocked_themes,
     activeTheme: profile.active_theme,
     ...(opts.includeActiveTicket ? { activeTicket: profile.active_ticket && profile.active_ticket.sprintProgress < profile.active_ticket.sprintGoal ? profile.active_ticket : null } : {}),
+  };
+}
+
+export function applyAuthoritativeProfile(
+  prev: GameState,
+  profile: ServerProfile,
+  opts: {
+    includeActiveTicket?: boolean;
+    preservePendingCompletedRewardTaskIds?: string[] | null;
+  } = {},
+): GameState {
+  const pendingTaskIdsToPreserve = opts.preservePendingCompletedRewardTaskIds?.filter(
+    (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
+  ) ?? [];
+  const settledTaskIdSet = new Set(getSettledPendingCompletedTaskIds(prev, profile, pendingTaskIdsToPreserve));
+  const next = applyServerProfile(
+    prev,
+    profile,
+    pendingTaskIdsToPreserve.length > 0
+      ? {
+        includeActiveTicket: opts.includeActiveTicket,
+        preservePendingCompletedRewardTaskIds: pendingTaskIdsToPreserve,
+      }
+      : { includeActiveTicket: opts.includeActiveTicket },
+  );
+
+  if (settledTaskIdSet.size === 0) {
+    return next;
+  }
+
+  return {
+    ...next,
+    pendingCompletedTaskIds: prev.pendingCompletedTaskIds.filter((id) => !settledTaskIdSet.has(id)),
+    pendingCompletedTaskRewards: Object.fromEntries(
+      Object.entries(prev.pendingCompletedTaskRewards ?? {}).filter(([ticketId]) => !settledTaskIdSet.has(ticketId)),
+    ),
   };
 }

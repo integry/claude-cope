@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GameState } from "../useGameState";
-import { applyServerProfile, getSettledPendingCompletedTaskIds } from "../profileSync";
+import { applyAuthoritativeProfile, applyServerProfile, getSettledPendingCompletedTaskIds } from "../profileSync";
 import { createServerProfile } from "../../test/createServerProfile";
 
 function createGameState(overrides: Partial<GameState> = {}): GameState {
@@ -258,5 +258,61 @@ describe("applyServerProfile", () => {
     }));
 
     expect(settledTaskIds).toEqual(["COPE-059"]);
+  });
+
+  it("applies the authoritative profile before clearing settled pending reward metadata", () => {
+    const prev = createGameState({
+      economy: {
+        currentTD: 1500,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
+      inventory: { legacy: 1 },
+    });
+
+    const merged = applyAuthoritativeProfile(prev, createServerProfile({
+      current_td: 1300,
+      total_td: 1500,
+      inventory: { legacy: 2, ci_cd: 1 },
+    }), {
+      preservePendingCompletedRewardTaskIds: ["COPE-059"],
+    });
+
+    expect(merged.economy.currentTD).toBe(1300);
+    expect(merged.economy.totalTDEarned).toBe(1500);
+    expect(merged.inventory).toEqual({ legacy: 2, ci_cd: 1 });
+    expect(merged.pendingCompletedTaskIds).toEqual([]);
+    expect(merged.pendingCompletedTaskRewards).toEqual({});
+  });
+
+  it("does not attempt exponential subset search once the pending set exceeds the safety cap", () => {
+    const pendingCompletedTaskIds = Array.from({ length: 13 }, (_, index) => `COPE-${index + 100}`);
+    const pendingCompletedTaskRewards = Object.fromEntries(
+      pendingCompletedTaskIds.map((ticketId) => [ticketId, { rewardTD: 100 }]),
+    );
+    const prev = createGameState({
+      economy: {
+        currentTD: 1300,
+        totalTDEarned: 1300,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds,
+      pendingCompletedTaskRewards,
+    });
+
+    const settledTaskIds = getSettledPendingCompletedTaskIds(prev, createServerProfile({
+      current_td: 600,
+      total_td: 600,
+    }));
+
+    expect(settledTaskIds).toEqual([]);
   });
 });
