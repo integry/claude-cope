@@ -76,9 +76,7 @@ export function applyServerProfile(
     0,
   );
   const optimisticLocalBaselineTD = Math.max(0, prev.economy.currentTD - unresolvedKnownRewardTD);
-  const hasLegacyPendingRewards = unresolvedPendingTaskIds.length > 0
-    && Object.keys(prev.pendingCompletedTaskRewards ?? {}).length === 0;
-  const inferredLegacyPendingRewardTD = hasLegacyPendingRewards
+  const inferredLegacyPendingRewardTD = unresolvedPendingTaskIds.length > 0
     ? Math.max(0, prev.economy.totalTDEarned - profile.total_td - unresolvedKnownRewardTD)
     : 0;
   const unresolvedCompletedRewardTD = unresolvedKnownRewardTD + inferredLegacyPendingRewardTD;

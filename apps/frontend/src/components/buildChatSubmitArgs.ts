@@ -2,7 +2,7 @@ import type { Message, GameState } from "../hooks/useGameState";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
-import { fetchSessionProfile, updateTicketServer } from "../api/profileApi";
+import { updateTicketServer } from "../api/profileApi";
 import { isPaidUser } from "../hooks/gameStateUtils";
 
 interface SprintContext {
@@ -15,7 +15,7 @@ interface SprintContext {
 }
 
 type CompletedTicketRewardSyncResult =
-  | { ok: true; status: "settled"; profile: ServerProfile; profileSource: "score" | "session" }
+  | { ok: true; status: "settled"; profile: ServerProfile; profileSource: "score" }
   | { ok: true; status: "pending" }
   | { ok: false; status: "failed" };
 
@@ -39,11 +39,7 @@ export function syncCompletedTicketReward(params: {
       if ((result as { ok?: boolean }).ok === false) return { ok: false, status: "failed" };
       const profile = (result as { profile?: ServerProfile }).profile;
       if (profile) return { ok: true, status: "settled", profile, profileSource: "score" };
-
-      const session = await fetchSessionProfile().catch(() => null);
-      return session?.profile
-        ? { ok: true, status: "settled", profile: session.profile, profileSource: "session" }
-        : { ok: true, status: "pending" };
+      return { ok: true, status: "pending" };
     })
     .catch((): CompletedTicketRewardSyncResult => ({ ok: false, status: "failed" }));
 }

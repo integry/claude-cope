@@ -105,7 +105,7 @@ describe("useScoreSync", () => {
     vi.useRealTimers();
   });
 
-  it("falls back to the session profile before settling pending completed rewards", async () => {
+  it("merges the session profile without settling pending completed rewards when /api/score omits a profile", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.mocked(fetchSessionProfile).mockResolvedValue({
       found: true,
@@ -143,9 +143,9 @@ describe("useScoreSync", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/score", expect.objectContaining({ method: "POST" }));
     expect(setState).toHaveBeenCalledTimes(1);
-    expect(state.pendingCompletedTaskIds).toEqual([]);
-    expect(state.pendingCompletedTaskRewards).toEqual({});
-    expect(state.economy.currentTD).toBe(1300);
+    expect(state.pendingCompletedTaskIds).toEqual(["COPE-115"]);
+    expect(state.pendingCompletedTaskRewards).toEqual({ "COPE-115": { rewardTD: 500 } });
+    expect(state.economy.currentTD).toBe(1500);
     expect(state.economy.totalTDEarned).toBe(1500);
   });
 

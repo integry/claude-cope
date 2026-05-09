@@ -220,7 +220,7 @@ describe("applyServerProfile", () => {
     expect(merged.economy.totalTDEarned).toBe(1500);
   });
 
-  it("does not infer extra legacy reward TD once reward metadata exists", () => {
+  it("preserves legacy pending reward TD even when newer pending rewards already have metadata", () => {
     const prev = createGameState({
       economy: {
         currentTD: 2000,
@@ -241,7 +241,7 @@ describe("applyServerProfile", () => {
       preservePendingCompletedRewardTaskIds: ["COPE-059", "COPE-060"],
     });
 
-    expect(merged.economy.currentTD).toBe(1500);
+    expect(merged.economy.currentTD).toBe(2000);
     expect(merged.economy.totalTDEarned).toBe(2000);
   });
 

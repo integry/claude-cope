@@ -124,17 +124,11 @@ describe("buildSprintCallbacks", () => {
     });
   });
 
-  it("settles the pending reward from the session profile when /api/score succeeds without returning one", async () => {
-    const settledProfile = createServerProfile({ total_td: 1500, current_td: 1500 });
+  it("keeps the pending reward unsettled when /api/score succeeds without returning a profile", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/score") {
         return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-      }
-      if (url === "/api/account/me") {
-        return Promise.resolve(
-          new Response(JSON.stringify({ found: true, profile: settledProfile }), { status: 200 }),
-        );
       }
       return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     });
@@ -144,9 +138,10 @@ describe("buildSprintCallbacks", () => {
 
     onSprintProgress(10);
     await waitForAssertion(() => {
-      expect(onCompletedRewardSettled).toHaveBeenCalledWith("COPE-059", settledProfile);
+      expect(fetchMock.mock.calls.some(([url]) => url === "/api/score")).toBe(true);
     });
-    expect(fetchMock.mock.calls.some(([url]) => url === "/api/account/me")).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/account/me")).toBe(false);
+    expect(onCompletedRewardSettled).not.toHaveBeenCalled();
   });
 
   it("does not replay completion side effects when sprint completion fires twice for the same ticket", async () => {
@@ -202,14 +197,11 @@ describe("buildSprintCallbacks", () => {
     });
   });
 
-  it("leaves settlement pending when /api/score succeeds but the session profile is unavailable", async () => {
+  it("leaves settlement pending when /api/score succeeds without an embedded profile", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/score") {
         return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-      }
-      if (url === "/api/account/me") {
-        return Promise.resolve(new Response(JSON.stringify({ found: false }), { status: 200 }));
       }
       return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     });
@@ -219,8 +211,9 @@ describe("buildSprintCallbacks", () => {
 
     onSprintProgress(10);
     await waitForAssertion(() => {
-      expect(fetchMock.mock.calls.some(([url]) => url === "/api/account/me")).toBe(true);
+      expect(fetchMock.mock.calls.some(([url]) => url === "/api/score")).toBe(true);
     });
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/account/me")).toBe(false);
     expect(onCompletedRewardSettled).not.toHaveBeenCalled();
   });
 
