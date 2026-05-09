@@ -23,12 +23,19 @@ export default function SprintProgressBar({ id, title, sprintProgress, sprintGoa
         <div>
           <span>[{"-".repeat(idleBarBlocks)}]</span>
           <span> </span>
-          {onSlashCommand
-            ? renderWithSlashLinks(
-                "Open the /backlog. Official tasks inflict 10x more Technical Debt.",
-                onSlashCommand,
-              )
-            : "Open the /backlog. Official tasks inflict 10x more Technical Debt."}
+          {onSlashCommand ? (
+            <>
+              {renderWithSlashLinks("Open the /backlog. Official tasks inflict ", onSlashCommand)}
+              <span className="sprint-idle-multiplier">10x</span>
+              <span> more Technical Debt.</span>
+            </>
+          ) : (
+            <>
+              <span>Open the /backlog. Official tasks inflict </span>
+              <span className="sprint-idle-multiplier">10x</span>
+              <span> more Technical Debt.</span>
+            </>
+          )}
         </div>
       </div>
     );
