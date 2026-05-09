@@ -6,6 +6,18 @@ function getPendingRewardAmount(prev: GameState, ticketId: string): number {
   return prev.pendingCompletedTaskRewards?.[ticketId]?.rewardTD ?? 0;
 }
 
+function inferLegacyPendingRewardAmount(
+  prev: GameState,
+  profile: ServerProfile,
+  pendingTaskIds: string[],
+): number {
+  if (pendingTaskIds.length !== 1) return 0;
+  const [ticketId] = pendingTaskIds;
+  if (!ticketId || getPendingRewardAmount(prev, ticketId) > 0) return 0;
+
+  return Math.max(0, prev.economy.totalTDEarned - profile.total_td);
+}
+
 export function getSettledPendingCompletedTaskIds(
   prev: GameState,
   profile: ServerProfile,
@@ -50,11 +62,12 @@ export function applyServerProfile(
   const pendingTaskIds = opts.preservePendingCompletedRewardTaskIds?.filter(
     (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
   ) ?? [];
+  const legacyPendingRewardTD = inferLegacyPendingRewardAmount(prev, profile, pendingTaskIds);
   const settledTaskIds = getSettledPendingCompletedTaskIds(prev, profile, pendingTaskIds);
   const settledTaskIdSet = new Set(settledTaskIds);
   const unresolvedCompletedRewardTD = pendingTaskIds.reduce((sum, ticketId) => (
     settledTaskIdSet.has(ticketId) ? sum : sum + getPendingRewardAmount(prev, ticketId)
-  ), 0);
+  ), 0) || legacyPendingRewardTD;
   const preservedCurrentRewardTD = Math.min(
     unresolvedCompletedRewardTD,
     Math.max(0, prev.economy.currentTD - profile.current_td),

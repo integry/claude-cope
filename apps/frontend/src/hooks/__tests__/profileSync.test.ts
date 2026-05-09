@@ -82,6 +82,31 @@ describe("applyServerProfile", () => {
     expect(merged.economy.totalTDEarned).toBe(1000);
   });
 
+  it("preserves a legacy pending completed-ticket reward when the reward metadata is missing", () => {
+    const prev = createGameState({
+      economy: {
+        currentTD: 1100,
+        totalTDEarned: 1100,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: {},
+    });
+
+    const merged = applyServerProfile(prev, createServerProfile({
+      current_td: 100,
+      total_td: 100,
+    }), {
+      preservePendingCompletedRewardTaskIds: ["COPE-059"],
+    });
+
+    expect(merged.economy.currentTD).toBe(1100);
+    expect(merged.economy.totalTDEarned).toBe(1100);
+  });
+
   it("preserves only the unresolved reward amount when the server also changed current TD", () => {
     const prev = createGameState({
       economy: {
