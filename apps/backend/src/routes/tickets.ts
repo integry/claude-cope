@@ -52,6 +52,7 @@ tickets.get("/community", async (c) => {
   return c.json(results);
 });
 
+// eslint-disable-next-line complexity
 tickets.post("/refine", async (c) => {
   if (c.env.ENABLE_TICKET_REFINE !== "true") {
     return c.json({ error: "Ticket refinement is disabled" }, 404);

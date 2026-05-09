@@ -399,7 +399,7 @@ function getShareProps(message: Message, previousMessage?: Message, nextMessage?
   return { showShareButton, shareSystemMessage };
 }
 
-function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", isFreeTier = false, onSlashCommand }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; isFreeTier?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
+function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; isFreeTier?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   const { showShareButton, shareSystemMessage } = getShareProps(message, previousMessage, nextMessage);
 

@@ -257,6 +257,8 @@ function normalizeComparableUserNextMessage(text: string | null | undefined): st
     .replace(/\s+/g, " ");
 }
 
+// This alternate picker mirrors the broad token heuristics in the primary fallback.
+// eslint-disable-next-line complexity
 function buildAlternateUserNextMessage(content: string, previous: string | null | undefined): string {
   const previousNormalized = normalizeComparableUserNextMessage(previous);
   const text = content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();

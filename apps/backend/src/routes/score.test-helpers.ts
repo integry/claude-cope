@@ -116,13 +116,39 @@ export function mockKV(initial?: string | Record<string, string | null>) {
   };
 }
 
+type PostScoreOptions = {
+  headers?: Record<string, string>;
+  kv?: ReturnType<typeof mockKV>;
+  env?: Record<string, unknown>;
+};
+
+function resolvePostScoreOptions(
+  body: Record<string, unknown>,
+  rest: [PostScoreOptions?] | [Record<string, string>?, ReturnType<typeof mockKV>?, Record<string, unknown>?],
+): Required<PostScoreOptions> {
+  const [first, second, third] = rest;
+  if (second !== undefined || third !== undefined || (first && !("headers" in first || "kv" in first || "env" in first))) {
+    return {
+      headers: (first as Record<string, string> | undefined) ?? {},
+      kv: second ?? mockKV(body.username as string | undefined),
+      env: third ?? {},
+    };
+  }
+
+  const options = (first as PostScoreOptions | undefined) ?? {};
+  return {
+    headers: options.headers ?? {},
+    kv: options.kv ?? mockKV(body.username as string | undefined),
+    env: options.env ?? {},
+  };
+}
+
 export function postScore(
   db: unknown,
   body: Record<string, unknown>,
-  headers?: Record<string, string>,
-  kv = mockKV(body.username as string | undefined),
-  env: Record<string, unknown> = {},
+  ...rest: [PostScoreOptions?] | [Record<string, string>?, ReturnType<typeof mockKV>?, Record<string, unknown>?]
 ) {
+  const { headers, kv, env } = resolvePostScoreOptions(body, rest);
   return app.request(
     "/api/score",
     {

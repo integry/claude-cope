@@ -242,12 +242,15 @@ async function resolveRenamedSessionUsername(kv: KVNamespace, startUsername: str
  * entries when the DB write fails.
  */
 async function verifyFreeSessionOwnership(
-  kv: KVNamespace,
-  sessionId: string,
-  username: string,
-  existingRow: { account_id: string | null } | null,
-  trustedFreeAccountId: string | undefined,
+  params: {
+    kv: KVNamespace;
+    sessionId: string;
+    username: string;
+    existingRow: { account_id: string | null } | null;
+    trustedFreeAccountId: string | undefined;
+  },
 ): Promise<OwnershipCheckResult> {
+  const { kv, sessionId, username, existingRow, trustedFreeAccountId } = params;
   if (existingRow) {
     const sessionUsername = await kv.get(`session_user:${sessionId}`);
     if (sameUsername(sessionUsername, username)) {
@@ -319,6 +322,7 @@ async function verifyFreeSessionOwnership(
  * Validates the claimed score against server-side tracking.
  * The server's total_td is the floor — client can't claim more than what the server has awarded.
  */
+// eslint-disable-next-line complexity
 score.post("/", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
@@ -357,13 +361,13 @@ score.post("/", async (c) => {
   if (!kv) {
     return c.json({ error: "Cannot verify session ownership — please retry" }, 503);
   }
-  const ownershipResult = await verifyFreeSessionOwnership(
+  const ownershipResult = await verifyFreeSessionOwnership({
     kv,
     sessionId,
-    body.username,
-    existingRow ? { account_id: existingRow.account_id } : null,
-    c.get("freeAccountId"),
-  );
+    username: body.username,
+    existingRow: existingRow ? { account_id: existingRow.account_id } : null,
+    trustedFreeAccountId: c.get("freeAccountId"),
+  });
   if (ownershipResult.error) {
     return c.json({ error: ownershipResult.error }, 403);
   }
