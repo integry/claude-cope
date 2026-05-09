@@ -314,11 +314,7 @@ async function respondWithMeProfile(
 }
 
 async function restoreMeFromFreeAccount(
-  c: {
-    env: Env["Bindings"];
-    get: (key: "freeAccountId") => string | undefined;
-    json: (data: unknown, status?: number) => Response;
-  },
+  c: Context<Env>,
   opts: {
     db: D1Database | undefined;
     kv: KVNamespace;
