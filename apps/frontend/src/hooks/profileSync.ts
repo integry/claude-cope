@@ -53,7 +53,8 @@ export function applyServerProfile(
     (sum, ticketId) => sum + getPendingRewardAmount(prev, ticketId),
     0,
   );
-  const hasLegacyPendingRewards = unresolvedPendingTaskIds.some((ticketId) => getPendingRewardAmount(prev, ticketId) <= 0);
+  const hasLegacyPendingRewards = unresolvedPendingTaskIds.length > 0
+    && Object.keys(prev.pendingCompletedTaskRewards ?? {}).length === 0;
   const inferredLegacyPendingRewardTD = hasLegacyPendingRewards
     ? Math.max(0, prev.economy.totalTDEarned - profile.total_td - unresolvedKnownRewardTD)
     : 0;
@@ -65,7 +66,7 @@ export function applyServerProfile(
   const serverCurrentDeltaExcludingPendingReward = profile.current_td - localCurrentTDExcludingPendingReward;
   const currentTD = serverCurrentDeltaExcludingPendingReward < 0
     ? Math.max(0, prev.economy.currentTD + serverCurrentDeltaExcludingPendingReward)
-    : Math.max(prev.economy.currentTD, profile.current_td);
+    : prev.economy.currentTD + serverCurrentDeltaExcludingPendingReward;
   const shouldPreserveOptimisticTotals = unresolvedPendingTaskIds.length > 0;
   // Aggregate TD snapshots are not enough to prove whether a pending completed
   // ticket reward is already included in the server totals. Preserve the local

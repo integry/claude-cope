@@ -136,6 +136,31 @@ describe("applyServerProfile", () => {
     expect(merged.economy.totalTDEarned).toBe(1500);
   });
 
+  it("applies positive server-side current TD gains on top of an unresolved reward", () => {
+    const prev = createGameState({
+      economy: {
+        currentTD: 1500,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
+    });
+
+    const merged = applyServerProfile(prev, createServerProfile({
+      current_td: 1200,
+      total_td: 1200,
+    }), {
+      preservePendingCompletedRewardTaskIds: ["COPE-059"],
+    });
+
+    expect(merged.economy.currentTD).toBe(1700);
+    expect(merged.economy.totalTDEarned).toBe(1500);
+  });
+
   it("preserves local balances when multiple pending rewards exceed the reliable local baseline", () => {
     const prev = createGameState({
       economy: {
@@ -187,6 +212,31 @@ describe("applyServerProfile", () => {
 
     expect(merged.economy.currentTD).toBe(1500);
     expect(merged.economy.totalTDEarned).toBe(1500);
+  });
+
+  it("does not infer extra legacy reward TD once reward metadata exists", () => {
+    const prev = createGameState({
+      economy: {
+        currentTD: 2000,
+        totalTDEarned: 2000,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059", "COPE-060"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
+    });
+
+    const merged = applyServerProfile(prev, createServerProfile({
+      current_td: 1000,
+      total_td: 1000,
+    }), {
+      preservePendingCompletedRewardTaskIds: ["COPE-059", "COPE-060"],
+    });
+
+    expect(merged.economy.currentTD).toBe(1500);
+    expect(merged.economy.totalTDEarned).toBe(2000);
   });
 
   it("keeps the optimistic local total while a completed-ticket reward is still pending", () => {
