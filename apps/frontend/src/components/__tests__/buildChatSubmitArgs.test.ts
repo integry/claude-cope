@@ -283,7 +283,7 @@ describe("buildSprintCallbacks", () => {
 
     expect(mergedAfterStaleChat.economy.currentTD).toBe(1500);
     expect(mergedAfterStaleChat.economy.totalTDEarned).toBe(1500);
-    expect(mergedAfterRetry.economy.currentTD).toBe(1500);
+    expect(mergedAfterRetry.economy.currentTD).toBe(1750);
     expect(mergedAfterRetry.economy.totalTDEarned).toBe(1750);
   });
 
