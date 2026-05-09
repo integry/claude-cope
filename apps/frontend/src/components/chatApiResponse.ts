@@ -100,7 +100,7 @@ export async function parseChatResponseBody(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
   addActiveTD?: (n: number, raw?: boolean) => void,
-  onProfileUpdate?: (profile: ServerProfile, ctx: { source: "chat" }) => void,
+  onProfileUpdate?: (profile: ServerProfile) => void,
 ): Promise<ParsedResponse> {
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("text/event-stream")) {
@@ -111,7 +111,7 @@ export async function parseChatResponseBody(
   const data = await res.json();
   const fields = extractJsonResponseFields(data);
   if (data?.profile && onProfileUpdate) {
-    onProfileUpdate(data.profile as ServerProfile, { source: "chat" });
+    onProfileUpdate(data.profile as ServerProfile);
   } else if (data?.td_awarded && addActiveTD) {
     addActiveTD(data.td_awarded, true);
   }

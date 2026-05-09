@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { buildSprintCallbacks, syncCompletedTicketReward } from "../buildChatSubmitArgs";
 import type { GameState } from "../../hooks/useGameState";
-import { applyServerProfile, type PendingCompletedRewardMerge } from "../../hooks/profileSync";
+import { applyServerProfile, combinePendingCompletedRewards, type PendingCompletedRewardMerge } from "../../hooks/profileSync";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 
 function createGameState(overrides: Partial<GameState> = {}): GameState {
@@ -184,5 +184,106 @@ describe("syncCompletedTicketReward", () => {
 
     expect(merged.economy.currentTD).toBe(1000);
     expect(merged.economy.totalTDEarned).toBe(1000);
+  });
+
+  it("clears pending reward state when completed reward sync does not return a profile", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/score") {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    });
+    const onCompletedRewardFailed = vi.fn();
+
+    const { onSprintProgress } = buildSprintCallbacks({
+      getState: () => createGameState({
+        proKeyHash: "fresh-pro-hash",
+        activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
+      }),
+      updateTicketProgress: vi.fn(),
+      addActiveTD: vi.fn(),
+      playChime: vi.fn(),
+      setState: vi.fn(),
+      onCompletedRewardPending: vi.fn(),
+      onCompletedRewardProfile: vi.fn(),
+      onCompletedRewardFailed,
+    });
+
+    onSprintProgress(10);
+    await vi.waitFor(() => {
+      expect(onCompletedRewardFailed).toHaveBeenCalledWith("COPE-059");
+    });
+  });
+
+  it("does not track pending completed task IDs when the reward cannot be synced", () => {
+    const setState = vi.fn((updater: (prev: GameState) => GameState) => updater(createGameState({
+      activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
+    })));
+
+    const { onSprintProgress } = buildSprintCallbacks({
+      getState: () => createGameState({
+        activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
+      }),
+      updateTicketProgress: vi.fn(),
+      addActiveTD: vi.fn(),
+      playChime: vi.fn(),
+      setState,
+    });
+
+    onSprintProgress(10);
+
+    const nextState = setState.mock.results[0]?.value as GameState;
+    expect(nextState.pendingCompletedTaskIds).toEqual([]);
+  });
+
+  it("combines overlapping pending completed rewards before merging a stale chat profile", () => {
+    const combinedPendingReward = combinePendingCompletedRewards([
+      {
+        minimumCurrentTD: 1000,
+        minimumTotalTDEarned: 1000,
+        pendingTaskIds: ["COPE-059"],
+      },
+      {
+        minimumCurrentTD: 1500,
+        minimumTotalTDEarned: 1500,
+        pendingTaskIds: ["COPE-060"],
+      },
+    ]);
+    const localState = createGameState({
+      economy: {
+        currentTD: 1500,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059", "COPE-060"],
+    });
+    const staleProfile: ServerProfile = {
+      username: "alice",
+      current_td: 1000,
+      total_td: 1000,
+      corporate_rank: "Junior Code Monkey",
+      inventory: {},
+      upgrades: [],
+      achievements: [],
+      buddy_type: null,
+      buddy_is_shiny: false,
+      unlocked_themes: ["default"],
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+      multiplier: 1,
+      quota_percent: 100,
+    };
+
+    const merged = applyServerProfile(localState, staleProfile, {
+      preservePendingCompletedReward: combinedPendingReward,
+    });
+
+    expect(merged.economy.currentTD).toBe(1500);
+    expect(merged.economy.totalTDEarned).toBe(1500);
   });
 });

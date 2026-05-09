@@ -7,7 +7,7 @@ import { isFreeUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
-import { applyServerProfile, type PendingCompletedRewardMerge } from "../hooks/profileSync";
+import { applyServerProfile, combinePendingCompletedRewards, type PendingCompletedRewardMerge } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { filterChatHistory } from "./filterChatHistory";
@@ -92,20 +92,38 @@ function Terminal() {
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
-  const pendingCompletedRewardRef = useRef<PendingCompletedRewardMerge | null>(null);
+  const pendingCompletedRewardsRef = useRef<Record<string, PendingCompletedRewardMerge>>({});
 
   useEffect(() => {
     return () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); };
   }, []);
 
   useEffect(() => {
-    const pendingReward = pendingCompletedRewardRef.current;
-    if (!pendingReward) return;
-    const unresolvedTaskIds = pendingReward.pendingTaskIds.filter((ticketId) => state.pendingCompletedTaskIds.includes(ticketId));
-    pendingCompletedRewardRef.current = unresolvedTaskIds.length > 0
-      ? { ...pendingReward, pendingTaskIds: unresolvedTaskIds }
-      : null;
+    const unresolvedTaskIds = new Set(state.pendingCompletedTaskIds);
+    const nextPendingRewards = Object.fromEntries(
+      Object.entries(pendingCompletedRewardsRef.current).filter(([ticketId]) => unresolvedTaskIds.has(ticketId)),
+    );
+    pendingCompletedRewardsRef.current = nextPendingRewards;
   }, [state.pendingCompletedTaskIds]);
+
+  const clearPendingCompletedReward = useCallback((ticketId: string) => {
+    delete pendingCompletedRewardsRef.current[ticketId];
+    setState((prev) => (
+      prev.pendingCompletedTaskIds.includes(ticketId)
+        ? {
+            ...prev,
+            pendingCompletedTaskIds: prev.pendingCompletedTaskIds.filter((id) => id !== ticketId),
+          }
+        : prev
+    ));
+  }, [setState]);
+
+  const getPendingCompletedRewardMerge = useCallback((pendingTaskIds: string[]) => {
+    const pendingRewards = pendingTaskIds
+      .map((ticketId) => pendingCompletedRewardsRef.current[ticketId])
+      .filter((pendingReward): pendingReward is PendingCompletedRewardMerge => Boolean(pendingReward));
+    return combinePendingCompletedRewards(pendingRewards);
+  }, []);
 
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
     const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
@@ -235,18 +253,18 @@ function Terminal() {
       const next = applyServerProfile(
         prev,
         profile,
-        source === "chat" && pendingCompletedRewardRef.current
-          ? { preservePendingCompletedReward: pendingCompletedRewardRef.current }
+        source === "chat"
+          ? { preservePendingCompletedReward: getPendingCompletedRewardMerge(prev.pendingCompletedTaskIds) }
           : {},
       );
       if (source !== "completed-ticket-reward" || !completedTicketId) return next;
-      pendingCompletedRewardRef.current = null;
+      delete pendingCompletedRewardsRef.current[completedTicketId];
       return {
         ...next,
         pendingCompletedTaskIds: next.pendingCompletedTaskIds.filter((ticketId) => ticketId !== completedTicketId),
       };
     });
-  }, [setState]);
+  }, [getPendingCompletedRewardMerge, setState]);
 
   const processCommandRef = useRef<(command: string) => void>(() => {});
   const processCommand = async (command: string) => {
@@ -279,10 +297,15 @@ function Terminal() {
       playChime,
       setState,
       onCompletedRewardPending: (pendingReward) => {
-        pendingCompletedRewardRef.current = pendingReward;
+        const [ticketId] = pendingReward.pendingTaskIds;
+        if (!ticketId) return;
+        pendingCompletedRewardsRef.current[ticketId] = pendingReward;
       },
       onCompletedRewardProfile: (profile, ticketId) => {
         applyAuthoritativeProfile(profile, "completed-ticket-reward", ticketId);
+      },
+      onCompletedRewardFailed: (ticketId) => {
+        clearPendingCompletedReward(ticketId);
       },
     });
     const controller = new AbortController();
@@ -370,7 +393,6 @@ function Terminal() {
       activeTheme={state.activeTheme}
       regressionGlitch={regressionGlitch}
       anyOverlayOpen={anyOverlayOpen}
-      isFreeTier={isFreeTier}
       inputRef={inputRef}
       closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
       onlineCount={onlineCount}

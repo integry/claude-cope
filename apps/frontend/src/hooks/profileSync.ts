@@ -8,6 +8,28 @@ export type PendingCompletedRewardMerge = {
   pendingTaskIds: string[];
 };
 
+export function combinePendingCompletedRewards(
+  pendingRewards: PendingCompletedRewardMerge[],
+): PendingCompletedRewardMerge | null {
+  if (pendingRewards.length === 0) return null;
+
+  let minimumCurrentTD = 0;
+  let minimumTotalTDEarned = 0;
+  const pendingTaskIds = new Set<string>();
+
+  for (const pendingReward of pendingRewards) {
+    minimumCurrentTD = Math.max(minimumCurrentTD, pendingReward.minimumCurrentTD);
+    minimumTotalTDEarned = Math.max(minimumTotalTDEarned, pendingReward.minimumTotalTDEarned);
+    for (const ticketId of pendingReward.pendingTaskIds) pendingTaskIds.add(ticketId);
+  }
+
+  return {
+    minimumCurrentTD,
+    minimumTotalTDEarned,
+    pendingTaskIds: [...pendingTaskIds],
+  };
+}
+
 /**
  * Merge a server-authoritative profile onto local game state.
  * Server wins for all authoritative fields; local-only fields are preserved.
