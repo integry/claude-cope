@@ -70,20 +70,15 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     onlineCount,
   });
 
+  isBootingRef.current = isBooting;
+  isInteractionBlockedRef.current = isInteractionBlocked;
+
   const clearIdleTimer = useCallback(() => {
     if (idleTimerRef.current !== null) {
       window.clearTimeout(idleTimerRef.current);
       idleTimerRef.current = null;
     }
   }, []);
-
-  useEffect(() => {
-    isBootingRef.current = isBooting;
-  }, [isBooting]);
-
-  useEffect(() => {
-    isInteractionBlockedRef.current = isInteractionBlocked;
-  }, [isInteractionBlocked]);
 
   const scheduleIdleTip = useCallback(() => {
     clearIdleTimer();
