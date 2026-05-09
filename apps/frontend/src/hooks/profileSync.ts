@@ -59,6 +59,56 @@ export function isServerProfileStaleAgainstFloor(
   return profile.total_td === floor.totalTD && profile.current_td > floor.currentTD;
 }
 
+function resolvePendingRewardEconomyMerge(
+  prev: GameState,
+  profile: ServerProfile,
+  pendingTaskIds: string[],
+  settledTaskIds: string[] | null | undefined,
+): Pick<GameState["economy"], "currentTD" | "totalTDEarned" | "currentRank"> {
+  const settledTaskIdSet = new Set((settledTaskIds ?? []).filter((ticketId) => pendingTaskIds.includes(ticketId)));
+  const unresolvedPendingTaskIds = pendingTaskIds.filter((ticketId) => !settledTaskIdSet.has(ticketId));
+  const unresolvedKnownRewardTD = unresolvedPendingTaskIds.reduce(
+    (sum, ticketId) => sum + getPendingRewardAmount(prev, ticketId),
+    0,
+  );
+  const optimisticLocalBaselineTD = Math.max(0, prev.economy.currentTD - unresolvedKnownRewardTD);
+  const inferredLegacyPendingRewardTD = unresolvedPendingTaskIds.length > 0
+    ? Math.max(0, prev.economy.totalTDEarned - profile.total_td - unresolvedKnownRewardTD)
+    : 0;
+  const unresolvedCompletedRewardTD = unresolvedKnownRewardTD + inferredLegacyPendingRewardTD;
+  const shouldPreserveOptimisticTotals = unresolvedPendingTaskIds.length > 0;
+  const hasAuthoritativeEconomyAdvance = shouldPreserveOptimisticTotals
+    && profile.total_td > prev.economy.totalTDEarned;
+  const hasReliableLocalCurrentBaseline = optimisticLocalBaselineTD > 0;
+  const isServerTotalCloseToOptimisticLocalTotal = profile.total_td >= (
+    prev.economy.totalTDEarned - (unresolvedCompletedRewardTD / 2)
+  );
+
+  let currentTD = profile.current_td;
+  if (shouldPreserveOptimisticTotals && !hasAuthoritativeEconomyAdvance) {
+    currentTD = hasReliableLocalCurrentBaseline && !isServerTotalCloseToOptimisticLocalTotal
+      ? Math.max(0, profile.current_td + unresolvedCompletedRewardTD)
+      : prev.economy.currentTD;
+  }
+
+  const totalTDEarned = hasAuthoritativeEconomyAdvance
+    ? profile.total_td
+    : shouldPreserveOptimisticTotals
+    ? Math.max(prev.economy.totalTDEarned, profile.total_td)
+    : profile.total_td;
+  const currentRank = hasAuthoritativeEconomyAdvance
+    ? profile.corporate_rank
+    : shouldPreserveOptimisticTotals && unresolvedCompletedRewardTD > 0 && totalTDEarned > profile.total_td
+    ? resolveRank(totalTDEarned, prev.economy.currentRank)
+    : profile.corporate_rank;
+
+  return {
+    currentTD,
+    totalTDEarned,
+    currentRank,
+  };
+}
+
 /**
  * Merge a server-authoritative profile onto local game state.
  * Server wins for all authoritative fields; local-only fields are preserved.
@@ -87,54 +137,16 @@ export function applyServerProfile(
   const pendingTaskIds = opts.preservePendingCompletedRewardTaskIds?.filter(
     (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
   ) ?? [];
-  const settledTaskIdSet = new Set(
-    (opts.settledPendingCompletedRewardTaskIds ?? []).filter((ticketId) => pendingTaskIds.includes(ticketId)),
-  );
-  const unresolvedPendingTaskIds = pendingTaskIds.filter((ticketId) => !settledTaskIdSet.has(ticketId));
-  const unresolvedKnownRewardTD = unresolvedPendingTaskIds.reduce(
-    (sum, ticketId) => sum + getPendingRewardAmount(prev, ticketId),
-    0,
-  );
-  const optimisticLocalBaselineTD = Math.max(0, prev.economy.currentTD - unresolvedKnownRewardTD);
-  const inferredLegacyPendingRewardTD = unresolvedPendingTaskIds.length > 0
-    ? Math.max(0, prev.economy.totalTDEarned - profile.total_td - unresolvedKnownRewardTD)
-    : 0;
-  const unresolvedCompletedRewardTD = unresolvedKnownRewardTD + inferredLegacyPendingRewardTD;
-  const shouldPreserveOptimisticTotals = unresolvedPendingTaskIds.length > 0;
-  const hasAuthoritativeEconomyAdvance = shouldPreserveOptimisticTotals
-    && profile.total_td > prev.economy.totalTDEarned;
-  const hasReliableLocalCurrentBaseline = optimisticLocalBaselineTD > 0;
-  const isServerTotalCloseToOptimisticLocalTotal = profile.total_td >= (
-    prev.economy.totalTDEarned - (unresolvedCompletedRewardTD / 2)
-  );
-  // Only treat the local pre-reward balance as a baseline when the user still
-  // has enough TD left for that subtraction to mean something. Otherwise the
-  // optimistic reward may already have been spent, or it may dominate the whole
-  // local balance, so the safest merge is to preserve the local current TD.
-  // Likewise, once the server aggregate total is close to the optimistic local
-  // total, the snapshots are too ambiguous to safely re-add the pending reward
-  // on top without risking inflation.
-  const currentTD = hasAuthoritativeEconomyAdvance
-    ? profile.current_td
-    : !shouldPreserveOptimisticTotals
-    ? profile.current_td
-    : hasReliableLocalCurrentBaseline && !isServerTotalCloseToOptimisticLocalTotal
-        ? Math.max(0, profile.current_td + unresolvedCompletedRewardTD)
-        : prev.economy.currentTD;
   // Aggregate TD snapshots are not enough to prove whether a pending completed
   // ticket reward is already included in the server totals. Preserve the local
   // optimistic total only while the ticket is still unsettled; once `/api/score`
   // succeeds, later merges should converge back to plain server truth.
-  const totalTDEarned = hasAuthoritativeEconomyAdvance
-    ? profile.total_td
-    : shouldPreserveOptimisticTotals
-    ? Math.max(prev.economy.totalTDEarned, profile.total_td)
-    : profile.total_td;
-  const currentRank = hasAuthoritativeEconomyAdvance
-    ? profile.corporate_rank
-    : shouldPreserveOptimisticTotals && unresolvedCompletedRewardTD > 0 && totalTDEarned > profile.total_td
-    ? resolveRank(totalTDEarned, prev.economy.currentRank)
-    : profile.corporate_rank;
+  const { currentTD, totalTDEarned, currentRank } = resolvePendingRewardEconomyMerge(
+    prev,
+    profile,
+    pendingTaskIds,
+    opts.settledPendingCompletedRewardTaskIds,
+  );
 
   return {
     ...prev,
