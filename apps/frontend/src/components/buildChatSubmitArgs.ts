@@ -29,7 +29,7 @@ export function syncCompletedTicketReward(params: {
       ...(proKeyHash ? { proKeyHash } : {}),
     }),
   })
-    .then(async (res) => {
+    .then(async (res): Promise<{ ok: boolean; profile?: ServerProfile; profileSource?: "score" | "session" } | null> => {
       if (!res.ok) return null;
       const result = await res.json().catch(() => ({}));
       if ((result as { ok?: boolean }).ok === false) return null;
