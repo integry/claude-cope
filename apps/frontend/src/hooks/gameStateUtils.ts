@@ -79,6 +79,15 @@ export interface ByokUsage {
   cost: number;
 }
 
+export interface PendingCompletedTaskReward {
+  rewardTD: number;
+}
+
+export interface AuthoritativeProfileFloor {
+  totalTD: number;
+  currentTD: number;
+}
+
 export interface GameState {
   version: string;
   username: string;
@@ -97,6 +106,8 @@ export interface GameState {
   unlockedThemes: string[];
   soundEnabled: boolean;
   pendingCompletedTaskIds: string[];
+  pendingCompletedTaskRewards?: Record<string, PendingCompletedTaskReward>;
+  authoritativeProfileFloor?: AuthoritativeProfileFloor | null;
   apiKey?: string;
   selectedModel?: string;
   proKey?: string;
@@ -172,7 +183,17 @@ function createDefaultState(): GameState {
     unlockedThemes: ["default"],
     soundEnabled: true,
     pendingCompletedTaskIds: [],
+    pendingCompletedTaskRewards: {},
+    authoritativeProfileFloor: null,
   };
+}
+
+function hasValidAuthoritativeProfileFloor(state: GameState): boolean {
+  return state.authoritativeProfileFloor == null || (
+    typeof state.authoritativeProfileFloor === "object"
+    && typeof state.authoritativeProfileFloor.totalTD === "number"
+    && typeof state.authoritativeProfileFloor.currentTD === "number"
+  );
 }
 
 function applyDefensiveDefaults(state: GameState): void {
@@ -215,6 +236,12 @@ function applyDefensiveDefaults(state: GameState): void {
   }
   if (!Array.isArray(state.pendingCompletedTaskIds)) {
     state.pendingCompletedTaskIds = [];
+  }
+  if (!state.pendingCompletedTaskRewards || typeof state.pendingCompletedTaskRewards !== "object") {
+    state.pendingCompletedTaskRewards = {};
+  }
+  if (!hasValidAuthoritativeProfileFloor(state)) {
+    state.authoritativeProfileFloor = null;
   }
 }
 
