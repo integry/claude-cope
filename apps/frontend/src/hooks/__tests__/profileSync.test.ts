@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GameState } from "../useGameState";
-import { applyAuthoritativeProfile, applyServerProfile, getSettledPendingCompletedTaskIds } from "../profileSync";
+import { applyAuthoritativeProfile, applyServerProfile } from "../profileSync";
 import { createServerProfile } from "../../test/createServerProfile";
 
 function createGameState(overrides: Partial<GameState> = {}): GameState {
@@ -164,7 +164,32 @@ describe("applyServerProfile", () => {
     expect(merged.economy.totalTDEarned).toBe(1500);
   });
 
-  it("keeps newer server-earned current TD gains while a completed-ticket reward is still pending", () => {
+  it("does not double-count a pending reward when the authoritative total already includes it", () => {
+    const prev = createGameState({
+      economy: {
+        currentTD: 1500,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
+    });
+
+    const merged = applyServerProfile(prev, createServerProfile({
+      current_td: 1500,
+      total_td: 1500,
+    }), {
+      preservePendingCompletedRewardTaskIds: ["COPE-059"],
+    });
+
+    expect(merged.economy.currentTD).toBe(1500);
+    expect(merged.economy.totalTDEarned).toBe(1500);
+  });
+
+  it("keeps the optimistic local total while a completed-ticket reward is still pending", () => {
     const prev = createGameState({
       economy: {
         currentTD: 1500,
@@ -185,8 +210,8 @@ describe("applyServerProfile", () => {
       preservePendingCompletedRewardTaskIds: ["COPE-059"],
     });
 
-    expect(merged.economy.currentTD).toBe(1750);
-    expect(merged.economy.totalTDEarned).toBe(1750);
+    expect(merged.economy.currentTD).toBe(1500);
+    expect(merged.economy.totalTDEarned).toBe(1500);
   });
 
   it("does not preserve a completed-ticket reward once the ticket is no longer pending", () => {
@@ -212,105 +237,6 @@ describe("applyServerProfile", () => {
 
     expect(merged.economy.currentTD).toBe(900);
     expect(merged.economy.totalTDEarned).toBe(900);
-  });
-
-  it("does not mark a pending reward as settled when the authoritative profile is still stale", () => {
-    const prev = createGameState({
-      economy: {
-        currentTD: 1000,
-        totalTDEarned: 1500,
-        currentRank: "Junior Code Monkey",
-        quotaPercent: 100,
-        quotaLockouts: 0,
-        tdMultiplier: 1,
-      },
-      pendingCompletedTaskIds: ["COPE-059"],
-      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
-    });
-
-    const settledTaskIds = getSettledPendingCompletedTaskIds(prev, createServerProfile({
-      current_td: 1000,
-      total_td: 1000,
-    }));
-
-    expect(settledTaskIds).toEqual([]);
-  });
-
-  it("does not infer settled ticket IDs from aggregate authoritative totals", () => {
-    const prev = createGameState({
-      economy: {
-        currentTD: 1800,
-        totalTDEarned: 1800,
-        currentRank: "Junior Code Monkey",
-        quotaPercent: 100,
-        quotaLockouts: 0,
-        tdMultiplier: 1,
-      },
-      pendingCompletedTaskIds: ["COPE-059", "COPE-060"],
-      pendingCompletedTaskRewards: {
-        "COPE-059": { rewardTD: 500 },
-        "COPE-060": { rewardTD: 300 },
-      },
-    });
-
-    const settledTaskIds = getSettledPendingCompletedTaskIds(prev, createServerProfile({
-      current_td: 1500,
-      total_td: 1500,
-    }));
-
-    expect(settledTaskIds).toEqual([]);
-  });
-
-  it("does not infer settled ticket IDs even when one subset would match exactly", () => {
-    const prev = createGameState({
-      economy: {
-        currentTD: 1400,
-        totalTDEarned: 1400,
-        currentRank: "Junior Code Monkey",
-        quotaPercent: 100,
-        quotaLockouts: 0,
-        tdMultiplier: 1,
-      },
-      pendingCompletedTaskIds: ["COPE-059", "COPE-060", "COPE-061"],
-      pendingCompletedTaskRewards: {
-        "COPE-059": { rewardTD: 400 },
-        "COPE-060": { rewardTD: 250 },
-        "COPE-061": { rewardTD: 250 },
-      },
-    });
-
-    const settledTaskIds = getSettledPendingCompletedTaskIds(prev, createServerProfile({
-      current_td: 1250,
-      total_td: 1250,
-    }));
-
-    expect(settledTaskIds).toEqual([]);
-  });
-
-  it("does not infer settled ticket IDs when an intersection exists across matching subsets", () => {
-    const prev = createGameState({
-      economy: {
-        currentTD: 1400,
-        totalTDEarned: 1400,
-        currentRank: "Junior Code Monkey",
-        quotaPercent: 100,
-        quotaLockouts: 0,
-        tdMultiplier: 1,
-      },
-      pendingCompletedTaskIds: ["COPE-059", "COPE-060", "COPE-061"],
-      pendingCompletedTaskRewards: {
-        "COPE-059": { rewardTD: 500 },
-        "COPE-060": { rewardTD: 300 },
-        "COPE-061": { rewardTD: 300 },
-      },
-    });
-
-    const settledTaskIds = getSettledPendingCompletedTaskIds(prev, createServerProfile({
-      current_td: 1100,
-      total_td: 1100,
-    }));
-
-    expect(settledTaskIds).toEqual([]);
   });
 
   it("applies the authoritative profile before clearing settled pending reward metadata", () => {
@@ -365,35 +291,9 @@ describe("applyServerProfile", () => {
       preservePendingCompletedRewardTaskIds: ["COPE-059"],
     });
 
-    expect(merged.economy.currentTD).toBe(1800);
-    expect(merged.economy.totalTDEarned).toBe(2000);
+    expect(merged.economy.currentTD).toBe(1500);
+    expect(merged.economy.totalTDEarned).toBe(1500);
     expect(merged.pendingCompletedTaskIds).toEqual(["COPE-059"]);
     expect(merged.pendingCompletedTaskRewards).toEqual({ "COPE-059": { rewardTD: 500 } });
-  });
-
-  it("does not attempt exponential subset search once the pending set exceeds the safety cap", () => {
-    const pendingCompletedTaskIds = Array.from({ length: 13 }, (_, index) => `COPE-${index + 100}`);
-    const pendingCompletedTaskRewards = Object.fromEntries(
-      pendingCompletedTaskIds.map((ticketId) => [ticketId, { rewardTD: 100 }]),
-    );
-    const prev = createGameState({
-      economy: {
-        currentTD: 1300,
-        totalTDEarned: 1300,
-        currentRank: "Junior Code Monkey",
-        quotaPercent: 100,
-        quotaLockouts: 0,
-        tdMultiplier: 1,
-      },
-      pendingCompletedTaskIds,
-      pendingCompletedTaskRewards,
-    });
-
-    const settledTaskIds = getSettledPendingCompletedTaskIds(prev, createServerProfile({
-      current_td: 600,
-      total_td: 600,
-    }));
-
-    expect(settledTaskIds).toEqual([]);
   });
 });

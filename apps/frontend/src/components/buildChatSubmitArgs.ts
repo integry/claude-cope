@@ -65,7 +65,7 @@ export function buildSprintCallbacks(ctx: SprintContext) {
     const completedTicketTitle = ticket.title;
     const completedUsername = current.username;
     const completedProKeyHash = current.proKeyHash;
-    const canTrackPendingCompletedReward = Boolean(completedUsername && completedProKeyHash) && isPaidUser(current);
+    const canTrackPendingCompletedReward = Boolean(completedUsername) && isPaidUser(current);
     const payout = ticket.sprintGoal * 10;
     const completionLockKey = `${completedUsername}:${completedTicketId}`;
 
@@ -95,7 +95,7 @@ export function buildSprintCallbacks(ctx: SprintContext) {
     ctx.playChime();
     sprintCompleteMessage = { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${completedTicketId} "${completedTicketTitle}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` };
 
-    if (canTrackPendingCompletedReward) {
+    if (completedUsername && completedProKeyHash) {
       void syncCompletedTicketReward({
         username: completedUsername,
         ticketId: completedTicketId,

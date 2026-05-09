@@ -52,8 +52,8 @@ export function useScoreSync(
           ...(current.proKeyHash ? { proKeyHash: current.proKeyHash } : {}),
         }),
       }).then(async (res) => {
-        if (!res.ok || completedTaskIds.length === 0) return;
         const data = await res.json().catch(() => ({}));
+        if (!res.ok || (data as { ok?: boolean }).ok === false || completedTaskIds.length === 0) return;
         const scoreProfile = (data as { profile?: ServerProfile }).profile;
         let profile = scoreProfile;
         if (!profile) {

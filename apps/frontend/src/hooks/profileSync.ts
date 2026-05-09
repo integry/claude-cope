@@ -6,20 +6,6 @@ function getPendingRewardAmount(prev: GameState, ticketId: string): number {
   return prev.pendingCompletedTaskRewards?.[ticketId]?.rewardTD ?? 0;
 }
 
-export function getSettledPendingCompletedTaskIds(
-  prev: GameState,
-  profile: ServerProfile,
-  candidateTaskIds: string[] = prev.pendingCompletedTaskIds,
-): string[] {
-  void prev;
-  void profile;
-  void candidateTaskIds;
-  // Aggregate TD snapshots are not enough to prove which specific completed
-  // ticket rewards were persisted. Only explicit confirmation from /api/score
-  // should clear pending reward metadata.
-  return [];
-}
-
 /**
  * Merge a server-authoritative profile onto local game state.
  * Server wins for all authoritative fields; local-only fields are preserved.
@@ -53,26 +39,17 @@ export function applyServerProfile(
   const inferredLegacyPendingRewardTD = hasLegacyPendingRewards
     ? Math.max(0, prev.economy.totalTDEarned - profile.total_td - unresolvedKnownRewardTD)
     : 0;
-  // Invariant: `currentTD` and `totalTDEarned` should preserve only unresolved
-  // optimistic completed-ticket rewards. Any reward that /api/score has already
-  // confirmed must be excluded here before we adopt the server profile, while
-  // legacy pending entries without reward metadata fall back to a bounded delta
-  // heuristic so older local state does not lose the bonus immediately.
   const unresolvedCompletedRewardTD = unresolvedKnownRewardTD + inferredLegacyPendingRewardTD;
   const localCurrentTDExcludingPendingReward = Math.max(0, prev.economy.currentTD - unresolvedCompletedRewardTD);
-  const localTotalTDExcludingPendingReward = Math.max(0, prev.economy.totalTDEarned - unresolvedCompletedRewardTD);
-  const canInferPositiveServerTDGain = localTotalTDExcludingPendingReward > 0;
-  const confirmedNonRewardTDGain = canInferPositiveServerTDGain
-    ? Math.max(0, profile.total_td - localTotalTDExcludingPendingReward)
-    : 0;
   const serverCurrentDeltaExcludingPendingReward = profile.current_td - localCurrentTDExcludingPendingReward;
-  const appliedCurrentDelta = serverCurrentDeltaExcludingPendingReward < 0
-    ? serverCurrentDeltaExcludingPendingReward
-    : Math.min(serverCurrentDeltaExcludingPendingReward, confirmedNonRewardTDGain);
-  const currentTD = Math.max(0, prev.economy.currentTD + appliedCurrentDelta);
-  const totalTDEarned = canInferPositiveServerTDGain
-    ? profile.total_td + unresolvedCompletedRewardTD
-    : Math.max(prev.economy.totalTDEarned, profile.total_td);
+  const currentTD = serverCurrentDeltaExcludingPendingReward < 0
+    ? Math.max(0, prev.economy.currentTD + serverCurrentDeltaExcludingPendingReward)
+    : Math.max(prev.economy.currentTD, profile.current_td);
+  // Aggregate TD snapshots are not enough to prove whether a pending completed
+  // ticket reward is already included in the server totals. Preserve the local
+  // optimistic total until /api/score explicitly settles the ticket to avoid
+  // double-counting once the backend catches up.
+  const totalTDEarned = Math.max(prev.economy.totalTDEarned, profile.total_td);
   const currentRank = unresolvedCompletedRewardTD > 0 && totalTDEarned > profile.total_td
     ? resolveRank(totalTDEarned, prev.economy.currentRank)
     : profile.corporate_rank;
