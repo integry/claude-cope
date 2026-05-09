@@ -10,8 +10,7 @@ interface SprintContext {
   addActiveTD: (amount: number) => void;
   playChime: () => void;
   setState: (fn: (prev: GameState) => GameState) => void;
-  onCompletedRewardProfile?: (profile: ServerProfile, ticketId: string) => void;
-  onCompletedRewardFailed?: (ticketId: string) => void;
+  onCompletedRewardSettled?: (ticketId: string, profile?: ServerProfile) => void;
 }
 
 export function syncCompletedTicketReward(params: {
@@ -82,11 +81,7 @@ export function buildSprintCallbacks(ctx: SprintContext) {
         ticketId: completedTicketId,
         proKeyHash: completedProKeyHash,
       }).then((result) => {
-        if (result?.profile) {
-          ctx.onCompletedRewardProfile?.(result.profile, completedTicketId);
-          return;
-        }
-        if (!result?.ok) ctx.onCompletedRewardFailed?.(completedTicketId);
+        if (result?.ok) ctx.onCompletedRewardSettled?.(completedTicketId, result.profile);
       });
       void updateTicketServer(completedUsername, null, completedProKeyHash);
     }

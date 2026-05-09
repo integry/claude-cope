@@ -140,7 +140,7 @@ describe("syncCompletedTicketReward", () => {
       addActiveTD: vi.fn(),
       playChime: vi.fn(),
       setState: vi.fn(),
-      onCompletedRewardProfile: vi.fn(),
+      onCompletedRewardSettled: vi.fn(),
     });
 
     onSprintProgress(10);
@@ -172,7 +172,7 @@ describe("syncCompletedTicketReward", () => {
     expect(merged.economy.totalTDEarned).toBe(1000);
   });
 
-  it("keeps pending reward state when completed reward sync succeeds without returning a profile", async () => {
+  it("settles the pending reward when completed reward sync succeeds without returning a profile", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/score") {
@@ -180,8 +180,7 @@ describe("syncCompletedTicketReward", () => {
       }
       return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     });
-    const onCompletedRewardFailed = vi.fn();
-    const onCompletedRewardProfile = vi.fn();
+    const onCompletedRewardSettled = vi.fn();
 
     const { onSprintProgress } = buildSprintCallbacks({
       getState: () => createGameState({
@@ -192,16 +191,37 @@ describe("syncCompletedTicketReward", () => {
       addActiveTD: vi.fn(),
       playChime: vi.fn(),
       setState: vi.fn(),
-      onCompletedRewardProfile,
-      onCompletedRewardFailed,
+      onCompletedRewardSettled,
     });
 
     onSprintProgress(10);
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(onCompletedRewardProfile).not.toHaveBeenCalled();
-    expect(onCompletedRewardFailed).not.toHaveBeenCalled();
+    expect(onCompletedRewardSettled).toHaveBeenCalledWith("COPE-059", undefined);
+  });
+
+  it("keeps the pending reward unsettled when completed reward sync fails", async () => {
+    fetchMock.mockRejectedValue(new Error("network"));
+    const onCompletedRewardSettled = vi.fn();
+
+    const { onSprintProgress } = buildSprintCallbacks({
+      getState: () => createGameState({
+        proKeyHash: "fresh-pro-hash",
+        activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
+      }),
+      updateTicketProgress: vi.fn(),
+      addActiveTD: vi.fn(),
+      playChime: vi.fn(),
+      setState: vi.fn(),
+      onCompletedRewardSettled,
+    });
+
+    onSprintProgress(10);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onCompletedRewardSettled).not.toHaveBeenCalled();
   });
 
   it("does not track pending completed task IDs when the reward cannot be synced", () => {
