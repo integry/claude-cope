@@ -52,8 +52,13 @@ describe("syncCompletedTicketReward", () => {
     expect(result).toEqual({ ok: true, profile: settledProfile, profileSource: "score" });
   });
 
-  it("returns success without a profile when /api/score succeeds without an updated profile", async () => {
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+  it("falls back to the session profile when /api/score succeeds without returning one", async () => {
+    const settledProfile = createServerProfile({ total_td: 1500, current_td: 1500 });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ found: true, profile: settledProfile }), { status: 200 }),
+      );
 
     const result = await syncCompletedTicketReward({
       username: "alice",
@@ -61,12 +66,15 @@ describe("syncCompletedTicketReward", () => {
       proKeyHash: "pro-hash",
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/account/me");
+    expect(result).toEqual({ ok: true, profile: settledProfile, profileSource: "session" });
   });
 
   it("leaves settlement pending when neither endpoint returns a profile", async () => {
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ found: false }), { status: 200 }));
 
     const result = await syncCompletedTicketReward({
       username: "alice",
@@ -74,7 +82,8 @@ describe("syncCompletedTicketReward", () => {
       proKeyHash: "pro-hash",
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/account/me");
     expect(result).toEqual({ ok: true });
   });
 

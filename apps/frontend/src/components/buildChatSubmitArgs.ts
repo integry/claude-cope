@@ -2,7 +2,7 @@ import type { Message, GameState } from "../hooks/useGameState";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
-import { updateTicketServer } from "../api/profileApi";
+import { fetchSessionProfile, updateTicketServer } from "../api/profileApi";
 import { isPaidUser } from "../hooks/gameStateUtils";
 
 interface SprintContext {
@@ -18,7 +18,7 @@ export function syncCompletedTicketReward(params: {
   username: string;
   ticketId: string;
   proKeyHash?: string;
-}): Promise<{ ok: boolean; profile?: ServerProfile; profileSource?: "score" } | null> {
+}): Promise<{ ok: boolean; profile?: ServerProfile; profileSource?: "score" | "session" } | null> {
   const { username, ticketId, proKeyHash } = params;
   return fetch(`${API_BASE}/api/score`, {
     method: "POST",
@@ -29,12 +29,15 @@ export function syncCompletedTicketReward(params: {
       ...(proKeyHash ? { proKeyHash } : {}),
     }),
   })
-    .then(async (res): Promise<{ ok: boolean; profile?: ServerProfile; profileSource?: "score" } | null> => {
+    .then(async (res): Promise<{ ok: boolean; profile?: ServerProfile; profileSource?: "score" | "session" } | null> => {
       if (!res.ok) return null;
       const result = await res.json().catch(() => ({}));
       if ((result as { ok?: boolean }).ok === false) return null;
       const profile = (result as { profile?: ServerProfile }).profile;
-      return profile ? { ok: true, profile, profileSource: "score" } : { ok: true };
+      if (profile) return { ok: true, profile, profileSource: "score" };
+
+      const session = await fetchSessionProfile().catch(() => null);
+      return session?.profile ? { ok: true, profile: session.profile, profileSource: "session" } : { ok: true };
     })
     .catch(() => null);
 }
@@ -101,7 +104,7 @@ export function buildSprintCallbacks(ctx: SprintContext) {
         if (result?.ok) {
           ctx.onCompletedRewardSettled?.(
             completedTicketId,
-            result.profileSource === "score" ? result.profile : undefined,
+            result.profile,
           );
         }
       });
