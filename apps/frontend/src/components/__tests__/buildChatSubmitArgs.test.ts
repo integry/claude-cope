@@ -98,13 +98,13 @@ describe("syncCompletedTicketReward", () => {
   });
 
   it("posts completed task IDs to /api/score for pro users without relying on local totals", async () => {
-    await syncCompletedTicketReward({
+    const result = await syncCompletedTicketReward({
       username: "alice",
       ticketId: "COPE-115",
       proKeyHash: "pro-hash",
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/score");
     expect(init?.method).toBe("POST");
@@ -113,6 +113,8 @@ describe("syncCompletedTicketReward", () => {
       completedTaskIds: ["COPE-115"],
       proKeyHash: "pro-hash",
     });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/account/me");
+    expect(result).toEqual({ ok: true, profile: undefined });
   });
 
   it("falls back to fetching the session profile when /api/score succeeds without returning one", async () => {
@@ -245,8 +247,7 @@ describe("syncCompletedTicketReward", () => {
     const { onSprintProgress } = createSprintCallbacks({}, { onCompletedRewardSettled });
 
     onSprintProgress(10);
-    await Promise.resolve();
-    await Promise.resolve();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
     expect(onCompletedRewardSettled).toHaveBeenCalledWith("COPE-059", settledProfile);
   });
