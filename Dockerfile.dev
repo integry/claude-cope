@@ -2,6 +2,9 @@ FROM node:20-bookworm
 
 WORKDIR /app
 
+# Dev-compose base image. Source is bind-mounted by docker-compose.dev.yml,
+# so this image intentionally installs workspace dependencies without copying
+# the repo or selecting a service command on its own.
 # Copy only manifests first so dependency installs layer cleanly.
 COPY package.json package-lock.json ./
 COPY apps/admin-backend/package.json apps/admin-backend/package.json
@@ -17,3 +20,5 @@ RUN npm ci
 RUN chown -R node:node /app
 
 USER node
+
+CMD ["bash"]

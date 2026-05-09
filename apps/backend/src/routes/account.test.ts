@@ -1345,6 +1345,28 @@ describe("GET /api/account/me", () => {
     });
     expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "alice", expect.any(Object));
   });
+  it("does not restore a licensed profile from a stale free-account cookie", async () => {
+    const kv = mockKV({});
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRowByAccountId]: { ...BASE_PROFILE, license_hash: "pro-hash", account_id: "acct-123" },
+      },
+    });
+    const cookieValue = await signFreeAccountCookieValue("secret", "acct-123");
+    const res = await app.request("/api/account/me", {
+      headers: {
+        Cookie: `cope_session_id=test-session; cope_free_account=${cookieValue}`,
+      },
+    }, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      QUOTA_KV: kv,
+      DB: db,
+      FREE_ACCOUNT_COOKIE_SECRET: "secret",
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ found: false });
+    expect(kv.put).not.toHaveBeenCalled();
+  });
   it("returns the mapped free profile when the session username exists", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
     const { db } = createMockDB({ firstBySQL: { [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, license_hash: null } } });
@@ -1359,6 +1381,18 @@ describe("GET /api/account/me", () => {
         corporate_rank: "Junior Code Monkey",
       },
     });
+  });
+  it("does not reissue the free-account cookie for a mapped Pro profile", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+    });
+    const res = await meReq({ QUOTA_KV: kv, DB: db, FREE_ACCOUNT_COOKIE_SECRET: "secret" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("set-cookie")).toBeNull();
   });
   it("applies the free-tier rank cap in the response without writing on /me", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });

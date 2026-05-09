@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { getCookie, setCookie } from "hono/cookie";
+import { getCookie } from "hono/cookie";
 
 export const FREE_ACCOUNT_COOKIE_NAME = "cope_free_account";
 const FREE_ACCOUNT_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
@@ -80,15 +80,25 @@ function serializeCookieHeader(name: string, value: string, options: ReturnType<
   return attributes.join("; ");
 }
 
-export async function issueFreeAccountCookie(c: Context, secret: string | undefined, accountId: string | null | undefined): Promise<void> {
-  if (!secret || !accountId) return;
+async function buildSignedFreeAccountCookieHeader(
+  secret: string,
+  accountId: string,
+): Promise<string> {
   const options = cookieOptions();
-  setCookie(c, FREE_ACCOUNT_COOKIE_NAME, await signFreeAccountCookieValue(secret, accountId), options);
+  const value = await signFreeAccountCookieValue(secret, accountId);
+  return serializeCookieHeader(FREE_ACCOUNT_COOKIE_NAME, value, options);
+}
+
+export async function issueFreeAccountCookie(
+  c: Pick<Context, "header">,
+  secret: string | undefined,
+  accountId: string | null | undefined,
+): Promise<void> {
+  if (!secret || !accountId) return;
+  c.header("Set-Cookie", await buildSignedFreeAccountCookieHeader(secret, accountId), { append: true });
 }
 
 export async function buildFreeAccountCookieHeader(secret: string | undefined, accountId: string | null | undefined): Promise<string | null> {
   if (!secret || !accountId) return null;
-  const options = cookieOptions();
-  const value = await signFreeAccountCookieValue(secret, accountId);
-  return serializeCookieHeader(FREE_ACCOUNT_COOKIE_NAME, value, options);
+  return buildSignedFreeAccountCookieHeader(secret, accountId);
 }

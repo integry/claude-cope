@@ -285,7 +285,7 @@ async function resolveSessionProfileRow(opts: {
 }
 
 async function respondWithMeProfile(
-  c: Context<Env>,
+  c: Pick<Context<Env>, "env" | "json" | "header">,
   opts: {
     db: D1Database | undefined;
     kv: KVNamespace;
@@ -301,7 +301,9 @@ async function respondWithMeProfile(
     env: c.env,
     sessionId: opts.sessionId,
   });
-  await issueFreeAccountCookie(c, c.env.FREE_ACCOUNT_COOKIE_SECRET, (opts.row as { account_id?: string | null }).account_id ?? null);
+  if (!isPro) {
+    await issueFreeAccountCookie(c, c.env.FREE_ACCOUNT_COOKIE_SECRET, (opts.row as { account_id?: string | null }).account_id ?? null);
+  }
 
   return c.json({
     found: true,
@@ -314,7 +316,7 @@ async function respondWithMeProfile(
 }
 
 async function restoreMeFromFreeAccount(
-  c: Context<Env>,
+  c: Pick<Context<Env>, "get" | "json" | "env" | "header">,
   opts: {
     db: D1Database | undefined;
     kv: KVNamespace;
@@ -326,6 +328,7 @@ async function restoreMeFromFreeAccount(
 
   const row = await getProfileRowByAccountId(opts.db, freeAccountId);
   if (!row) return null;
+  if (row.license_hash) return null;
 
   const username = row.username;
   try {
