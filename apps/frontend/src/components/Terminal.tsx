@@ -1,11 +1,16 @@
 import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
+import type { ServerProfile } from "@claude-cope/shared/profile";
 import { SLASH_COMMANDS } from "./slashCommands";
 import { useGameState, Message } from "../hooks/useGameState";
 import { isFreeUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
-import { applyServerProfile } from "../hooks/profileSync";
+import {
+  applyAuthoritativeProfile as mergeAuthoritativeProfile,
+  applyServerProfile,
+  settlePendingCompletedRewards,
+} from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { filterChatHistory } from "./filterChatHistory";
@@ -35,7 +40,11 @@ function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, 
 }
 
 function Terminal() {
-  const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
+  const {
+    state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement,
+    applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme,
+    offlineTDEarned, clearOfflineTDEarned, updateTicketProgress,
+  } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const creditTD = useCallback((amount: number) => addActiveTD(amount, true), [addActiveTD]);
@@ -53,7 +62,9 @@ function Terminal() {
   const applyReviewSprintBoost = useCallback((ticketId: string, boost: number) => {
     if (activeTicketRef.current?.id === ticketId) updateTicketProgress(boost);
   }, [updateTicketProgress]);
-  const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage } = useMultiplayer({ username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost });
+  const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage } = useMultiplayer({
+    username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost,
+  });
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
@@ -66,7 +77,12 @@ function Terminal() {
   const [inputValue, setInputValue] = useState("");
   const [suggestedReply, setSuggestedReply] = useState<string | null>(null);
   const overlays = useOverlays();
-  const { showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, closeAllOverlays } = overlays;
+  const {
+    showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy,
+    showTerms, showContact, showProfile, showParty, showUpgrade, setShowStore, setShowLeaderboard,
+    setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms,
+    setShowContact, setShowProfile, setShowParty, setShowUpgrade, closeAllOverlays,
+  } = overlays;
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
@@ -214,6 +230,37 @@ function Terminal() {
     if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1 } }));
   }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
 
+  const applyProfileUpdate = useCallback((profile: ServerProfile) => {
+    setState((prev) => {
+      return applyServerProfile(
+        prev,
+        profile,
+        prev.pendingCompletedTaskIds.length > 0
+          ? { preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds }
+        : {},
+      );
+    });
+  }, [setState]);
+
+  const applySettledCompletedReward = useCallback((ticketId: string, profile?: ServerProfile) => {
+    setState((prev) => {
+      if (!profile) {
+        return settlePendingCompletedRewards(prev, [ticketId]);
+      }
+
+      return mergeAuthoritativeProfile(
+        prev,
+        profile,
+        prev.pendingCompletedTaskIds.length > 0
+          ? {
+            preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
+            settledPendingCompletedRewardTaskIds: [ticketId],
+          }
+          : {},
+      );
+    });
+  }, [setState]);
+
   const processCommandRef = useRef<(command: string) => void>(() => {});
   const processCommand = async (command: string) => {
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
@@ -238,7 +285,16 @@ function Terminal() {
     const chatMessages = isFreeTier
       ? contextMessages
       : [...contextMessages, { role: "user", content: userMessage.content }];
-    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({ getState: getCurrentState, updateTicketProgress, addActiveTD, playChime, setState });
+    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({
+      getState: getCurrentState,
+      updateTicketProgress,
+      addActiveTD,
+      playChime,
+      setState,
+      onCompletedRewardSettled: (ticketId, profile) => {
+        applySettledCompletedReward(ticketId, profile);
+      },
+    });
     const controller = new AbortController();
     abortControllerRef.current = controller;
     submitChatMessage({
@@ -271,7 +327,7 @@ function Terminal() {
         });
         handleQuotaLockout(command);
       },
-      onProfileUpdate: (profile) => setState((prev) => applyServerProfile(prev, profile)),
+      onProfileUpdate: (profile) => applyProfileUpdate(profile),
       onError: playError, signal: controller.signal,
     });
   };
@@ -317,71 +373,25 @@ function Terminal() {
 
   return (
     <TerminalView
-      activeRegression={activeRegression}
-      outageHp={outageHp}
-      pendingReviewPing={pendingReviewPing}
-      pingAcknowledged={pingAcknowledged}
-      activeTheme={state.activeTheme}
-      regressionGlitch={regressionGlitch}
-      anyOverlayOpen={anyOverlayOpen}
-      isFreeTier={isFreeTier}
-      inputRef={inputRef}
-      closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
-      onlineCount={onlineCount}
-      rank={rank}
-      state={state}
-      handleProfileClick={handleProfileClick}
-      setShowHelp={setShowHelp}
-      setShowAbout={setShowAbout}
-      setInputValue={setInputValue}
-      setSlashQuery={setSlashQuery}
-      setSlashIndex={setSlashIndex}
-      setShowUpgrade={setShowUpgrade}
-      compactEffect={compactEffect}
-      isBooting={isBooting}
-      history={history}
-      messageKeys={messageKeys.current}
-      initialHistoryLen={initialHistoryLen.current}
-      promptString={promptString}
-      handleSlashCommandClick={handleSlashCommandClick}
-      bottomRef={bottomRef}
-      slashQuery={slashQuery}
-      slashIndex={slashIndex}
-      runSlashCommand={runSlashCommand}
-      inputValue={inputValue}
-      suggestedReply={suggestedReply}
-      isProcessing={isProcessing}
-      handleChange={handleChange}
-      handleKeyDown={handleKeyDown}
-      buyGenerator={buyGenerator}
-      buyUpgrade={buyUpgrade}
-      buyTheme={buyTheme}
-      setActiveTheme={setActiveTheme}
-      showStore={showStore}
-      showLeaderboard={showLeaderboard}
-      showAchievements={showAchievements}
-      showSynergize={showSynergize}
-      showHelp={showHelp}
-      showAbout={showAbout}
-      showPrivacy={showPrivacy}
-      showTerms={showTerms}
-      showContact={showContact}
-      showProfile={showProfile}
-      showParty={showParty}
-      showUpgrade={showUpgrade}
-      setShowStore={setShowStore}
-      setShowLeaderboard={setShowLeaderboard}
-      setShowAchievements={setShowAchievements}
-      setShowPrivacy={setShowPrivacy}
-      setShowTerms={setShowTerms}
-      setShowContact={setShowContact}
-      setShowProfile={setShowProfile}
-      setShowParty={setShowParty}
-      setShowSynergize={setShowSynergize}
-      setIsProcessing={setIsProcessing}
-      setHistory={setHistory}
-      pendingNagCommand={pendingNagCommandRef.current}
-      handleUpgradeNagClose={handleUpgradeNagClose}
+      activeRegression={activeRegression} outageHp={outageHp} pendingReviewPing={pendingReviewPing}
+      pingAcknowledged={pingAcknowledged} activeTheme={state.activeTheme} regressionGlitch={regressionGlitch}
+      anyOverlayOpen={anyOverlayOpen} inputRef={inputRef} closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
+      onlineCount={onlineCount} rank={rank} state={state} handleProfileClick={handleProfileClick}
+      setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue}
+      setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade}
+      compactEffect={compactEffect} isBooting={isBooting} history={history} messageKeys={messageKeys.current}
+      initialHistoryLen={initialHistoryLen.current} promptString={promptString} handleSlashCommandClick={handleSlashCommandClick}
+      bottomRef={bottomRef} slashQuery={slashQuery} slashIndex={slashIndex} runSlashCommand={runSlashCommand}
+      inputValue={inputValue} suggestedReply={suggestedReply} isProcessing={isProcessing} handleChange={handleChange}
+      handleKeyDown={handleKeyDown} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme}
+      setActiveTheme={setActiveTheme} showStore={showStore} showLeaderboard={showLeaderboard}
+      showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout}
+      showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact} showProfile={showProfile}
+      showParty={showParty} showUpgrade={showUpgrade} setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard}
+      setShowAchievements={setShowAchievements} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms}
+      setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty}
+      setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory}
+      pendingNagCommand={pendingNagCommandRef.current} handleUpgradeNagClose={handleUpgradeNagClose}
       handleManualUpgradeDismiss={handleManualUpgradeDismiss}
     />
   );

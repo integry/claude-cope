@@ -1,7 +1,9 @@
 import type { Message, GameState } from "../hooks/useGameState";
+import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
-import { updateTicketServer } from "../api/profileApi";
+import { fetchSessionProfile, updateTicketServer } from "../api/profileApi";
+import { isPaidUser } from "../hooks/gameStateUtils";
 
 interface SprintContext {
   getState: () => GameState;
@@ -9,32 +11,45 @@ interface SprintContext {
   addActiveTD: (amount: number) => void;
   playChime: () => void;
   setState: (fn: (prev: GameState) => GameState) => void;
+  onCompletedRewardSettled?: (ticketId: string, profile?: ServerProfile) => void;
 }
+
+type CompletedTicketRewardSyncResult =
+  | { ok: true; status: "settled"; profile: ServerProfile; profileSource: "score" | "session" }
+  | { ok: true; status: "pending" }
+  | { ok: false; status: "failed" };
 
 export function syncCompletedTicketReward(params: {
   username: string;
   ticketId: string;
   proKeyHash?: string;
-}) {
+}): Promise<CompletedTicketRewardSyncResult> {
   const { username, ticketId, proKeyHash } = params;
   return fetch(`${API_BASE}/api/score`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       username,
-      currentTD: 0,
-      totalTDEarned: 0,
-      inventory: {},
-      upgrades: [],
       completedTaskIds: [ticketId],
       ...(proKeyHash ? { proKeyHash } : {}),
     }),
-  }).catch(() => {});
+  }).then(async (res): Promise<CompletedTicketRewardSyncResult> => {
+      if (!res.ok) return { ok: false, status: "failed" };
+      const result = await res.json().catch(() => ({}));
+      if ((result as { ok?: boolean }).ok === false) return { ok: false, status: "failed" };
+      const profile = (result as { profile?: ServerProfile }).profile;
+      if (profile) return { ok: true, status: "settled", profile, profileSource: "score" };
+      const sessionProfile = (await fetchSessionProfile().catch(() => null))?.profile;
+      if (sessionProfile) return { ok: true, status: "settled", profile: sessionProfile, profileSource: "session" };
+      return { ok: true, status: "pending" };
+    })
+    .catch((): CompletedTicketRewardSyncResult => ({ ok: false, status: "failed" }));
 }
 
 /** Build the onSprintProgress callback and a getter for the sprint-complete message */
 export function buildSprintCallbacks(ctx: SprintContext) {
   let sprintCompleteMessage: Message | null = null;
+  let completedTicketSideEffectLock: string | null = null;
 
   const onSprintProgress = (rawAmount: number) => {
     const amount = Math.round(rawAmount * 1.5);
@@ -54,14 +69,31 @@ export function buildSprintCallbacks(ctx: SprintContext) {
     const completedTicketTitle = ticket.title;
     const completedUsername = current.username;
     const completedProKeyHash = current.proKeyHash;
+    const canTrackPendingCompletedReward = Boolean(completedUsername) && isPaidUser(current);
     const payout = ticket.sprintGoal * 10;
+    const completionLockKey = `${completedUsername}:${completedTicketId}`;
+
+    // This callback is per chat request. Guard only the currently completing
+    // ticket so duplicate streamed completion events do not fire twice.
+    if (completedTicketSideEffectLock === completionLockKey) return;
+    completedTicketSideEffectLock = completionLockKey;
 
     ctx.setState((prev) => {
       if (!prev.activeTicket || prev.activeTicket.id !== completedTicketId) return prev;
       return {
         ...prev,
         activeTicket: null,
-        pendingCompletedTaskIds: [...prev.pendingCompletedTaskIds, completedTicketId],
+        pendingCompletedTaskIds: canTrackPendingCompletedReward
+          ? prev.pendingCompletedTaskIds.includes(completedTicketId)
+            ? prev.pendingCompletedTaskIds
+            : [...prev.pendingCompletedTaskIds, completedTicketId]
+          : prev.pendingCompletedTaskIds,
+        pendingCompletedTaskRewards: canTrackPendingCompletedReward
+          ? {
+            ...prev.pendingCompletedTaskRewards,
+            [completedTicketId]: prev.pendingCompletedTaskRewards?.[completedTicketId] ?? { rewardTD: payout },
+          }
+          : prev.pendingCompletedTaskRewards,
       };
     });
 
@@ -70,12 +102,22 @@ export function buildSprintCallbacks(ctx: SprintContext) {
     sprintCompleteMessage = { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${completedTicketId} "${completedTicketTitle}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` };
 
     if (completedUsername && completedProKeyHash) {
-        void syncCompletedTicketReward({
-          username: completedUsername,
-          ticketId: completedTicketId,
-          proKeyHash: completedProKeyHash,
-        });
-        void updateTicketServer(completedUsername, null, completedProKeyHash);
+      void syncCompletedTicketReward({
+        username: completedUsername,
+        ticketId: completedTicketId,
+        proKeyHash: completedProKeyHash,
+      }).then((result) => {
+        if (result.status === "settled") {
+          ctx.onCompletedRewardSettled?.(
+            completedTicketId,
+            result.profile,
+          );
+        }
+      });
+    }
+
+    if (completedUsername && completedProKeyHash) {
+      void updateTicketServer(completedUsername, null, completedProKeyHash);
     }
 
     const completedMessage = `✅ ${completedUsername || "A player"} completed ticket "${completedTicketTitle}" and earned ${payout.toLocaleString()} TD!`;
