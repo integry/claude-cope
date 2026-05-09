@@ -156,7 +156,13 @@ describe("useTipManager", () => {
     act(() => {
       ref.current?.recordEnter();
       vi.advanceTimersByTime(40_000);
+    });
+
+    act(() => {
       ref.current?.setBlocked(true);
+    });
+
+    act(() => {
       vi.advanceTimersByTime(10_000);
     });
 
@@ -164,6 +170,9 @@ describe("useTipManager", () => {
 
     act(() => {
       ref.current?.setBlocked(false);
+    });
+
+    act(() => {
       vi.advanceTimersByTime(250);
     });
 

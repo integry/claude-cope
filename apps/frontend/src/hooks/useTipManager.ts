@@ -52,6 +52,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   const currentTD = gameState.economy.currentTD;
   const quotaPercent = gameState.economy.quotaPercent;
   const idleTimerRef = useRef<number | null>(null);
+  const idleDeadlineRef = useRef<number | null>(null);
   const hasInteractedRef = useRef(false);
   const actionCountRef = useRef(0);
   const usedCommandsRef = useRef<Set<string>>(new Set());
@@ -80,21 +81,23 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     }
   }, []);
 
-  const scheduleIdleTip = useCallback(() => {
+  const scheduleIdleTip = useCallback((delayMs = IDLE_TIP_DELAY_MS) => {
     clearIdleTimer();
     if (!hasInteractedRef.current) return;
+    idleDeadlineRef.current = Date.now() + delayMs;
     idleTimerRef.current = window.setTimeout(function fireIdleTip() {
       if (isBootingRef.current) {
         idleTimerRef.current = null;
         return;
       }
       if (isInteractionBlockedRef.current) {
-        idleTimerRef.current = window.setTimeout(fireIdleTip, 250);
+        idleTimerRef.current = null;
         return;
       }
       idleTimerRef.current = null;
+      idleDeadlineRef.current = null;
       appendTip(setHistory, getRandomIdleTip());
-    }, IDLE_TIP_DELAY_MS);
+    }, delayMs);
   }, [clearIdleTimer, setHistory]);
 
   const recordEnter = useCallback(() => {
@@ -188,6 +191,19 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   ]);
 
   useEffect(() => clearIdleTimer, [clearIdleTimer]);
+
+  useEffect(() => {
+    if (!hasInteractedRef.current) return;
+
+    if (isInteractionBlocked) {
+      clearIdleTimer();
+      return;
+    }
+
+    if (idleTimerRef.current !== null || idleDeadlineRef.current === null) return;
+    const remainingDelayMs = idleDeadlineRef.current - Date.now();
+    scheduleIdleTip(remainingDelayMs > 0 ? remainingDelayMs : 250);
+  }, [clearIdleTimer, isInteractionBlocked, scheduleIdleTip]);
 
   return { recordEnter, recordValidCommand, recordMessageWithoutTicket };
 }
