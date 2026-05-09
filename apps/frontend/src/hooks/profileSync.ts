@@ -2,6 +2,34 @@ import type { ServerProfile } from "@claude-cope/shared/profile";
 import type { GameState } from "./gameStateUtils";
 import { resolveRank } from "./gameStateUtils";
 
+function getPendingRewardAmount(prev: GameState, ticketId: string): number {
+  return prev.pendingCompletedTaskRewards?.[ticketId]?.rewardTD ?? 0;
+}
+
+export function getSettledPendingCompletedTaskIds(
+  prev: GameState,
+  profile: ServerProfile,
+  candidateTaskIds: string[] = prev.pendingCompletedTaskIds,
+): string[] {
+  const pendingTaskIds = candidateTaskIds.filter((ticketId) => prev.pendingCompletedTaskIds.includes(ticketId));
+  const totalPendingRewardTD = pendingTaskIds.reduce((sum, ticketId) => sum + getPendingRewardAmount(prev, ticketId), 0);
+
+  if (totalPendingRewardTD <= 0) return [];
+
+  const localTotalExcludingPendingRewards = Math.max(0, prev.economy.totalTDEarned - totalPendingRewardTD);
+  let confirmedPendingRewardTD = Math.max(0, profile.total_td - localTotalExcludingPendingRewards);
+  const settledTaskIds: string[] = [];
+
+  for (const ticketId of pendingTaskIds) {
+    const rewardTD = getPendingRewardAmount(prev, ticketId);
+    if (rewardTD <= 0 || confirmedPendingRewardTD < rewardTD) continue;
+    settledTaskIds.push(ticketId);
+    confirmedPendingRewardTD -= rewardTD;
+  }
+
+  return settledTaskIds;
+}
+
 /**
  * Merge a server-authoritative profile onto local game state.
  * Server wins for all authoritative fields; local-only fields are preserved.
@@ -19,21 +47,21 @@ export function applyServerProfile(
     preservePendingCompletedRewardTaskIds?: string[] | null;
   } = {},
 ): GameState {
-  const shouldPreservePendingReward = Boolean(
-    opts.preservePendingCompletedRewardTaskIds?.some((ticketId) => prev.pendingCompletedTaskIds.includes(ticketId)),
+  const pendingTaskIds = opts.preservePendingCompletedRewardTaskIds?.filter(
+    (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
+  ) ?? [];
+  const settledTaskIds = getSettledPendingCompletedTaskIds(prev, profile, pendingTaskIds);
+  const settledTaskIdSet = new Set(settledTaskIds);
+  const unresolvedCompletedRewardTD = pendingTaskIds.reduce((sum, ticketId) => (
+    settledTaskIdSet.has(ticketId) ? sum : sum + getPendingRewardAmount(prev, ticketId)
+  ), 0);
+  const preservedCurrentRewardTD = Math.min(
+    unresolvedCompletedRewardTD,
+    Math.max(0, prev.economy.currentTD - profile.current_td),
   );
-  const unresolvedCompletedRewardTD = shouldPreservePendingReward
-    ? Math.max(0, prev.economy.totalTDEarned - profile.total_td)
-    : 0;
-  const preservedCurrentRewardTD = shouldPreservePendingReward
-    ? Math.min(
-        unresolvedCompletedRewardTD,
-        Math.max(0, prev.economy.currentTD - profile.current_td),
-      )
-    : 0;
   const currentTD = profile.current_td + preservedCurrentRewardTD;
   const totalTDEarned = profile.total_td + unresolvedCompletedRewardTD;
-  const currentRank = shouldPreservePendingReward && totalTDEarned > profile.total_td
+  const currentRank = unresolvedCompletedRewardTD > 0 && totalTDEarned > profile.total_td
     ? resolveRank(totalTDEarned, prev.economy.currentRank)
     : profile.corporate_rank;
 

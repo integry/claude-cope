@@ -2,7 +2,7 @@ import type { Message, GameState } from "../hooks/useGameState";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
-import { fetchSessionProfile, updateTicketServer } from "../api/profileApi";
+import { updateTicketServer } from "../api/profileApi";
 
 interface SprintContext {
   getState: () => GameState;
@@ -32,13 +32,7 @@ export function syncCompletedTicketReward(params: {
       if (!res.ok) return null;
       const result = await res.json().catch(() => ({}));
       const profile = (result as { profile?: ServerProfile }).profile;
-      if (profile) return { ok: true, profile };
-
-      const sessionProfile = await fetchSessionProfile().catch(() => ({ found: false }));
-      return {
-        ok: true,
-        profile: "profile" in sessionProfile ? sessionProfile.profile ?? undefined : undefined,
-      };
+      return profile ? { ok: true, profile } : { ok: true };
     })
     .catch(() => null);
 }
@@ -77,6 +71,12 @@ export function buildSprintCallbacks(ctx: SprintContext) {
             ? prev.pendingCompletedTaskIds
             : [...prev.pendingCompletedTaskIds, completedTicketId]
           : prev.pendingCompletedTaskIds,
+        pendingCompletedTaskRewards: completedUsername && completedProKeyHash
+          ? {
+            ...prev.pendingCompletedTaskRewards,
+            [completedTicketId]: prev.pendingCompletedTaskRewards?.[completedTicketId] ?? { rewardTD: payout },
+          }
+          : prev.pendingCompletedTaskRewards,
       };
     });
 

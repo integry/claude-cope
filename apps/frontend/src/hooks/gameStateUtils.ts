@@ -79,6 +79,10 @@ export interface ByokUsage {
   cost: number;
 }
 
+export interface PendingCompletedTaskReward {
+  rewardTD: number;
+}
+
 export interface GameState {
   version: string;
   username: string;
@@ -97,6 +101,7 @@ export interface GameState {
   unlockedThemes: string[];
   soundEnabled: boolean;
   pendingCompletedTaskIds: string[];
+  pendingCompletedTaskRewards?: Record<string, PendingCompletedTaskReward>;
   apiKey?: string;
   selectedModel?: string;
   proKey?: string;
@@ -172,6 +177,7 @@ function createDefaultState(): GameState {
     unlockedThemes: ["default"],
     soundEnabled: true,
     pendingCompletedTaskIds: [],
+    pendingCompletedTaskRewards: {},
   };
 }
 
@@ -215,6 +221,9 @@ function applyDefensiveDefaults(state: GameState): void {
   }
   if (!Array.isArray(state.pendingCompletedTaskIds)) {
     state.pendingCompletedTaskIds = [];
+  }
+  if (!state.pendingCompletedTaskRewards || typeof state.pendingCompletedTaskRewards !== "object") {
+    state.pendingCompletedTaskRewards = {};
   }
 }
 

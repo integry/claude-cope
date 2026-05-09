@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import type { GameState } from "../useGameState";
-import { applyServerProfile } from "../profileSync";
+import { applyServerProfile, getSettledPendingCompletedTaskIds } from "../profileSync";
 
 function createGameState(overrides: Partial<GameState> = {}): GameState {
   return {
@@ -33,6 +33,7 @@ function createGameState(overrides: Partial<GameState> = {}): GameState {
     unlockedThemes: ["default"],
     soundEnabled: true,
     pendingCompletedTaskIds: [],
+    pendingCompletedTaskRewards: {},
     ...overrides,
   };
 }
@@ -70,6 +71,7 @@ describe("applyServerProfile", () => {
         tdMultiplier: 1,
       },
       pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 1000 } },
     });
 
     const merged = applyServerProfile(prev, createServerProfile(), {
@@ -91,6 +93,7 @@ describe("applyServerProfile", () => {
         tdMultiplier: 1,
       },
       pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
     });
 
     const merged = applyServerProfile(prev, createServerProfile({
@@ -115,6 +118,7 @@ describe("applyServerProfile", () => {
         tdMultiplier: 1,
       },
       pendingCompletedTaskIds: [],
+      pendingCompletedTaskRewards: {},
     });
 
     const merged = applyServerProfile(prev, createServerProfile({
@@ -126,5 +130,52 @@ describe("applyServerProfile", () => {
 
     expect(merged.economy.currentTD).toBe(900);
     expect(merged.economy.totalTDEarned).toBe(900);
+  });
+
+  it("does not mark a pending reward as settled when the authoritative profile is still stale", () => {
+    const prev = createGameState({
+      economy: {
+        currentTD: 1000,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
+    });
+
+    const settledTaskIds = getSettledPendingCompletedTaskIds(prev, createServerProfile({
+      current_td: 1000,
+      total_td: 1000,
+    }));
+
+    expect(settledTaskIds).toEqual([]);
+  });
+
+  it("settles only the pending rewards confirmed by the authoritative profile", () => {
+    const prev = createGameState({
+      economy: {
+        currentTD: 1800,
+        totalTDEarned: 1800,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059", "COPE-060"],
+      pendingCompletedTaskRewards: {
+        "COPE-059": { rewardTD: 500 },
+        "COPE-060": { rewardTD: 300 },
+      },
+    });
+
+    const settledTaskIds = getSettledPendingCompletedTaskIds(prev, createServerProfile({
+      current_td: 1500,
+      total_td: 1500,
+    }));
+
+    expect(settledTaskIds).toEqual(["COPE-059"]);
   });
 });

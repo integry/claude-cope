@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { buildSprintCallbacks, syncCompletedTicketReward } from "../buildChatSubmitArgs";
+import { buildSprintCallbacks } from "../buildChatSubmitArgs";
 import type { GameState } from "../../hooks/useGameState";
 import { applyServerProfile } from "../../hooks/profileSync";
 import type { ServerProfile } from "@claude-cope/shared/profile";
@@ -62,6 +62,7 @@ function createGameState(overrides: Partial<GameState> = {}): GameState {
     unlockedThemes: ["default"],
     soundEnabled: true,
     pendingCompletedTaskIds: [],
+    pendingCompletedTaskRewards: {},
     ...overrides,
   };
 }
@@ -84,7 +85,7 @@ function createSprintCallbacks(
   });
 }
 
-describe("syncCompletedTicketReward", () => {
+describe("buildSprintCallbacks", () => {
   const fetchMock = vi.fn();
 
   beforeEach(() => {
@@ -95,43 +96,6 @@ describe("syncCompletedTicketReward", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-  });
-
-  it("posts completed task IDs to /api/score for pro users without relying on local totals", async () => {
-    const result = await syncCompletedTicketReward({
-      username: "alice",
-      ticketId: "COPE-115",
-      proKeyHash: "pro-hash",
-    });
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe("/api/score");
-    expect(init?.method).toBe("POST");
-    expect(JSON.parse(init?.body as string)).toEqual({
-      username: "alice",
-      completedTaskIds: ["COPE-115"],
-      proKeyHash: "pro-hash",
-    });
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/account/me");
-    expect(result).toEqual({ ok: true, profile: undefined });
-  });
-
-  it("falls back to fetching the session profile when /api/score succeeds without returning one", async () => {
-    const sessionProfile = createServerProfile();
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ found: true, profile: sessionProfile }), { status: 200 }));
-
-    const result = await syncCompletedTicketReward({
-      username: "alice",
-      ticketId: "COPE-115",
-      proKeyHash: "pro-hash",
-    });
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/account/me");
-    expect(result).toEqual({ ok: true, profile: sessionProfile });
   });
 
   it("only sends the completed ticket identifier when syncing a completed paid ticket", async () => {
@@ -197,6 +161,7 @@ describe("syncCompletedTicketReward", () => {
         tdMultiplier: 1,
       },
       pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 1000 } },
     });
     const staleProfile = createServerProfile({ current_td: 0, total_td: 0 });
 
@@ -214,9 +179,6 @@ describe("syncCompletedTicketReward", () => {
       if (url === "/api/score") {
         return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
       }
-      if (url === "/api/account/me") {
-        return Promise.resolve(new Response(JSON.stringify({ found: false }), { status: 200 }));
-      }
       return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     });
     const onCompletedRewardSettled = vi.fn();
@@ -230,15 +192,12 @@ describe("syncCompletedTicketReward", () => {
     expect(onCompletedRewardSettled).not.toHaveBeenCalled();
   });
 
-  it("settles the pending reward after a successful /api/score response fetches the current session profile", async () => {
+  it("settles the pending reward after /api/score returns an updated profile", async () => {
     const settledProfile = createServerProfile();
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/score") {
-        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-      }
-      if (url === "/api/account/me") {
-        return Promise.resolve(new Response(JSON.stringify({ found: true, profile: settledProfile }), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, profile: settledProfile }), { status: 200 }));
       }
       return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     });
@@ -276,6 +235,7 @@ describe("syncCompletedTicketReward", () => {
         tdMultiplier: 1,
       },
       pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
     });
     const staleProfile = createServerProfile();
     const newerProfile = createServerProfile({ current_td: 1250, total_td: 1250 });
@@ -290,7 +250,7 @@ describe("syncCompletedTicketReward", () => {
     expect(mergedAfterStaleChat.economy.currentTD).toBe(1500);
     expect(mergedAfterStaleChat.economy.totalTDEarned).toBe(1500);
     expect(mergedAfterRetry.economy.currentTD).toBe(1500);
-    expect(mergedAfterRetry.economy.totalTDEarned).toBe(1500);
+    expect(mergedAfterRetry.economy.totalTDEarned).toBe(1750);
   });
 
   it("does not track pending completed task IDs when the reward cannot be synced", () => {
@@ -304,6 +264,7 @@ describe("syncCompletedTicketReward", () => {
 
     const nextState = setState.mock.results[0]?.value as GameState;
     expect(nextState.pendingCompletedTaskIds).toEqual([]);
+    expect(nextState.pendingCompletedTaskRewards).toEqual({});
   });
 
   it("does not append duplicate pending completed task IDs for the same ticket", () => {
@@ -311,6 +272,7 @@ describe("syncCompletedTicketReward", () => {
       proKeyHash: "fresh-pro-hash",
       activeTicket: DEFAULT_TICKET,
       pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 1000 } },
     })));
 
     const { onSprintProgress } = createSprintCallbacks({ pendingCompletedTaskIds: ["COPE-059"] }, { setState });
@@ -319,6 +281,7 @@ describe("syncCompletedTicketReward", () => {
 
     const nextState = setState.mock.results[0]?.value as GameState;
     expect(nextState.pendingCompletedTaskIds).toEqual(["COPE-059"]);
+    expect(nextState.pendingCompletedTaskRewards).toEqual({ "COPE-059": { rewardTD: 1000 } });
   });
 
   it("preserves local balances while multiple completed rewards are still pending", () => {
@@ -332,6 +295,10 @@ describe("syncCompletedTicketReward", () => {
         tdMultiplier: 1,
       },
       pendingCompletedTaskIds: ["COPE-059", "COPE-060"],
+      pendingCompletedTaskRewards: {
+        "COPE-059": { rewardTD: 500 },
+        "COPE-060": { rewardTD: 1000 },
+      },
     });
     const staleProfile = createServerProfile();
 
@@ -340,7 +307,7 @@ describe("syncCompletedTicketReward", () => {
     });
 
     expect(merged.economy.currentTD).toBe(1500);
-    expect(merged.economy.totalTDEarned).toBe(1500);
+    expect(merged.economy.totalTDEarned).toBe(2000);
   });
 
   it("does not resurrect TD the user already spent while a completed reward is pending", () => {
@@ -354,6 +321,7 @@ describe("syncCompletedTicketReward", () => {
         tdMultiplier: 1,
       },
       pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 1000 } },
     });
     const staleProfile = createServerProfile({ current_td: 100, total_td: 100 });
 
@@ -376,6 +344,7 @@ describe("syncCompletedTicketReward", () => {
         tdMultiplier: 1,
       },
       pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
     });
     const updatedProfile = createServerProfile({ current_td: 900 });
 

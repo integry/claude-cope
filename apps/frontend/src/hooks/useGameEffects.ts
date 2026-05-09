@@ -2,6 +2,8 @@ import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateA
 import { GENERATORS, CORPORATE_RANKS } from "../game/constants";
 import { type GameState, calculateActiveMultiplier, isPaidUser } from "./gameStateUtils";
 import { unlockAchievementServer } from "../api/profileApi";
+import { getSettledPendingCompletedTaskIds } from "./profileSync";
+import type { ServerProfile } from "@claude-cope/shared/profile";
 
 export function shouldBackgroundSyncScore(state: GameState, lastSyncedTotalTD: number): boolean {
   const hasPendingCompletedTickets = (state.pendingCompletedTaskIds?.length ?? 0) > 0;
@@ -49,15 +51,26 @@ export function useScoreSync(
           completedTaskIds,
           ...(current.proKeyHash ? { proKeyHash: current.proKeyHash } : {}),
         }),
-      }).then((res) => {
-        if (res.ok && completedTaskIds.length > 0) {
-          setState((prev) => ({
+      }).then(async (res) => {
+        if (!res.ok || completedTaskIds.length === 0) return;
+        const data = await res.json().catch(() => ({}));
+        const profile = (data as { profile?: ServerProfile }).profile;
+        if (!profile) return;
+
+        setState((prev) => {
+          const settledTaskIds = getSettledPendingCompletedTaskIds(prev, profile, completedTaskIds);
+          if (settledTaskIds.length === 0) return prev;
+
+          return {
             ...prev,
-            pendingCompletedTaskIds: prev.pendingCompletedTaskIds.filter(
-              (id) => !completedTaskIds.includes(id),
+            pendingCompletedTaskIds: prev.pendingCompletedTaskIds.filter((id) => !settledTaskIds.includes(id)),
+            pendingCompletedTaskRewards: Object.fromEntries(
+              Object.entries(prev.pendingCompletedTaskRewards ?? {}).filter(
+                ([ticketId]) => !settledTaskIds.includes(ticketId),
+              ),
             ),
-          }));
-        }
+          };
+        });
       }).catch(() => {});
     }, 300000); // 5 minutes
 
