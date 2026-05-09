@@ -2409,9 +2409,32 @@ export const FALLBACK_SEQUENCES: ToolStep[][] = [
   [{ tool: "Read", target: "package-lock.json", action: "Hastily papering over the haunted mansion of the monorepo" }, { tool: "Bash", target: "npm outdated", action: "Flirtatiously debugging the forbidden fruit of production data" }, { tool: "Grep", target: "deprecated|legacy|TODO", action: "Nonchalantly strolling through the cursed tome of legacy documentation" }, { tool: "Glob", target: "src/**/index.ts", action: "Begrudgingly accepting the forbidden fruit of production data" }, { tool: "Bash", target: "du -sh node_modules", action: "Melodramatically reading the haunted mansion of the monorepo" }],
 ];
 
+const TASK_ID_SUFFIX_RE = /(\d+)$/;
+
+/** Resolve a task ID to a specific tool-sequence key when possible. */
+export function resolveTaskSequenceKey(taskId: string): string | null {
+  if (taskId in TASK_TOOL_SEQUENCES) {
+    return taskId;
+  }
+
+  const suffixMatch = taskId.match(TASK_ID_SUFFIX_RE);
+  if (!suffixMatch) {
+    return null;
+  }
+
+  const legacyTaskId = `COPE-${suffixMatch[1].padStart(3, "0")}`;
+  return legacyTaskId in TASK_TOOL_SEQUENCES ? legacyTaskId : null;
+}
+
+/** Whether this task has a specific tool-sequence entry, directly or via legacy suffix aliasing. */
+export function hasSpecificTaskSequence(taskId: string): boolean {
+  return resolveTaskSequenceKey(taskId) !== null;
+}
+
 /** Get all tool sequences for a given task ID, or fallback sequences. */
 export function getSequencesForTask(taskId: string): ToolStep[][] {
-  return TASK_TOOL_SEQUENCES[taskId] ?? FALLBACK_SEQUENCES;
+  const resolvedKey = resolveTaskSequenceKey(taskId);
+  return resolvedKey ? TASK_TOOL_SEQUENCES[resolvedKey]! : FALLBACK_SEQUENCES;
 }
 
 /** Pick a single random sequence for a given task, or from all tasks if none specified. */

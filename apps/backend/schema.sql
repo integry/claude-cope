@@ -16,6 +16,10 @@ CREATE INDEX IF NOT EXISTS idx_hall_of_blame_technical_debt
 -- Community Backlog table for the Agile Suffering Loop
 CREATE TABLE IF NOT EXISTS community_backlog (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    reporter TEXT,
+    reporter_name TEXT,
+    reporter_title TEXT,
+    reporter_description TEXT,
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     technical_debt INTEGER NOT NULL DEFAULT 0,

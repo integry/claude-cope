@@ -340,7 +340,7 @@ function getMessageFlags(role: string, content: string) {
   return { useMarkdown, isAwaitingResponse, isStreaming };
 }
 
-function MessageContent({ message, isNew = false, isFreeTier = false, onSlashCommand }: { message: Message; isNew?: boolean; isFreeTier?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
+function MessageContent({ message, isNew = false, onSlashCommand }: { message: Message; isNew?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
   const { role, content } = message;
   const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(role, content);
 
@@ -348,7 +348,7 @@ function MessageContent({ message, isNew = false, isFreeTier = false, onSlashCom
   // queue warnings) render instantly so they don't vanish mid-animation when
   // the fixed delay timers remove them.
   const shouldTypewrite = isNew && useMarkdown && role === "system";
-  const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite, isFreeTier);
+  const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite);
 
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand), [onSlashCommand]);
 
@@ -412,7 +412,7 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
         </div>
       )}
       {message.role === "loading" && !isAwaitingResponse && <Spinner />}
-      <MessageContent message={message} isNew={isNew} isFreeTier={isFreeTier} onSlashCommand={onSlashCommand} />
+      <MessageContent message={message} isNew={isNew} onSlashCommand={onSlashCommand} />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
       {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}

@@ -10,6 +10,8 @@ interface ReviewPingTicket {
   sprintProgress: number;
 }
 
+export type PendingReviewPing = { sender: string; amount: number } | null;
+
 interface UseMultiplayerOptions {
   // The canonical user identity from game state (state.username). Used as the
   // PartyKit presence name so `/who`, `/ping`, `/profile`, and the leaderboard
@@ -136,7 +138,7 @@ function cancelledCopy(sender: string, reason: 'expired' | 'sender_disconnected'
 // The hook's useEffect wraps this with live setters and `isUserIdle`.
 export interface ServerMessageHandlers {
   setHistory: React.Dispatch<React.SetStateAction<Message[]>>;
-  setPendingReviewPing: React.Dispatch<React.SetStateAction<{ sender: string; amount: number } | null>>;
+  setPendingReviewPing: React.Dispatch<React.SetStateAction<PendingReviewPing>>;
   setOnlineCount: React.Dispatch<React.SetStateAction<number>>;
   setOnlineUsers: React.Dispatch<React.SetStateAction<string[]>>;
   setOutageHp: React.Dispatch<React.SetStateAction<number | null>>;

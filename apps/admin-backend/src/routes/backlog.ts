@@ -14,7 +14,7 @@ backlog.get("/", async (c) => {
 
   const { results } = await db
     .prepare(
-      "SELECT id, title, description, technical_debt, kickoff_prompt, created_at FROM community_backlog ORDER BY created_at DESC"
+      "SELECT id, reporter, reporter_name, reporter_title, reporter_description, title, description, technical_debt, kickoff_prompt, created_at FROM community_backlog ORDER BY created_at DESC"
     )
     .all();
 
@@ -26,6 +26,10 @@ backlog.post("/", async (c) => {
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
   const body = await c.req.json<{
+    reporter?: string;
+    reporter_name?: string;
+    reporter_title?: string;
+    reporter_description?: string;
     title: string;
     description?: string;
     technical_debt?: number;
@@ -38,9 +42,13 @@ backlog.post("/", async (c) => {
 
   const result = await db
     .prepare(
-      "INSERT INTO community_backlog (title, description, technical_debt, kickoff_prompt, created_at) VALUES (?, ?, ?, ?, datetime('now'))"
+      "INSERT INTO community_backlog (reporter, reporter_name, reporter_title, reporter_description, title, description, technical_debt, kickoff_prompt, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"
     )
     .bind(
+      body.reporter?.trim() || null,
+      body.reporter_name?.trim() || null,
+      body.reporter_title?.trim() || null,
+      body.reporter_description?.trim() || null,
       body.title,
       body.description ?? "",
       body.technical_debt ?? 0,
@@ -57,6 +65,10 @@ backlog.put("/:id", async (c) => {
 
   const id = c.req.param("id");
   const body = await c.req.json<{
+    reporter?: string;
+    reporter_name?: string;
+    reporter_title?: string;
+    reporter_description?: string;
     title?: string;
     description?: string;
     technical_debt?: number;
@@ -66,6 +78,22 @@ backlog.put("/:id", async (c) => {
   const fields: string[] = [];
   const values: (string | number)[] = [];
 
+  if (body.reporter !== undefined) {
+    fields.push("reporter = ?");
+    values.push(body.reporter.trim());
+  }
+  if (body.reporter_name !== undefined) {
+    fields.push("reporter_name = ?");
+    values.push(body.reporter_name.trim());
+  }
+  if (body.reporter_title !== undefined) {
+    fields.push("reporter_title = ?");
+    values.push(body.reporter_title.trim());
+  }
+  if (body.reporter_description !== undefined) {
+    fields.push("reporter_description = ?");
+    values.push(body.reporter_description.trim());
+  }
   if (body.title !== undefined) {
     fields.push("title = ?");
     values.push(body.title);

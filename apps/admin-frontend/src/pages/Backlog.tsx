@@ -4,6 +4,10 @@ import { API_BASE } from "../config";
 
 interface BacklogItem {
   id: string;
+  reporter?: string | null;
+  reporter_name?: string | null;
+  reporter_title?: string | null;
+  reporter_description?: string | null;
   title: string;
   description: string;
   technical_debt: number;
@@ -11,13 +15,26 @@ interface BacklogItem {
 }
 
 interface BacklogForm {
+  reporter: string;
+  reporter_name: string;
+  reporter_title: string;
+  reporter_description: string;
   title: string;
   description: string;
   technical_debt: number;
   kickoff_prompt: string;
 }
 
-const emptyForm: BacklogForm = { title: "", description: "", technical_debt: 0, kickoff_prompt: "" };
+const emptyForm: BacklogForm = {
+  reporter: "",
+  reporter_name: "",
+  reporter_title: "",
+  reporter_description: "",
+  title: "",
+  description: "",
+  technical_debt: 0,
+  kickoff_prompt: "",
+};
 
 export default function Backlog() {
   const { data, isLoading, isError, mutate } = useAdminApi<BacklogItem[]>("/api/backlog");
@@ -36,6 +53,10 @@ export default function Backlog() {
   function openEdit(item: BacklogItem) {
     setEditingId(item.id);
     setForm({
+      reporter: item.reporter ?? "",
+      reporter_name: item.reporter_name ?? "",
+      reporter_title: item.reporter_title ?? "",
+      reporter_description: item.reporter_description ?? "",
       title: item.title ?? "",
       description: item.description ?? "",
       technical_debt: item.technical_debt ?? 0,
@@ -137,6 +158,47 @@ export default function Backlog() {
           <h2 className="mb-4 text-lg font-semibold">{editingId ? "Edit Item" : "Add Item"}</h2>
           <div className="grid grid-cols-1 gap-4">
             <div>
+              <label className="block text-sm font-medium text-gray-700">Reporter</label>
+              <input
+                type="text"
+                value={form.reporter}
+                onChange={(e) => setForm({ ...form, reporter: e.target.value })}
+                className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+                placeholder="e.g. Karen (HR)"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Reporter Name</label>
+                <input
+                  type="text"
+                  value={form.reporter_name}
+                  onChange={(e) => setForm({ ...form, reporter_name: e.target.value })}
+                  className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Reporter Title</label>
+                <input
+                  type="text"
+                  value={form.reporter_title}
+                  onChange={(e) => setForm({ ...form, reporter_title: e.target.value })}
+                  className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+                  placeholder="e.g. Senior PHP Developer since 2003"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Reporter Description</label>
+              <input
+                type="text"
+                value={form.reporter_description}
+                onChange={(e) => setForm({ ...form, reporter_description: e.target.value })}
+                className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+                placeholder="Short colorful bio"
+              />
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700">Title</label>
               <input
                 type="text"
@@ -198,6 +260,7 @@ export default function Backlog() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">ID</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Reporter</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Title</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Description</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">TD</th>
@@ -205,9 +268,10 @@ export default function Backlog() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {data?.map((item, index) => (
+            {data?.map((item) => (
               <tr key={item.id}>
-                <td className="whitespace-nowrap px-6 py-4 text-sm font-mono text-gray-500">COPE-{String(index + 1).padStart(3, "0")}</td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm font-mono text-gray-500">{item.id}</td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{item.reporter ?? "—"}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">{item.title}</td>
                 <td className="max-w-md truncate px-6 py-4 text-sm text-gray-700">{item.description}</td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{item.technical_debt}</td>

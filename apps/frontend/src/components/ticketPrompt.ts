@@ -1,7 +1,17 @@
 import { API_BASE } from "../config";
 import type { Message } from "./Terminal";
 
-type BacklogTicket = { id: string; title: string; description: string; technical_debt: number; kickoff_prompt: string };
+type BacklogTicket = {
+  id: string;
+  reporter?: string | null;
+  reporter_name?: string | null;
+  reporter_title?: string | null;
+  reporter_description?: string | null;
+  title: string;
+  description: string;
+  technical_debt: number;
+  kickoff_prompt: string;
+};
 
 /** The pending ticket offered to the user, waiting for /accept */
 let pendingTicketOffer: BacklogTicket | null = null;
@@ -44,8 +54,16 @@ export async function fetchRandomTicketPrompt(
 
     const reward = (ticket.technical_debt * 10).toLocaleString("en-US");
     const extracted = extractSender(ticket.description);
-    const senderLine = extracted ? `FROM: ${extracted.sender}\n\n` : "";
+    const sender = ticket.reporter_name?.trim()
+      ? ticket.reporter_title?.trim()
+        ? `${ticket.reporter_name.trim()} [${ticket.reporter_title.trim()}]`
+        : ticket.reporter_name.trim()
+      : ticket.reporter?.trim() || extracted?.sender || "";
+    const senderLine = sender ? `FROM: ${sender}\n\n` : "";
     const body = extracted ? extracted.body : ticket.description;
+    const reporterDescriptionLine = ticket.reporter_description?.trim()
+      ? `${ticket.reporter_description.trim()}\n\n`
+      : "";
 
     setHistory((prev) => [
       ...prev,
@@ -56,6 +74,7 @@ export async function fetchRandomTicketPrompt(
           `===\n\n` +
           `**${ticket.title}**\n\n` +
           senderLine +
+          reporterDescriptionLine +
           `> ${body}\n\n` +
           `[✅ REWARD: ${reward} TD]\n\n` +
           `---\n\n` +
