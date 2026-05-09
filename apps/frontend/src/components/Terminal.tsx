@@ -41,11 +41,7 @@ function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, 
 }
 
 function Terminal() {
-  const {
-    state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement,
-    applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme,
-    offlineTDEarned, clearOfflineTDEarned, updateTicketProgress,
-  } = useGameState();
+  const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
   const creditTD = useCallback((amount: number) => addActiveTD(amount, true), [addActiveTD]);
@@ -63,9 +59,7 @@ function Terminal() {
   const applyReviewSprintBoost = useCallback((ticketId: string, boost: number) => {
     if (activeTicketRef.current?.id === ticketId) updateTicketProgress(boost);
   }, [updateTicketProgress]);
-  const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage } = useMultiplayer({
-    username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost,
-  });
+  const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage } = useMultiplayer({ username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost });
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
@@ -78,12 +72,7 @@ function Terminal() {
   const [inputValue, setInputValue] = useState("");
   const [suggestedReply, setSuggestedReply] = useState<string | null>(null);
   const overlays = useOverlays();
-  const {
-    showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy,
-    showTerms, showContact, showProfile, showParty, showUpgrade, setShowStore, setShowLeaderboard,
-    setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms,
-    setShowContact, setShowProfile, setShowParty, setShowUpgrade, closeAllOverlays,
-  } = overlays;
+  const { showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, closeAllOverlays } = overlays;
   const [bragPending, setBragPending] = useState(false);
   const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
   const [clearCount, setClearCount] = useState(0);
@@ -107,13 +96,7 @@ function Terminal() {
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
-  const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({
-    isBooting,
-    isInteractionBlocked: anyOverlayOpen || isProcessing,
-    gameState: state,
-    onlineCount,
-    setHistory,
-  });
+  const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
 
   useEffect(() => {
     return () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); };
@@ -240,34 +223,16 @@ function Terminal() {
   }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
 
   const applyProfileUpdate = useCallback((profile: ServerProfile) => {
-    setState((prev) => {
-      return applyServerProfile(
-        prev,
-        profile,
-        prev.pendingCompletedTaskIds.length > 0
-          ? { preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds }
-        : {},
-      );
-    });
+    setState((prev) => applyServerProfile(prev, profile, prev.pendingCompletedTaskIds.length > 0 ? { preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds } : {}));
   }, [setState]);
 
   const applySettledCompletedReward = useCallback((ticketId: string, profile?: ServerProfile) => {
-    setState((prev) => {
-      if (!profile) {
-        return settlePendingCompletedRewards(prev, [ticketId]);
-      }
-
-      return mergeAuthoritativeProfile(
-        prev,
-        profile,
-        prev.pendingCompletedTaskIds.length > 0
-          ? {
-            preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
-            settledPendingCompletedRewardTaskIds: [ticketId],
-          }
-          : {},
-      );
-    });
+    setState((prev) => !profile
+      ? settlePendingCompletedRewards(prev, [ticketId])
+      : mergeAuthoritativeProfile(prev, profile, prev.pendingCompletedTaskIds.length > 0 ? {
+        preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
+        settledPendingCompletedRewardTaskIds: [ticketId],
+      } : {}));
   }, [setState]);
 
   const processCommandRef = useRef<(command: string) => void>(() => {});
@@ -294,16 +259,7 @@ function Terminal() {
     const chatMessages = isFreeTier
       ? contextMessages
       : [...contextMessages, { role: "user", content: userMessage.content }];
-    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({
-      getState: getCurrentState,
-      updateTicketProgress,
-      addActiveTD,
-      playChime,
-      setState,
-      onCompletedRewardSettled: (ticketId, profile) => {
-        applySettledCompletedReward(ticketId, profile);
-      },
-    });
+    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({ getState: getCurrentState, updateTicketProgress, addActiveTD, playChime, setState, onCompletedRewardSettled: (ticketId, profile) => { applySettledCompletedReward(ticketId, profile); } });
     const controller = new AbortController();
     abortControllerRef.current = controller;
     submitChatMessage({
@@ -379,79 +335,20 @@ function Terminal() {
   }, [setShowUpgrade]);
 
   const { handleKeyDown } = useTerminalKeyboard({
-    slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements,
-    showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
-    freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing, setHistory,
-    closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
+    slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
+    freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing, setHistory, closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
   });
 
   return (
     <TerminalView
-      activeRegression={activeRegression}
-      outageHp={outageHp}
-      pendingReviewPing={pendingReviewPing}
-      pingAcknowledged={pingAcknowledged}
+      {...{
+        activeRegression, outageHp, pendingReviewPing, pingAcknowledged, regressionGlitch, anyOverlayOpen, inputRef, closeAllOverlaysPreservingNag, onlineCount, rank, state, handleProfileClick, setShowHelp, setShowAbout, setInputValue, setSlashQuery, setSlashIndex, setShowUpgrade, compactEffect, isBooting, history, promptString, handleSlashCommandClick, bottomRef, slashQuery, slashIndex, runSlashCommand, inputValue, suggestedReply, isProcessing, handleChange, handleKeyDown, buyGenerator, buyUpgrade, buyTheme, setActiveTheme,
+        showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, setShowStore, setShowLeaderboard, setShowAchievements, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowSynergize, setIsProcessing, setHistory, handleUpgradeNagClose, handleManualUpgradeDismiss,
+      }}
       activeTheme={state.activeTheme}
-      regressionGlitch={regressionGlitch}
-      anyOverlayOpen={anyOverlayOpen}
-      inputRef={inputRef}
-      closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
-      onlineCount={onlineCount}
-      rank={rank}
-      state={state}
-      handleProfileClick={handleProfileClick}
-      setShowHelp={setShowHelp}
-      setShowAbout={setShowAbout}
-      setInputValue={setInputValue}
-      setSlashQuery={setSlashQuery}
-      setSlashIndex={setSlashIndex}
-      setShowUpgrade={setShowUpgrade}
-      compactEffect={compactEffect}
-      isBooting={isBooting}
-      history={history}
       messageKeys={messageKeys.current}
       initialHistoryLen={initialHistoryLen.current}
-      promptString={promptString}
-      handleSlashCommandClick={handleSlashCommandClick}
-      bottomRef={bottomRef}
-      slashQuery={slashQuery}
-      slashIndex={slashIndex}
-      runSlashCommand={runSlashCommand}
-      inputValue={inputValue}
-      suggestedReply={suggestedReply}
-      isProcessing={isProcessing}
-      handleChange={handleChange}
-      handleKeyDown={handleKeyDown}
-      buyGenerator={buyGenerator}
-      buyUpgrade={buyUpgrade}
-      buyTheme={buyTheme}
-      setActiveTheme={setActiveTheme}
-      showStore={showStore}
-      showLeaderboard={showLeaderboard}
-      showAchievements={showAchievements}
-      showSynergize={showSynergize}
-      showHelp={showHelp}
-      showAbout={showAbout}
-      showPrivacy={showPrivacy}
-      showTerms={showTerms}
-      showContact={showContact}
-      showProfile={showProfile}
-      showParty={showParty}
-      showUpgrade={showUpgrade}
-      setShowStore={setShowStore}
-      setShowLeaderboard={setShowLeaderboard}
-      setShowAchievements={setShowAchievements}
-      setShowPrivacy={setShowPrivacy}
-      setShowTerms={setShowTerms}
-      setShowContact={setShowContact}
-      setShowProfile={setShowProfile}
-      setShowParty={setShowParty}
-      setShowSynergize={setShowSynergize}
-      setIsProcessing={setIsProcessing}
-      setHistory={setHistory}
       pendingNagCommand={pendingNagCommandRef.current}
-      handleUpgradeNagClose={handleUpgradeNagClose}
-      handleManualUpgradeDismiss={handleManualUpgradeDismiss}
     />
   );
 }
