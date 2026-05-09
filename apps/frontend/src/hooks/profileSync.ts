@@ -66,29 +66,39 @@ function resolvePendingRewardEconomyMerge(
     (sum, ticketId) => sum + getPendingRewardAmount(prev, ticketId),
     0,
   );
+  const hasLegacyPendingRewardWithoutMetadata = unresolvedPendingTaskIds.length > 0 && unresolvedKnownRewardTD === 0;
+  const hasAuthoritativeEconomyAdvance = profile.total_td > prev.economy.totalTDEarned;
+
+  if (hasLegacyPendingRewardWithoutMetadata) {
+    return {
+      currentTD: hasAuthoritativeEconomyAdvance ? profile.current_td : prev.economy.currentTD,
+      totalTDEarned: hasAuthoritativeEconomyAdvance ? profile.total_td : prev.economy.totalTDEarned,
+      currentRank: hasAuthoritativeEconomyAdvance ? profile.corporate_rank : prev.economy.currentRank,
+    };
+  }
+
   const optimisticLocalBaselineTD = Math.max(0, prev.economy.currentTD - unresolvedKnownRewardTD);
   const unresolvedCompletedRewardTD = unresolvedKnownRewardTD;
   const shouldPreserveOptimisticTotals = unresolvedCompletedRewardTD > 0;
-  const hasAuthoritativeEconomyAdvance = shouldPreserveOptimisticTotals
-    && profile.total_td > prev.economy.totalTDEarned;
+  const hasKnownRewardAuthoritativeAdvance = shouldPreserveOptimisticTotals && hasAuthoritativeEconomyAdvance;
   const hasReliableLocalCurrentBaseline = optimisticLocalBaselineTD > 0;
   const isServerTotalCloseToOptimisticLocalTotal = profile.total_td >= (
     prev.economy.totalTDEarned - (unresolvedCompletedRewardTD / 2)
   );
 
   let currentTD = profile.current_td;
-  if (shouldPreserveOptimisticTotals && !hasAuthoritativeEconomyAdvance) {
+  if (shouldPreserveOptimisticTotals && !hasKnownRewardAuthoritativeAdvance) {
     currentTD = hasReliableLocalCurrentBaseline && !isServerTotalCloseToOptimisticLocalTotal
       ? Math.max(0, profile.current_td + unresolvedCompletedRewardTD)
       : prev.economy.currentTD;
   }
 
-  const totalTDEarned = hasAuthoritativeEconomyAdvance
+  const totalTDEarned = hasKnownRewardAuthoritativeAdvance
     ? profile.total_td
     : shouldPreserveOptimisticTotals
     ? Math.max(prev.economy.totalTDEarned, profile.total_td)
     : profile.total_td;
-  const currentRank = hasAuthoritativeEconomyAdvance
+  const currentRank = hasKnownRewardAuthoritativeAdvance
     ? profile.corporate_rank
     : shouldPreserveOptimisticTotals && unresolvedCompletedRewardTD > 0 && totalTDEarned > profile.total_td
     ? resolveRank(totalTDEarned, prev.economy.currentRank)

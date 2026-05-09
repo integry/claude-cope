@@ -69,7 +69,7 @@ describe("applyServerProfile", () => {
     expect(merged.economy.totalTDEarned).toBe(1000);
   });
 
-  it("does not infer a legacy pending completed-ticket reward when the reward metadata is missing", () => {
+  it("preserves a legacy pending completed-ticket reward when the reward metadata is missing", () => {
     const prev = createGameState({
       economy: {
         currentTD: 1100,
@@ -90,11 +90,11 @@ describe("applyServerProfile", () => {
       preservePendingCompletedRewardTaskIds: ["COPE-059"],
     });
 
-    expect(merged.economy.currentTD).toBe(100);
-    expect(merged.economy.totalTDEarned).toBe(100);
+    expect(merged.economy.currentTD).toBe(1100);
+    expect(merged.economy.totalTDEarned).toBe(1100);
   });
 
-  it("does not infer multiple legacy pending completed-ticket rewards when reward metadata is missing", () => {
+  it("preserves multiple legacy pending completed-ticket rewards when reward metadata is missing", () => {
     const prev = createGameState({
       economy: {
         currentTD: 1400,
@@ -115,8 +115,8 @@ describe("applyServerProfile", () => {
       preservePendingCompletedRewardTaskIds: ["COPE-059", "COPE-060"],
     });
 
-    expect(merged.economy.currentTD).toBe(200);
-    expect(merged.economy.totalTDEarned).toBe(200);
+    expect(merged.economy.currentTD).toBe(1400);
+    expect(merged.economy.totalTDEarned).toBe(1400);
   });
 
   it("preserves only the unresolved reward amount when the server also changed current TD", () => {
