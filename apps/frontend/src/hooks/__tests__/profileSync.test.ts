@@ -136,6 +136,34 @@ describe("applyServerProfile", () => {
     expect(merged.economy.totalTDEarned).toBe(1500);
   });
 
+  it("preserves local balances when multiple pending rewards exceed the reliable local baseline", () => {
+    const prev = createGameState({
+      economy: {
+        currentTD: 1500,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059", "COPE-060"],
+      pendingCompletedTaskRewards: {
+        "COPE-059": { rewardTD: 500 },
+        "COPE-060": { rewardTD: 1000 },
+      },
+    });
+
+    const merged = applyServerProfile(prev, createServerProfile({
+      current_td: 1000,
+      total_td: 1000,
+    }), {
+      preservePendingCompletedRewardTaskIds: ["COPE-059", "COPE-060"],
+    });
+
+    expect(merged.economy.currentTD).toBe(1500);
+    expect(merged.economy.totalTDEarned).toBe(1500);
+  });
+
   it("keeps newer server-earned current TD gains while a completed-ticket reward is still pending", () => {
     const prev = createGameState({
       economy: {
