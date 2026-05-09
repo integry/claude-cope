@@ -1,9 +1,9 @@
 import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateAction } from "react";
 import { GENERATORS, CORPORATE_RANKS } from "../game/constants";
 import { type GameState, calculateActiveMultiplier, isPaidUser } from "./gameStateUtils";
-import { fetchSessionProfile, unlockAchievementServer } from "../api/profileApi";
+import { unlockAchievementServer } from "../api/profileApi";
 import type { ServerProfile } from "@claude-cope/shared/profile";
-import { applyAuthoritativeProfile } from "./profileSync";
+import { applyAuthoritativeProfile, settlePendingCompletedRewards } from "./profileSync";
 
 export function shouldBackgroundSyncScore(state: GameState, lastSyncedTotalTD: number): boolean {
   const hasPendingCompletedTickets = (state.pendingCompletedTaskIds?.length ?? 0) > 0;
@@ -56,19 +56,14 @@ export function useScoreSync(
         const isApplicationFailure = (data as { ok?: boolean }).ok === false;
         if (!res.ok || isApplicationFailure || completedTaskIds.length === 0) return;
         const scoreProfile = (data as { profile?: ServerProfile }).profile;
-        let profile = scoreProfile;
-        if (!profile) {
-          const session = await fetchSessionProfile();
-          profile = session.profile ?? undefined;
-        }
-        if (!profile) return;
-
-        setState((prev) => {
-          return applyAuthoritativeProfile(prev, profile, {
-            preservePendingCompletedRewardTaskIds: completedTaskIds,
-            settledPendingCompletedRewardTaskIds: scoreProfile ? completedTaskIds : [],
-          });
-        });
+        setState((prev) => (
+          scoreProfile
+            ? applyAuthoritativeProfile(prev, scoreProfile, {
+              preservePendingCompletedRewardTaskIds: completedTaskIds,
+              settledPendingCompletedRewardTaskIds: completedTaskIds,
+            })
+            : settlePendingCompletedRewards(prev, completedTaskIds)
+        ));
       }).catch(() => {});
     }, 300000); // 5 minutes
 

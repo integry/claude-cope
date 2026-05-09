@@ -6,7 +6,11 @@ import { isFreeUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
-import { applyAuthoritativeProfile as mergeAuthoritativeProfile, applyServerProfile } from "../hooks/profileSync";
+import {
+  applyAuthoritativeProfile as mergeAuthoritativeProfile,
+  applyServerProfile,
+  settlePendingCompletedRewards,
+} from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { filterChatHistory } from "./filterChatHistory";
@@ -238,8 +242,12 @@ function Terminal() {
     });
   }, [setState]);
 
-  const applySettledAuthoritativeProfile = useCallback((ticketId: string, profile: ServerProfile) => {
+  const applySettledCompletedReward = useCallback((ticketId: string, profile?: ServerProfile) => {
     setState((prev) => {
+      if (!profile) {
+        return settlePendingCompletedRewards(prev, [ticketId]);
+      }
+
       return mergeAuthoritativeProfile(
         prev,
         profile,
@@ -284,7 +292,7 @@ function Terminal() {
       playChime,
       setState,
       onCompletedRewardSettled: (ticketId, profile) => {
-        applySettledAuthoritativeProfile(ticketId, profile);
+        applySettledCompletedReward(ticketId, profile);
       },
     });
     const controller = new AbortController();

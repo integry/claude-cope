@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GameState } from "../useGameState";
-import { applyAuthoritativeProfile, applyServerProfile } from "../profileSync";
+import { applyAuthoritativeProfile, applyServerProfile, settlePendingCompletedRewards } from "../profileSync";
 import { createServerProfile } from "../../test/createServerProfile";
 
 function createGameState(overrides: Partial<GameState> = {}): GameState {
@@ -237,6 +237,32 @@ describe("applyServerProfile", () => {
 
     expect(merged.economy.currentTD).toBe(900);
     expect(merged.economy.totalTDEarned).toBe(900);
+  });
+
+  it("converges to server truth after a successful score sync settles the pending reward", () => {
+    const prev = createGameState({
+      economy: {
+        currentTD: 1500,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
+    });
+
+    const settled = settlePendingCompletedRewards(prev, ["COPE-059"]);
+    const merged = applyServerProfile(settled, createServerProfile({
+      current_td: 1300,
+      total_td: 1500,
+    }), {
+      preservePendingCompletedRewardTaskIds: ["COPE-059"],
+    });
+
+    expect(merged.economy.currentTD).toBe(1300);
+    expect(merged.economy.totalTDEarned).toBe(1500);
   });
 
   it("applies the authoritative profile before clearing settled pending reward metadata", () => {

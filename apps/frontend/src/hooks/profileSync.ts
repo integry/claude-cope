@@ -6,6 +6,24 @@ function getPendingRewardAmount(prev: GameState, ticketId: string): number {
   return prev.pendingCompletedTaskRewards?.[ticketId]?.rewardTD ?? 0;
 }
 
+export function settlePendingCompletedRewards(
+  prev: GameState,
+  settledPendingCompletedRewardTaskIds: string[] | null | undefined,
+): GameState {
+  const settledTaskIdSet = new Set(
+    (settledPendingCompletedRewardTaskIds ?? []).filter((ticketId) => prev.pendingCompletedTaskIds.includes(ticketId)),
+  );
+  if (settledTaskIdSet.size === 0) return prev;
+
+  return {
+    ...prev,
+    pendingCompletedTaskIds: prev.pendingCompletedTaskIds.filter((id) => !settledTaskIdSet.has(id)),
+    pendingCompletedTaskRewards: Object.fromEntries(
+      Object.entries(prev.pendingCompletedTaskRewards ?? {}).filter(([ticketId]) => !settledTaskIdSet.has(ticketId)),
+    ),
+  };
+}
+
 /**
  * Merge a server-authoritative profile onto local game state.
  * Server wins for all authoritative fields; local-only fields are preserved.
@@ -40,6 +58,9 @@ export function applyServerProfile(
     ? Math.max(0, prev.economy.totalTDEarned - profile.total_td - unresolvedKnownRewardTD)
     : 0;
   const unresolvedCompletedRewardTD = unresolvedKnownRewardTD + inferredLegacyPendingRewardTD;
+  // Pending ticket rewards are the one economy delta we know the local client
+  // may be ahead on. Strip them out before comparing the rest of the balance
+  // so server-side spends or gains still flow through.
   const localCurrentTDExcludingPendingReward = Math.max(0, prev.economy.currentTD - unresolvedCompletedRewardTD);
   const serverCurrentDeltaExcludingPendingReward = profile.current_td - localCurrentTDExcludingPendingReward;
   const currentTD = serverCurrentDeltaExcludingPendingReward < 0
@@ -48,8 +69,8 @@ export function applyServerProfile(
   const shouldPreserveOptimisticTotals = unresolvedPendingTaskIds.length > 0;
   // Aggregate TD snapshots are not enough to prove whether a pending completed
   // ticket reward is already included in the server totals. Preserve the local
-  // optimistic total until /api/score explicitly settles the ticket to avoid
-  // double-counting once the backend catches up.
+  // optimistic total only while the ticket is still unsettled; once `/api/score`
+  // succeeds, later merges should converge back to plain server truth.
   const totalTDEarned = shouldPreserveOptimisticTotals
     ? Math.max(prev.economy.totalTDEarned, profile.total_td)
     : profile.total_td;
@@ -94,10 +115,8 @@ export function applyAuthoritativeProfile(
   const pendingTaskIdsToPreserve = opts.preservePendingCompletedRewardTaskIds?.filter(
     (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
   ) ?? [];
-  const settledTaskIdSet = new Set(
-    (opts.settledPendingCompletedRewardTaskIds ?? []).filter(
-      (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
-    ),
+  const settledPendingCompletedRewardTaskIds = (opts.settledPendingCompletedRewardTaskIds ?? []).filter(
+    (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
   );
   const next = applyServerProfile(
     prev,
@@ -106,20 +125,9 @@ export function applyAuthoritativeProfile(
       ? {
         includeActiveTicket: opts.includeActiveTicket,
         preservePendingCompletedRewardTaskIds: pendingTaskIdsToPreserve,
-        settledPendingCompletedRewardTaskIds: [...settledTaskIdSet],
+        settledPendingCompletedRewardTaskIds,
       }
       : { includeActiveTicket: opts.includeActiveTicket },
   );
-
-  if (settledTaskIdSet.size === 0) {
-    return next;
-  }
-
-  return {
-    ...next,
-    pendingCompletedTaskIds: prev.pendingCompletedTaskIds.filter((id) => !settledTaskIdSet.has(id)),
-    pendingCompletedTaskRewards: Object.fromEntries(
-      Object.entries(prev.pendingCompletedTaskRewards ?? {}).filter(([ticketId]) => !settledTaskIdSet.has(ticketId)),
-    ),
-  };
+  return settlePendingCompletedRewards(next, settledPendingCompletedRewardTaskIds);
 }
