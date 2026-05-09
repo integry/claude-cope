@@ -4,6 +4,34 @@ import type { GameState } from "../../hooks/useGameState";
 import { applyServerProfile } from "../../hooks/profileSync";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 
+const DEFAULT_TICKET = {
+  id: "COPE-059",
+  title: "Do Crimes To YAML",
+  sprintProgress: 90,
+  sprintGoal: 100,
+};
+
+function createServerProfile(overrides: Partial<ServerProfile> = {}): ServerProfile {
+  return {
+    username: "alice",
+    current_td: 1000,
+    total_td: 1000,
+    corporate_rank: "Junior Code Monkey",
+    inventory: {},
+    upgrades: [],
+    achievements: [],
+    buddy_type: null,
+    buddy_is_shiny: false,
+    unlocked_themes: ["default"],
+    active_theme: "default",
+    active_ticket: null,
+    td_multiplier: 1,
+    multiplier: 1,
+    quota_percent: 100,
+    ...overrides,
+  };
+}
+
 function createGameState(overrides: Partial<GameState> = {}): GameState {
   return {
     version: "1.0",
@@ -38,6 +66,24 @@ function createGameState(overrides: Partial<GameState> = {}): GameState {
   };
 }
 
+function createSprintCallbacks(
+  overrides: Partial<GameState> = {},
+  callbacks: Partial<Parameters<typeof buildSprintCallbacks>[0]> = {},
+) {
+  return buildSprintCallbacks({
+    getState: () => createGameState({
+      proKeyHash: "fresh-pro-hash",
+      activeTicket: DEFAULT_TICKET,
+      ...overrides,
+    }),
+    updateTicketProgress: vi.fn(),
+    addActiveTD: vi.fn(),
+    playChime: vi.fn(),
+    setState: vi.fn(),
+    ...callbacks,
+  });
+}
+
 describe("syncCompletedTicketReward", () => {
   const fetchMock = vi.fn();
 
@@ -70,23 +116,7 @@ describe("syncCompletedTicketReward", () => {
   });
 
   it("falls back to fetching the session profile when /api/score succeeds without returning one", async () => {
-    const sessionProfile: ServerProfile = {
-      username: "alice",
-      current_td: 1000,
-      total_td: 1000,
-      corporate_rank: "Junior Code Monkey",
-      inventory: {},
-      upgrades: [],
-      achievements: [],
-      buddy_type: null,
-      buddy_is_shiny: false,
-      unlocked_themes: ["default"],
-      active_theme: "default",
-      active_ticket: null,
-      td_multiplier: 1,
-      multiplier: 1,
-      quota_percent: 100,
-    };
+    const sessionProfile = createServerProfile();
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ found: true, profile: sessionProfile }), { status: 200 }));
@@ -109,7 +139,7 @@ describe("syncCompletedTicketReward", () => {
       proKeyHash: "fresh-pro-hash",
       inventory: { legacy: 7 },
       upgrades: ["dark_mode"],
-      activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
+      activeTicket: DEFAULT_TICKET,
     })));
 
     const { onSprintProgress } = buildSprintCallbacks({
@@ -117,7 +147,7 @@ describe("syncCompletedTicketReward", () => {
         proKeyHash: "fresh-pro-hash",
         inventory: { legacy: 7 },
         upgrades: ["dark_mode"],
-        activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
+        activeTicket: DEFAULT_TICKET,
       }),
       updateTicketProgress: vi.fn(),
       addActiveTD,
@@ -137,44 +167,19 @@ describe("syncCompletedTicketReward", () => {
   });
 
   it("preserves the completed-ticket bonus against a stale server profile while reward sync is pending", async () => {
-    const scoreProfile: ServerProfile = {
-      username: "alice",
-      current_td: 1000,
-      total_td: 1000,
-      corporate_rank: "Junior Code Monkey",
-      inventory: {},
-      upgrades: [],
-      achievements: [],
-      buddy_type: null,
-      buddy_is_shiny: false,
-      unlocked_themes: ["default"],
-      active_theme: "default",
-      active_ticket: null,
-      td_multiplier: 1,
-      multiplier: 1,
-      quota_percent: 100,
-    };
+    const scoreProfile = createServerProfile();
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ profile: scoreProfile }), { status: 200 }));
 
-    const { onSprintProgress } = buildSprintCallbacks({
-      getState: () => createGameState({
-        proKeyHash: "fresh-pro-hash",
-        economy: {
-          currentTD: 0,
-          totalTDEarned: 0,
-          currentRank: "Junior Code Monkey",
-          quotaPercent: 100,
-          quotaLockouts: 0,
-          tdMultiplier: 1,
-        },
-        activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
-      }),
-      updateTicketProgress: vi.fn(),
-      addActiveTD: vi.fn(),
-      playChime: vi.fn(),
-      setState: vi.fn(),
-      onCompletedRewardSettled: vi.fn(),
-    });
+    const { onSprintProgress } = createSprintCallbacks({
+      economy: {
+        currentTD: 0,
+        totalTDEarned: 0,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+    }, { onCompletedRewardSettled: vi.fn() });
 
     onSprintProgress(10);
     await Promise.resolve();
@@ -191,11 +196,7 @@ describe("syncCompletedTicketReward", () => {
       },
       pendingCompletedTaskIds: ["COPE-059"],
     });
-    const staleProfile: ServerProfile = {
-      ...scoreProfile,
-      current_td: 0,
-      total_td: 0,
-    };
+    const staleProfile = createServerProfile({ current_td: 0, total_td: 0 });
 
     const merged = applyServerProfile(localState, staleProfile, {
       preservePendingCompletedRewardTaskIds: ["COPE-059"],
@@ -218,17 +219,7 @@ describe("syncCompletedTicketReward", () => {
     });
     const onCompletedRewardSettled = vi.fn();
 
-    const { onSprintProgress } = buildSprintCallbacks({
-      getState: () => createGameState({
-        proKeyHash: "fresh-pro-hash",
-        activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
-      }),
-      updateTicketProgress: vi.fn(),
-      addActiveTD: vi.fn(),
-      playChime: vi.fn(),
-      setState: vi.fn(),
-      onCompletedRewardSettled,
-    });
+    const { onSprintProgress } = createSprintCallbacks({}, { onCompletedRewardSettled });
 
     onSprintProgress(10);
     await Promise.resolve();
@@ -238,23 +229,7 @@ describe("syncCompletedTicketReward", () => {
   });
 
   it("settles the pending reward after a successful /api/score response fetches the current session profile", async () => {
-    const settledProfile: ServerProfile = {
-      username: "alice",
-      current_td: 1000,
-      total_td: 1000,
-      corporate_rank: "Junior Code Monkey",
-      inventory: {},
-      upgrades: [],
-      achievements: [],
-      buddy_type: null,
-      buddy_is_shiny: false,
-      unlocked_themes: ["default"],
-      active_theme: "default",
-      active_ticket: null,
-      td_multiplier: 1,
-      multiplier: 1,
-      quota_percent: 100,
-    };
+    const settledProfile = createServerProfile();
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/score") {
@@ -267,17 +242,7 @@ describe("syncCompletedTicketReward", () => {
     });
     const onCompletedRewardSettled = vi.fn();
 
-    const { onSprintProgress } = buildSprintCallbacks({
-      getState: () => createGameState({
-        proKeyHash: "fresh-pro-hash",
-        activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
-      }),
-      updateTicketProgress: vi.fn(),
-      addActiveTD: vi.fn(),
-      playChime: vi.fn(),
-      setState: vi.fn(),
-      onCompletedRewardSettled,
-    });
+    const { onSprintProgress } = createSprintCallbacks({}, { onCompletedRewardSettled });
 
     onSprintProgress(10);
     await Promise.resolve();
@@ -290,17 +255,7 @@ describe("syncCompletedTicketReward", () => {
     fetchMock.mockRejectedValue(new Error("network"));
     const onCompletedRewardSettled = vi.fn();
 
-    const { onSprintProgress } = buildSprintCallbacks({
-      getState: () => createGameState({
-        proKeyHash: "fresh-pro-hash",
-        activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
-      }),
-      updateTicketProgress: vi.fn(),
-      addActiveTD: vi.fn(),
-      playChime: vi.fn(),
-      setState: vi.fn(),
-      onCompletedRewardSettled,
-    });
+    const { onSprintProgress } = createSprintCallbacks({}, { onCompletedRewardSettled });
 
     onSprintProgress(10);
     await Promise.resolve();
@@ -321,28 +276,8 @@ describe("syncCompletedTicketReward", () => {
       },
       pendingCompletedTaskIds: ["COPE-059"],
     });
-    const staleProfile: ServerProfile = {
-      username: "alice",
-      current_td: 1000,
-      total_td: 1000,
-      corporate_rank: "Junior Code Monkey",
-      inventory: {},
-      upgrades: [],
-      achievements: [],
-      buddy_type: null,
-      buddy_is_shiny: false,
-      unlocked_themes: ["default"],
-      active_theme: "default",
-      active_ticket: null,
-      td_multiplier: 1,
-      multiplier: 1,
-      quota_percent: 100,
-    };
-    const newerProfile: ServerProfile = {
-      ...staleProfile,
-      current_td: 1250,
-      total_td: 1250,
-    };
+    const staleProfile = createServerProfile();
+    const newerProfile = createServerProfile({ current_td: 1250, total_td: 1250 });
 
     const mergedAfterStaleChat = applyServerProfile(localState, staleProfile, {
       preservePendingCompletedRewardTaskIds: ["COPE-059"],
@@ -359,18 +294,10 @@ describe("syncCompletedTicketReward", () => {
 
   it("does not track pending completed task IDs when the reward cannot be synced", () => {
     const setState = vi.fn((updater: (prev: GameState) => GameState) => updater(createGameState({
-      activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
+      activeTicket: DEFAULT_TICKET,
     })));
 
-    const { onSprintProgress } = buildSprintCallbacks({
-      getState: () => createGameState({
-        activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
-      }),
-      updateTicketProgress: vi.fn(),
-      addActiveTD: vi.fn(),
-      playChime: vi.fn(),
-      setState,
-    });
+    const { onSprintProgress } = createSprintCallbacks({ proKeyHash: undefined }, { setState });
 
     onSprintProgress(10);
 
@@ -381,21 +308,11 @@ describe("syncCompletedTicketReward", () => {
   it("does not append duplicate pending completed task IDs for the same ticket", () => {
     const setState = vi.fn((updater: (prev: GameState) => GameState) => updater(createGameState({
       proKeyHash: "fresh-pro-hash",
-      activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
+      activeTicket: DEFAULT_TICKET,
       pendingCompletedTaskIds: ["COPE-059"],
     })));
 
-    const { onSprintProgress } = buildSprintCallbacks({
-      getState: () => createGameState({
-        proKeyHash: "fresh-pro-hash",
-        activeTicket: { id: "COPE-059", title: "Do Crimes To YAML", sprintProgress: 90, sprintGoal: 100 },
-        pendingCompletedTaskIds: ["COPE-059"],
-      }),
-      updateTicketProgress: vi.fn(),
-      addActiveTD: vi.fn(),
-      playChime: vi.fn(),
-      setState,
-    });
+    const { onSprintProgress } = createSprintCallbacks({ pendingCompletedTaskIds: ["COPE-059"] }, { setState });
 
     onSprintProgress(10);
 
@@ -415,23 +332,7 @@ describe("syncCompletedTicketReward", () => {
       },
       pendingCompletedTaskIds: ["COPE-059", "COPE-060"],
     });
-    const staleProfile: ServerProfile = {
-      username: "alice",
-      current_td: 1000,
-      total_td: 1000,
-      corporate_rank: "Junior Code Monkey",
-      inventory: {},
-      upgrades: [],
-      achievements: [],
-      buddy_type: null,
-      buddy_is_shiny: false,
-      unlocked_themes: ["default"],
-      active_theme: "default",
-      active_ticket: null,
-      td_multiplier: 1,
-      multiplier: 1,
-      quota_percent: 100,
-    };
+    const staleProfile = createServerProfile();
 
     const merged = applyServerProfile(localState, staleProfile, {
       preservePendingCompletedRewardTaskIds: ["COPE-059", "COPE-060"],
@@ -453,23 +354,7 @@ describe("syncCompletedTicketReward", () => {
       },
       pendingCompletedTaskIds: ["COPE-059"],
     });
-    const staleProfile: ServerProfile = {
-      username: "alice",
-      current_td: 100,
-      total_td: 100,
-      corporate_rank: "Junior Code Monkey",
-      inventory: {},
-      upgrades: [],
-      achievements: [],
-      buddy_type: null,
-      buddy_is_shiny: false,
-      unlocked_themes: ["default"],
-      active_theme: "default",
-      active_ticket: null,
-      td_multiplier: 1,
-      multiplier: 1,
-      quota_percent: 100,
-    };
+    const staleProfile = createServerProfile({ current_td: 100, total_td: 100 });
 
     const merged = applyServerProfile(localState, staleProfile, {
       preservePendingCompletedRewardTaskIds: ["COPE-059"],
@@ -491,23 +376,7 @@ describe("syncCompletedTicketReward", () => {
       },
       pendingCompletedTaskIds: ["COPE-059"],
     });
-    const updatedProfile: ServerProfile = {
-      username: "alice",
-      current_td: 900,
-      total_td: 1000,
-      corporate_rank: "Junior Code Monkey",
-      inventory: {},
-      upgrades: [],
-      achievements: [],
-      buddy_type: null,
-      buddy_is_shiny: false,
-      unlocked_themes: ["default"],
-      active_theme: "default",
-      active_ticket: null,
-      td_multiplier: 1,
-      multiplier: 1,
-      quota_percent: 100,
-    };
+    const updatedProfile = createServerProfile({ current_td: 900 });
 
     const merged = applyServerProfile(localState, updatedProfile, {
       preservePendingCompletedRewardTaskIds: ["COPE-059"],

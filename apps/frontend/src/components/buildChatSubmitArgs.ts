@@ -35,7 +35,10 @@ export function syncCompletedTicketReward(params: {
       if (profile) return { ok: true, profile };
 
       const sessionProfile = await fetchSessionProfile().catch(() => ({ found: false }));
-      return { ok: true, profile: sessionProfile.profile ?? undefined };
+      return {
+        ok: true,
+        profile: "profile" in sessionProfile ? sessionProfile.profile ?? undefined : undefined,
+      };
     })
     .catch(() => null);
 }
