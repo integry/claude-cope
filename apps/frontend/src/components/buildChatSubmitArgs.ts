@@ -51,7 +51,7 @@ export function syncCompletedTicketReward(params: {
 /** Build the onSprintProgress callback and a getter for the sprint-complete message */
 export function buildSprintCallbacks(ctx: SprintContext) {
   let sprintCompleteMessage: Message | null = null;
-  const completedTicketSideEffectLocks = new Set<string>();
+  let completedTicketSideEffectLock: string | null = null;
 
   const onSprintProgress = (rawAmount: number) => {
     const amount = Math.round(rawAmount * 1.5);
@@ -75,8 +75,10 @@ export function buildSprintCallbacks(ctx: SprintContext) {
     const payout = ticket.sprintGoal * 10;
     const completionLockKey = `${completedUsername}:${completedTicketId}`;
 
-    if (completedTicketSideEffectLocks.has(completionLockKey)) return;
-    completedTicketSideEffectLocks.add(completionLockKey);
+    // This callback is per chat request. Guard only the currently completing
+    // ticket so duplicate streamed completion events do not fire twice.
+    if (completedTicketSideEffectLock === completionLockKey) return;
+    completedTicketSideEffectLock = completionLockKey;
 
     ctx.setState((prev) => {
       if (!prev.activeTicket || prev.activeTicket.id !== completedTicketId) return prev;

@@ -1,9 +1,9 @@
 import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateAction } from "react";
 import { GENERATORS, CORPORATE_RANKS } from "../game/constants";
 import { type GameState, calculateActiveMultiplier, isPaidUser } from "./gameStateUtils";
-import { unlockAchievementServer } from "../api/profileApi";
+import { fetchSessionProfile, unlockAchievementServer } from "../api/profileApi";
 import type { ServerProfile } from "@claude-cope/shared/profile";
-import { applyAuthoritativeProfile, settlePendingCompletedRewards } from "./profileSync";
+import { applyAuthoritativeProfile } from "./profileSync";
 
 export function shouldBackgroundSyncScore(state: GameState, lastSyncedTotalTD: number): boolean {
   const hasPendingCompletedTickets = (state.pendingCompletedTaskIds?.length ?? 0) > 0;
@@ -56,13 +56,13 @@ export function useScoreSync(
         const isApplicationFailure = (data as { ok?: boolean }).ok === false;
         if (!res.ok || isApplicationFailure || completedTaskIds.length === 0) return;
         const scoreProfile = (data as { profile?: ServerProfile }).profile;
+        const settledProfile = scoreProfile ?? (await fetchSessionProfile().catch(() => null))?.profile;
+        if (!settledProfile) return;
         setState((prev) => (
-          scoreProfile
-            ? applyAuthoritativeProfile(prev, scoreProfile, {
-              preservePendingCompletedRewardTaskIds: completedTaskIds,
-              settledPendingCompletedRewardTaskIds: completedTaskIds,
-            })
-            : settlePendingCompletedRewards(prev, completedTaskIds)
+          applyAuthoritativeProfile(prev, settledProfile, {
+            preservePendingCompletedRewardTaskIds: completedTaskIds,
+            settledPendingCompletedRewardTaskIds: completedTaskIds,
+          })
         ));
       }).catch(() => {});
     }, 300000); // 5 minutes

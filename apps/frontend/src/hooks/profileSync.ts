@@ -2,6 +2,10 @@ import type { ServerProfile } from "@claude-cope/shared/profile";
 import type { GameState } from "./gameStateUtils";
 import { resolveRank } from "./gameStateUtils";
 
+export interface AuthoritativeProfileFloor {
+  totalTD: number;
+}
+
 function getPendingRewardAmount(prev: GameState, ticketId: string): number {
   return prev.pendingCompletedTaskRewards?.[ticketId]?.rewardTD ?? 0;
 }
@@ -24,6 +28,17 @@ export function settlePendingCompletedRewards(
   };
 }
 
+export function createAuthoritativeProfileFloor(profile: ServerProfile): AuthoritativeProfileFloor {
+  return { totalTD: profile.total_td };
+}
+
+export function isServerProfileStaleAgainstFloor(
+  profile: ServerProfile,
+  floor: AuthoritativeProfileFloor | null | undefined,
+): boolean {
+  return floor != null && profile.total_td < floor.totalTD;
+}
+
 /**
  * Merge a server-authoritative profile onto local game state.
  * Server wins for all authoritative fields; local-only fields are preserved.
@@ -32,6 +47,13 @@ export function settlePendingCompletedRewards(
  * taken at request-start, so any chat that completes a sprint locally would
  * see the stale ticket re-applied here. Pass `includeActiveTicket: true` only
  * at `/sync` time for cross-device restore.
+ *
+ * Merge contract for completed-ticket rewards:
+ * while a ticket ID remains in `preservePendingCompletedRewardTaskIds`, this
+ * function may preserve optimistic local TD totals when a server profile could
+ * still be missing that reward. Once an authoritative settlement profile is
+ * applied and the pending ID is cleared elsewhere, callers should treat later
+ * profiles with lower aggregate `total_td` as stale and ignore them.
  */
 export function applyServerProfile(
   prev: GameState,

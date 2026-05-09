@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { GameState } from "../useGameState";
-import { applyAuthoritativeProfile, applyServerProfile, settlePendingCompletedRewards } from "../profileSync";
+import {
+  applyAuthoritativeProfile,
+  applyServerProfile,
+  createAuthoritativeProfileFloor,
+  isServerProfileStaleAgainstFloor,
+  settlePendingCompletedRewards,
+} from "../profileSync";
 import { createServerProfile } from "../../test/createServerProfile";
 
 function createGameState(overrides: Partial<GameState> = {}): GameState {
@@ -371,5 +377,15 @@ describe("applyServerProfile", () => {
     expect(merged.economy.totalTDEarned).toBe(1500);
     expect(merged.pendingCompletedTaskIds).toEqual(["COPE-059"]);
     expect(merged.pendingCompletedTaskRewards).toEqual({ "COPE-059": { rewardTD: 500 } });
+  });
+});
+
+describe("isServerProfileStaleAgainstFloor", () => {
+  it("treats lower aggregate totals as stale after an authoritative settlement", () => {
+    const floor = createAuthoritativeProfileFloor(createServerProfile({ total_td: 1500, current_td: 1300 }));
+
+    expect(isServerProfileStaleAgainstFloor(createServerProfile({ total_td: 1400, current_td: 1200 }), floor)).toBe(true);
+    expect(isServerProfileStaleAgainstFloor(createServerProfile({ total_td: 1500, current_td: 1100 }), floor)).toBe(false);
+    expect(isServerProfileStaleAgainstFloor(createServerProfile({ total_td: 1600, current_td: 1400 }), floor)).toBe(false);
   });
 });
