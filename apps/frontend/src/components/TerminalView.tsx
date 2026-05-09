@@ -194,6 +194,7 @@ export function TerminalView({
           title={state.activeTicket?.title}
           sprintProgress={state.activeTicket?.sprintProgress}
           sprintGoal={state.activeTicket?.sprintGoal}
+          onSlashCommand={handleSlashCommandClick}
         />
         <div className="relative border-b border-white">
           {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}

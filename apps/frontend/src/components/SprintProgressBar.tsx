@@ -1,29 +1,34 @@
+import { renderWithSlashLinks } from "./slashCommandLinks";
+import type { SlashCommandAction } from "./slashCommandDetect";
+
 interface SprintProgressBarProps {
   id?: string;
   title?: string;
   sprintProgress?: number;
   sprintGoal?: number;
+  onSlashCommand?: (command: string, action: SlashCommandAction) => void;
 }
 
-export default function SprintProgressBar({ id, title, sprintProgress, sprintGoal }: SprintProgressBarProps) {
+export default function SprintProgressBar({ id, title, sprintProgress, sprintGoal, onSlashCommand }: SprintProgressBarProps) {
   const hasActiveTicket = Boolean(id && title && sprintProgress !== undefined && sprintGoal !== undefined);
   const totalBlocks = 30;
+  const idleBarBlocks = 17;
 
   if (!hasActiveTicket) {
     return (
       <div className="text-xs font-mono mt-1 pt-1 border-t border-slate-700 sprint-idle-dim" data-testid="sprint-progress-bar">
         <div>
-          <span>[SPRINT]</span> IDLE: <span>unclaimed labor capacity</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span>[{"·".repeat(totalBlocks)}]</span>
-          <span>casual chat pays 1x TD</span>
-          <span className="sprint-idle-multiplier">10x</span>
+          <span>[SPRINT]</span> WAITING FOR DESTRUCTION <span>(Current Earning Rate: 1x)</span>
         </div>
         <div>
-          <span>Claim a formal ticket via </span>
-          <span className="text-slate-300">/backlog</span>
-          <span> and resume stakeholder-approved suffering.</span>
+          <span>[{"-".repeat(idleBarBlocks)}]</span>
+          <span> </span>
+          {onSlashCommand
+            ? renderWithSlashLinks(
+                "Open the /backlog. Official tasks inflict 10x more Technical Debt.",
+                onSlashCommand,
+              )
+            : "Open the /backlog. Official tasks inflict 10x more Technical Debt."}
         </div>
       </div>
     );

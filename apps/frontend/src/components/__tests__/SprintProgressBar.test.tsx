@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -27,10 +27,22 @@ describe("SprintProgressBar", () => {
   it("renders idle copy and the 10x reminder when no ticket is active", () => {
     renderBar({});
 
-    expect(container.textContent).toContain("IDLE: unclaimed labor capacity");
-    expect(container.textContent).toContain("casual chat pays 1x TD");
-    expect(container.textContent).toContain("10x");
-    expect(container.textContent).toContain("/backlog");
+    expect(container.textContent).toContain("[SPRINT] WAITING FOR DESTRUCTION (Current Earning Rate: 1x)");
+    expect(container.textContent).toContain("[-----------------] Open the /backlog. Official tasks inflict 10x more Technical Debt.");
+  });
+
+  it("makes /backlog clickable in the idle copy", () => {
+    const onSlashCommand = vi.fn();
+    renderBar({ onSlashCommand });
+
+    const button = container.querySelector("button");
+    expect(button?.textContent).toBe("/backlog");
+
+    act(() => {
+      button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "execute");
   });
 
   it("renders active sprint progress when a ticket is active", () => {
