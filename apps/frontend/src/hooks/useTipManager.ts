@@ -79,8 +79,8 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     clearIdleTimer();
     if (isBooting || isInteractionBlocked || !hasInteractedRef.current) return;
     idleTimerRef.current = window.setTimeout(() => {
+      idleTimerRef.current = null;
       appendTip(setHistory, getRandomIdleTip());
-      scheduleIdleTip();
     }, IDLE_TIP_DELAY_MS);
   }, [clearIdleTimer, isBooting, isInteractionBlocked, setHistory]);
 

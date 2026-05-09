@@ -113,6 +113,17 @@ describe("useTipManager", () => {
     expect(history[history.length - 1]?.content).toBe(IDLE_TIPS[0]?.text);
   });
 
+  it("does not keep streaming idle tips during the same idle stretch", () => {
+    act(() => {
+      ref.current?.recordEnter();
+      vi.advanceTimersByTime(135_000);
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      IDLE_TIPS[0]?.text,
+    ]);
+  });
+
   it("does not fire idle tips while interaction is intentionally blocked", () => {
     act(() => {
       ref.current?.recordEnter();
