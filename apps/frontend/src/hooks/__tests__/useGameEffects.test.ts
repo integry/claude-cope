@@ -105,7 +105,7 @@ describe("useScoreSync", () => {
     vi.useRealTimers();
   });
 
-  it("merges the session profile without settling pending completed rewards when /api/score omits a profile", async () => {
+  it("settles persisted pending rewards after a score sync falls back to the refreshed session profile", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.mocked(fetchSessionProfile).mockResolvedValue({
       found: true,
@@ -143,9 +143,9 @@ describe("useScoreSync", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/score", expect.objectContaining({ method: "POST" }));
     expect(setState).toHaveBeenCalledTimes(1);
-    expect(state.pendingCompletedTaskIds).toEqual(["COPE-115"]);
-    expect(state.pendingCompletedTaskRewards).toEqual({ "COPE-115": { rewardTD: 500 } });
-    expect(state.economy.currentTD).toBe(1500);
+    expect(state.pendingCompletedTaskIds).toEqual([]);
+    expect(state.pendingCompletedTaskRewards).toEqual({});
+    expect(state.economy.currentTD).toBe(1300);
     expect(state.economy.totalTDEarned).toBe(1500);
   });
 
@@ -265,4 +265,72 @@ describe("useScoreSync", () => {
     expect(state.economy.currentTD).toBe(1300);
     expect(state.economy.totalTDEarned).toBe(1500);
   });
+
+  it("preserves newer pending completed rewards added after score sync started", async () => {
+    let resolveScoreRequest: ((value: Response) => void) | null = null;
+    fetchMock.mockImplementation(() => new Promise<Response>((resolve) => {
+      resolveScoreRequest = resolve;
+    }));
+
+    let state = makeState({
+      proKeyHash: "pro-hash",
+      economy: {
+        currentTD: 1500,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-115"],
+      pendingCompletedTaskRewards: {
+        "COPE-115": { rewardTD: 500 },
+      },
+    });
+    const stateRef = { current: state };
+    const setState: Dispatch<SetStateAction<GameState>> = vi.fn((updater: SetStateAction<GameState>) => {
+      state = typeof updater === "function" ? updater(state) : updater;
+      stateRef.current = state;
+    });
+
+    act(() => {
+      root.render(createElement(ScoreSyncHarness, { stateRef, setState, initialTotalTD: 1000 }));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(300000);
+      await Promise.resolve();
+    });
+
+    act(() => {
+      setState((prev) => ({
+        ...prev,
+        economy: {
+          ...prev.economy,
+          currentTD: 1750,
+          totalTDEarned: 1750,
+        },
+        pendingCompletedTaskIds: [...prev.pendingCompletedTaskIds, "COPE-116"],
+        pendingCompletedTaskRewards: {
+          ...prev.pendingCompletedTaskRewards,
+          "COPE-116": { rewardTD: 250 },
+        },
+      }));
+    });
+
+    await act(async () => {
+      resolveScoreRequest?.(new Response(JSON.stringify({
+        ok: true,
+        profile: createServerProfile({ current_td: 1300, total_td: 1500 }),
+      }), { status: 200 }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(state.pendingCompletedTaskIds).toEqual(["COPE-116"]);
+    expect(state.pendingCompletedTaskRewards).toEqual({ "COPE-116": { rewardTD: 250 } });
+    expect(state.economy.currentTD).toBe(1550);
+    expect(state.economy.totalTDEarned).toBe(1750);
+  });
+
 });

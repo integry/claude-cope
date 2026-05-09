@@ -5,6 +5,32 @@ import { fetchSessionProfile, unlockAchievementServer } from "../api/profileApi"
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { applyAuthoritativeProfile, applyServerProfile } from "./profileSync";
 
+function getTrackedPendingCompletedTaskIds(state: GameState, requestedTaskIds: string[]): string[] {
+  return requestedTaskIds.filter((ticketId) => state.pendingCompletedTaskIds.includes(ticketId));
+}
+
+function canSettlePendingCompletedTaskIdsFromSessionProfile(
+  state: GameState,
+  sessionProfile: ServerProfile,
+  requestedTaskIds: string[],
+): boolean {
+  if (requestedTaskIds.length === 0) return false;
+
+  const remainingPendingTaskIds = state.pendingCompletedTaskIds.filter(
+    (ticketId) => !requestedTaskIds.includes(ticketId),
+  );
+  if (remainingPendingTaskIds.some((ticketId) => state.pendingCompletedTaskRewards?.[ticketId]?.rewardTD == null)) {
+    return false;
+  }
+
+  const remainingPendingRewardTD = remainingPendingTaskIds.reduce(
+    (sum, ticketId) => sum + (state.pendingCompletedTaskRewards?.[ticketId]?.rewardTD ?? 0),
+    0,
+  );
+
+  return sessionProfile.total_td >= Math.max(0, state.economy.totalTDEarned - remainingPendingRewardTD);
+}
+
 export function shouldBackgroundSyncScore(state: GameState, lastSyncedTotalTD: number): boolean {
   const hasPendingCompletedTickets = (state.pendingCompletedTaskIds?.length ?? 0) > 0;
   if (isPaidUser(state)) return Boolean(state.proKeyHash) && hasPendingCompletedTickets;
@@ -59,8 +85,8 @@ export function useScoreSync(
         if (scoreProfile) {
           setState((prev) => (
             applyAuthoritativeProfile(prev, scoreProfile, {
-              preservePendingCompletedRewardTaskIds: completedTaskIds,
-              settledPendingCompletedRewardTaskIds: completedTaskIds,
+              preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
+              settledPendingCompletedRewardTaskIds: getTrackedPendingCompletedTaskIds(prev, completedTaskIds),
             })
           ));
           return;
@@ -68,11 +94,19 @@ export function useScoreSync(
 
         const sessionProfile = (await fetchSessionProfile().catch(() => null))?.profile;
         if (!sessionProfile) return;
-        setState((prev) => (
-          applyServerProfile(prev, sessionProfile, {
-            preservePendingCompletedRewardTaskIds: completedTaskIds,
-          })
-        ));
+        setState((prev) => {
+          const settledPendingCompletedRewardTaskIds = getTrackedPendingCompletedTaskIds(prev, completedTaskIds);
+          if (canSettlePendingCompletedTaskIdsFromSessionProfile(prev, sessionProfile, settledPendingCompletedRewardTaskIds)) {
+            return applyAuthoritativeProfile(prev, sessionProfile, {
+              preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
+              settledPendingCompletedRewardTaskIds,
+            });
+          }
+
+          return applyServerProfile(prev, sessionProfile, {
+            preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
+          });
+        });
       }).catch(() => {});
     }, 300000); // 5 minutes
 

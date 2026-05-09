@@ -11,6 +11,7 @@ import {
   applyServerProfile,
   createAuthoritativeProfileFloor,
   isServerProfileStaleAgainstFloor,
+  mergeAuthoritativeProfileFloor,
   settlePendingCompletedRewards,
 } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
@@ -252,9 +253,10 @@ function Terminal() {
   const applySettledCompletedReward = useCallback((ticketId: string, profile?: ServerProfile) => {
     if (profile) {
       const nextFloor = createAuthoritativeProfileFloor(profile);
-      latestSettledProfileFloorRef.current = latestSettledProfileFloorRef.current
-        ? { totalTD: Math.max(latestSettledProfileFloorRef.current.totalTD, nextFloor.totalTD) }
-        : nextFloor;
+      latestSettledProfileFloorRef.current = mergeAuthoritativeProfileFloor(
+        latestSettledProfileFloorRef.current,
+        nextFloor,
+      );
     }
 
     setState((prev) => {

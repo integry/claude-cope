@@ -4,6 +4,7 @@ import { resolveRank } from "./gameStateUtils";
 
 export interface AuthoritativeProfileFloor {
   totalTD: number;
+  currentTD: number;
 }
 
 function getPendingRewardAmount(prev: GameState, ticketId: string): number {
@@ -29,14 +30,33 @@ export function settlePendingCompletedRewards(
 }
 
 export function createAuthoritativeProfileFloor(profile: ServerProfile): AuthoritativeProfileFloor {
-  return { totalTD: profile.total_td };
+  return {
+    totalTD: profile.total_td,
+    currentTD: profile.current_td,
+  };
+}
+
+export function mergeAuthoritativeProfileFloor(
+  floor: AuthoritativeProfileFloor | null | undefined,
+  nextFloor: AuthoritativeProfileFloor,
+): AuthoritativeProfileFloor {
+  if (!floor) return nextFloor;
+  if (nextFloor.totalTD > floor.totalTD) return nextFloor;
+  if (nextFloor.totalTD < floor.totalTD) return floor;
+
+  return {
+    totalTD: floor.totalTD,
+    currentTD: Math.min(floor.currentTD, nextFloor.currentTD),
+  };
 }
 
 export function isServerProfileStaleAgainstFloor(
   profile: ServerProfile,
   floor: AuthoritativeProfileFloor | null | undefined,
 ): boolean {
-  return floor != null && profile.total_td < floor.totalTD;
+  if (floor == null) return false;
+  if (profile.total_td < floor.totalTD) return true;
+  return profile.total_td === floor.totalTD && profile.current_td > floor.currentTD;
 }
 
 /**

@@ -388,4 +388,11 @@ describe("isServerProfileStaleAgainstFloor", () => {
     expect(isServerProfileStaleAgainstFloor(createServerProfile({ total_td: 1500, current_td: 1100 }), floor)).toBe(false);
     expect(isServerProfileStaleAgainstFloor(createServerProfile({ total_td: 1600, current_td: 1400 }), floor)).toBe(false);
   });
+
+  it("treats a same-total profile with a stale higher current TD as stale", () => {
+    const floor = createAuthoritativeProfileFloor(createServerProfile({ total_td: 1500, current_td: 1300 }));
+
+    expect(isServerProfileStaleAgainstFloor(createServerProfile({ total_td: 1500, current_td: 1500 }), floor)).toBe(true);
+    expect(isServerProfileStaleAgainstFloor(createServerProfile({ total_td: 1500, current_td: 1250 }), floor)).toBe(false);
+  });
 });

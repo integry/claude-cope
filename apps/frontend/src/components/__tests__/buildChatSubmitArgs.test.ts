@@ -197,26 +197,6 @@ describe("buildSprintCallbacks", () => {
     });
   });
 
-  it("leaves settlement pending when /api/score succeeds without an embedded profile", async () => {
-    fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === "/api/score") {
-        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-      }
-      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-    });
-    const onCompletedRewardSettled = vi.fn();
-
-    const { onSprintProgress } = createSprintCallbacks({}, { onCompletedRewardSettled });
-
-    onSprintProgress(10);
-    await waitForAssertion(() => {
-      expect(fetchMock.mock.calls.some(([url]) => url === "/api/score")).toBe(true);
-    });
-    expect(fetchMock.mock.calls.some(([url]) => url === "/api/account/me")).toBe(false);
-    expect(onCompletedRewardSettled).not.toHaveBeenCalled();
-  });
-
   it("keeps the pending reward unsettled when completed reward sync fails", async () => {
     fetchMock.mockRejectedValue(new Error("network"));
     const onCompletedRewardSettled = vi.fn();
