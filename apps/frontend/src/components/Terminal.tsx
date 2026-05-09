@@ -35,10 +35,6 @@ function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, 
   if (messageKeys.length > historyLength) messageKeys.length = historyLength;
 }
 
-function removePendingCompletedReward(ticketIds: string[], ticketId: string) {
-  return ticketIds.includes(ticketId) ? ticketIds.filter((id) => id !== ticketId) : ticketIds;
-}
-
 function Terminal() {
   const {
     state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement,
@@ -110,13 +106,6 @@ function Terminal() {
   useEffect(() => {
     return () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); };
   }, []);
-
-  const clearPendingCompletedReward = useCallback((ticketId: string) => {
-    setState((prev) => {
-      const pendingCompletedTaskIds = removePendingCompletedReward(prev.pendingCompletedTaskIds, ticketId);
-      return pendingCompletedTaskIds === prev.pendingCompletedTaskIds ? prev : { ...prev, pendingCompletedTaskIds };
-    });
-  }, [setState]);
 
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
     const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
@@ -243,17 +232,20 @@ function Terminal() {
     completedTicketId?: string,
   ) => {
     setState((prev) => {
-      const pendingTaskIds = source === "completed-ticket-reward" && completedTicketId
-        ? removePendingCompletedReward(prev.pendingCompletedTaskIds, completedTicketId)
-        : prev.pendingCompletedTaskIds;
       const next = applyServerProfile(
         prev,
         profile,
-        pendingTaskIds.length > 0 ? { preservePendingCompletedRewardTaskIds: pendingTaskIds } : {},
+        prev.pendingCompletedTaskIds.length > 0
+          ? { preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds }
+          : {},
       );
-      return source !== "completed-ticket-reward" || !completedTicketId
-        ? next
-        : { ...next, pendingCompletedTaskIds: pendingTaskIds };
+      if (source !== "completed-ticket-reward" || !completedTicketId) return next;
+      if (profile.total_td < prev.economy.totalTDEarned) return next;
+
+      return {
+        ...next,
+        pendingCompletedTaskIds: prev.pendingCompletedTaskIds.filter((id) => id !== completedTicketId),
+      };
     });
   }, [setState]);
 
@@ -288,11 +280,7 @@ function Terminal() {
       playChime,
       setState,
       onCompletedRewardSettled: (ticketId, profile) => {
-        if (profile) {
-          applyAuthoritativeProfile(profile, "completed-ticket-reward", ticketId);
-          return;
-        }
-        clearPendingCompletedReward(ticketId);
+        applyAuthoritativeProfile(profile, "completed-ticket-reward", ticketId);
       },
     });
     const controller = new AbortController();

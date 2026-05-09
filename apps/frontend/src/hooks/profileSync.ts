@@ -22,10 +22,17 @@ export function applyServerProfile(
   const shouldPreservePendingReward = Boolean(
     opts.preservePendingCompletedRewardTaskIds?.some((ticketId) => prev.pendingCompletedTaskIds.includes(ticketId)),
   );
-  const currentTD = shouldPreservePendingReward ? prev.economy.currentTD : profile.current_td;
-  const totalTDEarned = shouldPreservePendingReward
-    ? Math.max(profile.total_td, prev.economy.totalTDEarned)
-    : profile.total_td;
+  const unresolvedCompletedRewardTD = shouldPreservePendingReward
+    ? Math.max(0, prev.economy.totalTDEarned - profile.total_td)
+    : 0;
+  const preservedCurrentRewardTD = shouldPreservePendingReward
+    ? Math.min(
+        unresolvedCompletedRewardTD,
+        Math.max(0, prev.economy.currentTD - profile.current_td),
+      )
+    : 0;
+  const currentTD = profile.current_td + preservedCurrentRewardTD;
+  const totalTDEarned = profile.total_td + unresolvedCompletedRewardTD;
   const currentRank = shouldPreservePendingReward && totalTDEarned > profile.total_td
     ? resolveRank(totalTDEarned, prev.economy.currentRank)
     : profile.corporate_rank;

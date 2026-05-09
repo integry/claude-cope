@@ -172,7 +172,7 @@ describe("syncCompletedTicketReward", () => {
     expect(merged.economy.totalTDEarned).toBe(1000);
   });
 
-  it("settles the pending reward when completed reward sync succeeds without returning a profile", async () => {
+  it("keeps the pending reward until a server profile confirms the completed reward", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/score") {
@@ -195,9 +195,10 @@ describe("syncCompletedTicketReward", () => {
     });
 
     onSprintProgress(10);
-    await vi.waitFor(() => {
-      expect(onCompletedRewardSettled).toHaveBeenCalledWith("COPE-059", undefined);
-    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onCompletedRewardSettled).not.toHaveBeenCalled();
   });
 
   it("keeps the pending reward unsettled when completed reward sync fails", async () => {
@@ -221,6 +222,54 @@ describe("syncCompletedTicketReward", () => {
     await Promise.resolve();
 
     expect(onCompletedRewardSettled).not.toHaveBeenCalled();
+  });
+
+  it("preserves only the unresolved completed-ticket bonus after a failed sync and later accepts newer server balances", () => {
+    const localState = createGameState({
+      economy: {
+        currentTD: 1500,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059"],
+    });
+    const staleProfile: ServerProfile = {
+      username: "alice",
+      current_td: 1000,
+      total_td: 1000,
+      corporate_rank: "Junior Code Monkey",
+      inventory: {},
+      upgrades: [],
+      achievements: [],
+      buddy_type: null,
+      buddy_is_shiny: false,
+      unlocked_themes: ["default"],
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+      multiplier: 1,
+      quota_percent: 100,
+    };
+    const newerProfile: ServerProfile = {
+      ...staleProfile,
+      current_td: 1250,
+      total_td: 1250,
+    };
+
+    const mergedAfterStaleChat = applyServerProfile(localState, staleProfile, {
+      preservePendingCompletedRewardTaskIds: ["COPE-059"],
+    });
+    const mergedAfterRetry = applyServerProfile(localState, newerProfile, {
+      preservePendingCompletedRewardTaskIds: ["COPE-059"],
+    });
+
+    expect(mergedAfterStaleChat.economy.currentTD).toBe(1500);
+    expect(mergedAfterStaleChat.economy.totalTDEarned).toBe(1500);
+    expect(mergedAfterRetry.economy.currentTD).toBe(1500);
+    expect(mergedAfterRetry.economy.totalTDEarned).toBe(1500);
   });
 
   it("does not track pending completed task IDs when the reward cannot be synced", () => {
@@ -318,5 +367,43 @@ describe("syncCompletedTicketReward", () => {
 
     expect(merged.economy.currentTD).toBe(200);
     expect(merged.economy.totalTDEarned).toBe(1100);
+  });
+
+  it("applies unrelated server-side current TD changes while preserving only the unresolved reward amount", () => {
+    const localState = createGameState({
+      economy: {
+        currentTD: 1500,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059"],
+    });
+    const updatedProfile: ServerProfile = {
+      username: "alice",
+      current_td: 900,
+      total_td: 1000,
+      corporate_rank: "Junior Code Monkey",
+      inventory: {},
+      upgrades: [],
+      achievements: [],
+      buddy_type: null,
+      buddy_is_shiny: false,
+      unlocked_themes: ["default"],
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+      multiplier: 1,
+      quota_percent: 100,
+    };
+
+    const merged = applyServerProfile(localState, updatedProfile, {
+      preservePendingCompletedRewardTaskIds: ["COPE-059"],
+    });
+
+    expect(merged.economy.currentTD).toBe(1400);
+    expect(merged.economy.totalTDEarned).toBe(1500);
   });
 });
