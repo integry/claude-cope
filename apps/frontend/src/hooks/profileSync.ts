@@ -115,7 +115,7 @@ export function applyAuthoritativeProfile(
     (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
   ) ?? [];
   const settledTaskIdSet = new Set(
-    (opts.settledPendingCompletedRewardTaskIds ?? pendingTaskIdsToPreserve).filter(
+    (opts.settledPendingCompletedRewardTaskIds ?? []).filter(
       (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
     ),
   );

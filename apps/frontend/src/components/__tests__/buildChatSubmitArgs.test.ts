@@ -311,7 +311,7 @@ describe("buildSprintCallbacks", () => {
     expect(mergedAfterRetry.economy.totalTDEarned).toBe(1750);
   });
 
-  it("tracks pending completed task rewards for paid users even before a pro key hash is available", () => {
+  it("does not track pending completed task rewards before a pro key hash is available", () => {
     const setState = vi.fn((updater: (prev: GameState) => GameState) => updater(createGameState({
       proKey: "MAX-LICENSE-KEY-123",
       proKeyHash: undefined,
@@ -326,15 +326,9 @@ describe("buildSprintCallbacks", () => {
     onSprintProgress(10);
 
     const nextState = setState.mock.results[0]?.value as GameState;
-    expect(nextState.pendingCompletedTaskIds).toEqual(["COPE-059"]);
-    expect(nextState.pendingCompletedTaskRewards).toEqual({ "COPE-059": { rewardTD: 1000 } });
-
-    const scoreCall = fetchMock.mock.calls.find(([url]) => url === "/api/score");
-    expect(scoreCall).toBeTruthy();
-    expect(JSON.parse(scoreCall![1]?.body as string)).toEqual({
-      username: "alice",
-      completedTaskIds: ["COPE-059"],
-    });
+    expect(nextState.pendingCompletedTaskIds).toEqual([]);
+    expect(nextState.pendingCompletedTaskRewards).toEqual({});
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/score")).toBe(false);
   });
 
   it("does not track pending completed task IDs when the user is unpaid", () => {

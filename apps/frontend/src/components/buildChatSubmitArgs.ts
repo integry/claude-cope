@@ -65,7 +65,7 @@ export function buildSprintCallbacks(ctx: SprintContext) {
     const completedTicketTitle = ticket.title;
     const completedUsername = current.username;
     const completedProKeyHash = current.proKeyHash;
-    const canTrackPendingCompletedReward = Boolean(completedUsername) && isPaidUser(current);
+    const canTrackPendingCompletedReward = Boolean(completedUsername && completedProKeyHash) && isPaidUser(current);
     const payout = ticket.sprintGoal * 10;
     const completionLockKey = `${completedUsername}:${completedTicketId}`;
 

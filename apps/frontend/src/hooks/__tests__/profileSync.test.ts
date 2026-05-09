@@ -363,7 +363,6 @@ describe("applyServerProfile", () => {
       total_td: 1500,
     }), {
       preservePendingCompletedRewardTaskIds: ["COPE-059"],
-      settledPendingCompletedRewardTaskIds: [],
     });
 
     expect(merged.economy.currentTD).toBe(1800);

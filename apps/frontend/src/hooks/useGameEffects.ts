@@ -54,7 +54,8 @@ export function useScoreSync(
       }).then(async (res) => {
         if (!res.ok || completedTaskIds.length === 0) return;
         const data = await res.json().catch(() => ({}));
-        let profile = (data as { profile?: ServerProfile }).profile;
+        const scoreProfile = (data as { profile?: ServerProfile }).profile;
+        let profile = scoreProfile;
         if (!profile) {
           const session = await fetchSessionProfile();
           profile = session.profile ?? undefined;
@@ -64,6 +65,7 @@ export function useScoreSync(
         setState((prev) => {
           return applyAuthoritativeProfile(prev, profile, {
             preservePendingCompletedRewardTaskIds: completedTaskIds,
+            settledPendingCompletedRewardTaskIds: scoreProfile ? completedTaskIds : [],
           });
         });
       }).catch(() => {});
