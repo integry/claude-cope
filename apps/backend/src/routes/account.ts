@@ -283,6 +283,75 @@ async function resolveSessionProfileRow(opts: {
   return { username: current, row, redirected };
 }
 
+async function respondWithMeProfile(
+  c: {
+    env: Env["Bindings"];
+    json: (data: unknown, status?: number) => Response;
+  },
+  opts: {
+    db: D1Database | undefined;
+    kv: KVNamespace;
+    row: unknown;
+    sessionId: string;
+    username: string;
+  },
+) {
+  const { isPro, quotaPercent, profile, revoked } = await buildMePayload({
+    row: opts.row,
+    db: opts.db,
+    kv: opts.kv,
+    env: c.env,
+    sessionId: opts.sessionId,
+  });
+  await issueFreeAccountCookie(c, c.env.FREE_ACCOUNT_COOKIE_SECRET, (opts.row as { account_id?: string | null }).account_id ?? null);
+
+  return c.json({
+    found: true,
+    username: opts.username,
+    profile,
+    quotaPercent,
+    isPro,
+    ...(revoked ? { revoked: true } : {}),
+  });
+}
+
+async function restoreMeFromFreeAccount(
+  c: {
+    env: Env["Bindings"];
+    get: (key: "freeAccountId") => string | undefined;
+    json: (data: unknown, status?: number) => Response;
+  },
+  opts: {
+    db: D1Database | undefined;
+    kv: KVNamespace;
+    sessionId: string;
+  },
+) {
+  const freeAccountId = c.get("freeAccountId");
+  if (!opts.db || !freeAccountId) return null;
+
+  const row = await getProfileRowByAccountId(opts.db, freeAccountId);
+  if (!row) return null;
+
+  const username = row.username;
+  try {
+    await opts.kv.put(accountKvKeys.sessionUser(opts.sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+  } catch (err: unknown) {
+    console.warn(
+      `[account/me] failed to restore session binding for ${opts.sessionId}:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  return respondWithMeProfile(c, {
+    db: opts.db,
+    kv: opts.kv,
+    row,
+    sessionId: opts.sessionId,
+    username,
+  });
+}
+
 account.post("/checkout-license", async (c) => {
   const validated = await validateCheckoutRequest(c);
   if ("error" in validated) return validated.error;
@@ -370,31 +439,8 @@ account.get("/me", async (c) => {
   const db = c.env?.DB;
   let username = await kv.get(accountKvKeys.sessionUser(sessionId));
   if (!username) {
-    const freeAccountId = c.get("freeAccountId");
-    if (!db || !freeAccountId) return c.json({ found: false });
-    const row = await getProfileRowByAccountId(db, freeAccountId);
-    if (!row) return c.json({ found: false });
-    username = row.username;
-    try {
-      await kv.put(accountKvKeys.sessionUser(sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
-    } catch (err: unknown) {
-      console.warn(
-        `[account/me] failed to restore session binding for ${sessionId}:`,
-        err instanceof Error ? err.message : err,
-      );
-    }
-
-    const { isPro, quotaPercent, profile, revoked } = await buildMePayload({ row, db, kv, env: c.env, sessionId });
-    await issueFreeAccountCookie(c, c.env.FREE_ACCOUNT_COOKIE_SECRET, row.account_id ?? null);
-
-    return c.json({
-      found: true,
-      username,
-      profile,
-      quotaPercent,
-      isPro,
-      ...(revoked ? { revoked: true } : {}),
-    });
+    const restored = await restoreMeFromFreeAccount(c, { db, kv, sessionId });
+    return restored ?? c.json({ found: false });
   }
 
   const resolved = await resolveSessionProfileRow({ db, kv, sessionId, username });
@@ -422,17 +468,7 @@ account.get("/me", async (c) => {
     });
   }
 
-  const { isPro, quotaPercent, profile, revoked } = await buildMePayload({ row, db, kv, env: c.env, sessionId });
-  await issueFreeAccountCookie(c, c.env.FREE_ACCOUNT_COOKIE_SECRET, row.account_id ?? null);
-
-  return c.json({
-    found: true,
-    username,
-    profile,
-    quotaPercent,
-    isPro,
-    ...(revoked ? { revoked: true } : {}),
-  });
+  return respondWithMeProfile(c, { db, kv, row, sessionId, username });
 });
 
 account.post("/buy-generator", async (c) => {
