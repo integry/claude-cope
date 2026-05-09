@@ -45,12 +45,15 @@ export function applyServerProfile(
   const currentTD = serverCurrentDeltaExcludingPendingReward < 0
     ? Math.max(0, prev.economy.currentTD + serverCurrentDeltaExcludingPendingReward)
     : Math.max(prev.economy.currentTD, profile.current_td);
+  const shouldPreserveOptimisticTotals = unresolvedPendingTaskIds.length > 0;
   // Aggregate TD snapshots are not enough to prove whether a pending completed
   // ticket reward is already included in the server totals. Preserve the local
   // optimistic total until /api/score explicitly settles the ticket to avoid
   // double-counting once the backend catches up.
-  const totalTDEarned = Math.max(prev.economy.totalTDEarned, profile.total_td);
-  const currentRank = unresolvedCompletedRewardTD > 0 && totalTDEarned > profile.total_td
+  const totalTDEarned = shouldPreserveOptimisticTotals
+    ? Math.max(prev.economy.totalTDEarned, profile.total_td)
+    : profile.total_td;
+  const currentRank = shouldPreserveOptimisticTotals && unresolvedCompletedRewardTD > 0 && totalTDEarned > profile.total_td
     ? resolveRank(totalTDEarned, prev.economy.currentRank)
     : profile.corporate_rank;
 

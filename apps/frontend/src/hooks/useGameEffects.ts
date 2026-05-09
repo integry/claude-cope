@@ -53,7 +53,8 @@ export function useScoreSync(
         }),
       }).then(async (res) => {
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || (data as { ok?: boolean }).ok === false || completedTaskIds.length === 0) return;
+        const isApplicationFailure = (data as { ok?: boolean }).ok === false;
+        if (!res.ok || isApplicationFailure || completedTaskIds.length === 0) return;
         const scoreProfile = (data as { profile?: ServerProfile }).profile;
         let profile = scoreProfile;
         if (!profile) {

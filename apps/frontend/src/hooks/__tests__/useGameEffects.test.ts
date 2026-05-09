@@ -85,6 +85,7 @@ describe("useScoreSync", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.clearAllMocks();
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("navigator", { language: "en-US" });
