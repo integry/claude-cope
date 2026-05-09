@@ -32,7 +32,6 @@ type TerminalViewProps = OverlayVisibility & {
   activeTheme: GameState["activeTheme"];
   regressionGlitch: string | null | undefined;
   anyOverlayOpen: boolean;
-  isFreeTier: boolean;
   inputRef: RefObject<HTMLInputElement | null>;
   closeAllOverlaysPreservingNag: () => void;
   onlineCount: number;
@@ -89,7 +88,6 @@ export function TerminalView({
   activeTheme,
   regressionGlitch,
   anyOverlayOpen,
-  isFreeTier,
   inputRef,
   closeAllOverlaysPreservingNag,
   onlineCount,
@@ -186,13 +184,17 @@ export function TerminalView({
           promptString={promptString}
           activeTicketId={state.activeTicket?.id}
           username={state.username}
-          isFreeTier={isFreeTier}
           onSlashCommand={handleSlashCommandClick}
         />
         <div ref={bottomRef} />
       </div>
       <div className="shrink-0">
-        {state.activeTicket && <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />}
+        <SprintProgressBar
+          id={state.activeTicket?.id}
+          title={state.activeTicket?.title}
+          sprintProgress={state.activeTicket?.sprintProgress}
+          sprintGoal={state.activeTicket?.sprintGoal}
+        />
         <div className="relative border-b border-white">
           {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
           <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
