@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { buildSprintCallbacks } from "../buildChatSubmitArgs";
 import type { GameState } from "../../hooks/useGameState";
@@ -286,12 +287,43 @@ describe("buildSprintCallbacks", () => {
     expect(mergedAfterRetry.economy.totalTDEarned).toBe(1750);
   });
 
-  it("does not track pending completed task IDs when the reward cannot be synced", () => {
+  it("tracks pending completed task rewards for paid users even before a pro key hash is available", () => {
     const setState = vi.fn((updater: (prev: GameState) => GameState) => updater(createGameState({
+      proKey: "MAX-LICENSE-KEY-123",
+      proKeyHash: undefined,
       activeTicket: DEFAULT_TICKET,
     })));
 
-    const { onSprintProgress } = createSprintCallbacks({ proKeyHash: undefined }, { setState });
+    const { onSprintProgress } = createSprintCallbacks({
+      proKey: "MAX-LICENSE-KEY-123",
+      proKeyHash: undefined,
+    }, { setState });
+
+    onSprintProgress(10);
+
+    const nextState = setState.mock.results[0]?.value as GameState;
+    expect(nextState.pendingCompletedTaskIds).toEqual(["COPE-059"]);
+    expect(nextState.pendingCompletedTaskRewards).toEqual({ "COPE-059": { rewardTD: 1000 } });
+
+    const scoreCall = fetchMock.mock.calls.find(([url]) => url === "/api/score");
+    expect(scoreCall).toBeTruthy();
+    expect(JSON.parse(scoreCall![1]?.body as string)).toEqual({
+      username: "alice",
+      completedTaskIds: ["COPE-059"],
+    });
+  });
+
+  it("does not track pending completed task IDs when the user is unpaid", () => {
+    const setState = vi.fn((updater: (prev: GameState) => GameState) => updater(createGameState({
+      proKey: undefined,
+      activeTicket: DEFAULT_TICKET,
+    })));
+
+    const { onSprintProgress } = createSprintCallbacks({
+      proKey: undefined,
+      proKeyHash: undefined,
+      isPro: undefined,
+    }, { setState });
 
     onSprintProgress(10);
 
@@ -410,5 +442,28 @@ describe("buildSprintCallbacks", () => {
 
     expect(merged.economy.currentTD).toBe(1400);
     expect(merged.economy.totalTDEarned).toBe(1500);
+  });
+
+  it("keeps newer server-earned current TD gains while the completed-ticket reward is still pending", () => {
+    const localState = createGameState({
+      economy: {
+        currentTD: 1500,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059"],
+      pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
+    });
+    const newerProfile = createServerProfile({ current_td: 1250, total_td: 1250 });
+
+    const merged = applyServerProfile(localState, newerProfile, {
+      preservePendingCompletedRewardTaskIds: ["COPE-059"],
+    });
+
+    expect(merged.economy.currentTD).toBe(1750);
+    expect(merged.economy.totalTDEarned).toBe(1750);
   });
 });

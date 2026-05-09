@@ -109,11 +109,14 @@ export function applyServerProfile(
     ? Math.max(0, prev.economy.totalTDEarned - profile.total_td - unresolvedKnownRewardTD)
     : 0;
   const unresolvedCompletedRewardTD = unresolvedKnownRewardTD + inferredLegacyPendingRewardTD;
-  const preservedCurrentRewardTD = Math.min(
-    unresolvedCompletedRewardTD,
-    Math.max(0, prev.economy.currentTD - profile.current_td),
-  );
-  const currentTD = profile.current_td + preservedCurrentRewardTD;
+  const localCurrentTDExcludingPendingReward = Math.max(0, prev.economy.currentTD - unresolvedCompletedRewardTD);
+  const localTotalTDExcludingPendingReward = Math.max(0, prev.economy.totalTDEarned - unresolvedCompletedRewardTD);
+  const confirmedNonRewardTDGain = Math.max(0, profile.total_td - localTotalTDExcludingPendingReward);
+  const serverCurrentDeltaExcludingPendingReward = profile.current_td - localCurrentTDExcludingPendingReward;
+  const appliedCurrentDelta = serverCurrentDeltaExcludingPendingReward < 0
+    ? serverCurrentDeltaExcludingPendingReward
+    : Math.min(serverCurrentDeltaExcludingPendingReward, confirmedNonRewardTDGain);
+  const currentTD = Math.max(0, prev.economy.currentTD + appliedCurrentDelta);
   const totalTDEarned = profile.total_td + unresolvedCompletedRewardTD;
   const currentRank = unresolvedCompletedRewardTD > 0 && totalTDEarned > profile.total_td
     ? resolveRank(totalTDEarned, prev.economy.currentRank)

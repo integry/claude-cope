@@ -3,6 +3,7 @@ import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
 import { fetchSessionProfile, updateTicketServer } from "../api/profileApi";
+import { isPaidUser } from "../hooks/gameStateUtils";
 
 interface SprintContext {
   getState: () => GameState;
@@ -63,6 +64,7 @@ export function buildSprintCallbacks(ctx: SprintContext) {
     const completedTicketTitle = ticket.title;
     const completedUsername = current.username;
     const completedProKeyHash = current.proKeyHash;
+    const canTrackPendingCompletedReward = Boolean(completedUsername) && isPaidUser(current);
     const payout = ticket.sprintGoal * 10;
     const completionLockKey = `${completedUsername}:${completedTicketId}`;
 
@@ -74,12 +76,12 @@ export function buildSprintCallbacks(ctx: SprintContext) {
       return {
         ...prev,
         activeTicket: null,
-        pendingCompletedTaskIds: completedUsername && completedProKeyHash
+        pendingCompletedTaskIds: canTrackPendingCompletedReward
           ? prev.pendingCompletedTaskIds.includes(completedTicketId)
             ? prev.pendingCompletedTaskIds
             : [...prev.pendingCompletedTaskIds, completedTicketId]
           : prev.pendingCompletedTaskIds,
-        pendingCompletedTaskRewards: completedUsername && completedProKeyHash
+        pendingCompletedTaskRewards: canTrackPendingCompletedReward
           ? {
             ...prev.pendingCompletedTaskRewards,
             [completedTicketId]: prev.pendingCompletedTaskRewards?.[completedTicketId] ?? { rewardTD: payout },
@@ -92,7 +94,7 @@ export function buildSprintCallbacks(ctx: SprintContext) {
     ctx.playChime();
     sprintCompleteMessage = { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${completedTicketId} "${completedTicketTitle}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` };
 
-    if (completedUsername && completedProKeyHash) {
+    if (canTrackPendingCompletedReward) {
       void syncCompletedTicketReward({
         username: completedUsername,
         ticketId: completedTicketId,
@@ -100,6 +102,9 @@ export function buildSprintCallbacks(ctx: SprintContext) {
       }).then((result) => {
         if (result?.ok && result.profile) ctx.onCompletedRewardSettled?.(completedTicketId, result.profile);
       });
+    }
+
+    if (completedUsername && completedProKeyHash) {
       void updateTicketServer(completedUsername, null, completedProKeyHash);
     }
 
