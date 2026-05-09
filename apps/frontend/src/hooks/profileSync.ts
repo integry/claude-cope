@@ -101,6 +101,8 @@ export function applyServerProfile(
     : 0;
   const unresolvedCompletedRewardTD = unresolvedKnownRewardTD + inferredLegacyPendingRewardTD;
   const shouldPreserveOptimisticTotals = unresolvedPendingTaskIds.length > 0;
+  const hasAuthoritativeEconomyAdvance = shouldPreserveOptimisticTotals
+    && profile.total_td > prev.economy.totalTDEarned;
   const hasReliableLocalCurrentBaseline = optimisticLocalBaselineTD > 0;
   const isServerTotalCloseToOptimisticLocalTotal = profile.total_td >= (
     prev.economy.totalTDEarned - (unresolvedCompletedRewardTD / 2)
@@ -112,7 +114,9 @@ export function applyServerProfile(
   // Likewise, once the server aggregate total is close to the optimistic local
   // total, the snapshots are too ambiguous to safely re-add the pending reward
   // on top without risking inflation.
-  const currentTD = !shouldPreserveOptimisticTotals
+  const currentTD = hasAuthoritativeEconomyAdvance
+    ? profile.current_td
+    : !shouldPreserveOptimisticTotals
     ? profile.current_td
     : hasReliableLocalCurrentBaseline && !isServerTotalCloseToOptimisticLocalTotal
         ? Math.max(0, profile.current_td + unresolvedCompletedRewardTD)
@@ -121,10 +125,14 @@ export function applyServerProfile(
   // ticket reward is already included in the server totals. Preserve the local
   // optimistic total only while the ticket is still unsettled; once `/api/score`
   // succeeds, later merges should converge back to plain server truth.
-  const totalTDEarned = shouldPreserveOptimisticTotals
+  const totalTDEarned = hasAuthoritativeEconomyAdvance
+    ? profile.total_td
+    : shouldPreserveOptimisticTotals
     ? Math.max(prev.economy.totalTDEarned, profile.total_td)
     : profile.total_td;
-  const currentRank = shouldPreserveOptimisticTotals && unresolvedCompletedRewardTD > 0 && totalTDEarned > profile.total_td
+  const currentRank = hasAuthoritativeEconomyAdvance
+    ? profile.corporate_rank
+    : shouldPreserveOptimisticTotals && unresolvedCompletedRewardTD > 0 && totalTDEarned > profile.total_td
     ? resolveRank(totalTDEarned, prev.economy.currentRank)
     : profile.corporate_rank;
 

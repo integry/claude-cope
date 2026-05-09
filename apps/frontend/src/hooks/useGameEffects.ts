@@ -73,9 +73,6 @@ export function useScoreSync(
         const sessionProfile = (await fetchSessionProfile().catch(() => null))?.profile;
         if (!sessionProfile) return;
         setState((prev) => {
-          if (sessionProfile.total_td > prev.economy.totalTDEarned) {
-            return applyServerProfile(prev, sessionProfile);
-          }
           return applyServerProfile(prev, sessionProfile, {
             preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
           });
