@@ -9,9 +9,6 @@ import { executeSlashCommand } from "./slashCommandExecutor";
 import {
   applyAuthoritativeProfile as mergeAuthoritativeProfile,
   applyServerProfile,
-  createAuthoritativeProfileFloor,
-  isServerProfileStaleAgainstFloor,
-  mergeAuthoritativeProfileFloor,
   settlePendingCompletedRewards,
 } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
@@ -106,7 +103,6 @@ function Terminal() {
   const historyRef = useRef(history);
   historyRef.current = history;
   const lastSuggestedReplyRef = useRef<string | null>(null);
-  const latestSettledProfileFloorRef = useRef<ReturnType<typeof createAuthoritativeProfileFloor> | null>(null);
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
@@ -235,9 +231,6 @@ function Terminal() {
   }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
 
   const applyProfileUpdate = useCallback((profile: ServerProfile) => {
-    const settledProfileFloor = latestSettledProfileFloorRef.current;
-    if (isServerProfileStaleAgainstFloor(profile, settledProfileFloor)) return;
-
     setState((prev) => {
       return applyServerProfile(
         prev,
@@ -247,23 +240,9 @@ function Terminal() {
         : {},
       );
     });
-    if (settledProfileFloor) {
-      latestSettledProfileFloorRef.current = mergeAuthoritativeProfileFloor(
-        settledProfileFloor,
-        createAuthoritativeProfileFloor(profile),
-      );
-    }
   }, [setState]);
 
   const applySettledCompletedReward = useCallback((ticketId: string, profile?: ServerProfile) => {
-    if (profile) {
-      const nextFloor = createAuthoritativeProfileFloor(profile);
-      latestSettledProfileFloorRef.current = mergeAuthoritativeProfileFloor(
-        latestSettledProfileFloorRef.current,
-        nextFloor,
-      );
-    }
-
     setState((prev) => {
       if (!profile) {
         return settlePendingCompletedRewards(prev, [ticketId]);

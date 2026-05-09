@@ -3,7 +3,7 @@ import type { ServerProfile } from "@claude-cope/shared/profile";
 import { GENERATORS, CORPORATE_RANKS } from "../game/constants";
 import { type GameState, calculateActiveMultiplier, isPaidUser } from "./gameStateUtils";
 import { fetchSessionProfile, unlockAchievementServer } from "../api/profileApi";
-import { applyAuthoritativeProfile, applyServerProfile } from "./profileSync";
+import { applyAuthoritativeProfile } from "./profileSync";
 
 function getTrackedPendingCompletedTaskIds(state: GameState, requestedTaskIds: string[]): string[] {
   return requestedTaskIds.filter((ticketId) => state.pendingCompletedTaskIds.includes(ticketId));
@@ -73,8 +73,9 @@ export function useScoreSync(
         const sessionProfile = (await fetchSessionProfile().catch(() => null))?.profile;
         if (!sessionProfile) return;
         setState((prev) => {
-          return applyServerProfile(prev, sessionProfile, {
+          return applyAuthoritativeProfile(prev, sessionProfile, {
             preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
+            settledPendingCompletedRewardTaskIds: getTrackedPendingCompletedTaskIds(prev, completedTaskIds),
           });
         });
       }).catch(() => {});

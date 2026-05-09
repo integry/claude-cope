@@ -105,7 +105,7 @@ describe("useScoreSync", () => {
     vi.useRealTimers();
   });
 
-  it("keeps pending rewards tracked when score sync falls back to a refreshed session profile", async () => {
+  it("settles pending rewards when score sync falls back to a refreshed session profile", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.mocked(fetchSessionProfile).mockResolvedValue({
       found: true,
@@ -143,10 +143,11 @@ describe("useScoreSync", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/score", expect.objectContaining({ method: "POST" }));
     expect(setState).toHaveBeenCalledTimes(1);
-    expect(state.pendingCompletedTaskIds).toEqual(["COPE-115"]);
-    expect(state.pendingCompletedTaskRewards).toEqual({ "COPE-115": { rewardTD: 500 } });
-    expect(state.economy.currentTD).toBe(1500);
+    expect(state.pendingCompletedTaskIds).toEqual([]);
+    expect(state.pendingCompletedTaskRewards).toEqual({});
+    expect(state.economy.currentTD).toBe(1300);
     expect(state.economy.totalTDEarned).toBe(1500);
+    expect(state.authoritativeProfileFloor).toEqual({ currentTD: 1300, totalTD: 1500 });
   });
 
   it("does not merge profiles after an application-level /api/score failure", async () => {
@@ -264,9 +265,10 @@ describe("useScoreSync", () => {
     expect(state.pendingCompletedTaskRewards).toEqual({});
     expect(state.economy.currentTD).toBe(1300);
     expect(state.economy.totalTDEarned).toBe(1500);
+    expect(state.authoritativeProfileFloor).toEqual({ currentTD: 1300, totalTD: 1500 });
   });
 
-  it("does not treat a higher session-profile total as proof that a specific pending reward settled", async () => {
+  it("treats a refreshed session profile as authoritative settlement after /api/score succeeds", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.mocked(fetchSessionProfile).mockResolvedValue({
       found: true,
@@ -303,10 +305,11 @@ describe("useScoreSync", () => {
     });
 
     expect(setState).toHaveBeenCalledTimes(1);
-    expect(state.pendingCompletedTaskIds).toEqual(["COPE-115"]);
-    expect(state.pendingCompletedTaskRewards).toEqual({ "COPE-115": { rewardTD: 500 } });
+    expect(state.pendingCompletedTaskIds).toEqual([]);
+    expect(state.pendingCompletedTaskRewards).toEqual({});
     expect(state.economy.currentTD).toBe(1600);
     expect(state.economy.totalTDEarned).toBe(1800);
+    expect(state.authoritativeProfileFloor).toEqual({ currentTD: 1600, totalTD: 1800 });
   });
 
   it("preserves newer pending completed rewards added after score sync started", async () => {
@@ -374,6 +377,7 @@ describe("useScoreSync", () => {
     expect(state.pendingCompletedTaskRewards).toEqual({ "COPE-116": { rewardTD: 250 } });
     expect(state.economy.currentTD).toBe(1550);
     expect(state.economy.totalTDEarned).toBe(1750);
+    expect(state.authoritativeProfileFloor).toEqual({ currentTD: 1300, totalTD: 1500 });
   });
 
 });

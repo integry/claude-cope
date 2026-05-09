@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fetchSessionProfile } from "../../api/profileApi";
 import { syncCompletedTicketReward } from "../buildChatSubmitArgs";
 import { createServerProfile } from "../../test/createServerProfile";
+
+vi.mock("../../api/profileApi", () => ({
+  fetchSessionProfile: vi.fn(),
+  updateTicketServer: vi.fn(),
+}));
 
 describe("syncCompletedTicketReward", () => {
   const fetchMock = vi.fn();
@@ -9,6 +15,8 @@ describe("syncCompletedTicketReward", () => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.mocked(fetchSessionProfile).mockReset();
+    vi.mocked(fetchSessionProfile).mockResolvedValue({ found: false });
   });
 
   afterEach(() => {
@@ -57,7 +65,31 @@ describe("syncCompletedTicketReward", () => {
     });
   });
 
-  it("leaves settlement pending when /api/score succeeds without returning a profile", async () => {
+  it("falls back to the refreshed session profile when /api/score succeeds without embedding one", async () => {
+    const settledProfile = createServerProfile({ total_td: 1500, current_td: 1300 });
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.mocked(fetchSessionProfile).mockResolvedValueOnce({
+      found: true,
+      profile: settledProfile,
+    });
+
+    const result = await syncCompletedTicketReward({
+      username: "alice",
+      ticketId: "COPE-115",
+      proKeyHash: "pro-hash",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchSessionProfile).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      ok: true,
+      status: "settled",
+      profile: settledProfile,
+      profileSource: "session",
+    });
+  });
+
+  it("leaves settlement pending when /api/score succeeds and the session refresh still has no profile", async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
 
     const result = await syncCompletedTicketReward({
@@ -67,6 +99,7 @@ describe("syncCompletedTicketReward", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchSessionProfile).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ ok: true, status: "pending" });
   });
 

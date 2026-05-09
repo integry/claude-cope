@@ -1,11 +1,6 @@
 import type { ServerProfile } from "@claude-cope/shared/profile";
-import type { GameState } from "./gameStateUtils";
+import type { AuthoritativeProfileFloor, GameState } from "./gameStateUtils";
 import { resolveRank } from "./gameStateUtils";
-
-export interface AuthoritativeProfileFloor {
-  totalTD: number;
-  currentTD: number;
-}
 
 function getPendingRewardAmount(prev: GameState, ticketId: string): number {
   return prev.pendingCompletedTaskRewards?.[ticketId]?.rewardTD ?? 0;
@@ -72,11 +67,8 @@ function resolvePendingRewardEconomyMerge(
     0,
   );
   const optimisticLocalBaselineTD = Math.max(0, prev.economy.currentTD - unresolvedKnownRewardTD);
-  const inferredLegacyPendingRewardTD = unresolvedPendingTaskIds.length > 0
-    ? Math.max(0, prev.economy.totalTDEarned - profile.total_td - unresolvedKnownRewardTD)
-    : 0;
-  const unresolvedCompletedRewardTD = unresolvedKnownRewardTD + inferredLegacyPendingRewardTD;
-  const shouldPreserveOptimisticTotals = unresolvedPendingTaskIds.length > 0;
+  const unresolvedCompletedRewardTD = unresolvedKnownRewardTD;
+  const shouldPreserveOptimisticTotals = unresolvedCompletedRewardTD > 0;
   const hasAuthoritativeEconomyAdvance = shouldPreserveOptimisticTotals
     && profile.total_td > prev.economy.totalTDEarned;
   const hasReliableLocalCurrentBaseline = optimisticLocalBaselineTD > 0;
@@ -109,6 +101,21 @@ function resolvePendingRewardEconomyMerge(
   };
 }
 
+function getMergedAuthoritativeProfileFloor(
+  prev: GameState,
+  profile: ServerProfile,
+  settledPendingCompletedRewardTaskIds: string[] | null | undefined,
+): AuthoritativeProfileFloor | null | undefined {
+  const nextFloor = createAuthoritativeProfileFloor(profile);
+  if ((settledPendingCompletedRewardTaskIds?.length ?? 0) > 0) {
+    return mergeAuthoritativeProfileFloor(prev.authoritativeProfileFloor, nextFloor);
+  }
+  if (prev.authoritativeProfileFloor) {
+    return mergeAuthoritativeProfileFloor(prev.authoritativeProfileFloor, nextFloor);
+  }
+  return prev.authoritativeProfileFloor;
+}
+
 /**
  * Merge a server-authoritative profile onto local game state.
  * Server wins for all authoritative fields; local-only fields are preserved.
@@ -134,6 +141,10 @@ export function applyServerProfile(
     settledPendingCompletedRewardTaskIds?: string[] | null;
   } = {},
 ): GameState {
+  if (isServerProfileStaleAgainstFloor(profile, prev.authoritativeProfileFloor)) {
+    return prev;
+  }
+
   const pendingTaskIds = opts.preservePendingCompletedRewardTaskIds?.filter(
     (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
   ) ?? [];
@@ -145,6 +156,11 @@ export function applyServerProfile(
     prev,
     profile,
     pendingTaskIds,
+    opts.settledPendingCompletedRewardTaskIds,
+  );
+  const authoritativeProfileFloor = getMergedAuthoritativeProfileFloor(
+    prev,
+    profile,
     opts.settledPendingCompletedRewardTaskIds,
   );
 
@@ -169,6 +185,7 @@ export function applyServerProfile(
     },
     unlockedThemes: profile.unlocked_themes,
     activeTheme: profile.active_theme,
+    authoritativeProfileFloor,
     ...(opts.includeActiveTicket ? { activeTicket: profile.active_ticket && profile.active_ticket.sprintProgress < profile.active_ticket.sprintGoal ? profile.active_ticket : null } : {}),
   };
 }
