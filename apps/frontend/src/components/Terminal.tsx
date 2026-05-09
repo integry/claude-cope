@@ -290,7 +290,6 @@ function Terminal() {
     recordEnter();
     if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
     if (inputValue.trim().startsWith("/")) {
-      recordMessageWithoutTicket();
       runSlashCommand(inputValue.trim());
       return;
     }

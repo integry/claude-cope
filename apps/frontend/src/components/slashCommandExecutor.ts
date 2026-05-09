@@ -13,7 +13,6 @@ import { updateTicketServer } from "../api/profileApi";
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
-import { getRandomTip } from "../game/tips";
 import { buildAchievementBox } from "./achievementBox";
 import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand } from "./ticketCommands";
 import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
@@ -172,7 +171,6 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
       ctx.unlockAchievement("the_nuclear_option");
       messages.push({ role: "warning", content: buildAchievementBox("the_nuclear_option") });
     }
-    messages.push({ role: "system", content: getRandomTip() });
     ctx.setHistory(messages);
     ctx.setIsProcessing(false);
 

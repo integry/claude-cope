@@ -273,6 +273,18 @@ describe("useTipManager", () => {
     ]);
   });
 
+  it("does not stream backlog reminders on every message after the first threshold", () => {
+    act(() => {
+      for (let i = 0; i < 11; i++) {
+        ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      BACKLOG_REMINDER_TIPS[0]?.text,
+    ]);
+  });
+
   it("re-fires event-based contextual tips when the triggering event happens again", () => {
     act(() => {
       ref.current?.setOnlineCount(1);

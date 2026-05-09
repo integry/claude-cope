@@ -129,4 +129,15 @@ describe("async slash-command accounting", () => {
     expect(ctx.state.commandUsage).toEqual({ "/backlog": 1 });
     expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/backlog");
   });
+
+  it("does not append an extra random tip when /clear finishes", async () => {
+    const ctx = makeCtx(makeGameState());
+
+    executeSlashCommand("/clear", ctx);
+    vi.advanceTimersByTime(2000);
+    await vi.runAllTimersAsync();
+
+    expect(ctx.setHistory).toHaveBeenLastCalledWith([]);
+    expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/clear");
+  });
 });
