@@ -265,11 +265,7 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
       onProfileUpdate: (profile) => {
         mergedState = applyServerProfile(mergedState, profile, {
-          preservePendingCompletedReward: {
-            minimumCurrentTD: 1100,
-            minimumTotalTDEarned: 1100,
-            pendingTaskIds: ["COPE-782"],
-          },
+          preservePendingCompletedRewardTaskIds: ["COPE-782"],
         });
       },
     });

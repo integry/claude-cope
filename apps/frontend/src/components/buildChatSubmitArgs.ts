@@ -3,7 +3,6 @@ import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
 import { updateTicketServer } from "../api/profileApi";
-import type { PendingCompletedRewardMerge } from "../hooks/profileSync";
 
 interface SprintContext {
   getState: () => GameState;
@@ -11,7 +10,6 @@ interface SprintContext {
   addActiveTD: (amount: number) => void;
   playChime: () => void;
   setState: (fn: (prev: GameState) => GameState) => void;
-  onCompletedRewardPending?: (pending: PendingCompletedRewardMerge) => void;
   onCompletedRewardProfile?: (profile: ServerProfile, ticketId: string) => void;
   onCompletedRewardFailed?: (ticketId: string) => void;
 }
@@ -20,28 +18,21 @@ export function syncCompletedTicketReward(params: {
   username: string;
   ticketId: string;
   proKeyHash?: string;
-  currentTD?: number;
-  totalTDEarned?: number;
-  inventory?: Record<string, number>;
-  upgrades?: string[];
-}): Promise<{ profile?: ServerProfile } | null> {
-  const { username, ticketId, proKeyHash, currentTD = 0, totalTDEarned = 0, inventory = {}, upgrades = [] } = params;
+}): Promise<{ ok: boolean; profile?: ServerProfile } | null> {
+  const { username, ticketId, proKeyHash } = params;
   return fetch(`${API_BASE}/api/score`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       username,
-      currentTD,
-      totalTDEarned,
-      inventory,
-      upgrades,
       completedTaskIds: [ticketId],
       ...(proKeyHash ? { proKeyHash } : {}),
     }),
   })
     .then(async (res) => {
       if (!res.ok) return null;
-      return await res.json().catch(() => null) as { profile?: ServerProfile } | null;
+      const result = await res.json().catch(() => ({}));
+      return { ok: true, profile: (result as { profile?: ServerProfile }).profile };
     })
     .catch(() => null);
 }
@@ -69,11 +60,6 @@ export function buildSprintCallbacks(ctx: SprintContext) {
     const completedUsername = current.username;
     const completedProKeyHash = current.proKeyHash;
     const payout = ticket.sprintGoal * 10;
-    const pendingReward = {
-      minimumCurrentTD: current.economy.currentTD + payout,
-      minimumTotalTDEarned: current.economy.totalTDEarned + payout,
-      pendingTaskIds: [completedTicketId],
-    };
 
     ctx.setState((prev) => {
       if (!prev.activeTicket || prev.activeTicket.id !== completedTicketId) return prev;
@@ -91,21 +77,16 @@ export function buildSprintCallbacks(ctx: SprintContext) {
     sprintCompleteMessage = { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${completedTicketId} "${completedTicketTitle}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` };
 
     if (completedUsername && completedProKeyHash) {
-      ctx.onCompletedRewardPending?.(pendingReward);
       void syncCompletedTicketReward({
         username: completedUsername,
         ticketId: completedTicketId,
         proKeyHash: completedProKeyHash,
-        currentTD: pendingReward.minimumCurrentTD,
-        totalTDEarned: pendingReward.minimumTotalTDEarned,
-        inventory: current.inventory,
-        upgrades: current.upgrades,
       }).then((result) => {
         if (result?.profile) {
           ctx.onCompletedRewardProfile?.(result.profile, completedTicketId);
           return;
         }
-        ctx.onCompletedRewardFailed?.(completedTicketId);
+        if (!result?.ok) ctx.onCompletedRewardFailed?.(completedTicketId);
       });
       void updateTicketServer(completedUsername, null, completedProKeyHash);
     }

@@ -2,34 +2,6 @@ import type { ServerProfile } from "@claude-cope/shared/profile";
 import type { GameState } from "./gameStateUtils";
 import { resolveRank } from "./gameStateUtils";
 
-export type PendingCompletedRewardMerge = {
-  minimumCurrentTD: number;
-  minimumTotalTDEarned: number;
-  pendingTaskIds: string[];
-};
-
-export function combinePendingCompletedRewards(
-  pendingRewards: PendingCompletedRewardMerge[],
-): PendingCompletedRewardMerge | null {
-  if (pendingRewards.length === 0) return null;
-
-  let minimumCurrentTD = 0;
-  let minimumTotalTDEarned = 0;
-  const pendingTaskIds = new Set<string>();
-
-  for (const pendingReward of pendingRewards) {
-    minimumCurrentTD = Math.max(minimumCurrentTD, pendingReward.minimumCurrentTD);
-    minimumTotalTDEarned = Math.max(minimumTotalTDEarned, pendingReward.minimumTotalTDEarned);
-    for (const ticketId of pendingReward.pendingTaskIds) pendingTaskIds.add(ticketId);
-  }
-
-  return {
-    minimumCurrentTD,
-    minimumTotalTDEarned,
-    pendingTaskIds: [...pendingTaskIds],
-  };
-}
-
 /**
  * Merge a server-authoritative profile onto local game state.
  * Server wins for all authoritative fields; local-only fields are preserved.
@@ -44,19 +16,15 @@ export function applyServerProfile(
   profile: ServerProfile,
   opts: {
     includeActiveTicket?: boolean;
-    preservePendingCompletedReward?: PendingCompletedRewardMerge | null;
+    preservePendingCompletedRewardTaskIds?: string[] | null;
   } = {},
 ): GameState {
-  const pendingReward = opts.preservePendingCompletedReward;
   const shouldPreservePendingReward = Boolean(
-    pendingReward
-      && pendingReward.pendingTaskIds.some((ticketId) => prev.pendingCompletedTaskIds.includes(ticketId)),
+    opts.preservePendingCompletedRewardTaskIds?.some((ticketId) => prev.pendingCompletedTaskIds.includes(ticketId)),
   );
-  const currentTD = shouldPreservePendingReward
-    ? Math.max(profile.current_td, pendingReward!.minimumCurrentTD)
-    : profile.current_td;
+  const currentTD = shouldPreservePendingReward ? prev.economy.currentTD : profile.current_td;
   const totalTDEarned = shouldPreservePendingReward
-    ? Math.max(profile.total_td, pendingReward!.minimumTotalTDEarned)
+    ? Math.max(profile.total_td, prev.economy.totalTDEarned)
     : profile.total_td;
   const currentRank = shouldPreservePendingReward && totalTDEarned > profile.total_td
     ? resolveRank(totalTDEarned, prev.economy.currentRank)
