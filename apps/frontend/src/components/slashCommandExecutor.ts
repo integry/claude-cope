@@ -61,6 +61,46 @@ export interface SlashCommandContext {
   onValidSlashCommand?: (baseCommand: string) => void;
 }
 
+export const SLASH_COMMAND_ACCOUNTING_POLICY: Record<string, "tracked" | "conditional" | "excluded"> = {
+  "/backlog": "tracked",
+  "/take": "conditional",
+  "/clear": "tracked",
+  "/support": "tracked",
+  "/preworkout": "tracked",
+  "/buddy": "conditional",
+  "/store": "conditional",
+  "/synergize": "tracked",
+  "/compact": "tracked",
+  "/who": "tracked",
+  "/ping": "conditional",
+  "/help": "tracked",
+  "/about": "tracked",
+  "/privacy": "tracked",
+  "/terms": "tracked",
+  "/contact": "tracked",
+  "/fast": "tracked",
+  "/voice": "tracked",
+  "/blame": "tracked",
+  "/brrrrrr": "tracked",
+  "/feedback": "tracked",
+  "/bug": "tracked",
+  "/key": "conditional",
+  "/upgrade": "tracked",
+  "/leaderboard": "tracked",
+  "/achievements": "tracked",
+  "/profile": "tracked",
+  "/ticket": "conditional",
+  "/accept": "conditional",
+  "/abandon": "conditional",
+  "/alias": "conditional",
+  "/model": "conditional",
+  "/user": "tracked",
+  "/sync": "conditional",
+  "/shill": "tracked",
+  "/party": "tracked",
+  "/theme": "conditional",
+};
+
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.role !== "loading");
 
 function proGatedMessage(baseCommand: string): string {

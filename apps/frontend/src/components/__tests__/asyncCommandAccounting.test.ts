@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SetStateAction } from "react";
 import type { GameState } from "../../hooks/useGameState";
+import { ALL_SLASH_COMMANDS } from "../slashCommands";
 
 vi.mock("../../analytics", () => ({
   track: vi.fn(),
@@ -15,7 +16,7 @@ vi.mock("../ticketPrompt", () => ({
   fetchRandomTicketPrompt: vi.fn(),
 }));
 
-import { executeSlashCommand, type SlashCommandContext } from "../slashCommandExecutor";
+import { SLASH_COMMAND_ACCOUNTING_POLICY, executeSlashCommand, type SlashCommandContext } from "../slashCommandExecutor";
 
 function makeGameState(overrides: Partial<GameState> = {}): GameState {
   const base: GameState = {
@@ -139,5 +140,10 @@ describe("async slash-command accounting", () => {
 
     expect(ctx.setHistory).toHaveBeenLastCalledWith([]);
     expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/clear");
+  });
+
+  it("documents an explicit accounting policy for every supported slash command", () => {
+    expect(Object.keys(SLASH_COMMAND_ACCOUNTING_POLICY).sort()).toEqual([...ALL_SLASH_COMMANDS].sort());
+    expect(new Set(Object.values(SLASH_COMMAND_ACCOUNTING_POLICY))).toEqual(new Set(["tracked", "conditional"]));
   });
 });

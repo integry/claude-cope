@@ -152,6 +152,26 @@ describe("useTipManager", () => {
     ]);
   });
 
+  it("preserves elapsed idle time across temporary blocked states", () => {
+    act(() => {
+      ref.current?.recordEnter();
+      vi.advanceTimersByTime(40_000);
+      ref.current?.setBlocked(true);
+      vi.advanceTimersByTime(10_000);
+    });
+
+    expect(ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      ref.current?.setBlocked(false);
+      vi.advanceTimersByTime(250);
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      IDLE_TIPS[0]?.text,
+    ]);
+  });
+
   it("shows a milestone tip on every sixth valid command for an unused command", () => {
     act(() => {
       for (let i = 0; i < 6; i++) {

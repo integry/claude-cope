@@ -166,10 +166,7 @@ function Terminal() {
     }
     return false;
   }, [state.proKey, state.proKeyHash, state.economy.quotaPercent, handleQuotaLockout]);
-
-  const handleInstantBan = useCallback(() => {
-    triggerInstantBan({ setInstantBanReady, setIsProcessing, playError, setHistory });
-  }, [setIsProcessing, playError, setHistory]);
+  const handleInstantBan = useCallback(() => { triggerInstantBan({ setInstantBanReady, setIsProcessing, playError, setHistory }); }, [setIsProcessing, playError, setHistory]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = activeRegression === "backwards_typing" && e.target.value.length > inputValue.length
@@ -217,9 +214,14 @@ function Terminal() {
     handleSuggestedReply,
     recordValidCommand,
   ]);
-  const runSlashCommandRef = useRef(runSlashCommand);
-  runSlashCommandRef.current = runSlashCommand;
+  const runSlashCommandRef = useRef(runSlashCommand); runSlashCommandRef.current = runSlashCommand;
 
+  const submitPromptCommand = useCallback((command: string) => {
+    setCommandHistory((prev) => [...prev, command]);
+    recordValidCommand();
+    recordMessageWithoutTicket();
+    processCommandRef.current(command);
+  }, [recordMessageWithoutTicket, recordValidCommand]);
   useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, setHistory, runSlashCommand });
 
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
@@ -234,7 +236,6 @@ function Terminal() {
   const applyProfileUpdate = useCallback((profile: ServerProfile) => {
     setState((prev) => applyServerProfile(prev, profile, prev.pendingCompletedTaskIds.length > 0 ? { preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds } : {}));
   }, [setState]);
-
   const applySettledCompletedReward = useCallback((ticketId: string, profile?: ServerProfile) => {
     setState((prev) => !profile
       ? settlePendingCompletedRewards(prev, [ticketId])
@@ -311,6 +312,7 @@ function Terminal() {
     recordEnter();
     if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
     if (inputValue.trim().startsWith("/")) {
+      recordMessageWithoutTicket();
       runSlashCommand(inputValue.trim());
       return;
     }
@@ -326,9 +328,7 @@ function Terminal() {
       return;
     }
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
-    setCommandHistory((prev) => [...prev, command]);
-    recordMessageWithoutTicket();
-    processCommand(command);
+    submitPromptCommand(command);
   };
 
   const dismissUpgradeOverlay = useCallback(() => {
@@ -342,10 +342,9 @@ function Terminal() {
       const command = pendingNagCommandRef.current;
       pendingNagCommandRef.current = null;
       nagArmedFromQuotaRef.current = false;
-      setCommandHistory((prev) => [...prev, command]);
-      processCommandRef.current(command);
+      submitPromptCommand(command);
     }
-  }, [dismissUpgradeOverlay]);
+  }, [dismissUpgradeOverlay, submitPromptCommand]);
 
   const handleManualUpgradeDismiss = dismissUpgradeOverlay;
 

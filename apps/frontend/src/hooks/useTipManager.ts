@@ -61,6 +61,8 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   const noTicketMessageCountRef = useRef(0);
   const nextBacklogReminderThresholdRef = useRef(getNextBacklogReminderThreshold());
   const lastBacklogReminderTipIdRef = useRef<string | null>(null);
+  const isBootingRef = useRef(isBooting);
+  const isInteractionBlockedRef = useRef(isInteractionBlocked);
   const previousStateRef = useRef({
     currentTD: gameState.economy.currentTD,
     quotaPercent: gameState.economy.quotaPercent,
@@ -75,14 +77,30 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     }
   }, []);
 
+  useEffect(() => {
+    isBootingRef.current = isBooting;
+  }, [isBooting]);
+
+  useEffect(() => {
+    isInteractionBlockedRef.current = isInteractionBlocked;
+  }, [isInteractionBlocked]);
+
   const scheduleIdleTip = useCallback(() => {
     clearIdleTimer();
-    if (isBooting || isInteractionBlocked || !hasInteractedRef.current) return;
-    idleTimerRef.current = window.setTimeout(() => {
+    if (!hasInteractedRef.current) return;
+    idleTimerRef.current = window.setTimeout(function fireIdleTip() {
+      if (isBootingRef.current) {
+        idleTimerRef.current = null;
+        return;
+      }
+      if (isInteractionBlockedRef.current) {
+        idleTimerRef.current = window.setTimeout(fireIdleTip, 250);
+        return;
+      }
       idleTimerRef.current = null;
       appendTip(setHistory, getRandomIdleTip());
     }, IDLE_TIP_DELAY_MS);
-  }, [clearIdleTimer, isBooting, isInteractionBlocked, setHistory]);
+  }, [clearIdleTimer, setHistory]);
 
   const recordEnter = useCallback(() => {
     hasInteractedRef.current = true;
@@ -117,11 +135,6 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     noTicketMessageCountRef.current = 0;
     nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
   }, [gameState.activeTicket, setHistory]);
-
-  useEffect(() => {
-    if (!hasInteractedRef.current) return;
-    scheduleIdleTip();
-  }, [scheduleIdleTip]);
 
   useEffect(() => {
     if (!gameState.activeTicket) return;

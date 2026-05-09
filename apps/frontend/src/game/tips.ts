@@ -127,10 +127,6 @@ export function getRandomBacklogReminder(previousTipId?: string): TipDefinition 
     ?? { id: "backlog-reminder-fallback", text: toText(undefined), cmd: "/backlog", category: "ticket" };
 }
 
-export function getRandomBacklogReminderTip(previousTipId?: string): string {
-  return getRandomBacklogReminder(previousTipId).text;
-}
-
 export function selectMilestoneTip(usedCommands: Iterable<string>, shownTipIds: Iterable<string> = []): TipDefinition | null {
   const used = new Set(usedCommands);
   const shown = new Set(shownTipIds);
