@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { buildSprintCallbacks } from "../buildChatSubmitArgs";
 import type { GameState } from "../../hooks/useGameState";
 import { applyServerProfile } from "../../hooks/profileSync";
-import type { ServerProfile } from "@claude-cope/shared/profile";
+import { createServerProfile } from "../../test/createServerProfile";
 
 const DEFAULT_TICKET = {
   id: "COPE-059",
@@ -10,27 +10,6 @@ const DEFAULT_TICKET = {
   sprintProgress: 90,
   sprintGoal: 100,
 };
-
-function createServerProfile(overrides: Partial<ServerProfile> = {}): ServerProfile {
-  return {
-    username: "alice",
-    current_td: 1000,
-    total_td: 1000,
-    corporate_rank: "Junior Code Monkey",
-    inventory: {},
-    upgrades: [],
-    achievements: [],
-    buddy_type: null,
-    buddy_is_shiny: false,
-    unlocked_themes: ["default"],
-    active_theme: "default",
-    active_ticket: null,
-    td_multiplier: 1,
-    multiplier: 1,
-    quota_percent: 100,
-    ...overrides,
-  };
-}
 
 function createGameState(overrides: Partial<GameState> = {}): GameState {
   return {
@@ -179,6 +158,9 @@ describe("buildSprintCallbacks", () => {
       if (url === "/api/score") {
         return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
       }
+      if (url === "/api/account/me") {
+        return Promise.resolve(new Response(JSON.stringify({ found: false }), { status: 200 }));
+      }
       return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     });
     const onCompletedRewardSettled = vi.fn();
@@ -190,6 +172,38 @@ describe("buildSprintCallbacks", () => {
     await Promise.resolve();
 
     expect(onCompletedRewardSettled).not.toHaveBeenCalled();
+  });
+
+  it("does not replay completion side effects when sprint completion fires twice for the same ticket", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/score") {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, profile: createServerProfile() }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    });
+    const addActiveTD = vi.fn();
+    const playChime = vi.fn();
+
+    const { onSprintProgress } = buildSprintCallbacks({
+      getState: () => createGameState({
+        proKeyHash: "fresh-pro-hash",
+        activeTicket: DEFAULT_TICKET,
+      }),
+      updateTicketProgress: vi.fn(),
+      addActiveTD,
+      playChime,
+      setState: vi.fn(),
+    });
+
+    onSprintProgress(10);
+    onSprintProgress(10);
+    await Promise.resolve();
+
+    expect(addActiveTD).toHaveBeenCalledTimes(1);
+    expect(playChime).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/score")).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/recent-events")).toHaveLength(1);
   });
 
   it("settles the pending reward after /api/score returns an updated profile", async () => {
@@ -237,7 +251,7 @@ describe("buildSprintCallbacks", () => {
       pendingCompletedTaskIds: ["COPE-059"],
       pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
     });
-    const staleProfile = createServerProfile();
+    const staleProfile = createServerProfile({ current_td: 1000, total_td: 1000 });
     const newerProfile = createServerProfile({ current_td: 1250, total_td: 1250 });
 
     const mergedAfterStaleChat = applyServerProfile(localState, staleProfile, {
@@ -300,14 +314,37 @@ describe("buildSprintCallbacks", () => {
         "COPE-060": { rewardTD: 1000 },
       },
     });
-    const staleProfile = createServerProfile();
+    const staleProfile = createServerProfile({ current_td: 1000, total_td: 1000 });
 
     const merged = applyServerProfile(localState, staleProfile, {
       preservePendingCompletedRewardTaskIds: ["COPE-059", "COPE-060"],
     });
 
     expect(merged.economy.currentTD).toBe(1500);
-    expect(merged.economy.totalTDEarned).toBe(2000);
+    expect(merged.economy.totalTDEarned).toBe(1500);
+  });
+
+  it("preserves multiple legacy pending rewards without per-ticket metadata", () => {
+    const localState = createGameState({
+      economy: {
+        currentTD: 1500,
+        totalTDEarned: 1500,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      pendingCompletedTaskIds: ["COPE-059", "COPE-060"],
+      pendingCompletedTaskRewards: {},
+    });
+    const staleProfile = createServerProfile({ current_td: 200, total_td: 200 });
+
+    const merged = applyServerProfile(localState, staleProfile, {
+      preservePendingCompletedRewardTaskIds: ["COPE-059", "COPE-060"],
+    });
+
+    expect(merged.economy.currentTD).toBe(1500);
+    expect(merged.economy.totalTDEarned).toBe(1500);
   });
 
   it("does not resurrect TD the user already spent while a completed reward is pending", () => {
@@ -346,7 +383,7 @@ describe("buildSprintCallbacks", () => {
       pendingCompletedTaskIds: ["COPE-059"],
       pendingCompletedTaskRewards: { "COPE-059": { rewardTD: 500 } },
     });
-    const updatedProfile = createServerProfile({ current_td: 900 });
+    const updatedProfile = createServerProfile({ current_td: 900, total_td: 1000 });
 
     const merged = applyServerProfile(localState, updatedProfile, {
       preservePendingCompletedRewardTaskIds: ["COPE-059"],

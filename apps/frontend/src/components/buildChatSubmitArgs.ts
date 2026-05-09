@@ -2,7 +2,7 @@ import type { Message, GameState } from "../hooks/useGameState";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE } from "../config";
 import { supabase } from "../supabaseClient";
-import { updateTicketServer } from "../api/profileApi";
+import { fetchSessionProfile, updateTicketServer } from "../api/profileApi";
 
 interface SprintContext {
   getState: () => GameState;
@@ -32,7 +32,10 @@ export function syncCompletedTicketReward(params: {
       if (!res.ok) return null;
       const result = await res.json().catch(() => ({}));
       const profile = (result as { profile?: ServerProfile }).profile;
-      return profile ? { ok: true, profile } : { ok: true };
+      if (profile) return { ok: true, profile };
+
+      const session = await fetchSessionProfile().catch(() => null);
+      return session?.profile ? { ok: true, profile: session.profile } : { ok: true };
     })
     .catch(() => null);
 }
@@ -40,6 +43,7 @@ export function syncCompletedTicketReward(params: {
 /** Build the onSprintProgress callback and a getter for the sprint-complete message */
 export function buildSprintCallbacks(ctx: SprintContext) {
   let sprintCompleteMessage: Message | null = null;
+  const completedTicketSideEffectLocks = new Set<string>();
 
   const onSprintProgress = (rawAmount: number) => {
     const amount = Math.round(rawAmount * 1.5);
@@ -60,6 +64,10 @@ export function buildSprintCallbacks(ctx: SprintContext) {
     const completedUsername = current.username;
     const completedProKeyHash = current.proKeyHash;
     const payout = ticket.sprintGoal * 10;
+    const completionLockKey = `${completedUsername}:${completedTicketId}`;
+
+    if (completedTicketSideEffectLocks.has(completionLockKey)) return;
+    completedTicketSideEffectLocks.add(completionLockKey);
 
     ctx.setState((prev) => {
       if (!prev.activeTicket || prev.activeTicket.id !== completedTicketId) return prev;

@@ -1,27 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { syncCompletedTicketReward } from "../buildChatSubmitArgs";
-import type { ServerProfile } from "@claude-cope/shared/profile";
-
-function createServerProfile(overrides: Partial<ServerProfile> = {}): ServerProfile {
-  return {
-    username: "alice",
-    current_td: 1000,
-    total_td: 1000,
-    corporate_rank: "Junior Code Monkey",
-    inventory: {},
-    upgrades: [],
-    achievements: [],
-    buddy_type: null,
-    buddy_is_shiny: false,
-    unlocked_themes: ["default"],
-    active_theme: "default",
-    active_ticket: null,
-    td_multiplier: 1,
-    multiplier: 1,
-    quota_percent: 100,
-    ...overrides,
-  };
-}
+import { createServerProfile } from "../../test/createServerProfile";
 
 describe("syncCompletedTicketReward", () => {
   const fetchMock = vi.fn();
@@ -37,13 +16,17 @@ describe("syncCompletedTicketReward", () => {
   });
 
   it("posts completed task IDs to /api/score for pro users without relying on local totals", async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ found: false }), { status: 200 }));
+
     const result = await syncCompletedTicketReward({
       username: "alice",
       ticketId: "COPE-115",
       proKeyHash: "pro-hash",
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/score");
     expect(init?.method).toBe("POST");
@@ -71,14 +54,35 @@ describe("syncCompletedTicketReward", () => {
     expect(result).toEqual({ ok: true, profile: settledProfile });
   });
 
-  it("leaves settlement pending when /api/score succeeds without an updated profile", async () => {
+  it("falls back to the session profile when /api/score succeeds without an updated profile", async () => {
+    const settledProfile = createServerProfile({ total_td: 1500, current_td: 1500 });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ found: true, profile: settledProfile }), { status: 200 }));
+
     const result = await syncCompletedTicketReward({
       username: "alice",
       ticketId: "COPE-115",
       proKeyHash: "pro-hash",
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/account/me");
+    expect(result).toEqual({ ok: true, profile: settledProfile });
+  });
+
+  it("leaves settlement pending when neither endpoint returns a profile", async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ found: false }), { status: 200 }));
+
+    const result = await syncCompletedTicketReward({
+      username: "alice",
+      ticketId: "COPE-115",
+      proKeyHash: "pro-hash",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(result).toEqual({ ok: true });
   });
 });

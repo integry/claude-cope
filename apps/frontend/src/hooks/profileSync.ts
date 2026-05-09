@@ -6,16 +6,50 @@ function getPendingRewardAmount(prev: GameState, ticketId: string): number {
   return prev.pendingCompletedTaskRewards?.[ticketId]?.rewardTD ?? 0;
 }
 
-function inferLegacyPendingRewardAmount(
+function getKnownPendingRewardEntries(prev: GameState, pendingTaskIds: string[]) {
+  return pendingTaskIds
+    .map((ticketId) => ({ ticketId, rewardTD: getPendingRewardAmount(prev, ticketId) }))
+    .filter((entry) => entry.rewardTD > 0);
+}
+
+function getConfirmedKnownPendingRewardTD(
   prev: GameState,
   profile: ServerProfile,
-  pendingTaskIds: string[],
+  pendingRewardEntries: Array<{ ticketId: string; rewardTD: number }>,
 ): number {
-  if (pendingTaskIds.length !== 1) return 0;
-  const [ticketId] = pendingTaskIds;
-  if (!ticketId || getPendingRewardAmount(prev, ticketId) > 0) return 0;
+  const totalKnownPendingRewardTD = pendingRewardEntries.reduce((sum, entry) => sum + entry.rewardTD, 0);
+  if (totalKnownPendingRewardTD <= 0) return 0;
 
-  return Math.max(0, prev.economy.totalTDEarned - profile.total_td);
+  const localTotalExcludingKnownPendingRewards = Math.max(0, prev.economy.totalTDEarned - totalKnownPendingRewardTD);
+  return Math.max(0, Math.min(totalKnownPendingRewardTD, profile.total_td - localTotalExcludingKnownPendingRewards));
+}
+
+function collectExactRewardSubsets(
+  pendingRewardEntries: Array<{ ticketId: string; rewardTD: number }>,
+  targetRewardTD: number,
+): string[][] {
+  const exactSubsets: string[][] = [];
+  const currentSubset: string[] = [];
+
+  const visit = (entryIndex: number, runningRewardTD: number) => {
+    if (runningRewardTD === targetRewardTD) {
+      exactSubsets.push([...currentSubset]);
+      return;
+    }
+
+    if (entryIndex >= pendingRewardEntries.length || runningRewardTD > targetRewardTD) {
+      return;
+    }
+
+    const entry = pendingRewardEntries[entryIndex]!;
+    currentSubset.push(entry.ticketId);
+    visit(entryIndex + 1, runningRewardTD + entry.rewardTD);
+    currentSubset.pop();
+    visit(entryIndex + 1, runningRewardTD);
+  };
+
+  visit(0, 0);
+  return exactSubsets;
 }
 
 export function getSettledPendingCompletedTaskIds(
@@ -24,22 +58,20 @@ export function getSettledPendingCompletedTaskIds(
   candidateTaskIds: string[] = prev.pendingCompletedTaskIds,
 ): string[] {
   const pendingTaskIds = candidateTaskIds.filter((ticketId) => prev.pendingCompletedTaskIds.includes(ticketId));
-  const totalPendingRewardTD = pendingTaskIds.reduce((sum, ticketId) => sum + getPendingRewardAmount(prev, ticketId), 0);
+  if (pendingTaskIds.length === 0) return [];
 
-  if (totalPendingRewardTD <= 0) return [];
-
-  const localTotalExcludingPendingRewards = Math.max(0, prev.economy.totalTDEarned - totalPendingRewardTD);
-  let confirmedPendingRewardTD = Math.max(0, profile.total_td - localTotalExcludingPendingRewards);
-  const settledTaskIds: string[] = [];
-
-  for (const ticketId of pendingTaskIds) {
-    const rewardTD = getPendingRewardAmount(prev, ticketId);
-    if (rewardTD <= 0 || confirmedPendingRewardTD < rewardTD) continue;
-    settledTaskIds.push(ticketId);
-    confirmedPendingRewardTD -= rewardTD;
+  if (profile.total_td >= prev.economy.totalTDEarned) {
+    return pendingTaskIds;
   }
 
-  return settledTaskIds;
+  const pendingRewardEntries = getKnownPendingRewardEntries(prev, pendingTaskIds);
+  const confirmedPendingRewardTD = getConfirmedKnownPendingRewardTD(prev, profile, pendingRewardEntries);
+  if (confirmedPendingRewardTD <= 0) return [];
+
+  const exactSubsets = collectExactRewardSubsets(pendingRewardEntries, confirmedPendingRewardTD);
+  if (exactSubsets.length === 0) return [];
+
+  return exactSubsets[0]!.filter((ticketId) => exactSubsets.every((subset) => subset.includes(ticketId)));
 }
 
 /**
@@ -62,12 +94,15 @@ export function applyServerProfile(
   const pendingTaskIds = opts.preservePendingCompletedRewardTaskIds?.filter(
     (ticketId) => prev.pendingCompletedTaskIds.includes(ticketId),
   ) ?? [];
-  const legacyPendingRewardTD = inferLegacyPendingRewardAmount(prev, profile, pendingTaskIds);
-  const settledTaskIds = getSettledPendingCompletedTaskIds(prev, profile, pendingTaskIds);
-  const settledTaskIdSet = new Set(settledTaskIds);
-  const unresolvedCompletedRewardTD = pendingTaskIds.reduce((sum, ticketId) => (
+  const settledTaskIdSet = new Set(getSettledPendingCompletedTaskIds(prev, profile, pendingTaskIds));
+  const unresolvedKnownRewardTD = pendingTaskIds.reduce((sum, ticketId) => (
     settledTaskIdSet.has(ticketId) ? sum : sum + getPendingRewardAmount(prev, ticketId)
-  ), 0) || legacyPendingRewardTD;
+  ), 0);
+  const hasLegacyPendingRewards = pendingTaskIds.some((ticketId) => getPendingRewardAmount(prev, ticketId) <= 0);
+  const inferredLegacyPendingRewardTD = hasLegacyPendingRewards
+    ? Math.max(0, prev.economy.totalTDEarned - profile.total_td - unresolvedKnownRewardTD)
+    : 0;
+  const unresolvedCompletedRewardTD = unresolvedKnownRewardTD + inferredLegacyPendingRewardTD;
   const preservedCurrentRewardTD = Math.min(
     unresolvedCompletedRewardTD,
     Math.max(0, prev.economy.currentTD - profile.current_td),

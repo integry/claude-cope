@@ -1,7 +1,7 @@
 import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateAction } from "react";
 import { GENERATORS, CORPORATE_RANKS } from "../game/constants";
 import { type GameState, calculateActiveMultiplier, isPaidUser } from "./gameStateUtils";
-import { unlockAchievementServer } from "../api/profileApi";
+import { fetchSessionProfile, unlockAchievementServer } from "../api/profileApi";
 import { getSettledPendingCompletedTaskIds } from "./profileSync";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 
@@ -54,7 +54,11 @@ export function useScoreSync(
       }).then(async (res) => {
         if (!res.ok || completedTaskIds.length === 0) return;
         const data = await res.json().catch(() => ({}));
-        const profile = (data as { profile?: ServerProfile }).profile;
+        let profile = (data as { profile?: ServerProfile }).profile;
+        if (!profile) {
+          const session = await fetchSessionProfile();
+          profile = session.profile ?? undefined;
+        }
         if (!profile) return;
 
         setState((prev) => {
