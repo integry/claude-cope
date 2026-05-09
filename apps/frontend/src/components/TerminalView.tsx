@@ -32,7 +32,6 @@ type TerminalViewProps = OverlayVisibility & {
   activeTheme: GameState["activeTheme"];
   regressionGlitch: string | null | undefined;
   anyOverlayOpen: boolean;
-  isFreeTier: boolean;
   inputRef: RefObject<HTMLInputElement | null>;
   closeAllOverlaysPreservingNag: () => void;
   onlineCount: number;
@@ -89,7 +88,6 @@ export function TerminalView({
   activeTheme,
   regressionGlitch,
   anyOverlayOpen,
-  isFreeTier,
   inputRef,
   closeAllOverlaysPreservingNag,
   onlineCount,
@@ -186,7 +184,6 @@ export function TerminalView({
           promptString={promptString}
           activeTicketId={state.activeTicket?.id}
           username={state.username}
-          isFreeTier={isFreeTier}
           onSlashCommand={handleSlashCommandClick}
         />
         <div ref={bottomRef} />

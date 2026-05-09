@@ -436,7 +436,6 @@ function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps
   if (!messagesEqual(prev.previousMessage, next.previousMessage)) return false;
   if (!messagesEqual(prev.nextMessage, next.nextMessage)) return false;
   if (prev.username !== next.username) return false;
-  if (prev.isFreeTier !== next.isFreeTier) return false;
   if (prev.onSlashCommand !== next.onSlashCommand) return false;
   // Only compare activeTicketId for loading messages
   if (prev.message.role === "loading" && prev.activeTicketId !== next.activeTicketId) return false;

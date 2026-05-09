@@ -1,7 +1,13 @@
 import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateAction } from "react";
+import type { ServerProfile } from "@claude-cope/shared/profile";
 import { GENERATORS, CORPORATE_RANKS } from "../game/constants";
 import { type GameState, calculateActiveMultiplier, isPaidUser } from "./gameStateUtils";
-import { unlockAchievementServer } from "../api/profileApi";
+import { fetchSessionProfile, unlockAchievementServer } from "../api/profileApi";
+import { applyAuthoritativeProfile } from "./profileSync";
+
+function getTrackedPendingCompletedTaskIds(state: GameState, requestedTaskIds: string[]): string[] {
+  return requestedTaskIds.filter((ticketId) => state.pendingCompletedTaskIds.includes(ticketId));
+}
 
 export function shouldBackgroundSyncScore(state: GameState, lastSyncedTotalTD: number): boolean {
   const hasPendingCompletedTickets = (state.pendingCompletedTaskIds?.length ?? 0) > 0;
@@ -49,15 +55,29 @@ export function useScoreSync(
           completedTaskIds,
           ...(current.proKeyHash ? { proKeyHash: current.proKeyHash } : {}),
         }),
-      }).then((res) => {
-        if (res.ok && completedTaskIds.length > 0) {
-          setState((prev) => ({
-            ...prev,
-            pendingCompletedTaskIds: prev.pendingCompletedTaskIds.filter(
-              (id) => !completedTaskIds.includes(id),
-            ),
-          }));
+      }).then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        const isApplicationFailure = (data as { ok?: boolean }).ok === false;
+        if (!res.ok || isApplicationFailure || completedTaskIds.length === 0) return;
+        const scoreProfile = (data as { profile?: ServerProfile }).profile;
+        if (scoreProfile) {
+          setState((prev) => (
+            applyAuthoritativeProfile(prev, scoreProfile, {
+              preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
+              settledPendingCompletedRewardTaskIds: getTrackedPendingCompletedTaskIds(prev, completedTaskIds),
+            })
+          ));
+          return;
         }
+
+        const sessionProfile = (await fetchSessionProfile().catch(() => null))?.profile;
+        if (!sessionProfile) return;
+        setState((prev) => {
+          return applyAuthoritativeProfile(prev, sessionProfile, {
+            preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
+            settledPendingCompletedRewardTaskIds: getTrackedPendingCompletedTaskIds(prev, completedTaskIds),
+          });
+        });
       }).catch(() => {});
     }, 300000); // 5 minutes
 
