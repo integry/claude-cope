@@ -24,7 +24,7 @@ describe("syncCompletedTicketReward", () => {
       proKeyHash: "pro-hash",
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/score");
     expect(init?.method).toBe("POST");
@@ -33,6 +33,7 @@ describe("syncCompletedTicketReward", () => {
       completedTaskIds: ["COPE-115"],
       proKeyHash: "pro-hash",
     });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/account/me");
     expect(result).toEqual({ ok: true, status: "pending" });
   });
 
