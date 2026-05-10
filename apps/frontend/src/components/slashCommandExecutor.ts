@@ -14,7 +14,7 @@ import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 import { buildAchievementBox } from "./achievementBox";
-import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand } from "./ticketCommands";
+import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand, formatLockedTicketPrompt } from "./ticketCommands";
 import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
 
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
@@ -762,6 +762,11 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
   if (!offer) {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.NO_OFFER });
     reply({ role: "error", content: pickRandom(ACCEPT_NO_TICKET_MESSAGES) });
+  } else if (offer.is_locked) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.LOCKED });
+    clearPendingOffer();
+    reply({ role: "system", content: formatLockedTicketPrompt(offer) });
+    handleUpgradeCommand(ctx);
   } else if (ctx.state.activeTicket) {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.ALREADY_ACTIVE });
     reply({ role: "error", content: pickRandom(ACCEPT_ALREADY_ACTIVE_MESSAGES)(ctx.state.activeTicket.title) });
@@ -893,7 +898,7 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
     if (hasTask) markValidSlashCommand(ctx, "/ticket");
     return completeAsyncSlashCommand(handleTicketCommand(command, reply), ctx);
   } else if (command === "/backlog") {
-    return completeAsyncSlashCommand(handleBacklogCommand(reply), ctx);
+    return completeAsyncSlashCommand(handleBacklogCommand(reply, ctx.state.proKeyHash), ctx);
   } else if (command === "/sync" || command.startsWith("/sync ")) {
     return completeAsyncSlashCommand(handleSyncCommand(command, ctx, reply), ctx);
   } else if (command === "/shill") {
@@ -923,7 +928,12 @@ function handleExtendedCommand(command: string, ctx: SlashCommandContext, reply:
   if (command.startsWith("/take")) {
     const hadActiveTicket = Boolean(ctx.state.activeTicket);
     const input = command.slice("/take".length).trim();
-    const handled = handleTakeCommand(command, ctx.state, ctx.setState, reply, { setInputValue: ctx.setInputValue, onAccept: ctx.playChime, onSuggestedReply: ctx.onSuggestedReply });
+    const handled = handleTakeCommand(command, ctx.state, ctx.setState, reply, {
+      setInputValue: ctx.setInputValue,
+      onAccept: ctx.playChime,
+      onSuggestedReply: ctx.onSuggestedReply,
+      onLocked: () => handleUpgradeCommand(ctx),
+    });
     if (handled && input && !hadActiveTicket) markValidSlashCommand(ctx, "/take");
     return handled;
   }

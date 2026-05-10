@@ -31,6 +31,7 @@ import { getPendingOffer, clearPendingOffer } from "../ticketPrompt";
 import { PING_COST } from "../../game/constants";
 import type { GameState } from "../../hooks/useGameState";
 import type { Message } from "../Terminal";
+import type { PlayableBacklogTicket } from "@claude-cope/shared/backlogTickets";
 
 function makeGameState(overrides: Partial<GameState> = {}): GameState {
   const base: GameState = {
@@ -103,6 +104,26 @@ function makeCtx(overrides: Partial<SlashCommandContext> = {}): SlashCommandCont
     setActiveTheme: vi.fn(),
     ...overrides,
   } as SlashCommandContext;
+}
+
+function makePendingOffer(overrides: Partial<PlayableBacklogTicket> = {}): PlayableBacklogTicket {
+  return {
+    id: "BACKLOG-99",
+    reporter: "Bob (Platform)",
+    reporter_name: "Bob",
+    reporter_title: "Platform",
+    reporter_description: "Has a deadline and no patience.",
+    title: "Rewrite the monolith",
+    description: "lol",
+    technical_debt: 500,
+    kickoff_prompt: "start here",
+    created_at: "2026-01-01T00:00:00.000Z",
+    category_prefix: "OOPS",
+    category_label: "Operational mishaps",
+    is_locked: false,
+    tier: "premium",
+    ...overrides,
+  };
 }
 
 describe("/ping command validation", () => {
@@ -206,13 +227,7 @@ describe("/accept prefers review-pings over ticket offers", () => {
   });
 
   it("calls acceptReviewPing when a pending review-ping exists, even with a ticket offer on the table", () => {
-    vi.mocked(getPendingOffer).mockReturnValue({
-      id: "BACKLOG-99",
-      title: "Rewrite the monolith",
-      description: "lol",
-      technical_debt: 500,
-      kickoff_prompt: "start here",
-    });
+    vi.mocked(getPendingOffer).mockReturnValue(makePendingOffer());
 
     const ctx = makeCtx({
       pendingReviewPing: { sender: "Bob", amount: 50 },
@@ -231,13 +246,7 @@ describe("/accept prefers review-pings over ticket offers", () => {
   });
 
   it("falls back to the ticket offer when no review-ping is pending", () => {
-    vi.mocked(getPendingOffer).mockReturnValue({
-      id: "BACKLOG-99",
-      title: "Rewrite the monolith",
-      description: "lol",
-      technical_debt: 500,
-      kickoff_prompt: "start here",
-    });
+    vi.mocked(getPendingOffer).mockReturnValue(makePendingOffer());
 
     const ctx = makeCtx({ pendingReviewPing: null });
 
@@ -270,13 +279,7 @@ describe("/accept prefers review-pings over ticket offers", () => {
   });
 
   it("blocks ticket acceptance when the player already has an active ticket (and no review-ping)", () => {
-    vi.mocked(getPendingOffer).mockReturnValue({
-      id: "BACKLOG-99",
-      title: "Rewrite the monolith",
-      description: "lol",
-      technical_debt: 500,
-      kickoff_prompt: "start here",
-    });
+    vi.mocked(getPendingOffer).mockReturnValue(makePendingOffer());
 
     const ctx = makeCtx({
       pendingReviewPing: null,
