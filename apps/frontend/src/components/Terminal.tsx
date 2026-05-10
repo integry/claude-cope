@@ -378,8 +378,8 @@ function Terminal() {
   });
   const terminalViewProps: TerminalViewProps = {
     activeRegression, outageHp, activeOutageScenario, pendingReviewPing, pingAcknowledged, activeTheme: state.activeTheme, regressionGlitch, anyOverlayOpen, inputRef,
-    closeAllOverlaysPreservingNag, onlineCount, rank, state, handleProfileClick, setShowHelp, setShowAbout, setInputValue, setSlashQuery, setSlashIndex,
-    setShowUpgrade, compactEffect, isBooting, history, messageKeys: messageKeys.current, initialHistoryLen: initialHistoryLen.current, promptString,
+    closeAllOverlaysPreservingNag, onlineCount, rank, state, handleProfileClick, setInputValue, setSlashQuery, setSlashIndex,
+    compactEffect, isBooting, history, messageKeys: messageKeys.current, initialHistoryLen: initialHistoryLen.current, promptString,
     handleSlashCommandClick, bottomRef, slashQuery, slashIndex, handleSlashMenuSelect, inputValue, suggestedReply, isProcessing, handleChange,
     handleKeyDown, buyGenerator, buyUpgrade, buyTheme, setActiveTheme, ...terminalOverlayProps, setIsProcessing, setHistory, pendingNagCommand,
     handleUpgradeNagClose: handleUpgradeNagDismiss,
