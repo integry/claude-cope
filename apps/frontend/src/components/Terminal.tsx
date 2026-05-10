@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import type { ServerProfile } from "@claude-cope/shared/profile";
-import { SLASH_COMMANDS } from "./slashCommands";
+import { getSlashMenuItems, resolveSlashMenuSelection } from "./slashCommands";
 import { useGameState, Message } from "../hooks/useGameState";
-import { isFreeUser } from "../hooks/gameStateUtils";
+import { isFreeUser, isPaidUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
@@ -244,7 +244,8 @@ function Terminal() {
     setInputValue(value); setHistoryIndex(-1); setSuggestedReply(null); setSlashQuery(value.startsWith("/") ? value : ""); setSlashIndex(0);
   };
 
-  const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => !(cmd === "/store" && state.economy.totalTDEarned < 1000) && cmd.startsWith(slashQuery.toLowerCase()));
+  const getFilteredSlashCommands = () =>
+    getSlashMenuItems(slashQuery, state.economy.totalTDEarned, isPaidUser(state)).map((item) => item.value);
 
   const runSlashCommand = useCallback((command: string) => {
     executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
@@ -257,6 +258,20 @@ function Terminal() {
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") { runSlashCommandRef.current(command); return; }
     setInputValue(command + " "); setSlashQuery(""); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
+  }, []);
+
+  const handleSlashMenuSelect = useCallback((command: string) => {
+    const nextSelection = resolveSlashMenuSelection(command, "click");
+    if (nextSelection.mode === "execute") {
+      runSlashCommandRef.current(nextSelection.value);
+      return;
+    }
+
+    setInputValue(nextSelection.value);
+    setSlashQuery(nextSelection.nextQuery);
+    setSlashIndex(0);
+    setSuggestedReply(null);
+    inputRef.current?.focus();
   }, []);
 
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
@@ -400,7 +415,7 @@ function Terminal() {
       setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect}
       isBooting={isBooting} history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current}
       promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} bottomRef={bottomRef} slashQuery={slashQuery}
-      slashIndex={slashIndex} runSlashCommand={runSlashCommand} inputValue={inputValue} suggestedReply={suggestedReply}
+      slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect} inputValue={inputValue} suggestedReply={suggestedReply}
       isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown} buyGenerator={buyGenerator}
       buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} showStore={showStore}
       showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp}

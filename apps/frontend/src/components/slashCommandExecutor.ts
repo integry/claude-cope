@@ -15,7 +15,7 @@ import type { Message } from "./Terminal";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 import { getRandomTip } from "../game/tips";
 import { buildAchievementBox } from "./achievementBox";
-import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand, formatLockedTicketPrompt } from "./ticketCommands";
+import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand, formatLockedTicketPrompt, parseBacklogCategoryArgument } from "./ticketCommands";
 import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
 
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
@@ -795,8 +795,12 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
   } else if (command.startsWith("/ticket")) {
     handleTicketCommand(command, reply).then(() => ctx.setIsProcessing(false));
     return "async";
-  } else if (command === "/backlog") {
-    handleBacklogCommand(reply, ctx.state.proKeyHash).then(() => ctx.setIsProcessing(false));
+  } else if (command === "/backlog" || command.startsWith("/backlog ")) {
+    handleBacklogCommand(reply, {
+      proKeyHash: ctx.state.proKeyHash,
+      category: parseBacklogCategoryArgument(command) ?? undefined,
+      paidUser: isPaidUser(ctx.state),
+    }).then(() => ctx.setIsProcessing(false));
     return "async";
   } else if (command === "/sync" || command.startsWith("/sync ")) {
     handleSyncCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
