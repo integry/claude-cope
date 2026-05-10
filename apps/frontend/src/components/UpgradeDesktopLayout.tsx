@@ -20,6 +20,18 @@ export type LayoutProps = {
   singleAvailable: boolean;
   multiAvailable: boolean;
   quotaLine: string;
+  freeCategoryCount: number;
+  freeCategoryExamples: string[];
+  freeCategoryRemainder: number;
+  premiumCategoryCount: number;
+  premiumGroups: Array<{
+    id: string;
+    title: string;
+    description: string;
+    total: number;
+    examples: string[];
+    remainder: number;
+  }>;
   dismissMode?: "manual" | "nag";
   dismissPhase?: "idle" | "closing";
   dismissEffect?: UpgradeNagCloseEffect;
@@ -31,12 +43,22 @@ export type LayoutProps = {
   onDismiss?: () => void;
 };
 
+const PANEL_STYLE = {
+  fontFamily: MONO_FONT, fontSize: "13px", lineHeight: "1.1", backgroundColor: "#1e232b",
+  boxShadow: "12px 12px 0px rgba(0, 0, 0, 0.9)", padding: 0, margin: 0, whiteSpace: "pre" as const, overflowX: "auto" as const, overflowY: "hidden" as const,
+};
+
 export default function DesktopLayout({
   singleLabel,
   multiLabel,
   singleAvailable,
   multiAvailable,
   quotaLine,
+  freeCategoryCount,
+  freeCategoryExamples,
+  freeCategoryRemainder,
+  premiumCategoryCount,
+  premiumGroups,
   dismissMode = "manual",
   dismissPhase = "idle",
   dismissEffect = DEFAULT_CLOSE_EFFECT,
@@ -51,9 +73,7 @@ export default function DesktopLayout({
   const midBorder = <span style={{ color: B }}>{"╠" + "═".repeat(INNER_W) + "╣"}</span>;
   const botBorder = <span style={{ color: B }}>{"╚" + "═".repeat(INNER_W) + "╝"}</span>;
   const boxLine = (text: string, color = W) => {
-    const padded = text.length < INNER_W
-      ? text + " ".repeat(INNER_W - text.length)
-      : text.slice(0, INNER_W);
+    const padded = text.length < INNER_W ? text + " ".repeat(INNER_W - text.length) : text.slice(0, INNER_W);
     return (
       <>
         <span style={{ color: B }}>{"║"}</span>
@@ -74,7 +94,7 @@ export default function DesktopLayout({
       <>
         <span style={{ color: B }}>{"║"}</span>
         {content}
-        <span>{" ".repeat(padLen)}</span>
+        <span>{padLen > 0 ? " ".repeat(padLen) : ""}</span>
         <span style={{ color: B }}>{"║"}</span>
       </>
     );
@@ -91,6 +111,31 @@ export default function DesktopLayout({
       </>
     );
   };
+  const wrapText = (text: string, maxWidth = INNER_W - 2) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [""];
+
+    const lines: string[] = [];
+    let currentLine = "";
+    for (const word of words) {
+      const nextLine = currentLine ? `${currentLine} ${word}` : word;
+      if (nextLine.length <= maxWidth) {
+        currentLine = nextLine;
+        continue;
+      }
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  };
+  const renderWrappedBoxLines = (text: string, color = W) =>
+    wrapText(text).map((line, index) => (
+      <span key={`${color}-${index}-${line}`}>
+        {boxLine(`  ${line}`, color)}
+        {"\n"}
+      </span>
+    ));
   const buttonBlock = (
     id: number,
     label: string,
@@ -105,23 +150,7 @@ export default function DesktopLayout({
     const suffixLen = Math.max(0, INNER_W - totalUsed);
     const emptyInner = " ".repeat(INNER_W);
     const selected = selectedOptionId === id;
-    if (!available) {
-      const errText = "    [ERR] CHECKOUT_URL not configured.";
-      const errPad = Math.max(0, INNER_W - errText.length);
-      return (
-        <>
-          <span style={{ color: B }}>{"║"}</span>
-          <span style={{ color: W }}>{emptyInner}</span>
-          <span style={{ color: B }}>{"║"}</span>{"\n"}
-          <span style={{ color: B }}>{"║"}</span>
-          <span style={{ color: B }}>{errText + " ".repeat(errPad)}</span>
-          <span style={{ color: B }}>{"║"}</span>{"\n"}
-          <span style={{ color: B }}>{"║"}</span>
-          <span style={{ color: W }}>{emptyInner}</span>
-          <span style={{ color: B }}>{"║"}</span>
-        </>
-      );
-    }
+    if (!available) return <>{boxLine("")}{"\n"}{boxLine("    [ERR] CHECKOUT_URL not configured.", B)}{"\n"}{boxLine("")}</>;
     return (
       <a
         href={url}
@@ -171,6 +200,8 @@ export default function DesktopLayout({
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
   const canPointerDismiss = dismissMode === "manual" && !!onDismiss;
   const isForcedClosing = dismissPhase === "closing";
+  const creditsStr = `${PRO_QUOTA_LIMIT} non-expiring credits`;
+  const premiumSummary = `Premium is not a paywall tax. Max expands the backlog into ${premiumCategoryCount} specialized categories using the same real labels and prefixes teased in /backlog.`;
   useEffect(() => {
     if (availableOptionIds.length === 0) {
       setSelectedOptionId(null);
@@ -225,14 +256,7 @@ export default function DesktopLayout({
     if (!isDesktopViewport || isForcedClosing) return undefined;
     const overlay = overlayRef.current;
     if (!overlay) return undefined;
-    const restoreFocus = () => {
-      requestAnimationFrame(() => {
-        const activeElement = document.activeElement;
-        if (!overlay.contains(activeElement)) {
-          overlay.focus();
-        }
-      });
-    };
+    const restoreFocus = () => { requestAnimationFrame(() => { if (!overlay.contains(document.activeElement)) overlay.focus(); }); };
     overlay.addEventListener("focusout", restoreFocus);
     return () => { overlay.removeEventListener("focusout", restoreFocus); };
   }, [isDesktopViewport, isForcedClosing]);
@@ -260,13 +284,7 @@ export default function DesktopLayout({
       cycleSelection(1);
       return;
     }
-    if (
-      event.key === "Enter"
-      && selectedOptionId !== null
-      && target instanceof HTMLElement
-      && target.tagName !== "A"
-      && target.tagName !== "BUTTON"
-    ) {
+    if (event.key === "Enter" && selectedOptionId !== null && target instanceof HTMLElement && target.tagName !== "A" && target.tagName !== "BUTTON") {
       event.preventDefault();
       optionRefs.current[selectedOptionId]?.click();
     }
@@ -288,19 +306,7 @@ export default function DesktopLayout({
       <pre
         className={`relative z-10 mx-4 upgrade-overlay-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
-        style={{
-          fontFamily: MONO_FONT,
-          fontSize: "13px",
-          lineHeight: "1.1",
-          backgroundColor: "#1e232b",
-          boxShadow: "12px 12px 0px rgba(0, 0, 0, 0.9)",
-          padding: 0,
-          margin: 0,
-          whiteSpace: "pre",
-          overflowX: "auto",
-          overflowY: "hidden",
-          ...(isForcedClosing && closeEffectPresentation ? { animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" as const } : {}),
-        }}
+        style={isForcedClosing && closeEffectPresentation ? { ...PANEL_STYLE, animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" } : PANEL_STYLE}
       >
         {topBorder}{"\n"}
         <span style={{ color: B }}>{"║"}</span>
@@ -337,22 +343,24 @@ export default function DesktopLayout({
         {tableRow2}{"\n"}
         {tableBorderBot}{"\n"}
         {emptyLine}{"\n"}
+        {boxLine(`  [ FREE STARTER SET: ${freeCategoryCount} CATEGORIES ]`, Y)}{"\n"}
+        {renderWrappedBoxLines("Free users get a generous starter backlog across office politics, outages, testing misery, design systems, and analytics dread.")}
+        {renderWrappedBoxLines(`Includes: ${freeCategoryExamples.join(", ")}${freeCategoryRemainder > 0 ? `, +${freeCategoryRemainder} more starter categories` : ""}`)}
+        {emptyLine}{"\n"}
+        {boxLine("  [ MAX UNLOCK: 50+ SPECIALIZED CATEGORIES ]", Y)}{"\n"}
+        {renderWrappedBoxLines(premiumSummary)}
+        {emptyLine}{"\n"}
+        {premiumGroups.map((group) => (
+          <span key={group.id}>
+            {boxLine(`  [${group.title.toUpperCase()}] ${group.total}`, Y)}{"\n"}
+            {renderWrappedBoxLines(group.description, DIM)}
+            {renderWrappedBoxLines(`${group.examples.join(", ")}${group.remainder > 0 ? `, +${group.remainder} more` : ""}`)}
+            {emptyLine}{"\n"}
+          </span>
+        ))}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
-        {(() => {
-          const creditsStr = `${PRO_QUOTA_LIMIT} non-expiring credits`;
-          const line1 = `  Unlocks: ${creditsStr}, multi-device sync,`;
-          return boxLineRich(
-            <span style={{ color: W }}>
-              {"  Unlocks: "}
-              <span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>
-              {", "}
-              <span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>
-              {","}
-            </span>,
-            line1.length,
-          );
-        })()}{"\n"}
+        {boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{", "}<span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>{","}</span>, `  Unlocks: ${creditsStr}, multi-device sync,`.length)}{"\n"}
         {boxLineRich(
           <span style={{ color: W }}>
             {"  priority generation queue, and "}
@@ -371,25 +379,9 @@ export default function DesktopLayout({
         {midBorder}{"\n"}
         {(() => {
           const text = "[Press ESC to retain your net worth]";
-          const totalPad = INNER_W - text.length;
-          const left = Math.max(0, Math.floor(totalPad / 2));
-          const right = Math.max(0, totalPad - left);
-          return (
-            <span style={{ display: "inline" }} className="upgrade-esc-btn">
-              <span style={{ color: B }}>{"║"}</span>
-              {canPointerDismiss ? (
-                <button
-                  type="button"
-                  onClick={onDismiss}
-                  data-esc=""
-                  style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
-                >{" ".repeat(left) + text + " ".repeat(right)}</button>
-              ) : (
-                <span data-esc="" style={{ color: DIM }}>{" ".repeat(left) + text + " ".repeat(right)}</span>
-              )}
-              <span style={{ color: B }}>{"║"}</span>
-            </span>
-          );
+          const left = Math.max(0, Math.floor((INNER_W - text.length) / 2));
+          const paddedText = " ".repeat(left) + text + " ".repeat(Math.max(0, INNER_W - text.length - left));
+          return <span style={{ display: "inline" }} className="upgrade-esc-btn"><span style={{ color: B }}>{"║"}</span>{canPointerDismiss ? <button type="button" onClick={onDismiss} data-esc="" style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}>{paddedText}</button> : <span data-esc="" style={{ color: DIM }}>{paddedText}</span>}<span style={{ color: B }}>{"║"}</span></span>;
         })()}{"\n"}
         {botBorder}
       </pre>

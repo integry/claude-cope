@@ -1,4 +1,10 @@
 import {
+  BACKLOG_CATEGORY_TIERS,
+  BACKLOG_CATEGORY_UPGRADE_GROUPS,
+  FREE_BACKLOG_CATEGORY_COUNT,
+  PREMIUM_BACKLOG_CATEGORY_COUNT,
+} from "@claude-cope/shared/backlogTiers";
+import {
   UPGRADE_CHECKOUT_SINGLE,
   UPGRADE_CHECKOUT_MULTI,
   UPGRADE_PRICE_SINGLE,
@@ -40,6 +46,13 @@ type UpgradeOverlayProps = {
   dismissEffect?: UpgradeNagCloseEffect;
 };
 
+const FREE_CATEGORY_PREVIEW_COUNT = 5;
+const PREMIUM_GROUP_PREVIEW_COUNT = 4;
+
+function formatCategoryExample(prefix: string, label: string): string {
+  return `${prefix} ${label}`;
+}
+
 function UpgradeOverlay({
   quotaPercent,
   totalQuota,
@@ -60,6 +73,24 @@ function UpgradeOverlay({
     ? "EXTERNAL BILLING ACTIVE. Status: BYOK bypass engaged."
     : `CURRENT QUOTA: ${currentCredits} Credits. Status: ${getQuotaStatus(currentCredits)}.`;
   const closeEffectPresentation = getCloseEffectPresentation(dismissEffect);
+  const freeCategories = BACKLOG_CATEGORY_TIERS.filter((entry) => entry.tier === "free");
+  const freeCategoryExamples = freeCategories
+    .slice(0, FREE_CATEGORY_PREVIEW_COUNT)
+    .map((entry) => formatCategoryExample(entry.prefix, entry.label));
+  const premiumGroups = BACKLOG_CATEGORY_UPGRADE_GROUPS.map((group) => {
+    const examples = group.categories
+      .slice(0, PREMIUM_GROUP_PREVIEW_COUNT)
+      .map((entry) => formatCategoryExample(entry.prefix, entry.label));
+
+    return {
+      id: group.id,
+      title: group.title,
+      description: group.description,
+      total: group.categories.length,
+      examples,
+      remainder: Math.max(0, group.categories.length - examples.length),
+    };
+  });
 
   return (
     <>
@@ -75,6 +106,11 @@ function UpgradeOverlay({
         dismissPhase={dismissPhase}
         dismissEffect={dismissEffect}
         closeEffectPresentation={closeEffectPresentation}
+        freeCategoryCount={FREE_BACKLOG_CATEGORY_COUNT}
+        freeCategoryExamples={freeCategoryExamples}
+        freeCategoryRemainder={Math.max(0, FREE_BACKLOG_CATEGORY_COUNT - freeCategoryExamples.length)}
+        premiumCategoryCount={PREMIUM_BACKLOG_CATEGORY_COUNT}
+        premiumGroups={premiumGroups}
         onDismiss={onDismiss}
       />
       {/* Mobile: visible up to the shared max-width breakpoint */}
@@ -89,6 +125,11 @@ function UpgradeOverlay({
         dismissPhase={dismissPhase}
         dismissEffect={dismissEffect}
         closeEffectPresentation={closeEffectPresentation}
+        freeCategoryCount={FREE_BACKLOG_CATEGORY_COUNT}
+        freeCategoryExamples={freeCategoryExamples}
+        freeCategoryRemainder={Math.max(0, FREE_BACKLOG_CATEGORY_COUNT - freeCategoryExamples.length)}
+        premiumCategoryCount={PREMIUM_BACKLOG_CATEGORY_COUNT}
+        premiumGroups={premiumGroups}
       />
     </>
   );
@@ -109,6 +150,11 @@ function MobileLayout({
   dismissPhase = "idle",
   dismissEffect = DEFAULT_CLOSE_EFFECT,
   closeEffectPresentation = getCloseEffectPresentation(DEFAULT_CLOSE_EFFECT),
+  freeCategoryCount,
+  freeCategoryExamples,
+  freeCategoryRemainder,
+  premiumCategoryCount,
+  premiumGroups,
 }: LayoutProps & { onDismiss: () => void }) {
   const sectionStyle = { padding: "8px 12px" } as const;
   const hrStyle = {
@@ -268,6 +314,48 @@ function MobileLayout({
           }}>
             <span style={{ color: G, fontWeight: "bold" }}>Claude Cope</span>
             {" · MAX 429X · Unmitigated request storms"}
+          </div>
+        </div>
+
+        <hr style={hrStyle} />
+
+        <div style={sectionStyle}>
+          <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
+            [ FREE STARTER SET: {freeCategoryCount} CATEGORIES ]
+          </div>
+          <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: "6px" }}>
+            Free users get a generous starter backlog across office politics, outages, testing misery, design systems, and analytics dread.
+          </div>
+          <div style={{ fontSize: "11px", lineHeight: "1.5", color: W }}>
+            Includes: {freeCategoryExamples.join(" • ")}
+            {freeCategoryRemainder > 0 ? ` • +${freeCategoryRemainder} more starter categories` : ""}
+          </div>
+        </div>
+
+        <hr style={hrStyle} />
+
+        <div style={sectionStyle}>
+          <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
+            [ MAX UNLOCK: 50+ SPECIALIZED CATEGORIES ]
+          </div>
+          <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: "8px" }}>
+            Premium is not a paywall tax. It expands the backlog into {premiumCategoryCount} specialized categories built from the same labels and prefixes teased in `/backlog`.
+          </div>
+          <div style={{ display: "grid", gap: "8px" }}>
+            {premiumGroups.map((group) => (
+              <div key={group.id} style={{ border: `1px solid ${B}`, padding: "8px" }}>
+                <div style={{ color: Y, fontWeight: "bold", fontSize: "11px", marginBottom: "4px" }}>
+                  [{group.title.toUpperCase()}] {group.total}
+                </div>
+                <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "4px", color: DIM }}>
+                  {group.description}
+                </div>
+                <div style={{ fontSize: "11px", lineHeight: "1.5" }}>
+                  {group.examples.join(" • ")}
+                  {group.remainder > 0 ? ` • +${group.remainder} more` : ""}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
