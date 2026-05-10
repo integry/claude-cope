@@ -168,10 +168,14 @@ export default function DesktopLayout({
       setSelectedOptionId(null);
       return;
     }
+    if (dismissMode === "manual" && selectedOptionId === null) {
+      setSelectedOptionId(availableOptionIds[0] ?? null);
+      return;
+    }
     if (selectedOptionId !== null && !availableOptionIds.includes(selectedOptionId)) {
       setSelectedOptionId(availableOptionIds[0] ?? null);
     }
-  }, [availableOptionIds, selectedOptionId]);
+  }, [availableOptionIds, dismissMode, selectedOptionId]);
   useEffect(() => { if (isForcedClosing) setIsKeyboardNavigationMode(false); }, [isForcedClosing]);
   useEffect(() => {
     const syncViewport = () => { setIsDesktopViewport(getIsDesktopViewport()); };
