@@ -17,7 +17,10 @@ const {
   recordMessageWithoutTicketMock: vi.fn(),
 }));
 
-vi.mock("../../config", () => ({ BYOK_ENABLED: false }));
+vi.mock("../../config", () => ({
+  BYOK_ENABLED: false,
+  TICKET_REFINE_ENABLED: false,
+}));
 vi.mock("../../hooks/gameStateUtils", () => ({ isFreeUser: () => false }));
 vi.mock("../chatApi", () => ({
   computeBuddyInterjection: () => null,
