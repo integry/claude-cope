@@ -20,6 +20,226 @@ const DIM = "#aaaaaa"; // dim footer
 
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
 
+export const UPGRADE_NAG_CLOSE_EFFECTS = [
+  "death-spiral",
+  "emergency-eject",
+  "singularity",
+  "task-manager",
+  "bsod",
+  "catastrophic-reorg",
+] as const;
+
+export type UpgradeNagCloseEffect = typeof UPGRADE_NAG_CLOSE_EFFECTS[number];
+
+const DEFAULT_CLOSE_EFFECT: UpgradeNagCloseEffect = "death-spiral";
+
+const CLOSE_EFFECT_STYLES = `
+@keyframes upgrade-overlay-death-spiral {
+  0% {
+    opacity: 1;
+    filter: blur(0) saturate(1) contrast(1);
+    transform: perspective(1200px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1) skew(0deg, 0deg);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(12px) saturate(0.15) contrast(1.8);
+    transform: perspective(1200px) rotateX(-24deg) rotateY(24deg) rotateZ(-18deg) scale(0.68) skew(-8deg, 5deg);
+  }
+}
+
+@keyframes upgrade-overlay-emergency-eject {
+  0% {
+    opacity: 1;
+    filter: blur(0) brightness(1);
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  20% {
+    transform: translate3d(18px, -12px, 0) rotate(4deg) scale(1.02);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(10px) brightness(1.5);
+    transform: translate3d(180px, -120vh, 0) rotate(18deg) scale(0.72);
+  }
+}
+
+@keyframes upgrade-overlay-singularity {
+  0% {
+    opacity: 1;
+    filter: blur(0) hue-rotate(0deg);
+    transform: scale(1) rotate(0deg);
+  }
+  45% {
+    opacity: 1;
+    filter: blur(1px) hue-rotate(90deg);
+    transform: scale(1.08) rotate(-8deg);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(18px) hue-rotate(240deg);
+    transform: scale(0.03) rotate(1080deg);
+  }
+}
+
+@keyframes upgrade-overlay-task-manager {
+  0% {
+    opacity: 1;
+    filter: grayscale(0) blur(0);
+    transform: scaleX(1) scaleY(1) translate3d(0, 0, 0);
+  }
+  50% {
+    opacity: 1;
+    filter: grayscale(0.8) blur(1px);
+    transform: scaleX(1.06) scaleY(0.92) translate3d(-12px, 0, 0);
+  }
+  100% {
+    opacity: 0;
+    filter: grayscale(1) blur(8px);
+    transform: scaleX(0.02) scaleY(0.78) translate3d(-120vw, 0, 0);
+  }
+}
+
+@keyframes upgrade-overlay-bsod {
+  0% {
+    opacity: 1;
+    background-color: #1e232b;
+    color: inherit;
+    filter: blur(0);
+    transform: scale(1) rotate(0deg);
+  }
+  12% {
+    background-color: #0015aa;
+    color: #d6e4ff;
+  }
+  55% {
+    opacity: 1;
+    filter: blur(1px);
+    transform: scale(1.02) rotate(-1deg);
+  }
+  100% {
+    opacity: 0;
+    background-color: #0015aa;
+    color: #d6e4ff;
+    filter: blur(14px);
+    transform: scale(0.82) rotate(-7deg) translate3d(0, 26vh, 0);
+  }
+}
+
+@keyframes upgrade-overlay-catastrophic-reorg {
+  0% {
+    opacity: 1;
+    filter: blur(0) saturate(1);
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  15% {
+    transform: translate3d(-24px, 8px, 0) rotate(-3deg) scale(1.02);
+  }
+  30% {
+    transform: translate3d(26px, -10px, 0) rotate(4deg) scale(1.03);
+  }
+  45% {
+    transform: translate3d(-18px, 14px, 0) rotate(-6deg) scale(1.01);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(16px) saturate(2.1) hue-rotate(135deg);
+    transform: translate3d(0, 120vh, 0) rotate(22deg) scale(1.28);
+  }
+}
+
+@keyframes upgrade-overlay-backdrop-collapse {
+  0% {
+    opacity: 0.7;
+    backdrop-filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    backdrop-filter: blur(6px);
+  }
+}
+
+@keyframes upgrade-overlay-backdrop-pulse-out {
+  0% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  35% {
+    opacity: 0.9;
+    transform: scale(1.01);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes upgrade-overlay-backdrop-blue-screen {
+  0% {
+    opacity: 0.7;
+    background: rgba(0, 0, 0, 0.7);
+  }
+  15% {
+    opacity: 0.95;
+    background: rgba(0, 21, 170, 0.96);
+  }
+  100% {
+    opacity: 0;
+    background: rgba(0, 21, 170, 0.2);
+  }
+}
+
+@keyframes upgrade-overlay-screen-quake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  10% { transform: translate3d(-16px, 6px, 0); }
+  20% { transform: translate3d(14px, -10px, 0); }
+  30% { transform: translate3d(-12px, -6px, 0); }
+  40% { transform: translate3d(18px, 12px, 0); }
+  50% { transform: translate3d(-14px, 8px, 0); }
+  60% { transform: translate3d(10px, -12px, 0); }
+  70% { transform: translate3d(-8px, 10px, 0); }
+  80% { transform: translate3d(12px, -8px, 0); }
+  90% { transform: translate3d(-6px, 4px, 0); }
+}
+`;
+
+type CloseEffectPresentation = {
+  panelAnimation: string;
+  backdropAnimation: string;
+  overlayAnimation?: string;
+};
+
+const CLOSE_EFFECT_PRESENTATIONS: Record<UpgradeNagCloseEffect, CloseEffectPresentation> = {
+  "death-spiral": {
+    panelAnimation: "upgrade-overlay-death-spiral 3s cubic-bezier(0.2, 0.02, 0.1, 1) forwards",
+    backdropAnimation: "upgrade-overlay-backdrop-collapse 3s ease-out forwards",
+  },
+  "emergency-eject": {
+    panelAnimation: "upgrade-overlay-emergency-eject 3s cubic-bezier(0.18, 0.7, 0.18, 1) forwards",
+    backdropAnimation: "upgrade-overlay-backdrop-pulse-out 3s ease-out forwards",
+  },
+  singularity: {
+    panelAnimation: "upgrade-overlay-singularity 3s cubic-bezier(0.45, 0, 0.2, 1) forwards",
+    backdropAnimation: "upgrade-overlay-backdrop-pulse-out 3s ease-in forwards",
+  },
+  "task-manager": {
+    panelAnimation: "upgrade-overlay-task-manager 3s cubic-bezier(0.3, 0.02, 0.1, 1) forwards",
+    backdropAnimation: "upgrade-overlay-backdrop-collapse 3s linear forwards",
+  },
+  bsod: {
+    panelAnimation: "upgrade-overlay-bsod 3s cubic-bezier(0.15, 0.75, 0.2, 1) forwards",
+    backdropAnimation: "upgrade-overlay-backdrop-blue-screen 3s ease-out forwards",
+  },
+  "catastrophic-reorg": {
+    panelAnimation: "upgrade-overlay-catastrophic-reorg 3s cubic-bezier(0.18, 0.82, 0.18, 1) forwards",
+    backdropAnimation: "upgrade-overlay-backdrop-pulse-out 3s ease-out forwards",
+    overlayAnimation: "upgrade-overlay-screen-quake 260ms steps(2, end) 0s 10",
+  },
+};
+
+function getCloseEffectPresentation(effect: UpgradeNagCloseEffect): CloseEffectPresentation {
+  return CLOSE_EFFECT_PRESENTATIONS[effect] ?? CLOSE_EFFECT_PRESENTATIONS[DEFAULT_CLOSE_EFFECT];
+}
+
 /* ── component ───────────────────────────────────────────────── */
 
 type UpgradeOverlayProps = {
@@ -29,6 +249,7 @@ type UpgradeOverlayProps = {
   onDismiss: () => void;
   dismissMode?: "manual" | "nag";
   dismissPhase?: "idle" | "closing";
+  dismissEffect?: UpgradeNagCloseEffect;
 };
 
 function UpgradeOverlay({
@@ -38,6 +259,7 @@ function UpgradeOverlay({
   onDismiss,
   dismissMode = "manual",
   dismissPhase = "idle",
+  dismissEffect = DEFAULT_CLOSE_EFFECT,
 }: UpgradeOverlayProps) {
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
@@ -49,9 +271,11 @@ function UpgradeOverlay({
   const quotaLine = isBYOK
     ? "EXTERNAL BILLING ACTIVE. Status: BYOK bypass engaged."
     : `CURRENT QUOTA: ${currentCredits} Credits. Status: ${getQuotaStatus(currentCredits)}.`;
+  const closeEffectPresentation = getCloseEffectPresentation(dismissEffect);
 
   return (
     <>
+      <style>{CLOSE_EFFECT_STYLES}</style>
       {/* Desktop: visible above the shared mobile max-width breakpoint */}
       <DesktopLayout
         singleLabel={singleLabel}
@@ -61,6 +285,8 @@ function UpgradeOverlay({
         quotaLine={quotaLine}
         dismissMode={dismissMode}
         dismissPhase={dismissPhase}
+        dismissEffect={dismissEffect}
+        closeEffectPresentation={closeEffectPresentation}
         onDismiss={onDismiss}
       />
       {/* Mobile: visible up to the shared max-width breakpoint */}
@@ -73,6 +299,8 @@ function UpgradeOverlay({
         onDismiss={onDismiss}
         dismissMode={dismissMode}
         dismissPhase={dismissPhase}
+        dismissEffect={dismissEffect}
+        closeEffectPresentation={closeEffectPresentation}
       />
     </>
   );
@@ -91,6 +319,8 @@ function MobileLayout({
   onDismiss,
   dismissMode = "manual",
   dismissPhase = "idle",
+  dismissEffect = DEFAULT_CLOSE_EFFECT,
+  closeEffectPresentation = getCloseEffectPresentation(DEFAULT_CLOSE_EFFECT),
 }: LayoutProps & { onDismiss: () => void }) {
   const sectionStyle = { padding: "8px 12px" } as const;
   const hrStyle = {
@@ -151,9 +381,14 @@ function MobileLayout({
   return (
     <div
       className={`upgrade-mobile fixed inset-0 z-50 flex items-center justify-center${isForcedClosing ? " upgrade-overlay-closing" : ""}`}
+      data-close-effect={dismissEffect}
       onClick={dismissMode === "manual" ? onDismiss : undefined}
+      style={isForcedClosing && closeEffectPresentation.overlayAnimation ? { animation: closeEffectPresentation.overlayAnimation } : undefined}
     >
-      <div className="absolute inset-0 bg-black opacity-70 upgrade-overlay-backdrop" />
+      <div
+        className="absolute inset-0 bg-black opacity-70 upgrade-overlay-backdrop"
+        style={isForcedClosing ? { animation: closeEffectPresentation.backdropAnimation } : undefined}
+      />
 
       <div
         className={`relative z-10 upgrade-overlay-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
@@ -170,6 +405,7 @@ function MobileLayout({
           maxHeight: "calc(100vh - 2rem)",
           overflowY: "auto",
           color: W,
+          ...(isForcedClosing ? { animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" as const } : {}),
         }}
       >
         {/* Title bar */}

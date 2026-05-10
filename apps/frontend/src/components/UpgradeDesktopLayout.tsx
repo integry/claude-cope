@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { UPGRADE_CHECKOUT_SINGLE, UPGRADE_CHECKOUT_MULTI, PRO_QUOTA_LIMIT } from "../config";
+import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
 
 const B = "#ff5555"; // border (red)
 const Y = "#ffff55"; // yellow headings
@@ -21,6 +22,12 @@ export type LayoutProps = {
   quotaLine: string;
   dismissMode?: "manual" | "nag";
   dismissPhase?: "idle" | "closing";
+  dismissEffect?: UpgradeNagCloseEffect;
+  closeEffectPresentation?: {
+    panelAnimation: string;
+    backdropAnimation: string;
+    overlayAnimation?: string;
+  };
   onDismiss?: () => void;
 };
 
@@ -32,6 +39,8 @@ export default function DesktopLayout({
   quotaLine,
   dismissMode = "manual",
   dismissPhase = "idle",
+  dismissEffect = "death-spiral",
+  closeEffectPresentation,
   onDismiss,
 }: LayoutProps) {
   const optionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
@@ -248,11 +257,16 @@ export default function DesktopLayout({
     <div
       ref={overlayRef}
       className={`upgrade-desktop fixed inset-0 z-50 flex items-center justify-center${isForcedClosing ? " upgrade-overlay-closing" : ""}`}
+      data-close-effect={dismissEffect}
       onClick={canPointerDismiss ? onDismiss : undefined}
       onKeyDown={handleOverlayKeyDown}
       tabIndex={-1}
+      style={isForcedClosing && closeEffectPresentation?.overlayAnimation ? { animation: closeEffectPresentation.overlayAnimation } : undefined}
     >
-      <div className="absolute inset-0 bg-black opacity-70 upgrade-overlay-backdrop" />
+      <div
+        className="absolute inset-0 bg-black opacity-70 upgrade-overlay-backdrop"
+        style={isForcedClosing ? { animation: closeEffectPresentation?.backdropAnimation } : undefined}
+      />
       <pre
         className={`relative z-10 mx-4 upgrade-overlay-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
@@ -267,6 +281,7 @@ export default function DesktopLayout({
           whiteSpace: "pre",
           overflowX: "auto",
           overflowY: "hidden",
+          ...(isForcedClosing && closeEffectPresentation ? { animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" as const } : {}),
         }}
       >
         {topBorder}{"\n"}

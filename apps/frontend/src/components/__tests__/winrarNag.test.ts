@@ -468,6 +468,7 @@ describe("WinRAR nag: Terminal integration", () => {
   });
 
   it("keeps the nag open in a closing state for 3 seconds on early Escape, then replays the blocked command", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
     await renderTerminal();
     await submitTerminalCommand("status");
 
@@ -481,6 +482,7 @@ describe("WinRAR nag: Terminal integration", () => {
 
     expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
     expect(container.querySelector(".upgrade-desktop")?.classList.contains("upgrade-overlay-closing")).toBe(true);
+    expect(container.querySelector(".upgrade-desktop")?.getAttribute("data-close-effect")).toBe("catastrophic-reorg");
     expect(submitChatMessageMock).not.toHaveBeenCalled();
 
     await act(async () => {

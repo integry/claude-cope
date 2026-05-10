@@ -31,11 +31,17 @@ import { shouldShowNag } from "./winrarNag";
 import { TerminalView } from "./TerminalView";
 import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
+import { UPGRADE_NAG_CLOSE_EFFECTS, type UpgradeNagCloseEffect } from "./UpgradeOverlay";
 
 export type { Message };
 
 const NAG_MINIMUM_OPEN_MS = 3000;
 const NAG_FORCED_CLOSE_MS = 3000;
+const DEFAULT_UPGRADE_NAG_CLOSE_EFFECT: UpgradeNagCloseEffect = "death-spiral";
+
+function pickRandomUpgradeNagCloseEffect(): UpgradeNagCloseEffect {
+  return UPGRADE_NAG_CLOSE_EFFECTS[Math.floor(Math.random() * UPGRADE_NAG_CLOSE_EFFECTS.length)] ?? DEFAULT_UPGRADE_NAG_CLOSE_EFFECT;
+}
 
 function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
   while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++);
@@ -103,6 +109,7 @@ function Terminal() {
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
   const [upgradeNagDismissPhase, setUpgradeNagDismissPhase] = useState<"idle" | "closing">("idle");
+  const [upgradeNagDismissEffect, setUpgradeNagDismissEffect] = useState<UpgradeNagCloseEffect>(DEFAULT_UPGRADE_NAG_CLOSE_EFFECT);
 
   useEffect(() => {
     return () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); };
@@ -129,6 +136,7 @@ function Terminal() {
     nagArmedFromQuotaRef.current = false;
     nagOpenedAtRef.current = null;
     setUpgradeNagDismissPhase("idle");
+    setUpgradeNagDismissEffect(DEFAULT_UPGRADE_NAG_CLOSE_EFFECT);
     if (nagCloseTimeoutRef.current) {
       clearTimeout(nagCloseTimeoutRef.current);
       nagCloseTimeoutRef.current = null;
@@ -142,6 +150,7 @@ function Terminal() {
       clearTimeout(nagCloseTimeoutRef.current);
       nagCloseTimeoutRef.current = null;
     }
+    setUpgradeNagDismissEffect(DEFAULT_UPGRADE_NAG_CLOSE_EFFECT);
     setShowUpgrade(true);
   }, [setShowUpgrade]);
   const finalizeUpgradeNagClose = useCallback(() => {
@@ -150,6 +159,7 @@ function Terminal() {
       nagCloseTimeoutRef.current = null;
     }
     setUpgradeNagDismissPhase("idle");
+    setUpgradeNagDismissEffect(DEFAULT_UPGRADE_NAG_CLOSE_EFFECT);
     nagOpenedAtRef.current = null;
     setShowUpgrade(false);
     if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
@@ -340,6 +350,7 @@ function Terminal() {
       finalizeUpgradeNagClose();
       return;
     }
+    setUpgradeNagDismissEffect(pickRandomUpgradeNagCloseEffect());
     setUpgradeNagDismissPhase("closing");
     nagCloseTimeoutRef.current = setTimeout(() => {
       nagCloseTimeoutRef.current = null;
@@ -377,7 +388,7 @@ function Terminal() {
       setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty} setShowSynergize={setShowSynergize}
       setIsProcessing={setIsProcessing} setHistory={setHistory} pendingNagCommand={pendingNagCommandRef.current}
       handleUpgradeNagClose={handleUpgradeNagClose} handleManualUpgradeDismiss={handleManualUpgradeDismiss}
-      upgradeNagDismissPhase={upgradeNagDismissPhase} />
+      upgradeNagDismissPhase={upgradeNagDismissPhase} upgradeNagDismissEffect={upgradeNagDismissEffect} />
   );
 }
 

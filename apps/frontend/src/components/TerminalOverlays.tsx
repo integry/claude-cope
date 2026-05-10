@@ -11,6 +11,7 @@ import ContactOverlay from "./ContactOverlay";
 import UserProfileOverlay from "./UserProfileOverlay";
 import PartyOverlay from "./PartyOverlay";
 import UpgradeOverlay from "./UpgradeOverlay";
+import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
 import type { GameState, Message } from "../hooks/useGameState";
 import { FREE_QUOTA_LIMIT, PRO_QUOTA_LIMIT } from "../config";
 
@@ -48,6 +49,7 @@ export function TerminalOverlays({
   onUpgradeDismiss,
   upgradeDismissMode = "manual",
   upgradeDismissPhase = "idle",
+  upgradeDismissEffect = "death-spiral",
 }: {
   showStore: boolean;
   showLeaderboard: boolean;
@@ -82,6 +84,7 @@ export function TerminalOverlays({
   onUpgradeDismiss: () => void;
   upgradeDismissMode?: "manual" | "nag";
   upgradeDismissPhase?: "idle" | "closing";
+  upgradeDismissEffect?: UpgradeNagCloseEffect;
 }) {
   return (
     <>
@@ -169,6 +172,7 @@ export function TerminalOverlays({
           onDismiss={onUpgradeDismiss}
           dismissMode={upgradeDismissMode}
           dismissPhase={upgradeDismissPhase}
+          dismissEffect={upgradeDismissEffect}
         />
       )}
     </>
