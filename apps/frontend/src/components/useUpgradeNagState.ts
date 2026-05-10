@@ -117,11 +117,15 @@ export function useUpgradeNagState({
   );
 
   const dismissUpgradeOverlay = useCallback(() => {
+    clearNagCloseTimeout();
+    resetDismissState();
+    nagOpenedAtRef.current = null;
+    clearPendingNag();
     setShowUpgrade(false);
     if (window.location.pathname === "/upgrade") {
       window.history.pushState(null, "", "/");
     }
-  }, [setShowUpgrade]);
+  }, [clearNagCloseTimeout, clearPendingNag, resetDismissState, setShowUpgrade]);
 
   const closeAllOverlaysAndRestoreNag = useCallback(() => {
     closeAllOverlays();

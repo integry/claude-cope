@@ -4,7 +4,6 @@ import { createElement } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type React from "react";
-
 const {
   executeSlashCommandMock,
   recordEnterMock,
@@ -64,17 +63,27 @@ vi.mock("../../hooks/useSoundEffects", () => ({
   useSoundEffects: () => ({ playError: vi.fn(), playChime: vi.fn() }),
 }));
 vi.mock("../../hooks/usePingAcknowledged", () => ({ usePingAcknowledged: () => false }));
-vi.mock("../../hooks/useOverlays", () => ({
-  useOverlays: () => ({
-    showStore: false, showLeaderboard: false, showAchievements: false, showSynergize: false,
-    showHelp: false, showAbout: false, showPrivacy: false, showTerms: false,
-    showContact: false, showProfile: false, showParty: false, showUpgrade: false,
-    setShowStore: vi.fn(), setShowLeaderboard: vi.fn(), setShowAchievements: vi.fn(), setShowSynergize: vi.fn(),
-    setShowHelp: vi.fn(), setShowAbout: vi.fn(), setShowPrivacy: vi.fn(), setShowTerms: vi.fn(),
-    setShowContact: vi.fn(), setShowProfile: vi.fn(), setShowParty: vi.fn(), setShowUpgrade: setShowUpgradeMock,
-    closeAllOverlays: vi.fn(),
-  }),
-}));
+vi.mock("../../hooks/useOverlays", async () => {
+  const React = await import("react");
+  return {
+    useOverlays: () => {
+      const [showUpgrade, setShowUpgradeState] = React.useState(false);
+      const setShowUpgrade = (value: boolean) => {
+        setShowUpgradeMock(value);
+        setShowUpgradeState(value);
+      };
+      return {
+        showStore: false, showLeaderboard: false, showAchievements: false, showSynergize: false,
+        showHelp: false, showAbout: false, showPrivacy: false, showTerms: false,
+        showContact: false, showProfile: false, showParty: false, showUpgrade,
+        setShowStore: vi.fn(), setShowLeaderboard: vi.fn(), setShowAchievements: vi.fn(), setShowSynergize: vi.fn(),
+        setShowHelp: vi.fn(), setShowAbout: vi.fn(), setShowPrivacy: vi.fn(), setShowTerms: vi.fn(),
+        setShowContact: vi.fn(), setShowProfile: vi.fn(), setShowParty: vi.fn(), setShowUpgrade,
+        closeAllOverlays: vi.fn(() => setShowUpgradeState(false)),
+      };
+    },
+  };
+});
 vi.mock("../../hooks/useTipManager", () => ({
   useTipManager: () => ({
     recordEnter: recordEnterMock,
@@ -98,9 +107,15 @@ vi.mock("../../hooks/useTerminalKeyboard", () => ({
   useTerminalKeyboard: ({
     handleEnterSubmit,
     handleUpgradeNagClose,
+    abortControllerRef,
+    isProcessing,
+    showUpgrade,
   }: {
     handleEnterSubmit: () => void;
     handleUpgradeNagClose: () => void;
+    abortControllerRef: { current: AbortController | null };
+    isProcessing: boolean;
+    showUpgrade: boolean;
   }) => ({
     handleKeyDown: (event: KeyboardEvent) => {
       if (event.key === "Enter") {
@@ -109,7 +124,8 @@ vi.mock("../../hooks/useTerminalKeyboard", () => ({
       }
       if (event.key === "Escape") {
         event.preventDefault();
-        handleUpgradeNagClose();
+        if (showUpgrade) handleUpgradeNagClose();
+        else if (isProcessing && abortControllerRef.current) abortControllerRef.current.abort();
       }
     },
   }),
@@ -129,12 +145,14 @@ vi.mock("../TerminalView", () => ({
     handleChange,
     handleKeyDown,
     handleUpgradeNagClose,
+    handleManualUpgradeDismiss,
   }: {
     inputRef: { current: HTMLInputElement | null };
     inputValue: string;
     handleChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
     handleKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
     handleUpgradeNagClose: () => void;
+    handleManualUpgradeDismiss: () => void;
   }) => createElement("div", null,
     createElement("input", {
       ref: inputRef,
@@ -151,6 +169,11 @@ vi.mock("../TerminalView", () => ({
       "aria-label": "dismiss-upgrade",
       onClick: handleUpgradeNagClose,
     }),
+    createElement("button", {
+      type: "button",
+      "aria-label": "manual-dismiss-upgrade",
+      onClick: handleManualUpgradeDismiss,
+    }),
   ),
 }));
 vi.mock("../terminalViewUtils", () => ({
@@ -160,7 +183,6 @@ vi.mock("../terminalViewUtils", () => ({
 vi.mock("../useCheckoutLicenseSync", () => ({ useCheckoutLicenseSync: vi.fn() }));
 vi.mock("../../hooks/useGameState", async () => {
   const React = await import("react");
-
   return {
     useGameState: () => {
       const [state, setState] = React.useState({
@@ -182,14 +204,12 @@ vi.mock("../../hooks/useGameState", async () => {
         soundEnabled: true,
         pendingCompletedTaskIds: [],
       });
-
       const setChatHistory = (updater: React.SetStateAction<typeof state.chatHistory>) => {
         setState((prev) => ({
           ...prev,
           chatHistory: typeof updater === "function" ? updater(prev.chatHistory) : updater,
         }));
       };
-
       return {
         state,
         setState,
@@ -205,29 +225,23 @@ vi.mock("../../hooks/useGameState", async () => {
     },
   };
 });
-
 import Terminal from "../Terminal";
-
 let container: HTMLDivElement;
 let root: Root;
-
 function getInput() {
   const input = container.querySelector("input[aria-label='terminal-input']") as HTMLInputElement | null;
   expect(input).not.toBeNull();
   return input!;
 }
-
-function getDismissButton() {
-  const button = container.querySelector("button[aria-label='dismiss-upgrade']") as HTMLButtonElement | null;
+function getButton(label: string) {
+  const button = container.querySelector(`button[aria-label='${label}']`) as HTMLButtonElement | null;
   expect(button).not.toBeNull();
   return button!;
 }
-
 async function renderTerminal() {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-
   await act(async () => {
     root.render(createElement(Terminal));
   });
@@ -235,12 +249,10 @@ async function renderTerminal() {
 
 async function submitCommand(command: string) {
   const input = getInput();
-
   await act(async () => {
     input.value = command;
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-
   await act(async () => {
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
@@ -255,25 +267,17 @@ async function triggerNaggedPrompt() {
 
 async function replayNaggedPrompt(action: "button" | "escape") {
   const input = getInput();
-
   if (action === "button") {
-    await act(async () => {
-      getDismissButton().click();
-    });
+    await act(async () => { getButton("dismiss-upgrade").click(); });
   } else {
-    await act(async () => {
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
+    await act(async () => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
   }
-
   expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
   expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
-
   await act(async () => {
     vi.advanceTimersByTime(3000);
     await Promise.resolve();
   });
-
   expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(2);
   expect(submitChatMessageMock).toHaveBeenCalledTimes(2);
   return input;
@@ -292,7 +296,6 @@ describe("Terminal tip-manager wiring", () => {
     shouldShowNagMock.mockReset();
     shouldShowNagMock.mockReturnValue(false);
   });
-
   afterEach(() => {
     act(() => root?.unmount());
     container?.remove();
@@ -303,87 +306,91 @@ describe("Terminal tip-manager wiring", () => {
   it("does not let /clear repopulate the terminal through tip-manager callbacks", async () => {
     await renderTerminal();
     await submitCommand("/clear");
-
     expect(recordEnterMock).toHaveBeenCalledTimes(1);
     expect(recordValidCommandMock).toHaveBeenCalledWith("/clear", { suppressTip: true });
     expect(recordMessageWithoutTicketMock).not.toHaveBeenCalled();
   });
-
   it("does not count slash commands toward backlog reminders", async () => {
     await renderTerminal();
     await submitCommand("/help");
-
     expect(recordValidCommandMock).toHaveBeenCalledWith("/help");
     expect(recordMessageWithoutTicketMock).not.toHaveBeenCalled();
   });
-
   it("counts prompt submissions toward backlog reminders before the reply succeeds", async () => {
     await renderTerminal();
     await submitCommand("ship it");
-
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
   });
-
   it("rolls back backlog reminders when the prompt fails generically", async () => {
     submitChatMessageMock.mockImplementation(({ onError }: { onError?: () => void }) => {
       onError?.();
     });
     await renderTerminal();
     await submitCommand("ship it");
-
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
     expect(rollbackMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
   });
-
+  it("rolls back backlog reminders when an in-flight prompt is aborted", async () => {
+    submitChatMessageMock.mockImplementation(({ signal }: { signal: AbortSignal }) => {
+      signal.addEventListener("abort", () => {});
+    });
+    await renderTerminal();
+    await submitCommand("ship it");
+    await act(async () => {
+      getInput().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+    expect(rollbackMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+  });
   it("does not count accepted chat prompts toward slash-command milestone tips", async () => {
     submitChatMessageMock.mockImplementation(({ onAccepted }: { onAccepted?: () => void }) => {
       onAccepted?.();
     });
     await renderTerminal();
     await submitCommand("ship it");
-
     expect(submitChatMessageMock.mock.calls[0]?.[0]?.onAccepted).toEqual(expect.any(Function));
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
     expect(recordValidCommandMock).not.toHaveBeenCalled();
   });
-
   it("replays nagged prompts with normal backlog accounting and cleared input", async () => {
     await triggerNaggedPrompt();
-
     expect(setShowUpgradeMock).toHaveBeenCalledWith(true);
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
-
     const input = await replayNaggedPrompt("button");
     expect(input.value).toBe("");
   });
-
   it("replays a nagged prompt through the same path when dismissed by keyboard", async () => {
     await triggerNaggedPrompt();
     const input = await replayNaggedPrompt("escape");
     expect(input.value).toBe("");
   });
-
+  it("fully disarms a nagged prompt when the overlay is manually dismissed", async () => {
+    await triggerNaggedPrompt();
+    await act(async () => { getButton("manual-dismiss-upgrade").click(); });
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      vi.advanceTimersByTime(3000);
+    });
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+    expect(setShowUpgradeMock.mock.calls.filter(([value]) => value === true)).toHaveLength(1);
+  });
   it("replays a nagged prompt after the forced dismiss cycle completes", async () => {
     await renderTerminal();
     await submitCommand("first prompt");
     shouldShowNagMock.mockReturnValue(true);
     await submitCommand("retry me");
     await replayNaggedPrompt("button");
-
     expect(setShowUpgradeMock).toHaveBeenCalledTimes(2);
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(2, false);
   });
-
   it("disarms the quota nag after a replayed prompt is accepted", async () => {
     submitChatMessageMock.mockImplementation(({ onAccepted }: { onAccepted?: () => void }) => {
       onAccepted?.();
     });
     await triggerNaggedPrompt();
     await replayNaggedPrompt("button");
-
     await submitCommand("third prompt");
-
     expect(submitChatMessageMock).toHaveBeenCalledTimes(3);
     expect(setShowUpgradeMock).toHaveBeenCalledTimes(2);
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);

@@ -308,6 +308,10 @@ function Terminal() {
     const chatMessages = isFreeTier ? contextMessages : [...contextMessages, { role: "user", content: userMessage.content }];
     const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({ getState: getCurrentState, updateTicketProgress, addActiveTD, playChime, setState, onCompletedRewardSettled: (ticketId, profile) => { applySettledCompletedReward(ticketId, profile); } });
     const controller = new AbortController();
+    controller.signal.addEventListener("abort", () => {
+      pendingBacklogRollbackRef.current?.();
+      pendingBacklogRollbackRef.current = null;
+    }, { once: true });
     abortControllerRef.current = controller;
     submitChatMessage({
       chatMessages, buddyResult, unlockAchievement: unlockAchievementWithSound, setHistory, setIsProcessing,

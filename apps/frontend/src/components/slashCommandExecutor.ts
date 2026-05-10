@@ -951,7 +951,7 @@ function handleExtendedCommand(command: string, ctx: SlashCommandContext, reply:
   }
 
   if (command === "/upgrade") {
-    handleUpgradeCommand(ctx);
+    openUpgradeFlow(ctx, { trackCommandUsage: false });
     return true;
   }
 
