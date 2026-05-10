@@ -128,7 +128,7 @@ function BuddyOverlay({ buddy, bottomOffset }: BuddyOverlayProps) {
       updateScale();
     });
 
-    resizeObserver.observe(overlayRef.current);
+    resizeObserver.observe(overlay);
     window.addEventListener("resize", updateScale);
 
     return () => {
