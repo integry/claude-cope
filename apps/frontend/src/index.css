@@ -199,7 +199,8 @@ body {
 .upgrade-desktop[data-keyboard-nav="true"] button:focus,
 .upgrade-mobile a:focus-visible,
 .upgrade-mobile button:focus-visible {
-  box-shadow: 0 0 0 1px #4ade80, 0 0 0 3px rgba(74, 222, 128, 0.18);
+  outline: none;
+  box-shadow: none;
 }
 .share-popup-action [data-cursor] {
   color: #4ade80;
