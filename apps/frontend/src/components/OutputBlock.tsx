@@ -144,18 +144,16 @@ function MessageContent({
 }) {
   const { role, content } = message;
   const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(role, content);
-
-  if (message.backlogDisplay && role === "system") {
-    return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
-  }
-
   // Only typewrite actual AI responses (system role). Scaffold messages (ads,
   // queue warnings) render instantly so they don't vanish mid-animation when
   // the fixed delay timers remove them.
   const shouldTypewrite = isNew && useMarkdown && role === "system";
   const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite);
-
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand, shareNode), [onSlashCommand, shareNode]);
+
+  if (message.backlogDisplay && role === "system") {
+    return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
+  }
 
   if (role === "user") return null;
 
