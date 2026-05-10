@@ -85,13 +85,7 @@ function Terminal() {
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
-  const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({
-    isBooting,
-    isInteractionBlocked: anyOverlayOpen || isProcessing,
-    gameState: state,
-    onlineCount,
-    setHistory,
-  });
+  const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
   useEffect(() => () => {
     const ds = freeTierDelayRef.current;
     ds.cancelled = true;
@@ -122,20 +116,6 @@ function Terminal() {
     activePromptCountRef.current = 0;
     setIsProcessing(false);
   }, []);
-  const createPromptProcessingSetter = useCallback(() => {
-    let settled = false;
-    return (value: boolean | ((prev: boolean) => boolean)) => {
-      const nextValue = typeof value === "function" ? value(activePromptCountRef.current > 0) : value;
-      if (nextValue) {
-        startPromptProcessing();
-        settled = false;
-        return;
-      }
-      if (settled) return;
-      settled = true;
-      finishPromptProcessing();
-    };
-  }, [finishPromptProcessing, startPromptProcessing]);
   const trackAbortController = useCallback((controller: AbortController) => {
     activeAbortControllersRef.current.add(controller);
     syncAbortControllerHandle();
@@ -144,6 +124,27 @@ function Terminal() {
     if (!activeAbortControllersRef.current.delete(controller)) return;
     syncAbortControllerHandle();
   }, [syncAbortControllerHandle]);
+  const createPromptProcessingSetter = useCallback((controller: AbortController) => {
+    let processingSettled = false;
+    let controllerReleased = false;
+    const releaseController = () => {
+      if (controllerReleased) return;
+      controllerReleased = true;
+      untrackAbortController(controller);
+    };
+    return (value: boolean | ((prev: boolean) => boolean)) => {
+      const nextValue = typeof value === "function" ? value(activePromptCountRef.current > 0) : value;
+      if (nextValue) {
+        startPromptProcessing();
+        processingSettled = false;
+        return;
+      }
+      releaseController();
+      if (processingSettled) return;
+      processingSettled = true;
+      finishPromptProcessing();
+    };
+  }, [finishPromptProcessing, startPromptProcessing, untrackAbortController]);
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
     const isNew = unlockAchievement(id);
     if (isNew) {
@@ -311,7 +312,7 @@ function Terminal() {
       onCompletedRewardSettled: (ticketId, profile) => { applySettledCompletedReward(ticketId, profile); },
     });
     const controller = new AbortController();
-    const setPromptProcessing = createPromptProcessingSetter();
+    const setPromptProcessing = createPromptProcessingSetter(controller);
     controller.signal.addEventListener("abort", () => {
       settlePendingBacklogRollback(rollbackId, true);
       untrackAbortController(controller);
