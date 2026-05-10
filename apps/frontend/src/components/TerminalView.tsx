@@ -152,6 +152,19 @@ export function TerminalView({
   upgradeNagDismissPhase,
   upgradeNagDismissEffect,
 }: TerminalViewProps) {
+  const handleTickerCommand = (command: string) => {
+    closeAllOverlaysPreservingNag();
+    if (command === "/party") {
+      setShowParty(true);
+      return;
+    }
+    if (command === "/leaderboard") {
+      setShowLeaderboard(true);
+      return;
+    }
+    runSlashCommand(command);
+  };
+
   return (
     <div
       className={terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}
@@ -163,7 +176,7 @@ export function TerminalView({
       <div className="shrink-0">
         <Ticker
           onExpand={() => { closeAllOverlaysPreservingNag(); setShowParty(true); }}
-          onSlashCommand={runSlashCommand}
+          onSlashCommand={handleTickerCommand}
           onlineCount={onlineCount}
         />
         {outageHp !== null && <OutageBar outageHp={outageHp} />}
