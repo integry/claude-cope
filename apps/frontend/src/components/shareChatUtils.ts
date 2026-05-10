@@ -76,9 +76,9 @@ export async function renderChatCard(userMessage: string, systemMessage: string,
 
   const buddyBlock = extractBuddyInterjectionBlock(systemMessage);
   const buddyLines = buddyBlock?.block.split("\n") ?? [];
-  const systemBody = buddyBlock?.body || systemMessage;
+  const systemBody = buddyBlock ? buddyBlock.body : systemMessage;
 
-  const systemLines = wrapText(ctx, systemBody, contentMaxWidth);
+  const systemLines = systemBody === "" ? [] : wrapText(ctx, systemBody, contentMaxWidth);
   const headerText = username ?? "";
 
   const PARAGRAPH_BREAK_HEIGHT = Math.round(lineHeight * PARAGRAPH_BREAK_RATIO);

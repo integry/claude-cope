@@ -112,6 +112,14 @@ describe("renderChatCard", () => {
     expect(renderedText).toContain("Ship the lint rule before Friday.");
     expect(renderedText).not.toContain(`${buddyBlock}\n\nShip the lint rule before Friday.`);
   });
+
+  it("does not render a standalone buddy interjection twice", async () => {
+    const buddyBlock = formatBuddyInterjection("Agile Snail", "Remember the backlog.");
+    await renderChatCard("Test", buddyBlock);
+
+    const renderedText = mockCtx.fillText.mock.calls.map(([text]) => text);
+    expect(renderedText.filter((text) => text === "Remember the backlog.")).toHaveLength(1);
+  });
 });
 
 describe("getChatCardBlob", () => {
