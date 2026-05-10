@@ -107,7 +107,7 @@ function buildBacklogFooterLines(tickets: CommunityBacklogTicket[]): string[] {
       }),
     ).values()),
     "",
-    "Run `/upgrade` to unlock 50+ specialized categories and premium suffering.",
+    "Run /upgrade to unlock 50+ specialized categories and premium suffering.",
   ];
 }
 

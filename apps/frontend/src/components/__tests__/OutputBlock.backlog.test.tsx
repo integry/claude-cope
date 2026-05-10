@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 
 import OutputBlock from "../OutputBlock";
 import type { Message } from "../../hooks/useGameState";
+import { handleBacklogCommand } from "../ticketCommands";
 
 describe("OutputBlock backlog rendering", () => {
   let container: HTMLDivElement;
@@ -35,21 +36,38 @@ describe("OutputBlock backlog rendering", () => {
     container?.remove();
   });
 
-  it("renders the responsive backlog component and keeps slash commands clickable", () => {
-    const onSlashCommand = renderMessage({
-      role: "system",
-      content: "backlog fallback text",
-      backlogDisplay: {
-        kind: "community-backlog",
-        title: "[ COMMUNITY BACKLOG ]",
-        infoLine: "[INFO] Showing all tickets. Want specific trauma? Try: /backlog MELT",
-        footer: ["Type /take 1 through /take 2 to claim a ticket.", "Run /upgrade to unlock premium suffering."],
-        tickets: [
-          { row: 1, fullId: "BLAME-421", shortId: "BLAME-42", title: "The RCA Template Needs a Rewrite", status: "OPEN", reward: "1440 TD", isLocked: false },
-          { row: 2, fullId: "MAIL-1016", shortId: "MAIL-101", title: "🔒 [PREMIUM] Rewrite Domain Warmup", status: "PREMIUM", reward: "--", isLocked: true },
-        ],
-      },
-    });
+  it("renders the responsive backlog component from real backlog copy and keeps slash commands clickable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: "BLAME-421",
+          title: "BLAME The RCA Template Needs a Rewrite",
+          description: "Regular ticket",
+          technical_debt: 144,
+          kickoff_prompt: "rewrite the template",
+          category_prefix: "BLAME",
+          tier: "free",
+        },
+        {
+          id: "MAIL-1016",
+          title: "MAIL Rewrite Domain Warmup",
+          description: "Locked premium ticket",
+          technical_debt: 99,
+          kickoff_prompt: "never used",
+          category_prefix: "MAIL",
+          category_label: "Email Deliverability",
+          is_locked: true,
+          tier: "premium",
+        },
+      ]),
+    }));
+
+    const reply = vi.fn();
+    await handleBacklogCommand(reply);
+
+    const message = reply.mock.calls[0]?.[0] as Message;
+    const onSlashCommand = renderMessage(message);
 
     expect(container.textContent).toContain("[ COMMUNITY BACKLOG ]");
     expect(container.textContent).toContain("BLAME-42");
@@ -71,7 +89,7 @@ describe("OutputBlock backlog rendering", () => {
       upgradeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onSlashCommand).toHaveBeenCalledWith("/take 1", "execute");
+    expect(onSlashCommand).toHaveBeenCalledWith("/take BLAME-421", "execute");
     expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "execute");
     expect(onSlashCommand).toHaveBeenCalledWith("/upgrade", "execute");
   });
