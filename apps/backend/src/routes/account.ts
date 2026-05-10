@@ -1,12 +1,14 @@
 /* eslint-disable max-lines */
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
-import { getProfile, getProfileRow, rowToProfile, isLicenseActive } from "../utils/profile";
+import { getProfile, getProfileRow, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
 import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
+import { issueFreeAccountCookie } from "../utils/freeAccountIdentity";
 
 type Env = {
   Bindings: {
@@ -18,9 +20,11 @@ type Env = {
     POLAR_ORGANIZATION_ID?: string;
     FREE_QUOTA_LIMIT?: string;
     PRO_INITIAL_QUOTA?: string;
+    FREE_ACCOUNT_COOKIE_SECRET?: string;
   };
   Variables: {
     sessionId: string;
+    freeAccountId?: string;
   };
 };
 const SHILL_CREDIT = 5;
@@ -280,6 +284,71 @@ async function resolveSessionProfileRow(opts: {
   return { username: current, row, redirected };
 }
 
+async function respondWithMeProfile(
+  c: Pick<Context<Env>, "env" | "json" | "header">,
+  opts: {
+    db: D1Database | undefined;
+    kv: KVNamespace;
+    row: unknown;
+    sessionId: string;
+    username: string;
+  },
+) {
+  const { isPro, quotaPercent, profile, revoked } = await buildMePayload({
+    row: opts.row,
+    db: opts.db,
+    kv: opts.kv,
+    env: c.env,
+    sessionId: opts.sessionId,
+  });
+  if (!isPro) {
+    await issueFreeAccountCookie(c, c.env.FREE_ACCOUNT_COOKIE_SECRET, (opts.row as { account_id?: string | null }).account_id ?? null);
+  }
+
+  return c.json({
+    found: true,
+    username: opts.username,
+    profile,
+    quotaPercent,
+    isPro,
+    ...(revoked ? { revoked: true } : {}),
+  });
+}
+
+async function restoreMeFromFreeAccount(
+  c: Pick<Context<Env>, "get" | "json" | "env" | "header">,
+  opts: {
+    db: D1Database | undefined;
+    kv: KVNamespace;
+    sessionId: string;
+  },
+) {
+  const freeAccountId = c.get("freeAccountId");
+  if (!opts.db || !freeAccountId) return null;
+
+  const row = await getProfileRowByAccountId(opts.db, freeAccountId);
+  if (!row) return null;
+  if (row.license_hash) return null;
+
+  const username = row.username;
+  try {
+    await opts.kv.put(accountKvKeys.sessionUser(opts.sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+  } catch (err: unknown) {
+    console.warn(
+      `[account/me] failed to restore session binding for ${opts.sessionId}:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  return respondWithMeProfile(c, {
+    db: opts.db,
+    kv: opts.kv,
+    row,
+    sessionId: opts.sessionId,
+    username,
+  });
+}
+
 account.post("/checkout-license", async (c) => {
   const validated = await validateCheckoutRequest(c);
   if ("error" in validated) return validated.error;
@@ -364,10 +433,13 @@ account.get("/me", async (c) => {
   const sessionId = c.get("sessionId");
   if (!kv || !sessionId) return c.json({ found: false });
 
-  let username = await kv.get(accountKvKeys.sessionUser(sessionId));
-  if (!username) return c.json({ found: false });
-
   const db = c.env?.DB;
+  let username = await kv.get(accountKvKeys.sessionUser(sessionId));
+  if (!username) {
+    const restored = await restoreMeFromFreeAccount(c, { db, kv, sessionId });
+    return restored ?? c.json({ found: false });
+  }
+
   const resolved = await resolveSessionProfileRow({ db, kv, sessionId, username });
   username = resolved.username;
   const row = resolved.row;
@@ -393,16 +465,7 @@ account.get("/me", async (c) => {
     });
   }
 
-  const { isPro, quotaPercent, profile, revoked } = await buildMePayload({ row, db, kv, env: c.env, sessionId });
-
-  return c.json({
-    found: true,
-    username,
-    profile,
-    quotaPercent,
-    isPro,
-    ...(revoked ? { revoked: true } : {}),
-  });
+  return respondWithMeProfile(c, { db, kv, row, sessionId, username });
 });
 
 account.post("/buy-generator", async (c) => {

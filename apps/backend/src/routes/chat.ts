@@ -15,6 +15,7 @@ import {
 } from "./chatHelpers";
 import { getQuotaPercent, getQuotaLimits } from "../utils/quota";
 import { assignCategory, getRoutingConfig, type RequestCategory } from "../utils/categoryRouting";
+import { buildFreeAccountCookieHeader } from "../utils/freeAccountIdentity";
 
 type Env = {
   Bindings: {
@@ -27,9 +28,11 @@ type Env = {
     QUOTA_KV?: KVNamespace;
     FREE_QUOTA_LIMIT?: string;
     PRO_INITIAL_QUOTA?: string;
+    FREE_ACCOUNT_COOKIE_SECRET?: string;
   };
   Variables: {
     sessionId: string;
+    freeAccountId?: string;
   };
 };
 
@@ -254,6 +257,8 @@ function normalizeComparableUserNextMessage(text: string | null | undefined): st
     .replace(/\s+/g, " ");
 }
 
+// This alternate picker mirrors the broad token heuristics in the primary fallback.
+// eslint-disable-next-line complexity
 function buildAlternateUserNextMessage(content: string, previous: string | null | undefined): string {
   const previousNormalized = normalizeComparableUserNextMessage(previous);
   const text = content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
@@ -516,10 +521,11 @@ async function tryCacheSessionMapping(
   env: Env["Bindings"],
   ctx: { waitUntil: (p: Promise<unknown>) => void },
   opts: { db: D1Database; sessionId: string; username: string; effectiveProKeyHash: string | undefined },
-): Promise<{ profileLicenseHash: string | null; hasRow: boolean; deferredKvWrites: (() => void) | null }> {
+): Promise<{ profileLicenseHash: string | null; rowAccountId: string | null; hasRow: boolean; deferredKvWrites: (() => void) | null }> {
   const { db, sessionId, username, effectiveProKeyHash } = opts;
   const row = await getProfileRow(db, username);
   const profileHash = row ? (row as unknown as { license_hash: string | null }).license_hash : null;
+  const rowAccountId = row?.account_id ?? null;
   if (effectiveProKeyHash) {
     if (profileHash === effectiveProKeyHash) {
       cacheSessionUsername(env.QUOTA_KV ?? env.USAGE_KV, sessionId, username, ctx);
@@ -527,6 +533,7 @@ async function tryCacheSessionMapping(
   } else if (!row) {
     return {
       profileLicenseHash: profileHash,
+      rowAccountId,
       hasRow: false,
       deferredKvWrites: () => {
         const kv = env.QUOTA_KV ?? env.USAGE_KV;
@@ -537,7 +544,7 @@ async function tryCacheSessionMapping(
       },
     };
   }
-  return { profileLicenseHash: profileHash, hasRow: Boolean(row), deferredKvWrites: null };
+  return { profileLicenseHash: profileHash, rowAccountId, hasRow: Boolean(row), deferredKvWrites: null };
 }
 
 interface RoutingConfigResult {
@@ -939,6 +946,7 @@ type PreChatResult = {
   effectiveProKeyHash: string | undefined;
   profileLicenseHash: string | null;
   revokedProfileLicenseHash: string | null;
+  freeAccountId: string | null;
   quotaPercent: number;
   isProUserForRouting: boolean;
   ownsUsername: boolean;
@@ -952,6 +960,7 @@ function rejectPreChat(msg: string, status: number, base: Partial<PreChatResult>
     effectiveProKeyHash: undefined,
     profileLicenseHash: null,
     revokedProfileLicenseHash: null,
+    freeAccountId: null,
     quotaPercent: 0,
     isProUserForRouting: false,
     ownsUsername: false,
@@ -975,15 +984,30 @@ export function resolveFreeChatLicenseState(profileLicenseHash: string | null, l
 
 async function validateFreeUserAccess(
   env: Env["Bindings"],
-  opts: { db: D1Database | undefined; sessionId: string; username: string; hasRow: boolean; profileLicenseHash: string | null },
-): Promise<PreChatResult | { profileLicenseHash: string | null; revokedProfileLicenseHash: string | null }> {
+  opts: {
+    db: D1Database | undefined;
+    sessionId: string;
+    username: string;
+    hasRow: boolean;
+    profileLicenseHash: string | null;
+    rowAccountId: string | null;
+    trustedFreeAccountId: string | undefined;
+  },
+): Promise<PreChatResult | { profileLicenseHash: string | null; revokedProfileLicenseHash: string | null; freeAccountId: string | null }> {
   let { profileLicenseHash } = opts;
+  let freeAccountId = opts.rowAccountId ?? null;
   const ownershipCheck = await checkFreeOwnership(env, opts.sessionId, opts.username, opts.hasRow);
   if (!ownershipCheck.owns) {
-    if ('kvUnavailable' in ownershipCheck && ownershipCheck.kvUnavailable) {
-      return rejectPreChat("Ownership verification unavailable: KV storage is not configured", 500, { profileLicenseHash });
+    if (opts.rowAccountId && opts.trustedFreeAccountId === opts.rowAccountId) {
+      freeAccountId = opts.rowAccountId;
+    } else {
+      if ('kvUnavailable' in ownershipCheck && ownershipCheck.kvUnavailable) {
+        return rejectPreChat("Ownership verification unavailable: KV storage is not configured", 500, { profileLicenseHash });
+      }
+      return rejectPreChat("Session does not own this username", 403, { profileLicenseHash });
     }
-    return rejectPreChat("Session does not own this username", 403, { profileLicenseHash });
+  } else if (!freeAccountId && opts.hasRow) {
+    freeAccountId = crypto.randomUUID();
   }
   let revokedProfileLicenseHash: string | null = null;
   if (profileLicenseHash && opts.db) {
@@ -994,7 +1018,7 @@ async function validateFreeUserAccess(
   if (profileLicenseHash) {
     return rejectPreChat("This account is linked to a Pro license — authenticate with proKeyHash", 403, { profileLicenseHash });
   }
-  return { profileLicenseHash, revokedProfileLicenseHash };
+  return { profileLicenseHash, revokedProfileLicenseHash, freeAccountId: freeAccountId ?? crypto.randomUUID() };
 }
 
 export async function resolveRoutingQuotaState(
@@ -1045,9 +1069,9 @@ export async function resolveRoutingQuotaState(
 async function preChatChecks(
   env: Env["Bindings"],
   ctx: { waitUntil: (p: Promise<unknown>) => void },
-  opts: { db: D1Database | undefined; sessionId: string; username: string; effectiveProKeyHash: string | undefined },
+  opts: { db: D1Database | undefined; sessionId: string; username: string; effectiveProKeyHash: string | undefined; trustedFreeAccountId: string | undefined },
 ): Promise<PreChatResult> {
-  const { db, sessionId, username, effectiveProKeyHash } = opts;
+  const { db, sessionId, username, effectiveProKeyHash, trustedFreeAccountId } = opts;
 
   if (!username || username === "anonymous") {
     return rejectPreChat("A proven username is required to use chat", 403, { effectiveProKeyHash });
@@ -1062,20 +1086,32 @@ async function preChatChecks(
 
   let profileLicenseHash: string | null = null;
   let revokedProfileLicenseHash: string | null = null;
+  let freeAccountId: string | null = null;
+  let rowAccountId: string | null = null;
   let hasRow = false;
   let deferredKvWrites: (() => void) | null = null;
   if (db && username !== "anonymous") {
     const m = await tryCacheSessionMapping(env, ctx, { db, sessionId, username, effectiveProKeyHash });
     profileLicenseHash = m.profileLicenseHash;
+    rowAccountId = m.rowAccountId;
     hasRow = m.hasRow;
     deferredKvWrites = m.deferredKvWrites;
   }
 
   if (!effectiveProKeyHash) {
-    const freeAccess = await validateFreeUserAccess(env, { db, sessionId, username, hasRow, profileLicenseHash });
+    const freeAccess = await validateFreeUserAccess(env, {
+      db,
+      sessionId,
+      username,
+      hasRow,
+      profileLicenseHash,
+      rowAccountId,
+      trustedFreeAccountId,
+    });
     if ('error' in freeAccess) return freeAccess;
     profileLicenseHash = freeAccess.profileLicenseHash;
     revokedProfileLicenseHash = freeAccess.revokedProfileLicenseHash;
+    freeAccountId = freeAccess.freeAccountId;
   }
 
   const { quotaPercent, isProUserForRouting } = await resolveRoutingQuotaState(env, sessionId, effectiveProKeyHash);
@@ -1084,6 +1120,7 @@ async function preChatChecks(
     effectiveProKeyHash,
     profileLicenseHash,
     revokedProfileLicenseHash,
+    freeAccountId,
     quotaPercent,
     isProUserForRouting,
     ownsUsername: true,
@@ -1109,7 +1146,13 @@ chat.post("/", async (c) => {
   const sessionId = c.get("sessionId");
   const { username, rank } = extractBodyDefaults(body);
 
-  const preCheck = await preChatChecks(c.env, c.executionCtx, { db, sessionId, username, effectiveProKeyHash });
+  const preCheck = await preChatChecks(c.env, c.executionCtx, {
+    db,
+    sessionId,
+    username,
+    effectiveProKeyHash,
+    trustedFreeAccountId: c.get("freeAccountId"),
+  });
   if (preCheck.error) {
     return c.json({ error: preCheck.error }, (preCheck.status ?? 500) as ContentfulStatusCode);
   }
@@ -1176,12 +1219,19 @@ chat.post("/", async (c) => {
     return c.json({ error: "Pro scoring failed — please retry" }, 500);
   }
 
-  return handleFreeUserResponse(db, c.executionCtx, {
+  const freeResponse = await handleFreeUserResponse(db, c.executionCtx, {
     username, model, country, hour,
     data, quotaPercent, profileLicenseHash: preCheck.profileLicenseHash,
     revokedProfileLicenseHash: preCheck.revokedProfileLicenseHash,
-    ownsUsername: preCheck.ownsUsername, deferredKvWrites: preCheck.deferredKvWrites,
+    ownsUsername: preCheck.ownsUsername,
+    deferredKvWrites: preCheck.deferredKvWrites,
+    freeAccountId: preCheck.freeAccountId,
   });
+  const cookieHeader = await buildFreeAccountCookieHeader(c.env.FREE_ACCOUNT_COOKIE_SECRET, preCheck.freeAccountId);
+  if (cookieHeader) {
+    freeResponse.headers.append("Set-Cookie", cookieHeader);
+  }
+  return freeResponse;
 });
 
 export default chat;

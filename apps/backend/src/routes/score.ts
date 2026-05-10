@@ -3,15 +3,18 @@ import { FREE_TIER_RANK_CAP } from "./rankConstants";
 import { computeMultiplier } from "../gameConstants";
 import { accountKvKeys } from "./accountHelpers";
 import { getProfile, getProfileByLicenseHash, isLicenseActive, resolveRank as resolveRankFromProfile, resolveProUser } from "../utils/profile";
+import { issueFreeAccountCookie } from "../utils/freeAccountIdentity";
 
 type Env = {
   Bindings: {
     DB: D1Database;
     USAGE_KV?: KVNamespace;
     QUOTA_KV?: KVNamespace;
+    FREE_ACCOUNT_COOKIE_SECRET?: string;
   };
   Variables: {
     sessionId: string;
+    freeAccountId?: string;
   };
 };
 
@@ -162,6 +165,7 @@ function buildScoreBatch(db: D1Database, opts: {
   rank: string;
   country: string;
   username: string;
+  accountId: string;
   validatedClaims: Array<{ ticketId: string; bonus: number }>;
 }): D1PreparedStatement[] {
   const statements: D1PreparedStatement[] = [];
@@ -170,8 +174,8 @@ function buildScoreBatch(db: D1Database, opts: {
     // Guard: only update rows without a license_hash (belt-and-suspenders with the 403 precheck).
     const updatedTotal = Math.max(opts.serverTotal, opts.validatedTotal);
     statements.push(
-      db.prepare("UPDATE user_scores SET total_td = ?, current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now'), last_sync_time = datetime('now') WHERE username = ? AND license_hash IS NULL")
-        .bind(updatedTotal, opts.validatedCurrent, opts.rank, opts.country, opts.username),
+      db.prepare("UPDATE user_scores SET account_id = COALESCE(account_id, ?), total_td = ?, current_td = ?, corporate_rank = ?, country = ?, updated_at = datetime('now'), last_sync_time = datetime('now') WHERE username = ? AND license_hash IS NULL")
+        .bind(opts.accountId, updatedTotal, opts.validatedCurrent, opts.rank, opts.country, opts.username),
     );
     // Guard task claims the same way: only insert if the user row is still free.
     // Uses a subquery so the INSERT no-ops when the UPDATE above would also no-op
@@ -184,8 +188,8 @@ function buildScoreBatch(db: D1Database, opts: {
     }
   } else {
     statements.push(
-      db.prepare("INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, last_sync_time) VALUES (?, ?, ?, ?, ?, datetime('now'))")
-        .bind(opts.username, opts.validatedTotal, opts.validatedCurrent, opts.rank, opts.country),
+      db.prepare("INSERT INTO user_scores (username, account_id, total_td, current_td, corporate_rank, country, last_sync_time) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))")
+        .bind(opts.username, opts.accountId, opts.validatedTotal, opts.validatedCurrent, opts.rank, opts.country),
     );
     // New user insert — safe to add task claims unconditionally since we just created the row.
     for (const claim of opts.validatedClaims) {
@@ -201,7 +205,7 @@ function buildScoreBatch(db: D1Database, opts: {
 
 type OwnershipCheckResult =
   | { error: string; deferredKvWrites?: undefined }
-  | { error: null; deferredKvWrites: (() => Promise<void>) | null };
+  | { error: null; deferredKvWrites: (() => Promise<void>) | null; accountId: string };
 
 const SESSION_USERNAME_TTL_SECONDS = 60 * 60 * 24 * 365;
 const MAX_SESSION_RENAME_HOPS = 5;
@@ -238,17 +242,23 @@ async function resolveRenamedSessionUsername(kv: KVNamespace, startUsername: str
  * entries when the DB write fails.
  */
 async function verifyFreeSessionOwnership(
-  kv: KVNamespace,
-  sessionId: string,
-  username: string,
-  existingRow: boolean,
+  params: {
+    kv: KVNamespace;
+    sessionId: string;
+    username: string;
+    existingRow: { account_id: string | null } | null;
+    trustedFreeAccountId: string | undefined;
+  },
 ): Promise<OwnershipCheckResult> {
+  const { kv, sessionId, username, existingRow, trustedFreeAccountId } = params;
   if (existingRow) {
     const sessionUsername = await kv.get(`session_user:${sessionId}`);
     if (sameUsername(sessionUsername, username)) {
-      if (sessionUsername === username) return { error: null, deferredKvWrites: null };
+      const accountId = existingRow.account_id ?? crypto.randomUUID();
+      if (sessionUsername === username) return { error: null, deferredKvWrites: null, accountId };
       return {
         error: null,
+        accountId,
         deferredKvWrites: async () => {
           await kv.put(`session_user:${sessionId}`, username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
         },
@@ -257,8 +267,10 @@ async function verifyFreeSessionOwnership(
 
     const existingOwner = await kv.get(`username_session:${username}`);
     if (existingOwner === sessionId) {
+      const accountId = existingRow.account_id ?? crypto.randomUUID();
       return {
         error: null,
+        accountId,
         deferredKvWrites: async () => {
           await kv.put(`session_user:${sessionId}`, username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
         },
@@ -266,8 +278,21 @@ async function verifyFreeSessionOwnership(
     }
 
     if (sessionUsername && await resolveRenamedSessionUsername(kv, sessionUsername, username)) {
+      const accountId = existingRow.account_id ?? crypto.randomUUID();
       return {
         error: null,
+        accountId,
+        deferredKvWrites: async () => {
+          await kv.put(`session_user:${sessionId}`, username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+          await kv.put(`username_session:${username}`, sessionId, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+        },
+      };
+    }
+
+    if (existingRow.account_id && trustedFreeAccountId === existingRow.account_id) {
+      return {
+        error: null,
+        accountId: existingRow.account_id,
         deferredKvWrites: async () => {
           await kv.put(`session_user:${sessionId}`, username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
           await kv.put(`username_session:${username}`, sessionId, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
@@ -280,8 +305,10 @@ async function verifyFreeSessionOwnership(
     const existingOwner = await kv.get(`username_session:${username}`);
     if (existingOwner && existingOwner !== sessionId) return { error: "Session does not own this username" };
     // Defer KV writes until after DB persistence succeeds.
+    const accountId = crypto.randomUUID();
     return {
       error: null,
+      accountId,
       deferredKvWrites: async () => {
         await kv.put(`session_user:${sessionId}`, username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
         await kv.put(`username_session:${username}`, sessionId, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
@@ -295,6 +322,7 @@ async function verifyFreeSessionOwnership(
  * Validates the claimed score against server-side tracking.
  * The server's total_td is the floor — client can't claim more than what the server has awarded.
  */
+// eslint-disable-next-line complexity
 score.post("/", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
@@ -319,9 +347,9 @@ score.post("/", async (c) => {
 
   // Guard: if this username already has a license_hash, refuse unauthenticated writes.
   const existingRow = await db
-    .prepare("SELECT total_td, current_td, last_sync_time, license_hash FROM user_scores WHERE username = ?")
+    .prepare("SELECT total_td, current_td, last_sync_time, license_hash, account_id FROM user_scores WHERE username = ?")
     .bind(body.username)
-    .first<{ total_td: number; current_td: number; last_sync_time: string; license_hash: string | null }>();
+    .first<{ total_td: number; current_td: number; last_sync_time: string; license_hash: string | null; account_id: string | null }>();
 
   if (existingRow?.license_hash) {
     return c.json({ error: "This account is linked to a Pro license — authenticate with proKeyHash" }, 403);
@@ -333,10 +361,17 @@ score.post("/", async (c) => {
   if (!kv) {
     return c.json({ error: "Cannot verify session ownership — please retry" }, 503);
   }
-  const ownershipResult = await verifyFreeSessionOwnership(kv, sessionId, body.username, Boolean(existingRow));
+  const ownershipResult = await verifyFreeSessionOwnership({
+    kv,
+    sessionId,
+    username: body.username,
+    existingRow: existingRow ? { account_id: existingRow.account_id } : null,
+    trustedFreeAccountId: c.get("freeAccountId"),
+  });
   if (ownershipResult.error) {
     return c.json({ error: ownershipResult.error }, 403);
   }
+  const { accountId, deferredKvWrites } = ownershipResult as Extract<OwnershipCheckResult, { error: null }>;
 
   const claimedMultiplier = computeMultiplier(body.inventory, body.upgrades);
 
@@ -352,7 +387,7 @@ score.post("/", async (c) => {
   const rank = resolveRankAndFlags(body.totalTDEarned, serverTotal);
   const batchStatements = buildScoreBatch(db, {
     existing, serverTotal, validatedTotal, validatedCurrent,
-    rank, country, username: body.username, validatedClaims,
+    rank, country, username: body.username, accountId, validatedClaims,
   });
 
   try {
@@ -363,9 +398,11 @@ score.post("/", async (c) => {
 
   // KV ownership writes are deferred until after DB persistence succeeds.
   // If db.batch() threw, these never execute — no orphaned KV entries.
-  if (ownershipResult.deferredKvWrites) {
-    await ownershipResult.deferredKvWrites();
+  if (deferredKvWrites) {
+    await deferredKvWrites();
   }
+
+  await issueFreeAccountCookie(c, c.env.FREE_ACCOUNT_COOKIE_SECRET, accountId);
 
   const finalTotal = existing ? Math.max(serverTotal, validatedTotal) : validatedTotal;
   return c.json({

@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import app from "../app";
 import { makeDB, makeDBWithTasks, mockKV, postScore } from "./score.test-helpers";
+import { signFreeAccountCookieValue } from "../utils/freeAccountIdentity";
 
 describe("GET /api/score", () => {
   it("returns 400 when username is missing", async () => {
@@ -312,6 +313,51 @@ describe("POST /api/score", () => {
       kv,
     );
     expect(res.status).toBe(403);
+  });
+
+  it("repairs existing free-user ownership when the signed account cookie matches the row", async () => {
+    const { db } = makeDB({ total_td: 1000, current_td: 800, account_id: "acct-123" });
+    const kv = mockKV({});
+    const cookieValue = await signFreeAccountCookieValue("test-secret", "acct-123");
+    const res = await postScore(
+      db,
+      {
+        username: "alice",
+        currentTD: 1000,
+        totalTDEarned: 1000,
+        inventory: {},
+        upgrades: [],
+      },
+      { Cookie: `cope_session_id=test-session; cope_free_account=${cookieValue}` },
+      kv,
+      { FREE_ACCOUNT_COOKIE_SECRET: "test-secret" },
+    );
+    expect(res.status).toBe(200);
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "alice", expect.any(Object));
+    expect(kv.put).toHaveBeenCalledWith("username_session:alice", "test-session", expect.any(Object));
+  });
+
+  it("backfills a legacy free-user row with account identity after proven ownership", async () => {
+    const { db, getSQL } = makeDB({ total_td: 1000, current_td: 800, account_id: null });
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+    });
+    const res = await postScore(
+      db,
+      {
+        username: "alice",
+        currentTD: 1000,
+        totalTDEarned: 1000,
+        inventory: {},
+        upgrades: [],
+      },
+      { Cookie: "cope_session_id=test-session" },
+      kv,
+      { FREE_ACCOUNT_COOKIE_SECRET: "test-secret" },
+    );
+    expect(res.status).toBe(200);
+    expect(getSQL()).toContain("account_id = COALESCE(account_id, ?)");
+    expect(res.headers.get("set-cookie")).toContain("cope_free_account=");
   });
 
   it("allows large one-off earnings from completed task bonus", async () => {

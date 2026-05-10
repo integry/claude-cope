@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import app from "./app";
+import { migrations } from "./utils/migrations";
 
 describe("app", () => {
   it("returns 404 for unknown routes", async () => {
@@ -10,6 +11,11 @@ describe("app", () => {
   });
 
   describe("migration bootstrap middleware", () => {
+    it("registers explicit migrations for user_scores.account_id rollout", () => {
+      expect(migrations.some((migration) => migration.name === "033_add_user_scores_account_id")).toBe(true);
+      expect(migrations.some((migration) => migration.name === "034_idx_user_scores_account_id")).toBe(true);
+    });
+
     it("calls DB.exec for migration when DB is available", async () => {
       const db = {
         prepare: vi.fn(() => ({
