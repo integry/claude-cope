@@ -53,10 +53,7 @@ function Terminal() {
   } = useGameState();
   const history = state.chatHistory;
   const setHistory = setChatHistory;
-  const creditTD = useCallback(
-    (amount: number) => addActiveTD(amount, true),
-    [addActiveTD],
-  );
+  const creditTD = useCallback((amount: number) => addActiveTD(amount, true), [addActiveTD]);
   const debitTD = useCallback((amount: number) => {
     setState((prev) => ({
       ...prev,
@@ -75,14 +72,7 @@ function Terminal() {
     username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost,
   });
   const rank = state.economy.currentRank;
-  const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({
-    history,
-    setHistory,
-    setState,
-    totalTDEarned: state.economy.totalTDEarned,
-    offlineTDEarned,
-    clearOfflineTDEarned,
-  });
+  const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, totalTDEarned: state.economy.totalTDEarned, offlineTDEarned, clearOfflineTDEarned });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
   const [instantBanReady, setInstantBanReady] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
@@ -119,22 +109,20 @@ function Terminal() {
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
-  const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
-  useEffect(() => {
-    return () => {
-      const ds = freeTierDelayRef.current;
-      ds.cancelled = true;
-      if (ds.timeoutId) {
-        clearTimeout(ds.timeoutId);
-      }
-    };
+  const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({
+    isBooting,
+    isInteractionBlocked: anyOverlayOpen || isProcessing,
+    gameState: state,
+    onlineCount,
+    setHistory,
+  });
+  useEffect(() => () => {
+    const ds = freeTierDelayRef.current;
+    ds.cancelled = true;
+    if (ds.timeoutId) clearTimeout(ds.timeoutId);
   }, []);
-  useEffect(() => {
-    return () => {
-      if (startupTicketPromptTimeoutRef.current) {
-        clearTimeout(startupTicketPromptTimeoutRef.current);
-      }
-    };
+  useEffect(() => () => {
+    if (startupTicketPromptTimeoutRef.current) clearTimeout(startupTicketPromptTimeoutRef.current);
   }, []);
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
     const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
@@ -167,11 +155,7 @@ function Terminal() {
     setInputValue,
     setShowUpgrade,
   });
-  const handleProfileClick = useCallback(() => {
-    closeAllOverlaysPreservingNag();
-    setShowProfile(true);
-    window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`);
-  }, [closeAllOverlaysPreservingNag, setShowProfile, state.username]);
+  const handleProfileClick = useCallback(() => { closeAllOverlaysPreservingNag(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlaysPreservingNag, setShowProfile, state.username]);
   useEffect(() => { if (typeof bottomRef.current?.scrollIntoView === "function") bottomRef.current.scrollIntoView({ behavior: "auto" }); }, [history]);
   useEffect(() => {
     const onPopState = () => {
@@ -204,22 +188,13 @@ function Terminal() {
       nagArmedFromQuotaRef.current = true;
       if (command) openUpgradeNag(command);
     } else triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState });
-  }, [
-    nagArmedFromQuotaRef,
-    openUpgradeNag,
-    playError,
-    resetQuota,
-    setHistory,
-    setState,
-    state,
-    unlockAchievementWithSound,
-  ]);
+  }, [nagArmedFromQuotaRef, openUpgradeNag, playError, resetQuota, setHistory, setState, state, unlockAchievementWithSound]);
   const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
-    if (shouldShowNag(effectiveApiKey, state.proKey, state.proKeyHash, state.economy.quotaPercent)) {
-      handleQuotaLockout(command);
-      return true;
+    if (!shouldShowNag(effectiveApiKey, state.proKey, state.proKeyHash, state.economy.quotaPercent)) {
+      return false;
     }
-    return false;
+    handleQuotaLockout(command);
+    return true;
   }, [state.proKey, state.proKeyHash, state.economy.quotaPercent, handleQuotaLockout]);
   const handleInstantBan = useCallback(() => { triggerInstantBan({ setInstantBanReady, setIsProcessing, playError, setHistory }); }, [setIsProcessing, playError, setHistory]);
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -271,10 +246,7 @@ function Terminal() {
   }, []);
   const handleSlashMenuSelect = useCallback((command: string) => {
     const nextSelection = resolveSlashMenuSelection(command, "click");
-    if (nextSelection.mode === "execute") {
-      runSlashCommandRef.current(nextSelection.value);
-      return;
-    }
+    if (nextSelection.mode === "execute") return void runSlashCommandRef.current(nextSelection.value);
     setInputValue(nextSelection.value);
     setSlashQuery(nextSelection.nextQuery);
     setSlashIndex(0);
@@ -295,7 +267,11 @@ function Terminal() {
   }, [setState]);
   const processCommand = async (command: string) => {
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
-    if (!effectiveApiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); handleInstantBan(); return; }
+    if (!effectiveApiKey && instantBanReady) {
+      setHistory((prev) => [...prev, { role: "user", content: command }]);
+      handleInstantBan();
+      return;
+    }
     const buddyResult = computeBuddyInterjection(state.buddy);
     handleBuddyInterjection(buddyResult);
     const userMessage: Message = { role: "user", content: command };
@@ -308,12 +284,24 @@ function Terminal() {
       const completed = await runFreeTierDelay({ commandCount: newCount, userMessage, delayState, setHistory });
       if (!completed) return;
       freeTierDelayRef.current = { cancelled: false, timeoutId: null };
-    } else { setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]); setIsProcessing(true); }
+    } else {
+      setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
+      setIsProcessing(true);
+    }
     const rollbackId = nextPendingBacklogRollbackIdRef.current++;
     pendingBacklogRollbacksRef.current.set(rollbackId, recordMessageWithoutTicket());
     const contextMessages = filterChatHistory(historyRef.current);
     const chatMessages = isFreeTier ? contextMessages : [...contextMessages, { role: "user", content: userMessage.content }];
-    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({ getState: getCurrentState, updateTicketProgress, addActiveTD, playChime, setState, onCompletedRewardSettled: (ticketId, profile) => { applySettledCompletedReward(ticketId, profile); } });
+    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({
+      getState: getCurrentState,
+      updateTicketProgress,
+      addActiveTD,
+      playChime,
+      setState,
+      onCompletedRewardSettled: (ticketId, profile) => {
+        applySettledCompletedReward(ticketId, profile);
+      },
+    });
     const controller = new AbortController();
     controller.signal.addEventListener("abort", () => {
       settlePendingBacklogRollback(rollbackId, true);
@@ -342,9 +330,10 @@ function Terminal() {
         });
         handleQuotaLockout(command);
       },
-      onProfileUpdate: (profile) => applyProfileUpdate(profile),
+      onProfileUpdate: applyProfileUpdate,
       onAccepted: () => handlePromptAccepted(rollbackId),
-      onError: () => handlePromptError(rollbackId), signal: controller.signal,
+      onError: () => handlePromptError(rollbackId),
+      signal: controller.signal,
     });
   };
   processCommandRef.current = processCommand;
@@ -368,18 +357,20 @@ function Terminal() {
       setHistoryIndex(-1);
       return;
     }
-    if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
+    if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) {
+      setInputValue("");
+      return;
+    }
     const command = inputValue;
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
-    if (nagArmedFromQuotaRef.current && pendingNagCommandRef.current === null) { openUpgradeNag(command); return; }
+    if (nagArmedFromQuotaRef.current && pendingNagCommandRef.current === null) {
+      openUpgradeNag(command);
+      return;
+    }
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
     submitPromptCommandWithAccounting(command);
   };
-  const handleUpgradeNagDismiss = useCallback(() => {
-    handleUpgradeNagClose((command) => {
-      submitPromptCommandWithAccounting(command);
-    });
-  }, [handleUpgradeNagClose, submitPromptCommandWithAccounting]);
+  const handleUpgradeNagDismiss = useCallback(() => { handleUpgradeNagClose((command) => { submitPromptCommandWithAccounting(command); }); }, [handleUpgradeNagClose, submitPromptCommandWithAccounting]);
   const handleManualUpgradeDismiss = dismissUpgradeNagOverlay;
   const { handleKeyDown } = useTerminalKeyboard({
     slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
