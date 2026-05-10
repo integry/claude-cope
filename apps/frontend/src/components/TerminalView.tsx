@@ -56,6 +56,7 @@ type TerminalViewProps = OverlayVisibility & {
   slashQuery: string;
   slashIndex: number;
   runSlashCommand: (command: string) => void;
+  runTickerCommand: (command: string) => void;
   inputValue: string;
   suggestedReply: string | null;
   isProcessing: boolean;
@@ -114,6 +115,7 @@ export function TerminalView({
   slashQuery,
   slashIndex,
   runSlashCommand,
+  runTickerCommand,
   inputValue,
   suggestedReply,
   isProcessing,
@@ -163,7 +165,7 @@ export function TerminalView({
       <div className="shrink-0">
         <Ticker
           onExpand={() => { closeAllOverlaysPreservingNag(); setShowParty(true); }}
-          onSlashCommand={runSlashCommand}
+          onSlashCommand={runTickerCommand}
           onlineCount={onlineCount}
         />
         {outageHp !== null && <OutageBar outageHp={outageHp} />}
