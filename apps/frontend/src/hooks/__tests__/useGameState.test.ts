@@ -180,7 +180,7 @@ describe("canBuyTheme", () => {
   it("clears stale paid entitlements on auth-related theme purchase failures", () => {
     const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: "stale-hash", proKey: "stale-key" });
     const purchasedState = applyOptimisticThemePurchase(state, "amber");
-    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "License has been revoked or is no longer active");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "License has been revoked or is no longer active", "license_inactive");
 
     expect(failedState.proKey).toBeUndefined();
     expect(failedState.proKeyHash).toBeUndefined();
@@ -202,7 +202,18 @@ describe("canBuyTheme", () => {
   it("clears only the session-backed entitlement on session mismatch failures", () => {
     const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: "pro-hash", proKey: "pro-key" });
     const purchasedState = applyOptimisticThemePurchase(state, "amber");
-    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "Session authentication is required for this purchase");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "Session authentication is required for this purchase", "session_auth_required");
+
+    expect(failedState.proKey).toBe("pro-key");
+    expect(failedState.proKeyHash).toBe("pro-hash");
+    expect(failedState.isPro).toBe(true);
+    expect(failedState.hasSessionPro).toBeUndefined();
+  });
+
+  it("uses structured entitlement error codes even if backend error copy changes", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: "pro-hash", proKey: "pro-key" });
+    const purchasedState = applyOptimisticThemePurchase(state, "amber");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "Temporary auth issue", "session_auth_required");
 
     expect(failedState.proKey).toBe("pro-key");
     expect(failedState.proKeyHash).toBe("pro-hash");
@@ -213,7 +224,7 @@ describe("canBuyTheme", () => {
   it("clears stale paid state for session-only users on session mismatch failures", () => {
     const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
     const purchasedState = applyOptimisticThemePurchase(state, "amber");
-    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "Session user does not match the requested account");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "Session user does not match the requested account", "session_user_mismatch");
 
     expect(failedState.proKey).toBeUndefined();
     expect(failedState.proKeyHash).toBeUndefined();

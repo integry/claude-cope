@@ -296,7 +296,7 @@ export function useGameState() {
         setState((prev) => applyServerProfile(prev, result.profile!));
         track(AnalyticsEvents.THEME_PURCHASED, { theme_id: themeId, cost: theme.cost });
       } else if (!result.success) {
-        setState((prev) => applyThemePurchaseFailure(prev, themeId, result.error));
+        setState((prev) => applyThemePurchaseFailure(prev, themeId, result.error, result.errorCode));
       }
     }).catch(() => {
       setState((prev) => applyThemePurchaseFailure(prev, themeId, "Network error"));

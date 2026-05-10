@@ -535,7 +535,7 @@ account.post("/buy-theme", async (c) => {
     sessionId: c.get("sessionId"),
   });
   if (ownership.status !== "ok") {
-    return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
+    return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
   }
   const { profile } = ownership;
 
@@ -593,7 +593,7 @@ account.post("/update-theme", async (c) => {
     sessionId: c.get("sessionId"),
   });
   if (ownership.status !== "ok") {
-    return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
+    return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
   }
   const { profile } = ownership;
 

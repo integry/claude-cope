@@ -215,8 +215,14 @@ export async function rollbackProfileMutation(
 
 export type OwnershipResult =
   | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; status: "ok"; licenseKeyHash: string }
-  | { profile: null; status: "not_found"; error: string }
-  | { profile: null; status: "unauthorized"; error: string };
+  | { profile: null; status: "not_found"; error: string; errorCode?: undefined }
+  | { profile: null; status: "unauthorized"; error: string; errorCode?: ThemeOwnershipErrorCode };
+
+export type ThemeOwnershipErrorCode =
+  | "session_auth_required"
+  | "session_user_mismatch"
+  | "active_max_license_required"
+  | "license_inactive";
 
 async function followRenameChain(kv: KVNamespace, username: string) {
   let current = username;
@@ -294,7 +300,7 @@ export async function verifyOwnership(db: D1Database, username: string, licenseK
   // Keep paid mutation routes aligned with /me and score gating semantics:
   // stale "active" rows are treated as revoked until refreshed.
   if (!(await isLicenseActive(db, licenseKeyHash))) {
-    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
+    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active", errorCode: "license_inactive" };
   }
 
   const profile = await getProfile(db, username);
@@ -319,13 +325,18 @@ export async function resolveThemePurchaseOwnership(
   }
 
   if (!opts.kv || !opts.sessionId) {
-    return { profile: null, status: "unauthorized", error: "Session authentication is required for this purchase" };
+    return { profile: null, status: "unauthorized", error: "Session authentication is required for this purchase", errorCode: "session_auth_required" };
   }
 
   const boundUsername = await opts.kv.get(accountKvKeys.sessionUser(opts.sessionId));
   if (!boundUsername) {
-    return { profile: null, status: "unauthorized", error: "Session authentication is required for this purchase" };
+    return { profile: null, status: "unauthorized", error: "Session authentication is required for this purchase", errorCode: "session_auth_required" };
   }
+
+  const requestedUsername = opts.username.toLowerCase();
+  const requestedAlias = requestedUsername === boundUsername.toLowerCase()
+    ? null
+    : await followRenameChain(opts.kv, opts.username);
 
   const resolved = await resolveSessionProfileRow({
     db,
@@ -335,30 +346,25 @@ export async function resolveThemePurchaseOwnership(
     logPrefix: "[account/buy-theme]",
   });
   if (!resolved.row) {
-    if (boundUsername.toLowerCase() !== opts.username.toLowerCase()) {
-      const requestedAlias = await followRenameChain(opts.kv, opts.username);
-      if (requestedAlias.current.toLowerCase() !== boundUsername.toLowerCase()) {
-        return { profile: null, status: "unauthorized", error: "Unauthorized: session user does not match this profile" };
-      }
+    if (requestedAlias && requestedAlias.current.toLowerCase() !== boundUsername.toLowerCase()) {
+      return { profile: null, status: "unauthorized", error: "Unauthorized: session user does not match this profile", errorCode: "session_user_mismatch" };
     }
     return { profile: null, status: "not_found", error: "Profile not found" };
   }
-  const requestedUsername = opts.username.toLowerCase();
   const sessionMatchesRequested = resolved.username.toLowerCase() === requestedUsername
     || boundUsername.toLowerCase() === requestedUsername;
-  const requestedAlias = sessionMatchesRequested ? null : await followRenameChain(opts.kv, opts.username);
   if (!sessionMatchesRequested && requestedAlias?.current.toLowerCase() !== resolved.username.toLowerCase()) {
-    return { profile: null, status: "unauthorized", error: "Unauthorized: session user does not match this profile" };
+    return { profile: null, status: "unauthorized", error: "Unauthorized: session user does not match this profile", errorCode: "session_user_mismatch" };
   }
 
   const row = resolved.row as typeof resolved.row & { license_hash: string | null };
   if (!row) return { profile: null, status: "not_found", error: "Profile not found" };
   if (!row.license_hash) {
-    return { profile: null, status: "unauthorized", error: "An active Max license is required to purchase themes" };
+    return { profile: null, status: "unauthorized", error: "An active Max license is required to purchase themes", errorCode: "active_max_license_required" };
   }
 
   if (!(await isLicenseActive(db, row.license_hash))) {
-    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
+    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active", errorCode: "license_inactive" };
   }
 
   const profile = await getProfile(db, resolved.username);

@@ -816,10 +816,13 @@ describe("Provider configuration in OpenRouter requests", () => {
       { maxTokens: 40, temperature: 0.4, topP: 0.8 },
     );
     expect(capturedRequestBody).toMatchObject({
+      model: "openai/gpt-oss-20b",
+      messages: [{ role: "user", content: "test" }],
       max_tokens: 40,
       temperature: 0.4,
       top_p: 0.8,
     });
+    expect(capturedRequestBody).not.toHaveProperty("provider");
   });
 });
 

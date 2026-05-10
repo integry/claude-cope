@@ -207,7 +207,10 @@ describe("POST /api/account/buy-theme", () => {
       themeId: "amber",
     }, { DB: db });
     expect(res.status).toBe(403);
-    expect(((await res.json()) as { error: string }).error).toContain("Session authentication is required");
+    expect(await res.json()).toMatchObject({
+      error: expect.stringContaining("Session authentication is required"),
+      errorCode: "session_auth_required",
+    });
   });
   it("rejects a session-authenticated purchase when the session is bound to a different username", async () => {
     const kv = mockKV({ "session_user:test-session": "bob" });
@@ -216,7 +219,10 @@ describe("POST /api/account/buy-theme", () => {
       themeId: "amber",
     }, { DB: createMockDB().db, QUOTA_KV: kv });
     expect(res.status).toBe(403);
-    expect(((await res.json()) as { error: string }).error).toContain("session user does not match");
+    expect(await res.json()).toMatchObject({
+      error: expect.stringContaining("session user does not match"),
+      errorCode: "session_user_mismatch",
+    });
   });
   it("rejects a session-authenticated free user without licenseKeyHash", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
@@ -230,7 +236,10 @@ describe("POST /api/account/buy-theme", () => {
       themeId: "amber",
     }, { DB: db, QUOTA_KV: kv });
     expect(res.status).toBe(403);
-    expect(((await res.json()) as { error: string }).error).toContain("active Max license");
+    expect(await res.json()).toMatchObject({
+      error: expect.stringContaining("active Max license"),
+      errorCode: "active_max_license_required",
+    });
   });
   it("rejects a session-authenticated revoked user without licenseKeyHash", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
@@ -246,7 +255,10 @@ describe("POST /api/account/buy-theme", () => {
       themeId: "amber",
     }, { DB: db, QUOTA_KV: kv });
     expect(res.status).toBe(403);
-    expect(((await res.json()) as { error: string }).error).toContain("revoked");
+    expect(await res.json()).toMatchObject({
+      error: expect.stringContaining("revoked"),
+      errorCode: "license_inactive",
+    });
   });
 });
 

@@ -1,4 +1,5 @@
 import type { ServerProfile } from "@claude-cope/shared/profile";
+import type { ThemeEntitlementErrorCode } from "../api/profileApi";
 import { THEMES } from "../game/constants";
 import type { GameState } from "./gameStateUtils";
 import { isPaidUser, nextMsgId } from "./gameStateUtils";
@@ -16,13 +17,15 @@ function hasThemePurchaseAccess(state: Pick<GameState, "proKeyHash" | "hasSessio
   return Boolean(state.proKeyHash) || Boolean(state.hasSessionPro);
 }
 
-function isDefinitiveThemePurchaseEntitlementError(error?: string): boolean {
+function isDefinitiveThemePurchaseEntitlementError(error?: string, errorCode?: ThemeEntitlementErrorCode): boolean {
+  if (errorCode === "active_max_license_required" || errorCode === "license_inactive") return true;
   if (!error) return false;
   const normalized = error.toLowerCase();
   return normalized.includes("active max license") || normalized.includes("revoked") || normalized.includes("no longer active");
 }
 
-function isThemePurchaseSessionMismatchError(error?: string): boolean {
+function isThemePurchaseSessionMismatchError(error?: string, errorCode?: ThemeEntitlementErrorCode): boolean {
+  if (errorCode === "session_auth_required" || errorCode === "session_user_mismatch") return true;
   if (!error) return false;
   const normalized = error.toLowerCase();
   return normalized.includes("session authentication is required") || normalized.includes("session user does not match");
@@ -97,15 +100,15 @@ export function applyValidatedSessionProState(state: GameState, result: SessionP
   return { ...state, ...(restoredUsername && state.username !== restoredUsername ? { username: restoredUsername } : {}), isPro: true, hasSessionPro: true };
 }
 
-export function applyThemePurchaseFailure(state: GameState, themeId: string, error?: string): GameState {
+export function applyThemePurchaseFailure(state: GameState, themeId: string, error?: string, errorCode?: ThemeEntitlementErrorCode): GameState {
   const rolledBack = rollbackOptimisticThemePurchase(state, themeId);
-  const nextState = isDefinitiveThemePurchaseEntitlementError(error) ? {
+  const nextState = isDefinitiveThemePurchaseEntitlementError(error, errorCode) ? {
     ...rolledBack,
     proKey: undefined,
     proKeyHash: undefined,
     isPro: undefined,
     hasSessionPro: undefined,
-  } : isThemePurchaseSessionMismatchError(error) ? clearStaleSessionEntitlement(rolledBack) : rolledBack;
+  } : isThemePurchaseSessionMismatchError(error, errorCode) ? clearStaleSessionEntitlement(rolledBack) : rolledBack;
   const message = error ?? "Theme purchase failed";
   return { ...nextState, chatHistory: [...nextState.chatHistory, { id: nextMsgId(), role: "error", content: `[❌ Error] ${message}` }] };
 }

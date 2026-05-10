@@ -1,7 +1,13 @@
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE } from "../config";
 
-type ProfileResult = { success: boolean; profile?: ServerProfile; error?: string };
+export type ThemeEntitlementErrorCode =
+  | "session_auth_required"
+  | "session_user_mismatch"
+  | "active_max_license_required"
+  | "license_inactive";
+
+type ProfileResult = { success: boolean; profile?: ServerProfile; error?: string; errorCode?: ThemeEntitlementErrorCode };
 
 async function profilePost(path: string, body: Record<string, unknown>): Promise<ProfileResult> {
   try {
@@ -12,7 +18,7 @@ async function profilePost(path: string, body: Record<string, unknown>): Promise
     });
     const data = await res.json() as ProfileResult;
     if (!res.ok) {
-      return { success: false, error: data.error ?? `HTTP ${res.status}` };
+      return { success: false, error: data.error ?? `HTTP ${res.status}`, errorCode: data.errorCode };
     }
     return data;
   } catch {
