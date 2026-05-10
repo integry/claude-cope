@@ -574,6 +574,58 @@ account.post("/buy-theme", async (c) => {
   return c.json({ success: true, profile: updated });
 });
 
+account.post("/update-theme", async (c) => {
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: "Database not configured" }, 500);
+
+  const body = await c.req.json<{ username: string; themeId: string; licenseKeyHash?: string }>();
+  if (!body.username || !body.themeId) {
+    return c.json({ error: "username and themeId are required" }, 400);
+  }
+
+  const theme = THEMES.find((t) => t.id === body.themeId);
+  if (!theme) return c.json({ error: "Unknown theme" }, 400);
+
+  const ownership = await resolveThemePurchaseOwnership(db, {
+    username: body.username,
+    licenseKeyHash: body.licenseKeyHash,
+    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
+    sessionId: c.get("sessionId"),
+  });
+  if (ownership.status !== "ok") {
+    return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
+  }
+  const { profile } = ownership;
+
+  if (!profile.unlocked_themes.includes(body.themeId)) {
+    return c.json({ error: "Theme is not unlocked" }, 400);
+  }
+  if (profile.active_theme === body.themeId) {
+    return c.json({ success: true, profile });
+  }
+
+  const result = await db.prepare(
+    `UPDATE user_scores SET
+      active_theme = ?,
+      updated_at = datetime('now')
+    WHERE username = ? AND license_hash = ?
+      AND ? IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
+      AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
+  ).bind(
+    body.themeId,
+    profile.username,
+    ownership.licenseKeyHash,
+    body.themeId,
+  ).run();
+
+  if (!result.meta.changes) {
+    return c.json({ error: "Update failed — profile not found, theme not unlocked, or license revoked" }, 409);
+  }
+
+  const updated = await getProfile(db, profile.username);
+  return c.json({ success: true, profile: updated });
+});
+
 account.post("/unlock-achievement", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);

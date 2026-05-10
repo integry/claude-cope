@@ -5,7 +5,7 @@ import { GENERATORS, UPGRADES, THEMES, FREE_TIER_RANK_CAP } from "../game/consta
 import { supabase } from "../supabaseClient";
 import { type Message, type GameState, loadState, calcBulkCost, calculateActiveMultiplier, resolveRank, isPaidUser, isFreeUser, STORAGE_KEY } from "./gameStateUtils";
 import { applyServerProfile } from "./profileSync";
-import { buyGeneratorServer, buyUpgradeServer, buyThemeServer, unlockAchievementServer, updateTicketServer, fetchSessionProfile } from "../api/profileApi";
+import { buyGeneratorServer, buyUpgradeServer, buyThemeServer, unlockAchievementServer, updateTicketServer, fetchSessionProfile, updateThemeServer } from "../api/profileApi";
 import {
   type SessionProfileResult,
   canBuyTheme,
@@ -264,7 +264,18 @@ export function useGameState() {
   }, []);
 
   const setActiveTheme = useCallback((themeId: string) => {
+    const current = stateRef.current;
+    if (!current.unlockedThemes.includes(themeId) || current.activeTheme === themeId) return;
+
     setState((prev) => (!prev.unlockedThemes.includes(themeId) ? prev : { ...prev, activeTheme: themeId }));
+
+    if (!current.username || (!current.proKeyHash && !current.hasSessionPro)) return;
+
+    updateThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
+      if (result.success && result.profile) {
+        setState((prev) => applyServerProfile(prev, result.profile!));
+      }
+    }).catch(() => {});
   }, []);
 
   const unlockTheme = useCallback((themeId: string) => {

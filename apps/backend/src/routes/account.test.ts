@@ -250,6 +250,69 @@ describe("POST /api/account/buy-theme", () => {
   });
 });
 
+describe("POST /api/account/update-theme", () => {
+  it("returns 400 when required fields are missing", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/update-theme", { username: "alice" }, { DB: db });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for unknown themeId", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/update-theme", {
+      username: "alice", themeId: "nonexistent", licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe("Unknown theme");
+  });
+
+  it("persists the active theme for a session-authenticated Max user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = {
+      ...BASE_PROFILE,
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "default",
+    };
+    const updatedProfile = { ...paidProfile, active_theme: "amber" };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: updatedProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean; profile: { active_theme: string } };
+    expect(body.success).toBe(true);
+    expect(body.profile.active_theme).toBe("amber");
+  });
+
+  it("rejects equip requests for themes that are not unlocked", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = { ...BASE_PROFILE, current_td: 6000, active_theme: "default" };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe("Theme is not unlocked");
+  });
+});
+
 describe("POST /api/account/unlock-achievement", () => {
   it("returns 400 when required fields are missing", async () => {
     const { db } = createMockDB();

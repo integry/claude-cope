@@ -32,6 +32,10 @@ export function buyThemeServer(username: string, themeId: string, licenseKeyHash
   return profilePost("buy-theme", { username, themeId, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
 }
 
+export function updateThemeServer(username: string, themeId: string, licenseKeyHash?: string): Promise<ProfileResult> {
+  return profilePost("update-theme", { username, themeId, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
+}
+
 export function unlockAchievementServer(username: string, achievementId: string, licenseKeyHash: string): Promise<ProfileResult> {
   return profilePost("unlock-achievement", { username, achievementId, licenseKeyHash });
 }
