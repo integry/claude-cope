@@ -17,7 +17,7 @@ export default function Ticker({ onExpand, onlineCount }: TickerProps) {
 
   return (
     <div
-      className="hidden sm:block w-full bg-gray-900 border-b border-gray-700 text-green-400 text-xs py-1 px-2 cursor-pointer hover:bg-gray-800 transition-colors"
+      className="hidden sm:block w-full bg-gray-900 border-b border-gray-700 text-green-400 text-xs pt-2 pb-1 px-2 cursor-pointer hover:bg-gray-800 transition-colors"
       onClick={onExpand}
       role="button"
       tabIndex={0}
