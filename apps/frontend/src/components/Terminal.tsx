@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import type { ServerProfile } from "@claude-cope/shared/profile";
-import { getSlashMenuItems } from "./slashCommands";
+import { getSlashMenuItems, resolveSlashMenuSelection } from "./slashCommands";
 import { useGameState, Message } from "../hooks/useGameState";
 import { isFreeUser, isPaidUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
@@ -260,6 +260,20 @@ function Terminal() {
     setInputValue(command + " "); setSlashQuery(""); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
   }, []);
 
+  const handleSlashMenuSelect = useCallback((command: string) => {
+    const nextSelection = resolveSlashMenuSelection(command, "click");
+    if (nextSelection.mode === "execute") {
+      runSlashCommandRef.current(nextSelection.value);
+      return;
+    }
+
+    setInputValue(nextSelection.value);
+    setSlashQuery(nextSelection.nextQuery);
+    setSlashIndex(0);
+    setSuggestedReply(null);
+    inputRef.current?.focus();
+  }, []);
+
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
     if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1 } }));
   }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
@@ -401,7 +415,7 @@ function Terminal() {
       setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect}
       isBooting={isBooting} history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current}
       promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} bottomRef={bottomRef} slashQuery={slashQuery}
-      slashIndex={slashIndex} runSlashCommand={runSlashCommand} inputValue={inputValue} suggestedReply={suggestedReply}
+      slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect} inputValue={inputValue} suggestedReply={suggestedReply}
       isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown} buyGenerator={buyGenerator}
       buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} showStore={showStore}
       showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp}

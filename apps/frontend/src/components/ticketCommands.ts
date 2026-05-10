@@ -86,6 +86,11 @@ function formatBacklogFilterLine(category: string | null): string {
   return category ? `\n${formatBacklogFilterHeader(category)}` : "";
 }
 
+function formatBacklogInfoLine(category: string | null): string {
+  if (category) return "";
+  return "\n[INFO] Showing all tickets. Want specific trauma? Try: `/backlog MELT`";
+}
+
 function replyEmptyBacklog(reply: Reply, normalizedCategory: string | null): boolean {
   const hint = TICKET_REFINE_ENABLED ? " Submit tickets with `/ticket <description>`." : "";
   const filterHeader = formatBacklogFilterLine(normalizedCategory);
@@ -143,7 +148,8 @@ function replyBacklogTickets(
   const table = formatBacklogTable(tickets);
   const footer = formatBacklogFooter(tickets);
   const filterHeader = formatBacklogFilterLine(normalizedCategory);
-  reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]${filterHeader}\n\n\`\`\`\n${table}\n\`\`\`\n\n${footer}` });
+  const infoLine = formatBacklogInfoLine(normalizedCategory);
+  reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]${filterHeader}${infoLine}\n\n\`\`\`\n${table}\n\`\`\`\n\n${footer}` });
   return true;
 }
 

@@ -83,6 +83,7 @@ describe("premium backlog handling", () => {
     expect(message.content).toContain("🔒 [PREMIUM] Force View Events into Ad Creative Pipelines");
     expect(message.content).toContain("| OPEN     |      340 |");
     expect(message.content).toContain("| PREMIUM  |       -- |");
+    expect(message.content).toContain("[INFO] Showing all tickets. Want specific trauma? Try: `/backlog MELT`");
     expect(message.content).toContain("[UPGRADE REQUIRED] The following categories are locked behind Wallet Extraction:");
     expect(message.content).toContain("🔒 PIXEL (Ad Creative Pipelines)");
     expect(message.content).toContain("Run `/upgrade` to unlock 50+ specialized categories and premium suffering.");
@@ -179,6 +180,7 @@ describe("premium backlog handling", () => {
       expect.objectContaining({ headers: { "x-pro-key-hash": "pro-hash" } }),
     );
     expect(reply.mock.calls[0]?.[0].content).toContain("[ FILTER ACTIVE: MELT (Mainframes / Legacy) ]");
+    expect(reply.mock.calls[0]?.[0].content).not.toContain("Want specific trauma?");
   });
 
   it("blocks premium category filters for free users before any request is made", async () => {

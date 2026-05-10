@@ -94,6 +94,7 @@ export type SlashMenuCommandItem = {
   value: string;
   groupTitle: string;
   description?: string;
+  argumentHint?: string;
 };
 
 export type SlashMenuBacklogCategoryItem = {
@@ -106,6 +107,14 @@ export type SlashMenuBacklogCategoryItem = {
 };
 
 export type SlashMenuItem = SlashMenuCommandItem | SlashMenuBacklogCategoryItem;
+
+export type SlashMenuSelectionTrigger = "click" | "tab" | "enter";
+
+export type SlashMenuSelection = {
+  mode: "execute" | "prefill";
+  value: string;
+  nextQuery: string;
+};
 
 function matchesBacklogCategoryQuery(query: string, prefix: string, label: string, description: string): boolean {
   if (!query) return true;
@@ -166,7 +175,35 @@ export function getSlashMenuItems(
         value: cmd,
         groupTitle: group.title,
         description: SLASH_COMMAND_DESCRIPTIONS[cmd],
+        argumentHint: cmd === "/backlog" ? "[category]" : undefined,
       }];
     }),
   );
+}
+
+export function resolveSlashMenuSelection(
+  value: string,
+  trigger: SlashMenuSelectionTrigger,
+): SlashMenuSelection {
+  if (value === "/backlog") {
+    return {
+      mode: "prefill",
+      value: "/backlog ",
+      nextQuery: "/backlog ",
+    };
+  }
+
+  if (trigger === "tab") {
+    return {
+      mode: "prefill",
+      value,
+      nextQuery: value,
+    };
+  }
+
+  return {
+    mode: "execute",
+    value,
+    nextQuery: "",
+  };
 }

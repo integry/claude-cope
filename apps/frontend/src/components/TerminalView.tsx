@@ -55,7 +55,7 @@ type TerminalViewProps = OverlayVisibility & {
   bottomRef: RefObject<HTMLDivElement | null>;
   slashQuery: string;
   slashIndex: number;
-  runSlashCommand: (command: string) => void;
+  handleSlashMenuSelect: (command: string) => void;
   inputValue: string;
   suggestedReply: string | null;
   isProcessing: boolean;
@@ -113,7 +113,7 @@ export function TerminalView({
   bottomRef,
   slashQuery,
   slashIndex,
-  runSlashCommand,
+  handleSlashMenuSelect,
   inputValue,
   suggestedReply,
   isProcessing,
@@ -202,7 +202,7 @@ export function TerminalView({
           onSlashCommand={handleSlashCommandClick}
         />
         <div className="relative border-b border-white">
-          {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} paidUser={isPaidUser(state)} onSelect={runSlashCommand} />}
+          {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} paidUser={isPaidUser(state)} onSelect={handleSlashMenuSelect} />}
           <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
           <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
         </div>
