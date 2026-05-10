@@ -116,6 +116,7 @@ function Terminal() {
   const historyRef = useRef(history);
   historyRef.current = history;
   const lastSuggestedReplyRef = useRef<string | null>(null);
+  const pendingBacklogRollbackRef = useRef<(() => void) | null>(null);
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
@@ -154,7 +155,6 @@ function Terminal() {
     clearPendingNag,
     closeAllOverlaysAndRestoreNag,
     closeAllOverlaysPreservingNag,
-    consumePendingNagCommand,
     dismissUpgradeOverlay: dismissUpgradeNagOverlay,
     handleUpgradeNagClose,
     nagArmedFromQuotaRef,
@@ -248,8 +248,13 @@ function Terminal() {
   runSlashCommandRef.current = runSlashCommand;
   useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, setHistory, runSlashCommand });
   const handlePromptAccepted = useCallback(() => {
+    pendingBacklogRollbackRef.current = null;
     clearPendingNag();
   }, [clearPendingNag]);
+  const handlePromptError = useCallback(() => {
+    pendingBacklogRollbackRef.current = null;
+    playError();
+  }, [playError]);
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") { runSlashCommandRef.current(command); return; }
     setInputValue(command + " "); setSlashQuery(""); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
@@ -282,6 +287,7 @@ function Terminal() {
       if (!completed) return;
       freeTierDelayRef.current = { cancelled: false, timeoutId: null };
     } else { setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]); setIsProcessing(true); }
+    pendingBacklogRollbackRef.current = recordMessageWithoutTicket();
     const contextMessages = filterChatHistory(historyRef.current);
     const chatMessages = isFreeTier ? contextMessages : [...contextMessages, { role: "user", content: userMessage.content }];
     const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({ getState: getCurrentState, updateTicketProgress, addActiveTD, playChime, setState, onCompletedRewardSettled: (ticketId, profile) => { applySettledCompletedReward(ticketId, profile); } });
@@ -295,6 +301,8 @@ function Terminal() {
       onByokUsage: (usage) => setState((prev) => { const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 }; return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } }; }),
       onQuotaUpdate: (quotaPercent) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })); if (quotaPercent <= 0 && isFreeTier) nagArmedFromQuotaRef.current = true; },
       onQuotaExhausted: () => {
+        pendingBacklogRollbackRef.current?.();
+        pendingBacklogRollbackRef.current = null;
         setCommandHistory((prev) => {
           const idx = prev.lastIndexOf(command);
           return idx >= 0 ? [...prev.slice(0, idx), ...prev.slice(idx + 1)] : prev;
@@ -311,10 +319,15 @@ function Terminal() {
       },
       onProfileUpdate: (profile) => applyProfileUpdate(profile),
       onAccepted: handlePromptAccepted,
-      onError: playError, signal: controller.signal,
+      onError: handlePromptError, signal: controller.signal,
     });
   };
   processCommandRef.current = processCommand;
+  const submitPromptCommandWithAccounting = useCallback((command: string) => {
+    setInputValue("");
+    setHistoryIndex(-1);
+    submitPromptCommand(command);
+  }, [submitPromptCommand]);
   const handleEnterSubmit = async () => {
     recordEnter();
     if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
@@ -332,37 +345,16 @@ function Terminal() {
     }
     if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
-    setInputValue(""); setHistoryIndex(-1);
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
     if (nagArmedFromQuotaRef.current && pendingNagCommandRef.current === null) { openUpgradeNag(command); return; }
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
-    recordMessageWithoutTicket();
-    submitPromptCommand(command);
+    submitPromptCommandWithAccounting(command);
   };
-  const resumePendingNagCommand = useCallback((command: string) => {
-    setCommandHistory((prev) => [...prev, command]);
-    processCommandRef.current(command);
-  }, []);
   const handleUpgradeNagDismiss = useCallback(() => {
     handleUpgradeNagClose((command) => {
-      resumePendingNagCommand(command);
+      submitPromptCommandWithAccounting(command);
     });
-  }, [handleUpgradeNagClose, resumePendingNagCommand]);
-  const handleUpgradeNagConfirmClose = useCallback(() => {
-    dismissUpgradeNagOverlay();
-    const command = consumePendingNagCommand();
-    if (command !== null) {
-      setInputValue("");
-      setHistoryIndex(-1);
-      recordMessageWithoutTicket();
-      submitPromptCommand(command);
-    }
-  }, [
-    consumePendingNagCommand,
-    dismissUpgradeNagOverlay,
-    recordMessageWithoutTicket,
-    submitPromptCommand,
-  ]);
+  }, [handleUpgradeNagClose, submitPromptCommandWithAccounting]);
   const handleManualUpgradeDismiss = dismissUpgradeNagOverlay;
   const { handleKeyDown } = useTerminalKeyboard({
     slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
@@ -373,7 +365,7 @@ function Terminal() {
     closeAllOverlaysPreservingNag, onlineCount, rank, state, handleProfileClick, setInputValue, setSlashQuery, setSlashIndex, compactEffect, isBooting,
     history, messageKeys: messageKeys.current, initialHistoryLen: initialHistoryLen.current, promptString, handleSlashCommandClick, bottomRef, slashQuery,
     slashIndex, runSlashCommand, inputValue, suggestedReply, isProcessing, handleChange, handleKeyDown, buyGenerator, buyUpgrade, buyTheme, setActiveTheme,
-    ...terminalOverlayProps, setIsProcessing, setHistory, pendingNagCommand, handleUpgradeNagClose: handleUpgradeNagConfirmClose,
+    ...terminalOverlayProps, setIsProcessing, setHistory, pendingNagCommand, handleUpgradeNagClose: handleUpgradeNagDismiss,
     handleManualUpgradeDismiss, upgradeNagDismissPhase, upgradeNagDismissEffect,
   };
   return <TerminalView {...terminalViewProps} />;

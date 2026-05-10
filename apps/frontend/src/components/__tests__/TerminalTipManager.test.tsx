@@ -111,11 +111,21 @@ vi.mock("../terminalHandlers", () => ({
   triggerInstantBan: vi.fn(),
 }));
 vi.mock("../../hooks/useTerminalKeyboard", () => ({
-  useTerminalKeyboard: ({ handleEnterSubmit }: { handleEnterSubmit: () => void }) => ({
+  useTerminalKeyboard: ({
+    handleEnterSubmit,
+    handleUpgradeNagClose,
+  }: {
+    handleEnterSubmit: () => void;
+    handleUpgradeNagClose: () => void;
+  }) => ({
     handleKeyDown: (event: KeyboardEvent) => {
       if (event.key === "Enter") {
         event.preventDefault();
         void handleEnterSubmit();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        handleUpgradeNagClose();
       }
     },
   }),
@@ -324,6 +334,25 @@ describe("Terminal tip-manager wiring", () => {
 
     await act(async () => {
       dismissButton!.click();
+    });
+
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(2);
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(2);
+    expect(input!.value).toBe("");
+  });
+
+  it("replays a nagged prompt through the same path when dismissed by keyboard", async () => {
+    await renderTerminal();
+
+    await submitCommand("first prompt");
+    shouldShowNagMock.mockReturnValueOnce(true);
+    await submitCommand("retry me");
+
+    const input = container.querySelector("input[aria-label='terminal-input']") as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    await act(async () => {
+      input!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
 
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(2);

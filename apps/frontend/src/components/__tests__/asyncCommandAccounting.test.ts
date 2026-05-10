@@ -147,7 +147,8 @@ describe("async slash-command accounting", () => {
     await vi.runAllTimersAsync();
 
     expect(ctx.setHistory).toHaveBeenLastCalledWith([]);
-    expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/clear");
+    expect(ctx.state.commandUsage).toEqual({ "/clear": 1 });
+    expect(ctx.onValidSlashCommand).not.toHaveBeenCalled();
   });
 
   it("counts async streaming commands even when they do not reply through reply()", async () => {

@@ -9,6 +9,7 @@ import { API_BASE, BYOK_ENABLED, PRO_QUOTA_LIMIT } from "../config";
 import { applyServerProfile } from "../hooks/profileSync";
 import { isPaidUser } from "../hooks/gameStateUtils";
 import { updateTicketServer } from "../api/profileApi";
+import { ALL_SLASH_COMMANDS } from "./slashCommands";
 
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
@@ -65,8 +66,12 @@ export interface SlashCommandContext {
 }
 
 type SlashCommandAccountingPolicy = "tracked" | "conditional";
+type SupportedSlashCommand = (typeof ALL_SLASH_COMMANDS)[number];
+type SlashCommandAccountingOptions = {
+  notifyValidSlashCommand?: boolean;
+};
 
-export const SLASH_COMMAND_ACCOUNTING_POLICY: Record<string, SlashCommandAccountingPolicy> = {
+export const SLASH_COMMAND_ACCOUNTING_POLICY: Record<SupportedSlashCommand, SlashCommandAccountingPolicy> = {
   "/backlog": "tracked",
   "/take": "conditional",
   "/clear": "tracked",
@@ -325,7 +330,11 @@ function openOverlay(ctx: SlashCommandContext, open: () => void) {
   open();
 }
 
-function applySlashCommandAccounting(ctx: SlashCommandContext, baseCommand: string): void {
+function applySlashCommandAccounting(
+  ctx: SlashCommandContext,
+  baseCommand: string,
+  options?: SlashCommandAccountingOptions,
+): void {
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {
@@ -333,7 +342,9 @@ function applySlashCommandAccounting(ctx: SlashCommandContext, baseCommand: stri
       [baseCommand]: (prev.commandUsage[baseCommand] ?? 0) + 1,
     },
   }));
-  ctx.onValidSlashCommand?.(baseCommand);
+  if (options?.notifyValidSlashCommand !== false) {
+    ctx.onValidSlashCommand?.(baseCommand);
+  }
 }
 
 function markValidSlashCommand(ctx: SlashCommandContext, baseCommand: string): void {
@@ -359,7 +370,14 @@ function completeAsyncSlashCommand(promise: Promise<unknown>, ctx: SlashCommandC
 }
 
 function getSlashCommandAccountingPolicy(baseCommand: string): SlashCommandAccountingPolicy {
-  return SLASH_COMMAND_ACCOUNTING_POLICY[baseCommand] ?? "conditional";
+  if (!ALL_SLASH_COMMANDS.includes(baseCommand)) {
+    return "conditional";
+  }
+  const policy = SLASH_COMMAND_ACCOUNTING_POLICY[baseCommand as SupportedSlashCommand];
+  if (!policy) {
+    throw new Error(`Missing slash-command accounting policy for ${baseCommand}`);
+  }
+  return policy;
 }
 
 export function handleUpgradeCommand(ctx: SlashCommandContext): void {
@@ -1041,13 +1059,13 @@ export function executeSlashCommand(
     { role: "loading", content: getRandomLoadingPhrase() },
   ]);
 
-  const pendingAccounting = new Set<string>();
+  const pendingAccounting = new Map<string, SlashCommandAccountingOptions | undefined>();
   const flushPendingAccounting = (): void => {
-    pendingAccounting.forEach((baseCommand) => applySlashCommandAccounting(ctx, baseCommand));
+    pendingAccounting.forEach((options, baseCommand) => applySlashCommandAccounting(ctx, baseCommand, options));
     pendingAccounting.clear();
   };
-  const queueSlashCommandAccounting = (baseCommand: string): void => {
-    pendingAccounting.add(baseCommand);
+  const queueSlashCommandAccounting = (baseCommand: string, options?: SlashCommandAccountingOptions): void => {
+    pendingAccounting.set(baseCommand, options);
   };
 
   const reply = (msg: Message): void => {
@@ -1092,7 +1110,7 @@ export function executeSlashCommand(
 
   // /clear fires instantly — no fake processing delay
   if (command === "/clear") {
-    queueSlashCommandAccounting(baseCommand);
+    queueSlashCommandAccounting(baseCommand, { notifyValidSlashCommand: false });
     handleClearCommand(accountingCtx);
     accountingCtx.finalizeSlashCommand?.();
     return;

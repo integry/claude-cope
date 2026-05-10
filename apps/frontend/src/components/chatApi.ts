@@ -28,6 +28,15 @@ function normalizeSuggestedReply(text: string | null | undefined): string {
     .replace(/\s+/g, " ");
 }
 
+function runAcceptedCallback(onAccepted?: () => void): void {
+  if (!onAccepted) return;
+  try {
+    onAccepted();
+  } catch {
+    // Consumer callbacks must not turn a committed assistant reply into a chat failure.
+  }
+}
+
 export function mergeSuggestedReply(previous: string | null, next: string | null): string | null {
   const trimmedNext = next?.trim() ?? "";
   if (!trimmedNext) return null;
@@ -326,7 +335,7 @@ export function submitChatMessage(opts: {
         return updated;
       });
 
-      opts.onAccepted?.();
+      runAcceptedCallback(opts.onAccepted);
     })
     .catch((err) => {
       if (err instanceof DOMException && err.name === "AbortError") return;

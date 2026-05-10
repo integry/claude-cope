@@ -60,7 +60,6 @@ export function useUpgradeNagState({
 
   const clearPendingNag = useCallback(() => {
     pendingNagCommandRef.current = null;
-    nagArmedFromQuotaRef.current = false;
   }, []);
 
   const consumePendingNagCommand = useCallback(() => {

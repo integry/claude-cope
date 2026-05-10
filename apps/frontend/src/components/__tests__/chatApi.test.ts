@@ -606,6 +606,35 @@ describe("submitChatMessage - achievement parsing", () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
+  it("does not convert a successful chat into a failure when onAccepted throws", async () => {
+    const setHistory = vi.fn();
+    const setIsProcessing = vi.fn();
+    const onAccepted = vi.fn(() => {
+      throw new Error("consumer callback failed");
+    });
+    const onError = vi.fn();
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockStreamResponse(["Accepted reply"])
+    );
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+      onAccepted,
+      onError,
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(onAccepted).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it("handles response with no achievements", async () => {
     const unlockAchievement = vi.fn();
     const setHistory = vi.fn();
