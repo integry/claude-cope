@@ -90,7 +90,7 @@ type TerminalViewProps = OverlayVisibility & {
   upgradeNagDismissEffect: UpgradeNagCloseEffect;
 };
 
-const BUDDY_OVERLAY_BOTTOM_GAP = 8;
+const BUDDY_OVERLAY_BOTTOM_GAP = 0;
 
 function getBuddyBottomOffset(
   bottomChromeNode: HTMLDivElement | null,

@@ -10,7 +10,7 @@ import { DEFAULT_CLOSE_EFFECT } from "../upgradeOverlayEffects";
 
 const MOCK_FOOTER_HEIGHT = 40;
 const MOCK_BOTTOM_CHROME_HEIGHT = 96;
-const MOCK_BUDDY_GAP = 8;
+const MOCK_BUDDY_GAP = 0;
 
 vi.mock("../CommandLine", () => ({
   default: () => null,

@@ -155,9 +155,9 @@ body {
   position: absolute;
   right: clamp(0.75rem, 2vw, 1.5rem);
   bottom: calc(var(--terminal-buddy-offset, 0px) + env(safe-area-inset-bottom, 0px));
-  z-index: 20;
+  z-index: 100;
   pointer-events: none;
-  text-align: right;
+  text-align: center;
   transform: scale(var(--terminal-buddy-scale, 1));
   transform-origin: bottom right;
   will-change: transform;
