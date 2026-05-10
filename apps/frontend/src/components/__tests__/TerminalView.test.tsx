@@ -67,6 +67,8 @@ describe("TerminalView ticker shortcuts", () => {
         activeTheme: "default",
         economy: { currentRank: "Junior", currentTD: 0, quotaPercent: 100, tdMultiplier: 1, totalTDEarned: 0 },
         activeTicket: null,
+        inventory: {},
+        upgrades: [],
         username: "alice",
         buddy: { type: null, isShiny: false },
       } as ComponentProps<typeof TerminalView>["state"],
