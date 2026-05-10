@@ -5,6 +5,7 @@ import type { ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 
 import { TerminalView } from "../TerminalView";
+import type { GameState } from "../../hooks/useGameState";
 
 vi.mock("../CommandLine", () => ({ default: () => <div data-testid="command-line" /> }));
 vi.mock("../SlashMenu", () => ({ default: () => <div data-testid="slash-menu" /> }));
@@ -25,6 +26,41 @@ vi.mock("../Ticker", () => ({
     </div>
   ),
 }));
+
+function createGameState(overrides: Partial<GameState> = {}): GameState {
+  return {
+    version: "1.0",
+    username: "alice",
+    lastLogin: 0,
+    economy: {
+      currentTD: 0,
+      totalTDEarned: 0,
+      currentRank: "Junior Code Monkey",
+      quotaPercent: 100,
+      quotaLockouts: 0,
+      tdMultiplier: 1,
+    },
+    inventory: {},
+    upgrades: [],
+    achievements: [],
+    buddy: {
+      type: null,
+      isShiny: false,
+      promptsSinceLastInterjection: 0,
+    },
+    chatHistory: [],
+    commandUsage: {},
+    modes: { fast: false, voice: false },
+    activeTicket: null,
+    hasSeenTicketPrompt: false,
+    activeTheme: "default",
+    unlockedThemes: ["default"],
+    soundEnabled: true,
+    pendingCompletedTaskIds: [],
+    pendingCompletedTaskRewards: {},
+    ...overrides,
+  };
+}
 
 describe("TerminalView ticker shortcuts", () => {
   let container: HTMLDivElement;
@@ -63,15 +99,17 @@ describe("TerminalView ticker shortcuts", () => {
       closeAllOverlaysPreservingNag,
       onlineCount: 3,
       rank: "Junior",
-      state: {
+      state: createGameState({
         activeTheme: "default",
-        economy: { currentRank: "Junior", currentTD: 0, quotaPercent: 100, tdMultiplier: 1, totalTDEarned: 0 },
-        activeTicket: null,
-        inventory: {},
-        upgrades: [],
-        username: "alice",
-        buddy: { type: null, isShiny: false },
-      } as ComponentProps<typeof TerminalView>["state"],
+        economy: {
+          currentTD: 0,
+          totalTDEarned: 0,
+          currentRank: "Junior",
+          quotaPercent: 100,
+          quotaLockouts: 0,
+          tdMultiplier: 1,
+        },
+      }),
       handleProfileClick: vi.fn(),
       setShowHelp: vi.fn(),
       setShowAbout: vi.fn(),
