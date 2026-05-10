@@ -13,7 +13,9 @@ vi.mock("../CommandLine", () => ({
 }));
 vi.mock("../SlashMenu", () => ({ default: () => null }));
 vi.mock("../HeaderBar", () => ({ default: () => null }));
-vi.mock("../TerminalFooter", () => ({ TerminalFooter: () => null }));
+vi.mock("../TerminalFooter", () => ({
+  TerminalFooter: () => createElement("div", { "data-testid": "terminal-footer" }),
+}));
 vi.mock("../Ticker", () => ({ default: () => null }));
 vi.mock("../OutageBar", () => ({ OutageBar: () => null }));
 vi.mock("../SprintProgressBar", () => ({ default: () => null }));
@@ -28,8 +30,13 @@ class ResizeObserverMock {
   }
 
   observe(target: Element) {
+    const isFooterWrapper = target.firstElementChild?.getAttribute("data-testid") === "terminal-footer";
     const isBottomChrome = target.classList.contains("shrink-0");
-    const height = isBottomChrome ? 96 : 0;
+    const height = isFooterWrapper ? 40 : isBottomChrome ? 96 : 0;
+    Object.defineProperty(target, "getBoundingClientRect", {
+      value: () => ({ height }),
+      configurable: true,
+    });
     this.callback([{ contentRect: { height } } as ResizeObserverEntry], this as unknown as ResizeObserver);
   }
 
@@ -209,7 +216,8 @@ describe("TerminalView buddy overlay", () => {
     const overlay = view.querySelector(".terminal-buddy-overlay");
 
     expect(overlay).not.toBeNull();
-    expect(overlay?.getAttribute("style")).toContain("--terminal-buddy-offset: 104px");
+    expect(overlay?.getAttribute("style")).toContain("--terminal-buddy-offset: 144px");
     expect(view.querySelector(".terminal-command-shell")?.querySelector(".terminal-buddy-overlay")).toBeNull();
+    expect(view.querySelector("[data-testid='terminal-footer']")).not.toBeNull();
   });
 });

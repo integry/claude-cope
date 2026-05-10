@@ -237,26 +237,34 @@ export function TerminalView({
   upgradeNagDismissEffect,
 }: TerminalViewProps) {
   const bottomChromeRef = useRef<HTMLDivElement | null>(null);
+  const footerRef = useRef<HTMLDivElement | null>(null);
   const [buddyBottomOffset, setBuddyBottomOffset] = useState(0);
 
   useEffect(() => {
-    const node = bottomChromeRef.current;
-    if (!node) {
+    const bottomChromeNode = bottomChromeRef.current;
+    const footerNode = footerRef.current;
+    if (!bottomChromeNode && !footerNode) {
       return undefined;
     }
 
-    const updateBottomOffset = (height?: number) => {
-      const nextHeight = height ?? node.getBoundingClientRect().height;
-      setBuddyBottomOffset(Math.ceil(nextHeight) + 8);
+    const updateBottomOffset = () => {
+      const bottomChromeHeight = bottomChromeRef.current?.getBoundingClientRect().height ?? 0;
+      const footerHeight = footerRef.current?.getBoundingClientRect().height ?? 0;
+      setBuddyBottomOffset(Math.ceil(bottomChromeHeight + footerHeight) + 8);
     };
 
     updateBottomOffset();
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      updateBottomOffset(entries[0]?.contentRect.height);
+    const resizeObserver = new ResizeObserver(() => {
+      updateBottomOffset();
     });
 
-    resizeObserver.observe(node);
+    if (bottomChromeNode) {
+      resizeObserver.observe(bottomChromeNode);
+    }
+    if (footerNode) {
+      resizeObserver.observe(footerNode);
+    }
 
     return () => {
       resizeObserver.disconnect();
@@ -360,7 +368,9 @@ export function TerminalView({
         upgradeDismissPhase={upgradeNagDismissPhase}
         upgradeDismissEffect={upgradeNagDismissEffect}
       />
-      <TerminalFooter closeAllOverlays={closeAllOverlaysPreservingNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
+      <div ref={footerRef}>
+        <TerminalFooter closeAllOverlays={closeAllOverlaysPreservingNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
+      </div>
     </div>
   );
 }

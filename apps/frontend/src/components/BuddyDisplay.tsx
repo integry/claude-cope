@@ -11,11 +11,25 @@ export function BuddyDisplay({ type, isShiny, className = "" }: BuddyDisplayProp
   const [blink, setBlink] = useState(false);
 
   useEffect(() => {
+    let blinkTimeout: ReturnType<typeof setTimeout> | null = null;
+
     const interval = setInterval(() => {
       setBlink(true);
-      setTimeout(() => setBlink(false), 200);
+      if (blinkTimeout) {
+        clearTimeout(blinkTimeout);
+      }
+      blinkTimeout = setTimeout(() => {
+        setBlink(false);
+        blinkTimeout = null;
+      }, 200);
     }, 4000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      if (blinkTimeout) {
+        clearTimeout(blinkTimeout);
+      }
+    };
   }, []);
 
   if (!type) return null;
