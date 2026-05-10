@@ -1,4 +1,4 @@
-import { ChangeEvent, CompositionEvent, KeyboardEvent, forwardRef, useState } from "react";
+import { ChangeEvent, KeyboardEvent, forwardRef, useState } from "react";
 
 type CommandLineProps = {
   value: string;
@@ -18,11 +18,11 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     const showDecorativeCursor = showPlaceholder && isFocused && !disabled;
     const accessiblePlaceholder = placeholder ? `${placeholder}. Press Tab to accept suggestion.` : undefined;
 
-    const handleCompositionStart = (_e: CompositionEvent<HTMLInputElement>) => {
+    const handleCompositionStart = () => {
       setIsComposing(true);
     };
 
-    const handleCompositionEnd = (_e: CompositionEvent<HTMLInputElement>) => {
+    const handleCompositionEnd = () => {
       setIsComposing(false);
     };
 
