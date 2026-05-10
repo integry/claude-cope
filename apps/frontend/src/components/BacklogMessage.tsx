@@ -11,6 +11,7 @@ function renderLine(
 }
 
 function renderTicketId(
+  row: number,
   fullId: string,
   shortId: string,
   onSlashCommand?: (command: string, action: SlashCommandAction) => void,
@@ -21,13 +22,60 @@ function renderTicketId(
     <button
       type="button"
       className="block max-w-full cursor-pointer truncate bg-transparent p-0 font-inherit text-inherit underline decoration-dotted hover:text-cyan-100"
+      aria-label={`Claim ticket ${fullId}`}
       onClick={(event) => {
         event.stopPropagation();
-        onSlashCommand(`/take ${fullId}`, "execute");
+        onSlashCommand(`/take ${row}`, "execute");
       }}
     >
       {shortId}
     </button>
+  );
+}
+
+function BacklogTicketRow({
+  ticket,
+  onSlashCommand,
+}: {
+  ticket: BacklogDisplayData["tickets"][number];
+  onSlashCommand?: (command: string, action: SlashCommandAction) => void;
+}) {
+  return (
+    <div
+      className="border-b border-dashed border-cyan-400/40 py-2 last:border-b-0 md:grid md:grid-cols-[3rem_7.5rem_minmax(0,1fr)_5rem_6rem] md:items-start md:gap-4"
+    >
+      <div className="hidden text-slate-300 md:block">[{ticket.row}]</div>
+      <div className="hidden text-cyan-200 md:block">
+        {renderTicketId(ticket.row, ticket.fullId, ticket.shortId, onSlashCommand)}
+      </div>
+      <div className={`hidden min-w-0 break-words text-cyan-100 [overflow-wrap:anywhere] md:block ${ticket.isLocked ? "text-amber-200" : ""}`}>
+        {ticket.title}
+      </div>
+      <div className={`hidden md:block ${ticket.isLocked ? "text-amber-300" : "text-slate-300"}`}>
+        {ticket.status}
+      </div>
+      <div className={`hidden text-right md:block ${ticket.isLocked ? "text-amber-300" : "text-cyan-200"}`}>
+        {ticket.reward}
+      </div>
+
+      <div className="flex flex-col gap-1 md:hidden">
+        <div className="flex items-center justify-between gap-3 text-[12px] text-slate-400">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="text-slate-200">[{ticket.row}]</span>
+            <span className="min-w-0 text-cyan-200">
+              {renderTicketId(ticket.row, ticket.fullId, ticket.shortId, onSlashCommand)}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className={ticket.isLocked ? "text-amber-300" : "text-slate-300"}>{ticket.status}</span>
+            <span className={ticket.isLocked ? "text-amber-300" : "text-cyan-200"}>{ticket.reward}</span>
+          </div>
+        </div>
+        <div className={`min-w-0 break-words text-cyan-100 [overflow-wrap:anywhere] ${ticket.isLocked ? "text-amber-200" : ""}`}>
+          {ticket.title}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -38,6 +86,8 @@ export function BacklogMessage({
   backlog: BacklogDisplayData;
   onSlashCommand?: (command: string, action: SlashCommandAction) => void;
 }) {
+  const footerLineCounts = new Map<string, number>();
+
   return (
     <div className="max-w-full font-mono text-[13px] leading-relaxed text-cyan-100">
       <div className="border-y border-dashed border-cyan-400/60 py-2">
@@ -56,51 +106,21 @@ export function BacklogMessage({
 
       <div>
         {backlog.tickets.map((ticket) => (
-          <div
-            key={`${ticket.row}-${ticket.fullId}`}
-            className="border-b border-dashed border-cyan-400/40 py-2 last:border-b-0 md:grid md:grid-cols-[3rem_7.5rem_minmax(0,1fr)_5rem_6rem] md:items-start md:gap-4"
-          >
-            <div className="hidden text-slate-300 md:block">[{ticket.row}]</div>
-            <div className="hidden text-cyan-200 md:block">
-              {renderTicketId(ticket.fullId, ticket.shortId, onSlashCommand)}
-            </div>
-            <div className={`hidden min-w-0 break-words text-cyan-100 [overflow-wrap:anywhere] md:block ${ticket.isLocked ? "text-amber-200" : ""}`}>
-              {ticket.title}
-            </div>
-            <div className={`hidden md:block ${ticket.isLocked ? "text-amber-300" : "text-slate-300"}`}>
-              {ticket.status}
-            </div>
-            <div className={`hidden text-right md:block ${ticket.isLocked ? "text-amber-300" : "text-cyan-200"}`}>
-              {ticket.reward}
-            </div>
-
-            <div className="flex flex-col gap-1 md:hidden">
-              <div className="flex items-center justify-between gap-3 text-[12px] text-slate-400">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="text-slate-200">[{ticket.row}]</span>
-                  <span className="min-w-0 text-cyan-200">
-                    {renderTicketId(ticket.fullId, ticket.shortId, onSlashCommand)}
-                  </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className={ticket.isLocked ? "text-amber-300" : "text-slate-300"}>{ticket.status}</span>
-                  <span className={ticket.isLocked ? "text-amber-300" : "text-cyan-200"}>{ticket.reward}</span>
-                </div>
-              </div>
-              <div className={`min-w-0 break-words text-cyan-100 [overflow-wrap:anywhere] ${ticket.isLocked ? "text-amber-200" : ""}`}>
-                {ticket.title}
-              </div>
-            </div>
-          </div>
+          <BacklogTicketRow key={`${ticket.row}-${ticket.fullId}`} ticket={ticket} onSlashCommand={onSlashCommand} />
         ))}
       </div>
 
       <div className="border-t border-dashed border-cyan-400/60 pt-3 text-slate-300">
-        {backlog.footer.map((line, index) => (
-          <div key={`${index}-${line}`} className={line ? "mt-1" : ""}>
-            {renderLine(line, onSlashCommand)}
-          </div>
-        ))}
+        {backlog.footer.map((line) => {
+          const occurrence = footerLineCounts.get(line) ?? 0;
+          footerLineCounts.set(line, occurrence + 1);
+
+          return (
+            <div key={`${line || "blank"}-${occurrence}`} className={line ? "mt-1" : ""}>
+              {renderLine(line, onSlashCommand)}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -151,6 +151,8 @@ function MessageContent({
   const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite);
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand, shareNode), [onSlashCommand, shareNode]);
 
+  // Backlog messages intentionally bypass markdown rendering so the responsive
+  // table layout stays intact while `message.content` remains as a plain-text fallback.
   if (message.backlogDisplay && role === "system") {
     return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
   }

@@ -89,7 +89,8 @@ describe("OutputBlock backlog rendering", () => {
       upgradeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onSlashCommand).toHaveBeenCalledWith("/take BLAME-421", "execute");
+    expect(ticketButton?.getAttribute("aria-label")).toBe("Claim ticket BLAME-421");
+    expect(onSlashCommand).toHaveBeenCalledWith("/take 1", "execute");
     expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "execute");
     expect(onSlashCommand).toHaveBeenCalledWith("/upgrade", "execute");
   });
@@ -198,6 +199,7 @@ describe("OutputBlock backlog rendering", () => {
       ticketButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onSlashCommand).toHaveBeenCalledWith("/take PIXEL-77", "execute");
+    expect(ticketButton?.getAttribute("aria-label")).toBe("Claim ticket PIXEL-77");
+    expect(onSlashCommand).toHaveBeenCalledWith("/take 1", "execute");
   });
 });
