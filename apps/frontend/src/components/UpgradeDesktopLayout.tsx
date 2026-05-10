@@ -183,8 +183,9 @@ export default function DesktopLayout({
   const cycleSelection = useCallback((direction: -1 | 1) => {
     if (availableOptionIds.length === 0) return;
     if (selectedOptionId === null) {
-      const fallbackIndex = direction > 0 ? 0 : availableOptionIds.length - 1;
-      setSelectedOptionId(availableOptionIds[fallbackIndex] ?? null);
+      const baselineIndex = 0;
+      const nextIndex = (baselineIndex + direction + availableOptionIds.length) % availableOptionIds.length;
+      setSelectedOptionId(availableOptionIds[nextIndex] ?? null);
       return;
     }
     const currentIndex = availableOptionIds.indexOf(selectedOptionId);
