@@ -28,8 +28,8 @@ export function buyUpgradeServer(username: string, upgradeId: string, licenseKey
   return profilePost("buy-upgrade", { username, upgradeId, licenseKeyHash });
 }
 
-export function buyThemeServer(username: string, themeId: string, licenseKeyHash: string): Promise<ProfileResult> {
-  return profilePost("buy-theme", { username, themeId, licenseKeyHash });
+export function buyThemeServer(username: string, themeId: string, licenseKeyHash?: string): Promise<ProfileResult> {
+  return profilePost("buy-theme", { username, themeId, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
 }
 
 export function unlockAchievementServer(username: string, achievementId: string, licenseKeyHash: string): Promise<ProfileResult> {

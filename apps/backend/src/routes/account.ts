@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
-import { resolveProfile, verifyOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -581,15 +581,20 @@ account.post("/buy-theme", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{ username: string; themeId: string; licenseKeyHash: string }>();
-  if (!body.username || !body.themeId || !body.licenseKeyHash) {
-    return c.json({ error: "username, themeId, and licenseKeyHash are required" }, 400);
+  const body = await c.req.json<{ username: string; themeId: string; licenseKeyHash?: string }>();
+  if (!body.username || !body.themeId) {
+    return c.json({ error: "username and themeId are required" }, 400);
   }
 
   const theme = THEMES.find((t) => t.id === body.themeId);
   if (!theme) return c.json({ error: "Unknown theme" }, 400);
 
-  const ownership = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  const ownership = await resolveThemePurchaseOwnership(db, {
+    username: body.username,
+    licenseKeyHash: body.licenseKeyHash,
+    kv: c.env?.QUOTA_KV,
+    sessionId: c.get("sessionId"),
+  });
   if (ownership.status !== "ok") {
     return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
   }
@@ -605,24 +610,31 @@ account.post("/buy-theme", async (c) => {
   // Atomic update: SQL-level TD guard + JSON append + dedupe guard.
   // The NOT IN subquery prevents concurrent requests that both pass the
   // JS-level "already unlocked" check from both appending the same theme.
-  const result = await db
-    .prepare(
-      `UPDATE user_scores SET
+  const themePurchaseSql = body.licenseKeyHash
+    ? `UPDATE user_scores SET
         current_td = current_td - ?,
         unlocked_themes = json_insert(COALESCE(unlocked_themes, '["default"]'), '$[#]', ?),
         updated_at = datetime('now')
       WHERE username = ? AND current_td >= ? AND license_hash = ?
         AND ? NOT IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
-        AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
-    )
-    .bind(theme.cost, body.themeId, body.username, theme.cost, body.licenseKeyHash, body.themeId)
-    .run();
+        AND ${ACTIVE_LICENSE_EXISTS_SQL}`
+    : `UPDATE user_scores SET
+        current_td = current_td - ?,
+        unlocked_themes = json_insert(COALESCE(unlocked_themes, '["default"]'), '$[#]', ?),
+        updated_at = datetime('now')
+      WHERE username = ? AND current_td >= ?
+        AND ? NOT IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
+        AND ${ACTIVE_LICENSE_EXISTS_SQL}`;
+  const themePurchaseBindings = body.licenseKeyHash
+    ? [theme.cost, body.themeId, profile.username, theme.cost, body.licenseKeyHash, body.themeId]
+    : [theme.cost, body.themeId, profile.username, theme.cost, body.themeId];
+  const result = await db.prepare(themePurchaseSql).bind(...themePurchaseBindings).run();
 
   if (!result.meta.changes) {
     return c.json({ error: "Insufficient TD or theme already unlocked (concurrent update)", required: theme.cost }, 409);
   }
 
-  const updated = await getProfile(db, body.username);
+  const updated = await getProfile(db, profile.username);
   return c.json({ success: true, profile: updated });
 });
 

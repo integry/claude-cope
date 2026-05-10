@@ -29,6 +29,30 @@ export type { Message };
 export type { GameState, BuddyState, EconomyState, ActiveTicket, ByokUsage } from "./gameStateUtils";
 export { calcBulkCost } from "./gameStateUtils";
 
+export function canBuyTheme(state: Pick<GameState, "economy" | "unlockedThemes" | "proKey" | "proKeyHash" | "isPro">, themeId: string): boolean {
+  const theme = THEMES.find((t) => t.id === themeId);
+  if (!theme) return false;
+  if (!isPaidUser(state)) return false;
+  if (state.unlockedThemes.includes(themeId)) return false;
+  if (state.economy.currentTD < theme.cost) return false;
+  return true;
+}
+
+export function applyOptimisticThemePurchase(state: GameState, themeId: string): GameState {
+  const theme = THEMES.find((t) => t.id === themeId);
+  if (!theme) return state;
+  if (!canBuyTheme(state, themeId)) return state;
+
+  return {
+    ...state,
+    economy: {
+      ...state.economy,
+      currentTD: state.economy.currentTD - theme.cost,
+    },
+    unlockedThemes: [...state.unlockedThemes, themeId],
+  };
+}
+
 export function useGameState() {
   const [state, setState] = useState<GameState>(loadState);
   const stateRef = useRef(state);
@@ -45,9 +69,8 @@ export function useGameState() {
 
   // Session restore: if localStorage was cleared (state looks fresh), but the
   // browser cookie maps to a previously-known user on the server, restore that
-  // user's profile instead of starting as a brand-new identity.  The server
-  // never returns the license hash (it's a credential); Pro users must re-run
-  // /sync to regain Max access after clearing localStorage.
+  // user's profile instead of starting as a brand-new identity. The server
+  // never returns the license hash itself because it remains a credential.
   useEffect(() => {
     const initial = stateRef.current;
     const isFreshState =
@@ -345,53 +368,30 @@ export function useGameState() {
     setState((prev) => prev.unlockedThemes.includes(themeId) ? prev : { ...prev, unlockedThemes: [...prev.unlockedThemes, themeId] });
   }, []);
 
-  /** Purchase a theme. Requires proKey, sufficient TD, and theme not already owned. Returns true on success. */
+  /** Purchase a theme. Requires paid access, sufficient TD, and theme not already owned. Returns true on success. */
   const buyTheme = useCallback((themeId: string): boolean => {
     const theme = THEMES.find((t) => t.id === themeId);
     if (!theme) return false;
 
     const current = stateRef.current;
-    // Only paid users can purchase themes
-    if (!current.proKeyHash) return false;
-    // Already unlocked
-    if (current.unlockedThemes.includes(themeId)) return false;
-    // Can't afford
-    if (current.economy.currentTD < theme.cost) return false;
+    if (!canBuyTheme(current, themeId)) return false;
 
     // Optimistic local update
-    setState((prev) => {
-      if (!prev.proKeyHash) return prev;
-      if (prev.unlockedThemes.includes(themeId)) return prev;
-      if (prev.economy.currentTD < theme.cost) return prev;
+    setState((prev) => applyOptimisticThemePurchase(prev, themeId));
 
-      return {
-        ...prev,
-        economy: {
-          ...prev.economy,
-          currentTD: prev.economy.currentTD - theme.cost,
-        },
-        unlockedThemes: [...prev.unlockedThemes, themeId],
-      };
-    });
-
-    // Pro users: fire server call
-    if (current.proKeyHash) {
-      buyThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
-        if (result.success && result.profile) {
-          setState((prev) => applyServerProfile(prev, result.profile!));
-          track(AnalyticsEvents.THEME_PURCHASED, { theme_id: themeId, cost: theme.cost });
-        } else if (!result.success) {
-          // Rollback
-          setState((prev) => ({
-            ...prev,
-            economy: { ...prev.economy, currentTD: prev.economy.currentTD + theme.cost },
-            unlockedThemes: prev.unlockedThemes.filter((id) => id !== themeId),
-          }));
-        }
-      }).catch(() => {});
-    } else {
-      track(AnalyticsEvents.THEME_PURCHASED, { theme_id: themeId, cost: theme.cost });
-    }
+    buyThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
+      if (result.success && result.profile) {
+        setState((prev) => applyServerProfile(prev, result.profile!));
+        track(AnalyticsEvents.THEME_PURCHASED, { theme_id: themeId, cost: theme.cost });
+      } else if (!result.success) {
+        // Rollback
+        setState((prev) => ({
+          ...prev,
+          economy: { ...prev.economy, currentTD: prev.economy.currentTD + theme.cost },
+          unlockedThemes: prev.unlockedThemes.filter((id) => id !== themeId),
+        }));
+      }
+    }).catch(() => {});
 
     return true;
   }, []);

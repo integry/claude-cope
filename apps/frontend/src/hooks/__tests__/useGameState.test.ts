@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { calcBulkCost } from "../useGameState";
+import { calcBulkCost, canBuyTheme, applyOptimisticThemePurchase } from "../useGameState";
 import { GROWTH_RATE, GENERATORS } from "../../game/constants";
+import type { GameState } from "../gameStateUtils";
 
 describe("calcBulkCost", () => {
   const r = GROWTH_RATE; // 1.15
@@ -75,5 +76,59 @@ describe("calcBulkCost", () => {
     const cost1 = calcBulkCost(100, 1, 1);
     // Each additional owned unit multiplies cost by GROWTH_RATE
     expect(Math.abs(cost1 / cost0 - r)).toBeLessThan(0.01);
+  });
+});
+
+function makeGameState(overrides: Partial<GameState> = {}): GameState {
+  return {
+    version: "1.0",
+    username: "alice",
+    lastLogin: 0,
+    economy: {
+      currentTD: 6000,
+      totalTDEarned: 6000,
+      currentRank: "Junior Code Monkey",
+      quotaPercent: 100,
+      quotaLockouts: 0,
+      tdMultiplier: 1,
+    },
+    inventory: {},
+    upgrades: [],
+    achievements: [],
+    buddy: {
+      type: null,
+      isShiny: false,
+      promptsSinceLastInterjection: 0,
+    },
+    chatHistory: [],
+    commandUsage: {},
+    modes: { fast: false, voice: false },
+    activeTicket: null,
+    hasSeenTicketPrompt: false,
+    activeTheme: "default",
+    unlockedThemes: ["default"],
+    soundEnabled: true,
+    pendingCompletedTaskIds: [],
+    ...overrides,
+  };
+}
+
+describe("canBuyTheme", () => {
+  it("allows restored paid users without proKeyHash to buy themes", () => {
+    const state = makeGameState({ isPro: true, proKeyHash: undefined, proKey: undefined });
+    expect(canBuyTheme(state, "amber")).toBe(true);
+  });
+
+  it("rejects free users without paid status", () => {
+    const state = makeGameState({ isPro: undefined, proKeyHash: undefined, proKey: undefined });
+    expect(canBuyTheme(state, "amber")).toBe(false);
+  });
+
+  it("applies the optimistic purchase update for restored paid users without proKeyHash", () => {
+    const state = makeGameState({ isPro: true, proKeyHash: undefined, proKey: undefined });
+    const nextState = applyOptimisticThemePurchase(state, "amber");
+
+    expect(nextState.economy.currentTD).toBe(1000);
+    expect(nextState.unlockedThemes).toContain("amber");
   });
 });

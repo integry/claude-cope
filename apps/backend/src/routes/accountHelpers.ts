@@ -233,6 +233,43 @@ export async function verifyOwnership(db: D1Database, username: string, licenseK
   return { profile, status: "ok" };
 }
 
+export async function resolveThemePurchaseOwnership(
+  db: D1Database,
+  opts: {
+    username: string;
+    licenseKeyHash?: string;
+    kv?: KVNamespace;
+    sessionId?: string;
+  },
+): Promise<OwnershipResult> {
+  if (opts.licenseKeyHash) {
+    return verifyOwnership(db, opts.username, opts.licenseKeyHash);
+  }
+
+  if (!opts.kv || !opts.sessionId) {
+    return { profile: null, status: "unauthorized", error: "Session authentication is required for this purchase" };
+  }
+
+  const boundUsername = await opts.kv.get(accountKvKeys.sessionUser(opts.sessionId));
+  if (!boundUsername || boundUsername.toLowerCase() !== opts.username.toLowerCase()) {
+    return { profile: null, status: "unauthorized", error: "Unauthorized: session user does not match this profile" };
+  }
+
+  const row = await getProfileRow(db, boundUsername);
+  if (!row) return { profile: null, status: "not_found", error: "Profile not found" };
+  if (!row.license_hash) {
+    return { profile: null, status: "unauthorized", error: "An active Max license is required to purchase themes" };
+  }
+
+  if (!(await isLicenseActive(db, row.license_hash))) {
+    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
+  }
+
+  const profile = await getProfile(db, boundUsername);
+  if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
+  return { profile, status: "ok" };
+}
+
 export function broadcastPurchase(message: string, db: D1Database | undefined, ctx: { waitUntil: (p: Promise<unknown>) => void }) {
   if (db) {
     ctx.waitUntil(

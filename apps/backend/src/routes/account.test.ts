@@ -114,6 +114,54 @@ describe("POST /api/account/buy-theme", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("Unknown theme");
   });
+  it("succeeds for a session-authenticated Max user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { success: boolean }).success).toBe(true);
+  });
+  it("rejects a session-authenticated free user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, license_hash: null, current_td: 6000 },
+      },
+    });
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toContain("active Max license");
+  });
+  it("rejects a session-authenticated revoked user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "revoked", last_activated_at: new Date().toISOString() },
+      },
+    });
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toContain("revoked");
+  });
 });
 
 describe("POST /api/account/unlock-achievement", () => {
