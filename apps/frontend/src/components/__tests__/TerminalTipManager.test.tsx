@@ -8,6 +8,20 @@ import {
   submitCommand,
   type RenderedTerminal,
 } from "./TerminalTipManager.testUtils";
+import {
+  createBuildSprintCallbacksModule,
+  createChatApiModule,
+  createConfigModule,
+  createProfileSyncModule,
+  createSlashCommandExecutorModule,
+  createTerminalHandlersModule,
+  createTerminalInputHandlersModule,
+  createTerminalViewUtilsModule,
+  createUseMultiplayerModule,
+  createUseSoundEffectsModule,
+  createUseTerminalEffectsModule,
+  createUseTipManagerModule,
+} from "./TerminalTipManager.mockSetup";
 
 const {
   executeSlashCommandMock,
@@ -27,79 +41,35 @@ const {
   shouldShowNagMock: vi.fn(() => false),
 }));
 
-vi.mock("../../config", () => ({
-  BYOK_ENABLED: false,
-  TICKET_REFINE_ENABLED: false,
-}));
+vi.mock("../../config", () => createConfigModule());
 vi.mock("../../hooks/gameStateUtils", () => ({ isFreeUser: () => false }));
-vi.mock("../chatApi", () => ({
-  computeBuddyInterjection: () => null,
-  mergeSuggestedReply: (_prev: string | null, next: string) => next,
-  submitChatMessage: submitChatMessageMock,
-}));
-vi.mock("../slashCommandExecutor", () => ({
-  executeSlashCommand: executeSlashCommandMock,
-}));
-vi.mock("../../hooks/profileSync", () => ({
-  applyAuthoritativeProfile: (prev: unknown) => prev,
-  applyServerProfile: (prev: unknown) => prev,
-  settlePendingCompletedRewards: (prev: unknown) => prev,
-}));
+vi.mock("../chatApi", () => createChatApiModule(submitChatMessageMock));
+vi.mock("../slashCommandExecutor", () => createSlashCommandExecutorModule(executeSlashCommandMock));
+vi.mock("../../hooks/profileSync", () => createProfileSyncModule());
 vi.mock("../keyCommandHandler", () => ({ handleKeyCommand: vi.fn() }));
 vi.mock("../ticketPrompt", () => ({ fetchRandomTicketPrompt: vi.fn() }));
 vi.mock("../filterChatHistory", () => ({ filterChatHistory: (history: unknown[]) => history }));
-vi.mock("../../hooks/useMultiplayer", () => ({
-  useMultiplayer: () => ({
-    onlineCount: 0,
-    onlineUsers: [],
-    sendPing: vi.fn(),
-    pendingReviewPing: null,
-    acceptReviewPing: vi.fn(),
-    outageHp: null,
-    sendDamage: vi.fn(),
-  }),
-}));
-vi.mock("../../hooks/useTerminalEffects", () => ({
-  useTerminalEffects: () => ({ isBooting: false, regressionGlitch: null, activeRegression: null }),
-}));
-vi.mock("../../hooks/useSoundEffects", () => ({
-  useSoundEffects: () => ({ playError: vi.fn(), playChime: vi.fn() }),
-}));
+vi.mock("../../hooks/useMultiplayer", () => createUseMultiplayerModule());
+vi.mock("../../hooks/useTerminalEffects", () => createUseTerminalEffectsModule());
+vi.mock("../../hooks/useSoundEffects", () => createUseSoundEffectsModule());
 vi.mock("../../hooks/usePingAcknowledged", () => ({ usePingAcknowledged: () => false }));
 vi.mock("../../hooks/useOverlays", async () => (await import("./TerminalTipManager.testUtils")).createUseOverlaysModule()());
-vi.mock("../../hooks/useTipManager", () => ({
-  useTipManager: () => ({
-    recordEnter: recordEnterMock,
-    recordValidCommand: recordValidCommandMock,
-    recordMessageWithoutTicket: (...args: unknown[]) => recordMessageWithoutTicketMock(...args),
-  }),
+vi.mock("../../hooks/useTipManager", () => createUseTipManagerModule({
+  recordEnterMock,
+  recordValidCommandMock,
+  recordMessageWithoutTicketMock,
 }));
 vi.mock("../loadingPhrases", () => ({ getRandomLoadingPhrase: () => "Loading..." }));
 vi.mock("../freeTierDelay", () => ({ runFreeTierDelay: vi.fn() }));
-vi.mock("../buildChatSubmitArgs", () => ({
-  buildSprintCallbacks: () => ({
-    onSprintProgress: vi.fn(),
-    getSprintCompleteMessage: vi.fn(),
-  }),
-}));
-vi.mock("../terminalHandlers", () => ({
-  triggerQuotaLockout: vi.fn(),
-  triggerInstantBan: vi.fn(),
-}));
+vi.mock("../buildChatSubmitArgs", () => createBuildSprintCallbacksModule());
+vi.mock("../terminalHandlers", () => createTerminalHandlersModule());
 vi.mock("../../hooks/useTerminalKeyboard", async () => (await import("./TerminalTipManager.testUtils")).createUseTerminalKeyboardModule());
-vi.mock("../terminalInputHandlers", () => ({
-  handleBragSubmit: vi.fn(),
-  handleBuddyConfirm: vi.fn(),
-  tryOutageDamage: () => false,
-}));
+vi.mock("../terminalInputHandlers", () => createTerminalInputHandlersModule());
 vi.mock("../winrarNag", () => ({
   shouldShowNag: shouldShowNagMock,
 }));
 vi.mock("../TerminalView", async () => (await import("./TerminalTipManager.testUtils")).createTerminalViewModule());
-vi.mock("../terminalViewUtils", () => ({
-  getPromptString: () => ">",
-  isAnyOverlayOpen: () => false,
-}));
+vi.mock("../terminalViewUtils", () => createTerminalViewUtilsModule());
 vi.mock("../useCheckoutLicenseSync", () => ({ useCheckoutLicenseSync: vi.fn() }));
 vi.mock("../../hooks/useGameState", async () => (await import("./TerminalTipManager.testUtils")).createUseGameStateModule()());
 

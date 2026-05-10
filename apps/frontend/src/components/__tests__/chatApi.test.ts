@@ -609,6 +609,7 @@ describe("submitChatMessage - achievement parsing", () => {
     const setHistory = vi.fn();
     const setIsProcessing = vi.fn();
     const onAccepted = vi.fn();
+    const historyCommitCallbacks: Array<() => void> = [];
 
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
@@ -630,11 +631,15 @@ describe("submitChatMessage - achievement parsing", () => {
       setIsProcessing,
       currentRank: "Junior Code Monkey",
       onAccepted,
+      scheduleHistoryCommitCallback: (callback) => {
+        historyCommitCallbacks.push(callback);
+      },
     });
 
     await vi.advanceTimersByTimeAsync(3000);
 
     expect(onAccepted).not.toHaveBeenCalled();
+    expect(historyCommitCallbacks).toHaveLength(0);
   });
 
   it("does not fire onAccepted when final history commit fails", async () => {
@@ -648,6 +653,7 @@ describe("submitChatMessage - achievement parsing", () => {
     const setIsProcessing = vi.fn();
     const onAccepted = vi.fn();
     const onError = vi.fn();
+    const historyCommitCallbacks: Array<() => void> = [];
 
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       createMockStreamResponse(["Accepted reply"])
@@ -661,6 +667,9 @@ describe("submitChatMessage - achievement parsing", () => {
       setIsProcessing,
       currentRank: "Junior Code Monkey",
       onAccepted,
+      scheduleHistoryCommitCallback: (callback) => {
+        historyCommitCallbacks.push(callback);
+      },
       onError,
     });
 
@@ -668,6 +677,7 @@ describe("submitChatMessage - achievement parsing", () => {
 
     expect(onAccepted).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledTimes(1);
+    expect(historyCommitCallbacks).toHaveLength(0);
   });
 
   it("does not convert a successful chat into a failure when onAccepted throws", async () => {
@@ -678,6 +688,7 @@ describe("submitChatMessage - achievement parsing", () => {
     });
     const onError = vi.fn();
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const historyCommitCallbacks: Array<() => void> = [];
 
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       createMockStreamResponse(["Accepted reply"])
@@ -691,10 +702,14 @@ describe("submitChatMessage - achievement parsing", () => {
       setIsProcessing,
       currentRank: "Junior Code Monkey",
       onAccepted,
+      scheduleHistoryCommitCallback: (callback) => {
+        historyCommitCallbacks.push(callback);
+      },
       onError,
     });
 
     await vi.advanceTimersByTimeAsync(3000);
+    historyCommitCallbacks.shift()?.();
 
     expect(onAccepted).toHaveBeenCalledTimes(1);
     expect(onError).not.toHaveBeenCalled();

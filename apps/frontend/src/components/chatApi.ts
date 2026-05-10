@@ -40,16 +40,57 @@ function runAcceptedCallback(onAccepted?: () => void): void {
 
 function settleAcceptedCallback(
   onAccepted: (() => void) | undefined,
-  scheduleHistoryCommitCallback?: (callback: () => void) => void,
+  scheduleHistoryCommitCallback: ((callback: () => void) => void) | undefined,
 ): void {
   if (!onAccepted) return;
-  const callback = () => runAcceptedCallback(onAccepted);
-  if (scheduleHistoryCommitCallback) {
-    scheduleHistoryCommitCallback(callback);
+  if (!scheduleHistoryCommitCallback) {
+    console.error("submitChatMessage onAccepted requires scheduleHistoryCommitCallback");
     return;
   }
-  callback();
+  const callback = () => runAcceptedCallback(onAccepted);
+  scheduleHistoryCommitCallback(callback);
 }
+
+type SubmitChatMessageBaseOpts = {
+  chatMessages: { role: string; content: string }[];
+  buddyResult: BuddyInterjectionResult | null;
+  unlockAchievement: (id: string) => void;
+  setHistory: Dispatch<SetStateAction<Message[]>>;
+  setIsProcessing: Dispatch<SetStateAction<boolean>>;
+  currentRank: string;
+  apiKey?: string;
+  customModel?: string;
+  proKey?: string;
+  proKeyHash?: string;
+  modes?: ModesState;
+  activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
+  onSprintProgress?: (amount: number) => void;
+  getSprintCompleteMessage?: () => Message | null;
+  addActiveTD?: (n: number, raw?: boolean) => void;
+  onSuggestedReply?: (suggestion: string) => void;
+  buddyType?: string | null;
+  username?: string;
+  inventory?: Record<string, number>;
+  upgrades?: string[];
+  onByokUsage?: (usage: { model: string; prompt_tokens?: number; completion_tokens?: number; cost?: number }) => void;
+  onQuotaUpdate?: (quotaPercent: number) => void;
+  onQuotaExhausted?: () => void;
+  onProfileUpdate?: (profile: ServerProfile) => void;
+  onError?: () => void;
+  signal?: AbortSignal;
+};
+
+type SubmitChatMessageAcceptedOpts =
+  | {
+      onAccepted?: undefined;
+      scheduleHistoryCommitCallback?: undefined;
+    }
+  | {
+      onAccepted: () => void;
+      scheduleHistoryCommitCallback: (callback: () => void) => void;
+    };
+
+type SubmitChatMessageOpts = SubmitChatMessageBaseOpts & SubmitChatMessageAcceptedOpts;
 
 export function mergeSuggestedReply(previous: string | null, next: string | null): string | null {
   const trimmedNext = next?.trim() ?? "";
@@ -185,36 +226,7 @@ async function assertByokHumanSession(): Promise<void> {
   throw new ByokVerificationError("Unable to determine verification status from the server.", false);
 }
 
-export function submitChatMessage(opts: {
-  chatMessages: { role: string; content: string }[];
-  buddyResult: BuddyInterjectionResult | null;
-  unlockAchievement: (id: string) => void;
-  setHistory: Dispatch<SetStateAction<Message[]>>;
-  setIsProcessing: Dispatch<SetStateAction<boolean>>;
-  currentRank: string;
-  apiKey?: string;
-  customModel?: string;
-  proKey?: string;
-  proKeyHash?: string;
-  modes?: ModesState;
-  activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
-  onSprintProgress?: (amount: number) => void;
-  getSprintCompleteMessage?: () => Message | null;
-  addActiveTD?: (n: number, raw?: boolean) => void;
-  onSuggestedReply?: (suggestion: string) => void;
-  buddyType?: string | null;
-  username?: string;
-  inventory?: Record<string, number>;
-  upgrades?: string[];
-  onByokUsage?: (usage: { model: string; prompt_tokens?: number; completion_tokens?: number; cost?: number }) => void;
-  onQuotaUpdate?: (quotaPercent: number) => void;
-  onQuotaExhausted?: () => void;
-  onAccepted?: () => void;
-  scheduleHistoryCommitCallback?: (callback: () => void) => void;
-  onProfileUpdate?: (profile: ServerProfile) => void;
-  onError?: () => void;
-  signal?: AbortSignal;
-}) {
+export function submitChatMessage(opts: SubmitChatMessageOpts) {
   const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, onError, signal } = opts;
   // Ignore any locally-stored apiKey when BYOK is disabled at the operator
   // level — stale keys from prior sessions must not reach OpenRouter.

@@ -15,6 +15,7 @@ import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
 import { usePingAcknowledged } from "../hooks/usePingAcknowledged";
 import { useOverlays } from "../hooks/useOverlays";
+import { useHistoryCommitQueue } from "../hooks/useHistoryCommitQueue";
 import { useTipManager } from "../hooks/useTipManager";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 import { runFreeTierDelay } from "./freeTierDelay";
@@ -96,7 +97,6 @@ function Terminal() {
   const lastSuggestedReplyRef = useRef<string | null>(null);
   const nextPendingBacklogRollbackIdRef = useRef(0);
   const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
-  const pendingHistoryCommitCallbacksRef = useRef<Array<() => void>>([]);
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
@@ -115,13 +115,7 @@ function Terminal() {
   useEffect(() => () => {
     if (startupTicketPromptTimeoutRef.current) clearTimeout(startupTicketPromptTimeoutRef.current);
   }, []);
-  useEffect(() => {
-    if (pendingHistoryCommitCallbacksRef.current.length === 0) {
-      return;
-    }
-    const callbacks = pendingHistoryCommitCallbacksRef.current.splice(0);
-    callbacks.forEach((callback) => callback());
-  }, [history]);
+  const scheduleHistoryCommitCallback = useHistoryCommitQueue(history.length);
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
     const isNew = unlockAchievement(id);
     if (isNew) {
@@ -240,9 +234,6 @@ function Terminal() {
     settlePendingBacklogRollback(rollbackId, false);
     settleAcceptedNagReplay(replayId);
   }, [settleAcceptedNagReplay, settlePendingBacklogRollback]);
-  const scheduleHistoryCommitCallback = useCallback((callback: () => void) => {
-    pendingHistoryCommitCallbacksRef.current.push(callback);
-  }, []);
   const handlePromptError = useCallback((rollbackId: number) => {
     settlePendingBacklogRollback(rollbackId, true);
     playError();
