@@ -152,18 +152,21 @@ body {
 }
 
 .terminal-buddy-overlay {
-  position: absolute;
-  right: clamp(0.75rem, 2vw, 1.5rem);
-  bottom: calc(var(--terminal-buddy-offset, 0px) + env(safe-area-inset-bottom, 0px));
-  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 auto;
   pointer-events: none;
-  transform: scale(var(--terminal-buddy-scale, 1));
-  transform-origin: bottom right;
-  will-change: transform;
+  padding-right: clamp(0.25rem, 1vw, 0.75rem);
+  padding-bottom: 0.35rem;
+}
+
+.terminal-bottom-chrome {
+  align-items: flex-end;
 }
 
 .terminal-buddy-display {
   text-shadow: 0 0 12px rgba(251, 146, 60, 0.22);
+  max-width: min(100%, 28rem);
 }
 
 .terminal-buddy-inline {
@@ -195,8 +198,9 @@ body {
 
 @media (max-width: 640px) {
   .terminal-buddy-overlay {
-    right: 0.5rem;
-    opacity: 0.85;
+    padding-right: 0;
+    padding-top: 0.5rem;
+    justify-content: flex-start;
   }
 
   .terminal-buddy-display {

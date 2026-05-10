@@ -5,7 +5,7 @@ import type {
   RefObject,
   SetStateAction,
 } from "react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import HeaderBar from "./HeaderBar";
@@ -89,18 +89,6 @@ type TerminalViewProps = OverlayVisibility & {
   upgradeNagDismissPhase: "idle" | "closing";
   upgradeNagDismissEffect: UpgradeNagCloseEffect;
 };
-
-const BUDDY_OVERLAY_BOTTOM_GAP = 0;
-
-function getBuddyBottomOffset(
-  bottomChromeNode: HTMLDivElement | null,
-  footerNode: HTMLDivElement | null,
-) {
-  const bottomChromeHeight =
-    bottomChromeNode?.getBoundingClientRect().height ?? 0;
-  const footerHeight = footerNode?.getBoundingClientRect().height ?? 0;
-  return Math.ceil(bottomChromeHeight + footerHeight) + BUDDY_OVERLAY_BOTTOM_GAP;
-}
 
 function getUpgradeDismissProps(
   pendingNagCommand: string | null,
@@ -188,49 +176,6 @@ export function TerminalView({
   upgradeNagDismissEffect,
 }: TerminalViewProps) {
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
-  const bottomChromeRef = useRef<HTMLDivElement | null>(null);
-  const footerRef = useRef<HTMLDivElement | null>(null);
-  const [buddyBottomOffset, setBuddyBottomOffset] = useState(
-    BUDDY_OVERLAY_BOTTOM_GAP,
-  );
-
-  useLayoutEffect(() => {
-    const bottomChromeNode = bottomChromeRef.current;
-    const footerNode = footerRef.current;
-    if (!bottomChromeNode && !footerNode) {
-      return undefined;
-    }
-
-    const updateBottomOffset = () => {
-      const nextOffset = getBuddyBottomOffset(
-        bottomChromeRef.current,
-        footerRef.current,
-      );
-      setBuddyBottomOffset((currentOffset) =>
-        currentOffset === nextOffset ? currentOffset : nextOffset,
-      );
-    };
-
-    updateBottomOffset();
-
-    let resizeObserver: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== "undefined") {
-      resizeObserver = new ResizeObserver(updateBottomOffset);
-
-      if (bottomChromeNode) {
-        resizeObserver.observe(bottomChromeNode);
-      }
-      if (footerNode) {
-        resizeObserver.observe(footerNode);
-      }
-    }
-    window.addEventListener("resize", updateBottomOffset);
-
-    return () => {
-      resizeObserver?.disconnect();
-      window.removeEventListener("resize", updateBottomOffset);
-    };
-  }, []);
 
   const upgradeDismissProps = getUpgradeDismissProps(
     pendingNagCommand,
@@ -320,35 +265,40 @@ export function TerminalView({
         />
         <div ref={bottomRef} />
       </div>
-      <BuddyOverlay buddy={state.buddy} bottomOffset={buddyBottomOffset} containerRef={terminalContainerRef} />
-      <div ref={bottomChromeRef} className="shrink-0" data-terminal-bottom-chrome="true">
-        <SprintProgressBar
-          id={state.activeTicket?.id}
-          title={state.activeTicket?.title}
-          sprintProgress={state.activeTicket?.sprintProgress}
-          sprintGoal={state.activeTicket?.sprintGoal}
-          onSlashCommand={handleSlashCommandClick}
-        />
-        <div className="terminal-command-shell relative border-b border-white/20">
-          {slashQuery && (
-            <SlashMenu
-              query={slashQuery}
-              activeIndex={slashIndex}
-              totalTechnicalDebt={state.economy.totalTDEarned}
-              paidUser={isPaidUser(state)}
-              onSelect={handleSlashMenuSelect}
-            />
-          )}
-          <CommandLine
-            ref={inputRef}
-            value={inputValue}
-            disabled={isProcessing || isBooting || anyOverlayOpen}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            promptString={promptString}
-            placeholder={suggestedReply ?? undefined}
+      <div
+        className="terminal-bottom-chrome shrink-0 gap-4 md:flex md:items-end md:justify-between"
+        data-terminal-bottom-chrome="true"
+      >
+        <div className="min-w-0 flex-1">
+          <SprintProgressBar
+            id={state.activeTicket?.id}
+            title={state.activeTicket?.title}
+            sprintProgress={state.activeTicket?.sprintProgress}
+            sprintGoal={state.activeTicket?.sprintGoal}
+            onSlashCommand={handleSlashCommandClick}
           />
+          <div className="terminal-command-shell relative border-b border-white/20">
+            {slashQuery && (
+              <SlashMenu
+                query={slashQuery}
+                activeIndex={slashIndex}
+                totalTechnicalDebt={state.economy.totalTDEarned}
+                paidUser={isPaidUser(state)}
+                onSelect={handleSlashMenuSelect}
+              />
+            )}
+            <CommandLine
+              ref={inputRef}
+              value={inputValue}
+              disabled={isProcessing || isBooting || anyOverlayOpen}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              promptString={promptString}
+              placeholder={suggestedReply ?? undefined}
+            />
+          </div>
         </div>
+        <BuddyOverlay buddy={state.buddy} />
       </div>
       <TerminalOverlays
         showStore={showStore}
@@ -386,16 +336,14 @@ export function TerminalView({
         upgradeDismissPhase={upgradeNagDismissPhase}
         upgradeDismissEffect={upgradeNagDismissEffect}
       />
-      <div ref={footerRef}>
-        <TerminalFooter
-          closeAllOverlays={closeAllOverlaysPreservingNag}
-          setShowTerms={setShowTerms}
-          setShowPrivacy={setShowPrivacy}
-          setShowAbout={setShowAbout}
-          setShowHelp={setShowHelp}
-          setShowContact={setShowContact}
-        />
-      </div>
+      <TerminalFooter
+        closeAllOverlays={closeAllOverlaysPreservingNag}
+        setShowTerms={setShowTerms}
+        setShowPrivacy={setShowPrivacy}
+        setShowAbout={setShowAbout}
+        setShowHelp={setShowHelp}
+        setShowContact={setShowContact}
+      />
     </div>
   );
 }
