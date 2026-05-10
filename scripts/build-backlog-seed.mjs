@@ -116,7 +116,8 @@ if (sqlFiles.length === 0) {
 const chunks = await Promise.all(
   sqlFiles.map(async (file) => {
     const fullPath = path.join(seedDir, file);
-    const chunk = (await readFile(fullPath, "utf8")).trim();
+    const rawChunk = (await readFile(fullPath, "utf8")).trim();
+    const chunk = rawChunk.replace(/\),;\s*$/, ");");
     return `${chunk}${deriveReporterUpdates(chunk)}`;
   })
 );

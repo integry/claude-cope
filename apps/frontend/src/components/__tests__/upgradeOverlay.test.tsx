@@ -3,6 +3,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
+import {
+  BACKLOG_CATEGORY_UPGRADE_GROUPS,
+  PREMIUM_BACKLOG_CATEGORY_COUNT,
+} from "@claude-cope/shared/backlogTiers";
 
 vi.mock("../../config", () => ({
   UPGRADE_CHECKOUT_SINGLE: "https://example.com/single",
@@ -79,6 +83,23 @@ describe("UpgradeOverlay", () => {
     expect(text).toContain("EXTRACT TEAM FUNDS - $19.99");
   });
 
+  it("renders the compact appendix and keeps the purchase options above it", () => {
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+    const text = container.textContent ?? "";
+
+    expect(text).not.toContain("FREE STARTER SET:");
+    expect(text).toContain(`APPENDIX: ${PREMIUM_BACKLOG_CATEGORY_COUNT} NEW MAX CATEGORIES UNLOCKED`);
+    expect(text.indexOf("AUTHORIZE EXTRACTION - $4.99")).toBeLessThan(text.indexOf(`APPENDIX: ${PREMIUM_BACKLOG_CATEGORY_COUNT} NEW MAX CATEGORIES UNLOCKED`));
+    expect(text.indexOf("EXTRACT TEAM FUNDS - $19.99")).toBeLessThan(text.indexOf(`APPENDIX: ${PREMIUM_BACKLOG_CATEGORY_COUNT} NEW MAX CATEGORIES UNLOCKED`));
+
+    const renderedGroupTitles = BACKLOG_CATEGORY_UPGRADE_GROUPS.map((group) =>
+      group.id === "marketing-growth-sludge" ? "GROWTH SLUDGE" : group.title.toUpperCase(),
+    );
+    for (const title of renderedGroupTitles) {
+      expect(text).toContain(title);
+    }
+  });
+
   it("renders checkout links for both options", () => {
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
     const links = container.querySelectorAll("a[href]");
@@ -116,6 +137,20 @@ describe("UpgradeOverlay", () => {
     expect(onDismiss).not.toHaveBeenCalled();
   });
 
+  it("does call onDismiss when the nag footer is tapped on mobile", () => {
+    const onDismiss = vi.fn();
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss, dismissMode: "nag" });
+    const footerButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Tap to retain your net worth"),
+    );
+
+    act(() => {
+      footerButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
   it("renders the forced-closing class when the nag enters its exit sequence", () => {
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag", dismissPhase: "closing", dismissEffect: "singularity" });
     expect(container.querySelector(".upgrade-desktop")?.classList.contains("upgrade-overlay-closing")).toBe(true);
@@ -151,55 +186,66 @@ describe("UpgradeOverlay", () => {
 
   it("cycles desktop selection with arrow keys", () => {
     setViewportWidth(1024);
-    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
     const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
     const links = container.querySelectorAll(".upgrade-desktop a[href]");
     const singleLink = links[0] as HTMLAnchorElement | undefined;
     const multiLink = links[1] as HTMLAnchorElement | undefined;
-
     const getSelectedHref = () => container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href");
 
-    expect(getSelectedHref()).toBe("https://example.com/single");
-    expect(document.activeElement).toBe(singleLink);
+    expect(getSelectedHref()).toBeUndefined();
+    expect(document.activeElement).toBe(desktop);
 
     act(() => {
       desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
-    expect(getSelectedHref()).toBe("https://example.com/multi");
-    expect(document.activeElement).toBe(multiLink);
+    expect(getSelectedHref()).toBe("https://example.com/single");
+    expect(document.activeElement).toBe(singleLink);
 
     act(() => {
       desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
     });
-    expect(getSelectedHref()).toBe("https://example.com/single");
-    expect(document.activeElement).toBe(singleLink);
+    expect(getSelectedHref()).toBe("https://example.com/multi");
+    expect(document.activeElement).toBe(multiLink);
   });
 
-  it("activates the selected desktop option on Enter", () => {
+  it("does not activate a desktop option on Enter before keyboard navigation starts", () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     setViewportWidth(1024);
-    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
     const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
-
     act(() => {
       desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
+    expect(clickSpy).not.toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
 
+  it("activates the selected desktop option on Enter after keyboard navigation starts", () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    act(() => {
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+    act(() => {
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
     expect(clickSpy).toHaveBeenCalledTimes(1);
     clickSpy.mockRestore();
   });
 
   it("does not intercept document key events outside the desktop overlay", () => {
     setViewportWidth(1024);
-    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
-
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
     const getSelectedHref = () => container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href");
 
     act(() => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
 
-    expect(getSelectedHref()).toBe("https://example.com/single");
+    expect(getSelectedHref()).toBeUndefined();
   });
 
   it("does not route Enter key events from the dismiss button to checkout links", () => {
@@ -207,34 +253,88 @@ describe("UpgradeOverlay", () => {
     setViewportWidth(1024);
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
     const closeButton = container.querySelector(".upgrade-desktop button");
-
     act(() => {
       closeButton?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
-
     expect(clickSpy).not.toHaveBeenCalled();
     clickSpy.mockRestore();
   });
 
-  it("syncs the selected desktop option when focus moves to a different link", () => {
+  it("tabs from the desktop overlay into the first checkout link", () => {
     setViewportWidth(1024);
-    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
     const links = container.querySelectorAll(".upgrade-desktop a[href]");
-    const multiLink = links[1] as HTMLAnchorElement | undefined;
-
+    const singleLink = links[0] as HTMLAnchorElement | undefined;
     act(() => {
-      multiLink?.focus();
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
     });
+    expect(document.activeElement).toBe(singleLink);
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/single");
+  });
 
-    expect(document.activeElement).toBe(multiLink);
-    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/multi");
+  it("shows visible manual focus on the first checkout option without arming keyboard selection", () => {
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "manual" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    const singleLink = container.querySelector(".upgrade-desktop a[href='https://example.com/single']") as HTMLAnchorElement | null;
+    expect(document.activeElement).toBe(singleLink);
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("false");
+    expect(desktop?.getAttribute("data-manual-focus")).toBe("true");
+  });
+
+  it("prevents Enter on the program-focused manual checkout link before keyboard navigation is armed", () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "manual" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    const singleLink = container.querySelector(".upgrade-desktop a[href='https://example.com/single']") as HTMLAnchorElement | null;
+    const enterEvent = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    act(() => {
+      singleLink?.dispatchEvent(enterEvent);
+    });
+    expect(document.activeElement).toBe(singleLink);
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("false");
+    expect(desktop?.getAttribute("data-manual-focus")).toBe("true");
+    expect(enterEvent.defaultPrevented).toBe(true);
+    expect(clickSpy).not.toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
+
+  it("arms manual desktop keyboard navigation on the first Tab without skipping the first option", () => {
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "manual" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    const singleLink = container.querySelector(".upgrade-desktop a[href='https://example.com/single']") as HTMLAnchorElement | null;
+    act(() => {
+      singleLink?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+    expect(document.activeElement).toBe(singleLink);
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("true");
+    expect(desktop?.getAttribute("data-manual-focus")).toBe("false");
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/single");
+  });
+
+  it("arms manual desktop keyboard navigation before Shift+Tab can move focus to the close button", () => {
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "manual" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    const singleLink = container.querySelector(".upgrade-desktop a[href='https://example.com/single']") as HTMLAnchorElement | null;
+    const closeButton = container.querySelector(".upgrade-desktop button") as HTMLButtonElement | null;
+    act(() => {
+      singleLink?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }));
+      closeButton?.focus();
+    });
+    expect(document.activeElement).toBe(closeButton);
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("true");
+    expect(desktop?.getAttribute("data-manual-focus")).toBe("false");
   });
 
   it("disables desktop keyboard navigation after resizing to mobile", () => {
     setViewportWidth(1024);
-    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
     const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
-
     const getSelectedHref = () => container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href");
 
     act(() => {
@@ -244,35 +344,59 @@ describe("UpgradeOverlay", () => {
       desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
 
-    expect(getSelectedHref()).toBe("https://example.com/single");
+    expect(getSelectedHref()).toBeUndefined();
   });
 
   it("moves focus off the desktop overlay when resizing to mobile", () => {
     setViewportWidth(1024);
-    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
-    const singleLink = container.querySelector(".upgrade-desktop a[href]") as HTMLAnchorElement | null;
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
 
-    expect(document.activeElement).toBe(singleLink);
+    expect(document.activeElement).toBe(desktop);
 
     act(() => {
       setViewportWidth(375);
     });
 
-    expect(document.activeElement).not.toBe(singleLink);
+    expect(document.activeElement).not.toBe(desktop);
     expect(container.querySelector(".upgrade-desktop")?.contains(document.activeElement)).toBe(false);
+  });
+
+  it("clears desktop keyboard-armed state across desktop to mobile to desktop transitions", () => {
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+
+    act(() => {
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/single");
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("true");
+
+    act(() => {
+      setViewportWidth(375);
+    });
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("false");
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
+
+    act(() => {
+      setViewportWidth(1024);
+    });
+    expect(document.activeElement).toBe(desktop);
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("false");
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
   });
 
   it("enables desktop keyboard navigation after resizing from mobile to desktop", () => {
     setViewportWidth(375);
-    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
     const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
-
     const getSelectedHref = () => container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href");
 
     act(() => {
       desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
-    expect(getSelectedHref()).toBe("https://example.com/single");
+    expect(getSelectedHref()).toBeUndefined();
 
     act(() => {
       setViewportWidth(1024);
@@ -281,6 +405,30 @@ describe("UpgradeOverlay", () => {
       desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
 
-    expect(getSelectedHref()).toBe("https://example.com/multi");
+    expect(getSelectedHref()).toBe("https://example.com/single");
+  });
+
+  it("starts unarmed arrow-up navigation on the last checkout option", () => {
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    const multiLink = container.querySelector(".upgrade-desktop a[href='https://example.com/multi']") as HTMLAnchorElement | null;
+
+    act(() => {
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    });
+
+    expect(document.activeElement).toBe(multiLink);
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/multi");
+  });
+
+  it("does not auto-focus a checkout link or show selected styling when the nag opens", () => {
+    setViewportWidth(1024);
+    render({ quotaPercent: 0, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+
+    expect(document.activeElement).toBe(desktop);
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("false");
   });
 });

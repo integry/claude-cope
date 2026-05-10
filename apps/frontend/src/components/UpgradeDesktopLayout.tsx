@@ -13,6 +13,12 @@ const DIM = "#aaaaaa"; // dim footer
 const INNER_W = 64; // inner content width (between ║ chars)
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
 export const UPGRADE_OVERLAY_MOBILE_MAX_WIDTH = 640;
+const BORDER_TOP = `╔${"═".repeat(INNER_W)}╗`;
+const BORDER_MID = `╠${"═".repeat(INNER_W)}╣`;
+const BORDER_BOTTOM = `╚${"═".repeat(INNER_W)}╝`;
+const OPTION_IDS = { single: 0, multi: 1 } as const;
+type OptionId = (typeof OPTION_IDS)[keyof typeof OPTION_IDS];
+const RETAIN_TEXT = "[Press ESC to retain your net worth]";
 
 export type LayoutProps = {
   singleLabel: string;
@@ -20,23 +26,37 @@ export type LayoutProps = {
   singleAvailable: boolean;
   multiAvailable: boolean;
   quotaLine: string;
+  premiumCategoryCount: number;
+  premiumGroups: Array<{ id: string; title: string; summary: string }>;
   dismissMode?: "manual" | "nag";
   dismissPhase?: "idle" | "closing";
   dismissEffect?: UpgradeNagCloseEffect;
-  closeEffectPresentation?: {
-    panelAnimation: string;
-    backdropAnimation: string;
-    overlayAnimation?: string;
-  };
+  closeEffectPresentation?: { panelAnimation: string; backdropAnimation: string; overlayAnimation?: string };
   onDismiss?: () => void;
 };
 
+function getOptionIdList(singleAvailable: boolean, multiAvailable: boolean) { return [singleAvailable ? OPTION_IDS.single : null, multiAvailable ? OPTION_IDS.multi : null].filter((id): id is OptionId => id !== null); }
+function getTabEntryOptionId(ids: OptionId[], isReverse: boolean) { return ids[isReverse ? ids.length - 1 : 0] ?? null; }
+function isEditableOverlayTarget(target: EventTarget | null): target is HTMLElement { return target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT"); }
+function getOverlayArrowDirection(key: string): -1 | 1 | null { if (key === "ArrowUp" || key === "ArrowLeft") return -1; return key === "ArrowDown" || key === "ArrowRight" ? 1 : null; }
+function shouldBlockManualLinkEnter(event: React.KeyboardEvent<HTMLAnchorElement>, isKeyboardNavigationMode: boolean, showManualFocus: boolean) { return event.key === "Enter" && showManualFocus && !isKeyboardNavigationMode; }
+function shouldActivateSelectedOption(event: React.KeyboardEvent<HTMLDivElement>, isKeyboardNavigationMode: boolean, selectedOptionId: OptionId | null): selectedOptionId is OptionId { return event.key === "Enter" && isKeyboardNavigationMode && selectedOptionId !== null && event.target instanceof HTMLElement && event.target.tagName !== "A" && event.target.tagName !== "BUTTON"; }
+function isFocusedSelectedOption(target: EventTarget | null, selectedOptionId: OptionId | null, optionRefs: React.RefObject<Array<HTMLAnchorElement | null>>) { return selectedOptionId !== null && target === optionRefs.current[selectedOptionId]; }
+function shouldArmKeyboardNavigationOnTab(target: EventTarget | null, showManualFocus: boolean, selectedOptionId: OptionId | null, optionRefs: React.RefObject<Array<HTMLAnchorElement | null>>) { return showManualFocus && isFocusedSelectedOption(target, selectedOptionId, optionRefs); }
+function isFocusedDesktopOption(target: Element | null, optionRefs: React.RefObject<Array<HTMLAnchorElement | null>>) { return target !== null && optionRefs.current.includes(target as HTMLAnchorElement); }
+function getCenteredPadding(text: string) { const left = Math.max(0, Math.floor((INNER_W - text.length) / 2)); return { left, right: Math.max(0, INNER_W - text.length - left) }; }
+const PANEL_STYLE = {
+  fontFamily: MONO_FONT, fontSize: "13px", lineHeight: "1.1", backgroundColor: "#1e232b",
+  boxShadow: "12px 12px 0px rgba(0, 0, 0, 0.9)", padding: 0, margin: 0, whiteSpace: "pre" as const, overflowX: "auto" as const, overflowY: "hidden" as const,
+};
 export default function DesktopLayout({
   singleLabel,
   multiLabel,
   singleAvailable,
   multiAvailable,
   quotaLine,
+  premiumCategoryCount,
+  premiumGroups,
   dismissMode = "manual",
   dismissPhase = "idle",
   dismissEffect = DEFAULT_CLOSE_EFFECT,
@@ -45,99 +65,81 @@ export default function DesktopLayout({
 }: LayoutProps) {
   const optionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const focusSourceRef = useRef<"pointer" | "tab" | "arrow" | "programmatic" | null>(null);
   const getIsDesktopViewport = useCallback(() => typeof window !== "undefined" && window.innerWidth > UPGRADE_OVERLAY_MOBILE_MAX_WIDTH, []);
   const [isDesktopViewport, setIsDesktopViewport] = useState(getIsDesktopViewport);
-  const topBorder = <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>;
-  const midBorder = <span style={{ color: B }}>{"╠" + "═".repeat(INNER_W) + "╣"}</span>;
-  const botBorder = <span style={{ color: B }}>{"╚" + "═".repeat(INNER_W) + "╝"}</span>;
   const boxLine = (text: string, color = W) => {
-    const padded = text.length < INNER_W
-      ? text + " ".repeat(INNER_W - text.length)
-      : text.slice(0, INNER_W);
-    return (
-      <>
-        <span style={{ color: B }}>{"║"}</span>
-        <span style={{ color }}>{padded}</span>
-        <span style={{ color: B }}>{"║"}</span>
-      </>
-    );
+    const padded = text.length < INNER_W ? text + " ".repeat(INNER_W - text.length) : text.slice(0, INNER_W);
+    return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{padded}</span><span style={{ color: B }}>{"║"}</span></>;
   };
   const emptyLine = boxLine("");
-  const availableOptionIds = useMemo(
-    () => [singleAvailable ? 0 : null, multiAvailable ? 1 : null].filter((id): id is number => id !== null),
-    [singleAvailable, multiAvailable],
-  );
-  const [selectedOptionId, setSelectedOptionId] = useState<number | null>(availableOptionIds[0] ?? null);
+  const availableOptionIds = useMemo(() => getOptionIdList(singleAvailable, multiAvailable), [singleAvailable, multiAvailable]);
+  const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
+  const [isKeyboardNavigationMode, setIsKeyboardNavigationMode] = useState(false);
+  const [showManualFocus, setShowManualFocus] = useState(false);
   const boxLineRich = (content: React.ReactNode, textLength: number) => {
     const padLen = Math.max(0, INNER_W - textLength);
-    return (
-      <>
-        <span style={{ color: B }}>{"║"}</span>
-        {content}
-        <span>{" ".repeat(padLen)}</span>
-        <span style={{ color: B }}>{"║"}</span>
-      </>
-    );
+    return <><span style={{ color: B }}>{"║"}</span>{content}<span>{padLen > 0 ? " ".repeat(padLen) : ""}</span><span style={{ color: B }}>{"║"}</span></>;
   };
   const centeredBoxLine = (text: string, color = W) => {
-    const totalPad = INNER_W - text.length;
-    const left = Math.max(0, Math.floor(totalPad / 2));
-    const right = Math.max(0, totalPad - left);
-    return (
-      <>
-        <span style={{ color: B }}>{"║"}</span>
-        <span style={{ color }}>{" ".repeat(left) + text + " ".repeat(right)}</span>
-        <span style={{ color: B }}>{"║"}</span>
-      </>
-    );
+    const { left, right } = getCenteredPadding(text);
+    return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{" ".repeat(left) + text + " ".repeat(right)}</span><span style={{ color: B }}>{"║"}</span></>;
   };
-  const buttonBlock = (
-    id: number,
-    label: string,
-    url: string,
-    available: boolean,
-    primary = true,
-  ) => {
+  const wrapText = (text: string, maxWidth = INNER_W - 2) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [""];
+
+    const lines: string[] = [];
+    let currentLine = "";
+    for (const word of words) {
+      const nextLine = currentLine ? `${currentLine} ${word}` : word;
+      if (nextLine.length <= maxWidth) {
+        currentLine = nextLine;
+        continue;
+      }
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  };
+  const renderWrappedBoxLines = (text: string, color = W) => wrapText(text).map((line, index) => <span key={`${color}-${index}-${line}`}>{boxLine(`  ${line}`, color)}{"\n"}</span>);
+  const buttonBlock = (id: OptionId, label: string, url: string, available: boolean, primary = true) => {
     const MARGIN = 2;
     const cursorPrefix = " > ";
     const btnContent = " " + label + " ";
     const totalUsed = MARGIN + cursorPrefix.length + btnContent.length;
     const suffixLen = Math.max(0, INNER_W - totalUsed);
     const emptyInner = " ".repeat(INNER_W);
-    const selected = selectedOptionId === id;
-    if (!available) {
-      const errText = "    [ERR] CHECKOUT_URL not configured.";
-      const errPad = Math.max(0, INNER_W - errText.length);
-      return (
-        <>
-          <span style={{ color: B }}>{"║"}</span>
-          <span style={{ color: W }}>{emptyInner}</span>
-          <span style={{ color: B }}>{"║"}</span>{"\n"}
-          <span style={{ color: B }}>{"║"}</span>
-          <span style={{ color: B }}>{errText + " ".repeat(errPad)}</span>
-          <span style={{ color: B }}>{"║"}</span>{"\n"}
-          <span style={{ color: B }}>{"║"}</span>
-          <span style={{ color: W }}>{emptyInner}</span>
-          <span style={{ color: B }}>{"║"}</span>
-        </>
-      );
-    }
+    const selected = isKeyboardNavigationMode && selectedOptionId === id;
+    if (!available) return <>{boxLine("")}{"\n"}{boxLine("    [ERR] CHECKOUT_URL not configured.", B)}{"\n"}{boxLine("")}</>;
     return (
       <a
         href={url}
         ref={(element) => { optionRefs.current[id] = element; }}
         className={primary ? "upgrade-btn-primary" : "upgrade-btn-secondary"}
         data-selected={selected ? "true" : "false"}
-        style={{
-          display: "inline",
-          textDecoration: "none",
-          cursor: "pointer",
-          backgroundColor: "transparent",
-        }}
+        style={{ display: "inline", textDecoration: "none", cursor: "pointer", backgroundColor: "transparent" }}
         tabIndex={isForcedClosing ? -1 : undefined}
         aria-hidden={isForcedClosing ? true : undefined}
         onClick={(e) => e.stopPropagation()}
-        onFocus={() => { setSelectedOptionId(id); }}
+        onMouseDown={() => { focusSourceRef.current = "pointer"; setIsKeyboardNavigationMode(false); setShowManualFocus(false); }}
+        onKeyDown={(event) => {
+          if (shouldBlockManualLinkEnter(event, isKeyboardNavigationMode, showManualFocus)) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        onFocus={() => {
+          setSelectedOptionId(id);
+          if (focusSourceRef.current === "programmatic") {
+            focusSourceRef.current = null;
+            setShowManualFocus(dismissMode === "manual");
+            return;
+          }
+          setShowManualFocus(false);
+          if (focusSourceRef.current !== "pointer") setIsKeyboardNavigationMode(true);
+        }}
       >
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: "transparent" }}>{emptyInner}</span>
@@ -158,28 +160,31 @@ export default function DesktopLayout({
       </a>
     );
   };
-  const tableBorderTop = boxLine("  +----------------+----------+------------------------------+");
-  const tableHeader    = boxLine("  | ARCHITECTURE   | CAPACITY | GUARANTEED OUTCOME           |");
-  const tableBorderMid = boxLine("  +----------------+----------+------------------------------+");
-  const tableRow1      = boxLine("  | Legacy AI      | Max 20x  | Manageable pull requests     |");
-  const tableRow2      = boxLine("  | Claude Cope    | MAX 429X | Unmitigated request storms   |");
-  const tableBorderBot = boxLine("  +----------------+----------+------------------------------+");
-
-  const title = "[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]";
-  const closeBtn = "[x]";
+  const tableLines = { border: boxLine("  +----------------+----------+------------------------------+"), header: boxLine("  | ARCHITECTURE   | CAPACITY | GUARANTEED OUTCOME           |"), legacy: boxLine("  | Legacy AI      | Max 20x  | Manageable pull requests     |"), cope: boxLine("  | Claude Cope    | MAX 429X | Unmitigated request storms   |") };
+  const title = "[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]", closeBtn = "[x]";
+  const creditsStr = `${PRO_QUOTA_LIMIT} non-expiring credits`;
+  const retainPadding = getCenteredPadding(RETAIN_TEXT);
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
   const canPointerDismiss = dismissMode === "manual" && !!onDismiss;
   const isForcedClosing = dismissPhase === "closing";
+  const resetDesktopKeyboardState = useCallback(() => {
+    focusSourceRef.current = null;
+    setIsKeyboardNavigationMode(false);
+    setSelectedOptionId(null);
+    setShowManualFocus(false);
+  }, []);
   useEffect(() => {
     if (availableOptionIds.length === 0) {
       setSelectedOptionId(null);
+      setShowManualFocus(false);
       return;
     }
-    if (selectedOptionId === null || !availableOptionIds.includes(selectedOptionId)) {
+    if (selectedOptionId !== null && !availableOptionIds.includes(selectedOptionId)) {
       setSelectedOptionId(availableOptionIds[0] ?? null);
     }
   }, [availableOptionIds, selectedOptionId]);
+  useEffect(() => { if (isForcedClosing) resetDesktopKeyboardState(); }, [isForcedClosing, resetDesktopKeyboardState]);
   useEffect(() => {
     const syncViewport = () => { setIsDesktopViewport(getIsDesktopViewport()); };
     window.addEventListener("resize", syncViewport);
@@ -188,7 +193,8 @@ export default function DesktopLayout({
   const cycleSelection = useCallback((direction: -1 | 1) => {
     if (availableOptionIds.length === 0) return;
     if (selectedOptionId === null) {
-      setSelectedOptionId(availableOptionIds[0] ?? null);
+      const nextIndex = direction === 1 ? 0 : availableOptionIds.length - 1;
+      setSelectedOptionId(availableOptionIds[nextIndex] ?? null);
       return;
     }
     const currentIndex = availableOptionIds.indexOf(selectedOptionId);
@@ -199,40 +205,53 @@ export default function DesktopLayout({
   useEffect(() => {
     if (!isDesktopViewport || !isForcedClosing) return;
     const activeElement = document.activeElement;
-    if (activeElement instanceof HTMLElement && overlayRef.current?.contains(activeElement)) {
-      activeElement.blur();
-    }
+    if (activeElement instanceof HTMLElement && overlayRef.current?.contains(activeElement)) activeElement.blur();
   }, [isDesktopViewport, isForcedClosing]);
   useEffect(() => {
     if (!isDesktopViewport) {
+      resetDesktopKeyboardState();
       const activeElement = document.activeElement;
       if (activeElement instanceof HTMLElement && overlayRef.current?.contains(activeElement)) {
         activeElement.blur();
       }
       return;
     }
+    const overlay = overlayRef.current;
+    if (!overlay) return;
     if (isForcedClosing) {
-      overlayRef.current?.focus();
+      overlay.focus();
       return;
     }
-    if (selectedOptionId !== null) {
-      optionRefs.current[selectedOptionId]?.focus();
+    if (dismissMode === "nag" && !isKeyboardNavigationMode) {
+      overlay.focus();
       return;
     }
-    overlayRef.current?.focus();
-  }, [isDesktopViewport, isForcedClosing, selectedOptionId]);
+    if (isKeyboardNavigationMode && selectedOptionId !== null) {
+      const selectedOption = optionRefs.current[selectedOptionId];
+      const activeElement = document.activeElement;
+      if (selectedOption && (activeElement === overlay || isFocusedDesktopOption(activeElement, optionRefs))) {
+        selectedOption.focus();
+      }
+      return;
+    }
+    if (dismissMode === "manual") {
+      const firstOptionId = availableOptionIds[0];
+      const firstOption = firstOptionId !== undefined ? optionRefs.current[firstOptionId] : null;
+      if (firstOption && document.activeElement !== firstOption) {
+        focusSourceRef.current = "programmatic";
+        setShowManualFocus(true);
+        firstOption.focus();
+        return;
+      }
+      if (firstOption) return;
+    }
+    if (!overlay.contains(document.activeElement)) overlay.focus();
+  }, [availableOptionIds, dismissMode, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, resetDesktopKeyboardState, selectedOptionId]);
   useEffect(() => {
     if (!isDesktopViewport || isForcedClosing) return undefined;
     const overlay = overlayRef.current;
     if (!overlay) return undefined;
-    const restoreFocus = () => {
-      requestAnimationFrame(() => {
-        const activeElement = document.activeElement;
-        if (!overlay.contains(activeElement)) {
-          overlay.focus();
-        }
-      });
-    };
+    const restoreFocus = () => { requestAnimationFrame(() => { if (!overlay.contains(document.activeElement)) overlay.focus(); }); };
     overlay.addEventListener("focusout", restoreFocus);
     return () => { overlay.removeEventListener("focusout", restoreFocus); };
   }, [isDesktopViewport, isForcedClosing]);
@@ -244,38 +263,43 @@ export default function DesktopLayout({
       return;
     }
     const target = event.target;
-    const isEditableTarget = target instanceof HTMLElement
-      && (target.isContentEditable
-        || target.tagName === "INPUT"
-        || target.tagName === "TEXTAREA"
-        || target.tagName === "SELECT");
-    if (isEditableTarget) return;
-    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+    if (isEditableOverlayTarget(target)) return;
+    const arrowDirection = getOverlayArrowDirection(event.key);
+    if (arrowDirection !== null) {
       event.preventDefault();
-      cycleSelection(-1);
+      focusSourceRef.current = "arrow";
+      setIsKeyboardNavigationMode(true);
+      cycleSelection(arrowDirection);
       return;
     }
-    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-      event.preventDefault();
-      cycleSelection(1);
+    if (event.key === "Tab") {
+      focusSourceRef.current = "tab";
+      if (target === overlayRef.current) {
+        event.preventDefault();
+        setShowManualFocus(false);
+        setIsKeyboardNavigationMode(true);
+        const nextOptionId = getTabEntryOptionId(availableOptionIds, event.shiftKey);
+        setSelectedOptionId(nextOptionId);
+        return;
+      }
+      if (shouldArmKeyboardNavigationOnTab(target, showManualFocus, selectedOptionId, optionRefs)) {
+        setShowManualFocus(false);
+        setIsKeyboardNavigationMode(true);
+      }
       return;
     }
-    if (
-      event.key === "Enter"
-      && selectedOptionId !== null
-      && target instanceof HTMLElement
-      && target.tagName !== "A"
-      && target.tagName !== "BUTTON"
-    ) {
+    if (shouldActivateSelectedOption(event, isKeyboardNavigationMode, selectedOptionId)) {
       event.preventDefault();
       optionRefs.current[selectedOptionId]?.click();
     }
-  }, [cycleSelection, isDesktopViewport, isForcedClosing, selectedOptionId]);
+  }, [availableOptionIds, cycleSelection, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, selectedOptionId, showManualFocus]);
   return (
     <div
       ref={overlayRef}
       className={`upgrade-desktop fixed inset-0 z-50 flex items-center justify-center${isForcedClosing ? " upgrade-overlay-closing" : ""}`}
       data-close-effect={dismissEffect}
+      data-keyboard-nav={isKeyboardNavigationMode ? "true" : "false"}
+      data-manual-focus={showManualFocus ? "true" : "false"}
       onClick={canPointerDismiss ? onDismiss : undefined}
       onKeyDown={handleOverlayKeyDown}
       tabIndex={-1}
@@ -288,30 +312,13 @@ export default function DesktopLayout({
       <pre
         className={`relative z-10 mx-4 upgrade-overlay-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
-        style={{
-          fontFamily: MONO_FONT,
-          fontSize: "13px",
-          lineHeight: "1.1",
-          backgroundColor: "#1e232b",
-          boxShadow: "12px 12px 0px rgba(0, 0, 0, 0.9)",
-          padding: 0,
-          margin: 0,
-          whiteSpace: "pre",
-          overflowX: "auto",
-          overflowY: "hidden",
-          ...(isForcedClosing && closeEffectPresentation ? { animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" as const } : {}),
-        }}
+        style={isForcedClosing && closeEffectPresentation ? { ...PANEL_STYLE, animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" } : PANEL_STYLE}
       >
-        {topBorder}{"\n"}
+        <span style={{ color: B }}>{BORDER_TOP}</span>{"\n"}
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: B }}>{" " + title + " ".repeat(titleGap - 1)}</span>
         {canPointerDismiss ? (
-          <button
-            type="button"
-            onClick={onDismiss}
-            style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
-            title="Click to dismiss"
-          >{closeBtn}</button>
+          <button type="button" onClick={onDismiss} style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }} title="Click to dismiss">{closeBtn}</button>
         ) : dismissMode === "nag" ? (
           <span>{" ".repeat(closeBtn.length)}</span>
         ) : (
@@ -320,78 +327,51 @@ export default function DesktopLayout({
         <span style={{ color: B }}>{" ".repeat(titlePadRight)}</span>
         <span style={{ color: B }}>{"║"}</span>
         {"\n"}
-        {midBorder}{"\n"}
+        <span style={{ color: B }}>{BORDER_MID}</span>{"\n"}
         {emptyLine}{"\n"}
         {centeredBoxLine("INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]", Y)}{"\n"}
         {boxLine(`  > ${quotaLine}`, DIM)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [ THROUGHPUT BENCHMARKS ]", Y)}{"\n"}
-        {boxLine("  Industry standards artificially throttle assistant capacity")}{"\n"}
-        {boxLine("  at 5x or 20x. Claude Cope is architected without safeguards")}{"\n"}
-        {boxLine("  to guarantee absolute system saturation.")}{"\n"}
+        {boxLine("  Industry standards throttle capacity at 5x or 20x.")}{"\n"}
+        {boxLine("  Claude Cope guarantees absolute system saturation.")}{"\n"}
         {emptyLine}{"\n"}
-        {tableBorderTop}{"\n"}
-        {tableHeader}{"\n"}
-        {tableBorderMid}{"\n"}
-        {tableRow1}{"\n"}
-        {tableRow2}{"\n"}
-        {tableBorderBot}{"\n"}
+        {tableLines.border}{"\n"}
+        {tableLines.header}{"\n"}
+        {tableLines.border}{"\n"}
+        {tableLines.legacy}{"\n"}
+        {tableLines.cope}{"\n"}
+        {tableLines.border}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
-        {(() => {
-          const creditsStr = `${PRO_QUOTA_LIMIT} non-expiring credits`;
-          const line1 = `  Unlocks: ${creditsStr}, multi-device sync,`;
-          return boxLineRich(
-            <span style={{ color: W }}>
-              {"  Unlocks: "}
-              <span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>
-              {", "}
-              <span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>
-              {","}
-            </span>,
-            line1.length,
-          );
-        })()}{"\n"}
-        {boxLineRich(
-          <span style={{ color: W }}>
-            {"  priority generation queue, and "}
-            <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>
-            {"."}
-          </span>,
-          "  priority generation queue, and advanced Cope models.".length,
-        )}{"\n"}
-        {buttonBlock(0, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
+        {boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{" and "}<span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>{"."}</span>, `  Unlocks: ${creditsStr} and advanced Cope models.`.length)}{"\n"}
+        {buttonBlock(OPTION_IDS.single, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
-        {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
-        {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
+        {boxLine("  Let the entire team achieve HTTP 429 compliance.")}{"\n"}
         {boxLine("  (5 activation keys will be sent to your email)", "#8892b0")}{"\n"}
-        {buttonBlock(1, multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
-        {midBorder}{"\n"}
-        {(() => {
-          const text = "[Press ESC to retain your net worth]";
-          const totalPad = INNER_W - text.length;
-          const left = Math.max(0, Math.floor(totalPad / 2));
-          const right = Math.max(0, totalPad - left);
-          return (
-            <span style={{ display: "inline" }} className="upgrade-esc-btn">
-              <span style={{ color: B }}>{"║"}</span>
-              {canPointerDismiss ? (
-                <button
-                  type="button"
-                  onClick={onDismiss}
-                  data-esc=""
-                  style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
-                >{" ".repeat(left) + text + " ".repeat(right)}</button>
-              ) : (
-                <span data-esc="" style={{ color: DIM }}>{" ".repeat(left) + text + " ".repeat(right)}</span>
-              )}
-              <span style={{ color: B }}>{"║"}</span>
-            </span>
-          );
-        })()}{"\n"}
-        {botBorder}
+        {buttonBlock(OPTION_IDS.multi, multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
+        {emptyLine}{"\n"}
+        {boxLine("  ---------------------------------------------------------")}{"\n"}
+        {boxLine(`  [ APPENDIX: ${premiumCategoryCount} NEW MAX CATEGORIES UNLOCKED ]`, Y)}{"\n"}
+        {emptyLine}{"\n"}
+        {premiumGroups.map((group) => (
+          <span key={group.id}>
+            {renderWrappedBoxLines(`* ${group.title.toUpperCase()}: ${group.summary}`)}
+          </span>
+        ))}
+        <span style={{ color: B }}>{BORDER_MID}</span>{"\n"}
+        <span style={{ display: "inline" }} className="upgrade-esc-btn">
+          <span style={{ color: B }}>{"║"}</span>
+          {canPointerDismiss ? (
+            <button type="button" onClick={onDismiss} data-esc="" style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}>{" ".repeat(retainPadding.left) + RETAIN_TEXT + " ".repeat(retainPadding.right)}</button>
+          ) : (
+            <span data-esc="" style={{ color: DIM }}>{" ".repeat(retainPadding.left) + RETAIN_TEXT + " ".repeat(retainPadding.right)}</span>
+          )}
+          <span style={{ color: B }}>{"║"}</span>
+        </span>{"\n"}
+        <span style={{ color: B }}>{BORDER_BOTTOM}</span>
       </pre>
     </div>
   );

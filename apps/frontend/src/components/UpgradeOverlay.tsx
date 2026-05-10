@@ -1,4 +1,8 @@
 import {
+  BACKLOG_CATEGORY_UPGRADE_GROUPS,
+  PREMIUM_BACKLOG_CATEGORY_COUNT,
+} from "@claude-cope/shared/backlogTiers";
+import {
   UPGRADE_CHECKOUT_SINGLE,
   UPGRADE_CHECKOUT_MULTI,
   UPGRADE_PRICE_SINGLE,
@@ -40,6 +44,18 @@ type UpgradeOverlayProps = {
   dismissEffect?: UpgradeNagCloseEffect;
 };
 
+const PREMIUM_GROUP_SUMMARIES: Record<string, string> = {
+  "industry-verticals": "Fintech, Edtech, Govtech, Healthtech...",
+  "deep-infrastructure": "Migrations, IAM, K8s, Telemetry...",
+  "dark-corporate-arts": "Compliance rites, PMO, sabotage...",
+  "marketing-growth-sludge": "SEO spam, Ad-tech, funnel analytics...",
+  "emerging-hype": "AI agents, crypto, metaverse delusion...",
+};
+
+const PREMIUM_GROUP_DISPLAY_TITLES: Record<string, string> = {
+  "marketing-growth-sludge": "Growth Sludge",
+};
+
 function UpgradeOverlay({
   quotaPercent,
   totalQuota,
@@ -60,6 +76,12 @@ function UpgradeOverlay({
     ? "EXTERNAL BILLING ACTIVE. Status: BYOK bypass engaged."
     : `CURRENT QUOTA: ${currentCredits} Credits. Status: ${getQuotaStatus(currentCredits)}.`;
   const closeEffectPresentation = getCloseEffectPresentation(dismissEffect);
+  const premiumGroups = BACKLOG_CATEGORY_UPGRADE_GROUPS.map((group) => ({
+    id: group.id,
+    title: PREMIUM_GROUP_DISPLAY_TITLES[group.id] ?? group.title,
+    summary: PREMIUM_GROUP_SUMMARIES[group.id]
+      ?? `${group.categories.slice(0, 3).map((entry) => entry.label).join(", ")}...`,
+  }));
 
   return (
     <>
@@ -75,6 +97,8 @@ function UpgradeOverlay({
         dismissPhase={dismissPhase}
         dismissEffect={dismissEffect}
         closeEffectPresentation={closeEffectPresentation}
+        premiumCategoryCount={PREMIUM_BACKLOG_CATEGORY_COUNT}
+        premiumGroups={premiumGroups}
         onDismiss={onDismiss}
       />
       {/* Mobile: visible up to the shared max-width breakpoint */}
@@ -89,6 +113,8 @@ function UpgradeOverlay({
         dismissPhase={dismissPhase}
         dismissEffect={dismissEffect}
         closeEffectPresentation={closeEffectPresentation}
+        premiumCategoryCount={PREMIUM_BACKLOG_CATEGORY_COUNT}
+        premiumGroups={premiumGroups}
       />
     </>
   );
@@ -109,6 +135,8 @@ function MobileLayout({
   dismissPhase = "idle",
   dismissEffect = DEFAULT_CLOSE_EFFECT,
   closeEffectPresentation = getCloseEffectPresentation(DEFAULT_CLOSE_EFFECT),
+  premiumCategoryCount,
+  premiumGroups,
 }: LayoutProps & { onDismiss: () => void }) {
   const sectionStyle = { padding: "8px 12px" } as const;
   const hrStyle = {
@@ -246,9 +274,8 @@ function MobileLayout({
             [ THROUGHPUT BENCHMARKS ]
           </div>
           <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
-            Industry standards artificially throttle assistant capacity
-            at 5x or 20x. Claude Cope is architected without safeguards
-            to guarantee absolute system saturation.
+            Industry standards throttle capacity at 5x or 20x.
+            Claude Cope guarantees absolute system saturation.
           </div>
         </div>
 
@@ -283,9 +310,7 @@ function MobileLayout({
           </div>
           <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "8px", color: W }}>
             Unlocks:{" "}
-            <span style={{ color: BW, fontWeight: "bold" }}>{PRO_QUOTA_LIMIT} non-expiring credits</span>,{" "}
-            <span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>,
-            priority generation queue, and{" "}
+            <span style={{ color: BW, fontWeight: "bold" }}>{PRO_QUOTA_LIMIT} non-expiring credits</span> and{" "}
             <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>.
           </div>
           {mobileButton(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable, true)}
@@ -299,8 +324,7 @@ function MobileLayout({
             [OPTION 2: TEAM PACK - 5 LICENSES]
           </div>
           <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
-            Scale your bottlenecks. Let the entire engineering team
-            achieve HTTP 429 compliance simultaneously.
+            Let the entire team achieve HTTP 429 compliance.
           </div>
           <div style={{ color: "#8892b0", fontSize: "11px", marginBottom: "8px" }}>
             (5 activation keys will be sent to your email)
@@ -310,10 +334,40 @@ function MobileLayout({
 
         <hr style={hrStyle} />
 
+        <div style={sectionStyle}>
+          <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
+            [ APPENDIX: {premiumCategoryCount} NEW MAX CATEGORIES UNLOCKED ]
+          </div>
+          <div style={{ height: "8px" }} />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "8px 12px",
+              fontSize: "11px",
+              lineHeight: "1.5",
+            }}
+          >
+            {premiumGroups.map((group) => (
+              <div key={group.id}>
+                <span style={{ color: Y, fontWeight: "bold" }}>
+                  * {group.title.toUpperCase()}:
+                </span>
+                <span>{` ${group.summary}`}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <hr style={hrStyle} />
+
         {/* ESC / close */}
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDismiss();
+          }}
           style={{
             display: "block",
             width: "100%",

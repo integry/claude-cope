@@ -1,7 +1,20 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import {
+  FREE_BACKLOG_CATEGORY_PREFIXES,
+  PREMIUM_BACKLOG_CATEGORY_PREFIXES,
+  getBacklogCategoryPrefix,
+  getBacklogCategoryTierMeta,
+  isPremiumBacklogCategory,
+} from "@claude-cope/shared/backlogTiers";
+import type {
+  CommunityBacklogTicket,
+  LockedBacklogTeaserTicket,
+  PlayableBacklogTicket,
+} from "@claude-cope/shared/backlogTickets";
 import { TICKET_PM_PROMPT } from "../prompts/ticketPrompt";
 import { parseProviderList } from "@claude-cope/shared/openrouter";
+import { isLicenseActive } from "../utils/profile";
 
 type Env = {
   Bindings: {
@@ -17,6 +30,24 @@ type OpenRouterRequestBody = {
   messages: { role: string; content: string }[];
   provider?: { order: string[] };
 };
+
+interface BacklogTicketRow {
+  id: string;
+  reporter: string | null;
+  reporter_name: string | null;
+  reporter_title: string | null;
+  reporter_description: string | null;
+  title: string;
+  description: string;
+  technical_debt: number;
+  kickoff_prompt: string;
+  created_at: string;
+}
+
+const BACKLOG_PLAYABLE_LIMIT = 5;
+const BACKLOG_TEASER_LIMIT = 2;
+const COMMUNITY_BACKLOG_SELECT =
+  "SELECT id, reporter, reporter_name, reporter_title, reporter_description, title, description, technical_debt, kickoff_prompt, created_at FROM community_backlog";
 
 export function buildTicketRefineRequest(
   messages: { role: string; content: string }[],
@@ -36,20 +67,113 @@ export function buildTicketRefineRequest(
 
 const tickets = new Hono<Env>();
 
+function shuffleRows<T>(rows: readonly T[]): T[] {
+  const shuffled = [...rows];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
+  return shuffled;
+}
+
+function buildPlayableRow(row: BacklogTicketRow): PlayableBacklogTicket {
+  const categoryPrefix = getBacklogCategoryPrefix(row.id);
+  const categoryMeta = categoryPrefix ? getBacklogCategoryTierMeta(categoryPrefix) : null;
+
+  return {
+    ...row,
+    category_prefix: categoryPrefix,
+    category_label: categoryMeta?.label ?? null,
+    is_locked: false,
+    tier: isPremiumBacklogCategory(row.id) ? "premium" : "free",
+  };
+}
+
+function buildLockedTeaser(row: BacklogTicketRow): LockedBacklogTeaserTicket {
+  const categoryPrefix = getBacklogCategoryPrefix(row.id);
+  const categoryMeta = categoryPrefix ? getBacklogCategoryTierMeta(categoryPrefix) : null;
+  const categoryLabel = categoryMeta?.label ?? "premium backlog";
+
+  return {
+    id: row.id,
+    title: row.title,
+    category_prefix: categoryPrefix,
+    category_label: categoryMeta?.label ?? null,
+    is_locked: true,
+    tier: "premium",
+    upgrade_teaser: `Unlock ${categoryLabel} and 50+ specialized categories in Claude Cope Max.`,
+  };
+}
+
+function buildPaidBacklogRows(rows: BacklogTicketRow[]): PlayableBacklogTicket[] {
+  const premiumRows = rows.filter((row) => isPremiumBacklogCategory(row.id));
+  const initialSelection = rows.slice(0, BACKLOG_PLAYABLE_LIMIT);
+
+  if (premiumRows.length === 0 || initialSelection.some((row) => isPremiumBacklogCategory(row.id))) {
+    return initialSelection.map(buildPlayableRow);
+  }
+
+  return [...initialSelection.slice(0, BACKLOG_PLAYABLE_LIMIT - 1), premiumRows[0]!].map(buildPlayableRow);
+}
+
+function buildCommunityBacklogPrefixQuery(prefixes: ReadonlySet<string>, limit: number): { sql: string; bindings: string[] } {
+  const bindings = [...prefixes];
+  const whereClause = bindings.map(() => "?").join(", ");
+
+  return {
+    sql: `${COMMUNITY_BACKLOG_SELECT} WHERE substr(id, 1, instr(id, '-') - 1) IN (${whereClause}) ORDER BY RANDOM() LIMIT ${limit}`,
+    bindings,
+  };
+}
+
+async function queryRandomBacklogRows(
+  db: D1Database,
+  prefixes: ReadonlySet<string>,
+  limit: number,
+): Promise<BacklogTicketRow[]> {
+  if (limit <= 0 || prefixes.size === 0) return [];
+  const { sql, bindings } = buildCommunityBacklogPrefixQuery(prefixes, limit);
+  const { results } = await db.prepare(sql).bind(...bindings).all<BacklogTicketRow>();
+  return results ?? [];
+}
+
+async function queryRandomCommunityRows(db: D1Database, limit: number): Promise<BacklogTicketRow[]> {
+  const { results } = await db
+    .prepare(`${COMMUNITY_BACKLOG_SELECT} ORDER BY RANDOM() LIMIT ${limit}`)
+    .all<BacklogTicketRow>();
+
+  return results ?? [];
+}
+
 tickets.get("/community", async (c) => {
   const db = c.env?.DB;
   if (!db) {
     return c.json({ error: "Database is not configured" }, 500);
   }
 
-  const { results } = await db
-    .prepare(
-      "SELECT id, reporter, reporter_name, reporter_title, reporter_description, title, description, technical_debt, kickoff_prompt, created_at FROM community_backlog ORDER BY RANDOM() LIMIT 5"
-    )
-    .all();
+  const proKeyHash = c.req.header("x-pro-key-hash")?.trim();
+  const isPaidUser = proKeyHash ? await isLicenseActive(db, proKeyHash) : false;
+  c.header("Cache-Control", "private, max-age=10");
+  c.header("Vary", "x-pro-key-hash");
 
-  c.header("Cache-Control", "public, max-age=10");
-  return c.json(results);
+  if (isPaidUser) {
+    const rows = await queryRandomCommunityRows(db, BACKLOG_PLAYABLE_LIMIT);
+    if (rows.some((row) => isPremiumBacklogCategory(row.id))) {
+      return c.json(buildPaidBacklogRows(rows));
+    }
+
+    const premiumFallbackRows = await queryRandomBacklogRows(db, PREMIUM_BACKLOG_CATEGORY_PREFIXES, 1);
+    return c.json(buildPaidBacklogRows([...rows, ...premiumFallbackRows]));
+  }
+
+  const [freeRows, premiumRows] = await Promise.all([
+    queryRandomBacklogRows(db, FREE_BACKLOG_CATEGORY_PREFIXES, BACKLOG_PLAYABLE_LIMIT),
+    queryRandomBacklogRows(db, PREMIUM_BACKLOG_CATEGORY_PREFIXES, BACKLOG_TEASER_LIMIT),
+  ]);
+
+  const teaserRows = premiumRows.filter((row) => isPremiumBacklogCategory(row.id)).map(buildLockedTeaser);
+
+  return c.json(shuffleRows<CommunityBacklogTicket>([...freeRows.map(buildPlayableRow), ...teaserRows]));
 });
 
 // eslint-disable-next-line complexity
@@ -159,7 +283,7 @@ tickets.post("/refine", async (c) => {
   }
 
   // Insert into community_backlog
-  const id = crypto.randomUUID().replace(/-/g, "");
+  const id = `COMM-${crypto.randomUUID().replace(/-/g, "")}`;
 
   const { success } = await db
     .prepare(
