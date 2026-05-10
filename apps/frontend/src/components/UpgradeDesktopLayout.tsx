@@ -45,6 +45,7 @@ function shouldBlockManualLinkEnter(event: React.KeyboardEvent<HTMLAnchorElement
 function shouldActivateSelectedOption(event: React.KeyboardEvent<HTMLDivElement>, isKeyboardNavigationMode: boolean, selectedOptionId: OptionId | null): selectedOptionId is OptionId { return event.key === "Enter" && isKeyboardNavigationMode && selectedOptionId !== null && event.target instanceof HTMLElement && event.target.tagName !== "A" && event.target.tagName !== "BUTTON"; }
 function isFocusedSelectedOption(target: EventTarget | null, selectedOptionId: OptionId | null, optionRefs: React.RefObject<Array<HTMLAnchorElement | null>>) { return selectedOptionId !== null && target === optionRefs.current[selectedOptionId]; }
 function shouldArmKeyboardNavigationOnTab(target: EventTarget | null, showManualFocus: boolean, selectedOptionId: OptionId | null, optionRefs: React.RefObject<Array<HTMLAnchorElement | null>>) { return showManualFocus && isFocusedSelectedOption(target, selectedOptionId, optionRefs); }
+function isFocusedDesktopOption(target: Element | null, optionRefs: React.RefObject<Array<HTMLAnchorElement | null>>) { return target !== null && optionRefs.current.includes(target as HTMLAnchorElement); }
 function getCenteredPadding(text: string) { const left = Math.max(0, Math.floor((INNER_W - text.length) / 2)); return { left, right: Math.max(0, INNER_W - text.length - left) }; }
 export default function DesktopLayout({
   singleLabel,
@@ -238,7 +239,7 @@ export default function DesktopLayout({
     if (isKeyboardNavigationMode && selectedOptionId !== null) {
       const selectedOption = optionRefs.current[selectedOptionId];
       const activeElement = document.activeElement;
-      if (selectedOption && (activeElement === overlay || !overlay.contains(activeElement))) {
+      if (selectedOption && (activeElement === overlay || isFocusedDesktopOption(activeElement, optionRefs))) {
         selectedOption.focus();
       }
       return;
