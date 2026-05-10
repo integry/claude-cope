@@ -45,9 +45,12 @@ export function BuddyDisplay({ type, isShiny, className = "" }: BuddyDisplayProp
 
   return (
     <div className={`text-xs ${isShiny ? "text-amber-300" : "text-orange-400"} ${className}`.trim()}>
-      <pre className="font-mono whitespace-pre">{art}</pre>
-      <div className="whitespace-nowrap">
-        {isShiny ? `✨ Shiny ${type} ✨` : type} is watching...
+      <div className="terminal-buddy-inline">
+        <pre className="font-mono whitespace-pre">{art}</pre>
+        <div className="terminal-buddy-copy">
+          <div className="terminal-buddy-label">[BUDDY]</div>
+          <div>{isShiny ? `Shiny ${type} is watching...` : `${type} is watching...`}</div>
+        </div>
       </div>
     </div>
   );
