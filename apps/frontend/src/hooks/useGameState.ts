@@ -73,26 +73,66 @@ export function rollbackOptimisticThemePurchase(state: GameState, themeId: strin
   };
 }
 
-function isThemePurchaseAuthError(error?: string): boolean {
+type SessionProfileResult = {
+  found: boolean;
+  username?: string;
+  profile?: { username?: string | null } | null;
+  isPro?: boolean;
+};
+
+function isDefinitiveThemePurchaseEntitlementError(error?: string): boolean {
   if (!error) return false;
   const normalized = error.toLowerCase();
-  return normalized.includes("session authentication is required")
-    || normalized.includes("session user does not match")
-    || normalized.includes("unauthorized")
-    || normalized.includes("profile not found")
-    || normalized.includes("active max license")
+  return normalized.includes("active max license")
     || normalized.includes("revoked")
     || normalized.includes("no longer active");
 }
 
+function isThemePurchaseSessionMismatchError(error?: string): boolean {
+  if (!error) return false;
+  const normalized = error.toLowerCase();
+  return normalized.includes("session authentication is required")
+    || normalized.includes("session user does not match");
+}
+
+export function applyValidatedSessionProState(state: GameState, result: SessionProfileResult): GameState {
+  if (!result.found || !result.isPro) {
+    if (!isPaidUser(state) && !state.hasSessionPro) return state;
+    return {
+      ...state,
+      proKey: undefined,
+      proKeyHash: undefined,
+      isPro: undefined,
+      hasSessionPro: undefined,
+    };
+  }
+
+  const restoredUsername = result.profile?.username ?? result.username;
+  if (state.hasSessionPro && state.isPro && (!restoredUsername || state.username === restoredUsername)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    ...(restoredUsername && state.username !== restoredUsername ? { username: restoredUsername } : {}),
+    isPro: true,
+    hasSessionPro: true,
+  };
+}
+
 export function applyThemePurchaseFailure(state: GameState, themeId: string, error?: string): GameState {
   const rolledBack = rollbackOptimisticThemePurchase(state, themeId);
-  const nextState = isThemePurchaseAuthError(error)
+  const nextState = isDefinitiveThemePurchaseEntitlementError(error)
     ? {
         ...rolledBack,
         proKey: undefined,
         proKeyHash: undefined,
         isPro: undefined,
+        hasSessionPro: undefined,
+      }
+    : isThemePurchaseSessionMismatchError(error)
+    ? {
+        ...rolledBack,
         hasSessionPro: undefined,
       }
     : rolledBack;
@@ -171,15 +211,7 @@ export function useGameState() {
     let cancelled = false;
     fetchSessionProfile().then((result) => {
       if (cancelled) return;
-      if (!result.found || !result.isPro) {
-        setState((prev) => ({
-          ...prev,
-          proKey: undefined,
-          proKeyHash: undefined,
-          isPro: undefined,
-          hasSessionPro: undefined,
-        }));
-      }
+      setState((prev) => isPaidUser(prev) || prev.hasSessionPro ? applyValidatedSessionProState(prev, result) : prev);
     });
     return () => { cancelled = true; };
   }, []);

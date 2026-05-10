@@ -7,8 +7,8 @@ import { hashKey } from "../utils/quota";
 
 const LICENSE_STALE_SQL_CUTOFF = "-90 days";
 const MAX_SESSION_RENAME_HOPS = 32;
-const SESSION_USERNAME_TTL_SECONDS = 60 * 60 * 24 * 365;
-const RENAME_REDIRECT_TTL_SECONDS = SESSION_USERNAME_TTL_SECONDS;
+export const SESSION_USERNAME_TTL_SECONDS = 60 * 60 * 24 * 365;
+export const RENAME_REDIRECT_TTL_SECONDS = SESSION_USERNAME_TTL_SECONDS;
 export const accountKvKeys = {
   renamed: (username: string) => `renamed:${username}`,
   sessionUser: (sessionId: string) => `session_user:${sessionId}`,
