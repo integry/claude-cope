@@ -29,11 +29,11 @@ export type { Message };
 export type { GameState, BuddyState, EconomyState, ActiveTicket, ByokUsage } from "./gameStateUtils";
 export { calcBulkCost } from "./gameStateUtils";
 
-function hasThemePurchaseAccess(state: Pick<GameState, "proKeyHash" | "isPro">): boolean {
-  return Boolean(state.proKeyHash) || Boolean(state.isPro);
+function hasThemePurchaseAccess(state: Pick<GameState, "proKeyHash" | "hasSessionPro">): boolean {
+  return Boolean(state.proKeyHash) || Boolean(state.hasSessionPro);
 }
 
-export function canBuyTheme(state: Pick<GameState, "economy" | "unlockedThemes" | "proKeyHash" | "isPro">, themeId: string): boolean {
+export function canBuyTheme(state: Pick<GameState, "economy" | "unlockedThemes" | "proKeyHash" | "hasSessionPro">, themeId: string): boolean {
   const theme = THEMES.find((t) => t.id === themeId);
   if (!theme) return false;
   if (!hasThemePurchaseAccess(state)) return false;
@@ -105,7 +105,7 @@ export function useGameState() {
       const restoredUsername = result.profile?.username ?? result.username;
       if (restoredUsername) identify({ username: restoredUsername });
       setState((prev) => {
-        const withPro = result.isPro ? { ...prev, isPro: true } : prev;
+        const withPro = result.isPro ? { ...prev, isPro: true, hasSessionPro: true } : prev;
         // Full profile restore (server has user_scores row).
         if (result.profile) {
           return applyServerProfile(withPro, result.profile, { includeActiveTicket: true });
@@ -146,6 +146,7 @@ export function useGameState() {
           proKey: undefined,
           proKeyHash: undefined,
           isPro: undefined,
+          hasSessionPro: undefined,
         }));
       }
     });

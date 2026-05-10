@@ -115,12 +115,17 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
 
 describe("canBuyTheme", () => {
   it("allows restored paid users without proKeyHash to buy themes", () => {
-    const state = makeGameState({ isPro: true, proKeyHash: undefined, proKey: undefined });
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
     expect(canBuyTheme(state, "amber")).toBe(true);
   });
 
   it("rejects free users without paid status", () => {
     const state = makeGameState({ isPro: undefined, proKeyHash: undefined, proKey: undefined });
+    expect(canBuyTheme(state, "amber")).toBe(false);
+  });
+
+  it("rejects stale local isPro state without a session-backed entitlement", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: undefined, proKeyHash: undefined, proKey: undefined });
     expect(canBuyTheme(state, "amber")).toBe(false);
   });
 
@@ -130,7 +135,7 @@ describe("canBuyTheme", () => {
   });
 
   it("applies the optimistic purchase update for restored paid users without proKeyHash", () => {
-    const state = makeGameState({ isPro: true, proKeyHash: undefined, proKey: undefined });
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
     const nextState = applyOptimisticThemePurchase(state, "amber");
 
     expect(nextState.economy.currentTD).toBe(1000);
@@ -138,7 +143,7 @@ describe("canBuyTheme", () => {
   });
 
   it("rolls back the optimistic purchase update on failure", () => {
-    const state = makeGameState({ isPro: true, proKeyHash: undefined, proKey: undefined });
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
     const purchasedState = applyOptimisticThemePurchase(state, "amber");
     const rolledBackState = rollbackOptimisticThemePurchase(purchasedState, "amber");
 

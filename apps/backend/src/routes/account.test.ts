@@ -150,6 +150,24 @@ describe("POST /api/account/buy-theme", () => {
     expect(res.status).toBe(200);
     expect(((await res.json()) as { success: boolean }).success).toBe(true);
   });
+  it("rejects a purchase without licenseKeyHash when there is no authenticated session", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toContain("Session authentication is required");
+  });
+  it("rejects a session-authenticated purchase when the session is bound to a different username", async () => {
+    const kv = mockKV({ "session_user:test-session": "bob" });
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: createMockDB().db, QUOTA_KV: kv });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toContain("session user does not match");
+  });
   it("rejects a session-authenticated free user without licenseKeyHash", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
     const { db } = createMockDB({

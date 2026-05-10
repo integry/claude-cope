@@ -113,6 +113,7 @@ export interface GameState {
   proKey?: string;
   proKeyHash?: string;
   isPro?: boolean;
+  hasSessionPro?: boolean;
   byokTotalCost?: number;
   byokUsage?: Record<string, ByokUsage>;
 }

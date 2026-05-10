@@ -75,7 +75,7 @@ function handlePaidRoute403(
 ): void {
   const isRevoked = errorMessage?.toLowerCase().includes("revoked") || errorMessage?.toLowerCase().includes("no longer active");
   if (isRevoked) {
-    ctx.setState((prev) => ({ ...prev, proKey: undefined, proKeyHash: undefined, isPro: undefined }));
+    ctx.setState((prev) => ({ ...prev, proKey: undefined, proKeyHash: undefined, isPro: undefined, hasSessionPro: undefined }));
     reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] Your Max license has been revoked or is no longer active. Re-activate with \`/sync <key>\` or upgrade at \`/upgrade\`.` });
   } else {
     reply({ role: "error", content: proGatedMessage(command) });
