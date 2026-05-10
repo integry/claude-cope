@@ -31,7 +31,7 @@ import { shouldShowNag } from "./winrarNag";
 import { TerminalView } from "./TerminalView";
 import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
-import { UPGRADE_NAG_CLOSE_EFFECTS, type UpgradeNagCloseEffect } from "./UpgradeOverlay";
+import { UPGRADE_NAG_CLOSE_EFFECTS, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
 
 export type { Message };
 

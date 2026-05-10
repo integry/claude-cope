@@ -14,7 +14,7 @@ vi.mock("../../config", () => ({
 }));
 
 import UpgradeOverlay from "../UpgradeOverlay";
-import { UPGRADE_NAG_CLOSE_EFFECTS } from "../UpgradeOverlay";
+import { UPGRADE_NAG_CLOSE_EFFECTS } from "../upgradeOverlayEffects";
 
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
@@ -126,6 +126,7 @@ describe("UpgradeOverlay", () => {
   });
 
   it("supports multiple distinct close effects", () => {
+    expect(UPGRADE_NAG_CLOSE_EFFECTS.length).toBeGreaterThan(6);
     for (const effect of UPGRADE_NAG_CLOSE_EFFECTS) {
       cleanup();
       render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag", dismissPhase: "closing", dismissEffect: effect });
