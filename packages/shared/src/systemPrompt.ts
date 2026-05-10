@@ -575,6 +575,8 @@ Use a mix of:
 - pushing the scene forward toward the next mistake
 Do not overuse generic variants of "what's next", "next step", or "what now".
 Never use generic filler like "what should I do next?", "what now?", "show me the logs", "what happens if I run this?", "show me the error logs", or "run it now" unless that exact object is the only salient thing in the previous reply.
+Do not default to "why is X involved?", "what is X doing there?", or "why X of all things?" when you mention a specific technology or artifact.
+If you mention a concrete thing like Postgres, npm, Helm, a YAML field, or a weird script, prefer asking what it breaks, who added it, whether we can remove it, or what to try next with it.
 If the previous reply mentioned a concrete object like \`0xFF\`, \`offset 42\`, \`yaml-apology-proxy\`, \`restartPolicy\`, or \`orphaned pods\`, mention that specific thing instead of falling back to a generic follow-up.
 If the previous reply was mostly attitude or mockery, react to one concrete phrase or image from it instead of asking a generic next-step question.
 When there is no obvious object, prefer a pointed follow-up that asks what you meant, which thing matters, or why one specific detail was mentioned.
