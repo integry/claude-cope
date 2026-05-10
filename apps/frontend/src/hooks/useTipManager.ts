@@ -58,6 +58,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   const usedCommandsRef = useRef<Set<string>>(new Set());
   const shownMilestoneTipIdsRef = useRef<Set<string>>(new Set());
   const firedContextualTipsRef = useRef<Set<ContextualTipTrigger>>(new Set());
+  const pendingContextualTriggersRef = useRef<ContextualTipTrigger[]>([]);
   const hasEvaluatedContextualStateRef = useRef(false);
   const noTicketMessageCountRef = useRef(0);
   const nextBacklogReminderThresholdRef = useRef(getNextBacklogReminderThreshold());
@@ -165,13 +166,28 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       triggers.push("lone_user_online");
     }
 
-    const newTips = Array.from(new Set(triggers))
+    const eligibleTriggers = Array.from(new Set(triggers))
       .filter((trigger) => !SINGLE_FIRE_CONTEXTUAL_TRIGGERS.has(trigger) || !firedContextualTipsRef.current.has(trigger))
       .map((trigger) => {
         if (SINGLE_FIRE_CONTEXTUAL_TRIGGERS.has(trigger)) firedContextualTipsRef.current.add(trigger);
-        return getContextualTip(trigger);
-      })
+        return trigger;
+      });
+
+    if (isInteractionBlocked) {
+      pendingContextualTriggersRef.current.push(...eligibleTriggers);
+      previousStateRef.current = {
+        currentTD,
+        quotaPercent,
+        pendingCompletedTaskCount: completedTaskCount,
+        onlineCount,
+      };
+      return;
+    }
+
+    const newTips = [...pendingContextualTriggersRef.current, ...eligibleTriggers]
+      .map((trigger) => getContextualTip(trigger))
       .filter((tip): tip is string => Boolean(tip));
+    pendingContextualTriggersRef.current = [];
 
     if (newTips.length > 0) {
       setHistory((prev) => [...prev, ...newTips.map((content) => ({ role: "system" as const, content }))]);
@@ -188,6 +204,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     currentTD,
     quotaPercent,
     isBooting,
+    isInteractionBlocked,
     onlineCount,
     setHistory,
   ]);

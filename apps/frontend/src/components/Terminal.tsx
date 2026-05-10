@@ -36,6 +36,7 @@ import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
 export type { Message };
 
 type TerminalViewProps = ComponentProps<typeof TerminalView>;
+const BACKLOG_REMINDER_EXEMPT_COMMANDS = new Set(["/backlog", "/accept", "/take", "/ticket"]);
 
 function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
   while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++);
@@ -181,15 +182,22 @@ function Terminal() {
 
   const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => !(cmd === "/store" && state.economy.totalTDEarned < 1000) && cmd.startsWith(slashQuery.toLowerCase()));
 
+  const recordAcceptedAction = useCallback((baseCommand?: string) => {
+    recordValidCommand(baseCommand);
+    if (!baseCommand || !BACKLOG_REMINDER_EXEMPT_COMMANDS.has(baseCommand)) {
+      recordMessageWithoutTicket();
+    }
+  }, [recordMessageWithoutTicket, recordValidCommand]);
+
   const runSlashCommand = useCallback((command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme, onValidSlashCommand: recordValidCommand });
-  }, [state, setState, setHistory, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply, recordValidCommand]);
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme, onValidSlashCommand: recordAcceptedAction });
+  }, [state, setState, setHistory, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply, recordAcceptedAction]);
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
 
   const recordAcceptedPromptCommand = useCallback(() => {
-    recordValidCommand();
-  }, [recordValidCommand]);
+    recordAcceptedAction();
+  }, [recordAcceptedAction]);
 
   const submitPromptCommand = useCallback((command: string) => {
     setCommandHistory((prev) => [...prev, command]); processCommandRef.current(command);
@@ -279,8 +287,6 @@ function Terminal() {
     if (inputValue.trim().startsWith("/")) {
       const command = inputValue.trim();
       runSlashCommand(command);
-      const normalizedCommand = command.toLowerCase();
-      if (normalizedCommand !== "/backlog" && normalizedCommand !== "/accept" && !normalizedCommand.startsWith("/take") && !normalizedCommand.startsWith("/ticket")) recordMessageWithoutTicket();
       return;
     }
     if (bragPending) { handleBragSubmit({ inputValue, setInputValue, state, setHistory, setBragPending }); return; }
@@ -288,7 +294,6 @@ function Terminal() {
     if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
     setInputValue(""); setHistoryIndex(-1);
-    recordMessageWithoutTicket();
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
     if (nagArmedFromQuotaRef.current && pendingNagCommandRef.current === null) {
       pendingNagCommandRef.current = command;
