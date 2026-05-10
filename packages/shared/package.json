@@ -14,6 +14,7 @@
     "./openrouter": "./src/openrouter.ts",
     "./turnstile": "./src/turnstile.ts",
     "./config": "./src/config.ts",
-    "./backlogTiers": "./src/backlogTiers.ts"
+    "./backlogTiers": "./src/backlogTiers.ts",
+    "./backlogTickets": "./src/backlogTickets.ts"
   }
 }
