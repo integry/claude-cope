@@ -3,27 +3,9 @@ import { track, identify } from "../analytics";
 import { AnalyticsEvents } from "../analyticsEvents";
 import { GENERATORS, UPGRADES, THEMES, FREE_TIER_RANK_CAP } from "../game/constants";
 import { supabase } from "../supabaseClient";
-import {
-  type Message,
-  type GameState,
-  loadState,
-  calcBulkCost,
-  calculateActiveMultiplier,
-  resolveRank,
-  isPaidUser,
-  isFreeUser,
-  STORAGE_KEY,
-  nextMsgId,
-} from "./gameStateUtils";
+import { type Message, type GameState, loadState, calcBulkCost, calculateActiveMultiplier, resolveRank, isPaidUser, isFreeUser, STORAGE_KEY, nextMsgId } from "./gameStateUtils";
 import { applyServerProfile } from "./profileSync";
-import {
-  buyGeneratorServer,
-  buyUpgradeServer,
-  buyThemeServer,
-  unlockAchievementServer,
-  updateTicketServer,
-  fetchSessionProfile,
-} from "../api/profileApi";
+import { buyGeneratorServer, buyUpgradeServer, buyThemeServer, unlockAchievementServer, updateTicketServer, fetchSessionProfile } from "../api/profileApi";
 import { useScoreSync, useAchievementChecker } from "./useGameEffects";
 
 export type { Message };
@@ -47,30 +29,14 @@ export function applyOptimisticThemePurchase(state: GameState, themeId: string):
   const theme = THEMES.find((t) => t.id === themeId);
   if (!theme) return state;
   if (!canBuyTheme(state, themeId)) return state;
-
-  return {
-    ...state,
-    economy: {
-      ...state.economy,
-      currentTD: state.economy.currentTD - theme.cost,
-    },
-    unlockedThemes: [...state.unlockedThemes, themeId],
-  };
+  return { ...state, economy: { ...state.economy, currentTD: state.economy.currentTD - theme.cost }, unlockedThemes: [...state.unlockedThemes, themeId] };
 }
 
 export function rollbackOptimisticThemePurchase(state: GameState, themeId: string): GameState {
   const theme = THEMES.find((t) => t.id === themeId);
   if (!theme) return state;
   if (!state.unlockedThemes.includes(themeId)) return state;
-
-  return {
-    ...state,
-    economy: {
-      ...state.economy,
-      currentTD: state.economy.currentTD + theme.cost,
-    },
-    unlockedThemes: state.unlockedThemes.filter((id) => id !== themeId),
-  };
+  return { ...state, economy: { ...state.economy, currentTD: state.economy.currentTD + theme.cost }, unlockedThemes: state.unlockedThemes.filter((id) => id !== themeId) };
 }
 
 type SessionProfileResult = {
@@ -83,64 +49,39 @@ type SessionProfileResult = {
 function isDefinitiveThemePurchaseEntitlementError(error?: string): boolean {
   if (!error) return false;
   const normalized = error.toLowerCase();
-  return normalized.includes("active max license")
-    || normalized.includes("revoked")
-    || normalized.includes("no longer active");
+  return normalized.includes("active max license") || normalized.includes("revoked") || normalized.includes("no longer active");
 }
 
 function isThemePurchaseSessionMismatchError(error?: string): boolean {
   if (!error) return false;
   const normalized = error.toLowerCase();
-  return normalized.includes("session authentication is required")
-    || normalized.includes("session user does not match");
+  return normalized.includes("session authentication is required") || normalized.includes("session user does not match");
 }
 
 export function applyValidatedSessionProState(state: GameState, result: SessionProfileResult): GameState {
   if (!result.found || !result.isPro) {
     if (!isPaidUser(state) && !state.hasSessionPro) return state;
-    return {
-      ...state,
-      proKey: undefined,
-      proKeyHash: undefined,
-      isPro: undefined,
-      hasSessionPro: undefined,
-    };
+    return { ...state, proKey: undefined, proKeyHash: undefined, isPro: undefined, hasSessionPro: undefined };
   }
 
   const restoredUsername = result.profile?.username ?? result.username;
   if (state.hasSessionPro && state.isPro && (!restoredUsername || state.username === restoredUsername)) {
     return state;
   }
-
-  return {
-    ...state,
-    ...(restoredUsername && state.username !== restoredUsername ? { username: restoredUsername } : {}),
-    isPro: true,
-    hasSessionPro: true,
-  };
+  return { ...state, ...(restoredUsername && state.username !== restoredUsername ? { username: restoredUsername } : {}), isPro: true, hasSessionPro: true };
 }
 
 export function applyThemePurchaseFailure(state: GameState, themeId: string, error?: string): GameState {
   const rolledBack = rollbackOptimisticThemePurchase(state, themeId);
-  const nextState = isDefinitiveThemePurchaseEntitlementError(error)
-    ? {
-        ...rolledBack,
-        proKey: undefined,
-        proKeyHash: undefined,
-        isPro: undefined,
-        hasSessionPro: undefined,
-      }
-    : isThemePurchaseSessionMismatchError(error)
-    ? {
-        ...rolledBack,
-        hasSessionPro: undefined,
-      }
-    : rolledBack;
+  const nextState = isDefinitiveThemePurchaseEntitlementError(error) ? {
+    ...rolledBack,
+    proKey: undefined,
+    proKeyHash: undefined,
+    isPro: undefined,
+    hasSessionPro: undefined,
+  } : isThemePurchaseSessionMismatchError(error) ? { ...rolledBack, hasSessionPro: undefined } : rolledBack;
   const message = error ?? "Theme purchase failed";
-  return {
-    ...nextState,
-    chatHistory: [...nextState.chatHistory, { id: nextMsgId(), role: "error", content: `[❌ Error] ${message}` }],
-  };
+  return { ...nextState, chatHistory: [...nextState.chatHistory, { id: nextMsgId(), role: "error", content: `[❌ Error] ${message}` }] };
 }
 
 export function useGameState() {
@@ -152,22 +93,13 @@ export function useGameState() {
     stateRef.current = state;
   }, [state]);
 
-  // Update lastLogin on mount (no passive offline TD — active play only)
   useEffect(() => {
     setState((prev) => ({ ...prev, lastLogin: Date.now() }));
   }, []);
 
-  // Session restore: if localStorage was cleared (state looks fresh), but the
-  // browser cookie maps to a previously-known user on the server, restore that
-  // user's profile instead of starting as a brand-new identity. The server
-  // never returns the license hash itself because it remains a credential.
   useEffect(() => {
     const initial = stateRef.current;
-    const isFreshState =
-      initial.economy.totalTDEarned === 0 &&
-      initial.chatHistory.length === 0 &&
-      !initial.proKey &&
-      !initial.proKeyHash;
+    const isFreshState = initial.economy.totalTDEarned === 0 && initial.chatHistory.length === 0 && !initial.proKey && !initial.proKeyHash;
     if (!isFreshState) return;
 
     let cancelled = false;
@@ -177,22 +109,9 @@ export function useGameState() {
       if (restoredUsername) identify({ username: restoredUsername });
       setState((prev) => {
         const withPro = result.isPro ? { ...prev, isPro: true, hasSessionPro: true } : prev;
-        // Full profile restore (server has user_scores row).
-        if (result.profile) {
-          return applyServerProfile(withPro, result.profile, { includeActiveTicket: true });
-        }
-        // Username-only restore: server knows the identity but has no
-        // profile row yet (e.g., the previous attempt 402'd on quota).
-        // Restore the username and accurate quota so the UI is honest.
+        if (result.profile) return applyServerProfile(withPro, result.profile, { includeActiveTicket: true });
         if (result.username) {
-          return {
-            ...withPro,
-            username: result.username,
-            economy: {
-              ...withPro.economy,
-              ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}),
-            },
-          };
+          return { ...withPro, username: result.username, economy: { ...withPro.economy, ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}) } };
         }
         return withPro;
       });
@@ -200,10 +119,6 @@ export function useGameState() {
     return () => { cancelled = true; };
   }, []);
 
-  // Pro license validation: if local state claims paid status, verify against
-  // the server and clear pro fields whenever the current session can no longer
-  // prove paid access. This intentionally fails closed for client-side-only Max
-  // gates; users can re-run /sync <key> to restore the session binding.
   useEffect(() => {
     const initial = stateRef.current;
     if (!isPaidUser(initial)) return;
@@ -216,16 +131,11 @@ export function useGameState() {
     return () => { cancelled = true; };
   }, []);
 
-  // Persist state to localStorage (filter transient "loading" messages from chat history)
   useEffect(() => {
     try {
-      const toSave = {
-        ...state,
-        chatHistory: state.chatHistory.filter((m) => m.role !== "loading"),
-      };
+      const toSave = { ...state, chatHistory: state.chatHistory.filter((m) => m.role !== "loading") };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     } catch {
-      // localStorage full or unavailable — silently ignore
     }
   }, [state]);
 
@@ -242,33 +152,19 @@ export function useGameState() {
 
     if (current.economy.currentTD < cost) return false;
 
-    // Optimistic local update
     setState((prev) => {
       const ownedNow = prev.inventory[generatorId] ?? 0;
       const dynamicCost = calcBulkCost(generator.baseCost, ownedNow, amount);
       if (prev.economy.currentTD < dynamicCost) return prev;
-
-      return {
-        ...prev,
-        economy: {
-          ...prev.economy,
-          currentTD: prev.economy.currentTD - dynamicCost,
-        },
-        inventory: {
-          ...prev.inventory,
-          [generatorId]: ownedNow + amount,
-        },
-      };
+      return { ...prev, economy: { ...prev.economy, currentTD: prev.economy.currentTD - dynamicCost }, inventory: { ...prev.inventory, [generatorId]: ownedNow + amount } };
     });
 
-    // Pro users: fire server call, apply authoritative response
     if (current.proKeyHash) {
       buyGeneratorServer(current.username, generatorId, amount, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           setState((prev) => applyServerProfile(prev, result.profile!));
           track(AnalyticsEvents.GENERATOR_PURCHASED, { generator_id: generatorId, amount, cost });
         } else if (!result.success) {
-          // Rollback on failure
           setState((prev) => ({
             ...prev,
             economy: { ...prev.economy, currentTD: prev.economy.currentTD + cost },
@@ -278,7 +174,6 @@ export function useGameState() {
       }).catch(() => {});
     } else {
       track(AnalyticsEvents.GENERATOR_PURCHASED, { generator_id: generatorId, amount, cost });
-      // Free users: broadcast big purchases
       if (cost > 1_000_000) {
         const playerName = stateRef.current.username || "A player";
         const purchaseMessage = `💰 ${playerName} bought ${amount}x ${generator.name} for ${cost.toLocaleString()} TD!`;
@@ -287,65 +182,38 @@ export function useGameState() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: purchaseMessage }),
         }).catch(() => {});
-        supabase?.channel('global_incidents').send({
-          type: 'broadcast',
-          event: 'new_incident',
-          payload: { message: purchaseMessage },
-        }).catch(() => {});
+        supabase?.channel("global_incidents").send({ type: "broadcast", event: "new_incident", payload: { message: purchaseMessage } }).catch(() => {});
       }
     }
 
     return true;
   }, []);
 
-  /** Add TD. If raw=true, skip the local multiplier (used for server-awarded TD that's already multiplied). */
   const addActiveTD = useCallback((amount: number, raw = false) => {
     setState((prev) => {
-      const multiplier = (!raw && amount > 0)
-        ? calculateActiveMultiplier(prev.inventory, prev.upgrades) * prev.economy.tdMultiplier
-        : 1;
+      const multiplier = !raw && amount > 0 ? calculateActiveMultiplier(prev.inventory, prev.upgrades) * prev.economy.tdMultiplier : 1;
       const boosted = Math.round(amount * multiplier);
       const newCurrentTD = Math.max(0, prev.economy.currentTD + boosted);
       const newTotalTDEarned = Math.max(0, prev.economy.totalTDEarned + boosted);
-      // TODO(byok): BYOK rank bypass is client-side only. If the user's localStorage
-      // is cleared or they sync from another device, the server will return
-      // FREE_TIER_RANK_CAP because the backend has no BYOK awareness yet.
       const newRank = isFreeUser(prev) ? FREE_TIER_RANK_CAP : resolveRank(newTotalTDEarned, prev.economy.currentRank);
 
-      return {
-        ...prev,
-        economy: {
-          ...prev.economy,
-          currentTD: newCurrentTD,
-          totalTDEarned: newTotalTDEarned,
-          currentRank: newRank,
-        },
-      };
+      return { ...prev, economy: { ...prev.economy, currentTD: newCurrentTD, totalTDEarned: newTotalTDEarned, currentRank: newRank } };
     });
   }, []);
 
   const resetQuota = useCallback(() => {
     setState((prev) => ({
       ...prev,
-      economy: {
-        ...prev.economy,
-        quotaPercent: 100,
-        quotaLockouts: prev.economy.quotaLockouts + 1,
-      },
+      economy: { ...prev.economy, quotaPercent: 100, quotaLockouts: prev.economy.quotaLockouts + 1 },
     }));
   }, []);
 
-  /** Returns true if the achievement was newly unlocked, false if already owned. */
   const unlockAchievement = useCallback((achievement: string): boolean => {
     if (stateRef.current.achievements.includes(achievement)) return false;
     setState((prev) => {
       if (prev.achievements.includes(achievement)) return prev;
-      return {
-        ...prev,
-        achievements: [...prev.achievements, achievement],
-      };
+      return { ...prev, achievements: [...prev.achievements, achievement] };
     });
-    // Pro users: sync achievement to server
     const current = stateRef.current;
     if (current.proKeyHash) {
       unlockAchievementServer(current.username, achievement, current.proKeyHash).catch(() => {});
@@ -356,10 +224,7 @@ export function useGameState() {
   const applyOutageReward = useCallback(() => {
     setState((prev) => ({
       ...prev,
-      economy: {
-        ...prev.economy,
-        tdMultiplier: prev.economy.tdMultiplier + 0.05,
-      },
+      economy: { ...prev.economy, tdMultiplier: prev.economy.tdMultiplier + 0.05 },
     }));
   }, []);
 
@@ -372,30 +237,19 @@ export function useGameState() {
     if ((current.inventory[upgrade.requiredGeneratorId] ?? 0) < 1) return false;
     if (current.economy.currentTD < upgrade.cost) return false;
 
-    // Optimistic local update
     setState((prev) => {
       if (prev.upgrades.includes(upgradeId)) return prev;
       if ((prev.inventory[upgrade.requiredGeneratorId] ?? 0) < 1) return prev;
       if (prev.economy.currentTD < upgrade.cost) return prev;
-
-      return {
-        ...prev,
-        economy: {
-          ...prev.economy,
-          currentTD: prev.economy.currentTD - upgrade.cost,
-        },
-        upgrades: [...prev.upgrades, upgradeId],
-      };
+      return { ...prev, economy: { ...prev.economy, currentTD: prev.economy.currentTD - upgrade.cost }, upgrades: [...prev.upgrades, upgradeId] };
     });
 
-    // Pro users: fire server call
     if (current.proKeyHash) {
       buyUpgradeServer(current.username, upgradeId, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           setState((prev) => applyServerProfile(prev, result.profile!));
           track(AnalyticsEvents.UPGRADE_PURCHASED, { upgrade_id: upgradeId, cost: upgrade.cost });
         } else if (!result.success) {
-          // Rollback
           setState((prev) => ({
             ...prev,
             economy: { ...prev.economy, currentTD: prev.economy.currentTD + upgrade.cost },
@@ -422,36 +276,22 @@ export function useGameState() {
         }
       }
       if (!mostExpensiveId) return prev;
-
-      return {
-        ...prev,
-        inventory: {
-          ...prev.inventory,
-          [mostExpensiveId]: (prev.inventory[mostExpensiveId] ?? 0) - 1,
-        },
-      };
+      return { ...prev, inventory: { ...prev.inventory, [mostExpensiveId]: (prev.inventory[mostExpensiveId] ?? 0) - 1 } };
     });
   }, []);
 
   const setChatHistory = useCallback((action: SetStateAction<Message[]>) => {
-    setState((prev) => ({
-      ...prev,
-      chatHistory: typeof action === "function" ? action(prev.chatHistory) : action,
-    }));
+    setState((prev) => ({ ...prev, chatHistory: typeof action === "function" ? action(prev.chatHistory) : action }));
   }, []);
 
   const setActiveTheme = useCallback((themeId: string) => {
-    setState((prev) => {
-      if (!prev.unlockedThemes.includes(themeId)) return prev;
-      return { ...prev, activeTheme: themeId };
-    });
+    setState((prev) => (!prev.unlockedThemes.includes(themeId) ? prev : { ...prev, activeTheme: themeId }));
   }, []);
 
   const unlockTheme = useCallback((themeId: string) => {
     setState((prev) => prev.unlockedThemes.includes(themeId) ? prev : { ...prev, unlockedThemes: [...prev.unlockedThemes, themeId] });
   }, []);
 
-  /** Purchase a theme. Requires paid access, sufficient TD, and theme not already owned. Returns true on success. */
   const buyTheme = useCallback((themeId: string): boolean => {
     const theme = THEMES.find((t) => t.id === themeId);
     if (!theme) return false;
@@ -459,7 +299,6 @@ export function useGameState() {
     const current = stateRef.current;
     if (!canBuyTheme(current, themeId)) return false;
 
-    // Optimistic local update
     setState((prev) => applyOptimisticThemePurchase(prev, themeId));
 
     buyThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
@@ -483,24 +322,13 @@ export function useGameState() {
   const updateTicketProgress = useCallback((amount: number) => {
     setState((prev) => {
       if (!prev.activeTicket) return prev;
-      const newProgress = Math.min(
-        prev.activeTicket.sprintProgress + amount,
-        prev.activeTicket.sprintGoal,
-      );
-      const updatedTicket = {
-        ...prev.activeTicket,
-        sprintProgress: newProgress,
-      };
+      const newProgress = Math.min(prev.activeTicket.sprintProgress + amount, prev.activeTicket.sprintGoal);
+      const updatedTicket = { ...prev.activeTicket, sprintProgress: newProgress };
 
-      // Pro users: sync ticket progress to server
       if (prev.proKeyHash) {
         updateTicketServer(prev.username, updatedTicket, prev.proKeyHash).catch(() => {});
       }
-
-      return {
-        ...prev,
-        activeTicket: updatedTicket,
-      };
+      return { ...prev, activeTicket: updatedTicket };
     });
   }, []);
 
