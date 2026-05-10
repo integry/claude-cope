@@ -39,7 +39,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
 
 type HarnessHandle = {
   recordEnter: () => void;
-  recordValidCommand: (baseCommand?: string) => void;
+  recordValidCommand: (baseCommand?: string, options?: { suppressTip?: boolean }) => void;
   recordMessageWithoutTicket: () => void;
   setBlocked: (value: boolean) => void;
   setOnlineCount: (value: number) => void;
@@ -204,6 +204,30 @@ describe("useTipManager", () => {
     const history = ref.current?.getHistory() ?? [];
     expect(history).toHaveLength(12);
     expect(history[11]?.content).toBe(MILESTONE_TIPS[1]?.text);
+  });
+
+  it("still advances milestone accounting when tip rendering is suppressed", () => {
+    act(() => {
+      for (let i = 0; i < 5; i++) {
+        ref.current?.recordValidCommand("/help");
+      }
+      ref.current?.recordValidCommand("/clear", { suppressTip: true });
+      ref.current?.recordValidCommand("/help");
+      vi.runOnlyPendingTimers();
+    });
+
+    const history = ref.current?.getHistory() ?? [];
+    expect(history).toHaveLength(0);
+
+    act(() => {
+      for (let i = 0; i < 5; i++) {
+        ref.current?.recordValidCommand("/help");
+      }
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(ref.current?.getHistory()).toHaveLength(1);
+    expect(ref.current?.getHistory()[0]?.content).toBe(MILESTONE_TIPS[1]?.text);
   });
 
   it("fires contextual tips when tracked game states are reached", () => {

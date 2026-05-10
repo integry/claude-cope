@@ -254,7 +254,7 @@ describe("Terminal tip-manager wiring", () => {
     await submitCommand("/clear");
 
     expect(recordEnterMock).toHaveBeenCalledTimes(1);
-    expect(recordValidCommandMock).not.toHaveBeenCalled();
+    expect(recordValidCommandMock).toHaveBeenCalledWith("/clear", { suppressTip: true });
     expect(recordMessageWithoutTicketMock).not.toHaveBeenCalled();
   });
 
@@ -264,5 +264,12 @@ describe("Terminal tip-manager wiring", () => {
 
     expect(recordValidCommandMock).toHaveBeenCalledWith("/help");
     expect(recordMessageWithoutTicketMock).not.toHaveBeenCalled();
+  });
+
+  it("counts prompt submissions toward backlog reminders before the reply succeeds", async () => {
+    await renderTerminal();
+    await submitCommand("ship it");
+
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -183,14 +183,12 @@ function Terminal() {
 
   const recordAcceptedAction = useCallback((baseCommand?: string) => {
     if (baseCommand === "/clear") {
+      recordValidCommand(baseCommand, { suppressTip: true });
       return;
     }
 
     recordValidCommand(baseCommand);
-    if (!baseCommand) {
-      recordMessageWithoutTicket();
-    }
-  }, [recordMessageWithoutTicket, recordValidCommand]);
+  }, [recordValidCommand]);
 
   const runSlashCommand = useCallback((command: string) => {
     executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme, onValidSlashCommand: recordAcceptedAction });
@@ -304,6 +302,7 @@ function Terminal() {
       return;
     }
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
+    recordMessageWithoutTicket();
     submitPromptCommand(command);
   };
 

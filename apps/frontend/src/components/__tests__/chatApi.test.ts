@@ -507,6 +507,38 @@ describe("submitChatMessage - achievement parsing", () => {
     expect(onQuotaExhausted).toHaveBeenCalledTimes(1);
   });
 
+  it("does not fire onAccepted when the response stream cannot be parsed", async () => {
+    const setHistory = vi.fn();
+    const setIsProcessing = vi.fn();
+    const onAccepted = vi.fn();
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "text/event-stream" }),
+      body: {
+        getReader() {
+          throw new Error("broken stream");
+        },
+      },
+      json: () => Promise.reject(new Error("Should not call json on stream")),
+    } as unknown as Response);
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+      onAccepted,
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(onAccepted).not.toHaveBeenCalled();
+  });
+
   it("handles response with no achievements", async () => {
     const unlockAchievement = vi.fn();
     const setHistory = vi.fn();

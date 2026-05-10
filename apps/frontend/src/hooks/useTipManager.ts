@@ -19,6 +19,10 @@ interface UseTipManagerArgs {
   setHistory: SetHistory;
 }
 
+type RecordValidCommandOptions = {
+  suppressTip?: boolean;
+};
+
 function getCompletedTaskCount(gameState: GameState): number {
   return gameState.pendingCompletedTaskIds?.length ?? 0;
 }
@@ -106,10 +110,11 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     scheduleIdleTip();
   }, [scheduleIdleTip]);
 
-  const recordValidCommand = useCallback((baseCommand?: string): string | null => {
+  const recordValidCommand = useCallback((baseCommand?: string, options?: RecordValidCommandOptions): string | null => {
     actionCountRef.current += 1;
     if (baseCommand) usedCommandsRef.current.add(baseCommand);
     if (actionCountRef.current % MILESTONE_INTERVAL !== 0) return null;
+    if (options?.suppressTip) return null;
 
     const tip = selectMilestoneTip(usedCommandsRef.current, shownMilestoneTipIdsRef.current);
     if (!tip) return null;

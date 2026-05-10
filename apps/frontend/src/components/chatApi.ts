@@ -264,9 +264,9 @@ export function submitChatMessage(opts: {
   requestPromise
     .then(async (res) => {
       if (await handleChatErrorResponse(res, setHistory, opts.onQuotaExhausted, onError)) return;
-      opts.onAccepted?.();
 
       const parsed = await parseChatResponseBody(res, setHistory, opts.addActiveTD, opts.onProfileUpdate);
+      opts.onAccepted?.();
       let { rawReply } = parsed;
       const { tokensSent, tokensReceived, cost, quotaPercent } = parsed;
 
