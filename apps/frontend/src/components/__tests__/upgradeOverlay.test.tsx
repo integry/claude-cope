@@ -249,13 +249,15 @@ describe("UpgradeOverlay", () => {
     expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/multi");
   });
 
-  it("restores manual desktop focus to the first checkout option on open", () => {
+  it("restores manual desktop focus to the first checkout option on open without arming keyboard selection", () => {
     setViewportWidth(1024);
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "manual" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
     const singleLink = container.querySelector(".upgrade-desktop a[href='https://example.com/single']") as HTMLAnchorElement | null;
 
     expect(document.activeElement).toBe(singleLink);
-    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/single");
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("false");
   });
 
   it("disables desktop keyboard navigation after resizing to mobile", () => {

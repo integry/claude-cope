@@ -56,7 +56,7 @@ export default function DesktopLayout({
 }: LayoutProps) {
   const optionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const overlayRef = useRef<HTMLDivElement | null>(null);
-  const focusSourceRef = useRef<"pointer" | "tab" | "arrow" | null>(null);
+  const focusSourceRef = useRef<"pointer" | "tab" | "arrow" | "programmatic" | null>(null);
   const getIsDesktopViewport = useCallback(() => typeof window !== "undefined" && window.innerWidth > UPGRADE_OVERLAY_MOBILE_MAX_WIDTH, []);
   const [isDesktopViewport, setIsDesktopViewport] = useState(getIsDesktopViewport);
   const boxLine = (text: string, color = W) => {
@@ -134,6 +134,10 @@ export default function DesktopLayout({
         }}
         onFocus={() => {
           setSelectedOptionId(id);
+          if (focusSourceRef.current === "programmatic") {
+            focusSourceRef.current = null;
+            return;
+          }
           if (focusSourceRef.current !== "pointer") {
             setIsKeyboardNavigationMode(true);
           }
@@ -168,14 +172,10 @@ export default function DesktopLayout({
       setSelectedOptionId(null);
       return;
     }
-    if (dismissMode === "manual" && selectedOptionId === null) {
-      setSelectedOptionId(availableOptionIds[0] ?? null);
-      return;
-    }
     if (selectedOptionId !== null && !availableOptionIds.includes(selectedOptionId)) {
       setSelectedOptionId(availableOptionIds[0] ?? null);
     }
-  }, [availableOptionIds, dismissMode, selectedOptionId]);
+  }, [availableOptionIds, selectedOptionId]);
   useEffect(() => { if (isForcedClosing) setIsKeyboardNavigationMode(false); }, [isForcedClosing]);
   useEffect(() => {
     const syncViewport = () => { setIsDesktopViewport(getIsDesktopViewport()); };
@@ -221,12 +221,18 @@ export default function DesktopLayout({
       optionRefs.current[selectedOptionId]?.focus();
       return;
     }
-    if (dismissMode === "manual" && selectedOptionId !== null) {
-      optionRefs.current[selectedOptionId]?.focus();
-      return;
+    if (dismissMode === "manual") {
+      const firstOptionId = availableOptionIds[0];
+      const firstOption = firstOptionId !== undefined ? optionRefs.current[firstOptionId] : null;
+      if (firstOption && document.activeElement !== firstOption) {
+        focusSourceRef.current = "programmatic";
+        firstOption.focus();
+        return;
+      }
+      if (firstOption) return;
     }
     if (!overlay.contains(document.activeElement)) overlay.focus();
-  }, [dismissMode, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, selectedOptionId]);
+  }, [availableOptionIds, dismissMode, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, selectedOptionId]);
   useEffect(() => {
     if (!isDesktopViewport || isForcedClosing) return undefined;
     const overlay = overlayRef.current;
