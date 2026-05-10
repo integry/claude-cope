@@ -248,7 +248,7 @@ describe("UpgradeOverlay", () => {
     expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/single");
   });
 
-  it("restores manual desktop focus to the first checkout option on open without arming keyboard selection", () => {
+  it("shows visible manual focus on the first checkout option without arming keyboard selection", () => {
     setViewportWidth(1024);
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "manual" });
     const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
@@ -257,6 +257,23 @@ describe("UpgradeOverlay", () => {
     expect(document.activeElement).toBe(singleLink);
     expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
     expect(desktop?.getAttribute("data-keyboard-nav")).toBe("false");
+    expect(desktop?.getAttribute("data-manual-focus")).toBe("true");
+  });
+
+  it("arms manual desktop keyboard navigation on the first Tab without skipping the first option", () => {
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "manual" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    const singleLink = container.querySelector(".upgrade-desktop a[href='https://example.com/single']") as HTMLAnchorElement | null;
+
+    act(() => {
+      singleLink?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    expect(document.activeElement).toBe(singleLink);
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("true");
+    expect(desktop?.getAttribute("data-manual-focus")).toBe("false");
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/single");
   });
 
   it("disables desktop keyboard navigation after resizing to mobile", () => {
@@ -289,6 +306,31 @@ describe("UpgradeOverlay", () => {
 
     expect(document.activeElement).not.toBe(desktop);
     expect(container.querySelector(".upgrade-desktop")?.contains(document.activeElement)).toBe(false);
+  });
+
+  it("clears desktop keyboard-armed state across desktop to mobile to desktop transitions", () => {
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+
+    act(() => {
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/single");
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("true");
+
+    act(() => {
+      setViewportWidth(375);
+    });
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("false");
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
+
+    act(() => {
+      setViewportWidth(1024);
+    });
+    expect(document.activeElement).toBe(desktop);
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("false");
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
   });
 
   it("enables desktop keyboard navigation after resizing from mobile to desktop", () => {

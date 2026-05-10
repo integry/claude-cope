@@ -42,6 +42,7 @@ function getTabEntryOptionId(ids: OptionId[], isReverse: boolean) { return ids[i
 function isEditableOverlayTarget(target: EventTarget | null): target is HTMLElement { return target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT"); }
 function getOverlayArrowDirection(key: string): -1 | 1 | null { if (key === "ArrowUp" || key === "ArrowLeft") return -1; return key === "ArrowDown" || key === "ArrowRight" ? 1 : null; }
 function shouldActivateSelectedOption(event: React.KeyboardEvent<HTMLDivElement>, isKeyboardNavigationMode: boolean, selectedOptionId: OptionId | null): selectedOptionId is OptionId { return event.key === "Enter" && isKeyboardNavigationMode && selectedOptionId !== null && event.target instanceof HTMLElement && event.target.tagName !== "A" && event.target.tagName !== "BUTTON"; }
+function isFocusedSelectedOption(target: EventTarget | null, selectedOptionId: OptionId | null, optionRefs: React.RefObject<Array<HTMLAnchorElement | null>>) { return selectedOptionId !== null && target === optionRefs.current[selectedOptionId]; }
 function getCenteredPadding(text: string) {
   const left = Math.max(0, Math.floor((INNER_W - text.length) / 2));
   return { left, right: Math.max(0, INNER_W - text.length - left) };
@@ -71,6 +72,7 @@ export default function DesktopLayout({
   const availableOptionIds = useMemo(() => getOptionIdList(singleAvailable, multiAvailable), [singleAvailable, multiAvailable]);
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
   const [isKeyboardNavigationMode, setIsKeyboardNavigationMode] = useState(false);
+  const [showManualFocus, setShowManualFocus] = useState(false);
   const boxLineRich = (content: React.ReactNode, textLength: number) => {
     const padLen = Math.max(0, INNER_W - textLength);
     return (
@@ -135,13 +137,16 @@ export default function DesktopLayout({
         onMouseDown={() => {
           focusSourceRef.current = "pointer";
           setIsKeyboardNavigationMode(false);
+          setShowManualFocus(false);
         }}
         onFocus={() => {
           setSelectedOptionId(id);
           if (focusSourceRef.current === "programmatic") {
             focusSourceRef.current = null;
+            setShowManualFocus(dismissMode === "manual");
             return;
           }
+          setShowManualFocus(false);
           if (focusSourceRef.current !== "pointer") {
             setIsKeyboardNavigationMode(true);
           }
@@ -173,16 +178,23 @@ export default function DesktopLayout({
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
   const canPointerDismiss = dismissMode === "manual" && !!onDismiss, isForcedClosing = dismissPhase === "closing";
+  const resetDesktopKeyboardState = useCallback(() => {
+    focusSourceRef.current = null;
+    setIsKeyboardNavigationMode(false);
+    setSelectedOptionId(null);
+    setShowManualFocus(false);
+  }, []);
   useEffect(() => {
     if (availableOptionIds.length === 0) {
       setSelectedOptionId(null);
+      setShowManualFocus(false);
       return;
     }
     if (selectedOptionId !== null && !availableOptionIds.includes(selectedOptionId)) {
       setSelectedOptionId(availableOptionIds[0] ?? null);
     }
   }, [availableOptionIds, selectedOptionId]);
-  useEffect(() => { if (isForcedClosing) setIsKeyboardNavigationMode(false); }, [isForcedClosing]);
+  useEffect(() => { if (isForcedClosing) resetDesktopKeyboardState(); }, [isForcedClosing, resetDesktopKeyboardState]);
   useEffect(() => {
     const syncViewport = () => { setIsDesktopViewport(getIsDesktopViewport()); };
     window.addEventListener("resize", syncViewport);
@@ -207,6 +219,7 @@ export default function DesktopLayout({
   }, [isDesktopViewport, isForcedClosing]);
   useEffect(() => {
     if (!isDesktopViewport) {
+      resetDesktopKeyboardState();
       const activeElement = document.activeElement;
       if (activeElement instanceof HTMLElement && overlayRef.current?.contains(activeElement)) {
         activeElement.blur();
@@ -232,13 +245,14 @@ export default function DesktopLayout({
       const firstOption = firstOptionId !== undefined ? optionRefs.current[firstOptionId] : null;
       if (firstOption && document.activeElement !== firstOption) {
         focusSourceRef.current = "programmatic";
+        setShowManualFocus(true);
         firstOption.focus();
         return;
       }
       if (firstOption) return;
     }
     if (!overlay.contains(document.activeElement)) overlay.focus();
-  }, [availableOptionIds, dismissMode, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, selectedOptionId]);
+  }, [availableOptionIds, dismissMode, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, resetDesktopKeyboardState, selectedOptionId]);
   useEffect(() => {
     if (!isDesktopViewport || isForcedClosing) return undefined;
     const overlay = overlayRef.current;
@@ -273,11 +287,18 @@ export default function DesktopLayout({
     }
     if (event.key === "Tab") {
       focusSourceRef.current = "tab";
-      setIsKeyboardNavigationMode(true);
       if (target === overlayRef.current) {
         event.preventDefault();
+        setShowManualFocus(false);
+        setIsKeyboardNavigationMode(true);
         const nextOptionId = getTabEntryOptionId(availableOptionIds, event.shiftKey);
         setSelectedOptionId(nextOptionId);
+        return;
+      }
+      if (!event.shiftKey && showManualFocus && isFocusedSelectedOption(target, selectedOptionId, optionRefs)) {
+        event.preventDefault();
+        setShowManualFocus(false);
+        setIsKeyboardNavigationMode(true);
       }
       return;
     }
@@ -285,13 +306,14 @@ export default function DesktopLayout({
       event.preventDefault();
       optionRefs.current[selectedOptionId]?.click();
     }
-  }, [availableOptionIds, cycleSelection, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, selectedOptionId]);
+  }, [availableOptionIds, cycleSelection, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, selectedOptionId, showManualFocus]);
   return (
     <div
       ref={overlayRef}
       className={`upgrade-desktop fixed inset-0 z-50 flex items-center justify-center${isForcedClosing ? " upgrade-overlay-closing" : ""}`}
       data-close-effect={dismissEffect}
       data-keyboard-nav={isKeyboardNavigationMode ? "true" : "false"}
+      data-manual-focus={showManualFocus ? "true" : "false"}
       onClick={canPointerDismiss ? onDismiss : undefined}
       onKeyDown={handleOverlayKeyDown}
       tabIndex={-1}

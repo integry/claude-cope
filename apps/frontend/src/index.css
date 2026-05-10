@@ -180,6 +180,7 @@ body {
 }
 .upgrade-desktop[data-keyboard-nav="true"] .upgrade-btn-primary:focus [data-btn],
 .upgrade-desktop[data-keyboard-nav="true"] .upgrade-btn-secondary:focus [data-btn],
+.upgrade-desktop[data-manual-focus="true"] a:focus [data-btn],
 .upgrade-desktop[data-keyboard-nav="true"] button:focus [data-esc],
 .upgrade-mobile a:focus-visible [data-btn],
 .upgrade-mobile button:focus-visible [data-esc] {
@@ -188,11 +189,13 @@ body {
 }
 .upgrade-desktop[data-keyboard-nav="true"] .upgrade-btn-primary:focus [data-cursor],
 .upgrade-desktop[data-keyboard-nav="true"] .upgrade-btn-secondary:focus [data-cursor],
+.upgrade-desktop[data-manual-focus="true"] a:focus [data-cursor],
 .upgrade-mobile a:focus-visible [data-cursor] {
   color: #ffffff !important;
 }
 .upgrade-desktop[data-keyboard-nav="true"] .upgrade-btn-primary:focus,
 .upgrade-desktop[data-keyboard-nav="true"] .upgrade-btn-secondary:focus,
+.upgrade-desktop[data-manual-focus="true"] a:focus,
 .upgrade-desktop[data-keyboard-nav="true"] button:focus,
 .upgrade-mobile a:focus-visible,
 .upgrade-mobile button:focus-visible {
