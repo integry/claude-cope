@@ -1066,7 +1066,7 @@ export function executeSlashCommand(
     if (!hasPro && (!isBYOK || needsLicense)) {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: baseCommand, reason: SlashCommandFailureReasons.PRO_GATED });
       reply({ role: "error", content: proGatedMessage(baseCommand) });
-      accountingCtx.finalizeSlashCommand();
+      accountingCtx.finalizeSlashCommand?.();
       return;
     }
   }
@@ -1075,7 +1075,7 @@ export function executeSlashCommand(
   if (command === "/clear") {
     queueSlashCommandAccounting(baseCommand);
     handleClearCommand(accountingCtx);
-    accountingCtx.finalizeSlashCommand();
+    accountingCtx.finalizeSlashCommand?.();
     return;
   }
 
@@ -1089,7 +1089,7 @@ export function executeSlashCommand(
     // Accounting is finalized centrally after dispatch so async handlers no
     // longer depend on reply() side effects to record command usage.
     if (dispatchCommand(command, accountingCtx, reply) === "async") return;
-    accountingCtx.finalizeSlashCommand();
+    accountingCtx.finalizeSlashCommand?.();
   }, Math.floor(Math.random() * 1500) + 1500);
 }
 
