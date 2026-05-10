@@ -201,9 +201,9 @@ export function TerminalView({
           sprintGoal={state.activeTicket?.sprintGoal}
           onSlashCommand={handleSlashCommandClick}
         />
-        <div className="relative border-b border-white">
+        <div className="terminal-command-shell relative border-b border-white/20">
           {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} paidUser={isPaidUser(state)} onSelect={handleSlashMenuSelect} />}
-          <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
+        <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
           <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
         </div>
       </div>
