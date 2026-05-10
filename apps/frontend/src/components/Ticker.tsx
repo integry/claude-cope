@@ -18,7 +18,17 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
   const handleHeaderCommand = (command: string) => onSlashCommand(command);
 
   return (
-    <div className="hidden sm:block w-full bg-gray-900 border-b border-gray-700 text-green-400 text-xs py-1 px-2">
+    <div
+      className="hidden sm:block w-full bg-gray-900 border-b border-gray-700 text-green-400 text-xs pt-2 pb-1 px-2 cursor-pointer hover:bg-gray-800 transition-colors"
+      onClick={onExpand}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          onExpand?.();
+        }
+      }}
+    >
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -32,7 +42,10 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
           <button
             type="button"
             className="ticker-header-link"
-            onClick={() => handleHeaderCommand("/who")}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleHeaderCommand("/who");
+            }}
           >
             <span className="text-gray-400">Online:</span>{" "}
             <span className="text-green-400">{onlineCount}</span>{" "}
@@ -42,7 +55,10 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
           <button
             type="button"
             className="ticker-header-link"
-            onClick={() => handleHeaderCommand("/party")}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleHeaderCommand("/party");
+            }}
           >
             <span className="text-gray-400">Firehose</span>{" "}
             <span className="ticker-header-link-command">[/party]</span>
@@ -51,7 +67,10 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
           <button
             type="button"
             className="ticker-header-link"
-            onClick={() => handleHeaderCommand("/leaderboard")}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleHeaderCommand("/leaderboard");
+            }}
           >
             <span className="text-gray-400">Hall of Blame</span>{" "}
             <span className="ticker-header-link-command">[/leaderboard]</span>
