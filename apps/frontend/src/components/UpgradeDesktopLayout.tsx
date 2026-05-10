@@ -51,16 +51,8 @@ export default function DesktopLayout({
   const midBorder = <span style={{ color: B }}>{"╠" + "═".repeat(INNER_W) + "╣"}</span>;
   const botBorder = <span style={{ color: B }}>{"╚" + "═".repeat(INNER_W) + "╝"}</span>;
   const boxLine = (text: string, color = W) => {
-    const padded = text.length < INNER_W
-      ? text + " ".repeat(INNER_W - text.length)
-      : text.slice(0, INNER_W);
-    return (
-      <>
-        <span style={{ color: B }}>{"║"}</span>
-        <span style={{ color }}>{padded}</span>
-        <span style={{ color: B }}>{"║"}</span>
-      </>
-    );
+    const padded = text.length < INNER_W ? text + " ".repeat(INNER_W - text.length) : text.slice(0, INNER_W);
+    return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{padded}</span><span style={{ color: B }}>{"║"}</span></>;
   };
   const emptyLine = boxLine("");
   const availableOptionIds = useMemo(
@@ -84,13 +76,7 @@ export default function DesktopLayout({
     const totalPad = INNER_W - text.length;
     const left = Math.max(0, Math.floor(totalPad / 2));
     const right = Math.max(0, totalPad - left);
-    return (
-      <>
-        <span style={{ color: B }}>{"║"}</span>
-        <span style={{ color }}>{" ".repeat(left) + text + " ".repeat(right)}</span>
-        <span style={{ color: B }}>{"║"}</span>
-      </>
-    );
+    return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{" ".repeat(left) + text + " ".repeat(right)}</span><span style={{ color: B }}>{"║"}</span></>;
   };
   const buttonBlock = (
     id: number,
@@ -160,13 +146,7 @@ export default function DesktopLayout({
       </a>
     );
   };
-  const tableBorderTop = boxLine("  +----------------+----------+------------------------------+");
-  const tableHeader    = boxLine("  | ARCHITECTURE   | CAPACITY | GUARANTEED OUTCOME           |");
-  const tableBorderMid = boxLine("  +----------------+----------+------------------------------+");
-  const tableRow1      = boxLine("  | Legacy AI      | Max 20x  | Manageable pull requests     |");
-  const tableRow2      = boxLine("  | Claude Cope    | MAX 429X | Unmitigated request storms   |");
-  const tableBorderBot = boxLine("  +----------------+----------+------------------------------+");
-
+  const tableLines = { border: boxLine("  +----------------+----------+------------------------------+"), header: boxLine("  | ARCHITECTURE   | CAPACITY | GUARANTEED OUTCOME           |"), legacy: boxLine("  | Legacy AI      | Max 20x  | Manageable pull requests     |"), cope: boxLine("  | Claude Cope    | MAX 429X | Unmitigated request storms   |") };
   const title = "[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]";
   const closeBtn = "[x]";
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
@@ -182,9 +162,7 @@ export default function DesktopLayout({
       setSelectedOptionId(availableOptionIds[0] ?? null);
     }
   }, [availableOptionIds, selectedOptionId]);
-  useEffect(() => {
-    if (isForcedClosing) setIsKeyboardNavigationMode(false);
-  }, [isForcedClosing]);
+  useEffect(() => { if (isForcedClosing) setIsKeyboardNavigationMode(false); }, [isForcedClosing]);
   useEffect(() => {
     const syncViewport = () => { setIsDesktopViewport(getIsDesktopViewport()); };
     window.addEventListener("resize", syncViewport);
@@ -204,9 +182,7 @@ export default function DesktopLayout({
   useEffect(() => {
     if (!isDesktopViewport || !isForcedClosing) return;
     const activeElement = document.activeElement;
-    if (activeElement instanceof HTMLElement && overlayRef.current?.contains(activeElement)) {
-      activeElement.blur();
-    }
+    if (activeElement instanceof HTMLElement && overlayRef.current?.contains(activeElement)) activeElement.blur();
   }, [isDesktopViewport, isForcedClosing]);
   useEffect(() => {
     if (!isDesktopViewport) {
@@ -343,12 +319,12 @@ export default function DesktopLayout({
         {boxLine("  at 5x or 20x. Claude Cope is architected without safeguards")}{"\n"}
         {boxLine("  to guarantee absolute system saturation.")}{"\n"}
         {emptyLine}{"\n"}
-        {tableBorderTop}{"\n"}
-        {tableHeader}{"\n"}
-        {tableBorderMid}{"\n"}
-        {tableRow1}{"\n"}
-        {tableRow2}{"\n"}
-        {tableBorderBot}{"\n"}
+        {tableLines.border}{"\n"}
+        {tableLines.header}{"\n"}
+        {tableLines.border}{"\n"}
+        {tableLines.legacy}{"\n"}
+        {tableLines.cope}{"\n"}
+        {tableLines.border}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
