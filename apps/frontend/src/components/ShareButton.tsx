@@ -353,18 +353,8 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
                       display: "block",
                     }}
                   >
-                    <span data-cursor="" style={{ color: "#4ade80", fontWeight: "bold" }}>{">"}</span>
-                    <span
-                      data-btn=""
-                      style={{
-                        color: "#4ade80",
-                        fontWeight: "bold",
-                        padding: "2px 6px",
-                        backgroundColor: "transparent",
-                      }}
-                    >
-                      {` [ OPEN ${pasteHint.platform === "twitter" ? "X" : "LINKEDIN"} TAB ]`}
-                    </span>
+                    <span data-cursor="">{">"}</span>
+                    <span data-btn="">{` [ OPEN ${pasteHint.platform === "twitter" ? "X" : "LINKEDIN"} TAB ]`}</span>
                   </button>
                 </div>
               ) : (
@@ -389,18 +379,8 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
                         opacity: status === "generating" ? 0.5 : 1,
                       }}
                     >
-                      <span data-cursor="" style={{ color: "#4ade80", fontWeight: "bold" }}>{">"}</span>
-                      <span
-                        data-btn=""
-                        style={{
-                          color: "#4ade80",
-                          fontWeight: "bold",
-                          padding: "2px 6px",
-                          backgroundColor: "transparent",
-                        }}
-                      >
-                        {` [ ${label} ]`}
-                      </span>
+                      <span data-cursor="">{">"}</span>
+                      <span data-btn="">{` [ ${label} ]`}</span>
                     </button>
                   ))}
                 </div>
