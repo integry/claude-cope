@@ -153,12 +153,30 @@ describe("useGameState theme persistence", () => {
   });
 
   it("rolls back to the last confirmed theme and surfaces update-theme failures", async () => {
+    const confirmedRequest = deferred<{
+      success: true;
+      profile: ReturnType<typeof createServerProfile>;
+    }>();
     const request = deferred<{
       success: false;
       error: string;
       errorCode: "session_auth_required";
     }>();
-    vi.mocked(updateThemeServer).mockReturnValueOnce(request.promise);
+    vi.mocked(updateThemeServer)
+      .mockReturnValueOnce(confirmedRequest.promise)
+      .mockReturnValueOnce(request.promise);
+
+    act(() => {
+      hookState.setActiveTheme("midnight");
+    });
+
+    await act(async () => {
+      confirmedRequest.resolve({
+        success: true,
+        profile: createServerProfile({ active_theme: "midnight", unlocked_themes: ["default", "amber", "midnight"] }),
+      });
+      await confirmedRequest.promise;
+    });
 
     act(() => {
       hookState.setActiveTheme("amber");
@@ -175,7 +193,7 @@ describe("useGameState theme persistence", () => {
       await request.promise;
     });
 
-    expect(hookState.state.activeTheme).toBe("default");
+    expect(hookState.state.activeTheme).toBe("midnight");
     expect(hookState.state.hasSessionPro).toBeUndefined();
     expect(hookState.state.chatHistory[hookState.state.chatHistory.length - 1]).toMatchObject({
       role: "error",
