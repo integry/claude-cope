@@ -19,20 +19,12 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
 
   return (
     <div
-      className="hidden sm:block w-full bg-gray-900 border-b border-gray-700 text-green-400 text-xs pt-2 pb-1 px-2 cursor-pointer hover:bg-gray-800 transition-colors"
-      onClick={onExpand}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          onExpand?.();
-        }
-      }}
+      className="hidden sm:block w-full bg-gray-900 border-b border-gray-700 text-green-400 text-xs pt-2 pb-1 px-2 hover:bg-gray-800 transition-colors"
     >
       <div className="flex items-center justify-between">
         <button
           type="button"
-          className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left text-inherit hover:bg-gray-800 transition-colors"
+          className="min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left text-inherit hover:bg-gray-800 transition-colors"
           onClick={onExpand}
         >
           <strong className="text-yellow-400 bg-yellow-950/30 px-1 rounded">[LIVE]</strong>{" "}
