@@ -28,24 +28,48 @@ import { shouldShowNag } from "./winrarNag";
 import { TerminalView } from "./TerminalView";
 import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
-import { DEFAULT_CLOSE_EFFECT, UPGRADE_NAG_CLOSE_EFFECTS, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
+import { useUpgradeNagState } from "./useUpgradeNagState";
 export type { Message };
 type TerminalViewProps = ComponentProps<typeof TerminalView>;
-const NAG_MINIMUM_OPEN_MS = 3000;
-const NAG_FORCED_CLOSE_MS = 3000;
 export const STARTUP_TICKET_PROMPT_DELAY_MS = 300;
-function pickRandomUpgradeNagCloseEffect(): UpgradeNagCloseEffect {
-  return UPGRADE_NAG_CLOSE_EFFECTS[Math.floor(Math.random() * UPGRADE_NAG_CLOSE_EFFECTS.length)] ?? DEFAULT_CLOSE_EFFECT;
-}
 function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
   while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++);
   if (messageKeys.length > historyLength) messageKeys.length = historyLength;
 }
 function Terminal() {
-  const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
+  const {
+    state,
+    setState,
+    getCurrentState,
+    addActiveTD,
+    buyGenerator,
+    buyUpgrade,
+    resetQuota,
+    unlockAchievement,
+    applyOutageReward,
+    applyOutagePenalty,
+    setChatHistory,
+    setActiveTheme,
+    buyTheme,
+    offlineTDEarned,
+    clearOfflineTDEarned,
+    updateTicketProgress,
+  } = useGameState();
   const history = state.chatHistory;
-  const setHistory = setChatHistory, creditTD = useCallback((amount: number) => addActiveTD(amount, true), [addActiveTD]);
-  const debitTD = useCallback((amount: number) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, currentTD: Math.max(0, prev.economy.currentTD - amount) } })); }, [setState]);
+  const setHistory = setChatHistory;
+  const creditTD = useCallback(
+    (amount: number) => addActiveTD(amount, true),
+    [addActiveTD],
+  );
+  const debitTD = useCallback((amount: number) => {
+    setState((prev) => ({
+      ...prev,
+      economy: {
+        ...prev.economy,
+        currentTD: Math.max(0, prev.economy.currentTD - amount),
+      },
+    }));
+  }, [setState]);
   const activeTicketRef = useRef(state.activeTicket);
   activeTicketRef.current = state.activeTicket;
   const applyReviewSprintBoost = useCallback((ticketId: string, boost: number) => {
@@ -88,10 +112,6 @@ function Terminal() {
   syncMessageKeys(messageKeys.current, nextKeyId, history.length);
   const abortControllerRef = useRef<AbortController | null>(null);
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
-  const pendingNagCommandRef = useRef<string | null>(null);
-  const nagArmedFromQuotaRef = useRef(false);
-  const nagOpenedAtRef = useRef<number | null>(null);
-  const nagCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyRef = useRef(history);
   historyRef.current = history;
@@ -100,15 +120,20 @@ function Terminal() {
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
   const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
-  const [upgradeNagDismissPhase, setUpgradeNagDismissPhase] = useState<"idle" | "closing">("idle");
-  const [upgradeNagDismissEffect, setUpgradeNagDismissEffect] = useState<UpgradeNagCloseEffect>(DEFAULT_CLOSE_EFFECT);
   useEffect(() => {
-    return () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); };
+    return () => {
+      const ds = freeTierDelayRef.current;
+      ds.cancelled = true;
+      if (ds.timeoutId) {
+        clearTimeout(ds.timeoutId);
+      }
+    };
   }, []);
   useEffect(() => {
     return () => {
-      if (nagCloseTimeoutRef.current) clearTimeout(nagCloseTimeoutRef.current);
-      if (startupTicketPromptTimeoutRef.current) clearTimeout(startupTicketPromptTimeoutRef.current);
+      if (startupTicketPromptTimeoutRef.current) {
+        clearTimeout(startupTicketPromptTimeoutRef.current);
+      }
     };
   }, []);
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
@@ -120,53 +145,29 @@ function Terminal() {
     lastSuggestedReplyRef.current = merged;
     setSuggestedReply(merged);
   }, []);
-  const restorePendingNagCommand = useCallback(() => {
-    if (pendingNagCommandRef.current !== null) { setInputValue(pendingNagCommandRef.current); pendingNagCommandRef.current = null; }
-    nagArmedFromQuotaRef.current = false;
-    nagOpenedAtRef.current = null;
-    setUpgradeNagDismissPhase("idle");
-    setUpgradeNagDismissEffect(DEFAULT_CLOSE_EFFECT);
-    if (nagCloseTimeoutRef.current) {
-      clearTimeout(nagCloseTimeoutRef.current);
-      nagCloseTimeoutRef.current = null;
-    }
+  const processCommandRef = useRef<(command: string) => void>(() => {});
+  const submitPromptCommand = useCallback((command: string) => {
+    setCommandHistory((prev) => [...prev, command]);
+    processCommandRef.current(command);
   }, []);
-  const openUpgradeNag = useCallback((command?: string) => {
-    if (command !== undefined) pendingNagCommandRef.current = command;
-    nagOpenedAtRef.current = Date.now();
-    setUpgradeNagDismissPhase("idle");
-    if (nagCloseTimeoutRef.current) {
-      clearTimeout(nagCloseTimeoutRef.current);
-      nagCloseTimeoutRef.current = null;
-    }
-    setUpgradeNagDismissEffect(DEFAULT_CLOSE_EFFECT);
-    setShowUpgrade(true);
-  }, [setShowUpgrade]);
-  const finalizeUpgradeNagClose = useCallback(() => {
-    if (nagCloseTimeoutRef.current) {
-      clearTimeout(nagCloseTimeoutRef.current);
-      nagCloseTimeoutRef.current = null;
-    }
-    setUpgradeNagDismissPhase("idle");
-    setUpgradeNagDismissEffect(DEFAULT_CLOSE_EFFECT);
-    nagOpenedAtRef.current = null;
-    setShowUpgrade(false);
-    if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
-    if (pendingNagCommandRef.current !== null) {
-      const command = pendingNagCommandRef.current;
-      pendingNagCommandRef.current = null;
-      nagArmedFromQuotaRef.current = false;
-      setCommandHistory((prev) => [...prev, command]); processCommandRef.current(command);
-    }
-  }, [setShowUpgrade]);
-  const closeAllOverlaysAndRestoreNag = useCallback(() => {
-    closeAllOverlays();
-    restorePendingNagCommand();
-  }, [restorePendingNagCommand, closeAllOverlays]);
-  const closeAllOverlaysPreservingNag = useCallback(() => {
-    closeAllOverlays();
-    if (pendingNagCommandRef.current !== null) setShowUpgrade(true);
-  }, [closeAllOverlays, setShowUpgrade]);
+  const {
+    clearPendingNag,
+    closeAllOverlaysAndRestoreNag,
+    closeAllOverlaysPreservingNag,
+    consumePendingNagCommand,
+    dismissUpgradeOverlay: dismissUpgradeNagOverlay,
+    handleUpgradeNagClose,
+    nagArmedFromQuotaRef,
+    openUpgradeNag,
+    pendingNagCommand,
+    pendingNagCommandRef,
+    upgradeNagDismissEffect,
+    upgradeNagDismissPhase,
+  } = useUpgradeNagState({
+    closeAllOverlays,
+    setInputValue,
+    setShowUpgrade,
+  });
   const handleProfileClick = useCallback(() => {
     closeAllOverlaysPreservingNag();
     setShowProfile(true);
@@ -180,7 +181,7 @@ function Terminal() {
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [setShowUpgrade]);
+  }, [pendingNagCommandRef, setShowUpgrade]);
   useEffect(() => { if (!isProcessing && !isBooting && !anyOverlayOpen) inputRef.current?.focus(); }, [isProcessing, isBooting, anyOverlayOpen]);
   useEffect(() => {
     if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
@@ -204,7 +205,16 @@ function Terminal() {
       nagArmedFromQuotaRef.current = true;
       if (command) openUpgradeNag(command);
     } else triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState });
-  }, [openUpgradeNag, playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState]);
+  }, [
+    nagArmedFromQuotaRef,
+    openUpgradeNag,
+    playError,
+    resetQuota,
+    setHistory,
+    setState,
+    state,
+    unlockAchievementWithSound,
+  ]);
   const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
     if (shouldShowNag(effectiveApiKey, state.proKey, state.proKeyHash, state.economy.quotaPercent)) {
       handleQuotaLockout(command);
@@ -236,14 +246,10 @@ function Terminal() {
   }, [state, setState, setHistory, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply, recordAcceptedAction]);
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
-  const submitPromptCommand = useCallback((command: string) => {
-    setCommandHistory((prev) => [...prev, command]); processCommandRef.current(command);
-  }, []);
   useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, setHistory, runSlashCommand });
   const handlePromptAccepted = useCallback(() => {
-    pendingNagCommandRef.current = null;
-    nagArmedFromQuotaRef.current = false;
-  }, []);
+    clearPendingNag();
+  }, [clearPendingNag]);
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") { runSlashCommandRef.current(command); return; }
     setInputValue(command + " "); setSlashQuery(""); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
@@ -260,7 +266,6 @@ function Terminal() {
       settledPendingCompletedRewardTaskIds: [ticketId],
     } : {}));
   }, [setState]);
-  const processCommandRef = useRef<(command: string) => void>(() => {});
   const processCommand = async (command: string) => {
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
     if (!effectiveApiKey && instantBanReady) { setHistory((prev) => [...prev, { role: "user", content: command }]); handleInstantBan(); return; }
@@ -334,44 +339,41 @@ function Terminal() {
     recordMessageWithoutTicket();
     submitPromptCommand(command);
   };
-  const dismissUpgradeOverlay = useCallback(() => {
-    setShowUpgrade(false);
-    if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
-  }, [setShowUpgrade]);
-  const handleUpgradeNagClose = useCallback(() => {
-    if (upgradeNagDismissPhase === "closing") return;
-    const nagOpenedAt = nagOpenedAtRef.current;
-    const elapsed = nagOpenedAt === null ? Number.POSITIVE_INFINITY : Date.now() - nagOpenedAt;
-    if (elapsed >= NAG_MINIMUM_OPEN_MS) {
-      finalizeUpgradeNagClose();
-      return;
-    }
-    setUpgradeNagDismissEffect(pickRandomUpgradeNagCloseEffect());
-    setUpgradeNagDismissPhase("closing");
-    nagCloseTimeoutRef.current = setTimeout(() => { nagCloseTimeoutRef.current = null; finalizeUpgradeNagClose(); }, NAG_FORCED_CLOSE_MS);
-  }, [finalizeUpgradeNagClose, upgradeNagDismissPhase]);
+  const resumePendingNagCommand = useCallback((command: string) => {
+    setCommandHistory((prev) => [...prev, command]);
+    processCommandRef.current(command);
+  }, []);
+  const handleUpgradeNagDismiss = useCallback(() => {
+    handleUpgradeNagClose((command) => {
+      resumePendingNagCommand(command);
+    });
+  }, [handleUpgradeNagClose, resumePendingNagCommand]);
   const handleUpgradeNagConfirmClose = useCallback(() => {
-    dismissUpgradeOverlay();
-    if (pendingNagCommandRef.current !== null) {
-      const command = pendingNagCommandRef.current;
-      pendingNagCommandRef.current = null;
-      nagArmedFromQuotaRef.current = false;
+    dismissUpgradeNagOverlay();
+    const command = consumePendingNagCommand();
+    if (command !== null) {
       setInputValue("");
       setHistoryIndex(-1);
-      recordMessageWithoutTicket(); submitPromptCommand(command);
+      recordMessageWithoutTicket();
+      submitPromptCommand(command);
     }
-  }, [dismissUpgradeOverlay, recordMessageWithoutTicket, submitPromptCommand]);
-  const handleManualUpgradeDismiss = dismissUpgradeOverlay;
+  }, [
+    consumePendingNagCommand,
+    dismissUpgradeNagOverlay,
+    recordMessageWithoutTicket,
+    submitPromptCommand,
+  ]);
+  const handleManualUpgradeDismiss = dismissUpgradeNagOverlay;
   const { handleKeyDown } = useTerminalKeyboard({
     slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
-    freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing, setHistory, closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
+    freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing, setHistory, closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose: handleUpgradeNagDismiss, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
   });
   const terminalViewProps: TerminalViewProps = {
     activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme: state.activeTheme, regressionGlitch, anyOverlayOpen, inputRef,
     closeAllOverlaysPreservingNag, onlineCount, rank, state, handleProfileClick, setInputValue, setSlashQuery, setSlashIndex, compactEffect, isBooting,
     history, messageKeys: messageKeys.current, initialHistoryLen: initialHistoryLen.current, promptString, handleSlashCommandClick, bottomRef, slashQuery,
     slashIndex, runSlashCommand, inputValue, suggestedReply, isProcessing, handleChange, handleKeyDown, buyGenerator, buyUpgrade, buyTheme, setActiveTheme,
-    ...terminalOverlayProps, setIsProcessing, setHistory, pendingNagCommand: pendingNagCommandRef.current, handleUpgradeNagClose: handleUpgradeNagConfirmClose,
+    ...terminalOverlayProps, setIsProcessing, setHistory, pendingNagCommand, handleUpgradeNagClose: handleUpgradeNagConfirmClose,
     handleManualUpgradeDismiss, upgradeNagDismissPhase, upgradeNagDismissEffect,
   };
   return <TerminalView {...terminalViewProps} />;
