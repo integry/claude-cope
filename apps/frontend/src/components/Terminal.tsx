@@ -37,6 +37,7 @@ export type { Message };
 
 const NAG_MINIMUM_OPEN_MS = 3000;
 const NAG_FORCED_CLOSE_MS = 3000;
+export const STARTUP_TICKET_PROMPT_DELAY_MS = 300;
 function pickRandomUpgradeNagCloseEffect(): UpgradeNagCloseEffect {
   return UPGRADE_NAG_CLOSE_EFFECTS[Math.floor(Math.random() * UPGRADE_NAG_CLOSE_EFFECTS.length)] ?? DEFAULT_CLOSE_EFFECT;
 }
@@ -100,6 +101,7 @@ function Terminal() {
   const nagArmedFromQuotaRef = useRef(false);
   const nagOpenedAtRef = useRef<number | null>(null);
   const nagCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyRef = useRef(history);
   historyRef.current = history;
   const lastSuggestedReplyRef = useRef<string | null>(null);
@@ -115,6 +117,7 @@ function Terminal() {
   useEffect(() => {
     return () => {
       if (nagCloseTimeoutRef.current) clearTimeout(nagCloseTimeoutRef.current);
+      if (startupTicketPromptTimeoutRef.current) clearTimeout(startupTicketPromptTimeoutRef.current);
     };
   }, []);
 
@@ -196,9 +199,25 @@ function Terminal() {
 
   useEffect(() => {
     if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
-    setState((prev) => ({ ...prev, hasSeenTicketPrompt: true }));
-    fetchRandomTicketPrompt(setHistory);
-  }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
+    startupTicketPromptTimeoutRef.current = setTimeout(() => {
+      startupTicketPromptTimeoutRef.current = null;
+      const currentState = getCurrentState();
+      if (currentState.hasSeenTicketPrompt || currentState.activeTicket) return;
+      setState((prev) => (
+        prev.hasSeenTicketPrompt || prev.activeTicket
+          ? prev
+          : { ...prev, hasSeenTicketPrompt: true }
+      ));
+      void fetchRandomTicketPrompt(setHistory, currentState.proKeyHash);
+    }, STARTUP_TICKET_PROMPT_DELAY_MS);
+
+    return () => {
+      if (startupTicketPromptTimeoutRef.current) {
+        clearTimeout(startupTicketPromptTimeoutRef.current);
+        startupTicketPromptTimeoutRef.current = null;
+      }
+    };
+  }, [getCurrentState, isBooting, state.hasSeenTicketPrompt, state.activeTicket, state.proKeyHash, setState, setHistory]);
 
   const handleQuotaLockout = useCallback((command?: string) => {
     if (BYOK_ENABLED && state.apiKey) return;

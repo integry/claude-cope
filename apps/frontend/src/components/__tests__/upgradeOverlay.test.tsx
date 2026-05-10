@@ -3,6 +3,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
+import {
+  BACKLOG_CATEGORY_UPGRADE_GROUPS,
+  PREMIUM_BACKLOG_CATEGORY_COUNT,
+} from "@claude-cope/shared/backlogTiers";
 
 vi.mock("../../config", () => ({
   UPGRADE_CHECKOUT_SINGLE: "https://example.com/single",
@@ -79,6 +83,23 @@ describe("UpgradeOverlay", () => {
     expect(text).toContain("EXTRACT TEAM FUNDS - $19.99");
   });
 
+  it("renders the compact appendix and keeps the purchase options above it", () => {
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+    const text = container.textContent ?? "";
+
+    expect(text).not.toContain("FREE STARTER SET:");
+    expect(text).toContain(`APPENDIX: ${PREMIUM_BACKLOG_CATEGORY_COUNT} NEW MAX CATEGORIES UNLOCKED`);
+    expect(text.indexOf("AUTHORIZE EXTRACTION - $4.99")).toBeLessThan(text.indexOf(`APPENDIX: ${PREMIUM_BACKLOG_CATEGORY_COUNT} NEW MAX CATEGORIES UNLOCKED`));
+    expect(text.indexOf("EXTRACT TEAM FUNDS - $19.99")).toBeLessThan(text.indexOf(`APPENDIX: ${PREMIUM_BACKLOG_CATEGORY_COUNT} NEW MAX CATEGORIES UNLOCKED`));
+
+    const renderedGroupTitles = BACKLOG_CATEGORY_UPGRADE_GROUPS.map((group) =>
+      group.id === "marketing-growth-sludge" ? "GROWTH SLUDGE" : group.title.toUpperCase(),
+    );
+    for (const title of renderedGroupTitles) {
+      expect(text).toContain(title);
+    }
+  });
+
   it("renders checkout links for both options", () => {
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
     const links = container.querySelectorAll("a[href]");
@@ -114,6 +135,20 @@ describe("UpgradeOverlay", () => {
       desktop?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("does call onDismiss when the nag footer is tapped on mobile", () => {
+    const onDismiss = vi.fn();
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss, dismissMode: "nag" });
+    const footerButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Tap to retain your net worth"),
+    );
+
+    act(() => {
+      footerButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
   it("renders the forced-closing class when the nag enters its exit sequence", () => {

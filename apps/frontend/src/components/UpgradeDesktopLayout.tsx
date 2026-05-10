@@ -26,6 +26,12 @@ export type LayoutProps = {
   singleAvailable: boolean;
   multiAvailable: boolean;
   quotaLine: string;
+  premiumCategoryCount: number;
+  premiumGroups: Array<{
+    id: string;
+    title: string;
+    summary: string;
+  }>;
   dismissMode?: "manual" | "nag";
   dismissPhase?: "idle" | "closing";
   dismissEffect?: UpgradeNagCloseEffect;
@@ -47,12 +53,18 @@ function isFocusedSelectedOption(target: EventTarget | null, selectedOptionId: O
 function shouldArmKeyboardNavigationOnTab(target: EventTarget | null, showManualFocus: boolean, selectedOptionId: OptionId | null, optionRefs: React.RefObject<Array<HTMLAnchorElement | null>>) { return showManualFocus && isFocusedSelectedOption(target, selectedOptionId, optionRefs); }
 function isFocusedDesktopOption(target: Element | null, optionRefs: React.RefObject<Array<HTMLAnchorElement | null>>) { return target !== null && optionRefs.current.includes(target as HTMLAnchorElement); }
 function getCenteredPadding(text: string) { const left = Math.max(0, Math.floor((INNER_W - text.length) / 2)); return { left, right: Math.max(0, INNER_W - text.length - left) }; }
+const PANEL_STYLE = {
+  fontFamily: MONO_FONT, fontSize: "13px", lineHeight: "1.1", backgroundColor: "#1e232b",
+  boxShadow: "12px 12px 0px rgba(0, 0, 0, 0.9)", padding: 0, margin: 0, whiteSpace: "pre" as const, overflowX: "auto" as const, overflowY: "hidden" as const,
+};
 export default function DesktopLayout({
   singleLabel,
   multiLabel,
   singleAvailable,
   multiAvailable,
   quotaLine,
+  premiumCategoryCount,
+  premiumGroups,
   dismissMode = "manual",
   dismissPhase = "idle",
   dismissEffect = DEFAULT_CLOSE_EFFECT,
@@ -66,7 +78,13 @@ export default function DesktopLayout({
   const [isDesktopViewport, setIsDesktopViewport] = useState(getIsDesktopViewport);
   const boxLine = (text: string, color = W) => {
     const padded = text.length < INNER_W ? text + " ".repeat(INNER_W - text.length) : text.slice(0, INNER_W);
-    return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{padded}</span><span style={{ color: B }}>{"║"}</span></>;
+    return (
+      <>
+        <span style={{ color: B }}>{"║"}</span>
+        <span style={{ color }}>{padded}</span>
+        <span style={{ color: B }}>{"║"}</span>
+      </>
+    );
   };
   const emptyLine = boxLine("");
   const availableOptionIds = useMemo(() => getOptionIdList(singleAvailable, multiAvailable), [singleAvailable, multiAvailable]);
@@ -79,7 +97,7 @@ export default function DesktopLayout({
       <>
         <span style={{ color: B }}>{"║"}</span>
         {content}
-        <span>{" ".repeat(padLen)}</span>
+        <span>{padLen > 0 ? " ".repeat(padLen) : ""}</span>
         <span style={{ color: B }}>{"║"}</span>
       </>
     );
@@ -88,7 +106,38 @@ export default function DesktopLayout({
     const { left, right } = getCenteredPadding(text);
     return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{" ".repeat(left) + text + " ".repeat(right)}</span><span style={{ color: B }}>{"║"}</span></>;
   };
-  const buttonBlock = (id: OptionId, label: string, url: string, available: boolean, primary = true) => {
+  const wrapText = (text: string, maxWidth = INNER_W - 2) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [""];
+
+    const lines: string[] = [];
+    let currentLine = "";
+    for (const word of words) {
+      const nextLine = currentLine ? `${currentLine} ${word}` : word;
+      if (nextLine.length <= maxWidth) {
+        currentLine = nextLine;
+        continue;
+      }
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  };
+  const renderWrappedBoxLines = (text: string, color = W) =>
+    wrapText(text).map((line, index) => (
+      <span key={`${color}-${index}-${line}`}>
+        {boxLine(`  ${line}`, color)}
+        {"\n"}
+      </span>
+    ));
+  const buttonBlock = (
+    id: OptionId,
+    label: string,
+    url: string,
+    available: boolean,
+    primary = true,
+  ) => {
     const MARGIN = 2;
     const cursorPrefix = " > ";
     const btnContent = " " + label + " ";
@@ -96,23 +145,7 @@ export default function DesktopLayout({
     const suffixLen = Math.max(0, INNER_W - totalUsed);
     const emptyInner = " ".repeat(INNER_W);
     const selected = isKeyboardNavigationMode && selectedOptionId === id;
-    if (!available) {
-      const errText = "    [ERR] CHECKOUT_URL not configured.";
-      const errPad = Math.max(0, INNER_W - errText.length);
-      return (
-        <>
-          <span style={{ color: B }}>{"║"}</span>
-          <span style={{ color: W }}>{emptyInner}</span>
-          <span style={{ color: B }}>{"║"}</span>{"\n"}
-          <span style={{ color: B }}>{"║"}</span>
-          <span style={{ color: B }}>{errText + " ".repeat(errPad)}</span>
-          <span style={{ color: B }}>{"║"}</span>{"\n"}
-          <span style={{ color: B }}>{"║"}</span>
-          <span style={{ color: W }}>{emptyInner}</span>
-          <span style={{ color: B }}>{"║"}</span>
-        </>
-      );
-    }
+    if (!available) return <>{boxLine("")}{"\n"}{boxLine("    [ERR] CHECKOUT_URL not configured.", B)}{"\n"}{boxLine("")}</>;
     return (
       <a
         href={url}
@@ -177,7 +210,8 @@ export default function DesktopLayout({
   const retainPadding = getCenteredPadding(RETAIN_TEXT);
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
-  const canPointerDismiss = dismissMode === "manual" && !!onDismiss, isForcedClosing = dismissPhase === "closing";
+  const canPointerDismiss = dismissMode === "manual" && !!onDismiss;
+  const isForcedClosing = dismissPhase === "closing";
   const resetDesktopKeyboardState = useCallback(() => {
     focusSourceRef.current = null;
     setIsKeyboardNavigationMode(false);
@@ -261,14 +295,7 @@ export default function DesktopLayout({
     if (!isDesktopViewport || isForcedClosing) return undefined;
     const overlay = overlayRef.current;
     if (!overlay) return undefined;
-    const restoreFocus = () => {
-      requestAnimationFrame(() => {
-        const activeElement = document.activeElement;
-        if (!overlay.contains(activeElement)) {
-          overlay.focus();
-        }
-      });
-    };
+    const restoreFocus = () => { requestAnimationFrame(() => { if (!overlay.contains(document.activeElement)) overlay.focus(); }); };
     overlay.addEventListener("focusout", restoreFocus);
     return () => { overlay.removeEventListener("focusout", restoreFocus); };
   }, [isDesktopViewport, isForcedClosing]);
@@ -329,19 +356,7 @@ export default function DesktopLayout({
       <pre
         className={`relative z-10 mx-4 upgrade-overlay-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
-        style={{
-          fontFamily: MONO_FONT,
-          fontSize: "13px",
-          lineHeight: "1.1",
-          backgroundColor: "#1e232b",
-          boxShadow: "12px 12px 0px rgba(0, 0, 0, 0.9)",
-          padding: 0,
-          margin: 0,
-          whiteSpace: "pre",
-          overflowX: "auto",
-          overflowY: "hidden",
-          ...(isForcedClosing && closeEffectPresentation ? { animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" as const } : {}),
-        }}
+        style={isForcedClosing && closeEffectPresentation ? { ...PANEL_STYLE, animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" } : PANEL_STYLE}
       >
         <span style={{ color: B }}>{BORDER_TOP}</span>{"\n"}
         <span style={{ color: B }}>{"║"}</span>
@@ -362,9 +377,8 @@ export default function DesktopLayout({
         {boxLine(`  > ${quotaLine}`, DIM)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [ THROUGHPUT BENCHMARKS ]", Y)}{"\n"}
-        {boxLine("  Industry standards artificially throttle assistant capacity")}{"\n"}
-        {boxLine("  at 5x or 20x. Claude Cope is architected without safeguards")}{"\n"}
-        {boxLine("  to guarantee absolute system saturation.")}{"\n"}
+        {boxLine("  Industry standards throttle capacity at 5x or 20x.")}{"\n"}
+        {boxLine("  Claude Cope guarantees absolute system saturation.")}{"\n"}
         {emptyLine}{"\n"}
         {tableLines.border}{"\n"}
         {tableLines.header}{"\n"}
@@ -380,10 +394,18 @@ export default function DesktopLayout({
         {buttonBlock(OPTION_IDS.single, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
-        {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
-        {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
+        {boxLine("  Let the entire team achieve HTTP 429 compliance.")}{"\n"}
         {boxLine("  (5 activation keys will be sent to your email)", "#8892b0")}{"\n"}
         {buttonBlock(OPTION_IDS.multi, multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
+        {emptyLine}{"\n"}
+        {boxLine("  ---------------------------------------------------------")}{"\n"}
+        {boxLine(`  [ APPENDIX: ${premiumCategoryCount} NEW MAX CATEGORIES UNLOCKED ]`, Y)}{"\n"}
+        {emptyLine}{"\n"}
+        {premiumGroups.map((group) => (
+          <span key={group.id}>
+            {renderWrappedBoxLines(`* ${group.title.toUpperCase()}: ${group.summary}`)}
+          </span>
+        ))}
         <span style={{ color: B }}>{BORDER_MID}</span>{"\n"}
         <span style={{ display: "inline" }} className="upgrade-esc-btn">
           <span style={{ color: B }}>{"║"}</span>

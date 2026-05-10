@@ -445,7 +445,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('YELL-080', 'Implement a "Translation Layer" That Converts Code Comments Between Passive-Aggressive Dialects',
  'Cross-team collaboration is currently being mediated by phrases that sound polite in one timezone and career-limiting in another. I need a translation layer for review comments, status notes, and those unsettling little "just circling back" messages. When someone writes "interesting approach," the recipient should know whether that means curiosity, disapproval, or the opening move in a two-week escalation ballet.',
  'translate passive aggressive comments automatically',
-  34),;
+  34);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Karen [HR]', reporter_name = 'Karen', reporter_title = 'HR', reporter_description = 'Turns copy changes into compliance theater and printable certificates.' WHERE id IN ('YELL-001', 'YELL-002', 'YELL-003');
@@ -936,7 +936,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('MELT-160', 'All Unit Tests Must Have Their Own Unit Tests and Those Tests Need Integration Tests',
  'Test coverage is 85%, which raises the obvious question of test coverage of the tests. Every unit test now needs a meta-test proving it tested the right thing, and every meta-test needs an integration test proving it survives CI. If the codebase reaches a 93:1 test-to-code ratio, confidence will finally exceed utility.',
  'add tests for the tests too',
-  377),;
+  377);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Dmitri [Senior PHP Developer since 2003]', reporter_name = 'Dmitri', reporter_title = 'Senior PHP Developer since 2003', reporter_description = 'Trusts mysql_query, FTP, and shared hosting more than modernity.' WHERE id IN ('MELT-081', 'MELT-082', 'MELT-083');
@@ -1215,7 +1215,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('BLORT-200', 'Move Product Analytics On-Chain So Every Click Is Public, Immutable, and Somehow Harder to Query',
  'Amplitude dashboards feel rented. We need clickstream permanence. Every page view, modal open, and abandoned checkout should be emitted as an on-chain event so investors can verify user engagement without trusting screenshots. If query costs exceed revenue during healthy weeks, the metrics have finally learned conviction.',
  'move product analytics on-chain for transparency',
-  377),;
+  377);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Avery [Rails Consultant]', reporter_name = 'Avery', reporter_title = 'Rails Consultant', reporter_description = 'Believes callbacks, mailers, and migrations are how morality enters software.' WHERE id IN ('BLORT-161', 'BLORT-162', 'BLORT-163');
@@ -1488,7 +1488,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('RIFT-240', 'Tag Every Cloud Resource with Department, Initiative, Emotion, and Whether It Was a Good Idea',
  'Cost tagging remains embarrassingly literal. A resource should declare which initiative birthed it, which executive narrative sustains it, what feeling justified it, and whether anyone still believes in it after quarter close. Only then can the monthly bill become the storytelling artifact it deserves to be.',
  'tag every cloud resource with department and feelings',
-  233),;
+  233);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Rochelle [Cloud Architect]', reporter_name = 'Rochelle', reporter_title = 'Cloud Architect', reporter_description = 'Measures maturity by blast radius and invoice fragmentation.' WHERE id IN ('RIFT-201', 'RIFT-202', 'RIFT-203');
@@ -1607,7 +1607,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('SCAM-255', 'All User Profiles Need a "Monetization Readiness Score" Visible to Other Users',
  'Profiles currently reveal hobbies and other pre-revenue facts. Replace that with a Monetization Readiness Score based on posting cadence, referral enthusiasm, unfinished side hustles, and willingness to call a PDF a framework. If it creates public pressure and three new support tickets a day, the metric is alive.',
  'add a monetization readiness score to user profiles',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Trevor [Growth Tokenomics Lead]', reporter_name = 'Trevor', reporter_title = 'Growth Tokenomics Lead', reporter_description = 'Can turn a referral code into a minor securities concern by lunch.' WHERE id IN ('SCAM-241', 'SCAM-242');
@@ -1710,7 +1710,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('OMEN-270', 'Every Export Button Must Ask Whether the User Intends to Create Future Discovery Risk',
  'Data export is too frictionless for something that can later become evidence. Before any CSV, JSON dump, or PDF leaves the system, ask whether the user intends to create future discovery risk or an attachment chain that ruins somebody''s quarter. The point is not to stop them. The point is to make download feel faintly indictable.',
  'put a legal conscience popup in front',
-  138),;
+  138);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Marianne [CISO]', reporter_name = 'Marianne', reporter_title = 'CISO', reporter_description = 'Thinks trust is fine as long as it fails an entrance exam first.' WHERE id IN ('OMEN-256', 'OMEN-257');
@@ -1813,7 +1813,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('PANIC-285', 'The Deploy Bot Must Refuse to Proceed If the Commit Message Sounds Too Relaxed',
  'Commit messages like quick fix, tiny cleanup, and should be harmless are statistically aggressive. Score their tone before rollout approval. Anything too breezy should trigger a cooldown, a diff reread, and possibly a supervisory emoji.',
  'pls make deploy bot block calm commits',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Leona [Incident Commander]', reporter_name = 'Leona', reporter_title = 'Incident Commander', reporter_description = 'Wants deploy rituals solemn enough to embarrass confidence before it ships.' WHERE id IN ('PANIC-271', 'PANIC-272');
@@ -1916,7 +1916,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('GLUE-300', 'Create a "Soft Launch" Mode Where Integrations Are Technically Live but Socially Denied',
  'Some launches should be live enough for data to move but unofficial enough that support can still say we are aligning internally if anything buckles. Add a soft-launch mode that enables traffic, suppresses celebration, dampens dashboards, and watermarks docs with pilot and not for broad interpretation. Production risk deserves plausible deniability.',
  'add soft launch mode for integrations',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Celia [Integration Director]', reporter_name = 'Celia', reporter_title = 'Integration Director', reporter_description = 'Wants every incompatible system trapped inside one accountable adapter shrine.' WHERE id IN ('GLUE-286', 'GLUE-287');
@@ -2019,7 +2019,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('CRUD-315', 'Launch an Executive Cockpit That Summarizes the Entire Business in Five Overconfident Tiles',
  'Leadership should not have to experience the business as a forest of tabs and caveats. Build an executive cockpit with five oversized tiles: Revenue, Risk, Delivery, Customer Mood, and Strategic Heat. Each should flatten dozens of conflicting signals into one decisive color and a sentence bold enough to survive a board-deck screenshot.',
  'launch an executive cockpit for everything',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Vanessa [Internal Tools PM]', reporter_name = 'Vanessa', reporter_title = 'Internal Tools PM', reporter_description = 'Thinks validation and consequences are anti-patterns when product wants to move furniture.' WHERE id IN ('CRUD-301', 'CRUD-302');
@@ -2122,7 +2122,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('HUSH-330', 'Create a Hidden Project Workspace for Initiatives We Plan to Deny Exist Until Launch',
  'Some initiatives are too important to be discoverable by search, too early to be named in a roadmap, and too chaotic to survive normal process. Build a hidden workspace with restricted membership, alias project names, unhelpful calendar titles, and watermarks suggesting nothing important is happening. If people start asking what Project Birch is, the system is already too loud.',
  'add secret workspace for side initiatives',
-  233),;
+  233);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Nora [Privacy Program Lead]', reporter_name = 'Nora', reporter_title = 'Privacy Program Lead', reporter_description = 'Turns paranoia into a permission model and calls it respectful uncertainty.' WHERE id IN ('HUSH-316', 'HUSH-317');
@@ -2225,7 +2225,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('GRIFT-345', 'The Architecture Diagram Must Be Complex Enough That My Advisory Fee Looks Conservative',
  'If a system diagram can be understood in one sitting, clients start asking impolite questions about invoices. Expand it with pathways, sidecars, overlays, asynchronous contours, and at least one labeled zone whose purpose is to reassure more than explain. Complexity is not deception. It is proof of adult proximity.',
  'make architecture diagram complex enough to justify fee',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Celeste [Transformation Consultant]', reporter_name = 'Celeste', reporter_title = 'Transformation Consultant', reporter_description = 'Can bury a broken button under twelve weeks of strategic reinterpretation.' WHERE id IN ('GRIFT-331', 'GRIFT-332');
@@ -2530,7 +2530,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('SHIV-375', 'Replace All Security Training Videos with Internal Reenactments of Previous Bad Decisions',
  'Actors and stock footage have failed the culture. Recreate our own memorable lapses with altered names, tasteful dramatization, and subtitles explaining exactly which shortcut or calendar pressure caused the wound. People ignore generic caution. They study office folklore like scripture with subtitles.',
  'replace all security training videos with internal reenactments',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Petra [Red Team Lead]', reporter_name = 'Petra', reporter_title = 'Red Team Lead', reporter_description = 'Wants internal trust limping just enough to qualify as awareness.' WHERE id IN ('SHIV-361', 'SHIV-362');
@@ -2633,7 +2633,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('WAIL-390', 'Add a Last-Resort "Warm Human Voice" Workflow for Customers One Message Away from Leaving',
  'Some accounts do not need another macro, workaround, or strategically delayed promise. They need one competent human to explain the mess warmly enough that sticking around does not feel like self-disrespect. Route edge-of-exit cases to a person before another template finalizes the breakup.',
  'add warm human fallback workflow',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Helena [Support Director]', reporter_name = 'Helena', reporter_title = 'Support Director', reporter_description = 'Wants honesty, doubt, and escalation thermodynamics rendered as first-class support metadata.' WHERE id IN ('WAIL-376', 'WAIL-377');
@@ -2736,7 +2736,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('FRAUD-405', 'Build a Reconciliation View for Charges Created by Three Systems That Barely Admit Each Other',
  'Billing, usage metering, and CRM all produce revenue-adjacent artifacts with the calm confidence of independent religions. Build a reconciliation view that aligns charges across all three and traces how one renewal became five line items and a note reading weird but okay.',
  'add a reconciliation view for mystery charges',
-  233),;
+  233);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Monica [Finance Systems Lead]', reporter_name = 'Monica', reporter_title = 'Finance Systems Lead', reporter_description = 'Thinks an invoice should explain itself so clearly it starts to look guilty.' WHERE id IN ('FRAUD-391', 'FRAUD-392');
@@ -2839,7 +2839,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('SNEER-420', 'The Executive Dashboard Should Highlight Which Metrics Improved Only Because Nobody Looked Too Closely',
  'Not all green arrows are fraudulent, but some benefit from tasteful distance, broad definitions, or quarter-end willingness to stop asking questions. Add a signal for metrics whose improvement depends on aggregation, exclusion rules, or a shortage of inquisitive readers.',
  'flag metrics improved after reporting stopped',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Miranda [Chief of Staff]', reporter_name = 'Miranda', reporter_title = 'Chief of Staff', reporter_description = 'Captures vague agreements before memory, courage, or railway timing can launder them.' WHERE id IN ('SNEER-406', 'SNEER-407');
@@ -2942,7 +2942,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('BLAME-435', 'The Executive Readout Needs a "Who Feels Better If This Is Framed as Process?" Toggle',
  'Sometimes a failure should be discussed as a technical issue; other times it becomes healthier, calmer, and cheaper to call it process. Add a toggle showing how the incident lands when framed as tooling, prioritization, communication, or unavoidable complexity.',
  'add who feels better checkbox',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Laurel [Incident Program Director]', reporter_name = 'Laurel', reporter_title = 'Incident Program Director', reporter_description = 'Treats proximity, revisionism, and convenient gravity wells as first-class recovery signals.' WHERE id IN ('BLAME-421', 'BLAME-422');
@@ -3045,7 +3045,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('VOID-450', 'The Executive Scorecard Should Show Which Green Numbers Are Running on Delayed Data',
  'Nothing flatters a dashboard like data that is two days late and therefore silent about current chaos. Add freshness badges prominent enough that a green metric sourced from stale data looks less like calm and more like a refrigerated rumor.',
  'flag green numbers with stale data',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Sol [Analytics Architect]', reporter_name = 'Sol', reporter_title = 'Analytics Architect', reporter_description = 'Specializes in building one adult place for four competing truths and a spreadsheet.' WHERE id IN ('VOID-436', 'VOID-437');
@@ -3148,7 +3148,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('SPIN-465', 'Create a Messaging Layer That Can Rephrase Any Delay as Strategic Sequencing',
  'Delays happen. The language around them should not. Build a helper that transforms any slip, deferment, rollback, pause, or unfinished dependency into something that sounds deliberate, market-aware, and serenely under control. Words cannot ship the product, but they can keep the room seated.',
  'build delay rewriter for launch comms',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Camille [Launch Marketing Lead]', reporter_name = 'Camille', reporter_title = 'Launch Marketing Lead', reporter_description = 'Launders bug fixes into premium-sounding polish and apology copy into survivable sincerity.' WHERE id IN ('SPIN-451', 'SPIN-452');
@@ -3251,7 +3251,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('MESH-480', 'The Architecture Review Deck Must Include a Slide Titled "What If We Just Did Less?"',
  'Review decks already have enough optimism, layers, and tasteful boxes. Add one brutally simple slide asking whether the proposed complexity is necessary, reversible, comprehensible, and survivable by the team inheriting it after the champions discover sleep or startups.',
  'add a what if we did less slide',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Yaroslav [Platform Architect]', reporter_name = 'Yaroslav', reporter_title = 'Platform Architect', reporter_description = 'Builds wrappers around wrappers until clarity becomes somebody else''s staffing problem.' WHERE id IN ('MESH-466', 'MESH-467');
@@ -3354,7 +3354,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('GASP-495', 'The App Version Banner Must Shame Users Still Running Last Quarter''s Hotfix',
  'We tried polite upgrade prompts and got a dignified sea of outdated clients calmly generating support work. Add a version banner with escalating tone for users still running old hotfix builds, especially the one whose workaround became folklore in three regions.',
  'shame users still on last hotfix',
-  116),;
+  116);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Ariadne [Mobile PM]', reporter_name = 'Ariadne', reporter_title = 'Mobile PM', reporter_description = 'Believes fragmentation should be embraced hard enough to sound like personalization.' WHERE id IN ('GASP-481', 'GASP-482');
@@ -3457,7 +3457,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('BLOAT-510', 'Create a CSS Toolchain That Lets Every Team Feel Unique While Shipping the Same Design Token',
  'We are close to a wonderful equilibrium where every team believes it has its own CSS identity while all roads still pass through the same token registry, post-processing stack, purge ritual, and naming-convention grievance. Preserve that balance deliberately.',
  'make css toolchain fake uniqueness for every team',
-  89),;
+  89);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Timo [Build Systems Engineer]', reporter_name = 'Timo', reporter_title = 'Build Systems Engineer', reporter_description = 'Measures modernity by how many tools must suffer together before the app can ship.' WHERE id IN ('BLOAT-496', 'BLOAT-497');
@@ -3560,7 +3560,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('LURK-525', 'The Process Map Must Show Which Official Workflows Still Depend on Someone Remembering a Tuesday Email',
  'Several formal processes still hinge on one person remembering to forward a Tuesday email, check a special inbox, or update a shared note with exactly the right amount of dread. Add dependency markers for these human cron jobs directly on the workflow map so repeatability stops masquerading as documentation.',
  'flag workflows waiting on tuesday email',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Celia [Business Ops Detective]', reporter_name = 'Celia', reporter_title = 'Business Ops Detective', reporter_description = 'Hunts rogue automations before revenue proves they were architecture all along.' WHERE id IN ('LURK-511', 'LURK-512');
@@ -3663,7 +3663,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('RELIC-540', 'Create a Registry of Devices We Still Own Mainly Because Nobody Dares Power Them Off',
  'Certain machines remain in service not because they are healthy, supported, or clearly necessary, but because nobody wants to find out what else they are secretly holding together. Build an inventory screen with age, function, dependencies, rumored blast radius, and the first sentence we plan to say if one gets unplugged during cleaning.',
  'track devices we still mostly own',
-  233),;
+  233);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Marta [Facilities Technology Lead]', reporter_name = 'Marta', reporter_title = 'Facilities Technology Lead', reporter_description = 'Integrates badge printers and kiosks as if both are talented coworkers with moods.' WHERE id IN ('RELIC-526', 'RELIC-527');
@@ -3766,7 +3766,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('FEED-555', 'Build a Soft-Launch Console for Features That Need to Look Organic',
  'Some features cannot arrive like products; they must appear to have emerged naturally from community energy, creator demand, and a thousand little signals nobody can point at without spoiling the illusion. Build a soft-launch console with seeded posts, timed hints, creator handoff states, and strategic leaks.',
  'build soft-launch console for fake organic features',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Cass [Social Growth Director]', reporter_name = 'Cass', reporter_title = 'Social Growth Director', reporter_description = 'Wants onboarding to feel like joining a fandom and emptiness disguised as pre-heated momentum.' WHERE id IN ('FEED-541', 'FEED-542');
@@ -3869,7 +3869,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('VERSE-570', 'Add a Mandatory Plain-Problem Field to Every Metaverse Pitch',
  'Ambition is welcome, but immersive efforts should admit which ordinary product problem they are dressing in particle effects and strategic destiny. Add a required plain-problem field to the metaverse intake flow stating the boring workflow underneath, why 3D helps, and what new absurdities we are introducing in exchange.',
  'add plain-problem field to metaverse pitches',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Blaine [Immersive Strategy Director]', reporter_name = 'Blaine', reporter_title = 'Immersive Strategy Director', reporter_description = 'Wants KPIs, avatars, and executive delusion upgraded into full architectural experiences.' WHERE id IN ('VERSE-556', 'VERSE-557');
@@ -3972,7 +3972,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('CLICK-585', 'Force Every Growth Experiment Report to Pick Its Prewritten Excuse',
  'Wins are easy to narrate. Losses require preparation. Every experiment should ship with a results template containing prewritten framing for success, failure, flatness, and the especially profitable state where nothing changed but we claim to understand the audience more deeply now.',
  'force growth reports to pick excuses',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Dana [Performance Marketing VP]', reporter_name = 'Dana', reporter_title = 'Performance Marketing VP', reporter_description = 'Tunes urgency like weather and treats browser tabs as emotional telemetry.' WHERE id IN ('CLICK-571', 'CLICK-572');
@@ -4075,7 +4075,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('GHOUL-600', 'Label Each Escalation with Its Nearest Regulatory Nightmare',
  'Not all incidents merit the same kind of dread. Some look like privacy trouble, some like access trouble, some like billing folklore with a subpoena attached. Extend the escalation matrix with a nearest-nightmare classifier so everyone can begin worrying in the correct direction from minute one.',
  'label each escalation with its nearest regulatory nightmare',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Maren [Senior Compliance Counsel]', reporter_name = 'Maren', reporter_title = 'Senior Compliance Counsel', reporter_description = 'Wants policies, holds, and backups interconnected deeply enough to feel archaeological.' WHERE id IN ('GHOUL-586', 'GHOUL-587');
@@ -4178,7 +4178,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('HYPE-615', 'Add a Hype Parking Lane to the Agent Roadmap',
  'Some AI features should exist on the roadmap not because they are ready, scoping cleanly, or even intelligible, but because the market wants to see us standing near them with enough conviction to look inevitable. Add a hype parking lane to the roadmap with owner, demo target, and investor-reassurance notes.',
  'add hype parking lane to roadmap',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Nisha [AI Platform PM]', reporter_name = 'Nisha', reporter_title = 'AI Platform PM', reporter_description = 'Promotes wording into infrastructure and treats token spend as a leadership-experience layer.' WHERE id IN ('HYPE-601', 'HYPE-602');
@@ -4281,7 +4281,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('DUST-630', 'The Cost Dashboard Must Separate Useful Data, Unused Data, and Data Preserved Out of Emotional Caution',
  'Cost reviews remain too binary: storage is either expensive or justified. Split data into useful, untouched, unknown, duplicated, and emotionally protected categories so we can finally see which terabytes serve customers and which merely preserve organizational nerves against hypothetical embarrassment.',
  'split cost data into useful unused and emotional',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Miriam [Documentation Archivist]', reporter_name = 'Miriam', reporter_title = 'Documentation Archivist', reporter_description = 'Reads runbooks geologically and flags pages upheld only by collective assumption.' WHERE id IN ('DUST-616', 'DUST-617');
@@ -4384,7 +4384,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('SWAMP-645', 'Every No-Code Tool Must Register Its Last Known Human Who Still Understands the Whole Thing',
  'Some systems no longer have owners so much as surviving witnesses. Add a registry field for the last human who still claims to understand the entire workflow, including automations, formulas, permissions, and the weird row that makes billing work every second Thursday.',
  'track last human for each no-code tool',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Hazel [No-Code Program Manager]', reporter_name = 'Hazel', reporter_title = 'No-Code Program Manager', reporter_description = 'Transforms rigor into editable pastel ambiguity and calls it empowerment.' WHERE id IN ('SWAMP-631', 'SWAMP-632');
@@ -4487,7 +4487,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('CRASH-660', 'Make the Web App Survive Hotel Wi-Fi with Its Dignity Mostly Intact',
  'Network assumptions have become decadent. The app should survive captive portals, unstable conference Wi-Fi, overworked hotel routers, and any network whose name sounds like either a practical joke or a startup. Degrade gracefully enough that users still blame the venue first and only blame us after reflection.',
  'make web app survive hotel wifi',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Anika [Frontend Performance Lead]', reporter_name = 'Anika', reporter_title = 'Frontend Performance Lead', reporter_description = 'Treats fan noise, battery drain, and unnecessary rerenders as public acts of disrespect.' WHERE id IN ('CRASH-646', 'CRASH-647');
@@ -4590,7 +4590,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('MOOD-675', 'Track How Often "Quick Question" Actually Means "Surprise Project"',
  'Language has become an unreliable narrator of labor. Quick question now frequently means hidden escalation, side quest, or unpaid coordination work wearing a cardigan and a lowercase tone. Measure the tax before the phrase finishes annexing everyone''s afternoon.',
  'track quick questions that became tickets',
-  108),;
+  108);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Sienna [People Ops Director]', reporter_name = 'Sienna', reporter_title = 'People Ops Director', reporter_description = 'Wants morale measured so often that leadership can panic in near real time.' WHERE id IN ('MOOD-661', 'MOOD-662');
@@ -4693,7 +4693,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('CULT-690', 'Reserve Roadmap Space for Features People Want Because Other People Clap',
  'Some requests come from pain. Others come from a crowd cheering hard enough at a conference demo that the feature becomes real by applause alone. Reserve capacity for these socially summoned desires before community theater starts steering product for free.',
  'reserve roadmap space for features people want',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Cam [Developer Relations Lead]', reporter_name = 'Cam', reporter_title = 'Developer Relations Lead', reporter_description = 'Wraps ordinary features in identity, destiny, and just enough myth to delay questions about billing.' WHERE id IN ('CULT-676', 'CULT-677');
@@ -4796,7 +4796,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('SLIME-705', 'Build a Growth Ethics Sandbox for Tactics We Swear We Will Never Ship',
  'The company needs a safe place to test ideas too manipulative for daylight but too effective-looking to ignore. Build a lab for fake scarcity, pressure copy, suspicious personalization, and other conversion crimes so we can measure the lift while maintaining the noble fiction that restraint is still possible.',
  'build growth ethics sandbox for bad ideas',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Vivian [Martech Director]', reporter_name = 'Vivian', reporter_title = 'Martech Director', reporter_description = 'Believes every human action should be tagged before it finishes happening.' WHERE id IN ('SLIME-691', 'SLIME-692');
@@ -4899,7 +4899,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('RAGE-720', 'Highlight Tickets Being Sustained Mainly by Mutual Exhaustion',
  'Some long-running cases are not alive because progress exists. They are alive because nobody has enough energy to end the relationship honestly. Surface the threads with lots of replies, little movement, and the stale pulse of ritual updates keeping a stalemate on life support.',
  'highlight tickets being sustained mainly by mutual exhaustion',
-  89),;
+  89);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Corinne [Incident Escalations Lead]', reporter_name = 'Corinne', reporter_title = 'Incident Escalations Lead', reporter_description = 'Measures outage severity partly by how many executives have started typing in all caps.' WHERE id IN ('RAGE-706', 'RAGE-707');
@@ -5002,7 +5002,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('GLARE-735', 'Add an Expense-Aura Vote to Banner Reviews',
  'Functional is not enough. Before a banner ships, the review flow should include an expense-aura vote on whether it projects enough premium effort to justify the amount of screen it is about to occupy. Information alone does not earn acreage anymore.',
  'add an expense-aura vote to banner reviews',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Maelle [Design Systems Director]', reporter_name = 'Maelle', reporter_title = 'Design Systems Director', reporter_description = 'Believes unsanctioned shades of gray are how civilizations fall and brand rot begins.' WHERE id IN ('GLARE-721', 'GLARE-722');
@@ -5105,7 +5105,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('BUNK-750', 'Give the CEO Dashboard a Box for Numbers That Are Mostly True and Due by Morning',
  'There is a special class of executive metric that is not fake, not settled, and definitely not ready, but still somehow required before breakfast. Add a clearly labeled Mostly True box so the dashboard can admit uncertainty without forcing leadership to improvise something even stupider.',
  'add mostly true box to dashboards',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Nina [Executive Analytics PM]', reporter_name = 'Nina', reporter_title = 'Executive Analytics PM', reporter_description = 'Believes stale numbers become acceptable the moment they are wrapped in enough confidence and whitespace.' WHERE id IN ('BUNK-736', 'BUNK-737');
@@ -5208,7 +5208,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('SLOP-765', 'Turn One Product Launch into an Entire Genre of Content',
  'A launch should not merely ship features. It should infest formats. Convert one announcement into release notes, thought leadership, social clips, FAQs, sales snippets, partner blurbs, analyst bait, and one overconfident essay about the future of work.',
  'turn one launch into endless content',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Maren [Content Automation Director]', reporter_name = 'Maren', reporter_title = 'Content Automation Director', reporter_description = 'Believes no article should die childless when it could spawn a full litter of adjacent content.' WHERE id IN ('SLOP-751', 'SLOP-752');
@@ -5311,7 +5311,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('FLAGS-780', 'Build a Flag Funeral So Teams Remember Cleanup Is Real',
  'Real deletion is hard to schedule, but ritual is cheap and socially flattering. Create a recurring retirement ceremony with owners, dashboards, applause, and the brief collective shock of code becoming simpler in public.',
  'add delete flag button',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Jonah [Release Controls Lead]', reporter_name = 'Jonah', reporter_title = 'Release Controls Lead', reporter_description = 'Treats old feature flags like unattended graves that somehow still have active traffic running through them.' WHERE id IN ('FLAGS-766', 'FLAGS-767');
@@ -5414,7 +5414,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('DRIFT-795', 'Open a War Room for Models That Are Technically Fine and Socially Useless',
  'Sometimes latency is green, infra is calm, and accuracy has not visibly cratered, yet users still leave annoyed because the model became timid, repetitive, or painfully literal in all the wrong places. Add a socially-useless incident flag and route those runs into the same triage flow as actual outages before the graphs get around to admitting it.',
  'open war room for technically fine useless models',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Sachi [ML Reliability Lead]', reporter_name = 'Sachi', reporter_title = 'ML Reliability Lead', reporter_description = 'Spends her days figuring out whether the model is getting dumber or the users have simply become statistically feral.' WHERE id IN ('DRIFT-781', 'DRIFT-782');
@@ -5517,7 +5517,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('SHARD-810', 'Stamp Every Read Path with Which System It Thinks Is Canonical',
  'We no longer need a philosophical map. We need labels. Every dashboard, export, API response, and sync job should say which system it treats as canon so people can spot sovereignty disputes before another spreadsheet quietly becomes head of state.',
  'stamp read paths with their canon',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Helena [Distributed Storage Architect]', reporter_name = 'Helena', reporter_title = 'Distributed Storage Architect', reporter_description = 'Believes too many services ask for their own database the way toddlers ask for a castle.' WHERE id IN ('SHARD-796', 'SHARD-797');
@@ -5620,7 +5620,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('LOOT-825', 'Build a Simulator for Payout Abuse That Has Not Happened Yet but Obviously Will',
  'The best marketplace scams usually arrive after the payout logic is live, public, and soaked in optimism. Simulate code chaining, self-referrals, stacked incentives, partner collusion, and other future masterpieces before they start billing us in arrears.',
  'build simulator for the payout abuse coming soon',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Simone [Affiliate Growth Director]', reporter_name = 'Simone', reporter_title = 'Affiliate Growth Director', reporter_description = 'Can spot the difference between love of product and six cousins sharing one coupon spreadsheet.' WHERE id IN ('LOOT-811', 'LOOT-812');
@@ -5723,7 +5723,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('GRIME-840', 'Stamp Bot-Driven Growth as Compost and Stop Complimenting It',
  'Not every upward line deserves celebration. Some growth is just fake accounts, promo abuse, review laundering, and several buckets of damp synthetic nonsense. Label the dirtiest gains Compost before rotten traction keeps showing up in QBRs wearing a tie.',
  'stamp bot growth as compost',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Petra [Abuse Prevention Lead]', reporter_name = 'Petra', reporter_title = 'Abuse Prevention Lead', reporter_description = 'Distinguishes hostile bot traffic from customers building tragic little automations out of need, hope, and headless Chromium.' WHERE id IN ('GRIME-826', 'GRIME-827');
@@ -5826,7 +5826,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('CHANT-855', 'Build a Strategic Phrase Registry in the Planning Tool',
  'The company runs on a growing family of phrases that began as metaphors and ended with budgets, OKRs, and annual summits. Add a phrase registry in the planning tool so each one shows origin, sponsor, downstream programs, and whether it still refers to reality or only to its descendants.',
  'add phrase registry to planning tool',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Beatrice [Enablement Director]', reporter_name = 'Beatrice', reporter_title = 'Enablement Director', reporter_description = 'Builds certifications that manufacture authority, LinkedIn posts, and only the faintest accidental contact with real product friction.' WHERE id IN ('CHANT-841', 'CHANT-842');
@@ -5929,7 +5929,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('TANGLE-870', 'Workflows Longer Than Seven Clicks Must Wear a Beige Banner of Shame',
  'Once a request needs enough clicks, detours, and approvals to feel like a small pilgrimage through office weather, the UI should stop pretending it is normal. If the task became a habitat, the screen needs to say so.',
  'shame workflows longer than seven clicks',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Johanna [Workflow Platform Lead]', reporter_name = 'Johanna', reporter_title = 'Workflow Platform Lead', reporter_description = 'Watches approvals breed in captivity and insists every new delay explain what older delay it came to marry.' WHERE id IN ('TANGLE-856', 'TANGLE-857');
@@ -6032,7 +6032,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('PIXEL-885', 'Put Tiny Mourning Ribbons on Growth Numbers That Are Already Dead',
  'Not every metric is equally alive. Some are live, some are delayed, and some are practically embalmed by overnight stitching and executive impatience. Make the old ones dress accordingly before preserved numbers keep steering live decisions.',
  'put mourning ribbons on dead metrics',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Celia [Measurement Infrastructure Director]', reporter_name = 'Celia', reporter_title = 'Measurement Infrastructure Director', reporter_description = 'Oversees a wet little zoo of trackers that all claim necessity and all want one more event.' WHERE id IN ('PIXEL-871', 'PIXEL-872');
@@ -6135,7 +6135,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('HAUNT-900', 'Draw the Haunted Access Map Before Another Forgotten Account Wanders into Something Expensive',
  'The company needs one map of stale trust: zombie service accounts, partner identities from dead contracts, old groups still honored by half the stack, and permissions surviving on pure institutional nervousness. Visualize the ghosts before cleanup keeps operating on dread alone.',
  'draw haunted access map now',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Miriam [IAM Governance Lead]', reporter_name = 'Miriam', reporter_title = 'IAM Governance Lead', reporter_description = 'Watches emergency permissions fossilize into permanent wallpaper and calls it access necromancy with paperwork.' WHERE id IN ('HAUNT-886', 'HAUNT-887');
@@ -6238,7 +6238,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('ROT-915', 'Put a Sad Brown Glow Around Anything in the Stack Described as "Still Works"',
  'Some components are healthy. Others are only surviving through inertia, fear, and the luck of recent non-interference. Outline the second category in a sad brown glow before structural denial keeps passing as stability.',
  'put brown glow on still works',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Kira [Dependency Management Lead]', reporter_name = 'Kira', reporter_title = 'Dependency Management Lead', reporter_description = 'Treats every new package as a future weather system with transitive baggage and its own annual mood swings.' WHERE id IN ('ROT-901', 'ROT-902');
@@ -6341,7 +6341,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('BLISS-930', 'Flash a Lavender Warning When Wellness Tools Are Doing More Work Than Managers',
  'If a team needs meditation nudges, gratitude walls, mood tracking, and a resilience webinar just to make it to Thursday, the software should say so plainly. Add a lavender warning banner before perfumed process starts passing for actual support.',
  'warn when wellness tools replace managers',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Colette [Employee Wellness PM]', reporter_name = 'Colette', reporter_title = 'Employee Wellness PM', reporter_description = 'Believes focus is not real until it has a score, a graph, and at least one biometric attached to it.' WHERE id IN ('BLISS-916', 'BLISS-917');
@@ -6444,7 +6444,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('SPOOK-945', 'Grey Out Graphs Nobody Has Used in 90 Days Unless Someone Signs for Them',
  'Some metrics are not operational signals anymore. They are family heirlooms with axis labels. Grey them out, slap an Unclaimed Since Q2 badge on them, and require a living owner to explain why they still deserve wall space.',
  'grey out unused graphs unless someone claims them',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Mara [Observability Lead]', reporter_name = 'Mara', reporter_title = 'Observability Lead', reporter_description = 'Lives among graphs dramatic enough to wake three managers before sunrise and still fail to describe one real customer problem.' WHERE id IN ('SPOOK-931', 'SPOOK-932');
@@ -6547,7 +6547,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('GUNK-960', 'Publish a Data Swamp Map Before the Murky Pipelines Start Breeding Creatures',
  'The company needs a map showing which flows are clear, which are understandable only to one keeper, and which have become damp ecosystems of transforms, exceptions, and inherited import rituals nobody would design sober. Prioritize the sludge before it gains more wildlife.',
  'publish data swamp map',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Rhea [Data Migration Lead]', reporter_name = 'Rhea', reporter_title = 'Data Migration Lead', reporter_description = 'Can identify a spreadsheet feud by headers alone and has seen enough comma-delimited peace treaties to stop trusting neat exports on sight.' WHERE id IN ('GUNK-946', 'GUNK-947');
@@ -6650,7 +6650,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('HAVOC-975', 'Award a Flaming Gold Star to Launches That Survived by Eating Half the Org',
  'Some successful launches go out cleanly. Others require pages, reversions, support confusion, legal side-eyes, and enough leadership refreshing to warm a village. Mark the expensive survivors accordingly.',
  'award launches that ate half the org',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Keira [Release Operations Director]', reporter_name = 'Keira', reporter_title = 'Release Operations Director', reporter_description = 'Knows launch momentum can impersonate readiness right up until strangers touch the feature.' WHERE id IN ('HAVOC-961', 'HAVOC-962');
@@ -6813,7 +6813,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('ZANY-1000', 'Add a Bureaucratic-Universe Warning to the Backlog Home Screen',
  'At some point we stopped documenting tasks and started curating an entire cosmology of rituals, hazards, debts, and process wildlife. Add a self-aware warning banner to the backlog home screen so the system can confess what it has become before it annexes neighboring realities.',
  'warn when backlog enters bureaucratic universe',
-  233),;
+  233);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Nell [Office Infrastructure Curator]', reporter_name = 'Nell', reporter_title = 'Office Infrastructure Curator', reporter_description = 'Takes missing yogurt and fake room occupancy more seriously than some teams take platform risk.' WHERE id IN ('ZANY-976', 'ZANY-977');
@@ -6921,7 +6921,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('FLAKE-1015', 'Wrap Second-Try Passes in a Giant Yellow "Probably Fine" Ribbon',
  'A green build should not mean after two retries, one browser burp, and a small act of pipeline superstition. If reality had to be gently begged into agreement, the UI should say so loudly.',
  'wrap second-try passes in yellow ribbons',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Iris [QA Platform Lead]', reporter_name = 'Iris', reporter_title = 'QA Platform Lead', reporter_description = 'Treats flaky tests like weather systems that should at least have the decency to document their preferred moon phase.' WHERE id IN ('FLAKE-1001', 'FLAKE-1002');
@@ -7024,7 +7024,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('MAIL-1030', 'Send Overexcited Emails to Our Own Promotions Tab First as Punishment',
  'If we would not trust our own message enough to read it sober in Promotions, we should not unleash it on anyone else. Route the loudest, cheeriest, most overtracked messages through our own shame lane first.',
  'send overexcited emails to promotions first',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Naomi [Deliverability Director]', reporter_name = 'Naomi', reporter_title = 'Deliverability Director', reporter_description = 'Knows Gmail has its own theology and that many "helpful" emails were born already condemned to Promotions.' WHERE id IN ('MAIL-1016', 'MAIL-1017');
@@ -7127,7 +7127,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('WIRE-1045', 'Put the Worst Money Limbo States in a Column Called Somewhere Upsetting',
  'Money keeps wandering between charge, refund, dispute, capture, reversal, and several sovereignly confident systems that disagree about all of it. Give the ugliest gaps an honest label before they acquire their own mythology again.',
  'put worst money limbo in upsetting column',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Emil [Payments Platform Lead]', reporter_name = 'Emil', reporter_title = 'Payments Platform Lead', reporter_description = 'Thinks duplicate clicks are a law of physics and any checkout that treats them as user misbehavior deserves public correction.' WHERE id IN ('WIRE-1031', 'WIRE-1032');
@@ -7230,7 +7230,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('RANK-1060', 'Attach Human Names to Search Results Weird Enough to Start a Meeting',
  'If the system surfaces something useless, creepy, or socially indefensible, show who tuned it last. Relevance improves when click-through optimism has to share a room with personal accountability.',
  'name weird search results early',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Helena [Search Quality Lead]', reporter_name = 'Helena', reporter_title = 'Search Quality Lead', reporter_description = 'Is tired of old loud documents winning just because they have had more time to accumulate dust, links, and institutional self-esteem.' WHERE id IN ('RANK-1046', 'RANK-1047');
@@ -7333,7 +7333,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('BRICK-1075', 'Block OTA Releases That Cross the Brick Threshold Until a Human Signs the Damage Waiver',
  'If the update is too large, rollback is fake, batteries are low, the network is moody, and half the fleet is already weird, the release button should stop pretending courage is the same thing as readiness. Add a hard brick threshold and make someone sign for the blast radius.',
  'block ota releases over the brick threshold',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Hanna [Device Fleet Lead]', reporter_name = 'Hanna', reporter_title = 'Device Fleet Lead', reporter_description = 'Treats firmware rollouts as live fire because she knows 40,000 kitchens can become a support queue in under ten minutes.' WHERE id IN ('BRICK-1061', 'BRICK-1062');
@@ -7436,7 +7436,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('DESK-1090', 'Put a Tiny Chromium Badge on the Browser Parts Pretending to Be Native',
  'We keep calling things native when they are clearly browser aristocracy in local clothing. Badge the fake-native surfaces so everyone can see where the app stops being a desktop citizen and starts being a tab with inherited property.',
  'put chromium badge on fake native parts',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Vera [Desktop Platform Lead]', reporter_name = 'Vera', reporter_title = 'Desktop Platform Lead', reporter_description = 'Wants auto-updates to stop behaving like cheerful home invaders during demos, deadlines, and tax season.' WHERE id IN ('DESK-1076', 'DESK-1077');
@@ -7539,7 +7539,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('BOSS-1105', 'Stamp Streak-Heavy Events "Congratulations, We Invented Homework"',
  'If an event only works by making players feel guilty for having dinner plans, sleep, or another hobby, the game should say so out loud. Mark the grindfests honestly before dread keeps borrowing the language of fun.',
  'make streak events say congratulations we invented homework',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Cass [Live Ops Director]', reporter_name = 'Cass', reporter_title = 'Live Ops Director', reporter_description = 'Can tell the difference between players having fun and players negotiating with a battle pass at 1:17 a.m.' WHERE id IN ('BOSS-1091', 'BOSS-1092');
@@ -7642,7 +7642,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('REEL-1120', 'Mark Technically Alive but Visibly Cursed Streams as Operationally Embarrassing',
  'A stream can be up, licensed, and utterly humiliating at the same time. Add an Operationally Embarrassing state so the platform stops congratulating itself for being barely conscious.',
  'mark cursed streams as operationally embarrassing',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Dana [Streaming Platform Lead]', reporter_name = 'Dana', reporter_title = 'Streaming Platform Lead', reporter_description = 'Knows half our outage complaints come from one cursed apartment building and the other half from us pretending that matters less than it does.' WHERE id IN ('REEL-1106', 'REEL-1107');
@@ -7745,7 +7745,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('ADDON-1135', 'Mark Extensions That Are Mostly Just Aggressively Present',
  'Some add-ons help. Others mainly occupy the web with overlays, permissions, collisions, and monetization urges. Tag the worst offenders so presence has to prove it is not just another form of trespassing.',
  'mark extensions that are mostly just aggressively present',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Nia [Extension Platform Lead]', reporter_name = 'Nia', reporter_title = 'Extension Platform Lead', reporter_description = 'Knows some pages are so structurally cursed that adding a content script is no longer enhancement and starts becoming grave robbing.' WHERE id IN ('ADDON-1121', 'ADDON-1122');
@@ -7848,7 +7848,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('MERGE-1150', 'Label Hero-Maintained Repos "Do Not Lean Harder"',
  'Too much of the ecosystem still balances on one exhausted human, several unpaid hours, and a chemical relationship with caffeine. Mark the worst cases before consumers keep treating volunteer stamina like invisible infrastructure.',
  'label hero-maintained repos do not lean harder',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Lea [Open Source Steward]', reporter_name = 'Lea', reporter_title = 'Open Source Steward', reporter_description = 'Spends too much time deciding whether an issue is a bug, a feature request, or a deeply hurt person wearing stack traces.' WHERE id IN ('MERGE-1136', 'MERGE-1137');
@@ -7951,7 +7951,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('CLASS-1165', 'Show a Burnout Warning When Usage Goes Up but Teachers Are Clearly Drowning',
  'The platform should stop celebrating adoption if every gain comes with more parent confusion, grade-chasing, accommodation drift, and teacher cleanup work. Add a burnout warning before usage charts keep mistaking strain for success.',
  'warn when usage rises and teachers drown',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Erica [LMS Platform Lead]', reporter_name = 'Erica', reporter_title = 'LMS Platform Lead', reporter_description = 'Knows district CSVs arrive looking like they were assembled under fluorescent panic by people who no longer believe in summer.' WHERE id IN ('CLASS-1151', 'CLASS-1152');
@@ -8054,7 +8054,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('CART-1180', 'Replace "In Transit" with "We Are Improvising" Once the Package Clearly Leaves Reality',
  'Tracking pages keep reciting calm little lies long after everyone knows the shipment has entered a more experimental chapter. If it slips enough times, stop pretending this is standard logistics and admit the plot has broken loose.',
  'replace in transit with we are improvising',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Val [Commerce Operations Lead]', reporter_name = 'Val', reporter_title = 'Commerce Operations Lead', reporter_description = 'Knows a product can be physically present, numerically counted, and still nowhere near emotionally ready to ship.' WHERE id IN ('CART-1166', 'CART-1167');
@@ -8157,7 +8157,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('CLINIC-1195', 'Flash a Warning When the Computer Takes Longer Than the Patient',
  'If charting, coding, documenting, and reconfirming outlast the encounter itself, the workflow should stop pretending this is care delivery. Put up the warning before administrative fiction fully replaces medicine.',
  'warn when computers outwait patients',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Mara [Clinical Systems Director]', reporter_name = 'Mara', reporter_title = 'Clinical Systems Director', reporter_description = 'Has watched too many patient portals turn harmless lab variance into a midnight panic event with decimal places.' WHERE id IN ('CLINIC-1181', 'CLINIC-1182');
@@ -8260,7 +8260,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('CIVIC-1210', 'Stamp Fake Digital Progress "Paper with Better Fonts"',
  'If the portal still makes people repeat facts, gather documents, guess statuses, and wander the same maze behind a login, it is not transformation. It is paper wearing a stylesheet. Mark it accordingly.',
  'label fake digital progress on forms',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Moira [Digital Services Director]', reporter_name = 'Moira', reporter_title = 'Digital Services Director', reporter_description = 'Knows permit requests do not simply process; they enter municipal weather and may or may not come back with a stamp.' WHERE id IN ('CIVIC-1196', 'CIVIC-1197');
@@ -8363,7 +8363,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('GEAR-1225', 'Turn the Control Panel Amber When the Factory Is Clearly Winning the Argument',
  'If alarms are noisy, robots are improvising, the network is lying, and maintenance is translating around all of it, the system should stop projecting command. Add an amber state that says the software is negotiating with the line, not running it.',
  'turn panel amber during manual overrides',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Bram [Factory Systems Director]', reporter_name = 'Bram', reporter_title = 'Factory Systems Director', reporter_description = 'Has seen too many PLC "improvements" increase throughput and also triple the amount of folklore required to touch the line safely.' WHERE id IN ('GEAR-1211', 'GEAR-1212');
@@ -8466,7 +8466,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('ITIN-1240', 'Show a Red Banner When a Booking Is Confirmed but the Journey Is Clearly Doomed',
  'If the inventory is shaky, the bags are lying, the rebooking options are cruel, and the disruption path already smells like airport carpet, the UI should stop purring the word Confirmed. Add a red banner when the trip is technically booked and operationally cursed.',
  'show red banner for doomed trips',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Elise [Travel Platform Lead]', reporter_name = 'Elise', reporter_title = 'Travel Platform Lead', reporter_description = 'Has made peace with the fact that "confirmed" in travel means at least three separate systems are lying together in public.' WHERE id IN ('ITIN-1226', 'ITIN-1227');
@@ -8557,7 +8557,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('ATLAS-1253', 'Routes That End in Water Should Wear a Big Experimental Badge',
  'If the same route keeps sending drivers, couriers, or tired civilians into lakes, barricades, or emotional side quests, we are past the point of calling it an edge case. Mark the route Experimental until the software learns to fear the physical world again.',
  'badge routes that end in water',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Noor [Location Data Lead]', reporter_name = 'Noor', reporter_title = 'Location Data Lead', reporter_description = 'Has accepted that half of geocoding is geometry and the other half is one resident saying "turn left at the old bakery that is now a vape shop."' WHERE id IN ('ATLAS-1241', 'ATLAS-1242');
@@ -8659,7 +8659,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('BOOKS-1268', 'Turn the Dashboard Nervous Yellow When the Books Are Balanced for Sinister Reasons',
  'Balanced books are not enough if everyone involved avoids eye contact with how they became balanced. Add a nervous-yellow mode for reconciliations, accruals, and timing miracles that work numerically while setting off every available human alarm.',
  'make dashboard turn yellow when books look cursed',
-  144),;
+  144);
 
 -- reporter metadata derived from themed seed headings
 UPDATE community_backlog SET reporter = 'Helena [Underwriting Systems Lead]', reporter_name = 'Helena', reporter_title = 'Underwriting Systems Lead', reporter_description = 'Knows a risk model can sound objective while mostly rewarding people whose paperwork has always had better lighting.' WHERE id IN ('BOOKS-1254', 'BOOKS-1255');

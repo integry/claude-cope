@@ -1,22 +1,11 @@
 import { API_BASE } from "../config";
+import type { CommunityBacklogTicket, PlayableBacklogTicket } from "@claude-cope/shared/backlogTickets";
 import type { Message } from "./Terminal";
 
-type BacklogTicket = {
-  id: string;
-  reporter?: string | null;
-  reporter_name?: string | null;
-  reporter_title?: string | null;
-  reporter_description?: string | null;
-  title: string;
-  description: string;
-  technical_debt: number;
-  kickoff_prompt: string;
-};
-
 /** The pending ticket offered to the user, waiting for /accept */
-let pendingTicketOffer: BacklogTicket | null = null;
+let pendingTicketOffer: PlayableBacklogTicket | null = null;
 
-export function getPendingOffer(): BacklogTicket | null {
+export function getPendingOffer(): PlayableBacklogTicket | null {
   return pendingTicketOffer;
 }
 
@@ -41,15 +30,19 @@ export function extractSender(description: string): { sender: string; body: stri
  */
 export async function fetchRandomTicketPrompt(
   setHistory: React.Dispatch<React.SetStateAction<Message[]>>,
+  proKeyHash?: string,
 ): Promise<void> {
   try {
-    const res = await fetch(`${API_BASE}/api/tickets/community`);
+    const res = await fetch(`${API_BASE}/api/tickets/community`, {
+      headers: proKeyHash ? { "x-pro-key-hash": proKeyHash } : undefined,
+    });
     if (!res.ok) return;
 
-    const tickets = (await res.json()) as BacklogTicket[];
-    if (!tickets.length) return;
+    const tickets = (await res.json()) as CommunityBacklogTicket[];
+    const playableTickets = tickets.filter((ticket): ticket is PlayableBacklogTicket => !ticket.is_locked);
+    if (!playableTickets.length) return;
 
-    const ticket = tickets[Math.floor(Math.random() * tickets.length)]!;
+    const ticket = playableTickets[Math.floor(Math.random() * playableTickets.length)]!;
     pendingTicketOffer = ticket;
 
     const reward = (ticket.technical_debt * 10).toLocaleString("en-US");

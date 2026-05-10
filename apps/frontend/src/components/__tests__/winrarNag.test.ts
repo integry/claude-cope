@@ -26,9 +26,11 @@ vi.mock("../../config", () => ({
 }));
 
 vi.mock("../../supabaseClient", () => ({ supabase: {} }));
-const { submitChatMessageMock, testConfig } = vi.hoisted(() => ({
+const { submitChatMessageMock, testConfig, fetchRandomTicketPromptMock, setMockGameStateRef } = vi.hoisted(() => ({
   submitChatMessageMock: vi.fn(),
   testConfig: { initialQuotaPercent: 0 },
+  fetchRandomTicketPromptMock: vi.fn(),
+  setMockGameStateRef: { current: null as null | React.Dispatch<React.SetStateAction<Record<string, unknown>>> },
 }));
 
 vi.mock("../CommandLine", async () => {
@@ -105,9 +107,11 @@ vi.mock("../../hooks/useGameState", async () => {
           chatHistory: typeof updater === "function" ? updater(prev.chatHistory) : updater,
         }));
       }, []);
+      setMockGameStateRef.current = setState as React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
       return {
         state,
         setState,
+        getCurrentState: () => state,
         addActiveTD: () => undefined,
         buyGenerator: () => false,
         buyUpgrade: () => false,
@@ -136,7 +140,7 @@ vi.mock("../chatApi", () => ({
 vi.mock("../slashCommandExecutor", () => ({ executeSlashCommand: () => undefined }));
 vi.mock("../../hooks/profileSync", () => ({ applyServerProfile: (prev: unknown) => prev }));
 vi.mock("../keyCommandHandler", () => ({ handleKeyCommand: async () => false }));
-vi.mock("../ticketPrompt", () => ({ fetchRandomTicketPrompt: () => undefined }));
+vi.mock("../ticketPrompt", () => ({ fetchRandomTicketPrompt: fetchRandomTicketPromptMock }));
 vi.mock("../filterChatHistory", () => ({ filterChatHistory: (history: unknown[]) => history }));
 vi.mock("../TerminalFooter", () => ({ TerminalFooter: () => null }));
 vi.mock("../Ticker", () => ({ default: () => null }));
@@ -183,7 +187,7 @@ vi.mock("../terminalInputHandlers", () => ({
 }));
 
 import { TerminalOverlays } from "../TerminalOverlays";
-import Terminal from "../Terminal";
+import Terminal, { STARTUP_TICKET_PROMPT_DELAY_MS } from "../Terminal";
 import { shouldShowNag } from "../winrarNag";
 import type { GameState, Message } from "../../hooks/useGameState";
 
@@ -454,6 +458,8 @@ describe("WinRAR nag: Terminal integration", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-10T00:00:00.000Z"));
     submitChatMessageMock.mockReset();
+    fetchRandomTicketPromptMock.mockReset();
+    setMockGameStateRef.current = null;
     window.history.pushState(null, "", "/");
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
       configurable: true,
@@ -604,6 +610,32 @@ describe("WinRAR nag: Terminal integration", () => {
 
     expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
     expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
+  });
+
+  it("waits briefly for pro entitlement before fetching the startup ticket prompt", async () => {
+    await renderTerminal();
+
+    expect(fetchRandomTicketPromptMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(STARTUP_TICKET_PROMPT_DELAY_MS - 1);
+      await Promise.resolve();
+    });
+
+    expect(fetchRandomTicketPromptMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      setMockGameStateRef.current?.((prev: Record<string, unknown>) => ({ ...prev, proKeyHash: "pro-hash" }));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(STARTUP_TICKET_PROMPT_DELAY_MS);
+      await Promise.resolve();
+    });
+
+    expect(fetchRandomTicketPromptMock).toHaveBeenCalledTimes(1);
+    expect(fetchRandomTicketPromptMock).toHaveBeenCalledWith(expect.any(Function), "pro-hash");
   });
 
   it("disables terminal input while the upgrade overlay is open", async () => {
