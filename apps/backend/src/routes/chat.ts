@@ -195,6 +195,25 @@ const BROKEN_REPLY_FALLBACKS = [
   "The response escaped into a sidecar and left only a smoking crater where the help was supposed to be.",
 ] as const;
 
+function normalizeReplySeedText(content: string): string {
+  return content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function extractConcreteUserNextToken(text: string): string | null {
+  return (
+    text.match(/`([^`]{2,40})`/)?.[1]
+    ?? text.match(/\b0x[0-9A-Fa-f]+\b/)?.[0]
+    ?? text.match(/\boffset\s+\d+\b/i)?.[0]
+    ?? text.match(/\brestartPolicy\b/)?.[0]
+    ?? text.match(/\borphaned pods?\b/i)?.[0]
+    ?? text.match(/\blegacy code\b/i)?.[0]
+    ?? text.match(/\bConfigMap\b/)?.[0]
+    ?? text.match(/\bKubernetes\s+\d+(?:\.\d+)?\b/i)?.[0]
+    ?? text.match(/\bmagic(?:=true)?\b/i)?.[0]
+    ?? text.match(/\b[a-z]+-[a-z0-9_.-]{3,}\b/i)?.[0]
+  );
+}
+
 function hashTextForFallback(text: string): number {
   let hash = 0;
   for (let i = 0; i < text.length; i += 1) {
@@ -212,28 +231,18 @@ function buildBrokenReplyFallback(content: string): string {
 // This fallback intentionally handles a broad set of content patterns.
 // eslint-disable-next-line complexity
 function buildFallbackUserNextMessage(content: string): string {
-  const text = content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
-  const token =
-    text.match(/`([^`]{2,40})`/)?.[1]
-    ?? text.match(/\b0x[0-9A-Fa-f]+\b/)?.[0]
-    ?? text.match(/\boffset\s+\d+\b/i)?.[0]
-    ?? text.match(/\brestartPolicy\b/)?.[0]
-    ?? text.match(/\borphaned pods?\b/i)?.[0]
-    ?? text.match(/\blegacy code\b/i)?.[0]
-    ?? text.match(/\bConfigMap\b/)?.[0]
-    ?? text.match(/\bKubernetes\s+\d+(?:\.\d+)?\b/i)?.[0]
-    ?? text.match(/\bmagic(?:=true)?\b/i)?.[0]
-    ?? text.match(/\b[a-z]+-[a-z0-9-]{3,}\b/i)?.[0];
+  const text = normalizeReplySeedText(content);
+  const token = extractConcreteUserNextToken(text);
 
   if (token) {
-    if (/^0x/i.test(token)) return `Why ${token} of all things?`;
-    if (/^offset\s+\d+/i.test(token)) return `Who cursed ${token}?`;
-    if (/^restartPolicy$/i.test(token)) return "Who chose restartPolicy Never?";
-    if (/orphaned pods?/i.test(token)) return "Which pod got orphaned?";
-    if (/legacy code/i.test(token)) return "Is the legacy file the bad one?";
+    if (/^0x/i.test(token)) return `What breaks on ${token}?`;
+    if (/^offset\s+\d+/i.test(token)) return `What uses ${token}?`;
+    if (/^restartPolicy$/i.test(token)) return "Who set restartPolicy Never?";
+    if (/orphaned pods?/i.test(token)) return "Which pod lost its owner?";
+    if (/legacy code/i.test(token)) return "Can we delete the legacy file?";
     if (/^magic(?:=true)?$/i.test(token)) return "Who enabled the magic flag?";
-    if (/^[a-z]+-[a-z0-9-]{3,}$/i.test(token)) return `Is ${token} the cursed bit?`;
-    return `Why is ${token} involved?`;
+    if (/^[a-z]+-[a-z0-9_.-]{3,}$/i.test(token)) return `Who added ${token}?`;
+    return `What breaks if I remove ${token}?`;
   }
 
   if (/logs?/i.test(text)) return "Which part is lying, then?";
@@ -261,67 +270,56 @@ function normalizeComparableUserNextMessage(text: string | null | undefined): st
 // eslint-disable-next-line complexity
 function buildAlternateUserNextMessage(content: string, previous: string | null | undefined): string {
   const previousNormalized = normalizeComparableUserNextMessage(previous);
-  const text = content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
-  const token =
-    text.match(/`([^`]{2,40})`/)?.[1]
-    ?? text.match(/\b0x[0-9A-Fa-f]+\b/)?.[0]
-    ?? text.match(/\boffset\s+\d+\b/i)?.[0]
-    ?? text.match(/\brestartPolicy\b/)?.[0]
-    ?? text.match(/\borphaned pods?\b/i)?.[0]
-    ?? text.match(/\blegacy code\b/i)?.[0]
-    ?? text.match(/\bConfigMap\b/)?.[0]
-    ?? text.match(/\bKubernetes\s+\d+(?:\.\d+)?\b/i)?.[0]
-    ?? text.match(/\bmagic(?:=true)?\b/i)?.[0]
-    ?? text.match(/\b[a-z]+-[a-z0-9_.-]{3,}\b/i)?.[0];
+  const text = normalizeReplySeedText(content);
+  const token = extractConcreteUserNextToken(text);
 
   const candidates = token
     ? /^0x/i.test(token)
       ? [
-          `Why ${token} of all things?`,
-          `What is ${token} doing there?`,
-          `Is ${token} the bad part?`,
+          `What breaks on ${token}?`,
+          `Who introduced ${token}?`,
+          `Can we strip out ${token}?`,
         ]
       : /^offset\s+\d+/i.test(token)
         ? [
-            `Who cursed ${token}?`,
-            `Why is ${token} involved?`,
-            `What is ${token} doing there?`,
+            `What uses ${token}?`,
+            `Who added ${token}?`,
+            `Can we strip out ${token}?`,
           ]
         : /^restartPolicy$/i.test(token)
           ? [
               "Who chose restartPolicy Never?",
-              "Why is restartPolicy involved?",
-              "Is restartPolicy the bad part?",
+              "Can we delete restartPolicy Never?",
+              "What breaks after restartPolicy Never?",
             ]
           : /orphaned pods?/i.test(token)
             ? [
-                "Which pod got orphaned?",
-                "Why are orphaned pods involved?",
-                "What are the orphaned pods doing there?",
+                "Which pod lost its owner?",
+                "Who orphaned the pod?",
+                "Can we delete the orphaned pod?",
               ]
             : /legacy code/i.test(token)
               ? [
-                  "Is the legacy file the bad one?",
-                  "Why is legacy code involved?",
-                  "What is the legacy file doing there?",
+                  "Can we delete the legacy file?",
+                  "Who still uses the legacy file?",
+                  "What breaks if we rip it out?",
                 ]
               : /^magic(?:=true)?$/i.test(token)
                 ? [
                     "Who enabled the magic flag?",
-                    "Why is magic=True involved?",
-                    "Is the magic flag the bad part?",
+                    "What breaks if we remove magic?",
+                    "Can we kill the magic flag?",
                   ]
                 : /^[a-z]+-[a-z0-9_.-]{3,}$/i.test(token)
                   ? [
-                      `Is ${token} the cursed bit?`,
-                      `Why is ${token} involved?`,
-                      `What is ${token} doing there?`,
+                      `Who added ${token}?`,
+                      `What breaks if we remove ${token}?`,
+                      `Can we delete ${token}?`,
                     ]
                   : [
-                      `Why is ${token} involved?`,
-                      `What is ${token} doing there?`,
-                      `Is ${token} the bad part?`,
                       `Who dragged in ${token}?`,
+                      `What breaks if we remove ${token}?`,
+                      `Can we delete ${token}?`,
                     ]
     : Array.from({ length: UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length }, (_, offset) =>
         UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
@@ -348,23 +346,47 @@ function isGenericUserNextMessage(text: string): boolean {
       "show me the detail",
       ...UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.map((msg) => msg.toLowerCase().replace(/[.!?]+$/g, "")),
     ].includes(normalized) ||
+    isBannedUserNextMessagePattern(text) ||
     /show\s+(?:me\s+)?the\s+cursed\s+detail/i.test(text)
+  );
+}
+
+function isBannedUserNextMessagePattern(text: string): boolean {
+  const normalized = normalizeComparableUserNextMessage(text);
+  return (
+    /^why is .+ involved$/.test(normalized) ||
+    /^why are .+ involved$/.test(normalized) ||
+    /^what is .+ doing there$/.test(normalized) ||
+    /^what are .+ doing there$/.test(normalized) ||
+    /^why .+ of all things$/.test(normalized)
+  );
+}
+
+function shouldReplaceUserNextMessage(text: string | null | undefined, previousUserNextMessage?: string | null): boolean {
+  if (!text?.trim()) return true;
+  if (isGenericUserNextMessage(text)) return true;
+  return (
+    normalizeComparableUserNextMessage(text) ===
+    normalizeComparableUserNextMessage(previousUserNextMessage)
   );
 }
 
 function ensureUserNextMessageTag(content: string, previousUserNextMessage?: string | null): string {
   const match = content.match(/\[USER_NEXT_MESSAGE:\s*([^\]]*)\]/i);
-  if (match && match[1].trim() && !isGenericUserNextMessage(match[1])) {
-    if (
-      normalizeComparableUserNextMessage(match[1]) !==
-      normalizeComparableUserNextMessage(previousUserNextMessage)
-    ) {
-      return content;
-    }
+  if (match && !shouldReplaceUserNextMessage(match[1], previousUserNextMessage)) {
+    return content;
   }
 
   const fallback = `[USER_NEXT_MESSAGE: ${buildAlternateUserNextMessage(content, previousUserNextMessage)}]`;
   if (match) {
+    return content.replace(/\[USER_NEXT_MESSAGE:\s*[^\]]*\]/i, fallback);
+  }
+  return `${content.trim()}\n${fallback}`;
+}
+
+function replaceUserNextMessageTag(content: string, nextMessage: string): string {
+  const fallback = `[USER_NEXT_MESSAGE: ${nextMessage}]`;
+  if (/\[USER_NEXT_MESSAGE:\s*[^\]]*\]/i.test(content)) {
     return content.replace(/\[USER_NEXT_MESSAGE:\s*[^\]]*\]/i, fallback);
   }
   return `${content.trim()}\n${fallback}`;
@@ -615,6 +637,12 @@ type OpenRouterRequestBody = {
   temperature: number;
   top_p: number;
   provider?: { order: string[] };
+};
+
+type OpenRouterCallOptions = {
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
 };
 
 export function resolveProviderList(
@@ -907,20 +935,52 @@ type OpenRouterCallParams = {
   model: string;
   messages: { role: string; content: string }[];
   providers?: string[];
+  options?: OpenRouterCallOptions;
 };
 
-export async function callOpenRouter({ apiKey, model, messages, providers }: OpenRouterCallParams) {
+export async function callOpenRouter(params: OpenRouterCallParams): Promise<Response>;
+export async function callOpenRouter(
+  apiKey: string,
+  model: string,
+  messages: { role: string; content: string }[],
+  providers?: string[],
+  options: OpenRouterCallOptions = {},
+): Promise<Response>;
+export async function callOpenRouter(
+  apiKeyOrParams: string | OpenRouterCallParams,
+  model?: string,
+  messages?: { role: string; content: string }[],
+  providers?: string[],
+  options: OpenRouterCallOptions = {},
+): Promise<Response> {
+  const resolved =
+    typeof apiKeyOrParams === "string"
+      ? {
+          apiKey: apiKeyOrParams,
+          model: model!,
+          messages: messages!,
+          providers,
+          options,
+        }
+      : apiKeyOrParams;
+  const {
+    apiKey,
+    model: resolvedModel,
+    messages: resolvedMessages,
+    providers: resolvedProviders,
+  } = resolved;
+  const resolvedOptions = resolved.options ?? {};
   const requestBody: OpenRouterRequestBody = {
-    model,
-    messages,
-    max_tokens: 2000,
+    model: resolvedModel,
+    messages: resolvedMessages,
+    max_tokens: resolvedOptions.maxTokens ?? 2000,
     reasoning: { effort: "low" },
-    temperature: 0.9,
-    top_p: 0.9,
+    temperature: resolvedOptions.temperature ?? 0.9,
+    top_p: resolvedOptions.topP ?? 0.9,
   };
 
-  if (providers && providers.length > 0) {
-    requestBody.provider = { order: providers };
+  if (resolvedProviders && resolvedProviders.length > 0) {
+    requestBody.provider = { order: resolvedProviders };
   }
 
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -931,6 +991,129 @@ export async function callOpenRouter({ apiKey, model, messages, providers }: Ope
     },
     body: JSON.stringify(requestBody),
   });
+}
+
+function sanitizeGeneratedUserNextMessage(raw: string): string | null {
+  const extractedTag = raw.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/i)?.[1];
+  const firstLine = (extractedTag ?? raw)
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean);
+  if (!firstLine) return null;
+
+  const cleaned = firstLine
+    .replace(/^["'“”]+|["'“”]+$/g, "")
+    .replace(/[.!?,;:]+$/g, "")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .trim();
+  if (!cleaned) return null;
+
+  const limited = cleaned.split(/\s+/).slice(0, 8).join(" ");
+  return limited || null;
+}
+
+async function generateSuggestedUserNextMessage(
+  apiKey: string,
+  model: string,
+  providers: string[] | undefined,
+  chatMessages: { role: string; content: string }[],
+  assistantReply: string,
+  rank: string | undefined,
+  activeTicket: ChatBody["activeTicket"],
+  previousUserNextMessage?: string | null,
+): Promise<string | null> {
+  const recentMessages = chatMessages.slice(-4).map((msg) => ({
+    role: msg.role,
+    content: msg.content.slice(0, 220),
+  }));
+  const assistantBody = assistantReply
+    .replace(/\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g, "")
+    .trim()
+    .slice(0, 600);
+
+  const suggestionMessages = [
+    {
+      role: "system",
+      content: [
+        "Generate exactly one suggested next user chat message.",
+        "This is what a tired junior developer would type next to an ai coding agent.",
+        `The user's in-game rank is: ${rank ?? "Junior Code Monkey"}.`,
+        activeTicket?.title ? `They are currently stuck on ticket: ${activeTicket.title}.` : "",
+        "Lowercase only.",
+        "Max 8 words.",
+        "Prefer 4 to 7 words.",
+        "No brackets, labels, bullets, or explanation.",
+        "Make it actionable or code-shaped when possible.",
+        "Avoid 'why is x involved', 'what is x doing there', and generic filler.",
+        "Do not repeat the previous suggestion.",
+        "Prefer a single blunt command, impulsive question, or small panic confession.",
+        "Use one clause only.",
+        "Prefer starting with a concrete verb like add, fix, make, hook, log, run, restore, flip, block, or trigger.",
+        "Sound slightly clueless, rushed, and overconfident.",
+        "If the user already sounds panicked, keep that energy.",
+        "Avoid polished helper tone or calm project-manager wording.",
+        "Avoid filler like 'i need to' or 'we should'.",
+        "Do not say 'what now' or 'or something'.",
+      ].join(" "),
+    },
+    ...recentMessages,
+    {
+      role: "assistant",
+      content: assistantBody || "the system just explained a cursed technical problem",
+    },
+    {
+      role: "user",
+      content: `previous suggestion: ${previousUserNextMessage ?? "(none)"}\nwrite the next user message only`,
+    },
+  ];
+
+  try {
+    const response = await callOpenRouter(apiKey, model, suggestionMessages, providers, {
+      maxTokens: 40,
+      temperature: 0.7,
+      topP: 0.8,
+    });
+    if (!response.ok) {
+      let details = "";
+      try {
+        details = await response.text();
+      } catch {
+        details = "(failed to read body)";
+      }
+      console.log(
+        `[USER_NEXT_DEBUG] helper request failed status=${response.status} model=${model} details=${details.slice(0, 300)}`,
+      );
+      return null;
+    }
+    const data = await response.json() as ChatResponseData;
+    const raw = data.choices?.[0]?.message?.content ?? "";
+    const cleaned = sanitizeGeneratedUserNextMessage(raw);
+    if (!raw.trim()) {
+      console.log(
+        `[USER_NEXT_DEBUG] helper returned empty content model=${model} promptTokens=${data.usage?.prompt_tokens ?? "?"} completionTokens=${data.usage?.completion_tokens ?? "?"} finishReason=${data.choices?.[0]?.finish_reason ?? "?"}`,
+      );
+      return null;
+    }
+    if (!cleaned) {
+      console.log(
+        `[USER_NEXT_DEBUG] helper content could not be sanitized raw=${JSON.stringify(raw).slice(0, 200)}`,
+      );
+      return null;
+    }
+    if (shouldReplaceUserNextMessage(cleaned, previousUserNextMessage)) {
+      console.log(
+        `[USER_NEXT_DEBUG] helper suggestion rejected cleaned=${JSON.stringify(cleaned)} previous=${JSON.stringify(previousUserNextMessage ?? "")}`,
+      );
+      return null;
+    }
+    return cleaned;
+  } catch (error) {
+    console.log(
+      `[USER_NEXT_DEBUG] helper threw ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
 }
 
 /** Check free-user ownership of the target username via session→KV mapping. */
@@ -1213,11 +1396,31 @@ chat.post("/", async (c) => {
   const data = await orResponse.json() as ChatResponseData;
 
   if (data.choices?.[0]?.message?.content) {
-    data.choices[0].message.content = rewriteTutorialLeakIfNeeded(
+    let normalizedContent = rewriteTutorialLeakIfNeeded(
       body.chatMessages.filter((m) => m.role === "user").slice(-1)[0]?.content ?? "",
       normalizeReplyContent(data.choices[0].message.content, previousUserNextMessage),
       previousUserNextMessage,
     );
+
+    const currentSuggestion = extractUserNextMessage(normalizedContent);
+    if (shouldReplaceUserNextMessage(currentSuggestion, previousUserNextMessage)) {
+      const generatedSuggestion = await generateSuggestedUserNextMessage(
+        effectiveApiKey,
+        model,
+        providerList,
+        trimmedMessages,
+        normalizedContent,
+        rank,
+        body.activeTicket,
+        previousUserNextMessage,
+      );
+      normalizedContent = replaceUserNextMessageTag(
+        normalizedContent,
+        generatedSuggestion ?? buildAlternateUserNextMessage(normalizedContent, previousUserNextMessage),
+      );
+    }
+
+    data.choices[0].message.content = normalizedContent;
   }
 
   logChatDiagnostics(messages, data);

@@ -12,6 +12,10 @@ describe("SLASH_COMMAND_GROUPS", () => {
     expect(new Set(allCommands).size).toBe(allCommands.length);
   });
 
+  it("keeps /leaderboard available for Hall of Blame entry points", () => {
+    expect(ALL_SLASH_COMMANDS).toContain("/leaderboard");
+  });
+
   it("advertises backlog category arguments in the command menu", () => {
     const backlogItem = getSlashMenuItems("/b", 0, false).find((item) => item.type === "command" && item.value === "/backlog");
     expect(backlogItem).toMatchObject({ argumentHint: "[category]" });

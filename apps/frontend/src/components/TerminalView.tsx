@@ -58,6 +58,7 @@ type TerminalViewProps = OverlayVisibility & {
   slashQuery: string;
   slashIndex: number;
   handleSlashMenuSelect: (command: string) => void;
+  runSlashCommand: (command: string) => void;
   inputValue: string;
   suggestedReply: string | null;
   isProcessing: boolean;
@@ -117,6 +118,7 @@ export function TerminalView({
   slashQuery,
   slashIndex,
   handleSlashMenuSelect,
+  runSlashCommand,
   inputValue,
   suggestedReply,
   isProcessing,
@@ -155,6 +157,11 @@ export function TerminalView({
   upgradeNagDismissPhase,
   upgradeNagDismissEffect,
 }: TerminalViewProps) {
+  const handleTickerCommand = (command: string) => {
+    closeAllOverlaysPreservingNag();
+    runSlashCommand(command);
+  };
+
   return (
     <div
       className={terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}
@@ -164,7 +171,11 @@ export function TerminalView({
       }}
     >
       <div className="shrink-0">
-        <Ticker onExpand={() => { closeAllOverlaysPreservingNag(); setShowParty(true); }} onlineCount={onlineCount} />
+        <Ticker
+          onExpand={() => { closeAllOverlaysPreservingNag(); setShowParty(true); }}
+          onSlashCommand={handleTickerCommand}
+          onlineCount={onlineCount}
+        />
         {outageHp !== null && activeOutageScenario && <OutageBar outageHp={outageHp} scenario={activeOutageScenario} />}
         <HeaderBar
           rank={rank}
