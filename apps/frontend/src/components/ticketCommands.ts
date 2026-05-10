@@ -87,9 +87,49 @@ function formatBacklogFilterLine(category: string | null): string {
   return category ? `\n${formatBacklogFilterHeader(category)}` : "";
 }
 
-function formatBacklogInfoLine(category: string | null): string {
-  if (category) return "";
-  return "\n[INFO] Showing all tickets. Want specific trauma? Try: `/backlog MELT`";
+type BacklogCopy = {
+  filterHeader?: string;
+  infoLine?: string;
+  footer: string[];
+};
+
+function buildBacklogFooterLines(tickets: CommunityBacklogTicket[]): string[] {
+  const lockedTickets = tickets.filter((ticket) => ticket.is_locked);
+  if (lockedTickets.length === 0) {
+    return [`Type /take 1 through /take ${tickets.length} to claim a ticket.`];
+  }
+
+  return [
+    "Type /take <row> to claim an open ticket. Locked rows are teaser-only for free users.",
+    "",
+    "[UPGRADE REQUIRED] The following categories are locked behind Wallet Extraction:",
+    ...Array.from(new Map(
+      lockedTickets.map((ticket) => {
+        const prefix = ticket.category_prefix?.trim().replace(/^\[|\]$/g, "") || "PREMIUM";
+        const label = ticket.category_label?.trim() || "Specialized Suffering";
+        return [prefix, `🔒 ${prefix} (${label})`] as const;
+      }),
+    ).values()),
+    "",
+    "Run /upgrade to unlock 50+ specialized categories and premium suffering.",
+  ];
+}
+
+function buildBacklogCopy(
+  tickets: CommunityBacklogTicket[],
+  normalizedCategory: string | null,
+): BacklogCopy {
+  return {
+    filterHeader: normalizedCategory ? formatBacklogFilterHeader(normalizedCategory) : undefined,
+    infoLine: normalizedCategory
+      ? undefined
+      : "[INFO] Showing all tickets. Want specific trauma? Try: /backlog MELT",
+    footer: buildBacklogFooterLines(tickets),
+  };
+}
+
+function renderBacklogMarkdownText(text: string): string {
+  return text.replace(/(^|[\s(])(\/[a-z]+(?: [A-Z0-9<>-]+)?)/gi, "$1`$2`");
 }
 
 function replyEmptyBacklog(reply: Reply, normalizedCategory: string | null): boolean {
@@ -119,50 +159,6 @@ function formatBacklogTable(tickets: CommunityBacklogTicket[]): string {
   return [sep, header, sep, ...rows, sep].join("\n");
 }
 
-function formatBacklogFooter(tickets: CommunityBacklogTicket[]): string {
-  const lockedTickets = tickets.filter((ticket) => ticket.is_locked);
-  if (lockedTickets.length === 0) {
-    return `Type \`/take 1\` through \`/take ${tickets.length}\` to claim a ticket.`;
-  }
-
-  return [
-    "Type `/take <row>` to claim an open ticket. Locked rows are teaser-only for free users.",
-    "",
-    "[UPGRADE REQUIRED] The following categories are locked behind Wallet Extraction:",
-    ...Array.from(new Map(
-      lockedTickets.map((ticket) => {
-        const prefix = ticket.category_prefix?.trim().replace(/^\[|\]$/g, "") || "PREMIUM";
-        const label = ticket.category_label?.trim() || "Specialized Suffering";
-        return [prefix, ` 🔒 ${prefix} (${label})`] as const;
-      }),
-    ).values()),
-    "",
-    "Run `/upgrade` to unlock 50+ specialized categories and premium suffering.",
-  ].join("\n");
-}
-
-function formatBacklogFooterDisplay(tickets: CommunityBacklogTicket[]): string[] {
-  const lockedTickets = tickets.filter((ticket) => ticket.is_locked);
-  if (lockedTickets.length === 0) {
-    return [`Type /take 1 through /take ${tickets.length} to claim a ticket.`];
-  }
-
-  return [
-    "Type /take <row> to claim an open ticket. Locked rows are teaser-only for free users.",
-    "",
-    "[UPGRADE REQUIRED] The following categories are locked behind Wallet Extraction:",
-    ...Array.from(new Map(
-      lockedTickets.map((ticket) => {
-        const prefix = ticket.category_prefix?.trim().replace(/^\[|\]$/g, "") || "PREMIUM";
-        const label = ticket.category_label?.trim() || "Specialized Suffering";
-        return [prefix, `🔒 ${prefix} (${label})`] as const;
-      }),
-    ).values()),
-    "",
-    "Run /upgrade to unlock 50+ specialized categories and premium suffering.",
-  ];
-}
-
 function buildBacklogDisplayTicket(ticket: CommunityBacklogTicket, row: number): BacklogDisplayTicket {
   return {
     row,
@@ -179,12 +175,13 @@ function buildBacklogDisplayData(
   tickets: CommunityBacklogTicket[],
   normalizedCategory: string | null,
 ): BacklogDisplayData {
+  const copy = buildBacklogCopy(tickets, normalizedCategory);
   return {
     kind: "community-backlog",
     title: "[ COMMUNITY BACKLOG ]",
-    filterHeader: normalizedCategory ? formatBacklogFilterHeader(normalizedCategory) : undefined,
-    infoLine: normalizedCategory ? undefined : "[INFO] Showing all tickets. Want specific trauma? Try: /backlog MELT",
-    footer: formatBacklogFooterDisplay(tickets),
+    filterHeader: copy.filterHeader,
+    infoLine: copy.infoLine,
+    footer: copy.footer,
     tickets: tickets.map((ticket, index) => buildBacklogDisplayTicket(ticket, index + 1)),
   };
 }
@@ -195,9 +192,10 @@ function replyBacklogTickets(
   normalizedCategory: string | null,
 ): boolean {
   const table = formatBacklogTable(tickets);
-  const footer = formatBacklogFooter(tickets);
-  const filterHeader = formatBacklogFilterLine(normalizedCategory);
-  const infoLine = formatBacklogInfoLine(normalizedCategory);
+  const copy = buildBacklogCopy(tickets, normalizedCategory);
+  const footer = copy.footer.map(renderBacklogMarkdownText).join("\n");
+  const filterHeader = copy.filterHeader ? `\n${copy.filterHeader}` : "";
+  const infoLine = copy.infoLine ? `\n${renderBacklogMarkdownText(copy.infoLine)}` : "";
   reply({
     role: "system",
     content: `[📋 **COMMUNITY BACKLOG**]${filterHeader}${infoLine}\n\n\`\`\`\n${table}\n\`\`\`\n\n${footer}`,

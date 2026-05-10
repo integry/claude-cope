@@ -71,4 +71,48 @@ describe("OutputBlock backlog rendering", () => {
     expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "execute");
     expect(onSlashCommand).toHaveBeenCalledWith("/upgrade", "execute");
   });
+
+  it("re-renders when backlogDisplay changes even if fallback content stays the same", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const firstMessage: Message = {
+      role: "system",
+      content: "backlog fallback text",
+      backlogDisplay: {
+        kind: "community-backlog",
+        title: "[ COMMUNITY BACKLOG ]",
+        footer: ["Type /take 1 through /take 1 to claim a ticket."],
+        tickets: [
+          { row: 1, fullId: "BLAME-421", shortId: "BLAME-42", title: "First title", status: "OPEN", reward: "1440 TD", isLocked: false },
+        ],
+      },
+    };
+
+    const nextMessage: Message = {
+      ...firstMessage,
+      backlogDisplay: {
+        ...firstMessage.backlogDisplay!,
+        tickets: [
+          { row: 1, fullId: "BLAME-421", shortId: "BLAME-42", title: "Updated title", status: "OPEN", reward: "1440 TD", isLocked: false },
+        ],
+      },
+    };
+
+    act(() => {
+      root.render(
+        <OutputBlock message={firstMessage} isNew={false} promptString="❯ " username="tester" />,
+      );
+    });
+    expect(container.textContent).toContain("First title");
+
+    act(() => {
+      root.render(
+        <OutputBlock message={nextMessage} isNew={false} promptString="❯ " username="tester" />,
+      );
+    });
+    expect(container.textContent).toContain("Updated title");
+    expect(container.textContent).not.toContain("First title");
+  });
 });

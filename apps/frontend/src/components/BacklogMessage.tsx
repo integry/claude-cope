@@ -41,7 +41,7 @@ export function BacklogMessage({
           >
             <div className="hidden text-slate-300 md:block">[{ticket.row}]</div>
             <div className="hidden text-cyan-200 md:block">{ticket.shortId}</div>
-            <div className={`hidden min-w-0 text-cyan-100 md:block ${ticket.isLocked ? "text-amber-200" : ""}`}>
+            <div className={`hidden min-w-0 break-words text-cyan-100 [overflow-wrap:anywhere] md:block ${ticket.isLocked ? "text-amber-200" : ""}`}>
               {ticket.title}
             </div>
             <div className={`hidden md:block ${ticket.isLocked ? "text-amber-300" : "text-slate-300"}`}>
@@ -62,7 +62,7 @@ export function BacklogMessage({
                   <span className={ticket.isLocked ? "text-amber-300" : "text-cyan-200"}>{ticket.reward}</span>
                 </div>
               </div>
-              <div className={`min-w-0 text-cyan-100 ${ticket.isLocked ? "text-amber-200" : ""}`}>
+              <div className={`min-w-0 break-words text-cyan-100 [overflow-wrap:anywhere] ${ticket.isLocked ? "text-amber-200" : ""}`}>
                 {ticket.title}
               </div>
             </div>

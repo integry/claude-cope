@@ -238,6 +238,7 @@ function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps
   if (prev.message.role !== next.message.role) return false;
   if (prev.message.content !== next.message.content) return false;
   if (prev.message.cost !== next.message.cost) return false;
+  if (JSON.stringify(prev.message.backlogDisplay) !== JSON.stringify(next.message.backlogDisplay)) return false;
   if (prev.isNew !== next.isNew) return false;
   if (prev.promptString !== next.promptString) return false;
   if (!messagesEqual(prev.previousMessage, next.previousMessage)) return false;
