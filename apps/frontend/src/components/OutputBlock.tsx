@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import React, { useState, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
