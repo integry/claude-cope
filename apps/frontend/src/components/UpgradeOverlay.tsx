@@ -28,9 +28,17 @@ type UpgradeOverlayProps = {
   isBYOK: boolean;
   onDismiss: () => void;
   dismissMode?: "manual" | "nag";
+  dismissPhase?: "idle" | "closing";
 };
 
-function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss, dismissMode = "manual" }: UpgradeOverlayProps) {
+function UpgradeOverlay({
+  quotaPercent,
+  totalQuota,
+  isBYOK,
+  onDismiss,
+  dismissMode = "manual",
+  dismissPhase = "idle",
+}: UpgradeOverlayProps) {
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
@@ -52,6 +60,7 @@ function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss, dismissMo
         multiAvailable={multiAvailable}
         quotaLine={quotaLine}
         dismissMode={dismissMode}
+        dismissPhase={dismissPhase}
         onDismiss={onDismiss}
       />
       {/* Mobile: visible up to the shared max-width breakpoint */}
@@ -63,6 +72,7 @@ function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss, dismissMo
         quotaLine={quotaLine}
         onDismiss={onDismiss}
         dismissMode={dismissMode}
+        dismissPhase={dismissPhase}
       />
     </>
   );
@@ -80,6 +90,7 @@ function MobileLayout({
   quotaLine,
   onDismiss,
   dismissMode = "manual",
+  dismissPhase = "idle",
 }: LayoutProps & { onDismiss: () => void }) {
   const sectionStyle = { padding: "8px 12px" } as const;
   const hrStyle = {
@@ -135,15 +146,17 @@ function MobileLayout({
     );
   };
 
+  const isForcedClosing = dismissPhase === "closing";
+
   return (
     <div
-      className="upgrade-mobile fixed inset-0 z-50 flex items-center justify-center"
+      className={`upgrade-mobile fixed inset-0 z-50 flex items-center justify-center${isForcedClosing ? " upgrade-overlay-closing" : ""}`}
       onClick={dismissMode === "manual" ? onDismiss : undefined}
     >
-      <div className="absolute inset-0 bg-black opacity-70" />
+      <div className="absolute inset-0 bg-black opacity-70 upgrade-overlay-backdrop" />
 
       <div
-        className="relative z-10"
+        className={`relative z-10 upgrade-overlay-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
         style={{
           fontFamily: MONO_FONT,

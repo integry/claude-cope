@@ -20,6 +20,7 @@ export type LayoutProps = {
   multiAvailable: boolean;
   quotaLine: string;
   dismissMode?: "manual" | "nag";
+  dismissPhase?: "idle" | "closing";
   onDismiss?: () => void;
 };
 
@@ -30,6 +31,7 @@ export default function DesktopLayout({
   multiAvailable,
   quotaLine,
   dismissMode = "manual",
+  dismissPhase = "idle",
   onDismiss,
 }: LayoutProps) {
   const optionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
@@ -157,6 +159,7 @@ export default function DesktopLayout({
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
   const canPointerDismiss = dismissMode === "manual" && !!onDismiss;
+  const isForcedClosing = dismissPhase === "closing";
   useEffect(() => {
     if (availableOptionIds.length === 0) {
       setSelectedOptionId(null);
@@ -244,14 +247,14 @@ export default function DesktopLayout({
   return (
     <div
       ref={overlayRef}
-      className="upgrade-desktop fixed inset-0 z-50 flex items-center justify-center"
+      className={`upgrade-desktop fixed inset-0 z-50 flex items-center justify-center${isForcedClosing ? " upgrade-overlay-closing" : ""}`}
       onClick={canPointerDismiss ? onDismiss : undefined}
       onKeyDown={handleOverlayKeyDown}
       tabIndex={-1}
     >
-      <div className="absolute inset-0 bg-black opacity-70" />
+      <div className="absolute inset-0 bg-black opacity-70 upgrade-overlay-backdrop" />
       <pre
-        className="relative z-10 mx-4"
+        className={`relative z-10 mx-4 upgrade-overlay-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
         style={{
           fontFamily: MONO_FONT,

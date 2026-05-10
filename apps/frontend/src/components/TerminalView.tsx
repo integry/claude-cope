@@ -78,6 +78,7 @@ type TerminalViewProps = OverlayVisibility & {
   pendingNagCommand: string | null;
   handleUpgradeNagClose: () => void;
   handleManualUpgradeDismiss: () => void;
+  upgradeNagDismissPhase: "idle" | "closing";
 };
 
 export function TerminalView({
@@ -146,6 +147,7 @@ export function TerminalView({
   pendingNagCommand,
   handleUpgradeNagClose,
   handleManualUpgradeDismiss,
+  upgradeNagDismissPhase,
 }: TerminalViewProps) {
   return (
     <div
@@ -235,6 +237,7 @@ export function TerminalView({
         setHistory={setHistory}
         onUpgradeDismiss={pendingNagCommand !== null ? handleUpgradeNagClose : handleManualUpgradeDismiss}
         upgradeDismissMode={pendingNagCommand !== null ? "nag" : "manual"}
+        upgradeDismissPhase={upgradeNagDismissPhase}
       />
       <TerminalFooter closeAllOverlays={closeAllOverlaysPreservingNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
     </div>

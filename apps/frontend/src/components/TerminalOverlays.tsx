@@ -47,6 +47,7 @@ export function TerminalOverlays({
   setHistory,
   onUpgradeDismiss,
   upgradeDismissMode = "manual",
+  upgradeDismissPhase = "idle",
 }: {
   showStore: boolean;
   showLeaderboard: boolean;
@@ -80,6 +81,7 @@ export function TerminalOverlays({
   setHistory: Dispatch<SetStateAction<Message[]>>;
   onUpgradeDismiss: () => void;
   upgradeDismissMode?: "manual" | "nag";
+  upgradeDismissPhase?: "idle" | "closing";
 }) {
   return (
     <>
@@ -166,6 +168,7 @@ export function TerminalOverlays({
           isBYOK={Boolean(state.apiKey) && !state.proKey && !state.proKeyHash}
           onDismiss={onUpgradeDismiss}
           dismissMode={upgradeDismissMode}
+          dismissPhase={upgradeDismissPhase}
         />
       )}
     </>
