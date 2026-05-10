@@ -41,7 +41,6 @@ function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, 
   while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++);
   if (messageKeys.length > historyLength) messageKeys.length = historyLength;
 }
-
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
@@ -189,14 +188,9 @@ function Terminal() {
       startupTicketPromptTimeoutRef.current = null;
       const currentState = getCurrentState();
       if (currentState.hasSeenTicketPrompt || currentState.activeTicket) return;
-      setState((prev) => (
-        prev.hasSeenTicketPrompt || prev.activeTicket
-          ? prev
-          : { ...prev, hasSeenTicketPrompt: true }
-      ));
+      setState((prev) => (prev.hasSeenTicketPrompt || prev.activeTicket ? prev : { ...prev, hasSeenTicketPrompt: true }));
       void fetchRandomTicketPrompt(setHistory, currentState.proKeyHash);
     }, STARTUP_TICKET_PROMPT_DELAY_MS);
-
     return () => {
       if (startupTicketPromptTimeoutRef.current) {
         clearTimeout(startupTicketPromptTimeoutRef.current);
@@ -261,12 +255,10 @@ function Terminal() {
     setState((prev) => applyServerProfile(prev, profile, prev.pendingCompletedTaskIds.length > 0 ? { preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds } : {}));
   }, [setState]);
   const applySettledCompletedReward = useCallback((ticketId: string, profile?: ServerProfile) => {
-    setState((prev) => !profile
-      ? settlePendingCompletedRewards(prev, [ticketId])
-      : mergeAuthoritativeProfile(prev, profile, prev.pendingCompletedTaskIds.length > 0 ? {
-        preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
-        settledPendingCompletedRewardTaskIds: [ticketId],
-      } : {}));
+    setState((prev) => !profile ? settlePendingCompletedRewards(prev, [ticketId]) : mergeAuthoritativeProfile(prev, profile, prev.pendingCompletedTaskIds.length > 0 ? {
+      preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,
+      settledPendingCompletedRewardTaskIds: [ticketId],
+    } : {}));
   }, [setState]);
   const processCommandRef = useRef<(command: string) => void>(() => {});
   const processCommand = async (command: string) => {
@@ -284,10 +276,7 @@ function Terminal() {
       const completed = await runFreeTierDelay({ commandCount: newCount, userMessage, delayState, setHistory });
       if (!completed) return;
       freeTierDelayRef.current = { cancelled: false, timeoutId: null };
-    } else {
-      setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
-      setIsProcessing(true);
-    }
+    } else { setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]); setIsProcessing(true); }
     const contextMessages = filterChatHistory(historyRef.current);
     const chatMessages = isFreeTier ? contextMessages : [...contextMessages, { role: "user", content: userMessage.content }];
     const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({ getState: getCurrentState, updateTicketProgress, addActiveTD, playChime, setState, onCompletedRewardSettled: (ticketId, profile) => { applySettledCompletedReward(ticketId, profile); } });
@@ -359,10 +348,7 @@ function Terminal() {
     }
     setUpgradeNagDismissEffect(pickRandomUpgradeNagCloseEffect());
     setUpgradeNagDismissPhase("closing");
-    nagCloseTimeoutRef.current = setTimeout(() => {
-      nagCloseTimeoutRef.current = null;
-      finalizeUpgradeNagClose();
-    }, NAG_FORCED_CLOSE_MS);
+    nagCloseTimeoutRef.current = setTimeout(() => { nagCloseTimeoutRef.current = null; finalizeUpgradeNagClose(); }, NAG_FORCED_CLOSE_MS);
   }, [finalizeUpgradeNagClose, upgradeNagDismissPhase]);
   const handleUpgradeNagConfirmClose = useCallback(() => {
     dismissUpgradeOverlay();
