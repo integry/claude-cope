@@ -36,7 +36,6 @@ import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
 export type { Message };
 
 type TerminalViewProps = ComponentProps<typeof TerminalView>;
-const BACKLOG_REMINDER_EXEMPT_COMMANDS = new Set(["/backlog", "/accept", "/take", "/ticket"]);
 
 function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
   while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++);
@@ -183,8 +182,12 @@ function Terminal() {
   const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => !(cmd === "/store" && state.economy.totalTDEarned < 1000) && cmd.startsWith(slashQuery.toLowerCase()));
 
   const recordAcceptedAction = useCallback((baseCommand?: string) => {
+    if (baseCommand === "/clear") {
+      return;
+    }
+
     recordValidCommand(baseCommand);
-    if (!baseCommand || !BACKLOG_REMINDER_EXEMPT_COMMANDS.has(baseCommand)) {
+    if (!baseCommand) {
       recordMessageWithoutTicket();
     }
   }, [recordMessageWithoutTicket, recordValidCommand]);
