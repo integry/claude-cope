@@ -320,12 +320,10 @@ function Terminal() {
       nagArmedFromQuotaRef.current = false;
       setInputValue("");
       setHistoryIndex(-1);
-      const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
-      if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
       recordMessageWithoutTicket();
       submitPromptCommand(command);
     }
-  }, [checkQuotaAndHandleExhaustion, dismissUpgradeOverlay, recordMessageWithoutTicket, state.apiKey, submitPromptCommand]);
+  }, [dismissUpgradeOverlay, recordMessageWithoutTicket, submitPromptCommand]);
 
   const handleManualUpgradeDismiss = dismissUpgradeOverlay;
 

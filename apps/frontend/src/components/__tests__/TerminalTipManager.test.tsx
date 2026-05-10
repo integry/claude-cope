@@ -331,7 +331,7 @@ describe("Terminal tip-manager wiring", () => {
     expect(input!.value).toBe("");
   });
 
-  it("rechecks the quota gate before replaying a nagged prompt", async () => {
+  it("replays a nagged prompt immediately after dismissing the overlay", async () => {
     await renderTerminal();
 
     await submitCommand("first prompt");
@@ -345,11 +345,10 @@ describe("Terminal tip-manager wiring", () => {
       dismissButton!.click();
     });
 
-    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
-    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
-    expect(setShowUpgradeMock).toHaveBeenCalledTimes(3);
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(2);
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(2);
+    expect(setShowUpgradeMock).toHaveBeenCalledTimes(2);
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(2, false);
-    expect(setShowUpgradeMock).toHaveBeenNthCalledWith(3, true);
   });
 });
