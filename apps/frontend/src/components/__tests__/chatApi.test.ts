@@ -464,6 +464,49 @@ describe("submitChatMessage - achievement parsing", () => {
     expect(errorMsg!.content).toContain("Network error");
   });
 
+  it("fires onAccepted for successful prompts but not for quota-rejected prompts", async () => {
+    const setHistory = vi.fn();
+    const setIsProcessing = vi.fn();
+    const onAccepted = vi.fn();
+    const onQuotaExhausted = vi.fn();
+
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(createMockStreamResponse(["Accepted reply"]))
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 402,
+        json: () => Promise.resolve({ error: "quota exhausted" }),
+      } as Response);
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+      onAccepted,
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "still hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+      onAccepted,
+      onQuotaExhausted,
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(onAccepted).toHaveBeenCalledTimes(1);
+    expect(onQuotaExhausted).toHaveBeenCalledTimes(1);
+  });
+
   it("handles response with no achievements", async () => {
     const unlockAchievement = vi.fn();
     const setHistory = vi.fn();

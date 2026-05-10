@@ -186,6 +186,7 @@ export function submitChatMessage(opts: {
   onByokUsage?: (usage: { model: string; prompt_tokens?: number; completion_tokens?: number; cost?: number }) => void;
   onQuotaUpdate?: (quotaPercent: number) => void;
   onQuotaExhausted?: () => void;
+  onAccepted?: () => void;
   onProfileUpdate?: (profile: ServerProfile) => void;
   onError?: () => void;
   signal?: AbortSignal;
@@ -263,6 +264,7 @@ export function submitChatMessage(opts: {
   requestPromise
     .then(async (res) => {
       if (await handleChatErrorResponse(res, setHistory, opts.onQuotaExhausted, onError)) return;
+      opts.onAccepted?.();
 
       const parsed = await parseChatResponseBody(res, setHistory, opts.addActiveTD, opts.onProfileUpdate);
       let { rawReply } = parsed;

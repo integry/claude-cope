@@ -62,7 +62,9 @@ export interface SlashCommandContext {
   queueSlashCommandAccounting?: (baseCommand: string) => void;
 }
 
-export const SLASH_COMMAND_ACCOUNTING_POLICY: Record<string, "tracked" | "conditional" | "excluded"> = {
+type SlashCommandAccountingPolicy = "tracked" | "conditional";
+
+export const SLASH_COMMAND_ACCOUNTING_POLICY: Record<string, SlashCommandAccountingPolicy> = {
   "/backlog": "tracked",
   "/take": "conditional",
   "/clear": "tracked",
@@ -341,8 +343,8 @@ function markValidSlashCommand(ctx: SlashCommandContext, baseCommand: string): v
   applySlashCommandAccounting(ctx, baseCommand);
 }
 
-function getSlashCommandAccountingPolicy(baseCommand: string): "tracked" | "conditional" | "excluded" {
-  return SLASH_COMMAND_ACCOUNTING_POLICY[baseCommand] ?? "excluded";
+function getSlashCommandAccountingPolicy(baseCommand: string): SlashCommandAccountingPolicy {
+  return SLASH_COMMAND_ACCOUNTING_POLICY[baseCommand] ?? "conditional";
 }
 
 export function handleUpgradeCommand(ctx: SlashCommandContext): void {
@@ -1017,7 +1019,6 @@ export function executeSlashCommand(
     pendingAccounting.clear();
   };
   const queueSlashCommandAccounting = (baseCommand: string): void => {
-    if (getSlashCommandAccountingPolicy(baseCommand) === "excluded") return;
     pendingAccounting.add(baseCommand);
   };
 
@@ -1059,7 +1060,7 @@ export function executeSlashCommand(
 
   // /clear fires instantly — no fake processing delay
   if (command === "/clear") {
-    if (accountingPolicy !== "excluded") queueSlashCommandAccounting(baseCommand);
+    queueSlashCommandAccounting(baseCommand);
     handleClearCommand(accountingCtx);
     flushPendingAccounting();
     return;
