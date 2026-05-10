@@ -58,6 +58,23 @@ describe("Ticker", () => {
     expect(onExpand).not.toHaveBeenCalled();
   });
 
+  it("does not bubble Enter or Space from header buttons to ticker expand", () => {
+    const onExpand = vi.fn();
+    const onSlashCommand = vi.fn();
+    renderTicker({ onlineCount: 3, onExpand, onSlashCommand });
+
+    const buttons = Array.from(container.querySelectorAll("button"));
+    expect(buttons).toHaveLength(3);
+
+    act(() => {
+      buttons[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      buttons[1]?.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    });
+
+    expect(onExpand).not.toHaveBeenCalled();
+    expect(onSlashCommand).not.toHaveBeenCalled();
+  });
+
   it("keeps the live event area clickable for expand behavior", () => {
     const onExpand = vi.fn();
     renderTicker({ onlineCount: 2, onExpand });

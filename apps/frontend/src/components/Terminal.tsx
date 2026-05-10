@@ -215,12 +215,6 @@ function Terminal() {
   }, [state, setState, setHistory, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply]);
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
-  const runTickerCommand = useCallback((command: string) => {
-    if (command === "/party") { closeAllOverlaysPreservingNag(); setShowParty(true); return; }
-    if (command === "/leaderboard") { closeAllOverlaysPreservingNag(); setShowLeaderboard(true); return; }
-    if (command === "/who") { setHistory((prev) => [...prev, { role: "system", content: onlineUsers.length > 0 ? `[📡] **${onlineCount}** developer(s) suffering in this instance: ${onlineUsers.join(", ")}` : `[📡] There are currently **${onlineCount}** developers suffering in this instance.` }]); return; }
-    runSlashCommandRef.current(command);
-  }, [closeAllOverlaysPreservingNag, onlineCount, onlineUsers, setHistory, setShowLeaderboard, setShowParty]);
   useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, setHistory, runSlashCommand });
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") { runSlashCommandRef.current(command); return; }
@@ -353,7 +347,7 @@ function Terminal() {
       setInputValue={setInputValue} setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect}
       isBooting={isBooting} history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString}
       handleSlashCommandClick={handleSlashCommandClick} bottomRef={bottomRef} slashQuery={slashQuery} slashIndex={slashIndex} runSlashCommand={runSlashCommand}
-      runTickerCommand={runTickerCommand} inputValue={inputValue} suggestedReply={suggestedReply} isProcessing={isProcessing} handleChange={handleChange}
+      inputValue={inputValue} suggestedReply={suggestedReply} isProcessing={isProcessing} handleChange={handleChange}
       handleKeyDown={handleKeyDown} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} showStore={showStore}
       showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout}
       showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact} showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade}

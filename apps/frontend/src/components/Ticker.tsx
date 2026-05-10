@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import { useLiveTicker } from "../hooks/useLiveTicker";
 
 interface TickerProps {
@@ -16,6 +17,9 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
 
   const latestEvent = liveEvents[0]!;
   const handleHeaderCommand = (command: string) => onSlashCommand?.(command);
+  const stopHeaderKeydownPropagation = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+  };
 
   return (
     <div
@@ -38,6 +42,7 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
           <button
             type="button"
             className="header-link"
+            onKeyDown={stopHeaderKeydownPropagation}
             onClick={(event) => {
               event.stopPropagation();
               handleHeaderCommand("/who");
@@ -51,6 +56,7 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
           <button
             type="button"
             className="header-link"
+            onKeyDown={stopHeaderKeydownPropagation}
             onClick={(event) => {
               event.stopPropagation();
               handleHeaderCommand("/party");
@@ -62,6 +68,7 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
           <button
             type="button"
             className="header-link"
+            onKeyDown={stopHeaderKeydownPropagation}
             onClick={(event) => {
               event.stopPropagation();
               handleHeaderCommand("/leaderboard");
