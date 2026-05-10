@@ -96,6 +96,15 @@ body {
   transform-origin: bottom center;
 }
 
+.sprint-idle-dim {
+  color: #7b8794;
+}
+
+.sprint-idle-multiplier {
+  color: #facc15;
+  font-weight: 700;
+}
+
 /* Global subtle scrollbar styles */
 ::-webkit-scrollbar {
   width: 8px;

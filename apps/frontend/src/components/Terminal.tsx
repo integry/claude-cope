@@ -183,38 +183,9 @@ function Terminal() {
 
   const runSlashCommand = useCallback((command: string) => {
     executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme, onValidSlashCommand: recordValidCommand });
-  }, [
-    state,
-    setState,
-    setHistory,
-    closeAllOverlaysAndRestoreNag,
-    setShowStore,
-    setShowLeaderboard,
-    setShowAchievements,
-    setShowSynergize,
-    setShowHelp,
-    setShowAbout,
-    setShowPrivacy,
-    setShowTerms,
-    setShowContact,
-    setShowProfile,
-    setShowParty,
-    setShowUpgrade,
-    unlockAchievementWithSound,
-    clearCount,
-    addActiveTD,
-    onlineCount,
-    onlineUsers,
-    sendPing,
-    pendingReviewPing,
-    acceptReviewPing,
-    playChime,
-    playError,
-    setActiveTheme,
-    handleSuggestedReply,
-    recordValidCommand,
-  ]);
-  const runSlashCommandRef = useRef(runSlashCommand); runSlashCommandRef.current = runSlashCommand;
+  }, [state, setState, setHistory, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply, recordValidCommand]);
+  const runSlashCommandRef = useRef(runSlashCommand);
+  runSlashCommandRef.current = runSlashCommand;
 
   const submitPromptCommand = useCallback((command: string) => {
     setCommandHistory((prev) => [...prev, command]); processCommandRef.current(command);
@@ -276,16 +247,8 @@ function Terminal() {
       currentRank: rank, apiKey: effectiveApiKey, customModel: state.selectedModel, proKey: state.proKey, proKeyHash: state.proKeyHash,
       modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, getSprintCompleteMessage, addActiveTD, onSuggestedReply: handleSuggestedReply,
       buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades,
-      onByokUsage: (usage) => setState((prev) => {
-        const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 };
-        return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } };
-      }),
-      onQuotaUpdate: (quotaPercent) => {
-        setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } }));
-        if (quotaPercent <= 0 && isFreeTier) {
-          nagArmedFromQuotaRef.current = true;
-        }
-      },
+      onByokUsage: (usage) => setState((prev) => { const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 }; return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } }; }),
+      onQuotaUpdate: (quotaPercent) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })); if (quotaPercent <= 0 && isFreeTier) nagArmedFromQuotaRef.current = true; },
       onQuotaExhausted: () => {
         setCommandHistory((prev) => {
           const idx = prev.lastIndexOf(command);

@@ -189,7 +189,13 @@ export function TerminalView({
         <div ref={bottomRef} />
       </div>
       <div className="shrink-0">
-        {state.activeTicket && <SprintProgressBar id={state.activeTicket.id} title={state.activeTicket.title} sprintProgress={state.activeTicket.sprintProgress} sprintGoal={state.activeTicket.sprintGoal} />}
+        <SprintProgressBar
+          id={state.activeTicket?.id}
+          title={state.activeTicket?.title}
+          sprintProgress={state.activeTicket?.sprintProgress}
+          sprintGoal={state.activeTicket?.sprintGoal}
+          onSlashCommand={handleSlashCommandClick}
+        />
         <div className="relative border-b border-white">
           {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
           <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
