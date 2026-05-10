@@ -129,7 +129,7 @@ function buildBacklogCopy(
 }
 
 function renderBacklogMarkdownText(text: string): string {
-  return text.replace(/(^|[\s(])(\/[a-z]+(?: [A-Z0-9<>-]+)?)/gi, "$1`$2`");
+  return text.replace(/(^|[\s(])(\/[a-z]+(?: <[a-z]+>| [A-Z0-9-]+)?)/g, "$1`$2`");
 }
 
 function replyEmptyBacklog(reply: Reply, normalizedCategory: string | null): boolean {
