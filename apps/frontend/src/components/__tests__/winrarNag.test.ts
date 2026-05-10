@@ -27,11 +27,12 @@ vi.mock("../../config", () => ({
 }));
 
 vi.mock("../../supabaseClient", () => ({ supabase: {} }));
-const { submitChatMessageMock, testConfig, fetchRandomTicketPromptMock, setMockGameStateRef } = vi.hoisted(() => ({
+const { submitChatMessageMock, testConfig, fetchRandomTicketPromptMock, setMockGameStateRef, triggerQuotaLockoutMock } = vi.hoisted(() => ({
   submitChatMessageMock: vi.fn(),
   testConfig: { initialQuotaPercent: 0 },
   fetchRandomTicketPromptMock: vi.fn(),
   setMockGameStateRef: { current: null as null | React.Dispatch<React.SetStateAction<Record<string, unknown>>> },
+  triggerQuotaLockoutMock: vi.fn(),
 }));
 
 vi.mock("../CommandLine", async () => {
@@ -192,7 +193,7 @@ vi.mock("../MessageList", () => ({
     createElement("div", { "data-testid": "message-list" }, history.map((msg, index) => createElement("div", { key: index }, msg.content))),
 }));
 vi.mock("../terminalHandlers", () => ({
-  triggerQuotaLockout: () => undefined,
+  triggerQuotaLockout: triggerQuotaLockoutMock,
   triggerInstantBan: () => undefined,
 }));
 vi.mock("../terminalInputHandlers", () => ({
@@ -474,6 +475,7 @@ describe("WinRAR nag: Terminal integration", () => {
     vi.setSystemTime(new Date("2026-05-10T00:00:00.000Z"));
     submitChatMessageMock.mockReset();
     fetchRandomTicketPromptMock.mockReset();
+    triggerQuotaLockoutMock.mockReset();
     setMockGameStateRef.current = null;
     window.history.pushState(null, "", "/");
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
@@ -625,6 +627,21 @@ describe("WinRAR nag: Terminal integration", () => {
 
     expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
     expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
+  });
+
+  it("does not wire BYOK quota exhaustion through the local upgrade nag path", async () => {
+    await renderTerminal();
+    await act(async () => {
+      setMockGameStateRef.current?.((prev: Record<string, unknown>) => ({ ...prev, apiKey: "sk-user-key" }));
+      await Promise.resolve();
+    });
+
+    await submitTerminalCommand("status");
+
+    const request = submitChatMessageMock.mock.calls[0]?.[0] as { onQuotaExhausted?: () => void };
+    expect(request.onQuotaExhausted).toBeUndefined();
+    expect(triggerQuotaLockoutMock).not.toHaveBeenCalled();
+    expect(container.querySelector(".upgrade-desktop")).toBeNull();
   });
 
   it("waits briefly for pro entitlement before fetching the startup ticket prompt", async () => {

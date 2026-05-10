@@ -81,6 +81,7 @@ function Terminal() {
   const lastSuggestedReplyRef = useRef<string | null>(null);
   const nextPendingBacklogRollbackIdRef = useRef(0);
   const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
+  const activePromptCountRef = useRef(0);
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
@@ -106,6 +107,35 @@ function Terminal() {
     const [latestController] = activeControllers.slice(-1);
     abortControllerRef.current = { abort: () => Array.from(activeAbortControllersRef.current).forEach((controller) => controller.abort()), signal: latestController!.signal } as AbortController;
   }, []);
+  const syncPromptProcessingState = useCallback(() => {
+    setIsProcessing(activePromptCountRef.current > 0);
+  }, []);
+  const startPromptProcessing = useCallback(() => {
+    activePromptCountRef.current += 1;
+    setIsProcessing(true);
+  }, []);
+  const finishPromptProcessing = useCallback(() => {
+    activePromptCountRef.current = Math.max(0, activePromptCountRef.current - 1);
+    syncPromptProcessingState();
+  }, [syncPromptProcessingState]);
+  const resetPromptProcessing = useCallback(() => {
+    activePromptCountRef.current = 0;
+    setIsProcessing(false);
+  }, []);
+  const createPromptProcessingSetter = useCallback(() => {
+    let settled = false;
+    return (value: boolean | ((prev: boolean) => boolean)) => {
+      const nextValue = typeof value === "function" ? value(activePromptCountRef.current > 0) : value;
+      if (nextValue) {
+        startPromptProcessing();
+        settled = false;
+        return;
+      }
+      if (settled) return;
+      settled = true;
+      finishPromptProcessing();
+    };
+  }, [finishPromptProcessing, startPromptProcessing]);
   const trackAbortController = useCallback((controller: AbortController) => {
     activeAbortControllersRef.current.add(controller);
     syncAbortControllerHandle();
@@ -272,7 +302,7 @@ function Terminal() {
     if (isFreeTier) {
       const newCount = freeCommandCount + 1;
       setFreeCommandCount(newCount);
-      setIsProcessing(true);
+      startPromptProcessing();
       const delayState = { cancelled: false, timeoutId: null as ReturnType<typeof setTimeout> | null };
       freeTierDelayRef.current = delayState;
       const completed = await runFreeTierDelay({ commandCount: newCount, userMessage, delayState, setHistory });
@@ -280,7 +310,7 @@ function Terminal() {
       freeTierDelayRef.current = { cancelled: false, timeoutId: null };
     } else {
       setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
-      setIsProcessing(true);
+      startPromptProcessing();
     }
     const rollbackId = nextPendingBacklogRollbackIdRef.current++;
     pendingBacklogRollbacksRef.current.set(rollbackId, recordMessageWithoutTicket());
@@ -297,19 +327,20 @@ function Terminal() {
       },
     });
     const controller = new AbortController();
+    const setPromptProcessing = createPromptProcessingSetter();
     controller.signal.addEventListener("abort", () => {
       settlePendingBacklogRollback(rollbackId, true);
       untrackAbortController(controller);
     }, { once: true });
     trackAbortController(controller);
     submitChatMessage({
-      chatMessages, buddyResult, unlockAchievement: unlockAchievementWithSound, setHistory, setIsProcessing,
+      chatMessages, buddyResult, unlockAchievement: unlockAchievementWithSound, setHistory, setIsProcessing: setPromptProcessing,
       currentRank: rank, apiKey: effectiveApiKey, customModel: state.selectedModel, proKey: state.proKey, proKeyHash: state.proKeyHash,
       modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, getSprintCompleteMessage, addActiveTD, onSuggestedReply: handleSuggestedReply,
       buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades,
       onByokUsage: (usage) => setState((prev) => { const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 }; return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } }; }),
       onQuotaUpdate: (quotaPercent) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })); if (quotaPercent <= 0 && isFreeTier) nagArmedFromQuotaRef.current = true; },
-      onQuotaExhausted: () => {
+      onQuotaExhausted: effectiveApiKey ? undefined : () => {
         untrackAbortController(controller);
         settlePendingBacklogRollback(rollbackId, true);
         setCommandHistory((prev) => removeCommandFromHistory(prev, command));
@@ -363,7 +394,7 @@ function Terminal() {
   const handleManualUpgradeDismiss = dismissUpgradeNagOverlay;
   const { handleKeyDown } = useTerminalKeyboard({
     slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
-    freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing, setHistory, closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose: handleUpgradeNagDismiss, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
+    freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing: resetPromptProcessing, setHistory, closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose: handleUpgradeNagDismiss, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
   });
   return (
     <TerminalView

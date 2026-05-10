@@ -198,6 +198,30 @@ describe("Terminal tip-manager wiring", () => {
     expect(rollbackMessageWithoutTicketMocks[1]).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps Escape aborting later prompts after an earlier overlapping prompt finishes", async () => {
+    submitChatMessageMock.mockImplementation(({ signal }: { signal: AbortSignal }) => {
+      signal.addEventListener("abort", () => {});
+    });
+    rendered = await renderTerminal(Terminal);
+    await submitCommand(rendered.container, "first prompt");
+    await submitCommand(rendered.container, "second prompt");
+
+    const firstRequest = submitChatMessageMock.mock.calls[0]?.[0] as { setIsProcessing: (value: boolean) => void };
+    expect(firstRequest.setIsProcessing).toEqual(expect.any(Function));
+
+    await act(async () => {
+      firstRequest.setIsProcessing(false);
+    });
+
+    const input = getInput(rendered.container);
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(rollbackMessageWithoutTicketMocks[0]).not.toHaveBeenCalled();
+    expect(rollbackMessageWithoutTicketMocks[1]).toHaveBeenCalledTimes(1);
+  });
+
   it("settles backlog accounting per prompt when submissions overlap", async () => {
     submitChatMessageMock.mockImplementation(() => {});
     rendered = await renderTerminal(Terminal);
