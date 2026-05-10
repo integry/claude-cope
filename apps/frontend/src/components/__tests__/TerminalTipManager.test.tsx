@@ -77,6 +77,19 @@ import Terminal from "../Terminal";
 
 let rendered: RenderedTerminal | null = null;
 
+async function commitAcceptedPrompt(callIndex: number) {
+  const request = submitChatMessageMock.mock.calls[callIndex]?.[0] as {
+    setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
+    onAccepted?: () => void;
+    scheduleHistoryCommitCallback?: (callback: () => void) => void;
+  };
+  await act(async () => {
+    request.setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
+    request.scheduleHistoryCommitCallback?.(() => request.onAccepted?.());
+    await Promise.resolve();
+  });
+}
+
 describe("Terminal tip-manager wiring", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -149,13 +162,14 @@ describe("Terminal tip-manager wiring", () => {
   });
 
   it("does not count accepted chat prompts toward slash-command milestone tips", async () => {
-    submitChatMessageMock.mockImplementation(({ setHistory, onAccepted }: {
+    submitChatMessageMock.mockImplementation(({ setHistory, onAccepted, scheduleHistoryCommitCallback }: {
       setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
       onAccepted?: () => void;
+      scheduleHistoryCommitCallback?: (callback: () => void) => void;
     }) => {
       act(() => {
         setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
-        onAccepted?.();
+        scheduleHistoryCommitCallback?.(() => onAccepted?.());
       });
     });
     rendered = await renderTerminal(Terminal);
@@ -163,6 +177,25 @@ describe("Terminal tip-manager wiring", () => {
     expect(submitChatMessageMock.mock.calls[0]?.[0]?.onAccepted).toEqual(expect.any(Function));
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
     expect(recordValidCommandMock).not.toHaveBeenCalled();
+  });
+
+  it("aborts all overlapping in-flight prompts on Escape", async () => {
+    submitChatMessageMock.mockImplementation(({ signal }: { signal: AbortSignal }) => {
+      signal.addEventListener("abort", () => {});
+    });
+    rendered = await renderTerminal(Terminal);
+    await submitCommand(rendered.container, "first prompt");
+    await submitCommand(rendered.container, "second prompt");
+    await vi.advanceTimersByTimeAsync(0);
+
+    const input = getInput(rendered.container);
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(2);
+    expect(rollbackMessageWithoutTicketMocks[0]).toHaveBeenCalledTimes(1);
+    expect(rollbackMessageWithoutTicketMocks[1]).toHaveBeenCalledTimes(1);
   });
 
   it("settles backlog accounting per prompt when submissions overlap", async () => {
@@ -174,12 +207,8 @@ describe("Terminal tip-manager wiring", () => {
 
     const firstRequest = submitChatMessageMock.mock.calls[0]?.[0] as { onAccepted?: () => void };
     const secondRequest = submitChatMessageMock.mock.calls[1]?.[0] as { onError?: () => void };
-    await act(async () => {
-      (submitChatMessageMock.mock.calls[0]?.[0] as {
-        setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
-      }).setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
-      firstRequest.onAccepted?.();
-    });
+    expect(firstRequest.onAccepted).toEqual(expect.any(Function));
+    await commitAcceptedPrompt(0);
     secondRequest.onError?.();
 
     expect(rollbackMessageWithoutTicketMocks[0]).not.toHaveBeenCalled();

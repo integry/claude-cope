@@ -82,6 +82,19 @@ import Terminal from "../Terminal";
 
 let rendered: RenderedTerminal | null = null;
 
+async function commitAcceptedPrompt(callIndex: number) {
+  const request = submitChatMessageMock.mock.calls[callIndex]?.[0] as {
+    setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
+    onAccepted?: () => void;
+    scheduleHistoryCommitCallback?: (callback: () => void) => void;
+  };
+  await act(async () => {
+    request.setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
+    request.scheduleHistoryCommitCallback?.(() => request.onAccepted?.());
+    await Promise.resolve();
+  });
+}
+
 async function triggerNaggedPrompt() {
   rendered = await renderTerminal(Terminal);
   await submitCommand(rendered.container, "first prompt");
@@ -175,13 +188,14 @@ describe("Terminal tip-manager nag replay wiring", () => {
   });
 
   it("disarms the quota nag after a replayed prompt is accepted", async () => {
-    submitChatMessageMock.mockImplementation(({ setHistory, onAccepted }: {
+    submitChatMessageMock.mockImplementation(({ setHistory, onAccepted, scheduleHistoryCommitCallback }: {
       setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
       onAccepted?: () => void;
+      scheduleHistoryCommitCallback?: (callback: () => void) => void;
     }) => {
       act(() => {
         setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
-        onAccepted?.();
+        scheduleHistoryCommitCallback?.(() => onAccepted?.());
       });
     });
     await triggerNaggedPrompt();
@@ -200,14 +214,7 @@ describe("Terminal tip-manager nag replay wiring", () => {
     shouldShowNagMock.mockReturnValueOnce(true);
     await submitCommand(rendered.container, "retry me");
 
-    const firstRequest = submitChatMessageMock.mock.calls[0]?.[0] as {
-      setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
-      onAccepted?: () => void;
-    };
-    await act(async () => {
-      firstRequest.setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
-      firstRequest.onAccepted?.();
-    });
+    await commitAcceptedPrompt(0);
 
     await replayNaggedPrompt("button");
     expect(submitChatMessageMock.mock.calls[1]?.[0]?.chatMessages.at(-1)?.content).toBe("retry me");
@@ -215,23 +222,25 @@ describe("Terminal tip-manager nag replay wiring", () => {
 
   it("keeps a quota-armed nag latched until the replayed prompt is accepted", async () => {
     isFreeUserMock.mockReturnValue(true);
-    submitChatMessageMock.mockImplementationOnce(({ setHistory, onQuotaUpdate, onAccepted }: {
+    submitChatMessageMock.mockImplementationOnce(({ setHistory, onQuotaUpdate, onAccepted, scheduleHistoryCommitCallback }: {
       setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
       onQuotaUpdate?: (quotaPercent: number) => void;
       onAccepted?: () => void;
+      scheduleHistoryCommitCallback?: (callback: () => void) => void;
     }) => {
       act(() => {
         onQuotaUpdate?.(0);
         setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
-        onAccepted?.();
+        scheduleHistoryCommitCallback?.(() => onAccepted?.());
       });
-    }).mockImplementation(({ setHistory, onAccepted }: {
+    }).mockImplementation(({ setHistory, onAccepted, scheduleHistoryCommitCallback }: {
       setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
       onAccepted?: () => void;
+      scheduleHistoryCommitCallback?: (callback: () => void) => void;
     }) => {
       act(() => {
         setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
-        onAccepted?.();
+        scheduleHistoryCommitCallback?.(() => onAccepted?.());
       });
     });
 
