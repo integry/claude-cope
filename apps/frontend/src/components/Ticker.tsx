@@ -2,18 +2,20 @@ import { useLiveTicker } from "../hooks/useLiveTicker";
 
 interface TickerProps {
   onExpand?: () => void;
+  onSlashCommand?: (command: string) => void;
   onlineCount: number;
 }
 
 // We isolate the Ticker component to prevent re-renders of the entire Terminal
 // when new events arrive. It fetches data independently via the SWR hook.
-export default function Ticker({ onExpand, onlineCount }: TickerProps) {
+export default function Ticker({ onExpand, onSlashCommand, onlineCount }: TickerProps) {
   // Switch to the hybrid hook to receive real-time updates via Supabase
   const liveEvents = useLiveTicker();
 
   if (!liveEvents || liveEvents.length === 0) return null;
 
   const latestEvent = liveEvents[0]!;
+  const handleHeaderCommand = (command: string) => onSlashCommand?.(command);
 
   return (
     <div
@@ -33,9 +35,40 @@ export default function Ticker({ onExpand, onlineCount }: TickerProps) {
           {latestEvent.message}
         </span>
         <span className="flex-shrink-0 flex items-center gap-0 ml-4 text-gray-400">
-          <span><span className="text-gray-400">Online:</span> <span className="text-green-400">{onlineCount}</span> <span className="text-gray-300 hover:text-gray-200"> [/who]</span></span>
-          <span className="mx-3 text-gray-500">|</span>
-          <span className="text-gray-300 hover:text-gray-200">Firehose [/party]</span>
+          <button
+            type="button"
+            className="header-link"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleHeaderCommand("/who");
+            }}
+          >
+            <span className="text-gray-400">Online:</span>{" "}
+            <span className="text-green-400">{onlineCount}</span>{" "}
+            <span>[/who]</span>
+          </button>
+          <span className="mx-3 text-gray-500" aria-hidden="true">|</span>
+          <button
+            type="button"
+            className="header-link"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleHeaderCommand("/party");
+            }}
+          >
+            Firehose [/party]
+          </button>
+          <span className="mx-3 text-gray-500" aria-hidden="true">|</span>
+          <button
+            type="button"
+            className="header-link"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleHeaderCommand("/leaderboard");
+            }}
+          >
+            Hall of Blame [/leaderboard]
+          </button>
         </span>
       </div>
     </div>

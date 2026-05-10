@@ -11,4 +11,8 @@ describe("SLASH_COMMAND_GROUPS", () => {
     const allCommands = SLASH_COMMAND_GROUPS.flatMap((group) => group.commands);
     expect(new Set(allCommands).size).toBe(allCommands.length);
   });
+
+  it("keeps /leaderboard available for Hall of Blame entry points", () => {
+    expect(ALL_SLASH_COMMANDS).toContain("/leaderboard");
+  });
 });

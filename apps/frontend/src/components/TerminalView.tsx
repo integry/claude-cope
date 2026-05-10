@@ -161,7 +161,11 @@ export function TerminalView({
       }}
     >
       <div className="shrink-0">
-        <Ticker onExpand={() => { closeAllOverlaysPreservingNag(); setShowParty(true); }} onlineCount={onlineCount} />
+        <Ticker
+          onExpand={() => { closeAllOverlaysPreservingNag(); setShowParty(true); }}
+          onSlashCommand={runSlashCommand}
+          onlineCount={onlineCount}
+        />
         {outageHp !== null && <OutageBar outageHp={outageHp} />}
         <HeaderBar
           rank={rank}
