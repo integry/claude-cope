@@ -15,24 +15,28 @@ const {
   recordEnterMock,
   recordValidCommandMock,
   recordMessageWithoutTicketMock,
+  runFreeTierDelayMock,
   submitChatMessageMock,
   setShowUpgradeMock,
   shouldShowNagMock,
+  isFreeUserMock,
 } = vi.hoisted(() => ({
   executeSlashCommandMock: vi.fn(),
   recordEnterMock: vi.fn(),
   recordValidCommandMock: vi.fn(),
   recordMessageWithoutTicketMock: vi.fn(),
+  runFreeTierDelayMock: vi.fn(),
   submitChatMessageMock: vi.fn(),
   setShowUpgradeMock: vi.fn(),
   shouldShowNagMock: vi.fn(() => false),
+  isFreeUserMock: vi.fn(() => false),
 }));
 
 vi.mock("../../config", () => ({
   BYOK_ENABLED: false,
   TICKET_REFINE_ENABLED: false,
 }));
-vi.mock("../../hooks/gameStateUtils", () => ({ isFreeUser: () => false }));
+vi.mock("../../hooks/gameStateUtils", () => ({ isFreeUser: isFreeUserMock }));
 vi.mock("../chatApi", () => ({
   computeBuddyInterjection: () => null,
   mergeSuggestedReply: (_prev: string | null, next: string) => next,
@@ -76,7 +80,7 @@ vi.mock("../../hooks/useTipManager", () => ({
   }),
 }));
 vi.mock("../loadingPhrases", () => ({ getRandomLoadingPhrase: () => "Loading..." }));
-vi.mock("../freeTierDelay", () => ({ runFreeTierDelay: vi.fn() }));
+vi.mock("../freeTierDelay", () => ({ runFreeTierDelay: runFreeTierDelayMock }));
 vi.mock("../buildChatSubmitArgs", () => ({
   buildSprintCallbacks: () => ({
     onSprintProgress: vi.fn(),
@@ -142,6 +146,10 @@ describe("Terminal tip-manager nag replay wiring", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-10T00:00:00.000Z"));
     recordMessageWithoutTicketMock.mockImplementation(() => vi.fn());
+    isFreeUserMock.mockReset();
+    isFreeUserMock.mockReturnValue(false);
+    runFreeTierDelayMock.mockReset();
+    runFreeTierDelayMock.mockResolvedValue(true);
     executeSlashCommandMock.mockImplementation((command: string, ctx: { onValidSlashCommand?: (baseCommand: string) => void }) => {
       ctx.onValidSlashCommand?.(command.trim());
     });
@@ -207,5 +215,45 @@ describe("Terminal tip-manager nag replay wiring", () => {
     expect(setShowUpgradeMock).toHaveBeenCalledTimes(2);
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(2, false);
+  });
+
+  it("does not let an earlier accepted prompt clear a different queued nag replay", async () => {
+    submitChatMessageMock.mockImplementation(() => {});
+    rendered = await renderTerminal(Terminal);
+    await submitCommand(rendered.container, "first prompt");
+    shouldShowNagMock.mockReturnValueOnce(true);
+    await submitCommand(rendered.container, "retry me");
+
+    const firstRequest = submitChatMessageMock.mock.calls[0]?.[0] as { onAccepted?: () => void };
+    firstRequest.onAccepted?.();
+
+    await replayNaggedPrompt("button");
+    expect(submitChatMessageMock.mock.calls[1]?.[0]?.chatMessages.at(-1)?.content).toBe("retry me");
+  });
+
+  it("keeps a quota-armed nag latched until the replayed prompt is accepted", async () => {
+    isFreeUserMock.mockReturnValue(true);
+    submitChatMessageMock.mockImplementationOnce(({ onQuotaUpdate, onAccepted }: {
+      onQuotaUpdate?: (quotaPercent: number) => void;
+      onAccepted?: () => void;
+    }) => {
+      onQuotaUpdate?.(0);
+      onAccepted?.();
+    }).mockImplementation(({ onAccepted }: { onAccepted?: () => void }) => {
+      onAccepted?.();
+    });
+
+    rendered = await renderTerminal(Terminal);
+    await submitCommand(rendered.container, "first prompt");
+    await submitCommand(rendered.container, "second prompt");
+
+    expect(setShowUpgradeMock).toHaveBeenCalledWith(true);
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+
+    await replayNaggedPrompt("button");
+    await submitCommand(rendered!.container, "third prompt");
+
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(3);
+    expect(setShowUpgradeMock).toHaveBeenCalledTimes(2);
   });
 });

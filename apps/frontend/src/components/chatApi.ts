@@ -1,5 +1,4 @@
 import type { Dispatch, SetStateAction } from "react";
-import { flushSync } from "react-dom";
 import type { Message } from "../hooks/gameStateUtils";
 import type { BuddyState } from "../hooks/useGameState";
 import type { ModesState } from "../hooks/gameStateUtils";
@@ -310,33 +309,31 @@ export function submitChatMessage(opts: {
       // Merge sprint-complete text into the AI reply so they appear as a single message
       const finalReply = sprintMsg ? sprintMsg.content + "\n\n" + reply : reply;
 
-      flushSync(() => {
-        setHistory((prev) => {
-          let updated = [
-            ...prev.filter((msg) => msg.role !== "loading"),
-            { role: "system" as const, content: finalReply, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
-            ...achievementMessages,
-            ...(buddyMessage ? [buddyMessage] : []),
-          ];
+      setHistory((prev) => {
+        let updated = [
+          ...prev.filter((msg) => msg.role !== "loading"),
+          { role: "system" as const, content: finalReply, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
+          ...achievementMessages,
+          ...(buddyMessage ? [buddyMessage] : []),
+        ];
 
-          if (buddyResult?.shouldDeleteHistory) {
-            // Find deletable messages (user or system, not warnings/errors)
-            const deletableIndices = updated.reduce<number[]>((acc, msg, i) => {
-              if (msg.role === "user" || msg.role === "system") acc.push(i);
-              return acc;
-            }, []);
-            if (deletableIndices.length > 1) {
-              const targetIdx = deletableIndices[Math.floor(Math.random() * (deletableIndices.length - 1))]!;
-              updated = [
-                ...updated.slice(0, targetIdx),
-                ...updated.slice(targetIdx + 1),
-                { role: "warning" as const, content: "[🐉 10x Dragon] *swoosh* — a line of your history has been incinerated." },
-              ];
-            }
+        if (buddyResult?.shouldDeleteHistory) {
+          // Find deletable messages (user or system, not warnings/errors)
+          const deletableIndices = updated.reduce<number[]>((acc, msg, i) => {
+            if (msg.role === "user" || msg.role === "system") acc.push(i);
+            return acc;
+          }, []);
+          if (deletableIndices.length > 1) {
+            const targetIdx = deletableIndices[Math.floor(Math.random() * (deletableIndices.length - 1))]!;
+            updated = [
+              ...updated.slice(0, targetIdx),
+              ...updated.slice(targetIdx + 1),
+              { role: "warning" as const, content: "[🐉 10x Dragon] *swoosh* — a line of your history has been incinerated." },
+            ];
           }
+        }
 
-          return updated;
-        });
+        return updated;
       });
 
       runAcceptedCallback(opts.onAccepted);

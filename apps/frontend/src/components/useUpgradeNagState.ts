@@ -29,6 +29,9 @@ export function useUpgradeNagState({
   setShowUpgrade,
 }: UseUpgradeNagStateArgs) {
   const pendingNagCommandRef = useRef<string | null>(null);
+  const pendingNagReplayIdRef = useRef<number | null>(null);
+  const activeNagReplayIdRef = useRef<number | null>(null);
+  const nextNagReplayIdRef = useRef(0);
   const nagArmedFromQuotaRef = useRef(false);
   const nagOpenedAtRef = useRef<number | null>(null);
   const nagCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,14 +63,19 @@ export function useUpgradeNagState({
 
   const clearPendingNag = useCallback(() => {
     pendingNagCommandRef.current = null;
+    pendingNagReplayIdRef.current = null;
+    activeNagReplayIdRef.current = null;
     nagArmedFromQuotaRef.current = false;
   }, []);
 
   const consumePendingNagCommand = useCallback(() => {
     const command = pendingNagCommandRef.current;
-    clearPendingNag();
-    return command;
-  }, [clearPendingNag]);
+    const replayId = pendingNagReplayIdRef.current;
+    pendingNagCommandRef.current = null;
+    pendingNagReplayIdRef.current = null;
+    activeNagReplayIdRef.current = replayId;
+    return command === null ? null : { command, replayId };
+  }, []);
 
   const restorePendingNagCommand = useCallback(() => {
     if (pendingNagCommandRef.current !== null) {
@@ -84,6 +92,7 @@ export function useUpgradeNagState({
     (command?: string) => {
       if (command !== undefined) {
         pendingNagCommandRef.current = command;
+        pendingNagReplayIdRef.current = nextNagReplayIdRef.current++;
         setInputValue("");
       }
       nagOpenedAtRef.current = Date.now();
@@ -94,8 +103,16 @@ export function useUpgradeNagState({
     [clearNagCloseTimeout, resetDismissState, setInputValue, setShowUpgrade],
   );
 
+  const settleAcceptedNagReplay = useCallback((replayId: number | null) => {
+    if (replayId === null || activeNagReplayIdRef.current !== replayId) {
+      return;
+    }
+    activeNagReplayIdRef.current = null;
+    nagArmedFromQuotaRef.current = false;
+  }, []);
+
   const finalizeUpgradeNagClose = useCallback(
-    (onResumePendingCommand: (command: string) => void) => {
+    (onResumePendingCommand: (command: string, replayId: number | null) => void) => {
       clearNagCloseTimeout();
       resetDismissState();
       nagOpenedAtRef.current = null;
@@ -103,9 +120,9 @@ export function useUpgradeNagState({
       if (window.location.pathname === "/upgrade") {
         window.history.pushState(null, "", "/");
       }
-      const command = consumePendingNagCommand();
-      if (command !== null) {
-        onResumePendingCommand(command);
+      const pendingNag = consumePendingNagCommand();
+      if (pendingNag !== null) {
+        onResumePendingCommand(pendingNag.command, pendingNag.replayId);
       }
     },
     [
@@ -140,7 +157,7 @@ export function useUpgradeNagState({
   }, [closeAllOverlays, setShowUpgrade]);
 
   const handleUpgradeNagClose = useCallback(
-    (onResumePendingCommand: (command: string) => void) => {
+    (onResumePendingCommand: (command: string, replayId: number | null) => void) => {
       if (upgradeNagDismissPhase === "closing") {
         return;
       }
@@ -173,6 +190,7 @@ export function useUpgradeNagState({
     pendingNagCommand: pendingNagCommandRef.current,
     pendingNagCommandRef,
     restorePendingNagCommand,
+    settleAcceptedNagReplay,
     upgradeNagDismissEffect,
     upgradeNagDismissPhase,
   };

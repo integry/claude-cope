@@ -133,13 +133,12 @@ function Terminal() {
     lastSuggestedReplyRef.current = merged;
     setSuggestedReply(merged);
   }, []);
-  const processCommandRef = useRef<(command: string) => void>(() => {});
-  const submitPromptCommand = useCallback((command: string) => {
+  const processCommandRef = useRef<(submission: { command: string; replayId: number | null }) => void>(() => {});
+  const submitPromptCommand = useCallback((command: string, replayId: number | null = null) => {
     setCommandHistory((prev) => [...prev, command]);
-    processCommandRef.current(command);
+    processCommandRef.current({ command, replayId });
   }, []);
   const {
-    clearPendingNag,
     closeAllOverlaysAndRestoreNag,
     closeAllOverlaysPreservingNag,
     dismissUpgradeOverlay: dismissUpgradeNagOverlay,
@@ -148,6 +147,7 @@ function Terminal() {
     openUpgradeNag,
     pendingNagCommand,
     pendingNagCommandRef,
+    settleAcceptedNagReplay,
     upgradeNagDismissEffect,
     upgradeNagDismissPhase,
   } = useUpgradeNagState({
@@ -232,10 +232,10 @@ function Terminal() {
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
   useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, setHistory, runSlashCommand });
-  const handlePromptAccepted = useCallback((rollbackId: number) => {
+  const handlePromptAccepted = useCallback((rollbackId: number, replayId: number | null) => {
     settlePendingBacklogRollback(rollbackId, false);
-    clearPendingNag();
-  }, [clearPendingNag, settlePendingBacklogRollback]);
+    settleAcceptedNagReplay(replayId);
+  }, [settleAcceptedNagReplay, settlePendingBacklogRollback]);
   const handlePromptError = useCallback((rollbackId: number) => {
     settlePendingBacklogRollback(rollbackId, true);
     playError();
@@ -265,7 +265,7 @@ function Terminal() {
       settledPendingCompletedRewardTaskIds: [ticketId],
     } : {}));
   }, [setState]);
-  const processCommand = async (command: string) => {
+  const processCommand = async ({ command, replayId }: { command: string; replayId: number | null }) => {
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
     if (!effectiveApiKey && instantBanReady) {
       setHistory((prev) => [...prev, { role: "user", content: command }]);
@@ -331,16 +331,16 @@ function Terminal() {
         handleQuotaLockout(command);
       },
       onProfileUpdate: applyProfileUpdate,
-      onAccepted: () => handlePromptAccepted(rollbackId),
+      onAccepted: () => handlePromptAccepted(rollbackId, replayId),
       onError: () => handlePromptError(rollbackId),
       signal: controller.signal,
     });
   };
   processCommandRef.current = processCommand;
-  const submitPromptCommandWithAccounting = useCallback((command: string) => {
+  const submitPromptCommandWithAccounting = useCallback((command: string, replayId: number | null = null) => {
     setInputValue("");
     setHistoryIndex(-1);
-    submitPromptCommand(command);
+    submitPromptCommand(command, replayId);
   }, [submitPromptCommand]);
   const handleEnterSubmit = async () => {
     recordEnter();
@@ -370,7 +370,7 @@ function Terminal() {
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
     submitPromptCommandWithAccounting(command);
   };
-  const handleUpgradeNagDismiss = useCallback(() => { handleUpgradeNagClose((command) => { submitPromptCommandWithAccounting(command); }); }, [handleUpgradeNagClose, submitPromptCommandWithAccounting]);
+  const handleUpgradeNagDismiss = useCallback(() => { handleUpgradeNagClose((command, replayId) => { submitPromptCommandWithAccounting(command, replayId); }); }, [handleUpgradeNagClose, submitPromptCommandWithAccounting]);
   const handleManualUpgradeDismiss = dismissUpgradeNagOverlay;
   const { handleKeyDown } = useTerminalKeyboard({
     slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
