@@ -39,6 +39,9 @@ export type LayoutProps = {
 
 function getOptionIdList(singleAvailable: boolean, multiAvailable: boolean) { return [singleAvailable ? OPTION_IDS.single : null, multiAvailable ? OPTION_IDS.multi : null].filter((id): id is OptionId => id !== null); }
 function getTabEntryOptionId(ids: OptionId[], isReverse: boolean) { return ids[isReverse ? ids.length - 1 : 0] ?? null; }
+function isEditableOverlayTarget(target: EventTarget | null): target is HTMLElement { return target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT"); }
+function getOverlayArrowDirection(key: string): -1 | 1 | null { if (key === "ArrowUp" || key === "ArrowLeft") return -1; return key === "ArrowDown" || key === "ArrowRight" ? 1 : null; }
+function shouldActivateSelectedOption(event: React.KeyboardEvent<HTMLDivElement>, isKeyboardNavigationMode: boolean, selectedOptionId: OptionId | null): selectedOptionId is OptionId { return event.key === "Enter" && isKeyboardNavigationMode && selectedOptionId !== null && event.target instanceof HTMLElement && event.target.tagName !== "A" && event.target.tagName !== "BUTTON"; }
 function getCenteredPadding(text: string) {
   const left = Math.max(0, Math.floor((INNER_W - text.length) / 2));
   return { left, right: Math.max(0, INNER_W - text.length - left) };
@@ -259,24 +262,13 @@ export default function DesktopLayout({
       return;
     }
     const target = event.target;
-    const isEditableTarget = target instanceof HTMLElement
-      && (target.isContentEditable
-        || target.tagName === "INPUT"
-        || target.tagName === "TEXTAREA"
-        || target.tagName === "SELECT");
-    if (isEditableTarget) return;
-    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+    if (isEditableOverlayTarget(target)) return;
+    const arrowDirection = getOverlayArrowDirection(event.key);
+    if (arrowDirection !== null) {
       event.preventDefault();
       focusSourceRef.current = "arrow";
       setIsKeyboardNavigationMode(true);
-      cycleSelection(-1);
-      return;
-    }
-    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-      event.preventDefault();
-      focusSourceRef.current = "arrow";
-      setIsKeyboardNavigationMode(true);
-      cycleSelection(1);
+      cycleSelection(arrowDirection);
       return;
     }
     if (event.key === "Tab") {
@@ -289,14 +281,7 @@ export default function DesktopLayout({
       }
       return;
     }
-    if (
-      event.key === "Enter"
-      && isKeyboardNavigationMode
-      && selectedOptionId !== null
-      && target instanceof HTMLElement
-      && target.tagName !== "A"
-      && target.tagName !== "BUTTON"
-    ) {
+    if (shouldActivateSelectedOption(event, isKeyboardNavigationMode, selectedOptionId)) {
       event.preventDefault();
       optionRefs.current[selectedOptionId]?.click();
     }
