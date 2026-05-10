@@ -236,7 +236,11 @@ export default function DesktopLayout({
       return;
     }
     if (isKeyboardNavigationMode && selectedOptionId !== null) {
-      optionRefs.current[selectedOptionId]?.focus();
+      const selectedOption = optionRefs.current[selectedOptionId];
+      const activeElement = document.activeElement;
+      if (selectedOption && (activeElement === overlay || !overlay.contains(activeElement))) {
+        selectedOption.focus();
+      }
       return;
     }
     if (dismissMode === "manual") {
