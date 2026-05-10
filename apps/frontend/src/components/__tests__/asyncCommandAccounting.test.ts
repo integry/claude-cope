@@ -150,7 +150,7 @@ describe("async slash-command accounting", () => {
 
   it("counts plain /ticket usage as a valid command", async () => {
     const ctx = makeCtx(makeGameState());
-    vi.mocked(handleTicketCommand).mockResolvedValueOnce();
+    vi.mocked(handleTicketCommand).mockResolvedValueOnce(true);
 
     executeSlashCommand("/ticket", ctx);
     await vi.runAllTimersAsync();
