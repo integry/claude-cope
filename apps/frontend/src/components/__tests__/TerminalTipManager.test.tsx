@@ -423,4 +423,34 @@ describe("Terminal tip-manager wiring", () => {
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(2, false);
   });
+
+  it("disarms the quota nag after a replayed prompt is accepted", async () => {
+    submitChatMessageMock.mockImplementation(({ onAccepted }: { onAccepted?: () => void }) => {
+      onAccepted?.();
+    });
+    await renderTerminal();
+
+    await submitCommand("first prompt");
+    shouldShowNagMock.mockReturnValueOnce(true);
+    await submitCommand("retry me");
+
+    const dismissButton = container.querySelector("button[aria-label='dismiss-upgrade']") as HTMLButtonElement | null;
+    expect(dismissButton).not.toBeNull();
+
+    await act(async () => {
+      dismissButton!.click();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+      await Promise.resolve();
+    });
+
+    await submitCommand("third prompt");
+
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(3);
+    expect(setShowUpgradeMock).toHaveBeenCalledTimes(2);
+    expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
+    expect(setShowUpgradeMock).toHaveBeenNthCalledWith(2, false);
+  });
 });

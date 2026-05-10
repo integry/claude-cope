@@ -33,9 +33,7 @@ function runAcceptedCallback(onAccepted?: () => void): void {
   try {
     onAccepted();
   } catch (error) {
-    if (import.meta.env.DEV) {
-      console.error("submitChatMessage onAccepted callback failed", error);
-    }
+    console.error("submitChatMessage onAccepted callback failed", error);
     // Consumer callbacks must not turn a committed assistant reply into a chat failure.
   }
 }
