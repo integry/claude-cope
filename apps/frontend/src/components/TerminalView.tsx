@@ -1,11 +1,4 @@
-import type {
-  CSSProperties,
-  ChangeEvent,
-  Dispatch,
-  KeyboardEvent as ReactKeyboardEvent,
-  RefObject,
-  SetStateAction,
-} from "react";
+import type { CSSProperties, ChangeEvent, Dispatch, KeyboardEvent as ReactKeyboardEvent, RefObject, SetStateAction } from "react";
 import { useEffect, useRef, useState } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
@@ -29,62 +22,22 @@ import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
 import type { OutageScenario } from "@claude-cope/shared/multiplayer-types";
 
 type TerminalViewProps = OverlayVisibility & {
-  activeRegression: string | null;
-  outageHp: number | null;
-  activeOutageScenario: OutageScenario | null;
-  pendingReviewPing: PendingReviewPing;
-  pingAcknowledged: boolean;
-  activeTheme: GameState["activeTheme"];
-  regressionGlitch: string | null | undefined;
-  anyOverlayOpen: boolean;
-  inputRef: RefObject<HTMLInputElement | null>;
-  closeAllOverlaysPreservingNag: () => void;
-  onlineCount: number;
-  rank: GameState["economy"]["currentRank"];
-  state: GameState;
-  handleProfileClick: () => void;
-  setShowHelp: Dispatch<SetStateAction<boolean>>;
-  setShowAbout: Dispatch<SetStateAction<boolean>>;
-  setInputValue: Dispatch<SetStateAction<string>>;
-  setSlashQuery: Dispatch<SetStateAction<string>>;
-  setSlashIndex: Dispatch<SetStateAction<number>>;
-  setShowUpgrade: Dispatch<SetStateAction<boolean>>;
-  compactEffect: boolean;
-  isBooting: boolean;
-  history: Message[];
-  messageKeys: number[];
-  initialHistoryLen: number;
-  promptString: string;
-  handleSlashCommandClick: (command: string, action: SlashCommandAction) => void;
-  bottomRef: RefObject<HTMLDivElement | null>;
-  slashQuery: string;
-  slashIndex: number;
-  handleSlashMenuSelect: (command: string) => void;
-  inputValue: string;
-  suggestedReply: string | null;
-  isProcessing: boolean;
-  handleChange: (e: ChangeEvent<HTMLInputElement>) => void;
-  handleKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
-  buyGenerator: (generatorId: string, amount?: number) => boolean;
-  buyUpgrade: (upgradeId: string) => boolean;
-  buyTheme: (themeId: string) => boolean;
-  setActiveTheme: (id: string) => void;
-  setShowStore: Dispatch<SetStateAction<boolean>>;
-  setShowLeaderboard: Dispatch<SetStateAction<boolean>>;
-  setShowAchievements: Dispatch<SetStateAction<boolean>>;
-  setShowPrivacy: Dispatch<SetStateAction<boolean>>;
-  setShowTerms: Dispatch<SetStateAction<boolean>>;
-  setShowContact: Dispatch<SetStateAction<boolean>>;
-  setShowProfile: Dispatch<SetStateAction<boolean>>;
-  setShowParty: Dispatch<SetStateAction<boolean>>;
-  setShowSynergize: Dispatch<SetStateAction<boolean>>;
-  setIsProcessing: Dispatch<SetStateAction<boolean>>;
-  setHistory: Dispatch<SetStateAction<Message[]>>;
-  pendingNagCommand: string | null;
-  handleUpgradeNagClose: () => void;
-  handleManualUpgradeDismiss: () => void;
-  upgradeNagDismissPhase: "idle" | "closing";
-  upgradeNagDismissEffect: UpgradeNagCloseEffect;
+  activeRegression: string | null; outageHp: number | null; activeOutageScenario: OutageScenario | null; pendingReviewPing: PendingReviewPing;
+  pingAcknowledged: boolean; activeTheme: GameState["activeTheme"]; regressionGlitch: string | null | undefined; anyOverlayOpen: boolean;
+  inputRef: RefObject<HTMLInputElement | null>; closeAllOverlaysPreservingNag: () => void; onlineCount: number; rank: GameState["economy"]["currentRank"];
+  state: GameState; handleProfileClick: () => void; setShowHelp: Dispatch<SetStateAction<boolean>>; setShowAbout: Dispatch<SetStateAction<boolean>>;
+  setInputValue: Dispatch<SetStateAction<string>>; setSlashQuery: Dispatch<SetStateAction<string>>; setSlashIndex: Dispatch<SetStateAction<number>>;
+  setShowUpgrade: Dispatch<SetStateAction<boolean>>; compactEffect: boolean; isBooting: boolean; history: Message[]; messageKeys: number[];
+  initialHistoryLen: number; promptString: string; handleSlashCommandClick: (command: string, action: SlashCommandAction) => void; bottomRef: RefObject<HTMLDivElement | null>;
+  slashQuery: string; slashIndex: number; handleSlashMenuSelect: (command: string) => void; inputValue: string; suggestedReply: string | null; isProcessing: boolean;
+  handleChange: (e: ChangeEvent<HTMLInputElement>) => void; handleKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
+  buyGenerator: (generatorId: string, amount?: number) => boolean; buyUpgrade: (upgradeId: string) => boolean; buyTheme: (themeId: string) => boolean;
+  setActiveTheme: (id: string) => void; setShowStore: Dispatch<SetStateAction<boolean>>; setShowLeaderboard: Dispatch<SetStateAction<boolean>>;
+  setShowAchievements: Dispatch<SetStateAction<boolean>>; setShowPrivacy: Dispatch<SetStateAction<boolean>>; setShowTerms: Dispatch<SetStateAction<boolean>>;
+  setShowContact: Dispatch<SetStateAction<boolean>>; setShowProfile: Dispatch<SetStateAction<boolean>>; setShowParty: Dispatch<SetStateAction<boolean>>;
+  setShowSynergize: Dispatch<SetStateAction<boolean>>; setIsProcessing: Dispatch<SetStateAction<boolean>>; setHistory: Dispatch<SetStateAction<Message[]>>;
+  pendingNagCommand: string | null; handleUpgradeNagClose: () => void; handleManualUpgradeDismiss: () => void;
+  upgradeNagDismissPhase: "idle" | "closing"; upgradeNagDismissEffect: UpgradeNagCloseEffect;
 };
 
 type BuddyOverlayProps = {
@@ -121,12 +74,8 @@ function getBuddyOverlayScale({
   overlayWidth: number;
   overlayHeight: number;
 }) {
-  const widthScale = overlayWidth > 0
-    ? clampBuddyScale((containerWidth - rightInset - BUDDY_OVERLAY_LEFT_PADDING) / overlayWidth)
-    : 1;
-  const heightScale = overlayHeight > 0
-    ? clampBuddyScale((containerHeight - bottomOffset - BUDDY_OVERLAY_TOP_PADDING) / overlayHeight)
-    : 1;
+  const widthScale = overlayWidth > 0 ? clampBuddyScale((containerWidth - rightInset - BUDDY_OVERLAY_LEFT_PADDING) / overlayWidth) : 1;
+  const heightScale = overlayHeight > 0 ? clampBuddyScale((containerHeight - bottomOffset - BUDDY_OVERLAY_TOP_PADDING) / overlayHeight) : 1;
 
   return Math.min(widthScale, heightScale);
 }
@@ -216,11 +165,7 @@ function getUpgradeDismissProps(
   handleManualUpgradeDismiss: () => void,
 ) {
   const nagDismiss = pendingNagCommand !== null;
-
-  return {
-    onUpgradeDismiss: nagDismiss ? handleUpgradeNagClose : handleManualUpgradeDismiss,
-    upgradeDismissMode: nagDismiss ? "nag" : "manual",
-  } as const;
+  return { onUpgradeDismiss: nagDismiss ? handleUpgradeNagClose : handleManualUpgradeDismiss, upgradeDismissMode: nagDismiss ? "nag" : "manual" } as const;
 }
 
 export function TerminalView({
@@ -334,11 +279,7 @@ export function TerminalView({
     };
   }, []);
 
-  const upgradeDismissProps = getUpgradeDismissProps(
-    pendingNagCommand,
-    handleUpgradeNagClose,
-    handleManualUpgradeDismiss,
-  );
+  const upgradeDismissProps = getUpgradeDismissProps(pendingNagCommand, handleUpgradeNagClose, handleManualUpgradeDismiss);
 
   return (
     <div
@@ -371,26 +312,12 @@ export function TerminalView({
       </div>
       <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
-        <MessageList
-          history={history}
-          messageKeys={messageKeys}
-          initialHistoryLen={initialHistoryLen}
-          promptString={promptString}
-          activeTicketId={state.activeTicket?.id}
-          username={state.username}
-          onSlashCommand={handleSlashCommandClick}
-        />
+        <MessageList history={history} messageKeys={messageKeys} initialHistoryLen={initialHistoryLen} promptString={promptString} activeTicketId={state.activeTicket?.id} username={state.username} onSlashCommand={handleSlashCommandClick} />
         <div ref={bottomRef} />
       </div>
       <BuddyOverlay buddy={state.buddy} bottomOffset={buddyBottomOffset} containerRef={terminalContainerRef} />
       <div ref={bottomChromeRef} className="shrink-0">
-        <SprintProgressBar
-          id={state.activeTicket?.id}
-          title={state.activeTicket?.title}
-          sprintProgress={state.activeTicket?.sprintProgress}
-          sprintGoal={state.activeTicket?.sprintGoal}
-          onSlashCommand={handleSlashCommandClick}
-        />
+        <SprintProgressBar id={state.activeTicket?.id} title={state.activeTicket?.title} sprintProgress={state.activeTicket?.sprintProgress} sprintGoal={state.activeTicket?.sprintGoal} onSlashCommand={handleSlashCommandClick} />
         <div className="terminal-command-shell relative border-b border-white/20">
           {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} paidUser={isPaidUser(state)} onSelect={handleSlashMenuSelect} />}
           <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
