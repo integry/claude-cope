@@ -9,7 +9,7 @@ import { updateTicketServer } from "../api/profileApi";
 type Reply = (msg: Message) => void;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
 
-type BacklogTicket = {
+export type BacklogTicket = {
   id: string;
   title: string;
   description: string;
@@ -24,6 +24,17 @@ type BacklogTicket = {
 
 /** Cache last backlog results so `/take 2` can resolve by row number */
 let lastBacklogResults: BacklogTicket[] = [];
+
+function formatBacklogTitle(ticket: BacklogTicket): string {
+  const categoryPrefix = ticket.category_prefix?.trim() ? `${ticket.category_prefix.trim()} ` : "";
+  const premiumPrefix = ticket.is_locked ? "🔒 [PREMIUM] " : "";
+  return `${premiumPrefix}${categoryPrefix}${ticket.title}`;
+}
+
+export function formatLockedTicketPrompt(ticket: BacklogTicket): string {
+  const teaser = ticket.upgrade_teaser?.trim() ? ` ${ticket.upgrade_teaser.trim()}` : " Upgrade to Claude Cope Max to claim it.";
+  return `[🔒 **[PREMIUM]**] **${ticket.title}** is locked behind Max.${teaser}`;
+}
 
 export async function handleTicketCommand(command: string, reply: Reply): Promise<boolean> {
   if (!TICKET_REFINE_ENABLED) {
@@ -87,7 +98,7 @@ export async function handleBacklogCommand(reply: Reply, proKeyHash?: string): P
     const numW = 3;
     const idW = 10;
     const statusW = 8;
-    const titleW = Math.max(5, ...tickets.map((t) => `${t.is_locked ? "🔒 " : ""}${t.title}`.length));
+    const titleW = Math.max(5, ...tickets.map((ticket) => formatBacklogTitle(ticket).length));
     const tdW = 8;
     const sep = `+${"-".repeat(numW + 2)}+${"-".repeat(idW + 2)}+${"-".repeat(titleW + 2)}+${"-".repeat(statusW + 2)}+${"-".repeat(tdW + 2)}+`;
     const pad = (s: string, w: number, align: "left" | "right" = "left") =>
@@ -96,12 +107,19 @@ export async function handleBacklogCommand(reply: Reply, proKeyHash?: string): P
         : s + " ".repeat(Math.max(0, w - s.length));
     const header = `| ${pad("#", numW)} | ${pad("ID", idW)} | ${pad("Title", titleW)} | ${pad("Status", statusW)} | ${pad("Reward", tdW)} |`;
     const rows = tickets.map((t, i) =>
-      `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(`${t.is_locked ? "🔒 " : ""}${t.title}`, titleW)} | ${pad(t.is_locked ? "LOCKED" : "OPEN", statusW)} | ${pad(t.is_locked ? "--" : String(t.technical_debt * 10), tdW, "right")} |`
+      `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(formatBacklogTitle(t), titleW)} | ${pad(t.is_locked ? "PREMIUM" : "OPEN", statusW)} | ${pad(t.is_locked ? "--" : String(t.technical_debt * 10), tdW, "right")} |`
     );
     const table = [sep, header, sep, ...rows, sep].join("\n");
-    const hasLockedRows = tickets.some((ticket) => ticket.is_locked);
-    const footer = hasLockedRows
-      ? "Locked rows are premium teasers. Upgrade to Claude Cope Max to claim them."
+    const lockedTickets = tickets.filter((ticket) => ticket.is_locked);
+    const footer = lockedTickets.length > 0
+      ? [
+        "Type `/take <row>` to claim an open ticket. Locked rows are teaser-only for free users.",
+        "",
+        "**Premium Teasers**",
+        ...lockedTickets.map((ticket) => `- ${formatBacklogTitle(ticket)}${ticket.upgrade_teaser?.trim() ? ` - ${ticket.upgrade_teaser.trim()}` : ""}`),
+        "",
+        "Run `/upgrade` to unlock premium backlog tickets.",
+      ].join("\n")
       : `Type \`/take 1\` through \`/take ${tickets.length}\` to claim a ticket.`;
     reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]\n\n\`\`\`\n${table}\n\`\`\`\n\n${footer}` });
   } catch {
@@ -116,9 +134,9 @@ export function handleTakeCommand(
   state: GameState,
   setState: SetState,
   reply: Reply,
-  opts: { setInputValue: (v: string) => void; onAccept?: () => void; onSuggestedReply?: (v: string) => void },
+  opts: { setInputValue: (v: string) => void; onAccept?: () => void; onSuggestedReply?: (v: string) => void; onLocked?: (ticket: BacklogTicket) => void },
 ): boolean {
-  const { onAccept, onSuggestedReply } = opts;
+  const { onAccept, onSuggestedReply, onLocked } = opts;
   const input = command.slice("/take".length).trim();
   if (!input) {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: SlashCommandFailureReasons.NO_ARGUMENT });
@@ -151,8 +169,9 @@ export function handleTakeCommand(
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: SlashCommandFailureReasons.LOCKED });
     reply({
       role: "system",
-      content: `[🔒] **${ticket.title}** is a premium backlog ticket.${ticket.upgrade_teaser ? ` ${ticket.upgrade_teaser}` : " Upgrade to Claude Cope Max to claim it."}`,
+      content: formatLockedTicketPrompt(ticket),
     });
+    onLocked?.(ticket);
     return true;
   }
 

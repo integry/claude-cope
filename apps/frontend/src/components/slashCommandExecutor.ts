@@ -15,7 +15,7 @@ import type { Message } from "./Terminal";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 import { getRandomTip } from "../game/tips";
 import { buildAchievementBox } from "./achievementBox";
-import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand } from "./ticketCommands";
+import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand, formatLockedTicketPrompt } from "./ticketCommands";
 import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
 
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
@@ -662,6 +662,11 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
   if (!offer) {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.NO_OFFER });
     reply({ role: "error", content: pickRandom(ACCEPT_NO_TICKET_MESSAGES) });
+  } else if (offer.is_locked) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.LOCKED });
+    clearPendingOffer();
+    reply({ role: "system", content: formatLockedTicketPrompt(offer) });
+    handleUpgradeCommand(ctx);
   } else if (ctx.state.activeTicket) {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.ALREADY_ACTIVE });
     reply({ role: "error", content: pickRandom(ACCEPT_ALREADY_ACTIVE_MESSAGES)(ctx.state.activeTicket.title) });
@@ -821,7 +826,12 @@ function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply
     if (asyncResult === "async") return "async";
     if (!asyncResult) {
       if (command.startsWith("/take")) {
-        handleTakeCommand(command, ctx.state, ctx.setState, reply, { setInputValue: ctx.setInputValue, onAccept: ctx.playChime, onSuggestedReply: ctx.onSuggestedReply });
+        handleTakeCommand(command, ctx.state, ctx.setState, reply, {
+          setInputValue: ctx.setInputValue,
+          onAccept: ctx.playChime,
+          onSuggestedReply: ctx.onSuggestedReply,
+          onLocked: () => handleUpgradeCommand(ctx),
+        });
       } else if (command === "/accept") {
         handleAcceptCommand(ctx, reply);
       } else if (command === "/abandon") {
