@@ -145,6 +145,7 @@ export default class ClaudeCopeServer implements Party.Server {
         // End the event if the community successfully depletes the health bar
         if (this.outageHp <= 0) {
           this.isOutageActive = false;
+          this.outageHp = 0;
           if (this.outageTimer) {
             clearTimeout(this.outageTimer);
             this.outageTimer = null;
@@ -407,6 +408,7 @@ export default class ClaudeCopeServer implements Party.Server {
       if (this.isOutageActive && this.activeOutageScenario) {
         this.isOutageActive = false;
         this.outageHp = 0;
+        this.outageTimer = null;
         this.broadcast({
           type: "outage_failed",
           scenario: this.activeOutageScenario,

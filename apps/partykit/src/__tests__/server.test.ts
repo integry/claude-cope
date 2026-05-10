@@ -97,6 +97,21 @@ function expectScenarioIdentity(message: { scenario: OutageScenario }, scenario:
   expect(message.scenario.title).toBe(scenario.title);
 }
 
+function getOutageScenario(id: string): OutageScenario {
+  return OUTAGE_SCENARIOS.find((entry) => entry.id === id)!;
+}
+
+function sendOutageDamage(
+  harness: ServerHarness,
+  from: FakeConnection,
+  command: string,
+  hits = 1
+): void {
+  for (let i = 0; i < hits; i++) {
+    harness.send(from, { type: "damage_outage", command });
+  }
+}
+
 // ── ServerHarness ───────────────────────────────────────────────────────
 // Thin typed adapter over `ClaudeCopeServer`. The only `as unknown as` casts
 // in the test file live here; every test interacts through typed methods.
@@ -142,6 +157,22 @@ class ServerHarness {
 
   accept(from: FakeConnection): void {
     this.send(from, { type: "accept_review_ping" });
+  }
+
+  startOutage(): void {
+    (this.server as unknown as { startOutage: () => void }).startOutage();
+  }
+
+  outageState(): {
+    outageHp: number;
+    isOutageActive: boolean;
+    activeOutageScenario: OutageScenario | null;
+  } {
+    return this.server as unknown as {
+      outageHp: number;
+      isOutageActive: boolean;
+      activeOutageScenario: OutageScenario | null;
+    };
   }
 
   // Raw client→server for the handful of tests that intentionally send a
@@ -420,18 +451,19 @@ describe("PartyKit outage lifecycle", () => {
   it("broadcasts authoritative scenario metadata on start, update, and clear", () => {
     const alice = harness.connect("conn-a", "Alice");
     vi.spyOn(Math, "random").mockReturnValue(0.3);
+    const scenario = getOutageScenario("cloudflare-cache-purge");
+    const command = scenario.commands[1]!.label;
 
-    (harness.server as unknown as { startOutage: () => void }).startOutage();
+    harness.startOutage();
 
     const start = expectScenarioMessage<OutageStartMessage>(
       harness.room.broadcasts.at(-1),
       "outage_start"
     );
-    const scenario = OUTAGE_SCENARIOS.find((entry) => entry.id === "cloudflare-cache-purge")!;
     expectScenarioIdentity(start, scenario);
-    expect(start.scenario.commands[1]?.label).toBe(scenario.commands[1]?.label);
+    expect(start.scenario.commands[1]?.label).toBe(command);
 
-    harness.send(alice, { type: "damage_outage", command: scenario.commands[1]!.label });
+    sendOutageDamage(harness, alice, command);
     const update = expectScenarioMessage<OutageUpdateMessage>(
       harness.room.broadcasts.at(-1),
       "outage_update"
@@ -439,9 +471,7 @@ describe("PartyKit outage lifecycle", () => {
     expectScenarioIdentity(update, scenario);
     expect(update.hp).toBe(90);
 
-    for (let i = 0; i < 9; i++) {
-      harness.send(alice, { type: "damage_outage", command: scenario.commands[1]!.label });
-    }
+    sendOutageDamage(harness, alice, command, 9);
     const cleared = expectScenarioMessage<OutageClearedMessage>(
       harness.room.broadcasts.at(-1),
       "outage_cleared"
@@ -449,20 +479,31 @@ describe("PartyKit outage lifecycle", () => {
     expectScenarioIdentity(cleared, scenario);
   });
 
+  it("resets internal outage state after a successful clear", () => {
+    const alice = harness.connect("conn-a", "Alice");
+    vi.spyOn(Math, "random").mockReturnValue(0.3);
+    const scenario = getOutageScenario("cloudflare-cache-purge");
+
+    harness.startOutage();
+    sendOutageDamage(harness, alice, scenario.commands[1]!.label, 10);
+
+    const state = harness.outageState();
+    expect(state.isOutageActive).toBe(false);
+    expect(state.outageHp).toBe(0);
+    expect(state.activeOutageScenario).toBeNull();
+  });
+
   it("rejects damage_outage frames whose command does not match the active scenario", () => {
     const alice = harness.connect("conn-a", "Alice");
     vi.spyOn(Math, "random").mockReturnValue(0.3);
 
-    (harness.server as unknown as { startOutage: () => void }).startOutage();
+    harness.startOutage();
     const beforeCount = harness.room.broadcasts.length;
 
     harness.send(alice, { type: "damage_outage", command: "echo hacked" });
 
     expect(harness.room.broadcasts).toHaveLength(beforeCount);
-    const serverState = harness.server as unknown as {
-      outageHp: number;
-      activeOutageScenario: { id: string } | null;
-    };
+    const serverState = harness.outageState();
     expect(serverState.outageHp).toBe(100);
     expect(serverState.activeOutageScenario?.id).toBe("cloudflare-cache-purge");
   });
@@ -470,7 +511,7 @@ describe("PartyKit outage lifecycle", () => {
   it("broadcasts the same scenario metadata on outage failure", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.8);
 
-    (harness.server as unknown as { startOutage: () => void }).startOutage();
+    harness.startOutage();
     const start = harness.room.broadcasts.at(-1);
     expect(start?.type).toBe("outage_start");
 
