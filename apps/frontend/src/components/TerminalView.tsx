@@ -90,9 +90,10 @@ type TerminalViewProps = OverlayVisibility & {
 type BuddyOverlayProps = {
   buddy: GameState["buddy"];
   bottomOffset: number;
+  containerRef: RefObject<HTMLDivElement | null>;
 };
 
-function BuddyOverlay({ buddy, bottomOffset }: BuddyOverlayProps) {
+function BuddyOverlay({ buddy, bottomOffset, containerRef }: BuddyOverlayProps) {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
 
@@ -107,16 +108,23 @@ function BuddyOverlay({ buddy, bottomOffset }: BuddyOverlayProps) {
     }
 
     const updateScale = () => {
+      const container = containerRef.current;
       const width = overlay.scrollWidth;
       if (!width) {
         setScale(1);
         return;
       }
 
-      const styles = window.getComputedStyle(overlay);
-      const rightInset = Number.parseFloat(styles.right) || 0;
+      if (!container) {
+        setScale(1);
+        return;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      const overlayRect = overlay.getBoundingClientRect();
+      const rightInset = Math.max(0, containerRect.right - overlayRect.right);
       const leftPadding = 12;
-      const availableWidth = window.innerWidth - rightInset - leftPadding;
+      const availableWidth = containerRect.width - rightInset - leftPadding;
       const nextScale = availableWidth > 0 ? Math.min(1, availableWidth / width) : 1;
 
       setScale(nextScale);
@@ -124,18 +132,23 @@ function BuddyOverlay({ buddy, bottomOffset }: BuddyOverlayProps) {
 
     updateScale();
 
-    const resizeObserver = new ResizeObserver(() => {
-      updateScale();
-    });
-
-    resizeObserver.observe(overlay);
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        updateScale();
+      });
+      resizeObserver.observe(overlay);
+      if (containerRef.current) {
+        resizeObserver.observe(containerRef.current);
+      }
+    }
     window.addEventListener("resize", updateScale);
 
     return () => {
-      resizeObserver.disconnect();
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", updateScale);
     };
-  }, [buddy.type, buddy.isShiny]);
+  }, [buddy.type, buddy.isShiny, containerRef]);
 
   if (!buddy.type) {
     return null;
@@ -236,6 +249,7 @@ export function TerminalView({
   upgradeNagDismissPhase,
   upgradeNagDismissEffect,
 }: TerminalViewProps) {
+  const terminalContainerRef = useRef<HTMLDivElement | null>(null);
   const bottomChromeRef = useRef<HTMLDivElement | null>(null);
   const footerRef = useRef<HTMLDivElement | null>(null);
   const [buddyBottomOffset, setBuddyBottomOffset] = useState(0);
@@ -255,19 +269,24 @@ export function TerminalView({
 
     updateBottomOffset();
 
-    const resizeObserver = new ResizeObserver(() => {
-      updateBottomOffset();
-    });
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        updateBottomOffset();
+      });
 
-    if (bottomChromeNode) {
-      resizeObserver.observe(bottomChromeNode);
+      if (bottomChromeNode) {
+        resizeObserver.observe(bottomChromeNode);
+      }
+      if (footerNode) {
+        resizeObserver.observe(footerNode);
+      }
     }
-    if (footerNode) {
-      resizeObserver.observe(footerNode);
-    }
+    window.addEventListener("resize", updateBottomOffset);
 
     return () => {
-      resizeObserver.disconnect();
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateBottomOffset);
     };
   }, []);
 
@@ -279,7 +298,8 @@ export function TerminalView({
 
   return (
     <div
-      className={terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}
+      ref={terminalContainerRef}
+      className={`relative ${terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}`}
       style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : "var(--color-bg)", color: "var(--color-text)" }}
       onClick={() => {
         if (!anyOverlayOpen && !window.getSelection()?.toString()) inputRef.current?.focus();
@@ -318,7 +338,7 @@ export function TerminalView({
         />
         <div ref={bottomRef} />
       </div>
-      <BuddyOverlay buddy={state.buddy} bottomOffset={buddyBottomOffset} />
+      <BuddyOverlay buddy={state.buddy} bottomOffset={buddyBottomOffset} containerRef={terminalContainerRef} />
       <div ref={bottomChromeRef} className="shrink-0">
         <SprintProgressBar
           id={state.activeTicket?.id}

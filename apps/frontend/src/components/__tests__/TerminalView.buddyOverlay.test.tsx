@@ -220,4 +220,37 @@ describe("TerminalView buddy overlay", () => {
     expect(view.querySelector(".terminal-command-shell")?.querySelector(".terminal-buddy-overlay")).toBeNull();
     expect(view.querySelector("[data-testid='terminal-footer']")).not.toBeNull();
   });
+
+  it("scales the overlay down against the terminal container width on narrow layouts", () => {
+    const view = renderTerminalView(createState("Sarcastic Clippy"));
+    const overlay = view.querySelector(".terminal-buddy-overlay") as HTMLDivElement | null;
+    const terminal = view.firstElementChild as HTMLDivElement | null;
+
+    expect(overlay).not.toBeNull();
+    expect(terminal).not.toBeNull();
+
+    Object.defineProperty(overlay!, "scrollWidth", {
+      value: 440,
+      configurable: true,
+    });
+    Object.defineProperty(terminal!, "getBoundingClientRect", {
+      value: () => ({
+        width: 240,
+        right: 240,
+      }),
+      configurable: true,
+    });
+    Object.defineProperty(overlay!, "getBoundingClientRect", {
+      value: () => ({
+        right: 232,
+      }),
+      configurable: true,
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    expect(overlay?.getAttribute("style")).toContain("--terminal-buddy-scale: 0.5");
+  });
 });
