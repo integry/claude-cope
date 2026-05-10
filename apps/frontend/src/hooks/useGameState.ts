@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from "react";
+import type { ServerProfile } from "@claude-cope/shared/profile";
 import { track, identify } from "../analytics";
 import { AnalyticsEvents } from "../analyticsEvents";
 import { GENERATORS, UPGRADES, THEMES, FREE_TIER_RANK_CAP } from "../game/constants";
@@ -44,7 +45,7 @@ export function rollbackOptimisticThemePurchase(state: GameState, themeId: strin
 type SessionProfileResult = {
   found: boolean;
   username?: string;
-  profile?: { username?: string | null } | null;
+  profile?: ServerProfile | null;
   isPro?: boolean;
   quotaPercent?: number | null;
 };
