@@ -83,6 +83,7 @@ describe("premium backlog handling", () => {
     expect(message.content).toContain("🔒 [PREMIUM] Force View Events into Ad Creative Pipelines");
     expect(message.content).toContain("| OPEN     |      340 |");
     expect(message.content).toContain("| PREMIUM  |       -- |");
+    expect(message.content).toContain("[INFO] Showing all tickets. Want specific trauma? Try: `/backlog MELT`");
     expect(message.content).toContain("[UPGRADE REQUIRED] The following categories are locked behind Wallet Extraction:");
     expect(message.content).toContain("🔒 PIXEL (Ad Creative Pipelines)");
     expect(message.content).toContain("Run `/upgrade` to unlock 50+ specialized categories and premium suffering.");
@@ -150,5 +151,59 @@ describe("premium backlog handling", () => {
     expect(freeAccept).toHaveBeenCalledOnce();
     expect(freeSuggestedReply).toHaveBeenCalledWith("fix the lint config");
     expect(freeReply.mock.calls[0]?.[0].content).toContain("[🎫 **TICKET CLAIMED**]");
+  });
+
+  it("renders a filtered backlog header for valid category filters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: "MELT-02",
+          title: "MELT Unpick the Mainframe Ritual",
+          description: "Regular ticket",
+          technical_debt: 55,
+          kickoff_prompt: "touch the cobol",
+          category_prefix: "MELT",
+          category_label: "Mainframes / Legacy",
+          is_locked: false,
+          tier: "premium",
+        },
+      ]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const reply = vi.fn();
+
+    await handleBacklogCommand(reply, { category: "MELT", paidUser: true, proKeyHash: "pro-hash" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/tickets/community?category=MELT"),
+      expect.objectContaining({ headers: { "x-pro-key-hash": "pro-hash" } }),
+    );
+    expect(reply.mock.calls[0]?.[0].content).toContain("[ FILTER ACTIVE: MELT (Mainframes / Legacy) ]");
+    expect(reply.mock.calls[0]?.[0].content).not.toContain("Want specific trauma?");
+  });
+
+  it("blocks premium category filters for free users before any request is made", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const reply = vi.fn();
+
+    await handleBacklogCommand(reply, { category: "MELT", paidUser: false });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(reply.mock.calls[0]?.[0].content).toContain("CATEGORY LOCKED");
+    expect(reply.mock.calls[0]?.[0].content).toContain("MELT");
+  });
+
+  it("rejects invalid backlog categories with a readable error", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const reply = vi.fn();
+
+    await handleBacklogCommand(reply, { category: "NOPE", paidUser: true });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(reply.mock.calls[0]?.[0].content).toContain("Unknown backlog category");
+    expect(reply.mock.calls[0]?.[0].content).toContain("NOPE");
   });
 });

@@ -268,6 +268,56 @@ describe("GET /api/tickets/community backlog tiering", () => {
     expect(data.every((row) => row.tier === "free")).toBe(true);
     expect(data.every((row) => row.is_locked === false)).toBe(true);
   });
+
+  it("filters backlog rows by a free category", async () => {
+    const res = await app.request("/api/tickets/community?category=BLAME", {}, { DB: createCommunityMockDB(rows) });
+
+    expect(res.status).toBe(200);
+
+    const data = await res.json() as CommunityBacklogTicket[];
+
+    expect(data).toHaveLength(1);
+    expect(data[0]?.id).toBe("BLAME-001");
+    expect(data.every((row) => row.is_locked === false)).toBe(true);
+  });
+
+  it("returns 403 when a free user requests a premium category directly", async () => {
+    const res = await app.request("/api/tickets/community?category=SCAM", {}, { DB: createCommunityMockDB(rows) });
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error: "Backlog category SCAM (Web3 / Crypto) requires Claude Cope Max.",
+    });
+  });
+
+  it("returns filtered premium rows for paid users", async () => {
+    const res = await app.request(
+      "/api/tickets/community?category=SCAM",
+      { headers: { "x-pro-key-hash": "pro-hash" } },
+      { DB: createCommunityMockDB(rows, ["pro-hash"]) },
+    );
+
+    expect(res.status).toBe(200);
+
+    const data = await res.json() as CommunityBacklogTicket[];
+
+    expect(data).toHaveLength(1);
+    expect(data[0]).toMatchObject({
+      id: "SCAM-001",
+      is_locked: false,
+      tier: "premium",
+      category_prefix: "SCAM",
+    });
+  });
+
+  it("returns 400 for invalid category filters", async () => {
+    const res = await app.request("/api/tickets/community?category=NOPE", {}, { DB: createCommunityMockDB(rows) });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'Invalid backlog category "NOPE". Use /backlog to browse valid categories.',
+    });
+  });
 });
 
 describe("backlog tier helpers", () => {

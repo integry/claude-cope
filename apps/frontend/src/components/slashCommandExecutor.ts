@@ -15,7 +15,7 @@ import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 import { buildAchievementBox } from "./achievementBox";
-import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand, formatLockedTicketPrompt } from "./ticketCommands";
+import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand, formatLockedTicketPrompt, parseBacklogCategoryArgument } from "./ticketCommands";
 import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
 
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
@@ -924,8 +924,14 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
     const hasTask = Boolean(command.slice("/ticket".length).trim());
     if (hasTask) markValidSlashCommand(ctx, "/ticket");
     return completeAsyncSlashCommand(handleTicketCommand(command, reply), ctx);
-  } else if (command === "/backlog") {
-    return completeAsyncSlashCommand(handleBacklogCommand(reply, ctx.state.proKeyHash), ctx);
+  } else if (command === "/backlog" || command.startsWith("/backlog ")) {
+    const normalizedCategory = parseBacklogCategoryArgument(command) ?? undefined;
+    if (normalizedCategory) markValidSlashCommand(ctx, "/backlog");
+    return completeAsyncSlashCommand(handleBacklogCommand(reply, {
+      proKeyHash: ctx.state.proKeyHash,
+      category: normalizedCategory,
+      paidUser: isPaidUser(ctx.state),
+    }), ctx);
   } else if (command === "/sync" || command.startsWith("/sync ")) {
     return completeAsyncSlashCommand(handleSyncCommand(command, ctx, reply), ctx);
   } else if (command === "/shill") {

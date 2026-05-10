@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback, ChangeEvent, type ComponentProps } from "react";
 import type { ServerProfile } from "@claude-cope/shared/profile";
-import { SLASH_COMMANDS } from "./slashCommands";
+import { getSlashMenuItems, resolveSlashMenuSelection } from "./slashCommands";
 import { useGameState, Message } from "../hooks/useGameState";
-import { isFreeUser } from "../hooks/gameStateUtils";
+import { isFreeUser, isPaidUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
@@ -233,7 +233,8 @@ function Terminal() {
     setSlashQuery(value.startsWith("/") ? value : "");
     setSlashIndex(0);
   };
-  const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => !(cmd === "/store" && state.economy.totalTDEarned < 1000) && cmd.startsWith(slashQuery.toLowerCase()));
+  const getFilteredSlashCommands = () =>
+    getSlashMenuItems(slashQuery, state.economy.totalTDEarned, isPaidUser(state)).map((item) => item.value);
   const recordAcceptedAction = useCallback((baseCommand?: string) => {
     if (baseCommand === "/clear") {
       recordValidCommand(baseCommand, { suppressTip: true });
@@ -259,6 +260,19 @@ function Terminal() {
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") { runSlashCommandRef.current(command); return; }
     setInputValue(command + " "); setSlashQuery(""); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
+  }, []);
+  const handleSlashMenuSelect = useCallback((command: string) => {
+    const nextSelection = resolveSlashMenuSelection(command, "click");
+    if (nextSelection.mode === "execute") {
+      runSlashCommandRef.current(nextSelection.value);
+      return;
+    }
+
+    setInputValue(nextSelection.value);
+    setSlashQuery(nextSelection.nextQuery);
+    setSlashIndex(0);
+    setSuggestedReply(null);
+    inputRef.current?.focus();
   }, []);
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
     if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1 } }));
@@ -363,10 +377,11 @@ function Terminal() {
   });
   const terminalViewProps: TerminalViewProps = {
     activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme: state.activeTheme, regressionGlitch, anyOverlayOpen, inputRef,
-    closeAllOverlaysPreservingNag, onlineCount, rank, state, handleProfileClick, setInputValue, setSlashQuery, setSlashIndex, compactEffect, isBooting,
-    history, messageKeys: messageKeys.current, initialHistoryLen: initialHistoryLen.current, promptString, handleSlashCommandClick, bottomRef, slashQuery,
-    slashIndex, runSlashCommand, inputValue, suggestedReply, isProcessing, handleChange, handleKeyDown, buyGenerator, buyUpgrade, buyTheme, setActiveTheme,
-    ...terminalOverlayProps, setIsProcessing, setHistory, pendingNagCommand, handleUpgradeNagClose: handleUpgradeNagDismiss,
+    closeAllOverlaysPreservingNag, onlineCount, rank, state, handleProfileClick, setShowHelp, setShowAbout, setInputValue, setSlashQuery, setSlashIndex,
+    setShowUpgrade, compactEffect, isBooting, history, messageKeys: messageKeys.current, initialHistoryLen: initialHistoryLen.current, promptString,
+    handleSlashCommandClick, bottomRef, slashQuery, slashIndex, handleSlashMenuSelect, inputValue, suggestedReply, isProcessing, handleChange,
+    handleKeyDown, buyGenerator, buyUpgrade, buyTheme, setActiveTheme, ...terminalOverlayProps, setIsProcessing, setHistory, pendingNagCommand,
+    handleUpgradeNagClose: handleUpgradeNagDismiss,
     handleManualUpgradeDismiss, upgradeNagDismissPhase, upgradeNagDismissEffect,
   };
   return <TerminalView {...terminalViewProps} />;
