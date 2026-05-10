@@ -196,10 +196,6 @@ function Terminal() {
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
 
-  const recordAcceptedPromptCommand = useCallback(() => {
-    recordAcceptedAction();
-  }, [recordAcceptedAction]);
-
   const submitPromptCommand = useCallback((command: string) => {
     setCommandHistory((prev) => [...prev, command]); processCommandRef.current(command);
   }, []);
@@ -260,7 +256,6 @@ function Terminal() {
       buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades,
       onByokUsage: (usage) => setState((prev) => { const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 }; return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } }; }),
       onQuotaUpdate: (quotaPercent) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })); if (quotaPercent <= 0 && isFreeTier) nagArmedFromQuotaRef.current = true; },
-      onAccepted: recordAcceptedPromptCommand,
       onQuotaExhausted: () => {
         setCommandHistory((prev) => {
           const idx = prev.lastIndexOf(command);
@@ -317,9 +312,12 @@ function Terminal() {
       const command = pendingNagCommandRef.current;
       pendingNagCommandRef.current = null;
       nagArmedFromQuotaRef.current = false;
+      setInputValue("");
+      setHistoryIndex(-1);
+      recordMessageWithoutTicket();
       submitPromptCommand(command);
     }
-  }, [dismissUpgradeOverlay, submitPromptCommand]);
+  }, [dismissUpgradeOverlay, recordMessageWithoutTicket, submitPromptCommand]);
 
   const handleManualUpgradeDismiss = dismissUpgradeOverlay;
 

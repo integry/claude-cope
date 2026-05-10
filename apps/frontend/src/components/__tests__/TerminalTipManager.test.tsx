@@ -10,11 +10,17 @@ const {
   recordEnterMock,
   recordValidCommandMock,
   recordMessageWithoutTicketMock,
+  submitChatMessageMock,
+  setShowUpgradeMock,
+  shouldShowNagMock,
 } = vi.hoisted(() => ({
   executeSlashCommandMock: vi.fn(),
   recordEnterMock: vi.fn(),
   recordValidCommandMock: vi.fn(),
   recordMessageWithoutTicketMock: vi.fn(),
+  submitChatMessageMock: vi.fn(),
+  setShowUpgradeMock: vi.fn(),
+  shouldShowNagMock: vi.fn(() => false),
 }));
 
 vi.mock("../../config", () => ({
@@ -25,7 +31,7 @@ vi.mock("../../hooks/gameStateUtils", () => ({ isFreeUser: () => false }));
 vi.mock("../chatApi", () => ({
   computeBuddyInterjection: () => null,
   mergeSuggestedReply: (_prev: string | null, next: string) => next,
-  submitChatMessage: vi.fn(),
+  submitChatMessage: submitChatMessageMock,
 }));
 vi.mock("../slashCommandExecutor", () => ({
   executeSlashCommand: executeSlashCommandMock,
@@ -81,7 +87,7 @@ vi.mock("../../hooks/useOverlays", () => ({
     setShowContact: vi.fn(),
     setShowProfile: vi.fn(),
     setShowParty: vi.fn(),
-    setShowUpgrade: vi.fn(),
+    setShowUpgrade: setShowUpgradeMock,
     closeAllOverlays: vi.fn(),
   }),
 }));
@@ -119,27 +125,39 @@ vi.mock("../terminalInputHandlers", () => ({
   handleBuddyConfirm: vi.fn(),
   tryOutageDamage: () => false,
 }));
+vi.mock("../winrarNag", () => ({
+  shouldShowNag: shouldShowNagMock,
+}));
 vi.mock("../TerminalView", () => ({
   TerminalView: ({
     inputRef,
     inputValue,
     handleChange,
     handleKeyDown,
+    handleUpgradeNagClose,
   }: {
     inputRef: { current: HTMLInputElement | null };
     inputValue: string;
     handleChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
     handleKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
-  }) => createElement("input", {
-    ref: inputRef,
-    "aria-label": "terminal-input",
-    value: inputValue,
-    onChange: handleChange,
-    onInput: (event: React.FormEvent<HTMLInputElement>) => {
-      handleChange(event as React.ChangeEvent<HTMLInputElement>);
-    },
-    onKeyDown: handleKeyDown,
-  }),
+    handleUpgradeNagClose: () => void;
+  }) => createElement("div", null,
+    createElement("input", {
+      ref: inputRef,
+      "aria-label": "terminal-input",
+      value: inputValue,
+      onChange: handleChange,
+      onInput: (event: React.FormEvent<HTMLInputElement>) => {
+        handleChange(event as React.ChangeEvent<HTMLInputElement>);
+      },
+      onKeyDown: handleKeyDown,
+    }),
+    createElement("button", {
+      type: "button",
+      "aria-label": "dismiss-upgrade",
+      onClick: handleUpgradeNagClose,
+    }),
+  ),
 }));
 vi.mock("../terminalViewUtils", () => ({
   getPromptString: () => ">",
@@ -241,6 +259,10 @@ describe("Terminal tip-manager wiring", () => {
     executeSlashCommandMock.mockImplementation((command: string, ctx: { onValidSlashCommand?: (baseCommand: string) => void }) => {
       ctx.onValidSlashCommand?.(command.trim());
     });
+    submitChatMessageMock.mockReset();
+    setShowUpgradeMock.mockReset();
+    shouldShowNagMock.mockReset();
+    shouldShowNagMock.mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -271,5 +293,40 @@ describe("Terminal tip-manager wiring", () => {
     await submitCommand("ship it");
 
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not count accepted chat prompts toward slash-command milestone tips", async () => {
+    submitChatMessageMock.mockImplementation(({ onAccepted }: { onAccepted?: () => void }) => {
+      onAccepted?.();
+    });
+    await renderTerminal();
+    await submitCommand("ship it");
+
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+    expect(recordValidCommandMock).not.toHaveBeenCalled();
+  });
+
+  it("replays nagged prompts with normal backlog accounting and cleared input", async () => {
+    await renderTerminal();
+
+    await submitCommand("first prompt");
+    shouldShowNagMock.mockReturnValueOnce(true);
+    await submitCommand("retry me");
+
+    expect(setShowUpgradeMock).toHaveBeenCalledWith(true);
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+
+    const dismissButton = container.querySelector("button[aria-label='dismiss-upgrade']") as HTMLButtonElement | null;
+    const input = container.querySelector("input[aria-label='terminal-input']") as HTMLInputElement | null;
+    expect(dismissButton).not.toBeNull();
+    expect(input).not.toBeNull();
+
+    await act(async () => {
+      dismissButton!.click();
+    });
+
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(2);
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(2);
+    expect(input!.value).toBe("");
   });
 });
