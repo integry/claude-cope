@@ -5,6 +5,7 @@ import {
   getBacklogCategoryPrefix,
   isPremiumBacklogCategory,
 } from "@claude-cope/shared/backlogTiers";
+import type { CommunityBacklogTicket } from "@claude-cope/shared/backlogTickets";
 import { parseProviderList } from "@claude-cope/shared/openrouter";
 import tickets, { buildTicketRefineRequest } from "./tickets";
 
@@ -52,17 +53,16 @@ function createCommunityMockDB(rows: MockBacklogRow[], activeHashes: string[] = 
 
           const limitMatch = sql.match(/LIMIT\s+(\d+)/i);
           const limit = limitMatch ? Number(limitMatch[1]) : rows.length;
-          const likeBindings = bindings
+          const prefixBindings = bindings
             .map((binding) => String(binding))
-            .filter((binding) => binding.endsWith("-%"))
-            .map((binding) => binding.slice(0, -2));
+            .filter((binding) => !activeHashes.includes(binding));
 
           const filteredRows =
-            likeBindings.length === 0
+            prefixBindings.length === 0
               ? rows
               : rows.filter((row) => {
                   const prefix = row.id.split("-")[0];
-                  return likeBindings.includes(prefix);
+                  return prefixBindings.includes(prefix);
                 });
 
           return { results: filteredRows.slice(0, limit) as T[] };
@@ -205,13 +205,7 @@ describe("GET /api/tickets/community backlog tiering", () => {
     expect(res.headers.get("Cache-Control")).toBe("private, max-age=10");
     expect(res.headers.get("Vary")).toBe("x-pro-key-hash");
 
-    const data = await res.json() as Array<MockBacklogRow & {
-      category_prefix: string | null;
-      category_label: string | null;
-      is_locked: boolean;
-      tier: "free" | "premium";
-      upgrade_teaser?: string;
-    }>;
+    const data = await res.json() as CommunityBacklogTicket[];
 
     const unlockedRows = data.filter((row) => !row.is_locked);
     const lockedRows = data.filter((row) => row.is_locked);
@@ -223,9 +217,11 @@ describe("GET /api/tickets/community backlog tiering", () => {
     expect(lockedRows.length).toBeGreaterThanOrEqual(1);
     expect(lockedRows.length).toBeLessThanOrEqual(2);
     expect(lockedRows.every((row) => row.tier === "premium")).toBe(true);
-    expect(lockedRows.every((row) => row.kickoff_prompt === "")).toBe(true);
     expect(lockedRows.every((row) => row.category_prefix !== null && !FREE_BACKLOG_CATEGORY_PREFIXES.has(row.category_prefix))).toBe(true);
     expect(lockedRows.every((row) => row.upgrade_teaser && row.upgrade_teaser.length > 0)).toBe(true);
+    expect(lockedRows.every((row) => !("description" in row))).toBe(true);
+    expect(lockedRows.every((row) => !("technical_debt" in row))).toBe(true);
+    expect(lockedRows.every((row) => !("kickoff_prompt" in row))).toBe(true);
     expect(data.some((row) => row.id === "COMM-001")).toBe(false);
   });
 
@@ -238,11 +234,7 @@ describe("GET /api/tickets/community backlog tiering", () => {
 
     expect(res.status).toBe(200);
 
-    const data = await res.json() as Array<MockBacklogRow & {
-      category_prefix: string | null;
-      is_locked: boolean;
-      tier: "free" | "premium";
-    }>;
+    const data = await res.json() as CommunityBacklogTicket[];
 
     expect(data).toHaveLength(5);
     expect(data.some((row) => row.tier === "premium" && row.is_locked === false)).toBe(true);
@@ -269,11 +261,7 @@ describe("GET /api/tickets/community backlog tiering", () => {
 
     expect(res.status).toBe(200);
 
-    const data = await res.json() as Array<MockBacklogRow & {
-      category_prefix: string | null;
-      is_locked: boolean;
-      tier: "free" | "premium";
-    }>;
+    const data = await res.json() as CommunityBacklogTicket[];
 
     expect(data).toHaveLength(5);
     expect(data.every((row) => row.category_prefix === null)).toBe(true);

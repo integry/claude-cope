@@ -135,6 +135,20 @@ describe("UpgradeOverlay", () => {
     expect(onDismiss).not.toHaveBeenCalled();
   });
 
+  it("does NOT call onDismiss when the nag footer is tapped on mobile", () => {
+    const onDismiss = vi.fn();
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss, dismissMode: "nag" });
+    const footerButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Tap to retain your net worth"),
+    );
+
+    act(() => {
+      footerButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
   it("renders the forced-closing class when the nag enters its exit sequence", () => {
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag", dismissPhase: "closing", dismissEffect: "singularity" });
     expect(container.querySelector(".upgrade-desktop")?.classList.contains("upgrade-overlay-closing")).toBe(true);

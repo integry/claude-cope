@@ -1,27 +1,11 @@
 import { API_BASE } from "../config";
+import type { CommunityBacklogTicket, PlayableBacklogTicket } from "@claude-cope/shared/backlogTickets";
 import type { Message } from "./Terminal";
 
-type BacklogTicket = {
-  id: string;
-  reporter?: string | null;
-  reporter_name?: string | null;
-  reporter_title?: string | null;
-  reporter_description?: string | null;
-  title: string;
-  description: string;
-  technical_debt: number;
-  kickoff_prompt: string;
-  category_prefix?: string | null;
-  category_label?: string | null;
-  is_locked?: boolean;
-  tier?: "free" | "premium";
-  upgrade_teaser?: string;
-};
-
 /** The pending ticket offered to the user, waiting for /accept */
-let pendingTicketOffer: BacklogTicket | null = null;
+let pendingTicketOffer: PlayableBacklogTicket | null = null;
 
-export function getPendingOffer(): BacklogTicket | null {
+export function getPendingOffer(): PlayableBacklogTicket | null {
   return pendingTicketOffer;
 }
 
@@ -54,8 +38,8 @@ export async function fetchRandomTicketPrompt(
     });
     if (!res.ok) return;
 
-    const tickets = (await res.json()) as BacklogTicket[];
-    const playableTickets = tickets.filter((ticket) => !ticket.is_locked);
+    const tickets = (await res.json()) as CommunityBacklogTicket[];
+    const playableTickets = tickets.filter((ticket): ticket is PlayableBacklogTicket => !ticket.is_locked);
     if (!playableTickets.length) return;
 
     const ticket = playableTickets[Math.floor(Math.random() * playableTickets.length)]!;

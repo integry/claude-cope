@@ -7,6 +7,11 @@ import {
   getBacklogCategoryTierMeta,
   isPremiumBacklogCategory,
 } from "@claude-cope/shared/backlogTiers";
+import type {
+  CommunityBacklogTicket,
+  LockedBacklogTeaserTicket,
+  PlayableBacklogTicket,
+} from "@claude-cope/shared/backlogTickets";
 import { TICKET_PM_PROMPT } from "../prompts/ticketPrompt";
 import { parseProviderList } from "@claude-cope/shared/openrouter";
 import { isLicenseActive } from "../utils/profile";
@@ -37,14 +42,6 @@ interface BacklogTicketRow {
   technical_debt: number;
   kickoff_prompt: string;
   created_at: string;
-}
-
-interface BacklogTicketResponse extends BacklogTicketRow {
-  category_prefix: string | null;
-  category_label: string | null;
-  is_locked: boolean;
-  tier: "free" | "premium";
-  upgrade_teaser?: string;
 }
 
 const BACKLOG_PLAYABLE_LIMIT = 5;
@@ -79,7 +76,7 @@ function shuffleRows<T>(rows: readonly T[]): T[] {
   return shuffled;
 }
 
-function buildPlayableRow(row: BacklogTicketRow): BacklogTicketResponse {
+function buildPlayableRow(row: BacklogTicketRow): PlayableBacklogTicket {
   const categoryPrefix = getBacklogCategoryPrefix(row.id);
   const categoryMeta = categoryPrefix ? getBacklogCategoryTierMeta(categoryPrefix) : null;
 
@@ -92,14 +89,14 @@ function buildPlayableRow(row: BacklogTicketRow): BacklogTicketResponse {
   };
 }
 
-function buildLockedTeaser(row: BacklogTicketRow): BacklogTicketResponse {
+function buildLockedTeaser(row: BacklogTicketRow): LockedBacklogTeaserTicket {
   const categoryPrefix = getBacklogCategoryPrefix(row.id);
   const categoryMeta = categoryPrefix ? getBacklogCategoryTierMeta(categoryPrefix) : null;
   const categoryLabel = categoryMeta?.label ?? "premium backlog";
 
   return {
-    ...row,
-    kickoff_prompt: "",
+    id: row.id,
+    title: row.title,
     category_prefix: categoryPrefix,
     category_label: categoryMeta?.label ?? null,
     is_locked: true,
@@ -108,7 +105,7 @@ function buildLockedTeaser(row: BacklogTicketRow): BacklogTicketResponse {
   };
 }
 
-function buildPaidBacklogRows(rows: BacklogTicketRow[]): BacklogTicketResponse[] {
+function buildPaidBacklogRows(rows: BacklogTicketRow[]): PlayableBacklogTicket[] {
   const premiumRows = rows.filter((row) => isPremiumBacklogCategory(row.id));
   const initialSelection = rows.slice(0, BACKLOG_PLAYABLE_LIMIT);
 
@@ -120,11 +117,11 @@ function buildPaidBacklogRows(rows: BacklogTicketRow[]): BacklogTicketResponse[]
 }
 
 function buildCommunityBacklogPrefixQuery(prefixes: ReadonlySet<string>, limit: number): { sql: string; bindings: string[] } {
-  const bindings = [...prefixes].map((prefix) => `${prefix}-%`);
-  const whereClause = bindings.map(() => "id LIKE ?").join(" OR ");
+  const bindings = [...prefixes];
+  const whereClause = bindings.map(() => "?").join(", ");
 
   return {
-    sql: `${COMMUNITY_BACKLOG_SELECT} WHERE ${whereClause} ORDER BY RANDOM() LIMIT ${limit}`,
+    sql: `${COMMUNITY_BACKLOG_SELECT} WHERE substr(id, 1, instr(id, '-') - 1) IN (${whereClause}) ORDER BY RANDOM() LIMIT ${limit}`,
     bindings,
   };
 }
@@ -176,7 +173,7 @@ tickets.get("/community", async (c) => {
 
   const teaserRows = premiumRows.filter((row) => isPremiumBacklogCategory(row.id)).map(buildLockedTeaser);
 
-  return c.json(shuffleRows([...freeRows.map(buildPlayableRow), ...teaserRows]));
+  return c.json(shuffleRows<CommunityBacklogTicket>([...freeRows.map(buildPlayableRow), ...teaserRows]));
 });
 
 // eslint-disable-next-line complexity

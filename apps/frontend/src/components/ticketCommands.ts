@@ -2,6 +2,7 @@ import { track } from "../analytics";
 import { AnalyticsEvents, SlashCommandFailureReasons } from "../analyticsEvents";
 import { API_BASE, TICKET_REFINE_ENABLED } from "../config";
 import type { GameState } from "../hooks/useGameState";
+import type { CommunityBacklogTicket } from "@claude-cope/shared/backlogTickets";
 import type { Message } from "./Terminal";
 import { prefetchSequences } from "./toolSequences";
 import { updateTicketServer } from "../api/profileApi";
@@ -9,29 +10,16 @@ import { updateTicketServer } from "../api/profileApi";
 type Reply = (msg: Message) => void;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
 
-export type BacklogTicket = {
-  id: string;
-  title: string;
-  description: string;
-  technical_debt: number;
-  kickoff_prompt: string;
-  category_prefix?: string | null;
-  category_label?: string | null;
-  is_locked?: boolean;
-  tier?: "free" | "premium";
-  upgrade_teaser?: string;
-};
-
 /** Cache last backlog results so `/take 2` can resolve by row number */
-let lastBacklogResults: BacklogTicket[] = [];
+let lastBacklogResults: CommunityBacklogTicket[] = [];
 
-function formatBacklogTitle(ticket: BacklogTicket): string {
+function formatBacklogTitle(ticket: CommunityBacklogTicket): string {
   const categoryPrefix = ticket.category_prefix?.trim() ? `${ticket.category_prefix.trim()} ` : "";
   const premiumPrefix = ticket.is_locked ? "🔒 [PREMIUM] " : "";
   return `${premiumPrefix}${categoryPrefix}${ticket.title}`;
 }
 
-export function formatLockedTicketPrompt(ticket: BacklogTicket): string {
+export function formatLockedTicketPrompt(ticket: CommunityBacklogTicket): string {
   const teaser = ticket.upgrade_teaser?.trim() ? ` ${ticket.upgrade_teaser.trim()}` : " Upgrade to Claude Cope Max to claim it.";
   return `[🔒 **[PREMIUM]**] **${ticket.title}** is locked behind Max.${teaser}`;
 }
@@ -86,7 +74,7 @@ export async function handleBacklogCommand(reply: Reply, proKeyHash?: string): P
       return true;
     }
 
-    const tickets = await res.json() as BacklogTicket[];
+    const tickets = await res.json() as CommunityBacklogTicket[];
     if (!tickets.length) {
       const hint = TICKET_REFINE_ENABLED ? " Submit tickets with `/ticket <description>`." : "";
       reply({ role: "system", content: `[📋 **BACKLOG**] The backlog is empty.${hint}` });
@@ -134,7 +122,7 @@ export function handleTakeCommand(
   state: GameState,
   setState: SetState,
   reply: Reply,
-  opts: { setInputValue: (v: string) => void; onAccept?: () => void; onSuggestedReply?: (v: string) => void; onLocked?: (ticket: BacklogTicket) => void },
+  opts: { setInputValue: (v: string) => void; onAccept?: () => void; onSuggestedReply?: (v: string) => void; onLocked?: (ticket: CommunityBacklogTicket) => void },
 ): boolean {
   const { onAccept, onSuggestedReply, onLocked } = opts;
   const input = command.slice("/take".length).trim();
@@ -152,7 +140,7 @@ export function handleTakeCommand(
 
   // Resolve ticket: try row number from cached backlog first, then raw ID
   const rowNum = parseInt(input, 10);
-  let ticket: BacklogTicket | undefined;
+  let ticket: CommunityBacklogTicket | undefined;
   if (!isNaN(rowNum) && rowNum >= 1 && rowNum <= lastBacklogResults.length) {
     ticket = lastBacklogResults[rowNum - 1];
   } else {
