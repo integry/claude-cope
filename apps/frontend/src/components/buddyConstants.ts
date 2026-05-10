@@ -37,6 +37,9 @@ export const BUDDY_ICONS: Record<string, string> = {
   ].join("\n"),
 };
 
+const BUDDY_TEXT_GAP = "   ";
+const BUDDY_TEXT_WRAP = 64;
+
 export const BUDDY_INTERJECTIONS: Record<string, string[]> = {
   "Agile Snail": [
     "Would you like to schedule a retrospective?",
@@ -74,3 +77,72 @@ export const BUDDY_INTERJECTIONS: Record<string, string[]> = {
     "The CI is red. MY CAREER IS OVER.",
   ],
 };
+
+function wrapBuddyText(text: string, maxWidth: number): string[] {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return [""];
+  }
+
+  const lines: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+    if (nextLine.length > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = nextLine;
+    }
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
+}
+
+export function formatBuddyInterjection(type: string, text: string): string {
+  const artLines = (BUDDY_ICONS[type] ?? "🐾").split("\n");
+  const wrappedText = wrapBuddyText(text, BUDDY_TEXT_WRAP);
+  const artWidth = Math.max(...artLines.map((line) => line.length));
+  const totalLines = Math.max(artLines.length, wrappedText.length + 1);
+  const output: string[] = [];
+
+  for (let index = 0; index < totalLines; index++) {
+    const art = artLines[index] ?? "";
+    const artColumn = art.padEnd(artWidth, " ");
+    let speech = "";
+    if (index === 0) {
+      speech = `[${type}]`;
+    } else if (wrappedText[index - 1]) {
+      speech = wrappedText[index - 1]!;
+    }
+    output.push(speech ? `${artColumn}${BUDDY_TEXT_GAP}${speech}` : art);
+  }
+
+  return output.join("\n");
+}
+
+export function extractBuddyInterjectionBlock(content: string): { block: string; body: string } | null {
+  const trimmedContent = content.replace(/^\n+/, "");
+  const separatorIndex = trimmedContent.indexOf("\n\n");
+  const block = separatorIndex >= 0 ? trimmedContent.slice(0, separatorIndex) : trimmedContent;
+  const body = separatorIndex >= 0 ? trimmedContent.slice(separatorIndex + 2) : "";
+  const lines = block.split("\n");
+
+  for (const art of Object.values(BUDDY_ICONS)) {
+    const artLines = art.split("\n");
+    if (artLines.every((artLine, index) => lines[index]?.startsWith(artLine))) {
+      return { block, body };
+    }
+  }
+
+  if (/^\S.*\s{3,}\[[^\]]+\]$/.test(lines[0] ?? "")) {
+    return { block, body };
+  }
+
+  return null;
+}

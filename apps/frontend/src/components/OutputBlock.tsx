@@ -8,6 +8,7 @@ import { ShareButton } from "./ShareButton";
 import { renderWithSlashLinks } from "./slashCommandLinks";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { appendShareMarker, buildMarkdownComponents, cleanLLMOutput } from "./OutputBlockMarkdown";
+import { extractBuddyInterjectionBlock } from "./buddyConstants";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
@@ -98,7 +99,7 @@ function TokenCounter({ tokensSent, tokensReceived }: { tokensSent?: number; tok
 // monospace so the ASCII art lines up. Other multi-line warnings (rate-limit
 // errors, etc.) should wrap normally.
 function isBuddyMessage(content: string): boolean {
-  return /\n\[[^\]]+\]\s/.test(content);
+  return extractBuddyInterjectionBlock(content) !== null;
 }
 
 function getContainerClass(message: Message, isNew: boolean): string {

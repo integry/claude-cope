@@ -3,7 +3,7 @@ import type { Message } from "../hooks/gameStateUtils";
 import type { BuddyState } from "../hooks/useGameState";
 import type { ModesState } from "../hooks/gameStateUtils";
 import type { ServerProfile } from "@claude-cope/shared/profile";
-import { BUDDY_ICONS, BUDDY_INTERJECTIONS } from "./buddyConstants";
+import { BUDDY_INTERJECTIONS, formatBuddyInterjection } from "./buddyConstants";
 import { API_BASE, BYOK_ENABLED, VERIFY_URL } from "../config";
 import { supabase } from "../supabaseClient";
 import { buildAchievementBox } from "./achievementBox";
@@ -40,12 +40,11 @@ export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionRe
   const promptCount = buddy.promptsSinceLastInterjection + 1;
   if (promptCount < 3) return null;
   if (promptCount < 7 && Math.random() >= 0.33) return null;
-  const icon = BUDDY_ICONS[buddy.type] ?? "🐾";
   const lines = BUDDY_INTERJECTIONS[buddy.type] ?? ["stares at you blankly."];
   const text = lines[Math.floor(Math.random() * lines.length)]!;
   const shouldDeleteHistory = buddy.type === "10x Dragon" && Math.random() < 0.5;
   return {
-    message: { role: "warning", content: `${icon}\n[${buddy.type}] ${text}` },
+    message: { role: "warning", content: formatBuddyInterjection(buddy.type, text) },
     shouldDeleteHistory,
   };
 }
@@ -292,7 +291,7 @@ export function submitChatMessage(opts: {
 
       // Build buddy message from LLM-generated interjection or fallback to client-side
       const buddyMessage = buddySays && opts.buddyType
-        ? { role: "warning" as const, content: `${BUDDY_ICONS[opts.buddyType] ?? "🐾"}\n[${opts.buddyType}] ${buddySays}` }
+        ? { role: "warning" as const, content: formatBuddyInterjection(opts.buddyType, buddySays) }
         : buddyResult?.message ?? null;
 
       // Merge sprint-complete text into the AI reply so they appear as a single message
