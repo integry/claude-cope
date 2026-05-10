@@ -333,7 +333,12 @@ function applySlashCommandAccounting(ctx: SlashCommandContext, baseCommand: stri
 }
 
 function markValidSlashCommand(ctx: SlashCommandContext, baseCommand: string): void {
-  ctx.queueSlashCommandAccounting?.(baseCommand) ?? applySlashCommandAccounting(ctx, baseCommand);
+  if (ctx.queueSlashCommandAccounting) {
+    ctx.queueSlashCommandAccounting(baseCommand);
+    return;
+  }
+
+  applySlashCommandAccounting(ctx, baseCommand);
 }
 
 function getSlashCommandAccountingPolicy(baseCommand: string): "tracked" | "conditional" | "excluded" {
@@ -814,7 +819,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
   }
 }
 
-async function handleShillCommand(ctx: SlashCommandContext, reply: Reply): Promise<void> {
+async function handleShillCommand(reply: Reply): Promise<void> {
   const tweetText = encodeURIComponent("I'm mass-producing Technical Debt at mass velocity in Claude COPE — the idle game where every prompt is a mistake. https://claudecope.com");
   window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, "_blank");
   try {
@@ -879,7 +884,7 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
     handleSyncCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
     return "async";
   } else if (command === "/shill") {
-    handleShillCommand(ctx, reply).then(() => ctx.setIsProcessing(false));
+    handleShillCommand(reply).then(() => ctx.setIsProcessing(false));
     return "async";
   }
   return false;
