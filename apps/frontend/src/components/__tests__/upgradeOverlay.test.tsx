@@ -135,7 +135,7 @@ describe("UpgradeOverlay", () => {
     expect(onDismiss).not.toHaveBeenCalled();
   });
 
-  it("does NOT call onDismiss when the nag footer is tapped on mobile", () => {
+  it("does call onDismiss when the nag footer is tapped on mobile", () => {
     const onDismiss = vi.fn();
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss, dismissMode: "nag" });
     const footerButton = Array.from(container.querySelectorAll("button")).find((button) =>
@@ -146,7 +146,7 @@ describe("UpgradeOverlay", () => {
       footerButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onDismiss).not.toHaveBeenCalled();
+    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
   it("renders the forced-closing class when the nag enters its exit sequence", () => {

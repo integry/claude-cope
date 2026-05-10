@@ -401,12 +401,10 @@ function MobileLayout({
         {/* ESC / close */}
         <button
           type="button"
-          onClick={dismissMode === "manual"
-            ? (e) => {
-                e.stopPropagation();
-                onDismiss();
-              }
-            : undefined}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDismiss();
+          }}
           style={{
             display: "block",
             width: "100%",
