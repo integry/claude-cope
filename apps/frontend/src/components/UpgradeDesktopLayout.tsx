@@ -27,19 +27,11 @@ export type LayoutProps = {
   multiAvailable: boolean;
   quotaLine: string;
   premiumCategoryCount: number;
-  premiumGroups: Array<{
-    id: string;
-    title: string;
-    summary: string;
-  }>;
+  premiumGroups: Array<{ id: string; title: string; summary: string }>;
   dismissMode?: "manual" | "nag";
   dismissPhase?: "idle" | "closing";
   dismissEffect?: UpgradeNagCloseEffect;
-  closeEffectPresentation?: {
-    panelAnimation: string;
-    backdropAnimation: string;
-    overlayAnimation?: string;
-  };
+  closeEffectPresentation?: { panelAnimation: string; backdropAnimation: string; overlayAnimation?: string };
   onDismiss?: () => void;
 };
 
@@ -78,13 +70,7 @@ export default function DesktopLayout({
   const [isDesktopViewport, setIsDesktopViewport] = useState(getIsDesktopViewport);
   const boxLine = (text: string, color = W) => {
     const padded = text.length < INNER_W ? text + " ".repeat(INNER_W - text.length) : text.slice(0, INNER_W);
-    return (
-      <>
-        <span style={{ color: B }}>{"║"}</span>
-        <span style={{ color }}>{padded}</span>
-        <span style={{ color: B }}>{"║"}</span>
-      </>
-    );
+    return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{padded}</span><span style={{ color: B }}>{"║"}</span></>;
   };
   const emptyLine = boxLine("");
   const availableOptionIds = useMemo(() => getOptionIdList(singleAvailable, multiAvailable), [singleAvailable, multiAvailable]);
@@ -93,14 +79,7 @@ export default function DesktopLayout({
   const [showManualFocus, setShowManualFocus] = useState(false);
   const boxLineRich = (content: React.ReactNode, textLength: number) => {
     const padLen = Math.max(0, INNER_W - textLength);
-    return (
-      <>
-        <span style={{ color: B }}>{"║"}</span>
-        {content}
-        <span>{padLen > 0 ? " ".repeat(padLen) : ""}</span>
-        <span style={{ color: B }}>{"║"}</span>
-      </>
-    );
+    return <><span style={{ color: B }}>{"║"}</span>{content}<span>{padLen > 0 ? " ".repeat(padLen) : ""}</span><span style={{ color: B }}>{"║"}</span></>;
   };
   const centeredBoxLine = (text: string, color = W) => {
     const { left, right } = getCenteredPadding(text);
@@ -124,20 +103,8 @@ export default function DesktopLayout({
     if (currentLine) lines.push(currentLine);
     return lines;
   };
-  const renderWrappedBoxLines = (text: string, color = W) =>
-    wrapText(text).map((line, index) => (
-      <span key={`${color}-${index}-${line}`}>
-        {boxLine(`  ${line}`, color)}
-        {"\n"}
-      </span>
-    ));
-  const buttonBlock = (
-    id: OptionId,
-    label: string,
-    url: string,
-    available: boolean,
-    primary = true,
-  ) => {
+  const renderWrappedBoxLines = (text: string, color = W) => wrapText(text).map((line, index) => <span key={`${color}-${index}-${line}`}>{boxLine(`  ${line}`, color)}{"\n"}</span>);
+  const buttonBlock = (id: OptionId, label: string, url: string, available: boolean, primary = true) => {
     const MARGIN = 2;
     const cursorPrefix = " > ";
     const btnContent = " " + label + " ";
@@ -152,20 +119,11 @@ export default function DesktopLayout({
         ref={(element) => { optionRefs.current[id] = element; }}
         className={primary ? "upgrade-btn-primary" : "upgrade-btn-secondary"}
         data-selected={selected ? "true" : "false"}
-        style={{
-          display: "inline",
-          textDecoration: "none",
-          cursor: "pointer",
-          backgroundColor: "transparent",
-        }}
+        style={{ display: "inline", textDecoration: "none", cursor: "pointer", backgroundColor: "transparent" }}
         tabIndex={isForcedClosing ? -1 : undefined}
         aria-hidden={isForcedClosing ? true : undefined}
         onClick={(e) => e.stopPropagation()}
-        onMouseDown={() => {
-          focusSourceRef.current = "pointer";
-          setIsKeyboardNavigationMode(false);
-          setShowManualFocus(false);
-        }}
+        onMouseDown={() => { focusSourceRef.current = "pointer"; setIsKeyboardNavigationMode(false); setShowManualFocus(false); }}
         onKeyDown={(event) => {
           if (shouldBlockManualLinkEnter(event, isKeyboardNavigationMode, showManualFocus)) {
             event.preventDefault();
@@ -180,9 +138,7 @@ export default function DesktopLayout({
             return;
           }
           setShowManualFocus(false);
-          if (focusSourceRef.current !== "pointer") {
-            setIsKeyboardNavigationMode(true);
-          }
+          if (focusSourceRef.current !== "pointer") setIsKeyboardNavigationMode(true);
         }}
       >
         <span style={{ color: B }}>{"║"}</span>
