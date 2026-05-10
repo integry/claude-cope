@@ -31,10 +31,7 @@ import { useUpgradeNagState } from "./useUpgradeNagState";
 export type { Message };
 type TerminalViewProps = ComponentProps<typeof TerminalView>;
 export const STARTUP_TICKET_PROMPT_DELAY_MS = 300;
-function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
-  while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++);
-  if (messageKeys.length > historyLength) messageKeys.length = historyLength;
-}
+function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) { while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++); if (messageKeys.length > historyLength) messageKeys.length = historyLength; }
 function Terminal() {
   const {
     state,
@@ -117,7 +114,8 @@ function Terminal() {
   const historyRef = useRef(history);
   historyRef.current = history;
   const lastSuggestedReplyRef = useRef<string | null>(null);
-  const pendingBacklogRollbackRef = useRef<(() => void) | null>(null);
+  const nextPendingBacklogRollbackIdRef = useRef(0);
+  const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
@@ -236,7 +234,17 @@ function Terminal() {
   };
   const getFilteredSlashCommands = () =>
     getSlashMenuItems(slashQuery, state.economy.totalTDEarned, isPaidUser(state)).map((item) => item.value);
-  const recordAcceptedAction = useCallback((baseCommand?: string) => {
+  const settlePendingBacklogRollback = useCallback((rollbackId: number, shouldRollback: boolean) => {
+    const rollback = pendingBacklogRollbacksRef.current.get(rollbackId);
+    if (!rollback) {
+      return;
+    }
+    pendingBacklogRollbacksRef.current.delete(rollbackId);
+    if (shouldRollback) {
+      rollback();
+    }
+  }, []);
+  const recordValidatedSlashCommand = useCallback((baseCommand?: string) => {
     if (baseCommand === "/clear") {
       recordValidCommand(baseCommand, { suppressTip: true });
       return;
@@ -244,20 +252,19 @@ function Terminal() {
     recordValidCommand(baseCommand);
   }, [recordValidCommand]);
   const runSlashCommand = useCallback((command: string) => {
-    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme, onValidSlashCommand: recordAcceptedAction });
-  }, [state, setState, setHistory, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply, recordAcceptedAction]);
+    executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme, onValidSlashCommand: recordValidatedSlashCommand });
+  }, [state, setState, setHistory, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply, recordValidatedSlashCommand]);
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
   useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, setHistory, runSlashCommand });
-  const handlePromptAccepted = useCallback(() => {
-    pendingBacklogRollbackRef.current = null;
+  const handlePromptAccepted = useCallback((rollbackId: number) => {
+    settlePendingBacklogRollback(rollbackId, false);
     clearPendingNag();
-  }, [clearPendingNag]);
-  const handlePromptError = useCallback(() => {
-    pendingBacklogRollbackRef.current?.();
-    pendingBacklogRollbackRef.current = null;
+  }, [clearPendingNag, settlePendingBacklogRollback]);
+  const handlePromptError = useCallback((rollbackId: number) => {
+    settlePendingBacklogRollback(rollbackId, true);
     playError();
-  }, [playError]);
+  }, [playError, settlePendingBacklogRollback]);
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") { runSlashCommandRef.current(command); return; }
     setInputValue(command + " "); setSlashQuery(""); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
@@ -268,7 +275,6 @@ function Terminal() {
       runSlashCommandRef.current(nextSelection.value);
       return;
     }
-
     setInputValue(nextSelection.value);
     setSlashQuery(nextSelection.nextQuery);
     setSlashIndex(0);
@@ -303,14 +309,14 @@ function Terminal() {
       if (!completed) return;
       freeTierDelayRef.current = { cancelled: false, timeoutId: null };
     } else { setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]); setIsProcessing(true); }
-    pendingBacklogRollbackRef.current = recordMessageWithoutTicket();
+    const rollbackId = nextPendingBacklogRollbackIdRef.current++;
+    pendingBacklogRollbacksRef.current.set(rollbackId, recordMessageWithoutTicket());
     const contextMessages = filterChatHistory(historyRef.current);
     const chatMessages = isFreeTier ? contextMessages : [...contextMessages, { role: "user", content: userMessage.content }];
     const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({ getState: getCurrentState, updateTicketProgress, addActiveTD, playChime, setState, onCompletedRewardSettled: (ticketId, profile) => { applySettledCompletedReward(ticketId, profile); } });
     const controller = new AbortController();
     controller.signal.addEventListener("abort", () => {
-      pendingBacklogRollbackRef.current?.();
-      pendingBacklogRollbackRef.current = null;
+      settlePendingBacklogRollback(rollbackId, true);
     }, { once: true });
     abortControllerRef.current = controller;
     submitChatMessage({
@@ -321,8 +327,7 @@ function Terminal() {
       onByokUsage: (usage) => setState((prev) => { const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 }; return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } }; }),
       onQuotaUpdate: (quotaPercent) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })); if (quotaPercent <= 0 && isFreeTier) nagArmedFromQuotaRef.current = true; },
       onQuotaExhausted: () => {
-        pendingBacklogRollbackRef.current?.();
-        pendingBacklogRollbackRef.current = null;
+        settlePendingBacklogRollback(rollbackId, true);
         setCommandHistory((prev) => {
           const idx = prev.lastIndexOf(command);
           return idx >= 0 ? [...prev.slice(0, idx), ...prev.slice(idx + 1)] : prev;
@@ -338,8 +343,8 @@ function Terminal() {
         handleQuotaLockout(command);
       },
       onProfileUpdate: (profile) => applyProfileUpdate(profile),
-      onAccepted: handlePromptAccepted,
-      onError: handlePromptError, signal: controller.signal,
+      onAccepted: () => handlePromptAccepted(rollbackId),
+      onError: () => handlePromptError(rollbackId), signal: controller.signal,
     });
   };
   processCommandRef.current = processCommand;
@@ -391,5 +396,4 @@ function Terminal() {
   };
   return <TerminalView {...terminalViewProps} />;
 }
-
 export default Terminal;

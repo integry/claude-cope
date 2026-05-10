@@ -1,16 +1,20 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createElement } from "react";
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import type React from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  cleanupRenderedTerminal,
+  getButton,
+  getInput,
+  renderTerminal,
+  submitCommand,
+  type RenderedTerminal,
+} from "./TerminalTipManager.testUtils";
 
 const {
   executeSlashCommandMock,
   recordEnterMock,
   recordValidCommandMock,
   recordMessageWithoutTicketMock,
-  rollbackMessageWithoutTicketMock,
   submitChatMessageMock,
   setShowUpgradeMock,
   shouldShowNagMock,
@@ -19,7 +23,6 @@ const {
   recordEnterMock: vi.fn(),
   recordValidCommandMock: vi.fn(),
   recordMessageWithoutTicketMock: vi.fn(),
-  rollbackMessageWithoutTicketMock: vi.fn(),
   submitChatMessageMock: vi.fn(),
   setShowUpgradeMock: vi.fn(),
   shouldShowNagMock: vi.fn(() => false),
@@ -64,27 +67,7 @@ vi.mock("../../hooks/useSoundEffects", () => ({
   useSoundEffects: () => ({ playError: vi.fn(), playChime: vi.fn() }),
 }));
 vi.mock("../../hooks/usePingAcknowledged", () => ({ usePingAcknowledged: () => false }));
-vi.mock("../../hooks/useOverlays", async () => {
-  const React = await import("react");
-  return {
-    useOverlays: () => {
-      const [showUpgrade, setShowUpgradeState] = React.useState(false);
-      const setShowUpgrade = (value: boolean) => {
-        setShowUpgradeMock(value);
-        setShowUpgradeState(value);
-      };
-      return {
-        showStore: false, showLeaderboard: false, showAchievements: false, showSynergize: false,
-        showHelp: false, showAbout: false, showPrivacy: false, showTerms: false,
-        showContact: false, showProfile: false, showParty: false, showUpgrade,
-        setShowStore: vi.fn(), setShowLeaderboard: vi.fn(), setShowAchievements: vi.fn(), setShowSynergize: vi.fn(),
-        setShowHelp: vi.fn(), setShowAbout: vi.fn(), setShowPrivacy: vi.fn(), setShowTerms: vi.fn(),
-        setShowContact: vi.fn(), setShowProfile: vi.fn(), setShowParty: vi.fn(), setShowUpgrade,
-        closeAllOverlays: vi.fn(() => setShowUpgradeState(false)),
-      };
-    },
-  };
-});
+vi.mock("../../hooks/useOverlays", async () => (await import("./TerminalTipManager.testUtils")).createUseOverlaysModule((value) => setShowUpgradeMock(value))());
 vi.mock("../../hooks/useTipManager", () => ({
   useTipManager: () => ({
     recordEnter: recordEnterMock,
@@ -104,33 +87,7 @@ vi.mock("../terminalHandlers", () => ({
   triggerQuotaLockout: vi.fn(),
   triggerInstantBan: vi.fn(),
 }));
-vi.mock("../../hooks/useTerminalKeyboard", () => ({
-  useTerminalKeyboard: ({
-    handleEnterSubmit,
-    handleUpgradeNagClose,
-    abortControllerRef,
-    isProcessing,
-    showUpgrade,
-  }: {
-    handleEnterSubmit: () => void;
-    handleUpgradeNagClose: () => void;
-    abortControllerRef: { current: AbortController | null };
-    isProcessing: boolean;
-    showUpgrade: boolean;
-  }) => ({
-    handleKeyDown: (event: KeyboardEvent) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        void handleEnterSubmit();
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        if (showUpgrade) handleUpgradeNagClose();
-        else if (isProcessing && abortControllerRef.current) abortControllerRef.current.abort();
-      }
-    },
-  }),
-}));
+vi.mock("../../hooks/useTerminalKeyboard", async () => (await import("./TerminalTipManager.testUtils")).createUseTerminalKeyboardModule());
 vi.mock("../terminalInputHandlers", () => ({
   handleBragSubmit: vi.fn(),
   handleBuddyConfirm: vi.fn(),
@@ -139,144 +96,35 @@ vi.mock("../terminalInputHandlers", () => ({
 vi.mock("../winrarNag", () => ({
   shouldShowNag: shouldShowNagMock,
 }));
-vi.mock("../TerminalView", () => ({
-  TerminalView: ({
-    inputRef,
-    inputValue,
-    handleChange,
-    handleKeyDown,
-    handleUpgradeNagClose,
-    handleManualUpgradeDismiss,
-  }: {
-    inputRef: { current: HTMLInputElement | null };
-    inputValue: string;
-    handleChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-    handleKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
-    handleUpgradeNagClose: () => void;
-    handleManualUpgradeDismiss: () => void;
-  }) => createElement("div", null,
-    createElement("input", {
-      ref: inputRef,
-      "aria-label": "terminal-input",
-      value: inputValue,
-      onChange: handleChange,
-      onInput: (event: React.FormEvent<HTMLInputElement>) => {
-        handleChange(event as React.ChangeEvent<HTMLInputElement>);
-      },
-      onKeyDown: handleKeyDown,
-    }),
-    createElement("button", {
-      type: "button",
-      "aria-label": "dismiss-upgrade",
-      onClick: handleUpgradeNagClose,
-    }),
-    createElement("button", {
-      type: "button",
-      "aria-label": "manual-dismiss-upgrade",
-      onClick: handleManualUpgradeDismiss,
-    }),
-  ),
-}));
+vi.mock("../TerminalView", async () => (await import("./TerminalTipManager.testUtils")).createTerminalViewModule());
 vi.mock("../terminalViewUtils", () => ({
   getPromptString: () => ">",
   isAnyOverlayOpen: () => false,
 }));
 vi.mock("../useCheckoutLicenseSync", () => ({ useCheckoutLicenseSync: vi.fn() }));
-vi.mock("../../hooks/useGameState", async () => {
-  const React = await import("react");
-  return {
-    useGameState: () => {
-      const [state, setState] = React.useState({
-        version: "1",
-        username: "TestUser0",
-        lastLogin: Date.now(),
-        economy: { currentTD: 0, totalTDEarned: 0, currentRank: "Junior Code Monkey", quotaPercent: 100, quotaLockouts: 0, tdMultiplier: 1 },
-        inventory: {},
-        upgrades: [],
-        achievements: [],
-        buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 },
-        chatHistory: [],
-        commandUsage: {},
-        modes: { fast: false, voice: false },
-        activeTicket: null,
-        hasSeenTicketPrompt: true,
-        activeTheme: "default",
-        unlockedThemes: ["default"],
-        soundEnabled: true,
-        pendingCompletedTaskIds: [],
-      });
-      const setChatHistory = (updater: React.SetStateAction<typeof state.chatHistory>) => {
-        setState((prev) => ({
-          ...prev,
-          chatHistory: typeof updater === "function" ? updater(prev.chatHistory) : updater,
-        }));
-      };
-      return {
-        state,
-        setState,
-        getCurrentState: () => state,
-        addActiveTD: vi.fn(), buyGenerator: vi.fn(), buyUpgrade: vi.fn(), resetQuota: vi.fn(),
-        unlockAchievement: vi.fn(), applyOutageReward: vi.fn(), applyOutagePenalty: vi.fn(),
-        setChatHistory,
-        setActiveTheme: vi.fn(), buyTheme: vi.fn(),
-        offlineTDEarned: 0,
-        clearOfflineTDEarned: vi.fn(),
-        updateTicketProgress: vi.fn(),
-      };
-    },
-  };
-});
+vi.mock("../../hooks/useGameState", async () => (await import("./TerminalTipManager.testUtils")).createUseGameStateModule()());
 
 import Terminal from "../Terminal";
 
-let container: HTMLDivElement;
-let root: Root;
-
-function getInput() {
-  const input = container.querySelector("input[aria-label='terminal-input']") as HTMLInputElement | null;
-  expect(input).not.toBeNull();
-  return input!;
-}
-
-function getButton(label: string) {
-  const button = container.querySelector(`button[aria-label='${label}']`) as HTMLButtonElement | null;
-  expect(button).not.toBeNull();
-  return button!;
-}
-
-async function renderTerminal() {
-  container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
-  await act(async () => {
-    root.render(createElement(Terminal));
-  });
-}
-
-async function submitCommand(command: string) {
-  const input = getInput();
-  await act(async () => {
-    input.value = command;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () => {
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
-}
+let rendered: RenderedTerminal | null = null;
 
 async function triggerNaggedPrompt() {
-  await renderTerminal();
-  await submitCommand("first prompt");
+  rendered = await renderTerminal(Terminal);
+  await submitCommand(rendered.container, "first prompt");
   shouldShowNagMock.mockReturnValueOnce(true);
-  await submitCommand("retry me");
+  await submitCommand(rendered.container, "retry me");
 }
 
 async function replayNaggedPrompt(action: "button" | "escape") {
-  const input = getInput();
+  const input = getInput(rendered!.container);
   if (action === "button") {
-    await act(async () => { getButton("dismiss-upgrade").click(); });
+    await act(async () => {
+      getButton(rendered!.container, "dismiss-upgrade").click();
+    });
   } else {
-    await act(async () => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
   }
   expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
   expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
@@ -293,7 +141,7 @@ describe("Terminal tip-manager nag replay wiring", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-10T00:00:00.000Z"));
-    recordMessageWithoutTicketMock.mockImplementation(() => rollbackMessageWithoutTicketMock);
+    recordMessageWithoutTicketMock.mockImplementation(() => vi.fn());
     executeSlashCommandMock.mockImplementation((command: string, ctx: { onValidSlashCommand?: (baseCommand: string) => void }) => {
       ctx.onValidSlashCommand?.(command.trim());
     });
@@ -304,8 +152,8 @@ describe("Terminal tip-manager nag replay wiring", () => {
   });
 
   afterEach(() => {
-    act(() => root?.unmount());
-    container?.remove();
+    cleanupRenderedTerminal(rendered);
+    rendered = null;
     vi.clearAllMocks();
     vi.useRealTimers();
   });
@@ -326,7 +174,9 @@ describe("Terminal tip-manager nag replay wiring", () => {
 
   it("fully disarms a nagged prompt when the overlay is manually dismissed", async () => {
     await triggerNaggedPrompt();
-    await act(async () => { getButton("manual-dismiss-upgrade").click(); });
+    await act(async () => {
+      getButton(rendered!.container, "manual-dismiss-upgrade").click();
+    });
     await act(async () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
       vi.advanceTimersByTime(3000);
@@ -336,10 +186,10 @@ describe("Terminal tip-manager nag replay wiring", () => {
   });
 
   it("replays a nagged prompt after the forced dismiss cycle completes", async () => {
-    await renderTerminal();
-    await submitCommand("first prompt");
+    rendered = await renderTerminal(Terminal);
+    await submitCommand(rendered.container, "first prompt");
     shouldShowNagMock.mockReturnValue(true);
-    await submitCommand("retry me");
+    await submitCommand(rendered.container, "retry me");
     await replayNaggedPrompt("button");
     expect(setShowUpgradeMock).toHaveBeenCalledTimes(2);
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
@@ -352,7 +202,7 @@ describe("Terminal tip-manager nag replay wiring", () => {
     });
     await triggerNaggedPrompt();
     await replayNaggedPrompt("button");
-    await submitCommand("third prompt");
+    await submitCommand(rendered!.container, "third prompt");
     expect(submitChatMessageMock).toHaveBeenCalledTimes(3);
     expect(setShowUpgradeMock).toHaveBeenCalledTimes(2);
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
