@@ -36,7 +36,7 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
           >
             <span className="text-gray-400">Online:</span>{" "}
             <span className="text-green-400">{onlineCount}</span>{" "}
-            <span>[/who]</span>
+            <span className="header-link-command">[/who]</span>
           </button>
           <span className="mx-3 text-gray-500" aria-hidden="true">|</span>
           <button
@@ -44,7 +44,8 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
             className="header-link"
             onClick={() => handleHeaderCommand("/party")}
           >
-            Firehose [/party]
+            <span className="text-gray-400">Firehose</span>{" "}
+            <span className="header-link-command">[/party]</span>
           </button>
           <span className="mx-3 text-gray-500" aria-hidden="true">|</span>
           <button
@@ -52,7 +53,8 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
             className="header-link"
             onClick={() => handleHeaderCommand("/leaderboard")}
           >
-            Hall of Blame [/leaderboard]
+            <span className="text-gray-400">Hall of Blame</span>{" "}
+            <span className="header-link-command">[/leaderboard]</span>
           </button>
         </div>
       </div>
