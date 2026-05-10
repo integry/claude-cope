@@ -105,33 +105,35 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     scheduleIdleTip();
   }, [scheduleIdleTip]);
 
-  const recordValidCommand = useCallback((baseCommand?: string) => {
+  const recordValidCommand = useCallback((baseCommand?: string): string | null => {
     actionCountRef.current += 1;
     if (baseCommand) usedCommandsRef.current.add(baseCommand);
-    if (actionCountRef.current % MILESTONE_INTERVAL !== 0) return;
+    if (actionCountRef.current % MILESTONE_INTERVAL !== 0) return null;
 
     const tip = selectMilestoneTip(usedCommandsRef.current, shownMilestoneTipIdsRef.current);
-    if (!tip) return;
+    if (!tip) return null;
 
     shownMilestoneTipIdsRef.current.add(tip.id);
     appendTip(setHistory, tip.text);
+    return tip.text;
   }, [setHistory]);
 
-  const recordMessageWithoutTicket = useCallback(() => {
+  const recordMessageWithoutTicket = useCallback((): string | null => {
     if (gameState.activeTicket) {
       noTicketMessageCountRef.current = 0;
       nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
-      return;
+      return null;
     }
 
     noTicketMessageCountRef.current += 1;
-    if (noTicketMessageCountRef.current < nextBacklogReminderThresholdRef.current) return;
+    if (noTicketMessageCountRef.current < nextBacklogReminderThresholdRef.current) return null;
 
     const tip = getRandomBacklogReminder(lastBacklogReminderTipIdRef.current ?? undefined);
     lastBacklogReminderTipIdRef.current = tip.id;
     appendTip(setHistory, tip.text);
     noTicketMessageCountRef.current = 0;
     nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
+    return tip.text;
   }, [gameState.activeTicket, setHistory]);
 
   useEffect(() => {

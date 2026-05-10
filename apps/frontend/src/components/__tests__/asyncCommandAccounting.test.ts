@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SetStateAction } from "react";
 import type { GameState } from "../../hooks/useGameState";
+import type { Message } from "../Terminal";
 import { ALL_SLASH_COMMANDS } from "../slashCommands";
 
 vi.mock("../../analytics", () => ({
@@ -48,13 +49,16 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
   return { ...base, ...overrides };
 }
 
-function makeCtx(state: GameState): SlashCommandContext {
+function makeCtx(state: GameState): SlashCommandContext & { getHistory: () => Message[] } {
+  let history: Message[] = [];
   const ctx = {
     state,
     setState: vi.fn((update: SetStateAction<GameState>) => {
       ctx.state = typeof update === "function" ? update(ctx.state) : update;
     }),
-    setHistory: vi.fn(),
+    setHistory: vi.fn((update: SetStateAction<Message[]>) => {
+      history = typeof update === "function" ? update(history) : update;
+    }),
     setIsProcessing: vi.fn(),
     closeAllOverlays: vi.fn(),
     setShowStore: vi.fn(),
@@ -89,10 +93,14 @@ function makeCtx(state: GameState): SlashCommandContext {
     playChime: vi.fn(),
     playError: vi.fn(),
     setActiveTheme: vi.fn(),
-    onValidSlashCommand: vi.fn(),
+    onValidSlashCommand: vi.fn((baseCommand: string) => {
+      ctx.setHistory((prev) => [...prev, { role: "system", content: `tip:${baseCommand}` }]);
+    }),
   } satisfies SlashCommandContext;
 
-  return ctx;
+  return Object.assign(ctx, {
+    getHistory: () => history,
+  });
 }
 
 describe("async slash-command accounting", () => {
@@ -140,6 +148,35 @@ describe("async slash-command accounting", () => {
 
     expect(ctx.setHistory).toHaveBeenLastCalledWith([]);
     expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/clear");
+  });
+
+  it("applies tracked command accounting from the policy after the command row is in history", async () => {
+    const ctx = makeCtx(makeGameState());
+
+    executeSlashCommand("/help", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    expect(ctx.state.commandUsage).toEqual({ "/help": 1 });
+    expect(ctx.getHistory().map((message) => message.content)).toEqual([
+      "/help",
+      "tip:/help",
+    ]);
+  });
+
+  it("flushes conditional command accounting after async slash-command replies", async () => {
+    const ctx = makeCtx(makeGameState());
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+
+    executeSlashCommand("/backlog", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    expect(ctx.state.commandUsage).toEqual({ "/backlog": 1 });
+    expect(ctx.getHistory()[0]?.role).toBe("user");
+    expect(ctx.getHistory()[0]?.content).toBe("/backlog");
+    expect(ctx.getHistory()[1]?.role).toBe("error");
+    expect(ctx.getHistory()[2]?.content).toBe("tip:/backlog");
   });
 
   it("documents an explicit accounting policy for every supported slash command", () => {

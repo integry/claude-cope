@@ -217,10 +217,9 @@ function Terminal() {
   const runSlashCommandRef = useRef(runSlashCommand); runSlashCommandRef.current = runSlashCommand;
 
   const submitPromptCommand = useCallback((command: string) => {
-    setCommandHistory((prev) => [...prev, command]);
+    setCommandHistory((prev) => [...prev, command]); processCommandRef.current(command);
     recordValidCommand();
     recordMessageWithoutTicket();
-    processCommandRef.current(command);
   }, [recordMessageWithoutTicket, recordValidCommand]);
   useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, setHistory, runSlashCommand });
 
@@ -312,8 +311,10 @@ function Terminal() {
     recordEnter();
     if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
     if (inputValue.trim().startsWith("/")) {
-      recordMessageWithoutTicket();
-      runSlashCommand(inputValue.trim());
+      const command = inputValue.trim();
+      runSlashCommand(command);
+      const normalizedCommand = command.toLowerCase();
+      if (normalizedCommand !== "/backlog" && normalizedCommand !== "/accept" && !normalizedCommand.startsWith("/take") && !normalizedCommand.startsWith("/ticket")) recordMessageWithoutTicket();
       return;
     }
     if (bragPending) { handleBragSubmit({ inputValue, setInputValue, state, setHistory, setBragPending }); return; }

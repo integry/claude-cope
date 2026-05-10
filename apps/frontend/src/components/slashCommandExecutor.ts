@@ -59,6 +59,7 @@ export interface SlashCommandContext {
   playError: () => void;
   setActiveTheme: (themeId: string) => void;
   onValidSlashCommand?: (baseCommand: string) => void;
+  queueSlashCommandAccounting?: (baseCommand: string) => void;
 }
 
 export const SLASH_COMMAND_ACCOUNTING_POLICY: Record<string, "tracked" | "conditional" | "excluded"> = {
@@ -320,7 +321,7 @@ function openOverlay(ctx: SlashCommandContext, open: () => void) {
   open();
 }
 
-function markValidSlashCommand(ctx: SlashCommandContext, baseCommand: string): void {
+function applySlashCommandAccounting(ctx: SlashCommandContext, baseCommand: string): void {
   ctx.setState((prev) => ({
     ...prev,
     commandUsage: {
@@ -329,6 +330,14 @@ function markValidSlashCommand(ctx: SlashCommandContext, baseCommand: string): v
     },
   }));
   ctx.onValidSlashCommand?.(baseCommand);
+}
+
+function markValidSlashCommand(ctx: SlashCommandContext, baseCommand: string): void {
+  ctx.queueSlashCommandAccounting?.(baseCommand) ?? applySlashCommandAccounting(ctx, baseCommand);
+}
+
+function getSlashCommandAccountingPolicy(baseCommand: string): "tracked" | "conditional" | "excluded" {
+  return SLASH_COMMAND_ACCOUNTING_POLICY[baseCommand] ?? "excluded";
 }
 
 export function handleUpgradeCommand(ctx: SlashCommandContext): void {
@@ -432,7 +441,6 @@ function handleOverlayCommand(command: string, ctx: SlashCommandContext): boolea
   };
   const opener = overlayMap[command];
   if (opener) {
-    markValidSlashCommand(ctx, command);
     openOverlay(ctx, opener);
     return true;
   }
@@ -441,15 +449,12 @@ function handleOverlayCommand(command: string, ctx: SlashCommandContext): boolea
 
 function handleSimpleReplyCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   if (command === "/support") {
-    markValidSlashCommand(ctx, "/support");
     reply({ role: "system", content: pickRandom(supportResponses) });
     return true;
   } else if (command === "/preworkout") {
-    markValidSlashCommand(ctx, "/preworkout");
     reply({ role: "system", content: pickRandom(preworkoutResponses) });
     return true;
   } else if (command === "/who") {
-    markValidSlashCommand(ctx, "/who");
     if (ctx.onlineUsers.length > 0) {
       const userList = ctx.onlineUsers.join(", ");
       reply({ role: "system", content: `[📡] **${ctx.onlineCount}** developer(s) suffering in this instance: ${userList}` });
@@ -462,7 +467,6 @@ function handleSimpleReplyCommand(command: string, ctx: SlashCommandContext, rep
 }
 
 function handleCompactCommand(ctx: SlashCommandContext): boolean {
-  markValidSlashCommand(ctx, "/compact");
   ctx.triggerCompactEffect();
   ctx.setHistory((prev) => {
     const cleaned = clearLoading(prev);
@@ -479,7 +483,6 @@ function handleCompactCommand(ctx: SlashCommandContext): boolean {
 
 function handleUserCommand(command: string, ctx: SlashCommandContext): boolean {
   const alias = command.slice(5).trim();
-  markValidSlashCommand(ctx, "/user");
   openOverlay(ctx, () => ctx.setShowProfile(true));
   const target = alias || ctx.state.username;
   window.history.pushState(null, "", `/user/${encodeURIComponent(target)}`);
@@ -490,7 +493,6 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
   if (command === "/store") return handleStoreCommand(ctx, reply);
   if (handleOverlayCommand(command, ctx)) return true;
   if (command === "/synergize") {
-    markValidSlashCommand(ctx, "/synergize");
     reply({ role: "system", content: pickRandom(synergizeResponses) });
     ctx.closeAllOverlays();
     ctx.setShowSynergize(true);
@@ -507,34 +509,28 @@ function handleCoreCommand(command: string, ctx: SlashCommandContext, reply: Rep
 
 function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
   if (command === "/help") {
-    markValidSlashCommand(ctx, "/help");
     const tdGrant = Math.floor(Math.random() * 200) + 100;
     ctx.addActiveTD(tdGrant);
     openOverlay(ctx, () => ctx.setShowHelp(true));
     window.history.pushState(null, "", "/help");
     return true;
   } else if (command === "/about") {
-    markValidSlashCommand(ctx, "/about");
     openOverlay(ctx, () => ctx.setShowAbout(true));
     window.history.pushState(null, "", "/about");
     return true;
   } else if (command === "/privacy") {
-    markValidSlashCommand(ctx, "/privacy");
     openOverlay(ctx, () => ctx.setShowPrivacy(true));
     window.history.pushState(null, "", "/privacy");
     return true;
   } else if (command === "/terms") {
-    markValidSlashCommand(ctx, "/terms");
     openOverlay(ctx, () => ctx.setShowTerms(true));
     window.history.pushState(null, "", "/terms");
     return true;
   } else if (command === "/contact") {
-    markValidSlashCommand(ctx, "/contact");
     openOverlay(ctx, () => ctx.setShowContact(true));
     window.history.pushState(null, "", "/contact");
     return true;
   } else if (command === "/fast") {
-    markValidSlashCommand(ctx, "/fast");
     const newFast = !ctx.state.modes.fast;
     ctx.setState((prev) => ({ ...prev, modes: { ...prev.modes, fast: newFast } }));
     if (newFast) {
@@ -544,7 +540,6 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     }
     return true;
   } else if (command === "/voice") {
-    markValidSlashCommand(ctx, "/voice");
     const newVoice = !ctx.state.modes.voice;
     ctx.setState((prev) => ({ ...prev, modes: { ...prev.modes, voice: newVoice } }));
     if (newVoice) {
@@ -554,7 +549,6 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     }
     return true;
   } else if (command === "/blame") {
-    markValidSlashCommand(ctx, "/blame");
     const files = [
       "src/index.ts", "package.json", "tsconfig.json", ".env.production",
       "src/utils/helpers.ts", "node_modules/.package-lock.json", "Dockerfile",
@@ -571,7 +565,6 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     }
     return true;
   } else if (command === "/brrrrrr") {
-    markValidSlashCommand(ctx, "/brrrrrr");
     ctx.setHistory((prev) => [...clearLoading(prev), { role: "system", content: "[🔥 BRRRRRR] Initiating nested for-loop flood... Press Ctrl+C to stop before your CPU melts!" }]);
     let count = 0;
     ctx.brrrrrrIntervalRef.current = setInterval(() => {
@@ -824,7 +817,6 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
 async function handleShillCommand(ctx: SlashCommandContext, reply: Reply): Promise<void> {
   const tweetText = encodeURIComponent("I'm mass-producing Technical Debt at mass velocity in Claude COPE — the idle game where every prompt is a mistake. https://claudecope.com");
   window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, "_blank");
-  markValidSlashCommand(ctx, "/shill");
   try {
     const res = await fetch(`${API_BASE}/api/account/shill`, {
       method: "POST",
@@ -879,7 +871,6 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
     });
     return "async";
   } else if (command === "/backlog") {
-    markValidSlashCommand(ctx, "/backlog");
     handleBacklogCommand(reply).then(() => {
       ctx.setIsProcessing(false);
     });
@@ -900,7 +891,6 @@ function handleExtendedCommand(command: string, ctx: SlashCommandContext, reply:
   }
 
   if (command === "/feedback" || command === "/bug") {
-    markValidSlashCommand(ctx, command);
     reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
     return true;
   }
@@ -1016,11 +1006,27 @@ export function executeSlashCommand(
     { role: "loading", content: getRandomLoadingPhrase() },
   ]);
 
+  const pendingAccounting = new Set<string>();
+  const flushPendingAccounting = (): void => {
+    pendingAccounting.forEach((baseCommand) => applySlashCommandAccounting(ctx, baseCommand));
+    pendingAccounting.clear();
+  };
+  const queueSlashCommandAccounting = (baseCommand: string): void => {
+    if (getSlashCommandAccountingPolicy(baseCommand) === "excluded") return;
+    pendingAccounting.add(baseCommand);
+  };
+
   const reply = (msg: Message): void => {
     ctx.setHistory((prev) => [...clearLoading(prev), msg]);
+    flushPendingAccounting();
   };
 
   const baseCommand = parseBaseCommand(command);
+  const accountingPolicy = getSlashCommandAccountingPolicy(baseCommand);
+  const accountingCtx: SlashCommandContext = {
+    ...ctx,
+    queueSlashCommandAccounting,
+  };
 
   track(AnalyticsEvents.SLASH_COMMAND_ATTEMPTED, { command: baseCommand });
 
@@ -1048,8 +1054,9 @@ export function executeSlashCommand(
 
   // /clear fires instantly — no fake processing delay
   if (command === "/clear") {
-    if (baseCommand !== "/unknown") markValidSlashCommand(ctx, baseCommand);
-    handleClearCommand(ctx);
+    if (accountingPolicy !== "excluded") queueSlashCommandAccounting(baseCommand);
+    handleClearCommand(accountingCtx);
+    flushPendingAccounting();
     return;
   }
 
@@ -1059,7 +1066,9 @@ export function executeSlashCommand(
       ctx.unlockAchievement("the_final_escape");
     }
 
-    if (dispatchCommand(command, ctx, reply) === "async") return;
+    if (accountingPolicy === "tracked") queueSlashCommandAccounting(baseCommand);
+    if (dispatchCommand(command, accountingCtx, reply) === "async") return;
+    flushPendingAccounting();
     ctx.setIsProcessing(false);
   }, Math.floor(Math.random() * 1500) + 1500);
 }
