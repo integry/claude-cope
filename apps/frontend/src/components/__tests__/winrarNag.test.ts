@@ -535,6 +535,20 @@ describe("WinRAR nag: Terminal integration", () => {
     clickSpy.mockRestore();
   });
 
+  it("does not click a checkout link when Enter opens the nag from prompt submission", async () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    await renderTerminal();
+    await submitTerminalCommand("status");
+
+    const desktop = container.querySelector(".upgrade-desktop");
+    expect(desktop).not.toBeNull();
+    expect(document.activeElement).toBe(desktop);
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
+    expect(clickSpy).not.toHaveBeenCalled();
+
+    clickSpy.mockRestore();
+  });
+
   it("closes the nag immediately when Escape is pressed after 3 seconds", async () => {
     await renderTerminal();
     await submitTerminalCommand("status");
