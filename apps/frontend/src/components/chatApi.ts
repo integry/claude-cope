@@ -38,6 +38,19 @@ function runAcceptedCallback(onAccepted?: () => void): void {
   }
 }
 
+function settleAcceptedCallback(
+  onAccepted: (() => void) | undefined,
+  scheduleHistoryCommitCallback?: (callback: () => void) => void,
+): void {
+  if (!onAccepted) return;
+  const callback = () => runAcceptedCallback(onAccepted);
+  if (scheduleHistoryCommitCallback) {
+    scheduleHistoryCommitCallback(callback);
+    return;
+  }
+  callback();
+}
+
 export function mergeSuggestedReply(previous: string | null, next: string | null): string | null {
   const trimmedNext = next?.trim() ?? "";
   if (!trimmedNext) return null;
@@ -197,6 +210,7 @@ export function submitChatMessage(opts: {
   onQuotaUpdate?: (quotaPercent: number) => void;
   onQuotaExhausted?: () => void;
   onAccepted?: () => void;
+  scheduleHistoryCommitCallback?: (callback: () => void) => void;
   onProfileUpdate?: (profile: ServerProfile) => void;
   onError?: () => void;
   signal?: AbortSignal;
@@ -336,7 +350,10 @@ export function submitChatMessage(opts: {
         return updated;
       });
 
-      runAcceptedCallback(opts.onAccepted);
+      settleAcceptedCallback(
+        opts.onAccepted,
+        opts.scheduleHistoryCommitCallback,
+      );
     })
     .catch((err) => {
       if (err instanceof DOMException && err.name === "AbortError") return;

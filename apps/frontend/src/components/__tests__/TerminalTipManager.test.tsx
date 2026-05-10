@@ -179,8 +179,14 @@ describe("Terminal tip-manager wiring", () => {
   });
 
   it("does not count accepted chat prompts toward slash-command milestone tips", async () => {
-    submitChatMessageMock.mockImplementation(({ onAccepted }: { onAccepted?: () => void }) => {
-      onAccepted?.();
+    submitChatMessageMock.mockImplementation(({ setHistory, onAccepted }: {
+      setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
+      onAccepted?: () => void;
+    }) => {
+      act(() => {
+        setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
+        onAccepted?.();
+      });
     });
     rendered = await renderTerminal(Terminal);
     await submitCommand(rendered.container, "ship it");
@@ -198,7 +204,12 @@ describe("Terminal tip-manager wiring", () => {
 
     const firstRequest = submitChatMessageMock.mock.calls[0]?.[0] as { onAccepted?: () => void };
     const secondRequest = submitChatMessageMock.mock.calls[1]?.[0] as { onError?: () => void };
-    firstRequest.onAccepted?.();
+    await act(async () => {
+      (submitChatMessageMock.mock.calls[0]?.[0] as {
+        setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
+      }).setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
+      firstRequest.onAccepted?.();
+    });
     secondRequest.onError?.();
 
     expect(rollbackMessageWithoutTicketMocks[0]).not.toHaveBeenCalled();

@@ -205,8 +205,14 @@ describe("Terminal tip-manager nag replay wiring", () => {
   });
 
   it("disarms the quota nag after a replayed prompt is accepted", async () => {
-    submitChatMessageMock.mockImplementation(({ onAccepted }: { onAccepted?: () => void }) => {
-      onAccepted?.();
+    submitChatMessageMock.mockImplementation(({ setHistory, onAccepted }: {
+      setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
+      onAccepted?: () => void;
+    }) => {
+      act(() => {
+        setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
+        onAccepted?.();
+      });
     });
     await triggerNaggedPrompt();
     await replayNaggedPrompt("button");
@@ -224,8 +230,14 @@ describe("Terminal tip-manager nag replay wiring", () => {
     shouldShowNagMock.mockReturnValueOnce(true);
     await submitCommand(rendered.container, "retry me");
 
-    const firstRequest = submitChatMessageMock.mock.calls[0]?.[0] as { onAccepted?: () => void };
-    firstRequest.onAccepted?.();
+    const firstRequest = submitChatMessageMock.mock.calls[0]?.[0] as {
+      setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
+      onAccepted?: () => void;
+    };
+    await act(async () => {
+      firstRequest.setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
+      firstRequest.onAccepted?.();
+    });
 
     await replayNaggedPrompt("button");
     expect(submitChatMessageMock.mock.calls[1]?.[0]?.chatMessages.at(-1)?.content).toBe("retry me");
@@ -233,14 +245,24 @@ describe("Terminal tip-manager nag replay wiring", () => {
 
   it("keeps a quota-armed nag latched until the replayed prompt is accepted", async () => {
     isFreeUserMock.mockReturnValue(true);
-    submitChatMessageMock.mockImplementationOnce(({ onQuotaUpdate, onAccepted }: {
+    submitChatMessageMock.mockImplementationOnce(({ setHistory, onQuotaUpdate, onAccepted }: {
+      setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
       onQuotaUpdate?: (quotaPercent: number) => void;
       onAccepted?: () => void;
     }) => {
-      onQuotaUpdate?.(0);
-      onAccepted?.();
-    }).mockImplementation(({ onAccepted }: { onAccepted?: () => void }) => {
-      onAccepted?.();
+      act(() => {
+        onQuotaUpdate?.(0);
+        setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
+        onAccepted?.();
+      });
+    }).mockImplementation(({ setHistory, onAccepted }: {
+      setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
+      onAccepted?: () => void;
+    }) => {
+      act(() => {
+        setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
+        onAccepted?.();
+      });
     });
 
     rendered = await renderTerminal(Terminal);

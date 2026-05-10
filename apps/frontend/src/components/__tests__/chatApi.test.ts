@@ -469,6 +469,7 @@ describe("submitChatMessage - achievement parsing", () => {
     const setIsProcessing = vi.fn();
     const onAccepted = vi.fn();
     const onQuotaExhausted = vi.fn();
+    const historyCommitCallbacks: Array<() => void> = [];
 
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(createMockStreamResponse(["Accepted reply"]))
@@ -486,9 +487,15 @@ describe("submitChatMessage - achievement parsing", () => {
       setIsProcessing,
       currentRank: "Junior Code Monkey",
       onAccepted,
+      scheduleHistoryCommitCallback: (callback) => {
+        historyCommitCallbacks.push(callback);
+      },
     });
 
     await vi.advanceTimersByTimeAsync(3000);
+    expect(onAccepted).not.toHaveBeenCalled();
+
+    historyCommitCallbacks.shift()?.();
 
     submitChatMessage({
       chatMessages: [{ role: "user", content: "still hi" }],
@@ -499,6 +506,9 @@ describe("submitChatMessage - achievement parsing", () => {
       currentRank: "Junior Code Monkey",
       onAccepted,
       onQuotaExhausted,
+      scheduleHistoryCommitCallback: (callback) => {
+        historyCommitCallbacks.push(callback);
+      },
     });
 
     await vi.advanceTimersByTimeAsync(3000);
@@ -509,6 +519,7 @@ describe("submitChatMessage - achievement parsing", () => {
 
   it("fires onAccepted only after the final assistant message is committed", async () => {
     const events: string[] = [];
+    const historyCommitCallbacks: Array<() => void> = [];
     const setHistory = vi.fn((updater: unknown) => {
       if (typeof updater !== "function") return;
       const next = updater([{ role: "loading", content: "Loading..." }]);
@@ -533,11 +544,64 @@ describe("submitChatMessage - achievement parsing", () => {
       setIsProcessing,
       currentRank: "Junior Code Monkey",
       onAccepted,
+      scheduleHistoryCommitCallback: (callback) => {
+        historyCommitCallbacks.push(callback);
+      },
     });
 
     await vi.advanceTimersByTimeAsync(3000);
 
     expect(events).toContain("history-committed");
+    expect(events).not.toContain("accepted");
+
+    historyCommitCallbacks.shift()?.();
+
+    expect(events[events.length - 1]).toBe("accepted");
+  });
+
+  it("fires onAccepted only after the final JSON assistant message is committed", async () => {
+    const events: string[] = [];
+    const historyCommitCallbacks: Array<() => void> = [];
+    const setHistory = vi.fn((updater: unknown) => {
+      if (typeof updater !== "function") return;
+      const next = updater([{ role: "loading", content: "Loading..." }]);
+      if (Array.isArray(next) && next.some((message) => message.role === "system")) {
+        events.push("history-committed");
+      }
+    });
+    const setIsProcessing = vi.fn();
+    const onAccepted = vi.fn(() => {
+      events.push("accepted");
+    });
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: "Accepted reply" } }],
+      usage: { prompt_tokens: 5, completion_tokens: 7 },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+      onAccepted,
+      scheduleHistoryCommitCallback: (callback) => {
+        historyCommitCallbacks.push(callback);
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(events).toContain("history-committed");
+    expect(events).not.toContain("accepted");
+
+    historyCommitCallbacks.shift()?.();
+
     expect(events[events.length - 1]).toBe("accepted");
   });
 

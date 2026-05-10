@@ -29,8 +29,7 @@ import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
 import { useUpgradeNagState } from "./useUpgradeNagState";
 import { STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, removeCommandFromHistory, removeUserCommandMessage, syncMessageKeys } from "./terminalUtils";
-export type { Message };
-export { STARTUP_TICKET_PROMPT_DELAY_MS };
+export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
 function Terminal() {
   const {
     state,
@@ -97,6 +96,7 @@ function Terminal() {
   const lastSuggestedReplyRef = useRef<string | null>(null);
   const nextPendingBacklogRollbackIdRef = useRef(0);
   const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
+  const pendingHistoryCommitCallbacksRef = useRef<Array<() => void>>([]);
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
@@ -115,8 +115,19 @@ function Terminal() {
   useEffect(() => () => {
     if (startupTicketPromptTimeoutRef.current) clearTimeout(startupTicketPromptTimeoutRef.current);
   }, []);
+  useEffect(() => {
+    if (pendingHistoryCommitCallbacksRef.current.length === 0) {
+      return;
+    }
+    const callbacks = pendingHistoryCommitCallbacksRef.current.splice(0);
+    callbacks.forEach((callback) => callback());
+  }, [history]);
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
-    const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
+    const isNew = unlockAchievement(id);
+    if (isNew) {
+      playChime();
+    }
+    return isNew;
   }, [unlockAchievement, playChime]);
   const handleSuggestedReply = useCallback((suggestion: string) => {
     const merged = mergeSuggestedReply(lastSuggestedReplyRef.current, suggestion);
@@ -146,7 +157,11 @@ function Terminal() {
     setInputValue,
     setShowUpgrade,
   });
-  const handleProfileClick = useCallback(() => { closeAllOverlaysPreservingNag(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlaysPreservingNag, setShowProfile, state.username]);
+  const handleProfileClick = useCallback(() => {
+    closeAllOverlaysPreservingNag();
+    setShowProfile(true);
+    window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`);
+  }, [closeAllOverlaysPreservingNag, setShowProfile, state.username]);
   useEffect(() => { if (typeof bottomRef.current?.scrollIntoView === "function") bottomRef.current.scrollIntoView({ behavior: "auto" }); }, [history]);
   useEffect(() => {
     const onPopState = () => {
@@ -225,6 +240,9 @@ function Terminal() {
     settlePendingBacklogRollback(rollbackId, false);
     settleAcceptedNagReplay(replayId);
   }, [settleAcceptedNagReplay, settlePendingBacklogRollback]);
+  const scheduleHistoryCommitCallback = useCallback((callback: () => void) => {
+    pendingHistoryCommitCallbacksRef.current.push(callback);
+  }, []);
   const handlePromptError = useCallback((rollbackId: number) => {
     settlePendingBacklogRollback(rollbackId, true);
     playError();
@@ -311,6 +329,7 @@ function Terminal() {
       },
       onProfileUpdate: applyProfileUpdate,
       onAccepted: () => handlePromptAccepted(rollbackId, replayId),
+      scheduleHistoryCommitCallback,
       onError: () => handlePromptError(rollbackId),
       signal: controller.signal,
     });
