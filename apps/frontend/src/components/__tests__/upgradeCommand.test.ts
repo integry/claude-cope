@@ -149,6 +149,19 @@ describe("/upgrade command", () => {
     expect(window.history.pushState).toHaveBeenCalledWith(null, "", "/upgrade");
   });
 
+  it("still opens the overlay when window history is unavailable", () => {
+    const ctx = makeCtx();
+    vi.unstubAllGlobals();
+    vi.stubGlobal("window", {});
+    try {
+      expect(() => handleUpgradeCommand(ctx)).not.toThrow();
+      expect(ctx.closeAllOverlays).toHaveBeenCalledOnce();
+      expect(ctx.setShowUpgrade).toHaveBeenCalledWith(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("clears loading messages from history before opening the overlay", () => {
     const ctx = makeCtx();
 

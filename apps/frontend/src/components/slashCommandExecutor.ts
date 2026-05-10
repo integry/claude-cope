@@ -99,7 +99,7 @@ export const SLASH_COMMAND_ACCOUNTING_POLICY: Record<SupportedSlashCommand, Slas
   "/leaderboard": "tracked",
   "/achievements": "tracked",
   "/profile": "tracked",
-  "/ticket": "conditional",
+  "/ticket": "tracked",
   "/accept": "conditional",
   "/abandon": "conditional",
   "/alias": "conditional",
@@ -384,6 +384,13 @@ export function handleUpgradeCommand(ctx: SlashCommandContext): void {
   openUpgradeFlow(ctx, { trackCommandUsage: true });
 }
 
+function pushHistoryPath(pathname: string): void {
+  if (typeof window === "undefined" || typeof window.history?.pushState !== "function") {
+    return;
+  }
+  window.history.pushState(null, "", pathname);
+}
+
 function openUpgradeFlow(
   ctx: SlashCommandContext,
   options: { trackCommandUsage: boolean },
@@ -392,7 +399,7 @@ function openUpgradeFlow(
     markValidSlashCommand(ctx, "/upgrade");
   }
   openOverlay(ctx, () => ctx.setShowUpgrade(true));
-  window.history.pushState(null, "", "/upgrade");
+  pushHistoryPath("/upgrade");
 }
 
 function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
@@ -921,8 +928,6 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
       await handleKeyCommand(command, ctx.setState, mockSetHistory, ctx.state);
     }), ctx);
   } else if (command.startsWith("/ticket")) {
-    const hasTask = Boolean(command.slice("/ticket".length).trim());
-    if (hasTask) markValidSlashCommand(ctx, "/ticket");
     return completeAsyncSlashCommand(handleTicketCommand(command, reply), ctx);
   } else if (command === "/backlog" || command.startsWith("/backlog ")) {
     const normalizedCategory = parseBacklogCategoryArgument(command) ?? undefined;

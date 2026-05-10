@@ -20,12 +20,13 @@ vi.mock("../ticketCommands", async () => {
   const actual = await vi.importActual<typeof import("../ticketCommands")>("../ticketCommands");
   return {
     ...actual,
+    handleTicketCommand: vi.fn(actual.handleTicketCommand),
     handleTakeCommand: vi.fn(actual.handleTakeCommand),
   };
 });
 
 import { SLASH_COMMAND_ACCOUNTING_POLICY, executeSlashCommand, type SlashCommandContext } from "../slashCommandExecutor";
-import { handleTakeCommand } from "../ticketCommands";
+import { handleTakeCommand, handleTicketCommand } from "../ticketCommands";
 
 function makeGameState(overrides: Partial<GameState> = {}): GameState {
   const base: GameState = {
@@ -145,6 +146,17 @@ describe("async slash-command accounting", () => {
 
     expect(ctx.state.commandUsage).toEqual({ "/backlog": 1 });
     expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/backlog");
+  });
+
+  it("counts plain /ticket usage as a valid command", async () => {
+    const ctx = makeCtx(makeGameState());
+    vi.mocked(handleTicketCommand).mockResolvedValueOnce();
+
+    executeSlashCommand("/ticket", ctx);
+    await vi.runAllTimersAsync();
+
+    expect(ctx.state.commandUsage).toEqual({ "/ticket": 1 });
+    expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/ticket");
   });
 
   it("does not append an extra random tip when /clear finishes", async () => {

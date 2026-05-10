@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type React from "react";
+
 const {
   executeSlashCommandMock,
   recordEnterMock,
@@ -11,6 +12,7 @@ const {
   recordMessageWithoutTicketMock,
   rollbackMessageWithoutTicketMock,
   submitChatMessageMock,
+  setShowUpgradeMock,
   shouldShowNagMock,
 } = vi.hoisted(() => ({
   executeSlashCommandMock: vi.fn(),
@@ -19,6 +21,7 @@ const {
   recordMessageWithoutTicketMock: vi.fn(),
   rollbackMessageWithoutTicketMock: vi.fn(),
   submitChatMessageMock: vi.fn(),
+  setShowUpgradeMock: vi.fn(),
   shouldShowNagMock: vi.fn(() => false),
 }));
 
@@ -67,6 +70,7 @@ vi.mock("../../hooks/useOverlays", async () => {
     useOverlays: () => {
       const [showUpgrade, setShowUpgradeState] = React.useState(false);
       const setShowUpgrade = (value: boolean) => {
+        setShowUpgradeMock(value);
         setShowUpgradeState(value);
       };
       return {
@@ -222,14 +226,24 @@ vi.mock("../../hooks/useGameState", async () => {
     },
   };
 });
+
 import Terminal from "../Terminal";
+
 let container: HTMLDivElement;
 let root: Root;
+
 function getInput() {
   const input = container.querySelector("input[aria-label='terminal-input']") as HTMLInputElement | null;
   expect(input).not.toBeNull();
   return input!;
 }
+
+function getButton(label: string) {
+  const button = container.querySelector(`button[aria-label='${label}']`) as HTMLButtonElement | null;
+  expect(button).not.toBeNull();
+  return button!;
+}
+
 async function renderTerminal() {
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -250,7 +264,32 @@ async function submitCommand(command: string) {
   });
 }
 
-describe("Terminal tip-manager wiring", () => {
+async function triggerNaggedPrompt() {
+  await renderTerminal();
+  await submitCommand("first prompt");
+  shouldShowNagMock.mockReturnValueOnce(true);
+  await submitCommand("retry me");
+}
+
+async function replayNaggedPrompt(action: "button" | "escape") {
+  const input = getInput();
+  if (action === "button") {
+    await act(async () => { getButton("dismiss-upgrade").click(); });
+  } else {
+    await act(async () => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  }
+  expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+  expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    vi.advanceTimersByTime(3000);
+    await Promise.resolve();
+  });
+  expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(2);
+  expect(submitChatMessageMock).toHaveBeenCalledTimes(2);
+  return input;
+}
+
+describe("Terminal tip-manager nag replay wiring", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-10T00:00:00.000Z"));
@@ -259,9 +298,11 @@ describe("Terminal tip-manager wiring", () => {
       ctx.onValidSlashCommand?.(command.trim());
     });
     submitChatMessageMock.mockReset();
+    setShowUpgradeMock.mockReset();
     shouldShowNagMock.mockReset();
     shouldShowNagMock.mockReturnValue(false);
   });
+
   afterEach(() => {
     act(() => root?.unmount());
     container?.remove();
@@ -269,53 +310,52 @@ describe("Terminal tip-manager wiring", () => {
     vi.useRealTimers();
   });
 
-  it("does not let /clear repopulate the terminal through tip-manager callbacks", async () => {
-    await renderTerminal();
-    await submitCommand("/clear");
-    expect(recordEnterMock).toHaveBeenCalledTimes(1);
-    expect(recordValidCommandMock).toHaveBeenCalledWith("/clear", { suppressTip: true });
-    expect(recordMessageWithoutTicketMock).not.toHaveBeenCalled();
-  });
-  it("does not count slash commands toward backlog reminders", async () => {
-    await renderTerminal();
-    await submitCommand("/help");
-    expect(recordValidCommandMock).toHaveBeenCalledWith("/help");
-    expect(recordMessageWithoutTicketMock).not.toHaveBeenCalled();
-  });
-  it("counts prompt submissions toward backlog reminders before the reply succeeds", async () => {
-    await renderTerminal();
-    await submitCommand("ship it");
+  it("replays nagged prompts with normal backlog accounting and cleared input", async () => {
+    await triggerNaggedPrompt();
+    expect(setShowUpgradeMock).toHaveBeenCalledWith(true);
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+    const input = await replayNaggedPrompt("button");
+    expect(input.value).toBe("");
   });
-  it("rolls back backlog reminders when the prompt fails generically", async () => {
-    submitChatMessageMock.mockImplementation(({ onError }: { onError?: () => void }) => {
-      onError?.();
-    });
-    await renderTerminal();
-    await submitCommand("ship it");
-    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
-    expect(rollbackMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+
+  it("replays a nagged prompt through the same path when dismissed by keyboard", async () => {
+    await triggerNaggedPrompt();
+    const input = await replayNaggedPrompt("escape");
+    expect(input.value).toBe("");
   });
-  it("rolls back backlog reminders when an in-flight prompt is aborted", async () => {
-    submitChatMessageMock.mockImplementation(({ signal }: { signal: AbortSignal }) => {
-      signal.addEventListener("abort", () => {});
-    });
-    await renderTerminal();
-    await submitCommand("ship it");
+
+  it("fully disarms a nagged prompt when the overlay is manually dismissed", async () => {
+    await triggerNaggedPrompt();
+    await act(async () => { getButton("manual-dismiss-upgrade").click(); });
     await act(async () => {
-      getInput().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      vi.advanceTimersByTime(3000);
     });
-    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
-    expect(rollbackMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+    expect(setShowUpgradeMock.mock.calls.filter(([value]) => value === true)).toHaveLength(1);
   });
-  it("does not count accepted chat prompts toward slash-command milestone tips", async () => {
+
+  it("replays a nagged prompt after the forced dismiss cycle completes", async () => {
+    await renderTerminal();
+    await submitCommand("first prompt");
+    shouldShowNagMock.mockReturnValue(true);
+    await submitCommand("retry me");
+    await replayNaggedPrompt("button");
+    expect(setShowUpgradeMock).toHaveBeenCalledTimes(2);
+    expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
+    expect(setShowUpgradeMock).toHaveBeenNthCalledWith(2, false);
+  });
+
+  it("disarms the quota nag after a replayed prompt is accepted", async () => {
     submitChatMessageMock.mockImplementation(({ onAccepted }: { onAccepted?: () => void }) => {
       onAccepted?.();
     });
-    await renderTerminal();
-    await submitCommand("ship it");
-    expect(submitChatMessageMock.mock.calls[0]?.[0]?.onAccepted).toEqual(expect.any(Function));
-    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
-    expect(recordValidCommandMock).not.toHaveBeenCalled();
+    await triggerNaggedPrompt();
+    await replayNaggedPrompt("button");
+    await submitCommand("third prompt");
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(3);
+    expect(setShowUpgradeMock).toHaveBeenCalledTimes(2);
+    expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
+    expect(setShowUpgradeMock).toHaveBeenNthCalledWith(2, false);
   });
 });
