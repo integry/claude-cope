@@ -791,7 +791,7 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
     handleTicketCommand(command, reply).then(() => ctx.setIsProcessing(false));
     return "async";
   } else if (command === "/backlog") {
-    handleBacklogCommand(reply).then(() => ctx.setIsProcessing(false));
+    handleBacklogCommand(reply, ctx.state.proKeyHash).then(() => ctx.setIsProcessing(false));
     return "async";
   } else if (command === "/sync" || command.startsWith("/sync ")) {
     handleSyncCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));

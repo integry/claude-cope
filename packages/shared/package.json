@@ -13,6 +13,7 @@
     "./migrations": "./src/migrations.ts",
     "./openrouter": "./src/openrouter.ts",
     "./turnstile": "./src/turnstile.ts",
-    "./config": "./src/config.ts"
+    "./config": "./src/config.ts",
+    "./backlogTiers": "./src/backlogTiers.ts"
   }
 }
