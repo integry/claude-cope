@@ -1,6 +1,7 @@
 import type { CSSProperties, RefObject } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { BuddyDisplay } from "./BuddyDisplay";
+import { getBuddyOverlayScale } from "./buddyOverlayScale";
 import type { GameState } from "../hooks/useGameState";
 
 type BuddyOverlayProps = {
@@ -9,51 +10,10 @@ type BuddyOverlayProps = {
   containerRef: RefObject<HTMLDivElement | null>;
 };
 
-const BUDDY_OVERLAY_LEFT_PADDING = 12;
-const BUDDY_OVERLAY_TOP_PADDING = 12;
-const BUDDY_OVERLAY_MIN_SCALE = 0.35;
-
 type BuddyOverlayStyle = CSSProperties & {
   "--terminal-buddy-offset": string;
   "--terminal-buddy-scale": number;
 };
-
-function clampBuddyScale(scale: number) {
-  return Math.max(BUDDY_OVERLAY_MIN_SCALE, Math.min(1, scale));
-}
-
-function getBuddyOverlayScale({
-  containerWidth,
-  containerHeight,
-  rightInset,
-  bottomOffset,
-  overlayWidth,
-  overlayHeight,
-}: {
-  containerWidth: number;
-  containerHeight: number;
-  rightInset: number;
-  bottomOffset: number;
-  overlayWidth: number;
-  overlayHeight: number;
-}) {
-  const widthScale =
-    overlayWidth > 0
-      ? clampBuddyScale(
-          (containerWidth - rightInset - BUDDY_OVERLAY_LEFT_PADDING) /
-            overlayWidth,
-        )
-      : 1;
-  const heightScale =
-    overlayHeight > 0
-      ? clampBuddyScale(
-          (containerHeight - bottomOffset - BUDDY_OVERLAY_TOP_PADDING) /
-            overlayHeight,
-        )
-      : 1;
-
-  return Math.min(widthScale, heightScale);
-}
 
 export function BuddyOverlay({
   buddy,
@@ -62,8 +22,11 @@ export function BuddyOverlay({
 }: BuddyOverlayProps) {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
+  const [isMeasured, setIsMeasured] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    setIsMeasured(false);
+
     if (!buddy.type) {
       return undefined;
     }
@@ -86,6 +49,7 @@ export function BuddyOverlay({
 
       if (!width || !height || !container) {
         setScaleIfChanged(1);
+        setIsMeasured(true);
         return;
       }
 
@@ -102,6 +66,7 @@ export function BuddyOverlay({
       });
 
       setScaleIfChanged(nextScale);
+      setIsMeasured(true);
     };
 
     updateScale();
@@ -130,6 +95,7 @@ export function BuddyOverlay({
   const overlayStyle: BuddyOverlayStyle = {
     "--terminal-buddy-offset": `${bottomOffset}px`,
     "--terminal-buddy-scale": scale,
+    visibility: isMeasured ? "visible" : "hidden",
   };
 
   return (

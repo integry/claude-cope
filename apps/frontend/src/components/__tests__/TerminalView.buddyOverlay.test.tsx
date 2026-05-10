@@ -35,7 +35,7 @@ class ResizeObserverMock {
 
   observe(target: Element) {
     const isFooterWrapper = target.firstElementChild?.getAttribute("data-testid") === "terminal-footer";
-    const isBottomChrome = target.classList.contains("shrink-0");
+    const isBottomChrome = target.getAttribute("data-terminal-bottom-chrome") === "true";
     const height = isFooterWrapper ? MOCK_FOOTER_HEIGHT : isBottomChrome ? MOCK_BOTTOM_CHROME_HEIGHT : 0;
     Object.defineProperty(target, "getBoundingClientRect", {
       value: () => ({ height }),

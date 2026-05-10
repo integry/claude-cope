@@ -98,10 +98,7 @@ function getBuddyBottomOffset(
   const bottomChromeHeight =
     bottomChromeNode?.getBoundingClientRect().height ?? 0;
   const footerHeight = footerNode?.getBoundingClientRect().height ?? 0;
-
-  return (
-    Math.ceil(bottomChromeHeight + footerHeight) + BUDDY_OVERLAY_BOTTOM_GAP
-  );
+  return Math.ceil(bottomChromeHeight + footerHeight) + BUDDY_OVERLAY_BOTTOM_GAP;
 }
 
 function getUpgradeDismissProps(
@@ -110,7 +107,12 @@ function getUpgradeDismissProps(
   handleManualUpgradeDismiss: () => void,
 ) {
   const nagDismiss = pendingNagCommand !== null;
-  return { onUpgradeDismiss: nagDismiss ? handleUpgradeNagClose : handleManualUpgradeDismiss, upgradeDismissMode: nagDismiss ? "nag" : "manual" } as const;
+  return {
+    onUpgradeDismiss: nagDismiss
+      ? handleUpgradeNagClose
+      : handleManualUpgradeDismiss,
+    upgradeDismissMode: nagDismiss ? "nag" : "manual",
+  } as const;
 }
 
 export function TerminalView({
@@ -310,12 +312,8 @@ export function TerminalView({
         />
         <div ref={bottomRef} />
       </div>
-      <BuddyOverlay
-        buddy={state.buddy}
-        bottomOffset={buddyBottomOffset}
-        containerRef={terminalContainerRef}
-      />
-      <div ref={bottomChromeRef} className="shrink-0">
+      <BuddyOverlay buddy={state.buddy} bottomOffset={buddyBottomOffset} containerRef={terminalContainerRef} />
+      <div ref={bottomChromeRef} className="shrink-0" data-terminal-bottom-chrome="true">
         <SprintProgressBar
           id={state.activeTicket?.id}
           title={state.activeTicket?.title}

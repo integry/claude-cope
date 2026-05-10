@@ -46,7 +46,9 @@ export function BuddyDisplay({ type, isShiny, className = "" }: BuddyDisplayProp
   return (
     <div className={`text-xs ${isShiny ? "text-amber-300" : "text-orange-400"} ${className}`.trim()}>
       <pre className="font-mono whitespace-pre">{art}</pre>
-      <div>{isShiny ? `✨ Shiny ${type} ✨` : type} is watching...</div>
+      <div className="whitespace-nowrap">
+        {isShiny ? `✨ Shiny ${type} ✨` : type} is watching...
+      </div>
     </div>
   );
 }
