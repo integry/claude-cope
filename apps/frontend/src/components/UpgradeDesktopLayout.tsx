@@ -20,6 +20,18 @@ export type LayoutProps = {
   singleAvailable: boolean;
   multiAvailable: boolean;
   quotaLine: string;
+  freeCategoryCount: number;
+  freeCategoryExamples: string[];
+  freeCategoryRemainder: number;
+  premiumCategoryCount: number;
+  premiumGroups: Array<{
+    id: string;
+    title: string;
+    description: string;
+    total: number;
+    examples: string[];
+    remainder: number;
+  }>;
   dismissMode?: "manual" | "nag";
   dismissPhase?: "idle" | "closing";
   dismissEffect?: UpgradeNagCloseEffect;
@@ -37,6 +49,11 @@ export default function DesktopLayout({
   singleAvailable,
   multiAvailable,
   quotaLine,
+  freeCategoryCount,
+  freeCategoryExamples,
+  freeCategoryRemainder,
+  premiumCategoryCount,
+  premiumGroups,
   dismissMode = "manual",
   dismissPhase = "idle",
   dismissEffect = DEFAULT_CLOSE_EFFECT,
@@ -91,6 +108,31 @@ export default function DesktopLayout({
       </>
     );
   };
+  const wrapText = (text: string, maxWidth = INNER_W - 2) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [""];
+
+    const lines: string[] = [];
+    let currentLine = "";
+    for (const word of words) {
+      const nextLine = currentLine ? `${currentLine} ${word}` : word;
+      if (nextLine.length <= maxWidth) {
+        currentLine = nextLine;
+        continue;
+      }
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  };
+  const renderWrappedBoxLines = (text: string, color = W) =>
+    wrapText(text).map((line, index) => (
+      <span key={`${color}-${index}-${line}`}>
+        {boxLine(`  ${line}`, color)}
+        {"\n"}
+      </span>
+    ));
   const buttonBlock = (
     id: number,
     label: string,
@@ -337,6 +379,21 @@ export default function DesktopLayout({
         {tableRow2}{"\n"}
         {tableBorderBot}{"\n"}
         {emptyLine}{"\n"}
+        {boxLine(`  [ FREE STARTER SET: ${freeCategoryCount} CATEGORIES ]`, Y)}{"\n"}
+        {renderWrappedBoxLines("Free users get a generous starter backlog across office politics, outages, testing misery, design systems, and analytics dread.")}
+        {renderWrappedBoxLines(`Includes: ${freeCategoryExamples.join(", ")}${freeCategoryRemainder > 0 ? `, +${freeCategoryRemainder} more starter categories` : ""}`)}
+        {emptyLine}{"\n"}
+        {boxLine("  [ MAX UNLOCK: 50+ SPECIALIZED CATEGORIES ]", Y)}{"\n"}
+        {renderWrappedBoxLines(`Premium is not a paywall tax. Max expands the backlog into ${premiumCategoryCount} specialized categories using the same real labels and prefixes teased in /backlog.`)}
+        {emptyLine}{"\n"}
+        {premiumGroups.map((group) => (
+          <span key={group.id}>
+            {boxLine(`  [${group.title.toUpperCase()}] ${group.total}`, Y)}{"\n"}
+            {renderWrappedBoxLines(group.description, DIM)}
+            {renderWrappedBoxLines(`${group.examples.join(", ")}${group.remainder > 0 ? `, +${group.remainder} more` : ""}`)}
+            {emptyLine}{"\n"}
+          </span>
+        ))}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
         {(() => {

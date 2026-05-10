@@ -5,6 +5,13 @@ export interface BacklogCategoryTierMeta {
   tier: "free" | "premium";
 }
 
+export interface BacklogCategoryUpgradeGroupMeta {
+  id: string;
+  title: string;
+  description: string;
+  categories: readonly BacklogCategoryTierMeta[];
+}
+
 type BacklogCategoryDefinition = readonly [
   prefix: string,
   slug: string,
@@ -128,6 +135,39 @@ const BACKLOG_CATEGORY_TIER_LOOKUP = new Map(
   BACKLOG_CATEGORY_TIERS.map((entry) => [entry.prefix, entry] as const),
 );
 
+const BACKLOG_CATEGORY_UPGRADE_GROUP_DEFINITIONS = [
+  {
+    id: "industry-verticals",
+    title: "Industry Verticals",
+    description: "Sector-specific nightmares with regulations, customers, and domain-specific rot.",
+    prefixes: ["ATLAS", "BOOKS", "BOSS", "BRICK", "CART", "CIVIC", "CLASS", "CLINIC", "CRUD", "DESK", "FEED", "GEAR", "ITIN", "REEL", "WIRE"],
+  },
+  {
+    id: "deep-infrastructure",
+    title: "Deep Infrastructure",
+    description: "The plumbing layer where incidents, integrations, and architecture debt breed.",
+    prefixes: ["ADDON", "CRASH", "DRIFT", "DUST", "FLAGS", "GASP", "GLUE", "GUNK", "HAUNT", "HAVOC", "MAIL", "MELT", "MERGE", "MESH", "OMEN", "RELIC", "RIFT", "ROT", "SPOOK", "SWAMP"],
+  },
+  {
+    id: "dark-corporate-arts",
+    title: "Dark Corporate Arts",
+    description: "Process cults, compliance rites, executive heat, and institutional sabotage.",
+    prefixes: ["BLISS", "BUNK", "CHANT", "CULT", "GHOUL", "HUSH", "LURK", "MOOD", "RAGE", "RANK", "SHIV", "SPIN", "ZANY"],
+  },
+  {
+    id: "marketing-growth-sludge",
+    title: "Marketing / Growth Sludge",
+    description: "Funnels, affiliates, dark patterns, and every KPI scam in between.",
+    prefixes: ["CLICK", "FRAUD", "GRIFT", "GRIME", "LOOT", "PIXEL", "SLIME"],
+  },
+  {
+    id: "emerging-hype",
+    title: "Emerging Hype",
+    description: "Freshly funded delusions, synthetic mush, and trend-chasing platform bets.",
+    prefixes: ["HYPE", "SCAM", "SLOP", "VERSE"],
+  },
+] as const;
+
 export const FREE_BACKLOG_CATEGORY_PREFIXES = new Set(
   BACKLOG_CATEGORY_TIERS.filter((entry) => entry.tier === "free").map((entry) => entry.prefix),
 );
@@ -135,6 +175,47 @@ export const FREE_BACKLOG_CATEGORY_PREFIXES = new Set(
 export const PREMIUM_BACKLOG_CATEGORY_PREFIXES = new Set(
   BACKLOG_CATEGORY_TIERS.filter((entry) => entry.tier === "premium").map((entry) => entry.prefix),
 );
+
+export const FREE_BACKLOG_CATEGORY_COUNT = BACKLOG_CATEGORY_TIERS.filter((entry) => entry.tier === "free").length;
+
+export const PREMIUM_BACKLOG_CATEGORY_COUNT = BACKLOG_CATEGORY_TIERS.filter((entry) => entry.tier === "premium").length;
+
+export const BACKLOG_CATEGORY_UPGRADE_GROUPS: readonly BacklogCategoryUpgradeGroupMeta[] = (() => {
+  const seenPremiumPrefixes = new Set<string>();
+  const groups = BACKLOG_CATEGORY_UPGRADE_GROUP_DEFINITIONS.map((group) => {
+    const categories = group.prefixes.map((prefix) => {
+      const category = BACKLOG_CATEGORY_TIER_LOOKUP.get(prefix);
+      if (!category) {
+        throw new Error(`Unknown backlog upgrade category prefix: ${prefix}`);
+      }
+      if (category.tier !== "premium") {
+        throw new Error(`Upgrade group "${group.id}" includes non-premium category: ${prefix}`);
+      }
+      if (seenPremiumPrefixes.has(prefix)) {
+        throw new Error(`Duplicate backlog upgrade category prefix in groups: ${prefix}`);
+      }
+      seenPremiumPrefixes.add(prefix);
+      return category;
+    });
+
+    return {
+      id: group.id,
+      title: group.title,
+      description: group.description,
+      categories,
+    };
+  });
+
+  const missingPremiumPrefixes = BACKLOG_CATEGORY_TIERS
+    .filter((entry) => entry.tier === "premium" && !seenPremiumPrefixes.has(entry.prefix))
+    .map((entry) => entry.prefix);
+
+  if (missingPremiumPrefixes.length > 0) {
+    throw new Error(`Missing premium backlog categories in upgrade groups: ${missingPremiumPrefixes.join(", ")}`);
+  }
+
+  return groups;
+})();
 
 export function getBacklogCategoryPrefix(taskId: string): string | null {
   const prefix = taskId.split("-")[0]?.trim().toUpperCase();

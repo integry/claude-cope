@@ -3,6 +3,11 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
+import {
+  BACKLOG_CATEGORY_UPGRADE_GROUPS,
+  FREE_BACKLOG_CATEGORY_COUNT,
+  PREMIUM_BACKLOG_CATEGORY_COUNT,
+} from "@claude-cope/shared/backlogTiers";
 
 vi.mock("../../config", () => ({
   UPGRADE_CHECKOUT_SINGLE: "https://example.com/single",
@@ -77,6 +82,20 @@ describe("UpgradeOverlay", () => {
     const text = container.textContent ?? "";
     expect(text).toContain("AUTHORIZE EXTRACTION - $4.99");
     expect(text).toContain("EXTRACT TEAM FUNDS - $19.99");
+  });
+
+  it("renders the free-tier pitch and grouped premium unlock copy from shared metadata", () => {
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+    const text = container.textContent ?? "";
+
+    expect(text).toContain(`FREE STARTER SET: ${FREE_BACKLOG_CATEGORY_COUNT} CATEGORIES`);
+    expect(text).toContain("MAX UNLOCK: 50+ SPECIALIZED CATEGORIES");
+    expect(text).toContain(`${PREMIUM_BACKLOG_CATEGORY_COUNT} specialized categories`);
+
+    for (const group of BACKLOG_CATEGORY_UPGRADE_GROUPS) {
+      expect(text).toContain(group.title.toUpperCase());
+      expect(text).toContain(`${group.categories[0]!.prefix} ${group.categories[0]!.label}`);
+    }
   });
 
   it("renders checkout links for both options", () => {
