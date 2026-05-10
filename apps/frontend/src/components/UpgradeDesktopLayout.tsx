@@ -68,6 +68,7 @@ export default function DesktopLayout({
     [singleAvailable, multiAvailable],
   );
   const [selectedOptionId, setSelectedOptionId] = useState<number | null>(availableOptionIds[0] ?? null);
+  const [isKeyboardNavigationMode, setIsKeyboardNavigationMode] = useState(false);
   const boxLineRich = (content: React.ReactNode, textLength: number) => {
     const padLen = Math.max(0, INNER_W - textLength);
     return (
@@ -104,7 +105,7 @@ export default function DesktopLayout({
     const totalUsed = MARGIN + cursorPrefix.length + btnContent.length;
     const suffixLen = Math.max(0, INNER_W - totalUsed);
     const emptyInner = " ".repeat(INNER_W);
-    const selected = selectedOptionId === id;
+    const selected = isKeyboardNavigationMode && selectedOptionId === id;
     if (!available) {
       const errText = "    [ERR] CHECKOUT_URL not configured.";
       const errPad = Math.max(0, INNER_W - errText.length);
@@ -137,6 +138,7 @@ export default function DesktopLayout({
         tabIndex={isForcedClosing ? -1 : undefined}
         aria-hidden={isForcedClosing ? true : undefined}
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={() => { setIsKeyboardNavigationMode(false); }}
         onFocus={() => { setSelectedOptionId(id); }}
       >
         <span style={{ color: B }}>{"║"}</span>
@@ -181,6 +183,9 @@ export default function DesktopLayout({
     }
   }, [availableOptionIds, selectedOptionId]);
   useEffect(() => {
+    if (isForcedClosing) setIsKeyboardNavigationMode(false);
+  }, [isForcedClosing]);
+  useEffect(() => {
     const syncViewport = () => { setIsDesktopViewport(getIsDesktopViewport()); };
     window.addEventListener("resize", syncViewport);
     return () => { window.removeEventListener("resize", syncViewport); };
@@ -211,16 +216,16 @@ export default function DesktopLayout({
       }
       return;
     }
-    if (isForcedClosing) {
+    if (isForcedClosing || (dismissMode === "nag" && !isKeyboardNavigationMode)) {
       overlayRef.current?.focus();
       return;
     }
-    if (selectedOptionId !== null) {
+    if (isKeyboardNavigationMode && selectedOptionId !== null) {
       optionRefs.current[selectedOptionId]?.focus();
       return;
     }
     overlayRef.current?.focus();
-  }, [isDesktopViewport, isForcedClosing, selectedOptionId]);
+  }, [dismissMode, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, selectedOptionId]);
   useEffect(() => {
     if (!isDesktopViewport || isForcedClosing) return undefined;
     const overlay = overlayRef.current;
@@ -252,16 +257,23 @@ export default function DesktopLayout({
     if (isEditableTarget) return;
     if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
       event.preventDefault();
+      setIsKeyboardNavigationMode(true);
       cycleSelection(-1);
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowRight") {
       event.preventDefault();
+      setIsKeyboardNavigationMode(true);
       cycleSelection(1);
+      return;
+    }
+    if (event.key === "Tab") {
+      setIsKeyboardNavigationMode(true);
       return;
     }
     if (
       event.key === "Enter"
+      && isKeyboardNavigationMode
       && selectedOptionId !== null
       && target instanceof HTMLElement
       && target.tagName !== "A"
@@ -270,12 +282,13 @@ export default function DesktopLayout({
       event.preventDefault();
       optionRefs.current[selectedOptionId]?.click();
     }
-  }, [cycleSelection, isDesktopViewport, isForcedClosing, selectedOptionId]);
+  }, [cycleSelection, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, selectedOptionId]);
   return (
     <div
       ref={overlayRef}
       className={`upgrade-desktop fixed inset-0 z-50 flex items-center justify-center${isForcedClosing ? " upgrade-overlay-closing" : ""}`}
       data-close-effect={dismissEffect}
+      data-keyboard-nav={isKeyboardNavigationMode ? "true" : "false"}
       onClick={canPointerDismiss ? onDismiss : undefined}
       onKeyDown={handleOverlayKeyDown}
       tabIndex={-1}
