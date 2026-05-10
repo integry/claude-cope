@@ -83,13 +83,14 @@ export function useUpgradeNagState({
     (command?: string) => {
       if (command !== undefined) {
         pendingNagCommandRef.current = command;
+        setInputValue("");
       }
       nagOpenedAtRef.current = Date.now();
       resetDismissState();
       clearNagCloseTimeout();
       setShowUpgrade(true);
     },
-    [clearNagCloseTimeout, resetDismissState, setShowUpgrade],
+    [clearNagCloseTimeout, resetDismissState, setInputValue, setShowUpgrade],
   );
 
   const finalizeUpgradeNagClose = useCallback(

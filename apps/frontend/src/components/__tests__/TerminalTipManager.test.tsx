@@ -266,6 +266,8 @@ async function submitCommand(command: string) {
 
 describe("Terminal tip-manager wiring", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-10T00:00:00.000Z"));
     executeSlashCommandMock.mockImplementation((command: string, ctx: { onValidSlashCommand?: (baseCommand: string) => void }) => {
       ctx.onValidSlashCommand?.(command.trim());
     });
@@ -279,6 +281,7 @@ describe("Terminal tip-manager wiring", () => {
     act(() => root?.unmount());
     container?.remove();
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it("does not let /clear repopulate the terminal through tip-manager callbacks", async () => {
@@ -336,6 +339,14 @@ describe("Terminal tip-manager wiring", () => {
       dismissButton!.click();
     });
 
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+      await Promise.resolve();
+    });
+
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(2);
     expect(submitChatMessageMock).toHaveBeenCalledTimes(2);
     expect(input!.value).toBe("");
@@ -355,12 +366,20 @@ describe("Terminal tip-manager wiring", () => {
       input!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
 
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+      await Promise.resolve();
+    });
+
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(2);
     expect(submitChatMessageMock).toHaveBeenCalledTimes(2);
     expect(input!.value).toBe("");
   });
 
-  it("replays a nagged prompt immediately after dismissing the overlay", async () => {
+  it("replays a nagged prompt after the forced dismiss cycle completes", async () => {
     await renderTerminal();
 
     await submitCommand("first prompt");
@@ -372,6 +391,16 @@ describe("Terminal tip-manager wiring", () => {
 
     await act(async () => {
       dismissButton!.click();
+    });
+
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+    expect(setShowUpgradeMock).toHaveBeenCalledTimes(1);
+    expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+      await Promise.resolve();
     });
 
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(2);
