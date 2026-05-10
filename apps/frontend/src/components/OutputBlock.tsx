@@ -8,6 +8,7 @@ import { ShareButton } from "./ShareButton";
 import { renderWithSlashLinks } from "./slashCommandLinks";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { appendShareMarker, buildMarkdownComponents, cleanLLMOutput } from "./OutputBlockMarkdown";
+import { BacklogMessage } from "./BacklogMessage";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
@@ -144,6 +145,10 @@ function MessageContent({
   const { role, content } = message;
   const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(role, content);
 
+  if (message.backlogDisplay && role === "system") {
+    return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
+  }
+
   // Only typewrite actual AI responses (system role). Scaffold messages (ads,
   // queue warnings) render instantly so they don't vanish mid-animation when
   // the fixed delay timers remove them.
@@ -226,7 +231,9 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
 type OutputBlockProps = Parameters<typeof OutputBlock>[0];
 
 function messagesEqual(a: Message | undefined, b: Message | undefined): boolean {
-  return a?.role === b?.role && a?.content === b?.content;
+  return a?.role === b?.role
+    && a?.content === b?.content
+    && JSON.stringify(a?.backlogDisplay) === JSON.stringify(b?.backlogDisplay);
 }
 
 function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps): boolean {

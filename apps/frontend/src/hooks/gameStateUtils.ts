@@ -37,6 +37,25 @@ function generateUsername(): string {
 let _msgId = 0;
 export function nextMsgId(): number { return ++_msgId; }
 
+export type BacklogDisplayTicket = {
+  row: number;
+  fullId: string;
+  shortId: string;
+  title: string;
+  status: "OPEN" | "PREMIUM";
+  reward: string;
+  isLocked: boolean;
+};
+
+export type BacklogDisplayData = {
+  kind: "community-backlog";
+  title: string;
+  filterHeader?: string;
+  infoLine?: string;
+  footer: string[];
+  tickets: BacklogDisplayTicket[];
+};
+
 export type Message = {
   id?: number;
   role: "user" | "system" | "loading" | "warning" | "error";
@@ -44,6 +63,7 @@ export type Message = {
   tokensSent?: number;
   tokensReceived?: number;
   cost?: number;
+  backlogDisplay?: BacklogDisplayData;
 };
 
 export interface BuddyState {
