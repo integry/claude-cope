@@ -6,10 +6,11 @@ import {
 } from "../buddyOverlayScale";
 
 describe("BuddyOverlay scale helpers", () => {
-  it("clamps scale values into the supported range", () => {
+  it("caps scale at full size and hides values below the visible threshold", () => {
     expect(clampBuddyScale(2)).toBe(1);
     expect(clampBuddyScale(0.5)).toBe(0.5);
-    expect(clampBuddyScale(0.1)).toBe(0.35);
+    expect(clampBuddyScale(0.35)).toBe(0.35);
+    expect(clampBuddyScale(0.1)).toBe(0);
   });
 
   it("returns full scale when overlay dimensions are zero", () => {
@@ -49,7 +50,7 @@ describe("BuddyOverlay scale helpers", () => {
     ).toBe(1);
   });
 
-  it("uses the tighter constrained axis and clamps to the minimum", () => {
+  it("uses the tighter constrained axis and hides the overlay below the threshold", () => {
     expect(
       getBuddyOverlayScale({
         containerWidth: 240,
@@ -81,6 +82,6 @@ describe("BuddyOverlay scale helpers", () => {
         overlayWidth: 200,
         overlayHeight: 220,
       }),
-    ).toBe(0.35);
+    ).toBe(0);
   });
 });

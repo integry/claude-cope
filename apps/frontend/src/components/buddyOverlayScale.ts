@@ -1,9 +1,13 @@
 const BUDDY_OVERLAY_LEFT_PADDING = 12;
 const BUDDY_OVERLAY_TOP_PADDING = 12;
-const BUDDY_OVERLAY_MIN_SCALE = 0.35;
+const BUDDY_OVERLAY_MIN_VISIBLE_SCALE = 0.35;
 
 export function clampBuddyScale(scale: number) {
-  return Math.max(BUDDY_OVERLAY_MIN_SCALE, Math.min(1, scale));
+  if (scale < BUDDY_OVERLAY_MIN_VISIBLE_SCALE) {
+    return 0;
+  }
+
+  return Math.min(1, scale);
 }
 
 export function getBuddyOverlayScale({
