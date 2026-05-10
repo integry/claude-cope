@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import type { ServerProfile } from "@claude-cope/shared/profile";
-import { SLASH_COMMANDS } from "./slashCommands";
+import { getSlashMenuItems } from "./slashCommands";
 import { useGameState, Message } from "../hooks/useGameState";
-import { isFreeUser } from "../hooks/gameStateUtils";
+import { isFreeUser, isPaidUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
@@ -244,7 +244,8 @@ function Terminal() {
     setInputValue(value); setHistoryIndex(-1); setSuggestedReply(null); setSlashQuery(value.startsWith("/") ? value : ""); setSlashIndex(0);
   };
 
-  const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => !(cmd === "/store" && state.economy.totalTDEarned < 1000) && cmd.startsWith(slashQuery.toLowerCase()));
+  const getFilteredSlashCommands = () =>
+    getSlashMenuItems(slashQuery, state.economy.totalTDEarned, isPaidUser(state)).map((item) => item.value);
 
   const runSlashCommand = useCallback((command: string) => {
     executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });

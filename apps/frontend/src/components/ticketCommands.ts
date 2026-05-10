@@ -3,6 +3,10 @@ import { AnalyticsEvents, SlashCommandFailureReasons } from "../analyticsEvents"
 import { API_BASE, TICKET_REFINE_ENABLED } from "../config";
 import type { GameState } from "../hooks/useGameState";
 import type { CommunityBacklogTicket } from "@claude-cope/shared/backlogTickets";
+import {
+  BACKLOG_CATEGORY_ALL,
+  getBacklogCategoryTierMeta,
+} from "@claude-cope/shared/backlogTiers";
 import type { Message } from "./Terminal";
 import { prefetchSequences } from "./toolSequences";
 import { updateTicketServer } from "../api/profileApi";
@@ -12,6 +16,30 @@ type SetState = React.Dispatch<React.SetStateAction<GameState>>;
 
 /** Cache last backlog results so `/take 2` can resolve by row number */
 let lastBacklogResults: CommunityBacklogTicket[] = [];
+
+type BacklogRequestOptions = {
+  proKeyHash?: string;
+  category?: string;
+  paidUser?: boolean;
+};
+
+function normalizeBacklogCategory(category?: string): string | null {
+  if (!category) return null;
+  const normalized = category.trim().toUpperCase();
+  if (!normalized || normalized === BACKLOG_CATEGORY_ALL) return null;
+  return normalized;
+}
+
+export function parseBacklogCategoryArgument(command: string): string | null {
+  const rawArgument = command.slice("/backlog".length).trim();
+  return rawArgument ? rawArgument.toUpperCase() : null;
+}
+
+function formatBacklogFilterHeader(category: string): string {
+  const meta = getBacklogCategoryTierMeta(category);
+  if (!meta) return `[ FILTER ACTIVE: ${category} ]`;
+  return `[ FILTER ACTIVE: ${meta.prefix} (${meta.label}) ]`;
+}
 
 function formatBacklogTitle(ticket: CommunityBacklogTicket): string {
   const premiumPrefix = ticket.is_locked ? "🔒 [PREMIUM] " : "";
@@ -66,21 +94,40 @@ export async function handleTicketCommand(command: string, reply: Reply): Promis
   return true;
 }
 
-export async function handleBacklogCommand(reply: Reply, proKeyHash?: string): Promise<boolean> {
+export async function handleBacklogCommand(reply: Reply, options: BacklogRequestOptions = {}): Promise<boolean> {
+  const normalizedCategory = normalizeBacklogCategory(options.category);
+  const categoryMeta = normalizedCategory ? getBacklogCategoryTierMeta(normalizedCategory) : null;
+
+  if (normalizedCategory && !categoryMeta) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.VALIDATION_FAILED });
+    reply({ role: "error", content: `[❌] Unknown backlog category: \`${normalizedCategory}\`. Try \`/backlog \` to browse valid categories.` });
+    return true;
+  }
+
+  if (categoryMeta?.tier === "premium" && !options.paidUser) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.PRO_GATED });
+    reply({ role: "warning", content: `[🔒 **CATEGORY LOCKED**] \`${categoryMeta.prefix}\` (${categoryMeta.label}) is a Max backlog category. Free users can preview it in autocomplete, but cannot execute that filter.` });
+    return true;
+  }
+
   try {
-    const res = await fetch(`${API_BASE}/api/tickets/community`, {
-      headers: proKeyHash ? { "x-pro-key-hash": proKeyHash } : undefined,
+    const query = normalizedCategory ? `?${new URLSearchParams({ category: normalizedCategory }).toString()}` : "";
+    const res = await fetch(`${API_BASE}/api/tickets/community${query}`, {
+      headers: options.proKeyHash ? { "x-pro-key-hash": options.proKeyHash } : undefined,
     });
     if (!res.ok) {
-      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.SERVER_ERROR });
-      reply({ role: "error", content: `[❌] Failed to fetch backlog (HTTP ${res.status}).` });
+      const data = await res.json().catch(() => null) as { error?: string } | null;
+      const reason = res.status === 400 ? SlashCommandFailureReasons.VALIDATION_FAILED : res.status === 403 ? SlashCommandFailureReasons.PRO_GATED : SlashCommandFailureReasons.SERVER_ERROR;
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason });
+      reply({ role: "error", content: data?.error ? `[❌] ${data.error}` : `[❌] Failed to fetch backlog (HTTP ${res.status}).` });
       return true;
     }
 
     const tickets = await res.json() as CommunityBacklogTicket[];
     if (!tickets.length) {
       const hint = TICKET_REFINE_ENABLED ? " Submit tickets with `/ticket <description>`." : "";
-      reply({ role: "system", content: `[📋 **BACKLOG**] The backlog is empty.${hint}` });
+      const filterHeader = normalizedCategory ? `\n${formatBacklogFilterHeader(normalizedCategory)}` : "";
+      reply({ role: "system", content: `[📋 **BACKLOG**]${filterHeader}\n\nThe backlog is empty.${hint}` });
       return true;
     }
 
@@ -120,7 +167,8 @@ export async function handleBacklogCommand(reply: Reply, proKeyHash?: string): P
         "Run `/upgrade` to unlock 50+ specialized categories and premium suffering.",
       ].join("\n")
       : `Type \`/take 1\` through \`/take ${tickets.length}\` to claim a ticket.`;
-    reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]\n\n\`\`\`\n${table}\n\`\`\`\n\n${footer}` });
+    const filterHeader = normalizedCategory ? `\n${formatBacklogFilterHeader(normalizedCategory)}` : "";
+    reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]${filterHeader}\n\n\`\`\`\n${table}\n\`\`\`\n\n${footer}` });
   } catch {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.NETWORK_ERROR });
     reply({ role: "error", content: "[❌] Network error — the backlog server is unreachable." });

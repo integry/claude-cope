@@ -1,4 +1,8 @@
 import { BYOK_ENABLED, TICKET_REFINE_ENABLED } from "../config";
+import {
+  BACKLOG_CATEGORY_ALL,
+  BACKLOG_CATEGORY_TIERS,
+} from "@claude-cope/shared/backlogTiers";
 
 export type SlashCommandGroup = {
   title: string;
@@ -84,3 +88,85 @@ export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/party": "Watch chaos unfold in realtime",
   "/theme": "Switch your terminal theme",
 };
+
+export type SlashMenuCommandItem = {
+  type: "command";
+  value: string;
+  groupTitle: string;
+  description?: string;
+};
+
+export type SlashMenuBacklogCategoryItem = {
+  type: "backlog-category";
+  value: string;
+  prefix: string;
+  label: string;
+  description: string;
+  locked: boolean;
+};
+
+export type SlashMenuItem = SlashMenuCommandItem | SlashMenuBacklogCategoryItem;
+
+function matchesBacklogCategoryQuery(query: string, prefix: string, label: string, description: string): boolean {
+  if (!query) return true;
+  const normalized = query.trim().toLowerCase();
+  return prefix.toLowerCase().includes(normalized)
+    || label.toLowerCase().includes(normalized)
+    || description.toLowerCase().includes(normalized);
+}
+
+export function getSlashMenuItems(
+  query: string,
+  totalTechnicalDebt: number,
+  paidUser: boolean,
+): SlashMenuItem[] {
+  const normalizedQuery = query.toLowerCase();
+
+  if (normalizedQuery.startsWith("/backlog ")) {
+    const categoryQuery = query.slice("/backlog ".length);
+    const items: SlashMenuBacklogCategoryItem[] = [];
+
+    if (matchesBacklogCategoryQuery(categoryQuery, BACKLOG_CATEGORY_ALL, "All Categories", "The normal mixed backlog feed")) {
+      items.push({
+        type: "backlog-category",
+        value: `/backlog ${BACKLOG_CATEGORY_ALL}`,
+        prefix: BACKLOG_CATEGORY_ALL,
+        label: "All Categories",
+        description: "The normal mixed backlog feed",
+        locked: false,
+      });
+    }
+
+    for (const category of BACKLOG_CATEGORY_TIERS) {
+      if (!matchesBacklogCategoryQuery(categoryQuery, category.prefix, category.label, category.description)) {
+        continue;
+      }
+
+      items.push({
+        type: "backlog-category",
+        value: `/backlog ${category.prefix}`,
+        prefix: category.prefix,
+        label: category.label,
+        description: category.description,
+        locked: category.tier === "premium" && !paidUser,
+      });
+    }
+
+    return items;
+  }
+
+  return SLASH_COMMAND_GROUPS.flatMap((group) =>
+    group.commands.flatMap((cmd): SlashMenuCommandItem[] => {
+      if (!SLASH_COMMANDS.includes(cmd)) return [];
+      if (cmd === "/store" && totalTechnicalDebt < 1000) return [];
+      if (!cmd.startsWith(normalizedQuery)) return [];
+
+      return [{
+        type: "command",
+        value: cmd,
+        groupTitle: group.title,
+        description: SLASH_COMMAND_DESCRIPTIONS[cmd],
+      }];
+    }),
+  );
+}

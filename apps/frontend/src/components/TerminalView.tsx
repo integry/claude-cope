@@ -8,7 +8,7 @@ import type {
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import HeaderBar from "./HeaderBar";
-import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
+import { calculateActiveMultiplier, isPaidUser } from "../hooks/gameStateUtils";
 import { parseGlitchStyle } from "./parseGlitchStyle";
 import { terminalContainerClassName } from "./terminalClassName";
 import { BYOK_ENABLED } from "../config";
@@ -202,7 +202,7 @@ export function TerminalView({
           onSlashCommand={handleSlashCommandClick}
         />
         <div className="relative border-b border-white">
-          {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
+          {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} paidUser={isPaidUser(state)} onSelect={runSlashCommand} />}
           <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
           <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
         </div>

@@ -41,6 +41,7 @@ describe("SlashMenu", () => {
       query: "/th",
       activeIndex: 0,
       totalTechnicalDebt: 5000,
+      paidUser: false,
       onSelect: vi.fn(),
     });
 
@@ -56,11 +57,47 @@ describe("SlashMenu", () => {
       query: "/",
       activeIndex: pingIndex,
       totalTechnicalDebt: 5000,
+      paidUser: false,
       onSelect: vi.fn(),
     });
 
     const selected = Array.from(menu.querySelectorAll("li")).find((item) => item.className.includes("border-cyan-400"));
     expect(selected?.textContent).toContain("/ping");
     expect(selected?.textContent).not.toContain("GUILD HALL/ping");
+  });
+
+  it("shows backlog category autocomplete immediately after /backlog space", () => {
+    const menu = renderSlashMenu({
+      query: "/backlog ",
+      activeIndex: 0,
+      totalTechnicalDebt: 5000,
+      paidUser: false,
+      onSelect: vi.fn(),
+    });
+
+    expect(menu.textContent).toContain("BACKLOG CATEGORIES");
+    expect(menu.textContent).toContain("ALL");
+    expect(menu.textContent).toContain("All Categories");
+    expect(menu.textContent).toContain("MELT");
+    expect(menu.textContent).toContain("Mainframes / Legacy");
+    expect(menu.textContent).toContain("LOCKED");
+  });
+
+  it("emits full /backlog category commands when category rows are clicked", () => {
+    const onSelect = vi.fn();
+    const menu = renderSlashMenu({
+      query: "/backlog ",
+      activeIndex: 0,
+      totalTechnicalDebt: 5000,
+      paidUser: false,
+      onSelect,
+    });
+
+    const firstCategory = Array.from(menu.querySelectorAll("li.cursor-pointer")).find((item) => item.textContent?.includes("All Categories"));
+    act(() => {
+      firstCategory?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSelect).toHaveBeenCalledWith("/backlog ALL");
   });
 });
