@@ -164,6 +164,8 @@ export default function DesktopLayout({
   };
   const tableLines = { border: boxLine("  +----------------+----------+------------------------------+"), header: boxLine("  | ARCHITECTURE   | CAPACITY | GUARANTEED OUTCOME           |"), legacy: boxLine("  | Legacy AI      | Max 20x  | Manageable pull requests     |"), cope: boxLine("  | Claude Cope    | MAX 429X | Unmitigated request storms   |") };
   const title = "[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]", closeBtn = "[x]";
+  const creditsStr = `${PRO_QUOTA_LIMIT} non-expiring credits`;
+  const retainPadding = getCenteredPadding(RETAIN_TEXT);
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
   const canPointerDismiss = dismissMode === "manual" && !!onDismiss, isForcedClosing = dismissPhase === "closing";
@@ -328,12 +330,7 @@ export default function DesktopLayout({
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: B }}>{" " + title + " ".repeat(titleGap - 1)}</span>
         {canPointerDismiss ? (
-          <button
-            type="button"
-            onClick={onDismiss}
-            style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
-            title="Click to dismiss"
-          >{closeBtn}</button>
+          <button type="button" onClick={onDismiss} style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }} title="Click to dismiss">{closeBtn}</button>
         ) : dismissMode === "nag" ? (
           <span>{" ".repeat(closeBtn.length)}</span>
         ) : (
@@ -361,10 +358,7 @@ export default function DesktopLayout({
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
-        {(() => {
-          const creditsStr = `${PRO_QUOTA_LIMIT} non-expiring credits`;
-          return boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{", "}<span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>{","}</span>, `  Unlocks: ${creditsStr}, multi-device sync,`.length);
-        })()}{"\n"}
+        {boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{", "}<span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>{","}</span>, `  Unlocks: ${creditsStr}, multi-device sync,`.length)}{"\n"}
         {boxLineRich(
           <span style={{ color: W }}>
             {"  priority generation queue, and "}
@@ -381,25 +375,15 @@ export default function DesktopLayout({
         {boxLine("  (5 activation keys will be sent to your email)", "#8892b0")}{"\n"}
         {buttonBlock(OPTION_IDS.multi, multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         <span style={{ color: B }}>{BORDER_MID}</span>{"\n"}
-        {(() => {
-          const { left, right } = getCenteredPadding(RETAIN_TEXT);
-          return (
-            <span style={{ display: "inline" }} className="upgrade-esc-btn">
-              <span style={{ color: B }}>{"║"}</span>
-              {canPointerDismiss ? (
-                <button
-                  type="button"
-                  onClick={onDismiss}
-                  data-esc=""
-                  style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
-                >{" ".repeat(left) + RETAIN_TEXT + " ".repeat(right)}</button>
-              ) : (
-                <span data-esc="" style={{ color: DIM }}>{" ".repeat(left) + RETAIN_TEXT + " ".repeat(right)}</span>
-              )}
-              <span style={{ color: B }}>{"║"}</span>
-            </span>
-          );
-        })()}{"\n"}
+        <span style={{ display: "inline" }} className="upgrade-esc-btn">
+          <span style={{ color: B }}>{"║"}</span>
+          {canPointerDismiss ? (
+            <button type="button" onClick={onDismiss} data-esc="" style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}>{" ".repeat(retainPadding.left) + RETAIN_TEXT + " ".repeat(retainPadding.right)}</button>
+          ) : (
+            <span data-esc="" style={{ color: DIM }}>{" ".repeat(retainPadding.left) + RETAIN_TEXT + " ".repeat(retainPadding.right)}</span>
+          )}
+          <span style={{ color: B }}>{"║"}</span>
+        </span>{"\n"}
         <span style={{ color: B }}>{BORDER_BOTTOM}</span>
       </pre>
     </div>
