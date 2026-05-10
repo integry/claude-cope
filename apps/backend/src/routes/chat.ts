@@ -902,7 +902,14 @@ RETRY OVERRIDE — YOUR LAST DRAFT LEANED ON THE SAME ENTERPRISE CLICHES:
   ];
 }
 
-export async function callOpenRouter(apiKey: string, model: string, messages: { role: string; content: string }[], providers?: string[]) {
+type OpenRouterCallParams = {
+  apiKey: string;
+  model: string;
+  messages: { role: string; content: string }[];
+  providers?: string[];
+};
+
+export async function callOpenRouter({ apiKey, model, messages, providers }: OpenRouterCallParams) {
   const requestBody: OpenRouterRequestBody = {
     model,
     messages,
@@ -953,19 +960,29 @@ type PreChatResult = {
   deferredKvWrites: (() => void) | null;
 };
 
-function rejectPreChat(msg: string, status: number, base: Partial<PreChatResult>): PreChatResult {
+type RejectPreChatBase = {
+  effectiveProKeyHash?: string | undefined;
+  profileLicenseHash?: string | null;
+  revokedProfileLicenseHash?: string | null;
+  freeAccountId?: string | null;
+  quotaPercent?: number;
+  isProUserForRouting?: boolean;
+  ownsUsername?: boolean;
+  deferredKvWrites?: (() => void) | null;
+};
+
+function rejectPreChat(msg: string, status: number, base: RejectPreChatBase): PreChatResult {
   return {
     error: msg,
     status,
-    effectiveProKeyHash: undefined,
-    profileLicenseHash: null,
-    revokedProfileLicenseHash: null,
-    freeAccountId: null,
-    quotaPercent: 0,
-    isProUserForRouting: false,
-    ownsUsername: false,
-    deferredKvWrites: null,
-    ...base,
+    effectiveProKeyHash: base.effectiveProKeyHash,
+    profileLicenseHash: base.profileLicenseHash ?? null,
+    revokedProfileLicenseHash: base.revokedProfileLicenseHash ?? null,
+    freeAccountId: base.freeAccountId ?? null,
+    quotaPercent: base.quotaPercent ?? 0,
+    isProUserForRouting: base.isProUserForRouting ?? false,
+    ownsUsername: base.ownsUsername ?? false,
+    deferredKvWrites: base.deferredKvWrites ?? null,
   };
 }
 
@@ -1180,7 +1197,12 @@ chat.post("/", async (c) => {
   });
 
   const providerList = resolveProviderList(baseProviders, baseProvidersFreeOnly, category);
-  const orResponse = await callOpenRouter(effectiveApiKey, model, messages, providerList);
+  const orResponse = await callOpenRouter({
+    apiKey: effectiveApiKey,
+    model,
+    messages,
+    providers: providerList,
+  });
 
   if (!orResponse.ok) {
     const errData = await orResponse.json();

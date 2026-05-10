@@ -763,7 +763,12 @@ describe("Provider configuration in OpenRouter requests", () => {
     const { parseProviderList } = await import("@claude-cope/shared/openrouter");
     const providerList = parseProviderList("Together,Fireworks");
     expect(providerList).toEqual(["Together", "Fireworks"]);
-    await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
+    await callOpenRouter({
+      apiKey: "test-key",
+      model: "openai/gpt-oss-20b",
+      messages: [{ role: "user", content: "test" }],
+      providers: providerList,
+    });
     expect(capturedRequestBody).toBeDefined();
     expect(capturedRequestBody).toHaveProperty("provider");
     expect(capturedRequestBody).toMatchObject({
@@ -782,7 +787,12 @@ describe("Provider configuration in OpenRouter requests", () => {
     for (const input of [undefined, ""]) {
       const providerList = parseProviderList(input);
       expect(providerList).toEqual([]);
-      await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
+      await callOpenRouter({
+        apiKey: "test-key",
+        model: "openai/gpt-oss-20b",
+        messages: [{ role: "user", content: "test" }],
+        providers: providerList,
+      });
       expect(capturedRequestBody).toBeDefined();
       expect(capturedRequestBody).not.toHaveProperty("provider");
     }
