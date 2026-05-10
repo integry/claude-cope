@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { UPGRADE_CHECKOUT_SINGLE, UPGRADE_CHECKOUT_MULTI, PRO_QUOTA_LIMIT } from "../config";
+import { DEFAULT_CLOSE_EFFECT, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
 
 const B = "#ff5555"; // border (red)
 const Y = "#ffff55"; // yellow headings
@@ -20,6 +21,13 @@ export type LayoutProps = {
   multiAvailable: boolean;
   quotaLine: string;
   dismissMode?: "manual" | "nag";
+  dismissPhase?: "idle" | "closing";
+  dismissEffect?: UpgradeNagCloseEffect;
+  closeEffectPresentation?: {
+    panelAnimation: string;
+    backdropAnimation: string;
+    overlayAnimation?: string;
+  };
   onDismiss?: () => void;
 };
 
@@ -30,6 +38,9 @@ export default function DesktopLayout({
   multiAvailable,
   quotaLine,
   dismissMode = "manual",
+  dismissPhase = "idle",
+  dismissEffect = DEFAULT_CLOSE_EFFECT,
+  closeEffectPresentation,
   onDismiss,
 }: LayoutProps) {
   const optionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
@@ -123,6 +134,8 @@ export default function DesktopLayout({
           cursor: "pointer",
           backgroundColor: "transparent",
         }}
+        tabIndex={isForcedClosing ? -1 : undefined}
+        aria-hidden={isForcedClosing ? true : undefined}
         onClick={(e) => e.stopPropagation()}
         onFocus={() => { setSelectedOptionId(id); }}
       >
@@ -157,6 +170,7 @@ export default function DesktopLayout({
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
   const canPointerDismiss = dismissMode === "manual" && !!onDismiss;
+  const isForcedClosing = dismissPhase === "closing";
   useEffect(() => {
     if (availableOptionIds.length === 0) {
       setSelectedOptionId(null);
@@ -183,6 +197,13 @@ export default function DesktopLayout({
     setSelectedOptionId(availableOptionIds[nextIndex] ?? null);
   }, [availableOptionIds, selectedOptionId]);
   useEffect(() => {
+    if (!isDesktopViewport || !isForcedClosing) return;
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && overlayRef.current?.contains(activeElement)) {
+      activeElement.blur();
+    }
+  }, [isDesktopViewport, isForcedClosing]);
+  useEffect(() => {
     if (!isDesktopViewport) {
       const activeElement = document.activeElement;
       if (activeElement instanceof HTMLElement && overlayRef.current?.contains(activeElement)) {
@@ -190,14 +211,18 @@ export default function DesktopLayout({
       }
       return;
     }
+    if (isForcedClosing) {
+      overlayRef.current?.focus();
+      return;
+    }
     if (selectedOptionId !== null) {
       optionRefs.current[selectedOptionId]?.focus();
       return;
     }
     overlayRef.current?.focus();
-  }, [isDesktopViewport, selectedOptionId]);
+  }, [isDesktopViewport, isForcedClosing, selectedOptionId]);
   useEffect(() => {
-    if (!isDesktopViewport) return undefined;
+    if (!isDesktopViewport || isForcedClosing) return undefined;
     const overlay = overlayRef.current;
     if (!overlay) return undefined;
     const restoreFocus = () => {
@@ -210,9 +235,14 @@ export default function DesktopLayout({
     };
     overlay.addEventListener("focusout", restoreFocus);
     return () => { overlay.removeEventListener("focusout", restoreFocus); };
-  }, [isDesktopViewport]);
+  }, [isDesktopViewport, isForcedClosing]);
   const handleOverlayKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!isDesktopViewport) return;
+    if (isForcedClosing) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     const target = event.target;
     const isEditableTarget = target instanceof HTMLElement
       && (target.isContentEditable
@@ -240,18 +270,23 @@ export default function DesktopLayout({
       event.preventDefault();
       optionRefs.current[selectedOptionId]?.click();
     }
-  }, [cycleSelection, isDesktopViewport, selectedOptionId]);
+  }, [cycleSelection, isDesktopViewport, isForcedClosing, selectedOptionId]);
   return (
     <div
       ref={overlayRef}
-      className="upgrade-desktop fixed inset-0 z-50 flex items-center justify-center"
+      className={`upgrade-desktop fixed inset-0 z-50 flex items-center justify-center${isForcedClosing ? " upgrade-overlay-closing" : ""}`}
+      data-close-effect={dismissEffect}
       onClick={canPointerDismiss ? onDismiss : undefined}
       onKeyDown={handleOverlayKeyDown}
       tabIndex={-1}
+      style={isForcedClosing && closeEffectPresentation?.overlayAnimation ? { animation: closeEffectPresentation.overlayAnimation } : undefined}
     >
-      <div className="absolute inset-0 bg-black opacity-70" />
+      <div
+        className="absolute inset-0 bg-black opacity-70 upgrade-overlay-backdrop"
+        style={isForcedClosing ? { animation: closeEffectPresentation?.backdropAnimation } : undefined}
+      />
       <pre
-        className="relative z-10 mx-4"
+        className={`relative z-10 mx-4 upgrade-overlay-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
         style={{
           fontFamily: MONO_FONT,
@@ -264,6 +299,7 @@ export default function DesktopLayout({
           whiteSpace: "pre",
           overflowX: "auto",
           overflowY: "hidden",
+          ...(isForcedClosing && closeEffectPresentation ? { animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" as const } : {}),
         }}
       >
         {topBorder}{"\n"}

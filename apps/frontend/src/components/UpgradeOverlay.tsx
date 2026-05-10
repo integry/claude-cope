@@ -7,6 +7,12 @@ import {
 } from "../config";
 import DesktopLayout from "./UpgradeDesktopLayout";
 import type { LayoutProps } from "./UpgradeDesktopLayout";
+import {
+  CLOSE_EFFECT_STYLES,
+  DEFAULT_CLOSE_EFFECT,
+  getCloseEffectPresentation,
+  type UpgradeNagCloseEffect,
+} from "./upgradeOverlayEffects";
 import { getQuotaStatus } from "./upgradeQuotaStatus";
 
 /* ── helpers ─────────────────────────────────────────────────── */
@@ -19,6 +25,8 @@ const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
+export { UPGRADE_NAG_CLOSE_EFFECTS } from "./upgradeOverlayEffects";
+export type { UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
 
 /* ── component ───────────────────────────────────────────────── */
 
@@ -28,9 +36,19 @@ type UpgradeOverlayProps = {
   isBYOK: boolean;
   onDismiss: () => void;
   dismissMode?: "manual" | "nag";
+  dismissPhase?: "idle" | "closing";
+  dismissEffect?: UpgradeNagCloseEffect;
 };
 
-function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss, dismissMode = "manual" }: UpgradeOverlayProps) {
+function UpgradeOverlay({
+  quotaPercent,
+  totalQuota,
+  isBYOK,
+  onDismiss,
+  dismissMode = "manual",
+  dismissPhase = "idle",
+  dismissEffect = DEFAULT_CLOSE_EFFECT,
+}: UpgradeOverlayProps) {
   const singleAvailable = !!UPGRADE_CHECKOUT_SINGLE;
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
@@ -41,9 +59,11 @@ function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss, dismissMo
   const quotaLine = isBYOK
     ? "EXTERNAL BILLING ACTIVE. Status: BYOK bypass engaged."
     : `CURRENT QUOTA: ${currentCredits} Credits. Status: ${getQuotaStatus(currentCredits)}.`;
+  const closeEffectPresentation = getCloseEffectPresentation(dismissEffect);
 
   return (
     <>
+      <style>{CLOSE_EFFECT_STYLES}</style>
       {/* Desktop: visible above the shared mobile max-width breakpoint */}
       <DesktopLayout
         singleLabel={singleLabel}
@@ -52,6 +72,9 @@ function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss, dismissMo
         multiAvailable={multiAvailable}
         quotaLine={quotaLine}
         dismissMode={dismissMode}
+        dismissPhase={dismissPhase}
+        dismissEffect={dismissEffect}
+        closeEffectPresentation={closeEffectPresentation}
         onDismiss={onDismiss}
       />
       {/* Mobile: visible up to the shared max-width breakpoint */}
@@ -63,6 +86,9 @@ function UpgradeOverlay({ quotaPercent, totalQuota, isBYOK, onDismiss, dismissMo
         quotaLine={quotaLine}
         onDismiss={onDismiss}
         dismissMode={dismissMode}
+        dismissPhase={dismissPhase}
+        dismissEffect={dismissEffect}
+        closeEffectPresentation={closeEffectPresentation}
       />
     </>
   );
@@ -80,6 +106,9 @@ function MobileLayout({
   quotaLine,
   onDismiss,
   dismissMode = "manual",
+  dismissPhase = "idle",
+  dismissEffect = DEFAULT_CLOSE_EFFECT,
+  closeEffectPresentation = getCloseEffectPresentation(DEFAULT_CLOSE_EFFECT),
 }: LayoutProps & { onDismiss: () => void }) {
   const sectionStyle = { padding: "8px 12px" } as const;
   const hrStyle = {
@@ -135,15 +164,22 @@ function MobileLayout({
     );
   };
 
+  const isForcedClosing = dismissPhase === "closing";
+
   return (
     <div
-      className="upgrade-mobile fixed inset-0 z-50 flex items-center justify-center"
+      className={`upgrade-mobile fixed inset-0 z-50 flex items-center justify-center${isForcedClosing ? " upgrade-overlay-closing" : ""}`}
+      data-close-effect={dismissEffect}
       onClick={dismissMode === "manual" ? onDismiss : undefined}
+      style={isForcedClosing && closeEffectPresentation.overlayAnimation ? { animation: closeEffectPresentation.overlayAnimation } : undefined}
     >
-      <div className="absolute inset-0 bg-black opacity-70" />
+      <div
+        className="absolute inset-0 bg-black opacity-70 upgrade-overlay-backdrop"
+        style={isForcedClosing ? { animation: closeEffectPresentation.backdropAnimation } : undefined}
+      />
 
       <div
-        className="relative z-10"
+        className={`relative z-10 upgrade-overlay-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
         style={{
           fontFamily: MONO_FONT,
@@ -157,6 +193,7 @@ function MobileLayout({
           maxHeight: "calc(100vh - 2rem)",
           overflowY: "auto",
           color: W,
+          ...(isForcedClosing ? { animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" as const } : {}),
         }}
       >
         {/* Title bar */}

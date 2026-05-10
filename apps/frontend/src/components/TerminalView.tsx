@@ -23,6 +23,7 @@ import { BuddyDisplay } from "./BuddyDisplay";
 import type { GameState, Message } from "../hooks/useGameState";
 import type { PendingReviewPing } from "../hooks/useMultiplayer";
 import type { OverlayVisibility } from "./terminalViewUtils";
+import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
 
 type TerminalViewProps = OverlayVisibility & {
   activeRegression: string | null;
@@ -78,6 +79,8 @@ type TerminalViewProps = OverlayVisibility & {
   pendingNagCommand: string | null;
   handleUpgradeNagClose: () => void;
   handleManualUpgradeDismiss: () => void;
+  upgradeNagDismissPhase: "idle" | "closing";
+  upgradeNagDismissEffect: UpgradeNagCloseEffect;
 };
 
 export function TerminalView({
@@ -146,6 +149,8 @@ export function TerminalView({
   pendingNagCommand,
   handleUpgradeNagClose,
   handleManualUpgradeDismiss,
+  upgradeNagDismissPhase,
+  upgradeNagDismissEffect,
 }: TerminalViewProps) {
   return (
     <div
@@ -235,6 +240,8 @@ export function TerminalView({
         setHistory={setHistory}
         onUpgradeDismiss={pendingNagCommand !== null ? handleUpgradeNagClose : handleManualUpgradeDismiss}
         upgradeDismissMode={pendingNagCommand !== null ? "nag" : "manual"}
+        upgradeDismissPhase={upgradeNagDismissPhase}
+        upgradeDismissEffect={upgradeNagDismissEffect}
       />
       <TerminalFooter closeAllOverlays={closeAllOverlaysPreservingNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
     </div>

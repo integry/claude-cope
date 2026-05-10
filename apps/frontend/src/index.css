@@ -190,6 +190,11 @@ body {
   color: #ffffff !important;
 }
 
+.upgrade-overlay-panel {
+  transform-origin: center center;
+  will-change: transform, filter, opacity;
+}
+
 /* Responsive layout switching: CSS-first, no JS matchMedia needed */
 .upgrade-mobile { display: none; }
 .upgrade-desktop { display: flex; }
