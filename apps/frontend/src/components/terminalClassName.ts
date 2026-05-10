@@ -18,5 +18,5 @@ export function terminalContainerClassName(args: {
   const outage = args.outageHp !== null ? "bg-red-900" : "";
   const flash = args.pendingReviewPing && !args.pingAcknowledged ? "pvp-ping-flash" : "";
   const theme = args.activeTheme && args.activeTheme !== "default" ? `theme-${args.activeTheme}` : "";
-  return `${height} w-full font-mono text-sm leading-snug sm:leading-relaxed p-4 pb-0 flex flex-col transition-all duration-300 ${outage} ${flash} ${theme}`;
+  return `${height} w-full font-mono text-sm leading-snug sm:leading-relaxed px-4 pt-0 pb-0 flex flex-col transition-all duration-300 ${outage} ${flash} ${theme}`;
 }
