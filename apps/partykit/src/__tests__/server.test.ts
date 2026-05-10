@@ -3,6 +3,10 @@ import type * as Party from "partykit/server";
 import ClaudeCopeServer from "../server";
 import type {
   ClientMessage,
+  OutageClearedMessage,
+  OutageScenario,
+  OutageStartMessage,
+  OutageUpdateMessage,
   ReviewTicket,
   ServerMessage,
 } from "@claude-cope/shared/multiplayer-types";
@@ -79,6 +83,19 @@ const DEFAULT_TICKET: ReviewTicket = {
   sprintGoal: 100,
   sprintProgress: 25,
 };
+
+function expectScenarioMessage<T extends OutageStartMessage | OutageUpdateMessage | OutageClearedMessage>(
+  message: ServerMessage | undefined,
+  type: T["type"]
+): T {
+  expect(message?.type).toBe(type);
+  return message as T;
+}
+
+function expectScenarioIdentity(message: { scenario: OutageScenario }, scenario: OutageScenario): void {
+  expect(message.scenario.id).toBe(scenario.id);
+  expect(message.scenario.title).toBe(scenario.title);
+}
 
 // ── ServerHarness ───────────────────────────────────────────────────────
 // Thin typed adapter over `ClaudeCopeServer`. The only `as unknown as` casts
@@ -406,30 +423,30 @@ describe("PartyKit outage lifecycle", () => {
 
     (harness.server as unknown as { startOutage: () => void }).startOutage();
 
-    const start = harness.room.broadcasts.at(-1);
-    const scenario = OUTAGE_SCENARIOS.find((entry) => entry.id === "cloudflare-cache-purge")!;
-    expect(start?.type).toBe("outage_start");
-    expect(start && "scenario" in start ? start.scenario.title : "").toBe(scenario.title);
-    expect(start && "scenario" in start ? start.scenario.commands[1]?.label : "").toBe(
-      scenario.commands[1]?.label
+    const start = expectScenarioMessage<OutageStartMessage>(
+      harness.room.broadcasts.at(-1),
+      "outage_start"
     );
+    const scenario = OUTAGE_SCENARIOS.find((entry) => entry.id === "cloudflare-cache-purge")!;
+    expectScenarioIdentity(start, scenario);
+    expect(start.scenario.commands[1]?.label).toBe(scenario.commands[1]?.label);
 
     harness.send(alice, { type: "damage_outage", command: scenario.commands[1]!.label });
-    const update = harness.room.broadcasts.at(-1);
-    expect(update?.type).toBe("outage_update");
-    expect(update && "scenario" in update ? update.scenario.id : "").toBe(
-      start && "scenario" in start ? start.scenario.id : ""
+    const update = expectScenarioMessage<OutageUpdateMessage>(
+      harness.room.broadcasts.at(-1),
+      "outage_update"
     );
-    expect(update && "hp" in update ? update.hp : null).toBe(90);
+    expectScenarioIdentity(update, scenario);
+    expect(update.hp).toBe(90);
 
     for (let i = 0; i < 9; i++) {
       harness.send(alice, { type: "damage_outage", command: scenario.commands[1]!.label });
     }
-    const cleared = harness.room.broadcasts.at(-1);
-    expect(cleared?.type).toBe("outage_cleared");
-    expect(cleared && "scenario" in cleared ? cleared.scenario.id : "").toBe(
-      start && "scenario" in start ? start.scenario.id : ""
+    const cleared = expectScenarioMessage<OutageClearedMessage>(
+      harness.room.broadcasts.at(-1),
+      "outage_cleared"
     );
+    expectScenarioIdentity(cleared, scenario);
   });
 
   it("rejects damage_outage frames whose command does not match the active scenario", () => {
