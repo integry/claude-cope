@@ -31,16 +31,14 @@ import { shouldShowNag } from "./winrarNag";
 import { TerminalView } from "./TerminalView";
 import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
-import { UPGRADE_NAG_CLOSE_EFFECTS, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
+import { DEFAULT_CLOSE_EFFECT, UPGRADE_NAG_CLOSE_EFFECTS, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
 
 export type { Message };
 
 const NAG_MINIMUM_OPEN_MS = 3000;
 const NAG_FORCED_CLOSE_MS = 3000;
-const DEFAULT_UPGRADE_NAG_CLOSE_EFFECT: UpgradeNagCloseEffect = "death-spiral";
-
 function pickRandomUpgradeNagCloseEffect(): UpgradeNagCloseEffect {
-  return UPGRADE_NAG_CLOSE_EFFECTS[Math.floor(Math.random() * UPGRADE_NAG_CLOSE_EFFECTS.length)] ?? DEFAULT_UPGRADE_NAG_CLOSE_EFFECT;
+  return UPGRADE_NAG_CLOSE_EFFECTS[Math.floor(Math.random() * UPGRADE_NAG_CLOSE_EFFECTS.length)] ?? DEFAULT_CLOSE_EFFECT;
 }
 
 function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
@@ -109,7 +107,7 @@ function Terminal() {
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
   const [upgradeNagDismissPhase, setUpgradeNagDismissPhase] = useState<"idle" | "closing">("idle");
-  const [upgradeNagDismissEffect, setUpgradeNagDismissEffect] = useState<UpgradeNagCloseEffect>(DEFAULT_UPGRADE_NAG_CLOSE_EFFECT);
+  const [upgradeNagDismissEffect, setUpgradeNagDismissEffect] = useState<UpgradeNagCloseEffect>(DEFAULT_CLOSE_EFFECT);
 
   useEffect(() => {
     return () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); };
@@ -136,21 +134,21 @@ function Terminal() {
     nagArmedFromQuotaRef.current = false;
     nagOpenedAtRef.current = null;
     setUpgradeNagDismissPhase("idle");
-    setUpgradeNagDismissEffect(DEFAULT_UPGRADE_NAG_CLOSE_EFFECT);
+    setUpgradeNagDismissEffect(DEFAULT_CLOSE_EFFECT);
     if (nagCloseTimeoutRef.current) {
       clearTimeout(nagCloseTimeoutRef.current);
       nagCloseTimeoutRef.current = null;
     }
   }, []);
   const openUpgradeNag = useCallback((command?: string) => {
-    if (command) pendingNagCommandRef.current = command;
+    if (command !== undefined) pendingNagCommandRef.current = command;
     nagOpenedAtRef.current = Date.now();
     setUpgradeNagDismissPhase("idle");
     if (nagCloseTimeoutRef.current) {
       clearTimeout(nagCloseTimeoutRef.current);
       nagCloseTimeoutRef.current = null;
     }
-    setUpgradeNagDismissEffect(DEFAULT_UPGRADE_NAG_CLOSE_EFFECT);
+    setUpgradeNagDismissEffect(DEFAULT_CLOSE_EFFECT);
     setShowUpgrade(true);
   }, [setShowUpgrade]);
   const finalizeUpgradeNagClose = useCallback(() => {
@@ -159,7 +157,7 @@ function Terminal() {
       nagCloseTimeoutRef.current = null;
     }
     setUpgradeNagDismissPhase("idle");
-    setUpgradeNagDismissEffect(DEFAULT_UPGRADE_NAG_CLOSE_EFFECT);
+    setUpgradeNagDismissEffect(DEFAULT_CLOSE_EFFECT);
     nagOpenedAtRef.current = null;
     setShowUpgrade(false);
     if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
@@ -329,6 +327,11 @@ function Terminal() {
     if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
     if (bragPending) { handleBragSubmit({ inputValue, setInputValue, state, setHistory, setBragPending }); return; }
     if (buddyPendingConfirm) { handleBuddyConfirm({ inputValue, setInputValue, setBuddyPendingConfirm, setState, setHistory, buddyType: state.buddy?.type ?? undefined }); return; }
+    if (inputValue.trim().length === 0) {
+      setInputValue("");
+      setHistoryIndex(-1);
+      return;
+    }
     if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
     setInputValue(""); setHistoryIndex(-1);

@@ -14,6 +14,7 @@ import UpgradeOverlay from "./UpgradeOverlay";
 import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
 import type { GameState, Message } from "../hooks/useGameState";
 import { FREE_QUOTA_LIMIT, PRO_QUOTA_LIMIT } from "../config";
+import { DEFAULT_CLOSE_EFFECT } from "./upgradeOverlayEffects";
 
 export function TerminalOverlays({
   showStore,
@@ -49,7 +50,7 @@ export function TerminalOverlays({
   onUpgradeDismiss,
   upgradeDismissMode = "manual",
   upgradeDismissPhase = "idle",
-  upgradeDismissEffect = "death-spiral",
+  upgradeDismissEffect = DEFAULT_CLOSE_EFFECT,
 }: {
   showStore: boolean;
   showLeaderboard: boolean;

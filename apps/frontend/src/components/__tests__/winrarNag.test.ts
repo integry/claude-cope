@@ -504,6 +504,30 @@ describe("WinRAR nag: Terminal integration", () => {
     expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
   });
 
+  it("blocks desktop checkout keyboard activation during the forced-close phase", async () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    await renderTerminal();
+    await submitTerminalCommand("status");
+
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    expect(desktop).not.toBeNull();
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(desktop?.classList.contains("upgrade-overlay-closing")).toBe(true);
+
+    await act(async () => {
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(clickSpy).not.toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
+
   it("closes the nag immediately when Escape is pressed after 3 seconds", async () => {
     await renderTerminal();
     await submitTerminalCommand("status");

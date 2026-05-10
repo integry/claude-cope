@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { UPGRADE_CHECKOUT_SINGLE, UPGRADE_CHECKOUT_MULTI, PRO_QUOTA_LIMIT } from "../config";
-import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
+import { DEFAULT_CLOSE_EFFECT, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
 
 const B = "#ff5555"; // border (red)
 const Y = "#ffff55"; // yellow headings
@@ -39,7 +39,7 @@ export default function DesktopLayout({
   quotaLine,
   dismissMode = "manual",
   dismissPhase = "idle",
-  dismissEffect = "death-spiral",
+  dismissEffect = DEFAULT_CLOSE_EFFECT,
   closeEffectPresentation,
   onDismiss,
 }: LayoutProps) {
@@ -134,6 +134,8 @@ export default function DesktopLayout({
           cursor: "pointer",
           backgroundColor: "transparent",
         }}
+        tabIndex={isForcedClosing ? -1 : undefined}
+        aria-hidden={isForcedClosing ? true : undefined}
         onClick={(e) => e.stopPropagation()}
         onFocus={() => { setSelectedOptionId(id); }}
       >
@@ -195,6 +197,13 @@ export default function DesktopLayout({
     setSelectedOptionId(availableOptionIds[nextIndex] ?? null);
   }, [availableOptionIds, selectedOptionId]);
   useEffect(() => {
+    if (!isDesktopViewport || !isForcedClosing) return;
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && overlayRef.current?.contains(activeElement)) {
+      activeElement.blur();
+    }
+  }, [isDesktopViewport, isForcedClosing]);
+  useEffect(() => {
     if (!isDesktopViewport) {
       const activeElement = document.activeElement;
       if (activeElement instanceof HTMLElement && overlayRef.current?.contains(activeElement)) {
@@ -202,14 +211,18 @@ export default function DesktopLayout({
       }
       return;
     }
+    if (isForcedClosing) {
+      overlayRef.current?.focus();
+      return;
+    }
     if (selectedOptionId !== null) {
       optionRefs.current[selectedOptionId]?.focus();
       return;
     }
     overlayRef.current?.focus();
-  }, [isDesktopViewport, selectedOptionId]);
+  }, [isDesktopViewport, isForcedClosing, selectedOptionId]);
   useEffect(() => {
-    if (!isDesktopViewport) return undefined;
+    if (!isDesktopViewport || isForcedClosing) return undefined;
     const overlay = overlayRef.current;
     if (!overlay) return undefined;
     const restoreFocus = () => {
@@ -222,9 +235,14 @@ export default function DesktopLayout({
     };
     overlay.addEventListener("focusout", restoreFocus);
     return () => { overlay.removeEventListener("focusout", restoreFocus); };
-  }, [isDesktopViewport]);
+  }, [isDesktopViewport, isForcedClosing]);
   const handleOverlayKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!isDesktopViewport) return;
+    if (isForcedClosing) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     const target = event.target;
     const isEditableTarget = target instanceof HTMLElement
       && (target.isContentEditable
@@ -252,7 +270,7 @@ export default function DesktopLayout({
       event.preventDefault();
       optionRefs.current[selectedOptionId]?.click();
     }
-  }, [cycleSelection, isDesktopViewport, selectedOptionId]);
+  }, [cycleSelection, isDesktopViewport, isForcedClosing, selectedOptionId]);
   return (
     <div
       ref={overlayRef}
