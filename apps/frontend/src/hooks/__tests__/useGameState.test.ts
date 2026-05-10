@@ -209,4 +209,15 @@ describe("canBuyTheme", () => {
     expect(failedState.isPro).toBe(true);
     expect(failedState.hasSessionPro).toBeUndefined();
   });
+
+  it("clears stale paid state for session-only users on session mismatch failures", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
+    const purchasedState = applyOptimisticThemePurchase(state, "amber");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "Session user does not match the requested account");
+
+    expect(failedState.proKey).toBeUndefined();
+    expect(failedState.proKeyHash).toBeUndefined();
+    expect(failedState.isPro).toBeUndefined();
+    expect(failedState.hasSessionPro).toBeUndefined();
+  });
 });
