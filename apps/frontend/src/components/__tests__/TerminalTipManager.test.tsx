@@ -135,6 +135,9 @@ vi.mock("../TerminalView", () => ({
     "aria-label": "terminal-input",
     value: inputValue,
     onChange: handleChange,
+    onInput: (event: React.FormEvent<HTMLInputElement>) => {
+      handleChange(event as React.ChangeEvent<HTMLInputElement>);
+    },
     onKeyDown: handleKeyDown,
   }),
 }));
