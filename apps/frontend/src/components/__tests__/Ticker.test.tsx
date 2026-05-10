@@ -44,12 +44,12 @@ describe("Ticker", () => {
     renderTicker({ onlineCount: 3, onExpand, onSlashCommand });
 
     const buttons = Array.from(container.querySelectorAll("button"));
-    expect(buttons).toHaveLength(3);
+    expect(buttons).toHaveLength(4);
 
     act(() => {
-      buttons[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       buttons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       buttons[2]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      buttons[3]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(onSlashCommand).toHaveBeenNthCalledWith(1, "/who");
@@ -58,28 +58,29 @@ describe("Ticker", () => {
     expect(onExpand).not.toHaveBeenCalled();
   });
 
-  it("does not bubble Enter or Space from header buttons to ticker expand", () => {
+  it("keeps command buttons separate from live banner expand behavior", () => {
     const onExpand = vi.fn();
     const onSlashCommand = vi.fn();
     renderTicker({ onlineCount: 3, onExpand, onSlashCommand });
 
     const buttons = Array.from(container.querySelectorAll("button"));
-    expect(buttons).toHaveLength(3);
+    expect(buttons).toHaveLength(4);
 
     act(() => {
-      buttons[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-      buttons[1]?.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+      buttons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      buttons[2]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(onExpand).not.toHaveBeenCalled();
-    expect(onSlashCommand).not.toHaveBeenCalled();
+    expect(onSlashCommand).toHaveBeenNthCalledWith(1, "/who");
+    expect(onSlashCommand).toHaveBeenNthCalledWith(2, "/party");
   });
 
   it("keeps the live event area clickable for expand behavior", () => {
     const onExpand = vi.fn();
     renderTicker({ onlineCount: 2, onExpand });
 
-    const banner = container.firstElementChild;
+    const banner = container.querySelector("button");
     expect(banner).not.toBeNull();
 
     act(() => {
@@ -87,5 +88,12 @@ describe("Ticker", () => {
     });
 
     expect(onExpand).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses a native button for the live event banner", () => {
+    renderTicker({ onlineCount: 2 });
+
+    const banner = container.querySelector("button");
+    expect(banner?.tagName).toBe("BUTTON");
   });
 });

@@ -1,4 +1,3 @@
-import type { KeyboardEvent } from "react";
 import { useLiveTicker } from "../hooks/useLiveTicker";
 
 interface TickerProps {
@@ -17,36 +16,23 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
 
   const latestEvent = liveEvents[0]!;
   const handleHeaderCommand = (command: string) => onSlashCommand?.(command);
-  const stopHeaderKeydownPropagation = (event: KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === "Enter" || event.key === " ") event.stopPropagation();
-  };
 
   return (
-    <div
-      className="hidden sm:block w-full bg-gray-900 border-b border-gray-700 text-green-400 text-xs py-1 px-2 cursor-pointer hover:bg-gray-800 transition-colors"
-      onClick={onExpand}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          onExpand?.();
-        }
-      }}
-    >
+    <div className="hidden sm:block w-full bg-gray-900 border-b border-gray-700 text-green-400 text-xs py-1 px-2">
       <div className="flex items-center justify-between">
-        <span className="min-w-0 truncate">
+        <button
+          type="button"
+          className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left text-inherit hover:bg-gray-800 transition-colors"
+          onClick={onExpand}
+        >
           <strong className="text-yellow-400 bg-yellow-950/30 px-1 rounded">[LIVE]</strong>{" "}
           {latestEvent.message}
-        </span>
-        <span className="flex-shrink-0 flex items-center gap-0 ml-4 text-gray-400">
+        </button>
+        <div className="ml-4 flex flex-shrink-0 items-center gap-0 text-gray-400">
           <button
             type="button"
             className="header-link"
-            onKeyDown={stopHeaderKeydownPropagation}
-            onClick={(event) => {
-              event.stopPropagation();
-              handleHeaderCommand("/who");
-            }}
+            onClick={() => handleHeaderCommand("/who")}
           >
             <span className="text-gray-400">Online:</span>{" "}
             <span className="text-green-400">{onlineCount}</span>{" "}
@@ -56,11 +42,7 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
           <button
             type="button"
             className="header-link"
-            onKeyDown={stopHeaderKeydownPropagation}
-            onClick={(event) => {
-              event.stopPropagation();
-              handleHeaderCommand("/party");
-            }}
+            onClick={() => handleHeaderCommand("/party")}
           >
             Firehose [/party]
           </button>
@@ -68,15 +50,11 @@ export default function Ticker({ onExpand, onSlashCommand, onlineCount }: Ticker
           <button
             type="button"
             className="header-link"
-            onKeyDown={stopHeaderKeydownPropagation}
-            onClick={(event) => {
-              event.stopPropagation();
-              handleHeaderCommand("/leaderboard");
-            }}
+            onClick={() => handleHeaderCommand("/leaderboard")}
           >
             Hall of Blame [/leaderboard]
           </button>
-        </span>
+        </div>
       </div>
     </div>
   );

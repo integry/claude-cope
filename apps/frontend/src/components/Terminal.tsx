@@ -38,6 +38,18 @@ function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, 
   while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++);
   if (messageKeys.length > historyLength) messageKeys.length = historyLength;
 }
+function removeCommandFromHistory(history: string[], command: string) {
+  const idx = history.lastIndexOf(command);
+  return idx >= 0 ? [...history.slice(0, idx), ...history.slice(idx + 1)] : history;
+}
+function removeUserCommandMessage(history: Message[], command: string) {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i]?.role === "user" && history[i]?.content === command) {
+      return [...history.slice(0, i), ...history.slice(i + 1)];
+    }
+  }
+  return history;
+}
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
@@ -206,10 +218,22 @@ function Terminal() {
     triggerInstantBan({ setInstantBanReady, setIsProcessing, playError, setHistory });
   }, [setIsProcessing, playError, setHistory]);
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = activeRegression === "backwards_typing" && e.target.value.length > inputValue.length ? e.target.value.slice(inputValue.length) + inputValue : e.target.value;
-    setInputValue(value); setHistoryIndex(-1); setSuggestedReply(null); setSlashQuery(value.startsWith("/") ? value : ""); setSlashIndex(0);
+    const isBackwardsTyping = activeRegression === "backwards_typing";
+    const isAppending = e.target.value.length > inputValue.length;
+    const value = isBackwardsTyping && isAppending
+      ? e.target.value.slice(inputValue.length) + inputValue
+      : e.target.value;
+
+    setInputValue(value);
+    setHistoryIndex(-1);
+    setSuggestedReply(null);
+    setSlashQuery(value.startsWith("/") ? value : "");
+    setSlashIndex(0);
   };
-  const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => !(cmd === "/store" && state.economy.totalTDEarned < 1000) && cmd.startsWith(slashQuery.toLowerCase()));
+  const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => (
+    !(cmd === "/store" && state.economy.totalTDEarned < 1000)
+    && cmd.startsWith(slashQuery.toLowerCase())
+  ));
   const runSlashCommand = useCallback((command: string) => {
     executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
   }, [state, setState, setHistory, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply]);
@@ -274,18 +298,8 @@ function Terminal() {
       onByokUsage: (usage) => setState((prev) => { const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 }; return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } }; }),
       onQuotaUpdate: (quotaPercent) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })); if (quotaPercent <= 0 && isFreeTier) nagArmedFromQuotaRef.current = true; },
       onQuotaExhausted: () => {
-        setCommandHistory((prev) => {
-          const idx = prev.lastIndexOf(command);
-          return idx >= 0 ? [...prev.slice(0, idx), ...prev.slice(idx + 1)] : prev;
-        });
-        setHistory((prev) => {
-          for (let i = prev.length - 1; i >= 0; i--) {
-            if (prev[i]?.role === "user" && prev[i]?.content === command) {
-              return [...prev.slice(0, i), ...prev.slice(i + 1)];
-            }
-          }
-          return prev;
-        });
+        setCommandHistory((prev) => removeCommandFromHistory(prev, command));
+        setHistory((prev) => removeUserCommandMessage(prev, command));
         handleQuotaLockout(command);
       },
       onProfileUpdate: (profile) => applyProfileUpdate(profile),

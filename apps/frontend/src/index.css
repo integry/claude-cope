@@ -166,7 +166,9 @@ body {
 .header-link:focus-visible {
   color: #67e8f9;
   text-shadow: 0 0 5px rgba(103, 232, 249, 0.35);
-  outline: none;
+  outline: 1px solid #67e8f9;
+  outline-offset: 2px;
+  text-decoration: underline;
 }
 
 /* Upgrade overlay button hover — CSS :hover is more reliable than JS
