@@ -148,7 +148,7 @@ describe("useTipManager", () => {
     });
 
     expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
-      IDLE_TIPS[1]?.text,
+      IDLE_TIPS[2]?.text,
     ]);
   });
 
@@ -317,7 +317,7 @@ describe("useTipManager", () => {
     });
 
     expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
-      getContextualTip("td_1000"),
+      getContextualTip("td_1000", { totalTDEarned: 1_200 }),
       getContextualTip("lone_user_online"),
     ]);
   });
@@ -345,8 +345,8 @@ describe("useTipManager", () => {
     });
 
     expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
-      getContextualTip("td_1000"),
-      getContextualTip("quota_exhausted"),
+      getContextualTip("td_1000", { totalTDEarned: 1_200 }),
+      getContextualTip("quota_exhausted", { totalTDEarned: 1_200 }),
       getContextualTip("lone_user_online"),
     ]);
   });

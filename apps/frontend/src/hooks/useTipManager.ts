@@ -172,13 +172,11 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       usedCommandsRef.current,
       shownMilestoneTipIdsRef.current,
       { totalTDEarned },
-      { excludeTipIds: Object.keys(readRecentTipHistory()) },
     );
     if (!tip) return null;
 
     shownMilestoneTipIdsRef.current.add(tip.id);
     appendTip(setHistory, tip.text);
-    markTipShown(recentTipHistoryRef, tip);
     return tip.text;
   }, [setHistory, totalTDEarned]);
 
@@ -194,7 +192,6 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
 
     const tip = selectBacklogReminder(
       lastBacklogReminderTipIdRef.current ?? undefined,
-      { excludeTipIds: Object.keys(readRecentTipHistory()) },
     );
     if (!tip) {
       noTicketMessageCountRef.current = 0;
@@ -203,7 +200,6 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     }
     lastBacklogReminderTipIdRef.current = tip.id;
     appendTip(setHistory, tip.text);
-    markTipShown(recentTipHistoryRef, tip);
     noTicketMessageCountRef.current = 0;
     nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
     return tip.text;
@@ -256,13 +252,10 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       return;
     }
 
-    const excludedTipIds = new Set(Object.keys(readRecentTipHistory()));
     const newTips = [...pendingContextualTriggersRef.current, ...eligibleTriggers]
       .map((trigger) => {
-        const tip = selectContextualTip(trigger, { totalTDEarned }, { excludeTipIds: excludedTipIds });
+        const tip = selectContextualTip(trigger, { totalTDEarned });
         if (!tip) return null;
-        excludedTipIds.add(tip.id);
-        markTipShown(recentTipHistoryRef, tip);
         return tip.text;
       })
       .filter((tip): tip is string => Boolean(tip));
