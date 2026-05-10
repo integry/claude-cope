@@ -5,6 +5,9 @@ import { validatePolarKey } from "../utils/polar";
 import { hashKey } from "../utils/quota";
 
 const LICENSE_STALE_SQL_CUTOFF = "-90 days";
+const MAX_SESSION_RENAME_HOPS = 32;
+const SESSION_USERNAME_TTL_SECONDS = 60 * 60 * 24 * 365;
+const RENAME_REDIRECT_TTL_SECONDS = SESSION_USERNAME_TTL_SECONDS;
 export const accountKvKeys = {
   renamed: (username: string) => `renamed:${username}`,
   sessionUser: (sessionId: string) => `session_user:${sessionId}`,
@@ -210,9 +213,74 @@ export async function rollbackProfileMutation(
 }
 
 export type OwnershipResult =
-  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; status: "ok" }
+  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; status: "ok"; licenseKeyHash: string }
   | { profile: null; status: "not_found"; error: string }
   | { profile: null; status: "unauthorized"; error: string };
+
+async function followRenameChain(kv: KVNamespace, username: string) {
+  let current = username;
+  let hops = 0;
+  const seen = new Set([username]);
+  const traversed = [username];
+
+  while (hops < MAX_SESSION_RENAME_HOPS) {
+    const renamedTo = await kv.get(accountKvKeys.renamed(current));
+    if (!renamedTo || seen.has(renamedTo)) {
+      break;
+    }
+    current = renamedTo;
+    seen.add(current);
+    traversed.push(current);
+    hops += 1;
+  }
+
+  return { current, hops, traversed };
+}
+
+export async function resolveSessionProfileRow(opts: {
+  db: D1Database | undefined;
+  kv: KVNamespace;
+  sessionId: string;
+  username: string;
+  logPrefix?: string;
+}) {
+  const { db, kv, sessionId } = opts;
+  const originalUsername = opts.username;
+  const logPrefix = opts.logPrefix ?? "[account/session]";
+  if (!db) return { username: originalUsername, row: null };
+
+  const originalRow = await getProfileRow(db, originalUsername);
+  if (originalRow) {
+    return { username: originalUsername, row: originalRow, redirected: false };
+  }
+
+  const { current, hops, traversed } = await followRenameChain(kv, originalUsername);
+
+  if (hops === MAX_SESSION_RENAME_HOPS) {
+    console.warn(`${logPrefix} rename chain hop cap reached for ${originalUsername}`);
+  }
+
+  const row = await getProfileRow(db, current);
+  const redirected = current !== originalUsername;
+
+  if (row && redirected) {
+    try {
+      await kv.put(accountKvKeys.sessionUser(sessionId), current, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+      await Promise.all(
+        traversed
+          .slice(0, -1)
+          .map((username) => kv.put(accountKvKeys.renamed(username), current, { expirationTtl: RENAME_REDIRECT_TTL_SECONDS })),
+      );
+    } catch (err: unknown) {
+      console.warn(
+        `${logPrefix} failed to repair session rename ${originalUsername} -> ${current}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  return { username: current, row, redirected };
+}
 
 export async function verifyOwnership(db: D1Database, username: string, licenseKeyHash: string): Promise<OwnershipResult> {
   const row = await getProfileRow(db, username);
@@ -230,7 +298,7 @@ export async function verifyOwnership(db: D1Database, username: string, licenseK
 
   const profile = await getProfile(db, username);
   if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
-  return { profile, status: "ok" };
+  return { profile, status: "ok", licenseKeyHash };
 }
 
 export async function resolveThemePurchaseOwnership(
@@ -243,7 +311,10 @@ export async function resolveThemePurchaseOwnership(
   },
 ): Promise<OwnershipResult> {
   if (opts.licenseKeyHash) {
-    return verifyOwnership(db, opts.username, opts.licenseKeyHash);
+    const ownership = await verifyOwnership(db, opts.username, opts.licenseKeyHash);
+    if (ownership.status === "ok" || !opts.kv || !opts.sessionId) {
+      return ownership;
+    }
   }
 
   if (!opts.kv || !opts.sessionId) {
@@ -251,11 +322,35 @@ export async function resolveThemePurchaseOwnership(
   }
 
   const boundUsername = await opts.kv.get(accountKvKeys.sessionUser(opts.sessionId));
-  if (!boundUsername || boundUsername.toLowerCase() !== opts.username.toLowerCase()) {
+  if (!boundUsername) {
+    return { profile: null, status: "unauthorized", error: "Session authentication is required for this purchase" };
+  }
+
+  const resolved = await resolveSessionProfileRow({
+    db,
+    kv: opts.kv,
+    sessionId: opts.sessionId,
+    username: boundUsername,
+    logPrefix: "[account/buy-theme]",
+  });
+  if (!resolved.row) {
+    if (boundUsername.toLowerCase() !== opts.username.toLowerCase()) {
+      const requestedAlias = await followRenameChain(opts.kv, opts.username);
+      if (requestedAlias.current.toLowerCase() !== boundUsername.toLowerCase()) {
+        return { profile: null, status: "unauthorized", error: "Unauthorized: session user does not match this profile" };
+      }
+    }
+    return { profile: null, status: "not_found", error: "Profile not found" };
+  }
+  const requestedUsername = opts.username.toLowerCase();
+  const sessionMatchesRequested = resolved.username.toLowerCase() === requestedUsername
+    || boundUsername.toLowerCase() === requestedUsername;
+  const requestedAlias = sessionMatchesRequested ? null : await followRenameChain(opts.kv, opts.username);
+  if (!sessionMatchesRequested && requestedAlias?.current.toLowerCase() !== resolved.username.toLowerCase()) {
     return { profile: null, status: "unauthorized", error: "Unauthorized: session user does not match this profile" };
   }
 
-  const row = await getProfileRow(db, boundUsername);
+  const row = resolved.row as typeof resolved.row & { license_hash: string | null };
   if (!row) return { profile: null, status: "not_found", error: "Profile not found" };
   if (!row.license_hash) {
     return { profile: null, status: "unauthorized", error: "An active Max license is required to purchase themes" };
@@ -265,9 +360,9 @@ export async function resolveThemePurchaseOwnership(
     return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
   }
 
-  const profile = await getProfile(db, boundUsername);
+  const profile = await getProfile(db, resolved.username);
   if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
-  return { profile, status: "ok" };
+  return { profile, status: "ok", licenseKeyHash: row.license_hash };
 }
 
 export function broadcastPurchase(message: string, db: D1Database | undefined, ctx: { waitUntil: (p: Promise<unknown>) => void }) {

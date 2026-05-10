@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRow, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -28,7 +28,6 @@ type Env = {
   };
 };
 const SHILL_CREDIT = 5;
-const MAX_SESSION_RENAME_HOPS = 32;
 const SESSION_USERNAME_TTL_SECONDS = 60 * 60 * 24 * 365;
 const RENAME_REDIRECT_TTL_SECONDS = SESSION_USERNAME_TTL_SECONDS;
 
@@ -224,64 +223,6 @@ async function buildMePayload(opts: {
     : null;
   const revoked = Boolean(rawLicenseHash && !licenseActive);
   return { isPro, quotaPercent, profile, revoked };
-}
-
-async function resolveSessionProfileRow(opts: {
-  db: D1Database | undefined;
-  kv: KVNamespace;
-  sessionId: string;
-  username: string;
-}) {
-  const { db, kv, sessionId } = opts;
-  const originalUsername = opts.username;
-  if (!db) return { username: originalUsername, row: null };
-
-  const originalRow = await getProfileRow(db, originalUsername);
-  if (originalRow) {
-    return { username: originalUsername, row: originalRow, redirected: false };
-  }
-
-  let current = originalUsername;
-  let hops = 0;
-  const seen = new Set([originalUsername]);
-  const traversed = [originalUsername];
-
-  while (hops < MAX_SESSION_RENAME_HOPS) {
-    const renamedTo = await kv.get(accountKvKeys.renamed(current));
-    if (!renamedTo) break;
-    if (seen.has(renamedTo)) {
-      break;
-    }
-    current = renamedTo;
-    seen.add(current);
-    traversed.push(current);
-    hops += 1;
-  }
-
-  if (hops === MAX_SESSION_RENAME_HOPS) {
-    console.warn(`[account/me] rename chain hop cap reached for ${originalUsername}`);
-  }
-
-  const row = await getProfileRow(db, current);
-  const redirected = current !== originalUsername;
-
-  if (row && redirected) {
-    try {
-      await kv.put(accountKvKeys.sessionUser(sessionId), current, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
-      await Promise.all(
-        traversed
-          .slice(0, -1)
-          .map((username) => kv.put(accountKvKeys.renamed(username), current, { expirationTtl: RENAME_REDIRECT_TTL_SECONDS })),
-      );
-    } catch (err: unknown) {
-      console.warn(
-        `[account/me] failed to repair session rename ${originalUsername} -> ${current}:`,
-        err instanceof Error ? err.message : err,
-      );
-    }
-  }
-
-  return { username: current, row, redirected };
 }
 
 async function respondWithMeProfile(
@@ -610,25 +551,22 @@ account.post("/buy-theme", async (c) => {
   // Atomic update: SQL-level TD guard + JSON append + dedupe guard.
   // The NOT IN subquery prevents concurrent requests that both pass the
   // JS-level "already unlocked" check from both appending the same theme.
-  const themePurchaseSql = body.licenseKeyHash
-    ? `UPDATE user_scores SET
-        current_td = current_td - ?,
-        unlocked_themes = json_insert(COALESCE(unlocked_themes, '["default"]'), '$[#]', ?),
-        updated_at = datetime('now')
-      WHERE username = ? AND current_td >= ? AND license_hash = ?
-        AND ? NOT IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
-        AND ${ACTIVE_LICENSE_EXISTS_SQL}`
-    : `UPDATE user_scores SET
-        current_td = current_td - ?,
-        unlocked_themes = json_insert(COALESCE(unlocked_themes, '["default"]'), '$[#]', ?),
-        updated_at = datetime('now')
-      WHERE username = ? AND current_td >= ?
-        AND ? NOT IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
-        AND ${ACTIVE_LICENSE_EXISTS_SQL}`;
-  const themePurchaseBindings = body.licenseKeyHash
-    ? [theme.cost, body.themeId, profile.username, theme.cost, body.licenseKeyHash, body.themeId]
-    : [theme.cost, body.themeId, profile.username, theme.cost, body.themeId];
-  const result = await db.prepare(themePurchaseSql).bind(...themePurchaseBindings).run();
+  const result = await db.prepare(
+    `UPDATE user_scores SET
+      current_td = current_td - ?,
+      unlocked_themes = json_insert(COALESCE(unlocked_themes, '["default"]'), '$[#]', ?),
+      updated_at = datetime('now')
+    WHERE username = ? AND current_td >= ? AND license_hash = ?
+      AND ? NOT IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
+      AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
+  ).bind(
+    theme.cost,
+    body.themeId,
+    profile.username,
+    theme.cost,
+    ownership.licenseKeyHash,
+    body.themeId,
+  ).run();
 
   if (!result.meta.changes) {
     return c.json({ error: "Insufficient TD or theme already unlocked (concurrent update)", required: theme.cost }, 409);

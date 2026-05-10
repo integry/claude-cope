@@ -150,6 +150,56 @@ describe("POST /api/account/buy-theme", () => {
     expect(res.status).toBe(200);
     expect(((await res.json()) as { success: boolean }).success).toBe(true);
   });
+  it("repairs renamed session bindings and accepts a stale aliased username", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+    });
+    const paidProfile = { ...BASE_PROFILE, username: "bob", current_td: 6000 };
+    const activeLicense = { status: "active", last_activated_at: new Date().toISOString() };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? activeLicense
+              : value === "bob"
+                ? paidProfile
+                : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { success: boolean }).success).toBe(true);
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
+  });
+  it("falls back to session auth when a stale licenseKeyHash is present", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+      licenseKeyHash: "stale-hash",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { success: boolean }).success).toBe(true);
+  });
   it("rejects a purchase without licenseKeyHash when there is no authenticated session", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/buy-theme", {

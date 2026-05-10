@@ -13,6 +13,7 @@ import {
   isPaidUser,
   isFreeUser,
   STORAGE_KEY,
+  nextMsgId,
 } from "./gameStateUtils";
 import { applyServerProfile } from "./profileSync";
 import {
@@ -69,6 +70,36 @@ export function rollbackOptimisticThemePurchase(state: GameState, themeId: strin
       currentTD: state.economy.currentTD + theme.cost,
     },
     unlockedThemes: state.unlockedThemes.filter((id) => id !== themeId),
+  };
+}
+
+function isThemePurchaseAuthError(error?: string): boolean {
+  if (!error) return false;
+  const normalized = error.toLowerCase();
+  return normalized.includes("session authentication is required")
+    || normalized.includes("session user does not match")
+    || normalized.includes("unauthorized")
+    || normalized.includes("profile not found")
+    || normalized.includes("active max license")
+    || normalized.includes("revoked")
+    || normalized.includes("no longer active");
+}
+
+export function applyThemePurchaseFailure(state: GameState, themeId: string, error?: string): GameState {
+  const rolledBack = rollbackOptimisticThemePurchase(state, themeId);
+  const nextState = isThemePurchaseAuthError(error)
+    ? {
+        ...rolledBack,
+        proKey: undefined,
+        proKeyHash: undefined,
+        isPro: undefined,
+        hasSessionPro: undefined,
+      }
+    : rolledBack;
+  const message = error ?? "Theme purchase failed";
+  return {
+    ...nextState,
+    chatHistory: [...nextState.chatHistory, { id: nextMsgId(), role: "error", content: `[❌ Error] ${message}` }],
   };
 }
 
@@ -404,10 +435,10 @@ export function useGameState() {
         setState((prev) => applyServerProfile(prev, result.profile!));
         track(AnalyticsEvents.THEME_PURCHASED, { theme_id: themeId, cost: theme.cost });
       } else if (!result.success) {
-        setState((prev) => rollbackOptimisticThemePurchase(prev, themeId));
+        setState((prev) => applyThemePurchaseFailure(prev, themeId, result.error));
       }
     }).catch(() => {
-      setState((prev) => rollbackOptimisticThemePurchase(prev, themeId));
+      setState((prev) => applyThemePurchaseFailure(prev, themeId, "Network error"));
     });
 
     return true;

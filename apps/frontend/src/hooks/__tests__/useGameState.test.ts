@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcBulkCost, canBuyTheme, applyOptimisticThemePurchase, rollbackOptimisticThemePurchase } from "../useGameState";
+import { calcBulkCost, canBuyTheme, applyOptimisticThemePurchase, rollbackOptimisticThemePurchase, applyThemePurchaseFailure } from "../useGameState";
 import { GROWTH_RATE, GENERATORS } from "../../game/constants";
 import type { GameState } from "../gameStateUtils";
 
@@ -149,5 +149,29 @@ describe("canBuyTheme", () => {
 
     expect(rolledBackState.economy.currentTD).toBe(state.economy.currentTD);
     expect(rolledBackState.unlockedThemes).toEqual(state.unlockedThemes);
+  });
+
+  it("surfaces theme purchase failures in chat history", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
+    const purchasedState = applyOptimisticThemePurchase(state, "amber");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "Session authentication is required for this purchase");
+
+    expect(failedState.economy.currentTD).toBe(state.economy.currentTD);
+    expect(failedState.unlockedThemes).toEqual(state.unlockedThemes);
+    expect(failedState.chatHistory.at(-1)).toMatchObject({
+      role: "error",
+      content: "[❌ Error] Session authentication is required for this purchase",
+    });
+  });
+
+  it("clears stale paid entitlements on auth-related theme purchase failures", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: "stale-hash", proKey: "stale-key" });
+    const purchasedState = applyOptimisticThemePurchase(state, "amber");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "License has been revoked or is no longer active");
+
+    expect(failedState.proKey).toBeUndefined();
+    expect(failedState.proKeyHash).toBeUndefined();
+    expect(failedState.isPro).toBeUndefined();
+    expect(failedState.hasSessionPro).toBeUndefined();
   });
 });
