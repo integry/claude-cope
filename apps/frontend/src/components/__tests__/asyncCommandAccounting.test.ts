@@ -16,8 +16,16 @@ vi.mock("../ticketPrompt", () => ({
   clearPendingOffer: vi.fn(),
   fetchRandomTicketPrompt: vi.fn(),
 }));
+vi.mock("../ticketCommands", async () => {
+  const actual = await vi.importActual<typeof import("../ticketCommands")>("../ticketCommands");
+  return {
+    ...actual,
+    handleTakeCommand: vi.fn(actual.handleTakeCommand),
+  };
+});
 
 import { SLASH_COMMAND_ACCOUNTING_POLICY, executeSlashCommand, type SlashCommandContext } from "../slashCommandExecutor";
+import { handleTakeCommand } from "../ticketCommands";
 
 function makeGameState(overrides: Partial<GameState> = {}): GameState {
   const base: GameState = {
@@ -188,6 +196,30 @@ describe("async slash-command accounting", () => {
     expect(ctx.getHistory()[0]?.content).toBe("/backlog");
     expect(ctx.getHistory()[1]?.role).toBe("error");
     expect(ctx.getHistory()[2]?.content).toBe("tip:/backlog");
+  });
+
+  it("does not count locked /take attempts as /upgrade usage", async () => {
+    const ctx = makeCtx(makeGameState());
+    vi.mocked(handleTakeCommand).mockImplementationOnce((_command, _state, _setState, reply, opts) => {
+      reply({ role: "system", content: "locked" });
+      opts.onLocked?.({
+        id: "COPE-123",
+        title: "Locked ticket",
+        category_prefix: null,
+        category_label: null,
+        is_locked: true,
+        tier: "premium",
+        upgrade_teaser: "unlock it",
+      });
+      return true;
+    });
+
+    executeSlashCommand("/take 1", ctx);
+    await vi.runAllTimersAsync();
+
+    expect(ctx.setShowUpgrade).toHaveBeenCalledWith(true);
+    expect(ctx.state.commandUsage).not.toHaveProperty("/upgrade");
+    expect(ctx.onValidSlashCommand).not.toHaveBeenCalledWith("/upgrade");
   });
 
   it("documents an explicit accounting policy for every supported slash command", () => {

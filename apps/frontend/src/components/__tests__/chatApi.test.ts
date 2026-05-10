@@ -613,6 +613,7 @@ describe("submitChatMessage - achievement parsing", () => {
       throw new Error("consumer callback failed");
     });
     const onError = vi.fn();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       createMockStreamResponse(["Accepted reply"])
@@ -633,6 +634,10 @@ describe("submitChatMessage - achievement parsing", () => {
 
     expect(onAccepted).toHaveBeenCalledTimes(1);
     expect(onError).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledWith(
+      "submitChatMessage onAccepted callback failed",
+      expect.any(Error)
+    );
   });
 
   it("handles response with no achievements", async () => {

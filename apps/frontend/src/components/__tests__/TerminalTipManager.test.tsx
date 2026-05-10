@@ -10,6 +10,7 @@ const {
   recordEnterMock,
   recordValidCommandMock,
   recordMessageWithoutTicketMock,
+  rollbackMessageWithoutTicketMock,
   submitChatMessageMock,
   setShowUpgradeMock,
   shouldShowNagMock,
@@ -18,6 +19,7 @@ const {
   recordEnterMock: vi.fn(),
   recordValidCommandMock: vi.fn(),
   recordMessageWithoutTicketMock: vi.fn(),
+  rollbackMessageWithoutTicketMock: vi.fn(),
   submitChatMessageMock: vi.fn(),
   setShowUpgradeMock: vi.fn(),
   shouldShowNagMock: vi.fn(() => false),
@@ -95,7 +97,7 @@ vi.mock("../../hooks/useTipManager", () => ({
   useTipManager: () => ({
     recordEnter: recordEnterMock,
     recordValidCommand: recordValidCommandMock,
-    recordMessageWithoutTicket: recordMessageWithoutTicketMock,
+    recordMessageWithoutTicket: (...args: unknown[]) => recordMessageWithoutTicketMock(...args),
   }),
 }));
 vi.mock("../loadingPhrases", () => ({ getRandomLoadingPhrase: () => "Loading..." }));
@@ -268,6 +270,7 @@ describe("Terminal tip-manager wiring", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-10T00:00:00.000Z"));
+    recordMessageWithoutTicketMock.mockImplementation(() => rollbackMessageWithoutTicketMock);
     executeSlashCommandMock.mockImplementation((command: string, ctx: { onValidSlashCommand?: (baseCommand: string) => void }) => {
       ctx.onValidSlashCommand?.(command.trim());
     });
@@ -306,6 +309,17 @@ describe("Terminal tip-manager wiring", () => {
     await submitCommand("ship it");
 
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rolls back backlog reminders when the prompt fails generically", async () => {
+    submitChatMessageMock.mockImplementation(({ onError }: { onError?: () => void }) => {
+      onError?.();
+    });
+    await renderTerminal();
+    await submitCommand("ship it");
+
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+    expect(rollbackMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not count accepted chat prompts toward slash-command milestone tips", async () => {

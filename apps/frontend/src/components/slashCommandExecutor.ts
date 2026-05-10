@@ -959,7 +959,7 @@ function handleExtendedCommand(command: string, ctx: SlashCommandContext, reply:
       setInputValue: ctx.setInputValue,
       onAccept: ctx.playChime,
       onSuggestedReply: ctx.onSuggestedReply,
-      onLocked: () => handleUpgradeCommand(ctx),
+      onLocked: () => openUpgradeFlow(ctx, { trackCommandUsage: false }),
     });
     if (handled && input && !hadActiveTicket) markValidSlashCommand(ctx, "/take");
     return handled;

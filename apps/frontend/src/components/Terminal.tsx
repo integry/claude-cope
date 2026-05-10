@@ -252,6 +252,7 @@ function Terminal() {
     clearPendingNag();
   }, [clearPendingNag]);
   const handlePromptError = useCallback(() => {
+    pendingBacklogRollbackRef.current?.();
     pendingBacklogRollbackRef.current = null;
     playError();
   }, [playError]);
