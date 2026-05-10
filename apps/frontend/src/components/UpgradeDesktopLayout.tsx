@@ -88,13 +88,7 @@ export default function DesktopLayout({
     const { left, right } = getCenteredPadding(text);
     return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{" ".repeat(left) + text + " ".repeat(right)}</span><span style={{ color: B }}>{"║"}</span></>;
   };
-  const buttonBlock = (
-    id: OptionId,
-    label: string,
-    url: string,
-    available: boolean,
-    primary = true,
-  ) => {
+  const buttonBlock = (id: OptionId, label: string, url: string, available: boolean, primary = true) => {
     const MARGIN = 2;
     const cursorPrefix = " > ";
     const btnContent = " " + label + " ";
@@ -373,14 +367,7 @@ export default function DesktopLayout({
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
         {boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{", "}<span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>{","}</span>, `  Unlocks: ${creditsStr}, multi-device sync,`.length)}{"\n"}
-        {boxLineRich(
-          <span style={{ color: W }}>
-            {"  priority generation queue, and "}
-            <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>
-            {"."}
-          </span>,
-          "  priority generation queue, and advanced Cope models.".length,
-        )}{"\n"}
+        {boxLineRich(<span style={{ color: W }}>{"  priority generation queue, and "}<span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>{"."}</span>, "  priority generation queue, and advanced Cope models.".length)}{"\n"}
         {buttonBlock(OPTION_IDS.single, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
