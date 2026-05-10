@@ -54,11 +54,17 @@ describe("CommandLine", () => {
     expect(container.textContent).toContain("Try /help");
     expect(container.querySelector("[data-testid='command-line-placeholder']")).not.toBeNull();
     expect(container.querySelector("[data-testid='command-line-tab-hint']")?.textContent).toBe("[Tab]");
+    expect(container.querySelector("input")?.getAttribute("placeholder")).toBe("Try /help. Press Tab to accept suggestion.");
   });
 
   it("shows the decorative cursor only while focused and empty", () => {
     const { container, input } = renderCommandLine();
     expect(input).not.toBeNull();
+
+    act(() => {
+      input!.focus();
+    });
+
     expect(container.querySelector("[data-testid='command-line-cursor']")).not.toBeNull();
 
     act(() => {
@@ -86,5 +92,32 @@ describe("CommandLine", () => {
 
     expect(container.querySelector("[data-testid='command-line-placeholder']")).not.toBeNull();
     expect(container.querySelector("[data-testid='command-line-cursor']")).toBeNull();
+    expect(container.querySelector("[data-testid='command-line-tab-hint']")).toBeNull();
+  });
+
+  it("does not forward enter keydown while IME composition is active", () => {
+    const onKeyDown = vi.fn();
+    const { input } = renderCommandLine({ onKeyDown });
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input!.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    });
+
+    act(() => {
+      input!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    expect(onKeyDown).not.toHaveBeenCalled();
+
+    act(() => {
+      input!.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+    });
+
+    act(() => {
+      input!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
   });
 });

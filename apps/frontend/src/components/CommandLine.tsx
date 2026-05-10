@@ -1,4 +1,4 @@
-import { ChangeEvent, KeyboardEvent, forwardRef, useState } from "react";
+import { ChangeEvent, CompositionEvent, KeyboardEvent, forwardRef, useState } from "react";
 
 type CommandLineProps = {
   value: string;
@@ -12,8 +12,26 @@ type CommandLineProps = {
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
   function CommandLine({ value, disabled, onChange, onKeyDown, promptString = "❯ ", placeholder }, ref) {
     const [isFocused, setIsFocused] = useState(false);
+    const [isComposing, setIsComposing] = useState(false);
     const showPlaceholder = !value && !!placeholder;
+    const showTabHint = showPlaceholder && !disabled;
     const showDecorativeCursor = showPlaceholder && isFocused && !disabled;
+    const accessiblePlaceholder = placeholder ? `${placeholder}. Press Tab to accept suggestion.` : undefined;
+
+    const handleCompositionStart = (_e: CompositionEvent<HTMLInputElement>) => {
+      setIsComposing(true);
+    };
+
+    const handleCompositionEnd = (_e: CompositionEvent<HTMLInputElement>) => {
+      setIsComposing(false);
+    };
+
+    const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter" && (isComposing || e.nativeEvent.isComposing)) {
+        return;
+      }
+      onKeyDown(e);
+    };
 
     return (
       <div className="terminal-command-line border-t border-white/20">
@@ -28,9 +46,11 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
               >
                 {showDecorativeCursor && <span data-testid="command-line-cursor" className="terminal-command-cursor shrink-0" />}
                 <span className="truncate">{placeholder}</span>
-                <span data-testid="command-line-tab-hint" className="terminal-command-tab-hint shrink-0">
-                  [Tab]
-                </span>
+                {showTabHint && (
+                  <span data-testid="command-line-tab-hint" className="terminal-command-tab-hint shrink-0">
+                    [Tab]
+                  </span>
+                )}
               </div>
             )}
             <input
@@ -39,9 +59,13 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
               value={value}
               disabled={disabled}
               onChange={onChange}
-              onKeyDown={onKeyDown}
+              onKeyDown={handleInputKeyDown}
+              onCompositionStart={handleCompositionStart}
+              onCompositionEnd={handleCompositionEnd}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
+              placeholder={accessiblePlaceholder}
+              aria-label="Command line input"
               className="terminal-command-input relative z-10 w-full outline-none bg-transparent text-white font-bold caret-white disabled:opacity-50 py-0 leading-none"
               autoFocus
             />

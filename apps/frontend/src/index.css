@@ -185,6 +185,10 @@ body {
   min-width: 0;
 }
 
+.terminal-command-input::placeholder {
+  color: transparent;
+}
+
 .terminal-command-placeholder {
   color: rgba(226, 232, 240, 0.62);
 }
@@ -201,6 +205,12 @@ body {
   border-radius: 1px;
   box-shadow: 0 0 14px rgba(103, 232, 249, 0.28);
   animation: terminal-command-cursor-blink 1.1s steps(1, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-command-cursor {
+    animation: none;
+  }
 }
 
 .theme-amber {
