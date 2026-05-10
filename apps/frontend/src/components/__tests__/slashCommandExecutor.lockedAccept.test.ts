@@ -113,7 +113,11 @@ describe("locked pending offers", () => {
     handleAcceptCommand(ctx, reply);
 
     expect(clearPendingOffer).toHaveBeenCalledOnce();
-    expect(ctx.setState).not.toHaveBeenCalled();
+    expect(ctx.setState).toHaveBeenCalledOnce();
+    const update = (ctx.setState as ReturnType<typeof vi.fn>).mock.calls[0]![0] as (prev: GameState) => GameState;
+    const nextState = update(ctx.state);
+    expect(nextState.activeTicket).toBeNull();
+    expect(nextState.commandUsage).toEqual({ "/upgrade": 1 });
     expect(reply).toHaveBeenCalledOnce();
     expect(reply.mock.calls[0]?.[0].content).toContain("[PREMIUM]");
     expect(ctx.closeAllOverlays).toHaveBeenCalledOnce();
