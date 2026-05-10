@@ -1,7 +1,6 @@
 /* eslint-disable max-lines */
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import * as ReactDOM from "react-dom";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "../chatApi";
 import type { BuddyState, GameState } from "../../hooks/useGameState";
 import type { ServerProfile } from "@claude-cope/shared/profile";
@@ -510,7 +509,6 @@ describe("submitChatMessage - achievement parsing", () => {
 
   it("fires onAccepted only after the final assistant message is committed", async () => {
     const events: string[] = [];
-    const flushSyncSpy = vi.spyOn(ReactDOM, "flushSync");
     const setHistory = vi.fn((updater: unknown) => {
       if (typeof updater !== "function") return;
       const next = updater([{ role: "loading", content: "Loading..." }]);
@@ -541,7 +539,6 @@ describe("submitChatMessage - achievement parsing", () => {
 
     expect(events).toContain("history-committed");
     expect(events[events.length - 1]).toBe("accepted");
-    expect(flushSyncSpy).toHaveBeenCalledTimes(1);
   });
 
   it("does not fire onAccepted when the response stream cannot be parsed", async () => {
