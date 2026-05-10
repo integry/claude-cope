@@ -90,6 +90,7 @@ describe("TerminalView ticker shortcuts", () => {
     renderTerminalView({
       activeRegression: null,
       outageHp: null,
+      activeOutageScenario: null,
       pendingReviewPing: null,
       pingAcknowledged: false,
       activeTheme: "default",
@@ -127,6 +128,7 @@ describe("TerminalView ticker shortcuts", () => {
       bottomRef: { current: null },
       slashQuery: "",
       slashIndex: 0,
+      handleSlashMenuSelect: vi.fn(),
       runSlashCommand,
       inputValue: "",
       suggestedReply: null,
