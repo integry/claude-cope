@@ -44,10 +44,8 @@ function getOverlayArrowDirection(key: string): -1 | 1 | null { if (key === "Arr
 function shouldBlockManualLinkEnter(event: React.KeyboardEvent<HTMLAnchorElement>, isKeyboardNavigationMode: boolean, showManualFocus: boolean) { return event.key === "Enter" && showManualFocus && !isKeyboardNavigationMode; }
 function shouldActivateSelectedOption(event: React.KeyboardEvent<HTMLDivElement>, isKeyboardNavigationMode: boolean, selectedOptionId: OptionId | null): selectedOptionId is OptionId { return event.key === "Enter" && isKeyboardNavigationMode && selectedOptionId !== null && event.target instanceof HTMLElement && event.target.tagName !== "A" && event.target.tagName !== "BUTTON"; }
 function isFocusedSelectedOption(target: EventTarget | null, selectedOptionId: OptionId | null, optionRefs: React.RefObject<Array<HTMLAnchorElement | null>>) { return selectedOptionId !== null && target === optionRefs.current[selectedOptionId]; }
-function getCenteredPadding(text: string) {
-  const left = Math.max(0, Math.floor((INNER_W - text.length) / 2));
-  return { left, right: Math.max(0, INNER_W - text.length - left) };
-}
+function shouldArmKeyboardNavigationOnTab(target: EventTarget | null, showManualFocus: boolean, selectedOptionId: OptionId | null, optionRefs: React.RefObject<Array<HTMLAnchorElement | null>>) { return showManualFocus && isFocusedSelectedOption(target, selectedOptionId, optionRefs); }
+function getCenteredPadding(text: string) { const left = Math.max(0, Math.floor((INNER_W - text.length) / 2)); return { left, right: Math.max(0, INNER_W - text.length - left) }; }
 export default function DesktopLayout({
   singleLabel,
   multiLabel,
@@ -296,8 +294,7 @@ export default function DesktopLayout({
         setSelectedOptionId(nextOptionId);
         return;
       }
-      if (!event.shiftKey && showManualFocus && isFocusedSelectedOption(target, selectedOptionId, optionRefs)) {
-        event.preventDefault();
+      if (shouldArmKeyboardNavigationOnTab(target, showManualFocus, selectedOptionId, optionRefs)) {
         setShowManualFocus(false);
         setIsKeyboardNavigationMode(true);
       }
