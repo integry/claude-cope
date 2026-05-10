@@ -5,6 +5,7 @@ import { createElement } from "react";
 import type React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
+import { UPGRADE_NAG_CLOSE_EFFECTS } from "../upgradeOverlayEffects";
 
 /**
  * Production-wiring tests for the WinRAR nag screen (issue #736).
@@ -469,6 +470,7 @@ describe("WinRAR nag: Terminal integration", () => {
 
   it("keeps the nag open in a closing state for 3 seconds on early Escape, then replays the blocked command", async () => {
     vi.spyOn(Math, "random").mockReturnValue(0.99);
+    const expectedCloseEffect = UPGRADE_NAG_CLOSE_EFFECTS[Math.floor(0.99 * UPGRADE_NAG_CLOSE_EFFECTS.length)];
     await renderTerminal();
     await submitTerminalCommand("status");
 
@@ -482,7 +484,7 @@ describe("WinRAR nag: Terminal integration", () => {
 
     expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
     expect(container.querySelector(".upgrade-desktop")?.classList.contains("upgrade-overlay-closing")).toBe(true);
-    expect(container.querySelector(".upgrade-desktop")?.getAttribute("data-close-effect")).toBe("catastrophic-reorg");
+    expect(container.querySelector(".upgrade-desktop")?.getAttribute("data-close-effect")).toBe(expectedCloseEffect);
     expect(submitChatMessageMock).not.toHaveBeenCalled();
 
     await act(async () => {
