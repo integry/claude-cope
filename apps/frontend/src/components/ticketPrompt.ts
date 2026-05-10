@@ -11,6 +11,11 @@ type BacklogTicket = {
   description: string;
   technical_debt: number;
   kickoff_prompt: string;
+  category_prefix?: string | null;
+  category_label?: string | null;
+  is_locked?: boolean;
+  tier?: "free" | "premium";
+  upgrade_teaser?: string;
 };
 
 /** The pending ticket offered to the user, waiting for /accept */
@@ -41,15 +46,19 @@ export function extractSender(description: string): { sender: string; body: stri
  */
 export async function fetchRandomTicketPrompt(
   setHistory: React.Dispatch<React.SetStateAction<Message[]>>,
+  proKeyHash?: string,
 ): Promise<void> {
   try {
-    const res = await fetch(`${API_BASE}/api/tickets/community`);
+    const res = await fetch(`${API_BASE}/api/tickets/community`, {
+      headers: proKeyHash ? { "x-pro-key-hash": proKeyHash } : undefined,
+    });
     if (!res.ok) return;
 
     const tickets = (await res.json()) as BacklogTicket[];
-    if (!tickets.length) return;
+    const playableTickets = tickets.filter((ticket) => !ticket.is_locked);
+    if (!playableTickets.length) return;
 
-    const ticket = tickets[Math.floor(Math.random() * tickets.length)]!;
+    const ticket = playableTickets[Math.floor(Math.random() * playableTickets.length)]!;
     pendingTicketOffer = ticket;
 
     const reward = (ticket.technical_debt * 10).toLocaleString("en-US");

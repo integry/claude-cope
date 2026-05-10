@@ -9,7 +9,18 @@ import { updateTicketServer } from "../api/profileApi";
 type Reply = (msg: Message) => void;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
 
-type BacklogTicket = { id: string; title: string; description: string; technical_debt: number; kickoff_prompt: string };
+type BacklogTicket = {
+  id: string;
+  title: string;
+  description: string;
+  technical_debt: number;
+  kickoff_prompt: string;
+  category_prefix?: string | null;
+  category_label?: string | null;
+  is_locked?: boolean;
+  tier?: "free" | "premium";
+  upgrade_teaser?: string;
+};
 
 /** Cache last backlog results so `/take 2` can resolve by row number */
 let lastBacklogResults: BacklogTicket[] = [];
@@ -53,9 +64,11 @@ export async function handleTicketCommand(command: string, reply: Reply): Promis
   return true;
 }
 
-export async function handleBacklogCommand(reply: Reply): Promise<boolean> {
+export async function handleBacklogCommand(reply: Reply, proKeyHash?: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/tickets/community`);
+    const res = await fetch(`${API_BASE}/api/tickets/community`, {
+      headers: proKeyHash ? { "x-pro-key-hash": proKeyHash } : undefined,
+    });
     if (!res.ok) {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.SERVER_ERROR });
       reply({ role: "error", content: `[❌] Failed to fetch backlog (HTTP ${res.status}).` });
@@ -73,19 +86,24 @@ export async function handleBacklogCommand(reply: Reply): Promise<boolean> {
 
     const numW = 3;
     const idW = 10;
-    const titleW = Math.max(5, ...tickets.map((t) => t.title.length));
+    const statusW = 8;
+    const titleW = Math.max(5, ...tickets.map((t) => `${t.is_locked ? "🔒 " : ""}${t.title}`.length));
     const tdW = 8;
-    const sep = `+${"-".repeat(numW + 2)}+${"-".repeat(idW + 2)}+${"-".repeat(titleW + 2)}+${"-".repeat(tdW + 2)}+`;
+    const sep = `+${"-".repeat(numW + 2)}+${"-".repeat(idW + 2)}+${"-".repeat(titleW + 2)}+${"-".repeat(statusW + 2)}+${"-".repeat(tdW + 2)}+`;
     const pad = (s: string, w: number, align: "left" | "right" = "left") =>
       align === "right"
         ? " ".repeat(Math.max(0, w - s.length)) + s
         : s + " ".repeat(Math.max(0, w - s.length));
-    const header = `| ${pad("#", numW)} | ${pad("ID", idW)} | ${pad("Title", titleW)} | ${pad("Reward", tdW)} |`;
+    const header = `| ${pad("#", numW)} | ${pad("ID", idW)} | ${pad("Title", titleW)} | ${pad("Status", statusW)} | ${pad("Reward", tdW)} |`;
     const rows = tickets.map((t, i) =>
-      `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(t.title, titleW)} | ${pad(String(t.technical_debt * 10), tdW, "right")} |`
+      `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(`${t.is_locked ? "🔒 " : ""}${t.title}`, titleW)} | ${pad(t.is_locked ? "LOCKED" : "OPEN", statusW)} | ${pad(t.is_locked ? "--" : String(t.technical_debt * 10), tdW, "right")} |`
     );
     const table = [sep, header, sep, ...rows, sep].join("\n");
-    reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]\n\n\`\`\`\n${table}\n\`\`\`\n\nType \`/take 1\` through \`/take ${tickets.length}\` to claim a ticket.` });
+    const hasLockedRows = tickets.some((ticket) => ticket.is_locked);
+    const footer = hasLockedRows
+      ? "Locked rows are premium teasers. Upgrade to Claude Cope Max to claim them."
+      : `Type \`/take 1\` through \`/take ${tickets.length}\` to claim a ticket.`;
+    reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]\n\n\`\`\`\n${table}\n\`\`\`\n\n${footer}` });
   } catch {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.NETWORK_ERROR });
     reply({ role: "error", content: "[❌] Network error — the backlog server is unreachable." });
@@ -126,6 +144,15 @@ export function handleTakeCommand(
   if (!ticket) {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: SlashCommandFailureReasons.NOT_FOUND });
     reply({ role: "error", content: `[❌] Ticket "${input}" not found. Run \`/backlog\` to see available tickets.` });
+    return true;
+  }
+
+  if (ticket.is_locked) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: SlashCommandFailureReasons.LOCKED });
+    reply({
+      role: "system",
+      content: `[🔒] **${ticket.title}** is a premium backlog ticket.${ticket.upgrade_teaser ? ` ${ticket.upgrade_teaser}` : " Upgrade to Claude Cope Max to claim it."}`,
+    });
     return true;
   }
 

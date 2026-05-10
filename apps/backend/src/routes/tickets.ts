@@ -1,7 +1,14 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import {
+  getBacklogCategoryPrefix,
+  getBacklogCategoryTierMeta,
+  isFreeBacklogCategory,
+  isPremiumBacklogCategory,
+} from "@claude-cope/shared/backlogTiers";
 import { TICKET_PM_PROMPT } from "../prompts/ticketPrompt";
 import { parseProviderList } from "@claude-cope/shared/openrouter";
+import { isLicenseActive } from "../utils/profile";
 
 type Env = {
   Bindings: {
@@ -17,6 +24,30 @@ type OpenRouterRequestBody = {
   messages: { role: string; content: string }[];
   provider?: { order: string[] };
 };
+
+interface BacklogTicketRow {
+  id: string;
+  reporter: string | null;
+  reporter_name: string | null;
+  reporter_title: string | null;
+  reporter_description: string | null;
+  title: string;
+  description: string;
+  technical_debt: number;
+  kickoff_prompt: string;
+  created_at: string;
+}
+
+interface BacklogTicketResponse extends BacklogTicketRow {
+  category_prefix: string | null;
+  category_label: string | null;
+  is_locked: boolean;
+  tier: "free" | "premium";
+  upgrade_teaser?: string;
+}
+
+const BACKLOG_PLAYABLE_LIMIT = 5;
+const BACKLOG_TEASER_LIMIT = 2;
 
 export function buildTicketRefineRequest(
   messages: { role: string; content: string }[],
@@ -36,20 +67,84 @@ export function buildTicketRefineRequest(
 
 const tickets = new Hono<Env>();
 
+function shuffleRows<T>(rows: readonly T[]): T[] {
+  const shuffled = [...rows];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
+  return shuffled;
+}
+
+function buildPlayableRow(row: BacklogTicketRow): BacklogTicketResponse {
+  const categoryPrefix = getBacklogCategoryPrefix(row.id);
+  const categoryMeta = categoryPrefix ? getBacklogCategoryTierMeta(categoryPrefix) : null;
+
+  return {
+    ...row,
+    category_prefix: categoryPrefix,
+    category_label: categoryMeta?.label ?? null,
+    is_locked: false,
+    tier: isPremiumBacklogCategory(row.id) ? "premium" : "free",
+  };
+}
+
+function buildLockedTeaser(row: BacklogTicketRow): BacklogTicketResponse {
+  const categoryPrefix = getBacklogCategoryPrefix(row.id);
+  const categoryMeta = categoryPrefix ? getBacklogCategoryTierMeta(categoryPrefix) : null;
+  const categoryLabel = categoryMeta?.label ?? "premium backlog";
+
+  return {
+    ...row,
+    kickoff_prompt: "",
+    category_prefix: categoryPrefix,
+    category_label: categoryMeta?.label ?? null,
+    is_locked: true,
+    tier: "premium",
+    upgrade_teaser: `Unlock ${categoryLabel} and 50+ specialized categories in Claude Cope Max.`,
+  };
+}
+
+function buildPaidBacklogRows(rows: BacklogTicketRow[]): BacklogTicketResponse[] {
+  const premiumRows = rows.filter((row) => isPremiumBacklogCategory(row.id));
+  const initialSelection = rows.slice(0, BACKLOG_PLAYABLE_LIMIT);
+
+  if (premiumRows.length === 0 || initialSelection.some((row) => isPremiumBacklogCategory(row.id))) {
+    return initialSelection.map(buildPlayableRow);
+  }
+
+  return [...initialSelection.slice(0, BACKLOG_PLAYABLE_LIMIT - 1), premiumRows[0]!].map(buildPlayableRow);
+}
+
 tickets.get("/community", async (c) => {
   const db = c.env?.DB;
   if (!db) {
     return c.json({ error: "Database is not configured" }, 500);
   }
 
+  const proKeyHash = c.req.header("x-pro-key-hash")?.trim() || c.req.query("proKeyHash")?.trim();
+  const isPaidUser = proKeyHash ? await isLicenseActive(db, proKeyHash) : false;
   const { results } = await db
     .prepare(
-      "SELECT id, reporter, reporter_name, reporter_title, reporter_description, title, description, technical_debt, kickoff_prompt, created_at FROM community_backlog ORDER BY RANDOM() LIMIT 5"
+      "SELECT id, reporter, reporter_name, reporter_title, reporter_description, title, description, technical_debt, kickoff_prompt, created_at FROM community_backlog ORDER BY RANDOM()"
     )
-    .all();
+    .all<BacklogTicketRow>();
+
+  const rows = results ?? [];
 
   c.header("Cache-Control", "public, max-age=10");
-  return c.json(results);
+
+  if (isPaidUser) {
+    return c.json(buildPaidBacklogRows(rows));
+  }
+
+  const freeRows = rows.filter((row) => isFreeBacklogCategory(row.id)).slice(0, BACKLOG_PLAYABLE_LIMIT);
+  const teaserRows = rows
+    .filter((row) => !isFreeBacklogCategory(row.id))
+    .slice(0, BACKLOG_TEASER_LIMIT)
+    .map(buildLockedTeaser);
+
+  return c.json(shuffleRows([...freeRows.map(buildPlayableRow), ...teaserRows]));
 });
 
 // eslint-disable-next-line complexity

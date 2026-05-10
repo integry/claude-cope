@@ -197,8 +197,8 @@ function Terminal() {
   useEffect(() => {
     if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
     setState((prev) => ({ ...prev, hasSeenTicketPrompt: true }));
-    fetchRandomTicketPrompt(setHistory);
-  }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, setState, setHistory]);
+    fetchRandomTicketPrompt(setHistory, state.proKeyHash);
+  }, [isBooting, state.hasSeenTicketPrompt, state.activeTicket, state.proKeyHash, setState, setHistory]);
 
   const handleQuotaLockout = useCallback((command?: string) => {
     if (BYOK_ENABLED && state.apiKey) return;
