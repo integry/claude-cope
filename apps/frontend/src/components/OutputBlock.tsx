@@ -351,6 +351,28 @@ function getMessageFlags(role: string, content: string) {
   return { useMarkdown, isAwaitingResponse, isStreaming };
 }
 
+function endsWithCodeBlock(content: string): boolean {
+  const trimmed = content.trimEnd();
+  if (!trimmed) return false;
+  if (/```$/.test(trimmed)) return true;
+
+  const lines = trimmed.split("\n");
+  let index = lines.length - 1;
+  while (index >= 0 && lines[index]!.trim() === "") index -= 1;
+  if (index < 0) return false;
+
+  return /^(?: {4,}|\t)/.test(lines[index]!);
+}
+
+function appendShareMarker(content: string, includeShare: boolean): string {
+  if (!includeShare) return content;
+  const marker = "[share](https://__share__)";
+  const trimmed = content.trimEnd();
+  if (!trimmed) return marker;
+  const separator = endsWithCodeBlock(trimmed) ? "\n\n" : " ";
+  return `${trimmed}${separator}${marker}`;
+}
+
 function MessageContent({
   message,
   isNew = false,
@@ -377,7 +399,7 @@ function MessageContent({
 
   if (useMarkdown || isStreaming) {
     const rawContent = shouldTypewrite ? visibleContent : content;
-    const processedContent = cleanLLMOutput(rawContent) + (shareNode ? " [share](https://__share__)" : "");
+    const processedContent = appendShareMarker(cleanLLMOutput(rawContent), Boolean(shareNode));
     const showCursor = isStreaming || isTyping;
     return (
       <div className="space-y-1">
