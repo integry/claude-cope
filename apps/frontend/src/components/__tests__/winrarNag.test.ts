@@ -5,6 +5,7 @@ import { createElement } from "react";
 import type React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
+import { UPGRADE_NAG_CLOSE_EFFECTS } from "../upgradeOverlayEffects";
 
 /**
  * Production-wiring tests for the WinRAR nag screen (issue #736).
@@ -257,6 +258,7 @@ function makeOverlayProps(overrides: Record<string, unknown> = {}) {
     setHistory: noop as React.Dispatch<React.SetStateAction<Message[]>>,
     onUpgradeDismiss: vi.fn(),
     upgradeDismissMode: "manual" as const,
+    upgradeDismissPhase: "idle" as const,
     ...overrides,
   };
 }
@@ -450,6 +452,8 @@ describe("WinRAR nag: dismiss replay path", () => {
 
 describe("WinRAR nag: Terminal integration", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-10T00:00:00.000Z"));
     submitChatMessageMock.mockReset();
     window.history.pushState(null, "", "/");
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
@@ -461,15 +465,80 @@ describe("WinRAR nag: Terminal integration", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.useRealTimers();
     testConfig.initialQuotaPercent = 0;
   });
 
-  it("replays the blocked desktop command only after Escape dismisses the nag overlay", async () => {
+  it("keeps the nag open in a closing state for 3 seconds on early Escape, then replays the blocked command", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    const expectedCloseEffect = UPGRADE_NAG_CLOSE_EFFECTS[Math.floor(0.99 * UPGRADE_NAG_CLOSE_EFFECTS.length)];
     await renderTerminal();
     await submitTerminalCommand("status");
 
     expect(submitChatMessageMock).not.toHaveBeenCalled();
     expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
+    expect(container.querySelector(".upgrade-desktop")?.classList.contains("upgrade-overlay-closing")).toBe(true);
+    expect(container.querySelector(".upgrade-desktop")?.getAttribute("data-close-effect")).toBe(expectedCloseEffect);
+    expect(submitChatMessageMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(2999);
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
+    expect(submitChatMessageMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(".upgrade-desktop")).toBeNull();
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks desktop checkout keyboard activation during the forced-close phase", async () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    await renderTerminal();
+    await submitTerminalCommand("status");
+
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    expect(desktop).not.toBeNull();
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(desktop?.classList.contains("upgrade-overlay-closing")).toBe(true);
+
+    await act(async () => {
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(clickSpy).not.toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
+
+  it("closes the nag immediately when Escape is pressed after 3 seconds", async () => {
+    await renderTerminal();
+    await submitTerminalCommand("status");
+
+    expect(container.querySelector(".upgrade-desktop")).not.toBeNull();
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+      await Promise.resolve();
+    });
 
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));

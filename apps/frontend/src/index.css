@@ -154,7 +154,8 @@ body {
 /* Upgrade overlay button hover — CSS :hover is more reliable than JS
    mouseenter/mouseleave inside <pre> elements */
 .upgrade-btn-primary:active,
-.upgrade-btn-secondary:active {
+.upgrade-btn-secondary:active,
+.share-popup-action:active {
   outline: none;
   box-shadow: none;
 }
@@ -166,8 +167,32 @@ body {
   background-color: #4ade80 !important;
   color: #0d1117 !important;
 }
+.share-popup-action [data-cursor] {
+  color: #4ade80;
+  font-weight: bold;
+}
+.share-popup-action [data-btn] {
+  color: #4ade80;
+  font-weight: bold;
+  padding: 2px 6px;
+  background-color: transparent;
+}
+.share-popup-action:not(:disabled):hover [data-btn],
+.share-popup-action:not(:disabled):focus-visible [data-btn] {
+  background-color: #4ade80 !important;
+  color: #0d1117 !important;
+}
+.share-popup-action:not(:disabled):hover [data-cursor],
+.share-popup-action:not(:disabled):focus-visible [data-cursor] {
+  color: #4ade80 !important;
+}
 .upgrade-esc-btn:hover [data-esc] {
   color: #ffffff !important;
+}
+
+.upgrade-overlay-panel {
+  transform-origin: center center;
+  will-change: transform, filter, opacity;
 }
 
 /* Responsive layout switching: CSS-first, no JS matchMedia needed */

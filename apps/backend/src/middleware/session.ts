@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
+import { readFreeAccountIdCookie } from "../utils/freeAccountIdentity";
 
 const COOKIE_NAME = "cope_session_id";
 
@@ -18,5 +19,12 @@ export const sessionMiddleware: MiddlewareHandler = async (c, next) => {
   }
 
   c.set("sessionId", sessionId);
+  c.set(
+    "freeAccountId",
+    await readFreeAccountIdCookie(
+      c,
+      ((c.env as { FREE_ACCOUNT_COOKIE_SECRET?: string } | undefined)?.FREE_ACCOUNT_COOKIE_SECRET),
+    ),
+  );
   await next();
 };

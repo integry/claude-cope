@@ -3,6 +3,7 @@ import { computeMultiplier, CORPORATE_RANKS } from "../gameConstants";
 
 interface UserScoreRow {
   username: string;
+  account_id?: string | null;
   total_td: number;
   current_td: number;
   corporate_rank: string;
@@ -28,6 +29,8 @@ function parseJSON<T>(raw: string, fallback: T): T {
     return fallback;
   }
 }
+
+export type ProfileRow = UserScoreWithLicenseHashRow;
 
 export function resolveRank(totalTD: number): string {
   let rank = CORPORATE_RANKS[0]!.title;
@@ -85,8 +88,15 @@ export async function getProfileByLicenseHash(db: D1Database, hash: string): Pro
 
 export async function getProfileRow(db: D1Database, username: string): Promise<UserScoreWithLicenseHashRow | null> {
   return db
-    .prepare(`SELECT ${PROFILE_COLUMNS}, license_hash FROM user_scores WHERE username = ?`)
+    .prepare(`SELECT ${PROFILE_COLUMNS}, license_hash, account_id FROM user_scores WHERE username = ?`)
     .bind(username)
+    .first<UserScoreWithLicenseHashRow>();
+}
+
+export async function getProfileRowByAccountId(db: D1Database, accountId: string): Promise<UserScoreWithLicenseHashRow | null> {
+  return db
+    .prepare(`SELECT ${PROFILE_COLUMNS}, license_hash, account_id FROM user_scores WHERE account_id = ?`)
+    .bind(accountId)
     .first<UserScoreWithLicenseHashRow>();
 }
 

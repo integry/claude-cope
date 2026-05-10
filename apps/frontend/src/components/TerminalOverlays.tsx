@@ -11,8 +11,10 @@ import ContactOverlay from "./ContactOverlay";
 import UserProfileOverlay from "./UserProfileOverlay";
 import PartyOverlay from "./PartyOverlay";
 import UpgradeOverlay from "./UpgradeOverlay";
+import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
 import type { GameState, Message } from "../hooks/useGameState";
 import { FREE_QUOTA_LIMIT, PRO_QUOTA_LIMIT } from "../config";
+import { DEFAULT_CLOSE_EFFECT } from "./upgradeOverlayEffects";
 
 export function TerminalOverlays({
   showStore,
@@ -47,6 +49,8 @@ export function TerminalOverlays({
   setHistory,
   onUpgradeDismiss,
   upgradeDismissMode = "manual",
+  upgradeDismissPhase = "idle",
+  upgradeDismissEffect = DEFAULT_CLOSE_EFFECT,
 }: {
   showStore: boolean;
   showLeaderboard: boolean;
@@ -80,6 +84,8 @@ export function TerminalOverlays({
   setHistory: Dispatch<SetStateAction<Message[]>>;
   onUpgradeDismiss: () => void;
   upgradeDismissMode?: "manual" | "nag";
+  upgradeDismissPhase?: "idle" | "closing";
+  upgradeDismissEffect?: UpgradeNagCloseEffect;
 }) {
   return (
     <>
@@ -166,6 +172,8 @@ export function TerminalOverlays({
           isBYOK={Boolean(state.apiKey) && !state.proKey && !state.proKeyHash}
           onDismiss={onUpgradeDismiss}
           dismissMode={upgradeDismissMode}
+          dismissPhase={upgradeDismissPhase}
+          dismissEffect={upgradeDismissEffect}
         />
       )}
     </>

@@ -72,6 +72,7 @@ describe("recordUsage", () => {
       ownsUsername: true,
       profileLicenseHash: null,
       revokedProfileLicenseHash: null,
+      freeAccountId: null,
       deferredKvWrites: null,
     });
 
@@ -81,7 +82,7 @@ describe("recordUsage", () => {
     expect(upsert?.sql).toContain("ON CONFLICT DO UPDATE");
     expect(upsert?.sql).toContain("corporate_rank = ?");
     expect(upsert?.bindings).toEqual(expect.arrayContaining([FREE_TIER_RANK_CAP, FREE_TIER_RANK_CAP]));
-    expect(upsert?.bindings?.[3]).toBe(FREE_TIER_RANK_CAP);
+    expect(upsert?.bindings?.[4]).toBe(FREE_TIER_RANK_CAP);
   });
 });
 
@@ -101,6 +102,7 @@ describe("handleFreeUserResponse", () => {
       quotaPercent: 80,
       profileLicenseHash: null,
       revokedProfileLicenseHash: null,
+      freeAccountId: null,
       ownsUsername: true,
       deferredKvWrites: null,
     });

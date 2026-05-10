@@ -139,6 +139,7 @@ export function recordUsage(
     proKeyHash?: string;
     profileLicenseHash?: string | null;
     revokedProfileLicenseHash?: string | null;
+    freeAccountId?: string | null;
     ownsUsername: boolean;
     deferredKvWrites?: (() => void) | null;
   },
@@ -168,9 +169,10 @@ export function recordUsage(
       // free-tier branch so they keep local progress after losing paid status,
       // but the WHERE clause prevents writes onto someone else's active profile.
       db.prepare(
-        `INSERT INTO user_scores (username, total_td, current_td, corporate_rank, country, credits_used)
-         VALUES (?, ?, ?, ?, ?, 1)
+        `INSERT INTO user_scores (username, account_id, total_td, current_td, corporate_rank, country, credits_used)
+         VALUES (?, ?, ?, ?, ?, ?, 1)
          ON CONFLICT DO UPDATE SET
+           account_id = COALESCE(account_id, ?),
            total_td = total_td + ?,
            current_td = current_td + ?,
            corporate_rank = ?,
@@ -179,10 +181,12 @@ export function recordUsage(
          WHERE license_hash IS NULL OR license_hash = ?`,
       ).bind(
         params.username,
+        params.freeAccountId ?? null,
         params.tdAwarded,
         params.tdAwarded,
         FREE_TIER_RANK_CAP,
         params.country,
+        params.freeAccountId ?? null,
         params.tdAwarded,
         params.tdAwarded,
         FREE_TIER_RANK_CAP,
@@ -207,6 +211,7 @@ export async function handleFreeUserResponse(
     username: string; model: string; country: string; hour: string;
     data: ChatResponseData; quotaPercent: number; profileLicenseHash: string | null;
     revokedProfileLicenseHash: string | null;
+    freeAccountId: string | null;
     ownsUsername: boolean; deferredKvWrites: (() => void) | null;
   },
 ): Promise<Response> {
@@ -228,6 +233,7 @@ export async function handleFreeUserResponse(
     tdAwarded, rank: serverRank, country: params.country, hour: params.hour,
     profileLicenseHash: params.profileLicenseHash,
     revokedProfileLicenseHash: params.revokedProfileLicenseHash,
+    freeAccountId: params.freeAccountId,
     ownsUsername: params.ownsUsername,
     deferredKvWrites: params.deferredKvWrites,
   });

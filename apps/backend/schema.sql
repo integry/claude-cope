@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS recent_events (
 -- Server-authoritative score tracking (prevents client-side cheating)
 CREATE TABLE IF NOT EXISTS user_scores (
     username TEXT PRIMARY KEY,
+    account_id TEXT,
     total_td INTEGER NOT NULL DEFAULT 0,
     current_td INTEGER NOT NULL DEFAULT 0,
     corporate_rank TEXT NOT NULL DEFAULT 'Junior Code Monkey',
@@ -78,6 +79,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_username_nocase
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_license_hash
     ON user_scores (license_hash) WHERE license_hash IS NOT NULL AND license_hash != '';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_account_id
+    ON user_scores (account_id) WHERE account_id IS NOT NULL AND account_id != '';
 
 -- Usage logs for tracking token and model usage per user per hour
 CREATE TABLE IF NOT EXISTS usage_logs (

@@ -14,6 +14,7 @@ vi.mock("../../config", () => ({
 }));
 
 import UpgradeOverlay from "../UpgradeOverlay";
+import { UPGRADE_NAG_CLOSE_EFFECTS } from "../upgradeOverlayEffects";
 
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
@@ -24,7 +25,15 @@ function setViewportWidth(width: number) {
   window.dispatchEvent(new Event("resize"));
 }
 
-function render(props: { quotaPercent: number; totalQuota: number; isBYOK: boolean; onDismiss: () => void; dismissMode?: "manual" | "nag" }) {
+function render(props: {
+  quotaPercent: number;
+  totalQuota: number;
+  isBYOK: boolean;
+  onDismiss: () => void;
+  dismissMode?: "manual" | "nag";
+  dismissPhase?: "idle" | "closing";
+  dismissEffect?: (typeof UPGRADE_NAG_CLOSE_EFFECTS)[number];
+}) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -105,6 +114,25 @@ describe("UpgradeOverlay", () => {
       desktop?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("renders the forced-closing class when the nag enters its exit sequence", () => {
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag", dismissPhase: "closing", dismissEffect: "singularity" });
+    expect(container.querySelector(".upgrade-desktop")?.classList.contains("upgrade-overlay-closing")).toBe(true);
+    expect(container.querySelector(".upgrade-mobile")?.classList.contains("upgrade-overlay-closing")).toBe(true);
+    expect(container.querySelectorAll(".upgrade-overlay-panel-closing").length).toBeGreaterThanOrEqual(2);
+    expect(container.querySelector(".upgrade-desktop")?.getAttribute("data-close-effect")).toBe("singularity");
+    expect(container.querySelector(".upgrade-mobile")?.getAttribute("data-close-effect")).toBe("singularity");
+  });
+
+  it("supports multiple distinct close effects", () => {
+    expect(UPGRADE_NAG_CLOSE_EFFECTS.length).toBeGreaterThan(6);
+    for (const effect of UPGRADE_NAG_CLOSE_EFFECTS) {
+      cleanup();
+      render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag", dismissPhase: "closing", dismissEffect: effect });
+      expect(container.querySelector(".upgrade-desktop")?.getAttribute("data-close-effect")).toBe(effect);
+      expect(container.querySelector(".upgrade-mobile")?.getAttribute("data-close-effect")).toBe(effect);
+    }
   });
 
   it("renders the ESC / close footer in both layouts", () => {

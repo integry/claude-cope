@@ -32,10 +32,16 @@ import { shouldShowNag } from "./winrarNag";
 import { TerminalView } from "./TerminalView";
 import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
+import { DEFAULT_CLOSE_EFFECT, UPGRADE_NAG_CLOSE_EFFECTS, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
 
 export type { Message };
 
 type TerminalViewProps = ComponentProps<typeof TerminalView>;
+const NAG_MINIMUM_OPEN_MS = 3000;
+const NAG_FORCED_CLOSE_MS = 3000;
+function pickRandomUpgradeNagCloseEffect(): UpgradeNagCloseEffect {
+  return UPGRADE_NAG_CLOSE_EFFECTS[Math.floor(Math.random() * UPGRADE_NAG_CLOSE_EFFECTS.length)] ?? DEFAULT_CLOSE_EFFECT;
+}
 
 function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
   while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++);
@@ -93,6 +99,8 @@ function Terminal() {
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
   const pendingNagCommandRef = useRef<string | null>(null);
   const nagArmedFromQuotaRef = useRef(false);
+  const nagOpenedAtRef = useRef<number | null>(null);
+  const nagCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyRef = useRef(history);
   historyRef.current = history;
   const lastSuggestedReplyRef = useRef<string | null>(null);
@@ -100,9 +108,16 @@ function Terminal() {
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
   const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
+  const [upgradeNagDismissPhase, setUpgradeNagDismissPhase] = useState<"idle" | "closing">("idle");
+  const [upgradeNagDismissEffect, setUpgradeNagDismissEffect] = useState<UpgradeNagCloseEffect>(DEFAULT_CLOSE_EFFECT);
 
   useEffect(() => {
     return () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); };
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (nagCloseTimeoutRef.current) clearTimeout(nagCloseTimeoutRef.current);
+    };
   }, []);
 
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
@@ -119,7 +134,43 @@ function Terminal() {
   const restorePendingNagCommand = useCallback(() => {
     if (pendingNagCommandRef.current !== null) { setInputValue(pendingNagCommandRef.current); pendingNagCommandRef.current = null; }
     nagArmedFromQuotaRef.current = false;
+    nagOpenedAtRef.current = null;
+    setUpgradeNagDismissPhase("idle");
+    setUpgradeNagDismissEffect(DEFAULT_CLOSE_EFFECT);
+    if (nagCloseTimeoutRef.current) {
+      clearTimeout(nagCloseTimeoutRef.current);
+      nagCloseTimeoutRef.current = null;
+    }
   }, []);
+  const openUpgradeNag = useCallback((command?: string) => {
+    if (command !== undefined) pendingNagCommandRef.current = command;
+    nagOpenedAtRef.current = Date.now();
+    setUpgradeNagDismissPhase("idle");
+    if (nagCloseTimeoutRef.current) {
+      clearTimeout(nagCloseTimeoutRef.current);
+      nagCloseTimeoutRef.current = null;
+    }
+    setUpgradeNagDismissEffect(DEFAULT_CLOSE_EFFECT);
+    setShowUpgrade(true);
+  }, [setShowUpgrade]);
+  const finalizeUpgradeNagClose = useCallback(() => {
+    if (nagCloseTimeoutRef.current) {
+      clearTimeout(nagCloseTimeoutRef.current);
+      nagCloseTimeoutRef.current = null;
+    }
+    setUpgradeNagDismissPhase("idle");
+    setUpgradeNagDismissEffect(DEFAULT_CLOSE_EFFECT);
+    nagOpenedAtRef.current = null;
+    setShowUpgrade(false);
+    if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
+    if (pendingNagCommandRef.current !== null) {
+      const command = pendingNagCommandRef.current;
+      pendingNagCommandRef.current = null;
+      nagArmedFromQuotaRef.current = false;
+      setCommandHistory((prev) => [...prev, command]);
+      processCommandRef.current(command);
+    }
+  }, [setShowUpgrade]);
   const closeAllOverlaysAndRestoreNag = useCallback(() => {
     closeAllOverlays();
     restorePendingNagCommand();
@@ -155,9 +206,9 @@ function Terminal() {
     if (BYOK_ENABLED && state.apiKey) return;
     if (!state.proKey && !state.proKeyHash) {
       nagArmedFromQuotaRef.current = true;
-      if (command) { pendingNagCommandRef.current = command; setShowUpgrade(true); }
+      if (command) openUpgradeNag(command);
     } else { triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState }); }
-  }, [playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState, setShowUpgrade]);
+  }, [openUpgradeNag, playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState]);
 
   const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
     if (shouldShowNag(effectiveApiKey, state.proKey, state.proKeyHash, state.economy.quotaPercent)) {
@@ -293,13 +344,17 @@ function Terminal() {
     }
     if (bragPending) { handleBragSubmit({ inputValue, setInputValue, state, setHistory, setBragPending }); return; }
     if (buddyPendingConfirm) { handleBuddyConfirm({ inputValue, setInputValue, setBuddyPendingConfirm, setState, setHistory, buddyType: state.buddy?.type ?? undefined }); return; }
+    if (inputValue.trim().length === 0) {
+      setInputValue("");
+      setHistoryIndex(-1);
+      return;
+    }
     if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
     setInputValue(""); setHistoryIndex(-1);
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
     if (nagArmedFromQuotaRef.current && pendingNagCommandRef.current === null) {
-      pendingNagCommandRef.current = command;
-      setShowUpgrade(true);
+      openUpgradeNag(command);
       return;
     }
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
@@ -311,8 +366,23 @@ function Terminal() {
     setShowUpgrade(false);
     if (window.location.pathname === "/upgrade") window.history.pushState(null, "", "/");
   }, [setShowUpgrade]);
-
   const handleUpgradeNagClose = useCallback(() => {
+    if (upgradeNagDismissPhase === "closing") return;
+    const nagOpenedAt = nagOpenedAtRef.current;
+    const elapsed = nagOpenedAt === null ? Number.POSITIVE_INFINITY : Date.now() - nagOpenedAt;
+    if (elapsed >= NAG_MINIMUM_OPEN_MS) {
+      finalizeUpgradeNagClose();
+      return;
+    }
+    setUpgradeNagDismissEffect(pickRandomUpgradeNagCloseEffect());
+    setUpgradeNagDismissPhase("closing");
+    nagCloseTimeoutRef.current = setTimeout(() => {
+      nagCloseTimeoutRef.current = null;
+      finalizeUpgradeNagClose();
+    }, NAG_FORCED_CLOSE_MS);
+  }, [finalizeUpgradeNagClose, upgradeNagDismissPhase]);
+
+  const handleUpgradeNagConfirmClose = useCallback(() => {
     dismissUpgradeOverlay();
     if (pendingNagCommandRef.current !== null) {
       const command = pendingNagCommandRef.current;
@@ -366,8 +436,10 @@ function Terminal() {
     setIsProcessing,
     setHistory,
     pendingNagCommand: pendingNagCommandRef.current,
-    handleUpgradeNagClose,
+    handleUpgradeNagClose: handleUpgradeNagConfirmClose,
     handleManualUpgradeDismiss,
+    upgradeNagDismissPhase,
+    upgradeNagDismissEffect,
   };
 
   return (
