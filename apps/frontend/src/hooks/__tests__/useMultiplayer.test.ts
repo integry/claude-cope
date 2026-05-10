@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   applyServerMessage,
+  revealDeferredOutage,
   type ServerMessageHandlers,
 } from "../useMultiplayer";
 import type { Message } from "../../components/Terminal";
-import type { ServerMessage } from "@claude-cope/shared/multiplayer-types";
+import type {
+  ServerMessage,
+} from "@claude-cope/shared/multiplayer-types";
+import { OUTAGE_SCENARIOS } from "@claude-cope/shared/outageScenarios";
+import type { OutageScenario } from "@claude-cope/shared/multiplayer-types";
 
 /**
  * Regression coverage for the multiplayer follow-up logic that lives in
@@ -54,7 +59,11 @@ interface HarnessState {
   onlineCount: ReturnType<typeof createMockState<number>>;
   onlineUsers: ReturnType<typeof createMockState<string[]>>;
   outageHp: ReturnType<typeof createMockState<number | null>>;
+  activeOutageScenario: ReturnType<typeof createMockState<OutageScenario | null>>;
+  deferredOutage: { current: { hp: number; scenario: OutageScenario } | null };
 }
+
+const TEST_OUTAGE_SCENARIO = OUTAGE_SCENARIOS.find((scenario) => scenario.id === "postgres-failover")!;
 
 interface Harness {
   handlers: ServerMessageHandlers;
@@ -77,6 +86,8 @@ function makeHarness(): Harness {
     onlineCount: createMockState<number>(1),
     onlineUsers: createMockState<string[]>([]),
     outageHp: createMockState<number | null>(null),
+    activeOutageScenario: createMockState<OutageScenario | null>(null),
+    deferredOutage: { current: null },
   };
   const creditTD = vi.fn();
   const debitTD = vi.fn();
@@ -99,6 +110,8 @@ function makeHarness(): Harness {
       setOnlineCount: state.onlineCount.setter,
       setOnlineUsers: state.onlineUsers.setter,
       setOutageHp: state.outageHp.setter,
+      setActiveOutageScenario: state.activeOutageScenario.setter,
+      setDeferredOutageState: (next) => { state.deferredOutage.current = next; },
       creditTD,
       debitTD,
       applyReviewSprintBoost,
@@ -332,53 +345,84 @@ describe("applyServerMessage", () => {
   // ── outage — idle-guard invariants ──────────────────────────────────
 
   it("outage_start (active): sets HP and pushes the critical alert", () => {
-    applyServerMessage({ type: "outage_start", hp: 100 }, h.handlers);
+    applyServerMessage({ type: "outage_start", hp: 100, scenario: TEST_OUTAGE_SCENARIO }, h.handlers);
     expect(h.state.outageHp.value).toBe(100);
+    expect(h.state.activeOutageScenario.value).toEqual(TEST_OUTAGE_SCENARIO);
     expect(h.state.history.value[0]!.role).toBe("error");
+    expect(h.state.history.value[0]!.content).toBe(TEST_OUTAGE_SCENARIO.alert);
   });
 
   it("outage_start (idle): does not set HP or push the alert", () => {
     h.setIdle(true);
-    applyServerMessage({ type: "outage_start", hp: 100 }, h.handlers);
+    applyServerMessage({ type: "outage_start", hp: 100, scenario: TEST_OUTAGE_SCENARIO }, h.handlers);
     expect(h.state.outageHp.value).toBeNull();
+    expect(h.state.activeOutageScenario.value).toBeNull();
+    expect(h.state.deferredOutage.current).toEqual({ hp: 100, scenario: TEST_OUTAGE_SCENARIO });
     expect(h.state.history.value).toHaveLength(0);
   });
 
-  it("outage_update (idle): ignored", () => {
+  it("outage_update (idle): updates deferred outage state for later resync", () => {
     h.setIdle(true);
-    applyServerMessage({ type: "outage_update", hp: 42 }, h.handlers);
+    applyServerMessage({ type: "outage_update", hp: 42, scenario: TEST_OUTAGE_SCENARIO }, h.handlers);
     expect(h.state.outageHp.value).toBeNull();
+    expect(h.state.deferredOutage.current).toEqual({ hp: 42, scenario: TEST_OUTAGE_SCENARIO });
+  });
+
+  it("revealDeferredOutage: restores the active outage after the user returns from idle", () => {
+    h.state.deferredOutage.current = { hp: 42, scenario: TEST_OUTAGE_SCENARIO };
+
+    revealDeferredOutage({
+      deferredOutage: h.state.deferredOutage.current,
+      setDeferredOutageState: (next) => { h.state.deferredOutage.current = next; },
+      setOutageHp: h.state.outageHp.setter,
+      setActiveOutageScenario: h.state.activeOutageScenario.setter,
+      setHistory: h.state.history.setter,
+    });
+
+    expect(h.state.deferredOutage.current).toBeNull();
+    expect(h.state.outageHp.value).toBe(42);
+    expect(h.state.activeOutageScenario.value).toEqual(TEST_OUTAGE_SCENARIO);
+    expect(h.state.history.value[0]!.content).toBe(TEST_OUTAGE_SCENARIO.alert);
   });
 
   it("outage_cleared: always clears HP, only rewards/announces when not idle", () => {
     // Engaged path: reward + announce.
     h.state.outageHp.setter(50);
-    applyServerMessage({ type: "outage_cleared" }, h.handlers);
+    h.state.activeOutageScenario.setter(TEST_OUTAGE_SCENARIO);
+    applyServerMessage({ type: "outage_cleared", scenario: TEST_OUTAGE_SCENARIO }, h.handlers);
     expect(h.state.outageHp.value).toBeNull();
+    expect(h.state.activeOutageScenario.value).toBeNull();
     expect(h.applyOutageReward).toHaveBeenCalledTimes(1);
-    expect(h.state.history.value[0]!.content).toContain("back online");
+    expect(h.state.history.value[0]!.content).toBe(TEST_OUTAGE_SCENARIO.success);
 
     // Idle path: bar clears, no reward, no announcement.
     const h2 = makeHarness();
     h2.setIdle(true);
     h2.state.outageHp.setter(50);
-    applyServerMessage({ type: "outage_cleared" }, h2.handlers);
+    h2.state.activeOutageScenario.setter(TEST_OUTAGE_SCENARIO);
+    applyServerMessage({ type: "outage_cleared", scenario: TEST_OUTAGE_SCENARIO }, h2.handlers);
     expect(h2.state.outageHp.value).toBeNull();
+    expect(h2.state.activeOutageScenario.value).toBeNull();
     expect(h2.applyOutageReward).not.toHaveBeenCalled();
     expect(h2.state.history.value).toHaveLength(0);
   });
 
   it("outage_failed: always clears HP, only penalizes/announces when not idle", () => {
     h.state.outageHp.setter(50);
-    applyServerMessage({ type: "outage_failed" }, h.handlers);
+    h.state.activeOutageScenario.setter(TEST_OUTAGE_SCENARIO);
+    applyServerMessage({ type: "outage_failed", scenario: TEST_OUTAGE_SCENARIO }, h.handlers);
     expect(h.state.outageHp.value).toBeNull();
+    expect(h.state.activeOutageScenario.value).toBeNull();
     expect(h.applyOutagePenalty).toHaveBeenCalledTimes(1);
+    expect(h.state.history.value[0]!.content).toBe(TEST_OUTAGE_SCENARIO.failure);
 
     const h2 = makeHarness();
     h2.setIdle(true);
     h2.state.outageHp.setter(50);
-    applyServerMessage({ type: "outage_failed" }, h2.handlers);
+    h2.state.activeOutageScenario.setter(TEST_OUTAGE_SCENARIO);
+    applyServerMessage({ type: "outage_failed", scenario: TEST_OUTAGE_SCENARIO }, h2.handlers);
     expect(h2.state.outageHp.value).toBeNull();
+    expect(h2.state.activeOutageScenario.value).toBeNull();
     expect(h2.applyOutagePenalty).not.toHaveBeenCalled();
   });
 

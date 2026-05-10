@@ -158,7 +158,7 @@ vi.mock("../ticketPrompt", () => ({ fetchRandomTicketPrompt: fetchRandomTicketPr
 vi.mock("../filterChatHistory", () => ({ filterChatHistory: (history: unknown[]) => history }));
 vi.mock("../TerminalFooter", () => ({ TerminalFooter: () => null }));
 vi.mock("../Ticker", () => ({ default: () => null }));
-vi.mock("../OutageBar", () => ({ OutageBar: () => null, DAMAGE_COMMANDS: [] }));
+vi.mock("../OutageBar", () => ({ OutageBar: () => null }));
 vi.mock("../SprintProgressBar", () => ({ default: () => null }));
 vi.mock("../../hooks/useMultiplayer", () => ({
   useMultiplayer: () => ({
@@ -168,6 +168,7 @@ vi.mock("../../hooks/useMultiplayer", () => ({
     pendingReviewPing: null,
     acceptReviewPing: () => undefined,
     outageHp: null,
+    activeOutageScenario: null,
     sendDamage: () => undefined,
   }),
 }));

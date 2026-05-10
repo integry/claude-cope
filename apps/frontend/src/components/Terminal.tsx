@@ -10,7 +10,6 @@ import { applyAuthoritativeProfile as mergeAuthoritativeProfile, applyServerProf
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { filterChatHistory } from "./filterChatHistory";
-import { DAMAGE_COMMANDS } from "./OutageBar";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
@@ -75,7 +74,9 @@ function Terminal() {
   const applyReviewSprintBoost = useCallback((ticketId: string, boost: number) => {
     if (activeTicketRef.current?.id === ticketId) updateTicketProgress(boost);
   }, [updateTicketProgress]);
-  const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage } = useMultiplayer({ username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost });
+  const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, activeOutageScenario, sendDamage } = useMultiplayer({
+    username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost,
+  });
   const rank = state.economy.currentRank;
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({
     history,
@@ -345,7 +346,7 @@ function Terminal() {
   }, [submitPromptCommand]);
   const handleEnterSubmit = async () => {
     recordEnter();
-    if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
+    if (tryOutageDamage({ inputValue, outageHp, activeOutageScenario, sendDamage, setHistory, setInputValue })) return;
     if (inputValue.trim().startsWith("/")) {
       const command = inputValue.trim();
       runSlashCommand(command);
@@ -376,7 +377,7 @@ function Terminal() {
     freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing, setHistory, closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose: handleUpgradeNagDismiss, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
   });
   const terminalViewProps: TerminalViewProps = {
-    activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme: state.activeTheme, regressionGlitch, anyOverlayOpen, inputRef,
+    activeRegression, outageHp, activeOutageScenario, pendingReviewPing, pingAcknowledged, activeTheme: state.activeTheme, regressionGlitch, anyOverlayOpen, inputRef,
     closeAllOverlaysPreservingNag, onlineCount, rank, state, handleProfileClick, setShowHelp, setShowAbout, setInputValue, setSlashQuery, setSlashIndex,
     setShowUpgrade, compactEffect, isBooting, history, messageKeys: messageKeys.current, initialHistoryLen: initialHistoryLen.current, promptString,
     handleSlashCommandClick, bottomRef, slashQuery, slashIndex, handleSlashMenuSelect, inputValue, suggestedReply, isProcessing, handleChange,

@@ -4,6 +4,7 @@
   "private": true,
   "exports": {
     "./multiplayer-types": "./src/multiplayer-types.ts",
+    "./outageScenarios": "./src/outageScenarios.ts",
     "./models": "./src/models.ts",
     "./systemPrompt": "./src/systemPrompt.ts",
     "./profile": "./src/profile.ts",
