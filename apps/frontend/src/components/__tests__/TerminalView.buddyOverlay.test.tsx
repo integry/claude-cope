@@ -122,6 +122,7 @@ function createProps(state: GameState): React.ComponentProps<typeof TerminalView
     slashQuery: "",
     slashIndex: 0,
     handleSlashMenuSelect: noop,
+    runSlashCommand: noop,
     inputValue: "",
     suggestedReply: null,
     isProcessing: false,
