@@ -260,6 +260,26 @@ describe("UpgradeOverlay", () => {
     expect(desktop?.getAttribute("data-manual-focus")).toBe("true");
   });
 
+  it("prevents Enter on the program-focused manual checkout link before keyboard navigation is armed", () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "manual" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    const singleLink = container.querySelector(".upgrade-desktop a[href='https://example.com/single']") as HTMLAnchorElement | null;
+    const enterEvent = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+
+    act(() => {
+      singleLink?.dispatchEvent(enterEvent);
+    });
+
+    expect(document.activeElement).toBe(singleLink);
+    expect(desktop?.getAttribute("data-keyboard-nav")).toBe("false");
+    expect(desktop?.getAttribute("data-manual-focus")).toBe("true");
+    expect(enterEvent.defaultPrevented).toBe(true);
+    expect(clickSpy).not.toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
+
   it("arms manual desktop keyboard navigation on the first Tab without skipping the first option", () => {
     setViewportWidth(1024);
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "manual" });

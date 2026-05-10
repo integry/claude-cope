@@ -41,6 +41,7 @@ function getOptionIdList(singleAvailable: boolean, multiAvailable: boolean) { re
 function getTabEntryOptionId(ids: OptionId[], isReverse: boolean) { return ids[isReverse ? ids.length - 1 : 0] ?? null; }
 function isEditableOverlayTarget(target: EventTarget | null): target is HTMLElement { return target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT"); }
 function getOverlayArrowDirection(key: string): -1 | 1 | null { if (key === "ArrowUp" || key === "ArrowLeft") return -1; return key === "ArrowDown" || key === "ArrowRight" ? 1 : null; }
+function shouldBlockManualLinkEnter(event: React.KeyboardEvent<HTMLAnchorElement>, isKeyboardNavigationMode: boolean, showManualFocus: boolean) { return event.key === "Enter" && showManualFocus && !isKeyboardNavigationMode; }
 function shouldActivateSelectedOption(event: React.KeyboardEvent<HTMLDivElement>, isKeyboardNavigationMode: boolean, selectedOptionId: OptionId | null): selectedOptionId is OptionId { return event.key === "Enter" && isKeyboardNavigationMode && selectedOptionId !== null && event.target instanceof HTMLElement && event.target.tagName !== "A" && event.target.tagName !== "BUTTON"; }
 function isFocusedSelectedOption(target: EventTarget | null, selectedOptionId: OptionId | null, optionRefs: React.RefObject<Array<HTMLAnchorElement | null>>) { return selectedOptionId !== null && target === optionRefs.current[selectedOptionId]; }
 function getCenteredPadding(text: string) {
@@ -132,6 +133,12 @@ export default function DesktopLayout({
           focusSourceRef.current = "pointer";
           setIsKeyboardNavigationMode(false);
           setShowManualFocus(false);
+        }}
+        onKeyDown={(event) => {
+          if (shouldBlockManualLinkEnter(event, isKeyboardNavigationMode, showManualFocus)) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
         }}
         onFocus={() => {
           setSelectedOptionId(id);
