@@ -85,6 +85,22 @@ type TerminalViewProps = OverlayVisibility & {
   upgradeNagDismissEffect: UpgradeNagCloseEffect;
 };
 
+type BuddyOverlayProps = {
+  buddy: GameState["buddy"];
+};
+
+function BuddyOverlay({ buddy }: BuddyOverlayProps) {
+  if (!buddy.type) {
+    return null;
+  }
+
+  return (
+    <div className="terminal-buddy-overlay" aria-hidden="true">
+      <BuddyDisplay type={buddy.type} isShiny={buddy.isShiny} className="terminal-buddy-display" />
+    </div>
+  );
+}
+
 export function TerminalView({
   activeRegression,
   outageHp,
@@ -196,11 +212,7 @@ export function TerminalView({
         />
         <div ref={bottomRef} />
       </div>
-      {state.buddy.type && (
-        <div className="terminal-buddy-overlay" aria-hidden="true">
-          <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} className="terminal-buddy-display" />
-        </div>
-      )}
+      <BuddyOverlay buddy={state.buddy} />
       <div className="shrink-0">
         <SprintProgressBar
           id={state.activeTicket?.id}
