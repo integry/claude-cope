@@ -101,12 +101,12 @@ function BuddyOverlay({ buddy, bottomOffset }: BuddyOverlayProps) {
       return undefined;
     }
 
-    const updateScale = () => {
-      const overlay = overlayRef.current;
-      if (!overlay) {
-        return;
-      }
+    const overlay = overlayRef.current;
+    if (!overlay) {
+      return undefined;
+    }
 
+    const updateScale = () => {
       const width = overlay.scrollWidth;
       if (!width) {
         setScale(1);
