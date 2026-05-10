@@ -370,8 +370,6 @@ describe("Terminal tip-manager wiring", () => {
     await submitCommand("retry me");
     await replayNaggedPrompt("button");
 
-    expect(setShowUpgradeMock).toHaveBeenCalledTimes(1);
-    expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
     expect(setShowUpgradeMock).toHaveBeenCalledTimes(2);
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
     expect(setShowUpgradeMock).toHaveBeenNthCalledWith(2, false);
