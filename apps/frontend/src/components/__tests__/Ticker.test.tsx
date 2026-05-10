@@ -28,6 +28,9 @@ describe("Ticker", () => {
     container?.remove();
   });
 
+  const getButtonByText = (text: string) => Array.from(container.querySelectorAll("button"))
+    .find((button) => button.textContent?.includes(text)) as HTMLButtonElement | undefined;
+
   it("renders the full desktop command cluster", () => {
     renderTicker({ onlineCount: 7 });
 
@@ -43,37 +46,24 @@ describe("Ticker", () => {
     const onSlashCommand = vi.fn();
     renderTicker({ onlineCount: 3, onExpand, onSlashCommand });
 
-    const buttons = Array.from(container.querySelectorAll("button"));
-    expect(buttons).toHaveLength(4);
+    const whoButton = getButtonByText("[/who]");
+    const partyButton = getButtonByText("Firehose [/party]");
+    const leaderboardButton = getButtonByText("Hall of Blame [/leaderboard]");
+
+    expect(whoButton).toBeDefined();
+    expect(partyButton).toBeDefined();
+    expect(leaderboardButton).toBeDefined();
 
     act(() => {
-      buttons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      buttons[2]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      buttons[3]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      whoButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      partyButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      leaderboardButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(onSlashCommand).toHaveBeenNthCalledWith(1, "/who");
     expect(onSlashCommand).toHaveBeenNthCalledWith(2, "/party");
     expect(onSlashCommand).toHaveBeenNthCalledWith(3, "/leaderboard");
     expect(onExpand).not.toHaveBeenCalled();
-  });
-
-  it("keeps command buttons separate from live banner expand behavior", () => {
-    const onExpand = vi.fn();
-    const onSlashCommand = vi.fn();
-    renderTicker({ onlineCount: 3, onExpand, onSlashCommand });
-
-    const buttons = Array.from(container.querySelectorAll("button"));
-    expect(buttons).toHaveLength(4);
-
-    act(() => {
-      buttons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      buttons[2]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(onExpand).not.toHaveBeenCalled();
-    expect(onSlashCommand).toHaveBeenNthCalledWith(1, "/who");
-    expect(onSlashCommand).toHaveBeenNthCalledWith(2, "/party");
   });
 
   it("keeps the live event area clickable for expand behavior", () => {

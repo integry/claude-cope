@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import type { ServerProfile } from "@claude-cope/shared/profile";
-import { SLASH_COMMANDS } from "./slashCommands";
 import { useGameState, Message } from "../hooks/useGameState";
 import { isFreeUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
@@ -27,29 +26,10 @@ import { shouldShowNag } from "./winrarNag";
 import { TerminalView } from "./TerminalView";
 import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
-import { DEFAULT_CLOSE_EFFECT, UPGRADE_NAG_CLOSE_EFFECTS, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
+import { DEFAULT_CLOSE_EFFECT, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
+import { NAG_FORCED_CLOSE_MS, NAG_MINIMUM_OPEN_MS, STARTUP_TICKET_PROMPT_DELAY_MS, getFilteredSlashCommands, getNextTerminalInputValue, pickRandomUpgradeNagCloseEffect, removeCommandFromHistory, removeUserCommandMessage, syncMessageKeys } from "./terminalUtils";
 export type { Message };
-const NAG_MINIMUM_OPEN_MS = 3000, NAG_FORCED_CLOSE_MS = 3000;
-export const STARTUP_TICKET_PROMPT_DELAY_MS = 300;
-function pickRandomUpgradeNagCloseEffect(): UpgradeNagCloseEffect {
-  return UPGRADE_NAG_CLOSE_EFFECTS[Math.floor(Math.random() * UPGRADE_NAG_CLOSE_EFFECTS.length)] ?? DEFAULT_CLOSE_EFFECT;
-}
-function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
-  while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++);
-  if (messageKeys.length > historyLength) messageKeys.length = historyLength;
-}
-function removeCommandFromHistory(history: string[], command: string) {
-  const idx = history.lastIndexOf(command);
-  return idx >= 0 ? [...history.slice(0, idx), ...history.slice(idx + 1)] : history;
-}
-function removeUserCommandMessage(history: Message[], command: string) {
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i]?.role === "user" && history[i]?.content === command) {
-      return [...history.slice(0, i), ...history.slice(i + 1)];
-    }
-  }
-  return history;
-}
+export { STARTUP_TICKET_PROMPT_DELAY_MS };
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
@@ -218,22 +198,14 @@ function Terminal() {
     triggerInstantBan({ setInstantBanReady, setIsProcessing, playError, setHistory });
   }, [setIsProcessing, playError, setHistory]);
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const isBackwardsTyping = activeRegression === "backwards_typing";
-    const isAppending = e.target.value.length > inputValue.length;
-    const value = isBackwardsTyping && isAppending
-      ? e.target.value.slice(inputValue.length) + inputValue
-      : e.target.value;
-
+    const value = getNextTerminalInputValue(inputValue, e.target.value, activeRegression === "backwards_typing");
     setInputValue(value);
     setHistoryIndex(-1);
     setSuggestedReply(null);
     setSlashQuery(value.startsWith("/") ? value : "");
     setSlashIndex(0);
   };
-  const getFilteredSlashCommands = () => SLASH_COMMANDS.filter((cmd) => (
-    !(cmd === "/store" && state.economy.totalTDEarned < 1000)
-    && cmd.startsWith(slashQuery.toLowerCase())
-  ));
+  const filteredSlashCommands = () => getFilteredSlashCommands(slashQuery, state.economy.totalTDEarned);
   const runSlashCommand = useCallback((command: string) => {
     executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
   }, [state, setState, setHistory, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply]);
@@ -351,7 +323,7 @@ function Terminal() {
     slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements,
     showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
     freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing, setHistory,
-    closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
+    closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands: filteredSlashCommands,
   });
   return (
     <TerminalView
