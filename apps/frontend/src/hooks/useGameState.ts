@@ -281,7 +281,7 @@ export function useGameState() {
 
     setState((prev) => (!prev.unlockedThemes.includes(themeId) ? prev : { ...prev, activeTheme: themeId }));
 
-    if (!current.username || (!current.proKeyHash && !current.hasSessionPro)) return;
+    if (!current.username) return;
 
     updateThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
       if (themeUpdateRequestIdRef.current !== requestId) return;
