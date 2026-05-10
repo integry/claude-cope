@@ -14,6 +14,10 @@ export type ContextualTipTrigger =
   | "ticket_completed"
   | "lone_user_online";
 
+type TipSelectionContext = {
+  totalTDEarned?: number;
+};
+
 const GENERAL_TIPS: TipDefinition[] = [
   { id: "general-help", text: "Tip: Use /help to see all commands. There is no actual help, only commands.", cmd: "/help", category: "meta" },
   { id: "general-store", text: "Tip: The /store sells generators that produce Technical Debt while you sleep. Or cry.", cmd: "/store", category: "economy" },
@@ -96,6 +100,17 @@ function isEnabledTip(tip: TipDefinition): boolean {
   return TICKET_REFINE_ENABLED || tip.cmd !== "/ticket";
 }
 
+function isUnlockedTip(tip: TipDefinition, context?: TipSelectionContext): boolean {
+  if (tip.cmd === "/store") {
+    return (context?.totalTDEarned ?? 0) >= 1_000;
+  }
+  return true;
+}
+
+function isSelectableTip(tip: TipDefinition, context?: TipSelectionContext): boolean {
+  return isEnabledTip(tip) && isUnlockedTip(tip, context);
+}
+
 function pickRandomTip(pool: TipDefinition[]): TipDefinition | undefined {
   if (pool.length === 0) return undefined;
   return pool[Math.floor(Math.random() * pool.length)]!;
@@ -114,12 +129,12 @@ function toText(tip: TipDefinition | undefined): string {
 
 export const TIPS = GENERAL_TIPS.filter(isEnabledTip);
 
-export function getRandomTip(): string {
-  return toText(pickRandomTip(TIPS));
+export function getRandomTip(context?: TipSelectionContext): string {
+  return toText(pickRandomTip(TIPS.filter((tip) => isUnlockedTip(tip, context))));
 }
 
-export function getRandomIdleTip(): string {
-  return toText(pickRandomTip(IDLE_TIPS.filter(isEnabledTip)));
+export function getRandomIdleTip(context?: TipSelectionContext): string {
+  return toText(pickRandomTip(IDLE_TIPS.filter((tip) => isSelectableTip(tip, context))));
 }
 
 export function getRandomBacklogReminder(previousTipId?: string): TipDefinition {
@@ -127,11 +142,15 @@ export function getRandomBacklogReminder(previousTipId?: string): TipDefinition 
     ?? { id: "backlog-reminder-fallback", text: toText(undefined), cmd: "/backlog", category: "ticket" };
 }
 
-export function selectMilestoneTip(usedCommands: Iterable<string>, shownTipIds: Iterable<string> = []): TipDefinition | null {
+export function selectMilestoneTip(
+  usedCommands: Iterable<string>,
+  shownTipIds: Iterable<string> = [],
+  context?: TipSelectionContext,
+): TipDefinition | null {
   const used = new Set(usedCommands);
   const shown = new Set(shownTipIds);
   const eligible = MILESTONE_TIPS.filter((tip) => {
-    if (!isEnabledTip(tip)) return false;
+    if (!isSelectableTip(tip, context)) return false;
     return !tip.cmd || !used.has(tip.cmd);
   });
   if (eligible.length === 0) return null;
@@ -140,12 +159,16 @@ export function selectMilestoneTip(usedCommands: Iterable<string>, shownTipIds: 
   return pickRandomTip(unseenEligible.length > 0 ? unseenEligible : eligible) ?? null;
 }
 
-export function getMilestoneTip(usedCommands: Iterable<string>, shownTipIds: Iterable<string> = []): string | null {
-  const tip = selectMilestoneTip(usedCommands, shownTipIds);
+export function getMilestoneTip(
+  usedCommands: Iterable<string>,
+  shownTipIds: Iterable<string> = [],
+  context?: TipSelectionContext,
+): string | null {
+  const tip = selectMilestoneTip(usedCommands, shownTipIds, context);
   return tip ? tip.text : null;
 }
 
-export function getContextualTip(trigger: ContextualTipTrigger): string | null {
-  const tip = CONTEXTUAL_TIPS.find((entry) => entry.trigger === trigger && isEnabledTip(entry));
+export function getContextualTip(trigger: ContextualTipTrigger, context?: TipSelectionContext): string | null {
+  const tip = CONTEXTUAL_TIPS.find((entry) => entry.trigger === trigger && isSelectableTip(entry, context));
   return tip ? tip.text : null;
 }

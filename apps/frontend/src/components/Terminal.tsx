@@ -65,7 +65,14 @@ function Terminal() {
   }, [updateTicketProgress]);
   const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage } = useMultiplayer({ username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost });
   const rank = state.economy.currentRank;
-  const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned });
+  const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({
+    history,
+    setHistory,
+    setState,
+    totalTDEarned: state.economy.totalTDEarned,
+    offlineTDEarned,
+    clearOfflineTDEarned,
+  });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
   const [instantBanReady, setInstantBanReady] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);

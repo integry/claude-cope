@@ -54,6 +54,7 @@ function getInitialContextualTriggers(currentTD: number, quotaPercent: number, o
 export function useTipManager({ isBooting, isInteractionBlocked = false, gameState, onlineCount, setHistory }: UseTipManagerArgs) {
   const completedTaskCount = getCompletedTaskCount(gameState);
   const currentTD = gameState.economy.currentTD;
+  const totalTDEarned = gameState.economy.totalTDEarned;
   const quotaPercent = gameState.economy.quotaPercent;
   const idleTimerRef = useRef<number | null>(null);
   const idleDeadlineRef = useRef<number | null>(null);
@@ -101,9 +102,9 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       }
       idleTimerRef.current = null;
       idleDeadlineRef.current = null;
-      appendTip(setHistory, getRandomIdleTip());
+      appendTip(setHistory, getRandomIdleTip({ totalTDEarned }));
     }, delayMs);
-  }, [clearIdleTimer, setHistory]);
+  }, [clearIdleTimer, setHistory, totalTDEarned]);
 
   const recordEnter = useCallback(() => {
     hasInteractedRef.current = true;
@@ -116,13 +117,13 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     if (actionCountRef.current % MILESTONE_INTERVAL !== 0) return null;
     if (options?.suppressTip) return null;
 
-    const tip = selectMilestoneTip(usedCommandsRef.current, shownMilestoneTipIdsRef.current);
+    const tip = selectMilestoneTip(usedCommandsRef.current, shownMilestoneTipIdsRef.current, { totalTDEarned });
     if (!tip) return null;
 
     shownMilestoneTipIdsRef.current.add(tip.id);
     appendTip(setHistory, tip.text);
     return tip.text;
-  }, [setHistory]);
+  }, [setHistory, totalTDEarned]);
 
   const recordMessageWithoutTicket = useCallback((): string | null => {
     if (gameState.activeTicket) {
@@ -190,7 +191,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     }
 
     const newTips = [...pendingContextualTriggersRef.current, ...eligibleTriggers]
-      .map((trigger) => getContextualTip(trigger))
+      .map((trigger) => getContextualTip(trigger, { totalTDEarned }))
       .filter((tip): tip is string => Boolean(tip));
     pendingContextualTriggersRef.current = [];
 
@@ -208,6 +209,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     completedTaskCount,
     currentTD,
     quotaPercent,
+    totalTDEarned,
     isBooting,
     isInteractionBlocked,
     onlineCount,

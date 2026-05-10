@@ -183,6 +183,13 @@ describe("useTipManager", () => {
 
   it("shows a milestone tip on every sixth valid command for an unused command", () => {
     act(() => {
+      ref.current?.setGameState((prev) => ({
+        ...prev,
+        economy: { ...prev.economy, totalTDEarned: 1_000 },
+      }));
+    });
+
+    act(() => {
       for (let i = 0; i < 6; i++) {
         ref.current?.recordValidCommand("/help");
       }
@@ -194,6 +201,13 @@ describe("useTipManager", () => {
   });
 
   it("keeps firing milestone tips after all eligible milestone tips have been shown once", () => {
+    act(() => {
+      ref.current?.setGameState((prev) => ({
+        ...prev,
+        economy: { ...prev.economy, totalTDEarned: 1_000 },
+      }));
+    });
+
     act(() => {
       for (let i = 0; i < 72; i++) {
         ref.current?.recordValidCommand("/help");
@@ -207,6 +221,13 @@ describe("useTipManager", () => {
   });
 
   it("still advances milestone accounting when tip rendering is suppressed", () => {
+    act(() => {
+      ref.current?.setGameState((prev) => ({
+        ...prev,
+        economy: { ...prev.economy, totalTDEarned: 1_000 },
+      }));
+    });
+
     act(() => {
       for (let i = 0; i < 5; i++) {
         ref.current?.recordValidCommand("/help");
@@ -234,7 +255,7 @@ describe("useTipManager", () => {
     act(() => {
       ref.current?.setGameState((prev) => ({
         ...prev,
-        economy: { ...prev.economy, currentTD: 1_200 },
+        economy: { ...prev.economy, currentTD: 1_200, totalTDEarned: 1_200 },
       }));
       ref.current?.setOnlineCount(1);
       vi.runOnlyPendingTimers();
@@ -257,7 +278,7 @@ describe("useTipManager", () => {
         initialGameState: makeState({
           economy: {
             currentTD: 1_200,
-            totalTDEarned: 0,
+            totalTDEarned: 1_200,
             currentRank: "Junior Code Monkey",
             quotaPercent: 0,
             quotaLockouts: 0,
@@ -364,6 +385,23 @@ describe("useTipManager", () => {
       getContextualTip("lone_user_online"),
       getContextualTip("ticket_completed"),
       getContextualTip("lone_user_online"),
+    ]);
+  });
+
+  it("does not show /store milestone or contextual tips before the store is unlocked", () => {
+    act(() => {
+      for (let i = 0; i < 6; i++) {
+        ref.current?.recordValidCommand("/help");
+      }
+      ref.current?.setGameState((prev) => ({
+        ...prev,
+        economy: { ...prev.economy, currentTD: 1_200, totalTDEarned: 999 },
+      }));
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      MILESTONE_TIPS[2]?.text,
     ]);
   });
 });
