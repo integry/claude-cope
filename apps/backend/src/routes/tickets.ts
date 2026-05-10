@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
+  FREE_BACKLOG_CATEGORY_PREFIXES,
+  PREMIUM_BACKLOG_CATEGORY_PREFIXES,
   getBacklogCategoryPrefix,
   getBacklogCategoryTierMeta,
-  isFreeBacklogCategory,
   isPremiumBacklogCategory,
 } from "@claude-cope/shared/backlogTiers";
 import { TICKET_PM_PROMPT } from "../prompts/ticketPrompt";
@@ -48,6 +49,8 @@ interface BacklogTicketResponse extends BacklogTicketRow {
 
 const BACKLOG_PLAYABLE_LIMIT = 5;
 const BACKLOG_TEASER_LIMIT = 2;
+const COMMUNITY_BACKLOG_SELECT =
+  "SELECT id, reporter, reporter_name, reporter_title, reporter_description, title, description, technical_debt, kickoff_prompt, created_at FROM community_backlog";
 
 export function buildTicketRefineRequest(
   messages: { role: string; content: string }[],
@@ -116,33 +119,62 @@ function buildPaidBacklogRows(rows: BacklogTicketRow[]): BacklogTicketResponse[]
   return [...initialSelection.slice(0, BACKLOG_PLAYABLE_LIMIT - 1), premiumRows[0]!].map(buildPlayableRow);
 }
 
+function buildCommunityBacklogPrefixQuery(prefixes: ReadonlySet<string>, limit: number): { sql: string; bindings: string[] } {
+  const bindings = [...prefixes].map((prefix) => `${prefix}-%`);
+  const whereClause = bindings.map(() => "id LIKE ?").join(" OR ");
+
+  return {
+    sql: `${COMMUNITY_BACKLOG_SELECT} WHERE ${whereClause} ORDER BY RANDOM() LIMIT ${limit}`,
+    bindings,
+  };
+}
+
+async function queryRandomBacklogRows(
+  db: D1Database,
+  prefixes: ReadonlySet<string>,
+  limit: number,
+): Promise<BacklogTicketRow[]> {
+  if (limit <= 0 || prefixes.size === 0) return [];
+  const { sql, bindings } = buildCommunityBacklogPrefixQuery(prefixes, limit);
+  const { results } = await db.prepare(sql).bind(...bindings).all<BacklogTicketRow>();
+  return results ?? [];
+}
+
+async function queryRandomCommunityRows(db: D1Database, limit: number): Promise<BacklogTicketRow[]> {
+  const { results } = await db
+    .prepare(`${COMMUNITY_BACKLOG_SELECT} ORDER BY RANDOM() LIMIT ${limit}`)
+    .all<BacklogTicketRow>();
+
+  return results ?? [];
+}
+
 tickets.get("/community", async (c) => {
   const db = c.env?.DB;
   if (!db) {
     return c.json({ error: "Database is not configured" }, 500);
   }
 
-  const proKeyHash = c.req.header("x-pro-key-hash")?.trim() || c.req.query("proKeyHash")?.trim();
+  const proKeyHash = c.req.header("x-pro-key-hash")?.trim();
   const isPaidUser = proKeyHash ? await isLicenseActive(db, proKeyHash) : false;
-  const { results } = await db
-    .prepare(
-      "SELECT id, reporter, reporter_name, reporter_title, reporter_description, title, description, technical_debt, kickoff_prompt, created_at FROM community_backlog ORDER BY RANDOM()"
-    )
-    .all<BacklogTicketRow>();
-
-  const rows = results ?? [];
-
-  c.header("Cache-Control", "public, max-age=10");
+  c.header("Cache-Control", "private, max-age=10");
+  c.header("Vary", "x-pro-key-hash");
 
   if (isPaidUser) {
-    return c.json(buildPaidBacklogRows(rows));
+    const rows = await queryRandomCommunityRows(db, BACKLOG_PLAYABLE_LIMIT);
+    if (rows.some((row) => isPremiumBacklogCategory(row.id))) {
+      return c.json(buildPaidBacklogRows(rows));
+    }
+
+    const premiumFallbackRows = await queryRandomBacklogRows(db, PREMIUM_BACKLOG_CATEGORY_PREFIXES, 1);
+    return c.json(buildPaidBacklogRows([...rows, ...premiumFallbackRows]));
   }
 
-  const freeRows = rows.filter((row) => isFreeBacklogCategory(row.id)).slice(0, BACKLOG_PLAYABLE_LIMIT);
-  const teaserRows = rows
-    .filter((row) => !isFreeBacklogCategory(row.id))
-    .slice(0, BACKLOG_TEASER_LIMIT)
-    .map(buildLockedTeaser);
+  const [freeRows, premiumRows] = await Promise.all([
+    queryRandomBacklogRows(db, FREE_BACKLOG_CATEGORY_PREFIXES, BACKLOG_PLAYABLE_LIMIT),
+    queryRandomBacklogRows(db, PREMIUM_BACKLOG_CATEGORY_PREFIXES, BACKLOG_TEASER_LIMIT),
+  ]);
+
+  const teaserRows = premiumRows.filter((row) => isPremiumBacklogCategory(row.id)).map(buildLockedTeaser);
 
   return c.json(shuffleRows([...freeRows.map(buildPlayableRow), ...teaserRows]));
 });
@@ -254,7 +286,7 @@ tickets.post("/refine", async (c) => {
   }
 
   // Insert into community_backlog
-  const id = crypto.randomUUID().replace(/-/g, "");
+  const id = `COMM-${crypto.randomUUID().replace(/-/g, "")}`;
 
   const { success } = await db
     .prepare(

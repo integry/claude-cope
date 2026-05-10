@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
-import { FREE_BACKLOG_CATEGORY_PREFIXES } from "@claude-cope/shared/backlogTiers";
+import {
+  FREE_BACKLOG_CATEGORY_PREFIXES,
+  getBacklogCategoryPrefix,
+  isPremiumBacklogCategory,
+} from "@claude-cope/shared/backlogTiers";
 import { parseProviderList } from "@claude-cope/shared/openrouter";
 import tickets, { buildTicketRefineRequest } from "./tickets";
 
@@ -45,7 +49,23 @@ function createCommunityMockDB(rows: MockBacklogRow[], activeHashes: string[] = 
           if (!sql.includes("FROM community_backlog")) {
             throw new Error(`Unexpected all() query: ${sql}`);
           }
-          return { results: rows as T[] };
+
+          const limitMatch = sql.match(/LIMIT\s+(\d+)/i);
+          const limit = limitMatch ? Number(limitMatch[1]) : rows.length;
+          const likeBindings = bindings
+            .map((binding) => String(binding))
+            .filter((binding) => binding.endsWith("-%"))
+            .map((binding) => binding.slice(0, -2));
+
+          const filteredRows =
+            likeBindings.length === 0
+              ? rows
+              : rows.filter((row) => {
+                  const prefix = row.id.split("-")[0];
+                  return likeBindings.includes(prefix);
+                });
+
+          return { results: filteredRows.slice(0, limit) as T[] };
         },
         async first<T>() {
           if (!sql.includes("FROM licenses WHERE key_hash = ?")) {
@@ -173,6 +193,7 @@ describe("GET /api/tickets/community backlog tiering", () => {
     makeBacklogRow("BLAME-001"),
     makeBacklogRow("SNEER-001"),
     makeBacklogRow("PANIC-001"),
+    makeBacklogRow("COMM-001"),
     makeBacklogRow("CLINIC-001"),
     makeBacklogRow("SCAM-001"),
   ];
@@ -181,6 +202,8 @@ describe("GET /api/tickets/community backlog tiering", () => {
     const res = await app.request("/api/tickets/community", {}, { DB: createCommunityMockDB(rows) });
 
     expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("private, max-age=10");
+    expect(res.headers.get("Vary")).toBe("x-pro-key-hash");
 
     const data = await res.json() as Array<MockBacklogRow & {
       category_prefix: string | null;
@@ -203,6 +226,7 @@ describe("GET /api/tickets/community backlog tiering", () => {
     expect(lockedRows.every((row) => row.kickoff_prompt === "")).toBe(true);
     expect(lockedRows.every((row) => row.category_prefix !== null && !FREE_BACKLOG_CATEGORY_PREFIXES.has(row.category_prefix))).toBe(true);
     expect(lockedRows.every((row) => row.upgrade_teaser && row.upgrade_teaser.length > 0)).toBe(true);
+    expect(data.some((row) => row.id === "COMM-001")).toBe(false);
   });
 
   it("returns premium categories unlocked for paid users", async () => {
@@ -223,5 +247,46 @@ describe("GET /api/tickets/community backlog tiering", () => {
     expect(data).toHaveLength(5);
     expect(data.some((row) => row.tier === "premium" && row.is_locked === false)).toBe(true);
     expect(data.every((row) => row.is_locked === false)).toBe(true);
+  });
+
+  it("treats uncategorized ids as uncategorized instead of premium", async () => {
+    const res = await app.request(
+      "/api/tickets/community",
+      { headers: { "x-pro-key-hash": "pro-hash" } },
+      {
+        DB: createCommunityMockDB(
+          [
+            makeBacklogRow("COMM-001"),
+            makeBacklogRow("COMM-002"),
+            makeBacklogRow("COMM-003"),
+            makeBacklogRow("COMM-004"),
+            makeBacklogRow("COMM-005"),
+          ],
+          ["pro-hash"],
+        ),
+      },
+    );
+
+    expect(res.status).toBe(200);
+
+    const data = await res.json() as Array<MockBacklogRow & {
+      category_prefix: string | null;
+      is_locked: boolean;
+      tier: "free" | "premium";
+    }>;
+
+    expect(data).toHaveLength(5);
+    expect(data.every((row) => row.category_prefix === null)).toBe(true);
+    expect(data.every((row) => row.tier === "free")).toBe(true);
+    expect(data.every((row) => row.is_locked === false)).toBe(true);
+  });
+});
+
+describe("backlog tier helpers", () => {
+  it("does not treat unknown prefixes as premium categories", () => {
+    expect(getBacklogCategoryPrefix("COMM-123")).toBeNull();
+    expect(getBacklogCategoryPrefix("5f2c8a63c4c04c28a07003da9b6754b2")).toBeNull();
+    expect(isPremiumBacklogCategory("COMM-123")).toBe(false);
+    expect(isPremiumBacklogCategory("5f2c8a63c4c04c28a07003da9b6754b2")).toBe(false);
   });
 });

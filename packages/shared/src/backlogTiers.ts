@@ -218,8 +218,9 @@ export const BACKLOG_CATEGORY_UPGRADE_GROUPS: readonly BacklogCategoryUpgradeGro
 })();
 
 export function getBacklogCategoryPrefix(taskId: string): string | null {
-  const prefix = taskId.split("-")[0]?.trim().toUpperCase();
-  return prefix || null;
+  const rawPrefix = taskId.split("-")[0]?.trim().toUpperCase();
+  if (!rawPrefix) return null;
+  return BACKLOG_CATEGORY_TIER_LOOKUP.has(rawPrefix) ? rawPrefix : null;
 }
 
 export function getBacklogCategoryTierMeta(taskIdOrPrefix: string): BacklogCategoryTierMeta | null {
@@ -238,5 +239,5 @@ export function isFreeBacklogCategory(taskId: string): boolean {
 
 export function isPremiumBacklogCategory(taskId: string): boolean {
   const prefix = getBacklogCategoryPrefix(taskId);
-  return prefix !== null && !FREE_BACKLOG_CATEGORY_PREFIXES.has(prefix);
+  return prefix !== null && PREMIUM_BACKLOG_CATEGORY_PREFIXES.has(prefix);
 }
