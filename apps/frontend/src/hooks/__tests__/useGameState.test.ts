@@ -158,7 +158,7 @@ describe("canBuyTheme", () => {
 
     expect(failedState.economy.currentTD).toBe(state.economy.currentTD);
     expect(failedState.unlockedThemes).toEqual(state.unlockedThemes);
-    expect(failedState.chatHistory.at(-1)).toMatchObject({
+    expect(failedState.chatHistory[failedState.chatHistory.length - 1]).toMatchObject({
       role: "error",
       content: "[❌ Error] Session authentication is required for this purchase",
     });

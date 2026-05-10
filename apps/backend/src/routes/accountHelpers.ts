@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import type { ProfileRow } from "../utils/profile";
 import { getProfile, getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank } from "../utils/profile";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey } from "../utils/quota";
@@ -243,7 +244,7 @@ export async function resolveSessionProfileRow(opts: {
   sessionId: string;
   username: string;
   logPrefix?: string;
-}) {
+}): Promise<{ username: string; row: ProfileRow | null; redirected?: boolean }> {
   const { db, kv, sessionId } = opts;
   const originalUsername = opts.username;
   const logPrefix = opts.logPrefix ?? "[account/session]";

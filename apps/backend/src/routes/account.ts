@@ -2,7 +2,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
-import { getProfile, getProfileRow, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
+import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
 import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
