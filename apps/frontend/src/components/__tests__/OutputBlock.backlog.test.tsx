@@ -59,15 +59,19 @@ describe("OutputBlock backlog rendering", () => {
     const buttons = Array.from(container.querySelectorAll("button"));
     const backlogButton = buttons.find((button) => button.textContent === "/backlog");
     const upgradeButton = buttons.find((button) => button.textContent === "/upgrade");
+    const ticketButton = buttons.find((button) => button.textContent === "BLAME-42");
 
     expect(backlogButton).toBeTruthy();
     expect(upgradeButton).toBeTruthy();
+    expect(ticketButton).toBeTruthy();
 
     act(() => {
+      ticketButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       backlogButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       upgradeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    expect(onSlashCommand).toHaveBeenCalledWith("/take BLAME-421", "execute");
     expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "execute");
     expect(onSlashCommand).toHaveBeenCalledWith("/upgrade", "execute");
   });
