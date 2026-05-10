@@ -18,6 +18,10 @@ type SetState = React.Dispatch<React.SetStateAction<GameState>>;
 /** Cache last backlog results so `/take 2` or `/take BLAME-421` can resolve locally */
 let lastBacklogResults: CommunityBacklogTicket[] = [];
 
+function clearBacklogResultsCache(): void {
+  lastBacklogResults = [];
+}
+
 type BacklogRequestOptions = {
   proKeyHash?: string;
   category?: string;
@@ -57,6 +61,7 @@ export function formatLockedTicketPrompt(ticket: CommunityBacklogTicket): string
 }
 
 function replyInvalidBacklogCategory(reply: Reply, category: string): boolean {
+  clearBacklogResultsCache();
   track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.VALIDATION_FAILED });
   reply({ role: "error", content: `[❌] Unknown backlog category: \`${category}\`. Try \`/backlog \` to browse valid categories.` });
   return true;
@@ -66,12 +71,14 @@ function replyLockedBacklogCategory(
   reply: Reply,
   categoryMeta: NonNullable<ReturnType<typeof getBacklogCategoryTierMeta>>,
 ): boolean {
+  clearBacklogResultsCache();
   track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.PRO_GATED });
   reply({ role: "warning", content: `[🔒 **CATEGORY LOCKED**] \`${categoryMeta.prefix}\` (${categoryMeta.label}) is a Max backlog category. Free users can preview it in autocomplete, but cannot execute that filter.` });
   return true;
 }
 
 async function handleBacklogFetchFailure(res: Response, reply: Reply): Promise<boolean> {
+  clearBacklogResultsCache();
   const data = await res.json().catch(() => null) as { error?: string } | null;
   const reason = res.status === 400
     ? SlashCommandFailureReasons.VALIDATION_FAILED
@@ -129,6 +136,7 @@ function renderBacklogMarkdownText(text: string): string {
 }
 
 function replyEmptyBacklog(reply: Reply, normalizedCategory: string | null): boolean {
+  clearBacklogResultsCache();
   const hint = TICKET_REFINE_ENABLED ? " Submit tickets with `/ticket <description>`." : "";
   const filterHeader = normalizedCategory ? `\n${formatBacklogFilterHeader(normalizedCategory)}` : "";
   reply({ role: "system", content: `[📋 **BACKLOG**]${filterHeader}\n\nThe backlog is empty.${hint}` });
@@ -268,6 +276,7 @@ export async function handleBacklogCommand(reply: Reply, options: BacklogRequest
     lastBacklogResults = tickets;
     return replyBacklogTickets(reply, tickets, normalizedCategory);
   } catch {
+    clearBacklogResultsCache();
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.NETWORK_ERROR });
     reply({ role: "error", content: "[❌] Network error — the backlog server is unreachable." });
   }
@@ -295,13 +304,19 @@ export function handleTakeCommand(
     return true;
   }
 
-  // Resolve ticket: try row number from cached backlog first, then stable ID/prefix lookup.
+  // Resolve ticket: try row number from cached backlog first, then a unique stable ID/prefix lookup.
   const rowNum = parseInt(input, 10);
   let ticket: CommunityBacklogTicket | undefined;
   if (!isNaN(rowNum) && rowNum >= 1 && rowNum <= lastBacklogResults.length) {
     ticket = lastBacklogResults[rowNum - 1];
   } else {
-    ticket = lastBacklogResults.find((t) => t.id.startsWith(input));
+    const idMatches = lastBacklogResults.filter((t) => t.id.startsWith(input));
+    if (idMatches.length > 1) {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: SlashCommandFailureReasons.VALIDATION_FAILED });
+      reply({ role: "error", content: `[❌] Ticket ID prefix "${input}" is ambiguous. Use more characters or the row number from \`/backlog\`.` });
+      return true;
+    }
+    ticket = idMatches[0];
   }
 
   if (!ticket) {

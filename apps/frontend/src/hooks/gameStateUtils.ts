@@ -66,7 +66,9 @@ export type Message = {
   backlogDisplay?: BacklogDisplayData;
 };
 
-export function stripTransientMessageFields(message: Message): Message {
+// Backlog messages persist their structured payload so the responsive renderer
+// survives reloads; this hook exists as the single normalization point if that changes.
+export function normalizePersistedMessage(message: Message): Message {
   return message;
 }
 
@@ -237,7 +239,7 @@ function applyDefensiveDefaults(state: GameState): void {
   if (!Array.isArray(state.chatHistory)) {
     state.chatHistory = [];
   }
-  state.chatHistory = state.chatHistory.map(stripTransientMessageFields);
+  state.chatHistory = state.chatHistory.map(normalizePersistedMessage);
   if (!state.commandUsage || typeof state.commandUsage !== "object") {
     state.commandUsage = {};
   }

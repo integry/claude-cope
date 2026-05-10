@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { loadState, STORAGE_KEY, stripTransientMessageFields, type Message } from "../gameStateUtils";
+import { loadState, normalizePersistedMessage, STORAGE_KEY, type Message } from "../gameStateUtils";
 
-describe("stripTransientMessageFields", () => {
+describe("normalizePersistedMessage", () => {
   const message: Message = {
     id: 7,
     role: "system",
@@ -21,7 +21,7 @@ describe("stripTransientMessageFields", () => {
   });
 
   it("preserves backlogDisplay so responsive backlog messages survive persistence", () => {
-    const stripped = stripTransientMessageFields(message);
+    const stripped = normalizePersistedMessage(message);
 
     expect(stripped).toEqual(message);
   });

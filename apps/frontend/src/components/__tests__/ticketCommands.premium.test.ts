@@ -153,6 +153,105 @@ describe("premium backlog handling", () => {
     expect(freeReply.mock.calls[0]?.[0].content).toContain("[🎫 **TICKET CLAIMED**]");
   });
 
+  it("clears cached backlog rows when a later backlog request returns empty", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ([
+          {
+            id: "free-12345",
+            title: "Fix lint config",
+            description: "Regular ticket",
+            technical_debt: 4,
+            kickoff_prompt: "fix the lint config",
+          },
+        ]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      }));
+
+    await handleBacklogCommand(vi.fn());
+    await handleBacklogCommand(vi.fn());
+
+    const reply = vi.fn();
+    handleTakeCommand("/take 1", makeGameState(), vi.fn(), reply, {
+      setInputValue: vi.fn(),
+    });
+
+    expect(reply.mock.calls[0]?.[0].content).toContain("not found");
+  });
+
+  it("rejects ambiguous ticket ID prefixes instead of claiming the first match", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: "ABCDEF12-1111",
+          title: "First ticket",
+          description: "Regular ticket",
+          technical_debt: 4,
+          kickoff_prompt: "first prompt",
+        },
+        {
+          id: "ABCDEF12-2222",
+          title: "Second ticket",
+          description: "Regular ticket",
+          technical_debt: 8,
+          kickoff_prompt: "second prompt",
+        },
+      ]),
+    }));
+
+    await handleBacklogCommand(vi.fn());
+
+    const setState = vi.fn();
+    const reply = vi.fn();
+    handleTakeCommand("/take ABCDEF12", makeGameState(), setState, reply, {
+      setInputValue: vi.fn(),
+    });
+
+    expect(setState).not.toHaveBeenCalled();
+    expect(reply.mock.calls[0]?.[0].content).toContain("ambiguous");
+  });
+
+  it("allows unique ticket ID prefixes for manual /take commands", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: "ABCDEF12-1111",
+          title: "First ticket",
+          description: "Regular ticket",
+          technical_debt: 4,
+          kickoff_prompt: "first prompt",
+        },
+        {
+          id: "ABCDE999-2222",
+          title: "Second ticket",
+          description: "Regular ticket",
+          technical_debt: 8,
+          kickoff_prompt: "second prompt",
+        },
+      ]),
+    }));
+
+    await handleBacklogCommand(vi.fn());
+
+    const setState = vi.fn();
+    const reply = vi.fn();
+    const onSuggestedReply = vi.fn();
+    handleTakeCommand("/take ABCDEF12", makeGameState(), setState, reply, {
+      setInputValue: vi.fn(),
+      onSuggestedReply,
+    });
+
+    expect(setState).toHaveBeenCalledOnce();
+    expect(reply.mock.calls[0]?.[0].content).toContain("ABCDEF12-1111");
+    expect(onSuggestedReply).toHaveBeenCalledWith("first prompt");
+  });
+
   it("renders a filtered backlog header for valid category filters", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

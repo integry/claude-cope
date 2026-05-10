@@ -12,7 +12,7 @@ import {
   resolveRank,
   isPaidUser,
   isFreeUser,
-  stripTransientMessageFields,
+  normalizePersistedMessage,
   STORAGE_KEY,
 } from "./gameStateUtils";
 import { applyServerProfile } from "./profileSync";
@@ -118,7 +118,7 @@ export function useGameState() {
         ...state,
         chatHistory: state.chatHistory
           .filter((m) => m.role !== "loading")
-          .map(stripTransientMessageFields),
+          .map(normalizePersistedMessage),
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     } catch {
