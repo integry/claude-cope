@@ -10,7 +10,6 @@ import { applyAuthoritativeProfile as mergeAuthoritativeProfile, applyServerProf
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { filterChatHistory } from "./filterChatHistory";
-import { DAMAGE_COMMANDS } from "./OutageBar";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
@@ -39,8 +38,10 @@ function Terminal() {
   const debitTD = useCallback((amount: number) => setState((prev) => ({ ...prev, economy: { ...prev.economy, currentTD: Math.max(0, prev.economy.currentTD - amount) } })), [setState]);
   const activeTicketRef = useRef(state.activeTicket);
   activeTicketRef.current = state.activeTicket;
-  const applyReviewSprintBoost = useCallback((ticketId: string, boost: number) => { if (activeTicketRef.current?.id === ticketId) updateTicketProgress(boost); }, [updateTicketProgress]);
-  const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage } = useMultiplayer({
+  const applyReviewSprintBoost = useCallback((ticketId: string, boost: number) => {
+    if (activeTicketRef.current?.id === ticketId) updateTicketProgress(boost);
+  }, [updateTicketProgress]);
+  const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, activeOutageScenario, sendDamage } = useMultiplayer({
     username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost,
   });
   const rank = state.economy.currentRank;
@@ -295,7 +296,7 @@ function Terminal() {
   };
   processCommandRef.current = processCommand;
   const handleEnterSubmit = async () => {
-    if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
+    if (tryOutageDamage({ inputValue, outageHp, activeOutageScenario, sendDamage, setHistory, setInputValue })) return;
     if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
     if (bragPending) { handleBragSubmit({ inputValue, setInputValue, state, setHistory, setBragPending }); return; }
     if (buddyPendingConfirm) { handleBuddyConfirm({ inputValue, setInputValue, setBuddyPendingConfirm, setState, setHistory, buddyType: state.buddy?.type ?? undefined }); return; }
@@ -342,14 +343,15 @@ function Terminal() {
   });
   return (
     <TerminalView
-      activeRegression={activeRegression} outageHp={outageHp} pendingReviewPing={pendingReviewPing} pingAcknowledged={pingAcknowledged}
+      activeRegression={activeRegression} outageHp={outageHp} activeOutageScenario={activeOutageScenario} pendingReviewPing={pendingReviewPing} pingAcknowledged={pingAcknowledged}
       activeTheme={state.activeTheme} regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} inputRef={inputRef}
       closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag} onlineCount={onlineCount} rank={rank} state={state}
       handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue}
       setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect}
       isBooting={isBooting} history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current}
       promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} bottomRef={bottomRef} slashQuery={slashQuery}
-      slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect} inputValue={inputValue} suggestedReply={suggestedReply}
+      slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect} runSlashCommand={runSlashCommand}
+      inputValue={inputValue} suggestedReply={suggestedReply}
       isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown} buyGenerator={buyGenerator}
       buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} showStore={showStore}
       showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp}

@@ -1,7 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import PartySocket from 'partysocket';
 import { Message } from '../components/Terminal';
-import type { ClientMessage, ServerMessage } from '@claude-cope/shared/multiplayer-types';
+import type {
+  ClientMessage,
+  OutageScenario,
+  ServerMessage,
+} from '@claude-cope/shared/multiplayer-types';
+
+export interface DeferredOutageState {
+  hp: number;
+  scenario: OutageScenario;
+}
 
 interface ReviewPingTicket {
   id: string;
@@ -142,6 +151,8 @@ export interface ServerMessageHandlers {
   setOnlineCount: React.Dispatch<React.SetStateAction<number>>;
   setOnlineUsers: React.Dispatch<React.SetStateAction<string[]>>;
   setOutageHp: React.Dispatch<React.SetStateAction<number | null>>;
+  setActiveOutageScenario: React.Dispatch<React.SetStateAction<OutageScenario | null>>;
+  setDeferredOutageState: (next: DeferredOutageState | null) => void;
   creditTD: (amount: number) => void;
   debitTD: (amount: number) => void;
   applyReviewSprintBoost: (ticketId: string, boost: number) => void;
@@ -234,33 +245,42 @@ function handleReviewMessage(data: ServerMessage, h: ServerMessageHandlers): boo
 
 function handleOutageMessage(data: ServerMessage, h: ServerMessageHandlers): boolean {
   if (data.type === 'outage_start') {
-    // Skip the alert and health bar entirely when the user is idle — they
-    // can't participate and we don't want to stack up alerts.
-    if (h.isUserIdle()) return true;
+    if (h.isUserIdle()) {
+      h.setDeferredOutageState({ hp: data.hp, scenario: data.scenario });
+      return true;
+    }
+    h.setDeferredOutageState(null);
     h.setOutageHp(data.hp);
-    h.setHistory(prev => [...prev, { role: 'error', content: '[CRITICAL ALERT: AWS us-east-1 IS DOWN]' }]);
+    h.setActiveOutageScenario(data.scenario);
+    h.setHistory(prev => [...prev, { role: 'error', content: data.scenario.alert }]);
     return true;
   }
   if (data.type === 'outage_update') {
-    // Only sync the bar if the user is already engaged with this outage
-    if (h.isUserIdle()) return true;
+    if (h.isUserIdle()) {
+      h.setDeferredOutageState({ hp: data.hp, scenario: data.scenario });
+      return true;
+    }
+    h.setDeferredOutageState(null);
     h.setOutageHp(data.hp);
+    h.setActiveOutageScenario(data.scenario);
     return true;
   }
   if (data.type === 'outage_cleared') {
-    // Always clear the bar state; only reward+announce if not idle
+    h.setDeferredOutageState(null);
     h.setOutageHp(null);
+    h.setActiveOutageScenario(null);
     if (h.isUserIdle()) return true;
     h.applyOutageReward();
-    h.setHistory(prev => [...prev, { role: 'system', content: '[SUCCESS] AWS us-east-1 is back online. All players receive a TD boost.' }]);
+    h.setHistory(prev => [...prev, { role: 'system', content: data.scenario.success }]);
     return true;
   }
   if (data.type === 'outage_failed') {
-    // Always clear the bar state; only penalize+announce if not idle
+    h.setDeferredOutageState(null);
     h.setOutageHp(null);
+    h.setActiveOutageScenario(null);
     if (h.isUserIdle()) return true;
     h.applyOutagePenalty();
-    h.setHistory(prev => [...prev, { role: 'error', content: '[FAILURE] AWS us-east-1 outage was not resolved in time. Your most expensive generator has been decommissioned.' }]);
+    h.setHistory(prev => [...prev, { role: 'error', content: data.scenario.failure }]);
     return true;
   }
   return false;
@@ -276,6 +296,26 @@ export function applyServerMessage(data: ServerMessage, handlers: ServerMessageH
   handleOutageMessage(data, handlers);
 }
 
+export function revealDeferredOutage({
+  deferredOutage,
+  setDeferredOutageState,
+  setOutageHp,
+  setActiveOutageScenario,
+  setHistory,
+}: {
+  deferredOutage: DeferredOutageState | null;
+  setDeferredOutageState: (next: DeferredOutageState | null) => void;
+  setOutageHp: React.Dispatch<React.SetStateAction<number | null>>;
+  setActiveOutageScenario: React.Dispatch<React.SetStateAction<OutageScenario | null>>;
+  setHistory: React.Dispatch<React.SetStateAction<Message[]>>;
+}): void {
+  if (!deferredOutage) return;
+  setDeferredOutageState(null);
+  setOutageHp(deferredOutage.hp);
+  setActiveOutageScenario(deferredOutage.scenario);
+  setHistory(prev => [...prev, { role: 'error', content: deferredOutage.scenario.alert }]);
+}
+
 // We pass setHistory to allow the hook to write messages directly to the terminal when an attack occurs.
 export function useMultiplayer({ username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost }: UseMultiplayerOptions) {
   const [onlineCount, setOnlineCount] = useState(1);
@@ -286,16 +326,30 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
   const [pendingReviewPing, setPendingReviewPing] = useState<{ sender: string; amount: number } | null>(null);
   // Track the current outage health to render the global health bar
   const [outageHp, setOutageHp] = useState<number | null>(null);
+  const [activeOutageScenario, setActiveOutageScenario] = useState<OutageScenario | null>(null);
   const socketRef = useRef<PartySocket | null>(null);
   const lastActivityAt = useRef<number>(Date.now());
+  const deferredOutageRef = useRef<DeferredOutageState | null>(null);
 
   // Track user activity so we can skip outage alerts when the tab is idle
   useEffect(() => {
-    const markActive = () => { lastActivityAt.current = Date.now(); };
+    const markActive = () => {
+      const wasIdle = document.hidden || Date.now() - lastActivityAt.current > IDLE_THRESHOLD_MS;
+      lastActivityAt.current = Date.now();
+      if (wasIdle && !document.hidden) {
+        revealDeferredOutage({
+          deferredOutage: deferredOutageRef.current,
+          setDeferredOutageState: (next) => { deferredOutageRef.current = next; },
+          setOutageHp,
+          setActiveOutageScenario,
+          setHistory,
+        });
+      }
+    };
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'focus'];
     events.forEach((e) => window.addEventListener(e, markActive, { passive: true }));
     return () => events.forEach((e) => window.removeEventListener(e, markActive));
-  }, []);
+  }, [setHistory]);
 
   useEffect(() => {
     const socket = new PartySocket({
@@ -319,6 +373,8 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
           setOnlineCount,
           setOnlineUsers,
           setOutageHp,
+          setActiveOutageScenario,
+          setDeferredOutageState: (next) => { deferredOutageRef.current = next; },
           creditTD,
           debitTD,
           applyReviewSprintBoost,
@@ -348,7 +404,16 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
     sendMessage({ type: 'accept_review_ping' });
   };
   // Expose a method to allow players to attack the outage
-  const sendDamage = () => sendMessage({ type: 'damage_outage' });
+  const sendDamage = (command: string) => sendMessage({ type: 'damage_outage', command });
 
-  return { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage };
+  return {
+    onlineCount,
+    onlineUsers,
+    sendPing,
+    pendingReviewPing,
+    acceptReviewPing,
+    outageHp,
+    activeOutageScenario,
+    sendDamage,
+  };
 }

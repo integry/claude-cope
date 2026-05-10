@@ -24,10 +24,12 @@ import type { GameState, Message } from "../hooks/useGameState";
 import type { PendingReviewPing } from "../hooks/useMultiplayer";
 import type { OverlayVisibility } from "./terminalViewUtils";
 import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
+import type { OutageScenario } from "@claude-cope/shared/multiplayer-types";
 
 type TerminalViewProps = OverlayVisibility & {
   activeRegression: string | null;
   outageHp: number | null;
+  activeOutageScenario: OutageScenario | null;
   pendingReviewPing: PendingReviewPing;
   pingAcknowledged: boolean;
   activeTheme: GameState["activeTheme"];
@@ -56,6 +58,7 @@ type TerminalViewProps = OverlayVisibility & {
   slashQuery: string;
   slashIndex: number;
   handleSlashMenuSelect: (command: string) => void;
+  runSlashCommand: (command: string) => void;
   inputValue: string;
   suggestedReply: string | null;
   isProcessing: boolean;
@@ -86,6 +89,7 @@ type TerminalViewProps = OverlayVisibility & {
 export function TerminalView({
   activeRegression,
   outageHp,
+  activeOutageScenario,
   pendingReviewPing,
   pingAcknowledged,
   activeTheme,
@@ -114,6 +118,7 @@ export function TerminalView({
   slashQuery,
   slashIndex,
   handleSlashMenuSelect,
+  runSlashCommand,
   inputValue,
   suggestedReply,
   isProcessing,
@@ -179,7 +184,7 @@ export function TerminalView({
           onSlashCommand={handleTickerCommand}
           onlineCount={onlineCount}
         />
-        {outageHp !== null && <OutageBar outageHp={outageHp} />}
+        {outageHp !== null && activeOutageScenario && <OutageBar outageHp={outageHp} scenario={activeOutageScenario} />}
         <HeaderBar
           rank={rank}
           currentTD={state.economy.currentTD}

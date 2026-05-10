@@ -1,5 +1,13 @@
 import type * as Party from "partykit/server";
-import type { ClientMessage, ServerMessage } from "@claude-cope/shared/multiplayer-types";
+import type {
+  ClientMessage,
+  OutageScenario,
+  ServerMessage,
+} from "@claude-cope/shared/multiplayer-types";
+import {
+  outageScenarioMatchesCommand,
+  OUTAGE_SCENARIOS,
+} from "@claude-cope/shared/outageScenarios";
 
 // The core PartyKit server class. We manage real-time, low-latency events here
 // because Cloudflare Workers WebSockets are faster than standard database polling.
@@ -29,6 +37,7 @@ export default class ClaudeCopeServer implements Party.Server {
   // Maintain the authoritative health bar state for the co-op event
   private outageHp = 0;
   private isOutageActive = false;
+  private activeOutageScenario: OutageScenario | null = null;
   private outageTimer: ReturnType<typeof setTimeout> | null = null;
   private outageSchedule: ReturnType<typeof setTimeout> | null = null;
 
@@ -82,6 +91,13 @@ export default class ClaudeCopeServer implements Party.Server {
     const username = url.searchParams.get("username") || `anon-${conn.id.slice(0, 6)}`;
     this.usernames.set(conn.id, username);
     this.broadcastPresence();
+    if (this.isOutageActive && this.activeOutageScenario) {
+      this.send(conn, {
+        type: "outage_start",
+        hp: this.outageHp,
+        scenario: this.activeOutageScenario,
+      });
+    }
   }
 
   // When a user disconnects, refund any pending review-request they were the
@@ -109,19 +125,36 @@ export default class ClaudeCopeServer implements Party.Server {
         this.handleReviewPing(sender, data);
       } else if (data.type === "accept_review_ping") {
         this.handleAcceptReviewPing(sender);
-      } else if (data.type === "damage_outage" && this.isOutageActive) {
-        // Process damage from clients and broadcast the new health total to everyone
+      } else if (
+        data.type === "damage_outage" &&
+        this.isOutageActive &&
+        this.activeOutageScenario
+      ) {
+        if (!outageScenarioMatchesCommand(this.activeOutageScenario, data.command)) {
+          return;
+        }
+
+        // Only outage commands from the active scenario can damage the event.
         this.outageHp = Math.max(0, this.outageHp - 10);
-        this.broadcast({ type: "outage_update", hp: this.outageHp });
+        this.broadcast({
+          type: "outage_update",
+          hp: this.outageHp,
+          scenario: this.activeOutageScenario,
+        });
 
         // End the event if the community successfully depletes the health bar
         if (this.outageHp <= 0) {
           this.isOutageActive = false;
+          this.outageHp = 0;
           if (this.outageTimer) {
             clearTimeout(this.outageTimer);
             this.outageTimer = null;
           }
-          this.broadcast({ type: "outage_cleared" });
+          this.broadcast({
+            type: "outage_cleared",
+            scenario: this.activeOutageScenario,
+          });
+          this.activeOutageScenario = null;
         }
       }
     } catch {
@@ -361,15 +394,26 @@ export default class ClaudeCopeServer implements Party.Server {
 
     this.isOutageActive = true;
     this.outageHp = 100;
+    this.activeOutageScenario =
+      OUTAGE_SCENARIOS[Math.floor(Math.random() * OUTAGE_SCENARIOS.length)]!;
 
-    this.broadcast({ type: "outage_start", hp: this.outageHp });
+    this.broadcast({
+      type: "outage_start",
+      hp: this.outageHp,
+      scenario: this.activeOutageScenario,
+    });
 
     // If players don't deplete the HP within 2 minutes, the outage fails
     this.outageTimer = setTimeout(() => {
-      if (this.isOutageActive) {
+      if (this.isOutageActive && this.activeOutageScenario) {
         this.isOutageActive = false;
         this.outageHp = 0;
-        this.broadcast({ type: "outage_failed" });
+        this.outageTimer = null;
+        this.broadcast({
+          type: "outage_failed",
+          scenario: this.activeOutageScenario,
+        });
+        this.activeOutageScenario = null;
       }
     }, 2 * 60 * 1000);
   }
