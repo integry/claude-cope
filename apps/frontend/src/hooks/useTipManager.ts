@@ -132,6 +132,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   const emitIdleTip = useCallback(() => {
     idleTimerRef.current = null;
     idleDeadlineRef.current = null;
+    recentTipHistoryRef.current = readRecentTipHistory();
     const tip = selectIdleTip(
       { totalTDEarned: totalTDEarnedRef.current },
       { excludeTipIds: Object.keys(recentTipHistoryRef.current) },
