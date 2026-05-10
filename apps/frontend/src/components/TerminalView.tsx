@@ -298,8 +298,8 @@ export function TerminalView({
             />
           </div>
         </div>
-        <BuddyOverlay buddy={state.buddy} />
       </div>
+      <BuddyOverlay buddy={state.buddy} containerRef={terminalContainerRef} />
       <TerminalOverlays
         showStore={showStore}
         showLeaderboard={showLeaderboard}

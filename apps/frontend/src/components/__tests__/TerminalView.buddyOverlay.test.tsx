@@ -189,14 +189,18 @@ describe("TerminalView buddy overlay", () => {
     expect(commandShell?.textContent).not.toContain("Sarcastic Clippy is watching...");
   });
 
-  it("docks the buddy inside the bottom chrome beside the sprint area", () => {
+  it("renders the buddy as a root-level overlay instead of a bottom chrome child", () => {
     const view = renderTerminalView(createState("Sarcastic Clippy"));
     const overlay = view.querySelector(".terminal-buddy-overlay");
     const bottomChrome = view.querySelector("[data-terminal-bottom-chrome='true']");
+    const terminalRoot = view.firstElementChild;
 
     expect(overlay).not.toBeNull();
     expect(bottomChrome).not.toBeNull();
-    expect(bottomChrome?.contains(overlay!)).toBe(true);
+    expect(terminalRoot).not.toBeNull();
+    expect(bottomChrome?.contains(overlay!)).toBe(false);
+    expect(overlay?.parentElement).toBe(terminalRoot);
+    expect(overlay?.getAttribute("aria-hidden")).toBe("true");
     expect(view.querySelector("[data-testid='terminal-footer']")).not.toBeNull();
   });
 });

@@ -152,12 +152,14 @@ body {
 }
 
 .terminal-buddy-overlay {
-  display: flex;
-  justify-content: flex-end;
+  position: absolute;
+  right: 0.75rem;
+  bottom: var(--terminal-buddy-bottom-offset, 3.5rem);
   flex: 0 0 auto;
   pointer-events: none;
-  padding-right: clamp(0.25rem, 1vw, 0.75rem);
-  padding-bottom: 0.35rem;
+  z-index: 20;
+  transform-origin: bottom right;
+  will-change: transform, opacity;
 }
 
 .terminal-bottom-chrome {
@@ -198,9 +200,7 @@ body {
 
 @media (max-width: 640px) {
   .terminal-buddy-overlay {
-    padding-right: 0;
-    padding-top: 0.5rem;
-    justify-content: flex-start;
+    right: 0.35rem;
   }
 
   .terminal-buddy-display {
