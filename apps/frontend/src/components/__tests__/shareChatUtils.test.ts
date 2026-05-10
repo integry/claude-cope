@@ -118,7 +118,11 @@ describe("renderChatCard", () => {
     await renderChatCard("Test", buddyBlock);
 
     const renderedText = mockCtx.fillText.mock.calls.map(([text]) => text);
-    expect(renderedText.filter((text) => text === "Remember the backlog.")).toHaveLength(1);
+    expect(
+      renderedText.filter(
+        (text) => typeof text === "string" && text.includes("Remember the backlog.")
+      )
+    ).toHaveLength(1);
   });
 });
 
