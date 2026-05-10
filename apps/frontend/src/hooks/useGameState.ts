@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from "react";
+import type { ServerProfile } from "@claude-cope/shared/profile";
 import { track, identify } from "../analytics";
 import { AnalyticsEvents } from "../analyticsEvents";
 import { GENERATORS, UPGRADES, THEMES, FREE_TIER_RANK_CAP } from "../game/constants";
@@ -11,6 +12,7 @@ import {
   canBuyTheme,
   applyOptimisticThemePurchase,
   applyThemePurchaseFailure,
+  applyThemeEntitlementFailure,
   applyValidatedSessionProState,
   isFreshStateForSessionRestore,
   mergeSessionIdentity,
@@ -94,7 +96,14 @@ function broadcastHighValuePurchase(generatorName: string, amount: number, cost:
 export function useGameState() {
   const [state, setState] = useState<GameState>(loadState);
   const stateRef = useRef(state);
+  const confirmedActiveThemeRef = useRef(state.activeTheme);
+  const themeUpdateRequestIdRef = useRef(0);
   const [offlineTDEarned, setOfflineTDEarned] = useState(0);
+
+  const mergeServerProfile = useCallback((profile: ServerProfile) => {
+    confirmedActiveThemeRef.current = profile.active_theme;
+    setState((prev) => applyServerProfile(prev, profile));
+  }, []);
 
   useEffect(() => {
     stateRef.current = state;
@@ -111,6 +120,7 @@ export function useGameState() {
     let cancelled = false;
     fetchSessionProfile().then((result) => {
       if (cancelled) return;
+      if (result.profile) confirmedActiveThemeRef.current = result.profile.active_theme;
       restoreFreshSession(setState, result);
     });
     return () => { cancelled = true; };
@@ -158,7 +168,7 @@ export function useGameState() {
     if (current.proKeyHash) {
       buyGeneratorServer(current.username, generatorId, amount, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
-          setState((prev) => applyServerProfile(prev, result.profile!));
+          mergeServerProfile(result.profile);
           track(AnalyticsEvents.GENERATOR_PURCHASED, { generator_id: generatorId, amount, cost });
         } else if (!result.success) {
           setState((prev) => rollbackGeneratorPurchase(prev, generatorId, amount, cost));
@@ -170,7 +180,7 @@ export function useGameState() {
     }
 
     return true;
-  }, []);
+  }, [mergeServerProfile]);
 
   const addActiveTD = useCallback((amount: number, raw = false) => {
     setState((prev) => {
@@ -230,7 +240,7 @@ export function useGameState() {
     if (current.proKeyHash) {
       buyUpgradeServer(current.username, upgradeId, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
-          setState((prev) => applyServerProfile(prev, result.profile!));
+          mergeServerProfile(result.profile);
           track(AnalyticsEvents.UPGRADE_PURCHASED, { upgrade_id: upgradeId, cost: upgrade.cost });
         } else if (!result.success) {
           setState((prev) => rollbackUpgradePurchase(prev, upgradeId, upgrade.cost));
@@ -241,7 +251,7 @@ export function useGameState() {
     }
 
     return true;
-  }, []);
+  }, [mergeServerProfile]);
 
   const applyOutagePenalty = useCallback(() => {
     setState((prev) => {
@@ -266,17 +276,33 @@ export function useGameState() {
   const setActiveTheme = useCallback((themeId: string) => {
     const current = stateRef.current;
     if (!current.unlockedThemes.includes(themeId) || current.activeTheme === themeId) return;
+    const requestId = themeUpdateRequestIdRef.current + 1;
+    themeUpdateRequestIdRef.current = requestId;
 
     setState((prev) => (!prev.unlockedThemes.includes(themeId) ? prev : { ...prev, activeTheme: themeId }));
 
     if (!current.username || (!current.proKeyHash && !current.hasSessionPro)) return;
 
     updateThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
+      if (themeUpdateRequestIdRef.current !== requestId) return;
       if (result.success && result.profile) {
-        setState((prev) => applyServerProfile(prev, result.profile!));
+        mergeServerProfile(result.profile);
+        return;
       }
-    }).catch(() => {});
-  }, []);
+      if (!result.success) {
+        setState((prev) => {
+          const rollbackThemeId = prev.unlockedThemes.includes(confirmedActiveThemeRef.current) ? confirmedActiveThemeRef.current : "default";
+          return applyThemeEntitlementFailure({ ...prev, activeTheme: rollbackThemeId }, result.error, result.errorCode);
+        });
+      }
+    }).catch(() => {
+      if (themeUpdateRequestIdRef.current !== requestId) return;
+      setState((prev) => {
+        const rollbackThemeId = prev.unlockedThemes.includes(confirmedActiveThemeRef.current) ? confirmedActiveThemeRef.current : "default";
+        return applyThemeEntitlementFailure({ ...prev, activeTheme: rollbackThemeId }, "Network error");
+      });
+    });
+  }, [mergeServerProfile]);
 
   const unlockTheme = useCallback((themeId: string) => {
     setState((prev) => prev.unlockedThemes.includes(themeId) ? prev : { ...prev, unlockedThemes: [...prev.unlockedThemes, themeId] });
@@ -293,7 +319,7 @@ export function useGameState() {
 
     buyThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
       if (result.success && result.profile) {
-        setState((prev) => applyServerProfile(prev, result.profile!));
+        mergeServerProfile(result.profile);
         track(AnalyticsEvents.THEME_PURCHASED, { theme_id: themeId, cost: theme.cost });
       } else if (!result.success) {
         setState((prev) => applyThemePurchaseFailure(prev, themeId, result.error, result.errorCode));
@@ -303,7 +329,7 @@ export function useGameState() {
     });
 
     return true;
-  }, []);
+  }, [mergeServerProfile]);
 
   const toggleSound = useCallback(() => {
     setState((prev) => ({ ...prev, soundEnabled: !prev.soundEnabled }));

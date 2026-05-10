@@ -100,15 +100,18 @@ export function applyValidatedSessionProState(state: GameState, result: SessionP
   return { ...state, ...(restoredUsername && state.username !== restoredUsername ? { username: restoredUsername } : {}), isPro: true, hasSessionPro: true };
 }
 
-export function applyThemePurchaseFailure(state: GameState, themeId: string, error?: string, errorCode?: ThemeEntitlementErrorCode): GameState {
-  const rolledBack = rollbackOptimisticThemePurchase(state, themeId);
+export function applyThemeEntitlementFailure(state: GameState, error?: string, errorCode?: ThemeEntitlementErrorCode): GameState {
   const nextState = isDefinitiveThemePurchaseEntitlementError(error, errorCode) ? {
-    ...rolledBack,
+    ...state,
     proKey: undefined,
     proKeyHash: undefined,
     isPro: undefined,
     hasSessionPro: undefined,
-  } : isThemePurchaseSessionMismatchError(error, errorCode) ? clearStaleSessionEntitlement(rolledBack) : rolledBack;
+  } : isThemePurchaseSessionMismatchError(error, errorCode) ? clearStaleSessionEntitlement(state) : state;
   const message = error ?? "Theme purchase failed";
   return { ...nextState, chatHistory: [...nextState.chatHistory, { id: nextMsgId(), role: "error", content: `[❌ Error] ${message}` }] };
+}
+
+export function applyThemePurchaseFailure(state: GameState, themeId: string, error?: string, errorCode?: ThemeEntitlementErrorCode): GameState {
+  return applyThemeEntitlementFailure(rollbackOptimisticThemePurchase(state, themeId), error, errorCode);
 }
