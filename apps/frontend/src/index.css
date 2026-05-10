@@ -265,6 +265,35 @@ body {
   --color-text: #1a1a1a;
 }
 
+.ticker-header-link {
+  color: #9ca3af;
+  cursor: pointer;
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  transition: color 0.1s ease;
+}
+
+.ticker-header-link:focus-visible {
+  outline: 1px solid #67e8f9;
+  outline-offset: 2px;
+}
+
+.ticker-header-link-command {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.1s ease;
+}
+
+.ticker-header-link:hover .ticker-header-link-command,
+.ticker-header-link:focus-visible .ticker-header-link-command {
+  color: #a5f3fc;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* Upgrade overlay button hover — CSS :hover is more reliable than JS
    mouseenter/mouseleave inside <pre> elements */
 .upgrade-btn-primary:active,

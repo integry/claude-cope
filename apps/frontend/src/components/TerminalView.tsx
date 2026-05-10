@@ -62,6 +62,7 @@ type TerminalViewProps = OverlayVisibility & {
   slashQuery: string;
   slashIndex: number;
   handleSlashMenuSelect: (command: string) => void;
+  runSlashCommand: (command: string) => void;
   inputValue: string;
   suggestedReply: string | null;
   isProcessing: boolean;
@@ -147,6 +148,7 @@ export function TerminalView({
   slashQuery,
   slashIndex,
   handleSlashMenuSelect,
+  runSlashCommand,
   inputValue,
   suggestedReply,
   isProcessing,
@@ -236,6 +238,11 @@ export function TerminalView({
     handleManualUpgradeDismiss,
   );
 
+  const handleTickerCommand = (command: string) => {
+    closeAllOverlaysPreservingNag();
+    runSlashCommand(command);
+  };
+
   return (
     <div
       ref={terminalContainerRef}
@@ -257,6 +264,7 @@ export function TerminalView({
             closeAllOverlaysPreservingNag();
             setShowParty(true);
           }}
+          onSlashCommand={handleTickerCommand}
           onlineCount={onlineCount}
         />
         {outageHp !== null && activeOutageScenario && (

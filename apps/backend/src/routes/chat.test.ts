@@ -198,10 +198,18 @@ describe("USER_NEXT_MESSAGE dedupe", () => {
     expect(normalized).toContain("error_log_128.txt");
   });
 
-  it("keeps a specific suggested reply when it is not a repeat", () => {
+  it("replaces the why-is-x-involved pattern even when it is not a repeat", () => {
     const reply = "The real villain is `error_log_128.txt` and nobody will admit it.\n[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]";
     const normalized = normalizeReplyContent(reply, "Which daemon touched it?");
-    expect(normalized).toContain("[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]");
+    expect(normalized).not.toContain("[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]");
+    expect(normalized).toContain("error_log_128.txt");
+  });
+
+  it("replaces the what-is-x-doing-there pattern", () => {
+    const reply = "The real villain is `error_log_128.txt` and nobody will admit it.\n[USER_NEXT_MESSAGE: What is error_log_128.txt doing there?]";
+    const normalized = normalizeReplyContent(reply, "Which daemon touched it?");
+    expect(normalized).not.toContain("[USER_NEXT_MESSAGE: What is error_log_128.txt doing there?]");
+    expect(normalized).toContain("error_log_128.txt");
   });
 });
 
@@ -555,13 +563,13 @@ describe("reply formatting normalizer", () => {
   it("adds a specific USER_NEXT_MESSAGE when the tag is missing", () => {
     const input = "The only thing older than you is the legacy code haunting the repo since the 90s.";
     const output = normalizeReplyContent(input);
-    expect(output).toContain("[USER_NEXT_MESSAGE: Is the legacy file the bad one?]");
+    expect(output).toContain("[USER_NEXT_MESSAGE: Can we delete the legacy file?]");
   });
 
   it("fills an empty USER_NEXT_MESSAGE tag with a specific fallback", () => {
     const input = "That lone 0xFF byte detonated your stream.\n[USER_NEXT_MESSAGE: ]";
     const output = normalizeReplyContent(input);
-    expect(output).toContain("[USER_NEXT_MESSAGE: Why 0xFF of all things?]");
+    expect(output).toContain("[USER_NEXT_MESSAGE: What breaks on 0xFF?]");
   });
 
   it("replaces a generic USER_NEXT_MESSAGE with a specific fallback", () => {
@@ -786,6 +794,22 @@ describe("Provider configuration in OpenRouter requests", () => {
       expect(capturedRequestBody).toBeDefined();
       expect(capturedRequestBody).not.toHaveProperty("provider");
     }
+  });
+
+  it("allows lightweight override options for small helper prompts", async () => {
+    const { callOpenRouter } = await import("./chat");
+    await callOpenRouter(
+      "test-key",
+      "openai/gpt-oss-20b",
+      [{ role: "user", content: "test" }],
+      [],
+      { maxTokens: 40, temperature: 0.4, topP: 0.8 },
+    );
+    expect(capturedRequestBody).toMatchObject({
+      max_tokens: 40,
+      temperature: 0.4,
+      top_p: 0.8,
+    });
   });
 });
 
