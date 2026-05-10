@@ -20,17 +20,12 @@ export type LayoutProps = {
   singleAvailable: boolean;
   multiAvailable: boolean;
   quotaLine: string;
-  freeCategoryCount: number;
-  freeCategoryExamples: string[];
-  freeCategoryRemainder: number;
   premiumCategoryCount: number;
   premiumGroups: Array<{
     id: string;
     title: string;
-    description: string;
     total: number;
-    examples: string[];
-    remainder: number;
+    summary: string;
   }>;
   dismissMode?: "manual" | "nag";
   dismissPhase?: "idle" | "closing";
@@ -54,9 +49,6 @@ export default function DesktopLayout({
   singleAvailable,
   multiAvailable,
   quotaLine,
-  freeCategoryCount,
-  freeCategoryExamples,
-  freeCategoryRemainder,
   premiumCategoryCount,
   premiumGroups,
   dismissMode = "manual",
@@ -201,7 +193,7 @@ export default function DesktopLayout({
   const canPointerDismiss = dismissMode === "manual" && !!onDismiss;
   const isForcedClosing = dismissPhase === "closing";
   const creditsStr = `${PRO_QUOTA_LIMIT} non-expiring credits`;
-  const premiumSummary = `Premium is not a paywall tax. Max expands the backlog into ${premiumCategoryCount} specialized categories using the same real labels and prefixes teased in /backlog.`;
+  const premiumSummary = `Premium expands your backlog with ${premiumCategoryCount} highly specific nightmares:`;
   useEffect(() => {
     if (availableOptionIds.length === 0) {
       setSelectedOptionId(null);
@@ -343,21 +335,6 @@ export default function DesktopLayout({
         {tableRow2}{"\n"}
         {tableBorderBot}{"\n"}
         {emptyLine}{"\n"}
-        {boxLine(`  [ FREE STARTER SET: ${freeCategoryCount} CATEGORIES ]`, Y)}{"\n"}
-        {renderWrappedBoxLines("Free users get a generous starter backlog across office politics, outages, testing misery, design systems, and analytics dread.")}
-        {renderWrappedBoxLines(`Includes: ${freeCategoryExamples.join(", ")}${freeCategoryRemainder > 0 ? `, +${freeCategoryRemainder} more starter categories` : ""}`)}
-        {emptyLine}{"\n"}
-        {boxLine("  [ MAX UNLOCK: 50+ SPECIALIZED CATEGORIES ]", Y)}{"\n"}
-        {renderWrappedBoxLines(premiumSummary)}
-        {emptyLine}{"\n"}
-        {premiumGroups.map((group) => (
-          <span key={group.id}>
-            {boxLine(`  [${group.title.toUpperCase()}] ${group.total}`, Y)}{"\n"}
-            {renderWrappedBoxLines(group.description, DIM)}
-            {renderWrappedBoxLines(`${group.examples.join(", ")}${group.remainder > 0 ? `, +${group.remainder} more` : ""}`)}
-            {emptyLine}{"\n"}
-          </span>
-        ))}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
         {boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{", "}<span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>{","}</span>, `  Unlocks: ${creditsStr}, multi-device sync,`.length)}{"\n"}
@@ -376,6 +353,16 @@ export default function DesktopLayout({
         {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
         {boxLine("  (5 activation keys will be sent to your email)", "#8892b0")}{"\n"}
         {buttonBlock(1, multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
+        {emptyLine}{"\n"}
+        {boxLine("  ---------------------------------------------------------")}{"\n"}
+        {boxLine("  [ APPENDIX: UNLOCKED MAX CATEGORIES ]", Y)}{"\n"}
+        {renderWrappedBoxLines(premiumSummary)}
+        {emptyLine}{"\n"}
+        {premiumGroups.map((group) => (
+          <span key={group.id}>
+            {renderWrappedBoxLines(`* ${group.title.toUpperCase()} (${group.total}) ${group.summary}`)}
+          </span>
+        ))}
         {midBorder}{"\n"}
         {(() => {
           const text = "[Press ESC to retain your net worth]";
