@@ -217,12 +217,8 @@ function Terminal() {
     } else { triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState }); }
   }, [openUpgradeNag, playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState, nagArmedFromQuotaRef]);
   const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
-    if (!shouldShowNag(effectiveApiKey, state.proKey, state.proKeyHash, state.economy.quotaPercent)) {
-      return false;
-    }
-    if (BYOK_ENABLED && effectiveApiKey) {
-      return false;
-    }
+    if (!shouldShowNag(effectiveApiKey, state.proKey, state.proKeyHash, state.economy.quotaPercent)) return false;
+    if (BYOK_ENABLED && effectiveApiKey) return false;
     handleQuotaLockout(command);
     return true;
   }, [state.proKey, state.proKeyHash, state.economy.quotaPercent, handleQuotaLockout]);
@@ -256,14 +252,8 @@ function Terminal() {
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
   useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, setHistory, runSlashCommand });
-  const handlePromptAccepted = useCallback((rollbackId: number, replayId: number | null) => {
-    settlePendingBacklogRollback(rollbackId, false);
-    settleAcceptedNagReplay(replayId);
-  }, [settleAcceptedNagReplay, settlePendingBacklogRollback]);
-  const handlePromptError = useCallback((rollbackId: number) => {
-    settlePendingBacklogRollback(rollbackId, true);
-    playError();
-  }, [playError, settlePendingBacklogRollback]);
+  const handlePromptAccepted = useCallback((rollbackId: number, replayId: number | null) => { settlePendingBacklogRollback(rollbackId, false); settleAcceptedNagReplay(replayId); }, [settleAcceptedNagReplay, settlePendingBacklogRollback]);
+  const handlePromptError = useCallback((rollbackId: number) => { settlePendingBacklogRollback(rollbackId, true); playError(); }, [playError, settlePendingBacklogRollback]);
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") { runSlashCommandRef.current(command); return; }
     setInputValue(command + " "); setSlashQuery(""); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
@@ -271,11 +261,7 @@ function Terminal() {
   const handleSlashMenuSelect = useCallback((command: string) => {
     const nextSelection = resolveSlashMenuSelection(command, "click");
     if (nextSelection.mode === "execute") return void runSlashCommandRef.current(nextSelection.value);
-    setInputValue(nextSelection.value);
-    setSlashQuery(nextSelection.nextQuery);
-    setSlashIndex(0);
-    setSuggestedReply(null);
-    inputRef.current?.focus();
+    setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
   }, []);
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
     if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1 } }));
@@ -322,9 +308,7 @@ function Terminal() {
       addActiveTD,
       playChime,
       setState,
-      onCompletedRewardSettled: (ticketId, profile) => {
-        applySettledCompletedReward(ticketId, profile);
-      },
+      onCompletedRewardSettled: (ticketId, profile) => { applySettledCompletedReward(ticketId, profile); },
     });
     const controller = new AbortController();
     const setPromptProcessing = createPromptProcessingSetter();
@@ -373,13 +357,10 @@ function Terminal() {
     if (bragPending) { handleBragSubmit({ inputValue, setInputValue, state, setHistory, setBragPending }); return; }
     if (buddyPendingConfirm) { handleBuddyConfirm({ inputValue, setInputValue, setBuddyPendingConfirm, setState, setHistory, buddyType: state.buddy?.type ?? undefined }); return; }
     if (inputValue.trim().length === 0) {
-      setInputValue("");
-      setHistoryIndex(-1);
-      return;
+      setInputValue(""); setHistoryIndex(-1); return;
     }
     if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) {
-      setInputValue("");
-      return;
+      setInputValue(""); return;
     }
     const command = inputValue;
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
