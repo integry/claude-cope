@@ -46,15 +46,16 @@ export function BuddyOverlay({ buddy, containerRef }: BuddyOverlayProps) {
       }
 
       const containerRect = container.getBoundingClientRect();
-      const displayRect = display.getBoundingClientRect();
       const bottomOffset = getVisibleFooterHeight(container) + BUDDY_BOTTOM_GAP;
+      const overlayWidth = display.offsetWidth;
+      const overlayHeight = display.offsetHeight;
       const scale = getBuddyOverlayScale({
         containerWidth: containerRect.width,
         containerHeight: containerRect.height,
         rightInset: BUDDY_RIGHT_INSET,
         bottomOffset,
-        overlayWidth: displayRect.width,
-        overlayHeight: displayRect.height,
+        overlayWidth,
+        overlayHeight,
       });
 
       setOverlayMetrics((current) => {

@@ -39,6 +39,7 @@ export const BUDDY_ICONS: Record<string, string> = {
 
 const BUDDY_TEXT_GAP = "   ";
 const BUDDY_TEXT_WRAP = 64;
+const BUDDY_FALLBACK_ICON = "🐾";
 
 export const BUDDY_INTERJECTIONS: Record<string, string[]> = {
   "Agile Snail": [
@@ -105,7 +106,7 @@ function wrapBuddyText(text: string, maxWidth: number): string[] {
 }
 
 export function formatBuddyInterjection(type: string, text: string): string {
-  const artLines = (BUDDY_ICONS[type] ?? "🐾").split("\n");
+  const artLines = (BUDDY_ICONS[type] ?? BUDDY_FALLBACK_ICON).split("\n");
   const wrappedText = wrapBuddyText(text, BUDDY_TEXT_WRAP);
   const artWidth = Math.max(...artLines.map((line) => line.length));
   const totalLines = Math.max(artLines.length, wrappedText.length + 1);
@@ -126,6 +127,16 @@ export function formatBuddyInterjection(type: string, text: string): string {
   return output.join("\n");
 }
 
+function buildBuddyHeaderPattern(type: string | null, art: string): RegExp {
+  const firstArtLine = art.split("\n")[0] ?? "";
+  const escapedArt = firstArtLine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (type === null) {
+    return new RegExp(`^${escapedArt}\\s{3,}\\[[^\\]]+\\]$`);
+  }
+  const escapedType = type.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escapedArt}\\s{3,}\\[${escapedType}\\]$`);
+}
+
 export function extractBuddyInterjectionBlock(content: string): { block: string; body: string } | null {
   const trimmedContent = content.replace(/^\n+/, "");
   const separatorIndex = trimmedContent.indexOf("\n\n");
@@ -133,15 +144,16 @@ export function extractBuddyInterjectionBlock(content: string): { block: string;
   const body = separatorIndex >= 0 ? trimmedContent.slice(separatorIndex + 2) : "";
   const lines = block.split("\n");
 
-  for (const art of Object.values(BUDDY_ICONS)) {
+  const buddyVariants: ReadonlyArray<readonly [string | null, string]> = [
+    ...Object.entries(BUDDY_ICONS),
+    [null, BUDDY_FALLBACK_ICON],
+  ];
+  for (const [type, art] of buddyVariants) {
     const artLines = art.split("\n");
-    if (artLines.every((artLine, index) => lines[index]?.startsWith(artLine))) {
+    const hasMatchingArt = artLines.every((artLine, index) => lines[index]?.startsWith(artLine));
+    if (hasMatchingArt && buildBuddyHeaderPattern(type, art).test(lines[0] ?? "")) {
       return { block, body };
     }
-  }
-
-  if (/^\S.*\s{3,}\[[^\]]+\]$/.test(lines[0] ?? "")) {
-    return { block, body };
   }
 
   return null;

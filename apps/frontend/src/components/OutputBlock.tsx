@@ -94,10 +94,10 @@ function TokenCounter({ tokensSent, tokensReceived }: { tokensSent?: number; tok
   );
 }
 
-// Buddy interjections have a specific shape: ASCII art on the first lines,
-// then a `[Buddy Name] text` line. We need to render those as preformatted
-// monospace so the ASCII art lines up. Other multi-line warnings (rate-limit
-// errors, etc.) should wrap normally.
+// Buddy interjections are emitted as side-by-side ASCII art with a
+// `[Buddy Name]` header on the first line and wrapped body lines after it.
+// Render those as preformatted monospace so the art stays aligned; other
+// multi-line warnings (rate-limit errors, etc.) should wrap normally.
 function isBuddyMessage(content: string): boolean {
   return extractBuddyInterjectionBlock(content) !== null;
 }

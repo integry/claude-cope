@@ -8,6 +8,7 @@ import {
   getChatCardBlob,
   type ShareResult,
 } from "../shareChatUtils";
+import { formatBuddyInterjection } from "../buddyConstants";
 
 // Mock image loading
 const mockImage = {
@@ -101,6 +102,15 @@ describe("renderChatCard", () => {
     await renderChatCard("Test", "Response");
     expect(mockCanvas.width).toBeGreaterThan(0);
     expect(mockCanvas.height).toBeGreaterThan(0);
+  });
+
+  it("renders buddy interjections separately from the following system reply", async () => {
+    const buddyBlock = formatBuddyInterjection("Agile Snail", "Remember the backlog.");
+    await renderChatCard("Test", `${buddyBlock}\n\nShip the lint rule before Friday.`);
+
+    const renderedText = mockCtx.fillText.mock.calls.map(([text]) => text);
+    expect(renderedText).toContain("Ship the lint rule before Friday.");
+    expect(renderedText).not.toContain(`${buddyBlock}\n\nShip the lint rule before Friday.`);
   });
 });
 
