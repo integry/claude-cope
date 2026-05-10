@@ -151,6 +151,40 @@ body {
   box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.2);
 }
 
+.terminal-buddy-overlay {
+  position: fixed;
+  right: clamp(0.75rem, 2vw, 1.5rem);
+  bottom: clamp(4.75rem, 10vh, 7rem);
+  z-index: 20;
+  pointer-events: none;
+  max-width: min(16rem, calc(100vw - 1.5rem));
+  text-align: right;
+}
+
+.terminal-buddy-display {
+  text-shadow: 0 0 12px rgba(251, 146, 60, 0.22);
+}
+
+.terminal-buddy-display pre {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .terminal-buddy-overlay {
+    right: 0.5rem;
+    bottom: 5.5rem;
+    max-width: min(11rem, calc(100vw - 1rem));
+    opacity: 0.85;
+  }
+
+  .terminal-buddy-display {
+    font-size: 0.625rem;
+    line-height: 1.1;
+  }
+}
+
 .terminal-command-line {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.035) 100%);

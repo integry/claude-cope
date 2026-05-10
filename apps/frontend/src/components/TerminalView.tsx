@@ -196,6 +196,11 @@ export function TerminalView({
         />
         <div ref={bottomRef} />
       </div>
+      {state.buddy.type && (
+        <div className="terminal-buddy-overlay" aria-hidden="true">
+          <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} className="terminal-buddy-display" />
+        </div>
+      )}
       <div className="shrink-0">
         <SprintProgressBar
           id={state.activeTicket?.id}
@@ -206,7 +211,6 @@ export function TerminalView({
         />
         <div className="terminal-command-shell relative border-b border-white/20">
           {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} paidUser={isPaidUser(state)} onSelect={handleSlashMenuSelect} />}
-        <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
           <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
         </div>
       </div>
