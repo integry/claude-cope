@@ -71,7 +71,7 @@ describe("OutputBlock backlog rendering", () => {
       upgradeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onSlashCommand).toHaveBeenCalledWith("/take BLAME-421", "execute");
+    expect(onSlashCommand).toHaveBeenCalledWith("/take 1", "execute");
     expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "execute");
     expect(onSlashCommand).toHaveBeenCalledWith("/upgrade", "execute");
   });

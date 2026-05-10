@@ -83,10 +83,6 @@ async function handleBacklogFetchFailure(res: Response, reply: Reply): Promise<b
   return true;
 }
 
-function formatBacklogFilterLine(category: string | null): string {
-  return category ? `\n${formatBacklogFilterHeader(category)}` : "";
-}
-
 type BacklogCopy = {
   filterHeader?: string;
   infoLine?: string;
@@ -134,7 +130,7 @@ function renderBacklogMarkdownText(text: string): string {
 
 function replyEmptyBacklog(reply: Reply, normalizedCategory: string | null): boolean {
   const hint = TICKET_REFINE_ENABLED ? " Submit tickets with `/ticket <description>`." : "";
-  const filterHeader = formatBacklogFilterLine(normalizedCategory);
+  const filterHeader = normalizedCategory ? `\n${formatBacklogFilterHeader(normalizedCategory)}` : "";
   reply({ role: "system", content: `[📋 **BACKLOG**]${filterHeader}\n\nThe backlog is empty.${hint}` });
   return true;
 }

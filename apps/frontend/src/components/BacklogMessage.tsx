@@ -11,8 +11,8 @@ function renderLine(
 }
 
 function renderTicketId(
+  row: number,
   shortId: string,
-  fullId: string,
   onSlashCommand?: (command: string, action: SlashCommandAction) => void,
 ): React.ReactNode {
   if (!onSlashCommand) return shortId;
@@ -20,10 +20,10 @@ function renderTicketId(
   return (
     <button
       type="button"
-      className="cursor-pointer bg-transparent p-0 font-inherit text-inherit underline decoration-dotted hover:text-cyan-100"
+      className="block max-w-full cursor-pointer truncate bg-transparent p-0 font-inherit text-inherit underline decoration-dotted hover:text-cyan-100"
       onClick={(event) => {
         event.stopPropagation();
-        onSlashCommand(`/take ${fullId}`, "execute");
+        onSlashCommand(`/take ${row}`, "execute");
       }}
     >
       {shortId}
@@ -62,7 +62,7 @@ export function BacklogMessage({
           >
             <div className="hidden text-slate-300 md:block">[{ticket.row}]</div>
             <div className="hidden text-cyan-200 md:block">
-              {renderTicketId(ticket.shortId, ticket.fullId, onSlashCommand)}
+              {renderTicketId(ticket.row, ticket.shortId, onSlashCommand)}
             </div>
             <div className={`hidden min-w-0 break-words text-cyan-100 [overflow-wrap:anywhere] md:block ${ticket.isLocked ? "text-amber-200" : ""}`}>
               {ticket.title}
@@ -78,8 +78,8 @@ export function BacklogMessage({
               <div className="flex items-center justify-between gap-3 text-[12px] text-slate-400">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="text-slate-200">[{ticket.row}]</span>
-                  <span className="truncate text-cyan-200">
-                    {renderTicketId(ticket.shortId, ticket.fullId, onSlashCommand)}
+                  <span className="min-w-0 text-cyan-200">
+                    {renderTicketId(ticket.row, ticket.shortId, onSlashCommand)}
                   </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
