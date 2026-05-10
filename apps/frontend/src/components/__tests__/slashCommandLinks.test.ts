@@ -58,6 +58,15 @@ describe("detectSlashCommands", () => {
     }
   });
 
+  it("treats /leaderboard as an executable command for clickable UI entry points", () => {
+    const results = detectSlashCommands("Open /leaderboard to inspect the Hall of Blame.");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      command: "/leaderboard",
+      action: "execute",
+    });
+  });
+
   // False positive avoidance
   it("does NOT match API paths like /api/chat", () => {
     const results = detectSlashCommands("The endpoint is /api/chat for messaging.");
