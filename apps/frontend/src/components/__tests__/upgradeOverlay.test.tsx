@@ -88,13 +88,15 @@ describe("UpgradeOverlay", () => {
     const text = container.textContent ?? "";
 
     expect(text).not.toContain("FREE STARTER SET:");
-    expect(text).toContain("APPENDIX: UNLOCKED MAX CATEGORIES");
-    expect(text).toContain(`${PREMIUM_BACKLOG_CATEGORY_COUNT} highly specific nightmares`);
-    expect(text.indexOf("AUTHORIZE EXTRACTION - $4.99")).toBeLessThan(text.indexOf("APPENDIX: UNLOCKED MAX CATEGORIES"));
-    expect(text.indexOf("EXTRACT TEAM FUNDS - $19.99")).toBeLessThan(text.indexOf("APPENDIX: UNLOCKED MAX CATEGORIES"));
+    expect(text).toContain(`APPENDIX: ${PREMIUM_BACKLOG_CATEGORY_COUNT} NEW MAX CATEGORIES UNLOCKED`);
+    expect(text.indexOf("AUTHORIZE EXTRACTION - $4.99")).toBeLessThan(text.indexOf(`APPENDIX: ${PREMIUM_BACKLOG_CATEGORY_COUNT} NEW MAX CATEGORIES UNLOCKED`));
+    expect(text.indexOf("EXTRACT TEAM FUNDS - $19.99")).toBeLessThan(text.indexOf(`APPENDIX: ${PREMIUM_BACKLOG_CATEGORY_COUNT} NEW MAX CATEGORIES UNLOCKED`));
 
-    for (const group of BACKLOG_CATEGORY_UPGRADE_GROUPS) {
-      expect(text).toContain(group.title.toUpperCase());
+    const renderedGroupTitles = BACKLOG_CATEGORY_UPGRADE_GROUPS.map((group) =>
+      group.id === "marketing-growth-sludge" ? "GROWTH SLUDGE" : group.title.toUpperCase(),
+    );
+    for (const title of renderedGroupTitles) {
+      expect(text).toContain(title);
     }
   });
 

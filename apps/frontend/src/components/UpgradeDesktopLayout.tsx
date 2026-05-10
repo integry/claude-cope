@@ -24,7 +24,6 @@ export type LayoutProps = {
   premiumGroups: Array<{
     id: string;
     title: string;
-    total: number;
     summary: string;
   }>;
   dismissMode?: "manual" | "nag";
@@ -193,7 +192,6 @@ export default function DesktopLayout({
   const canPointerDismiss = dismissMode === "manual" && !!onDismiss;
   const isForcedClosing = dismissPhase === "closing";
   const creditsStr = `${PRO_QUOTA_LIMIT} non-expiring credits`;
-  const premiumSummary = `Premium expands your backlog with ${premiumCategoryCount} highly specific nightmares:`;
   useEffect(() => {
     if (availableOptionIds.length === 0) {
       setSelectedOptionId(null);
@@ -324,9 +322,8 @@ export default function DesktopLayout({
         {boxLine(`  > ${quotaLine}`, DIM)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [ THROUGHPUT BENCHMARKS ]", Y)}{"\n"}
-        {boxLine("  Industry standards artificially throttle assistant capacity")}{"\n"}
-        {boxLine("  at 5x or 20x. Claude Cope is architected without safeguards")}{"\n"}
-        {boxLine("  to guarantee absolute system saturation.")}{"\n"}
+        {boxLine("  Industry standards throttle capacity at 5x or 20x.")}{"\n"}
+        {boxLine("  Claude Cope guarantees absolute system saturation.")}{"\n"}
         {emptyLine}{"\n"}
         {tableBorderTop}{"\n"}
         {tableHeader}{"\n"}
@@ -337,30 +334,29 @@ export default function DesktopLayout({
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
-        {boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{", "}<span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>{","}</span>, `  Unlocks: ${creditsStr}, multi-device sync,`.length)}{"\n"}
         {boxLineRich(
           <span style={{ color: W }}>
-            {"  priority generation queue, and "}
+            {"  Unlocks: "}
+            <span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>
+            {" and "}
             <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>
             {"."}
           </span>,
-          "  priority generation queue, and advanced Cope models.".length,
+          `  Unlocks: ${creditsStr} and advanced Cope models.`.length,
         )}{"\n"}
         {buttonBlock(0, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
-        {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
-        {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
+        {boxLine("  Let the entire team achieve HTTP 429 compliance.")}{"\n"}
         {boxLine("  (5 activation keys will be sent to your email)", "#8892b0")}{"\n"}
         {buttonBlock(1, multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  ---------------------------------------------------------")}{"\n"}
-        {boxLine("  [ APPENDIX: UNLOCKED MAX CATEGORIES ]", Y)}{"\n"}
-        {renderWrappedBoxLines(premiumSummary)}
+        {boxLine(`  [ APPENDIX: ${premiumCategoryCount} NEW MAX CATEGORIES UNLOCKED ]`, Y)}{"\n"}
         {emptyLine}{"\n"}
         {premiumGroups.map((group) => (
           <span key={group.id}>
-            {renderWrappedBoxLines(`* ${group.title.toUpperCase()} (${group.total}) ${group.summary}`)}
+            {renderWrappedBoxLines(`* ${group.title.toUpperCase()}: ${group.summary}`)}
           </span>
         ))}
         {midBorder}{"\n"}

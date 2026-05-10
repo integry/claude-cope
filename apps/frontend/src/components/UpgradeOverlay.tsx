@@ -46,10 +46,14 @@ type UpgradeOverlayProps = {
 
 const PREMIUM_GROUP_SUMMARIES: Record<string, string> = {
   "industry-verticals": "Fintech, Edtech, Govtech, Healthtech...",
-  "deep-infrastructure": "Migrations, IAM, service meshes, telemetry...",
-  "dark-corporate-arts": "Compliance rites, PMO theater, sabotage...",
+  "deep-infrastructure": "Migrations, IAM, K8s, Telemetry...",
+  "dark-corporate-arts": "Compliance rites, PMO, sabotage...",
   "marketing-growth-sludge": "SEO spam, Ad-tech, funnel analytics...",
-  "emerging-hype": "AI agents, crypto theater, metaverse delusion...",
+  "emerging-hype": "AI agents, crypto, metaverse delusion...",
+};
+
+const PREMIUM_GROUP_DISPLAY_TITLES: Record<string, string> = {
+  "marketing-growth-sludge": "Growth Sludge",
 };
 
 function UpgradeOverlay({
@@ -74,8 +78,7 @@ function UpgradeOverlay({
   const closeEffectPresentation = getCloseEffectPresentation(dismissEffect);
   const premiumGroups = BACKLOG_CATEGORY_UPGRADE_GROUPS.map((group) => ({
     id: group.id,
-    title: group.title,
-    total: group.categories.length,
+    title: PREMIUM_GROUP_DISPLAY_TITLES[group.id] ?? group.title,
     summary: PREMIUM_GROUP_SUMMARIES[group.id]
       ?? `${group.categories.slice(0, 3).map((entry) => entry.label).join(", ")}...`,
   }));
@@ -271,9 +274,8 @@ function MobileLayout({
             [ THROUGHPUT BENCHMARKS ]
           </div>
           <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
-            Industry standards artificially throttle assistant capacity
-            at 5x or 20x. Claude Cope is architected without safeguards
-            to guarantee absolute system saturation.
+            Industry standards throttle capacity at 5x or 20x.
+            Claude Cope guarantees absolute system saturation.
           </div>
         </div>
 
@@ -308,9 +310,7 @@ function MobileLayout({
           </div>
           <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "8px", color: W }}>
             Unlocks:{" "}
-            <span style={{ color: BW, fontWeight: "bold" }}>{PRO_QUOTA_LIMIT} non-expiring credits</span>,{" "}
-            <span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>,
-            priority generation queue, and{" "}
+            <span style={{ color: BW, fontWeight: "bold" }}>{PRO_QUOTA_LIMIT} non-expiring credits</span> and{" "}
             <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>.
           </div>
           {mobileButton(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable, true)}
@@ -324,8 +324,7 @@ function MobileLayout({
             [OPTION 2: TEAM PACK - 5 LICENSES]
           </div>
           <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
-            Scale your bottlenecks. Let the entire engineering team
-            achieve HTTP 429 compliance simultaneously.
+            Let the entire team achieve HTTP 429 compliance.
           </div>
           <div style={{ color: "#8892b0", fontSize: "11px", marginBottom: "8px" }}>
             (5 activation keys will be sent to your email)
@@ -337,11 +336,9 @@ function MobileLayout({
 
         <div style={sectionStyle}>
           <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
-            [ APPENDIX: UNLOCKED MAX CATEGORIES ]
+            [ APPENDIX: {premiumCategoryCount} NEW MAX CATEGORIES UNLOCKED ]
           </div>
-          <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: "8px" }}>
-            Premium expands your backlog with {premiumCategoryCount} highly specific nightmares:
-          </div>
+          <div style={{ height: "8px" }} />
           <div
             style={{
               display: "grid",
@@ -354,7 +351,7 @@ function MobileLayout({
             {premiumGroups.map((group) => (
               <div key={group.id}>
                 <span style={{ color: Y, fontWeight: "bold" }}>
-                  * {group.title.toUpperCase()} ({group.total})
+                  * {group.title.toUpperCase()}:
                 </span>
                 <span>{` ${group.summary}`}</span>
               </div>
