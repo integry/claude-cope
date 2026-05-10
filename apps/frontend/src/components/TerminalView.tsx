@@ -8,7 +8,7 @@ import type {
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import HeaderBar from "./HeaderBar";
-import { calculateActiveMultiplier } from "../hooks/gameStateUtils";
+import { calculateActiveMultiplier, isPaidUser } from "../hooks/gameStateUtils";
 import { parseGlitchStyle } from "./parseGlitchStyle";
 import { terminalContainerClassName } from "./terminalClassName";
 import { BYOK_ENABLED } from "../config";
@@ -55,7 +55,7 @@ type TerminalViewProps = OverlayVisibility & {
   bottomRef: RefObject<HTMLDivElement | null>;
   slashQuery: string;
   slashIndex: number;
-  runSlashCommand: (command: string) => void;
+  handleSlashMenuSelect: (command: string) => void;
   inputValue: string;
   suggestedReply: string | null;
   isProcessing: boolean;
@@ -113,7 +113,7 @@ export function TerminalView({
   bottomRef,
   slashQuery,
   slashIndex,
-  runSlashCommand,
+  handleSlashMenuSelect,
   inputValue,
   suggestedReply,
   isProcessing,
@@ -218,9 +218,9 @@ export function TerminalView({
           sprintGoal={state.activeTicket?.sprintGoal}
           onSlashCommand={handleSlashCommandClick}
         />
-        <div className="relative border-b border-white">
-          {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} onSelect={runSlashCommand} />}
-          <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
+        <div className="terminal-command-shell relative border-b border-white/20">
+          {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} paidUser={isPaidUser(state)} onSelect={handleSlashMenuSelect} />}
+        <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
           <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
         </div>
       </div>

@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import type { ServerProfile } from "@claude-cope/shared/profile";
+import { getSlashMenuItems, resolveSlashMenuSelection } from "./slashCommands";
 import { useGameState, Message } from "../hooks/useGameState";
-import { isFreeUser } from "../hooks/gameStateUtils";
+import { isFreeUser, isPaidUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
@@ -27,7 +28,7 @@ import { TerminalView } from "./TerminalView";
 import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
 import { DEFAULT_CLOSE_EFFECT, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
-import { NAG_FORCED_CLOSE_MS, NAG_MINIMUM_OPEN_MS, STARTUP_TICKET_PROMPT_DELAY_MS, getFilteredSlashCommands, getNextTerminalInputValue, pickRandomUpgradeNagCloseEffect, removeCommandFromHistory, removeUserCommandMessage, syncMessageKeys } from "./terminalUtils";
+import { NAG_FORCED_CLOSE_MS, NAG_MINIMUM_OPEN_MS, STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, pickRandomUpgradeNagCloseEffect, removeCommandFromHistory, removeUserCommandMessage, syncMessageKeys } from "./terminalUtils";
 export type { Message };
 export { STARTUP_TICKET_PROMPT_DELAY_MS };
 function Terminal() {
@@ -205,7 +206,8 @@ function Terminal() {
     setSlashQuery(value.startsWith("/") ? value : "");
     setSlashIndex(0);
   };
-  const filteredSlashCommands = () => getFilteredSlashCommands(slashQuery, state.economy.totalTDEarned);
+  const getFilteredSlashCommands = () =>
+    getSlashMenuItems(slashQuery, state.economy.totalTDEarned, isPaidUser(state)).map((item) => item.value);
   const runSlashCommand = useCallback((command: string) => {
     executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme });
   }, [state, setState, setHistory, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply]);
@@ -215,6 +217,19 @@ function Terminal() {
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") { runSlashCommandRef.current(command); return; }
     setInputValue(command + " "); setSlashQuery(""); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
+  }, []);
+  const handleSlashMenuSelect = useCallback((command: string) => {
+    const nextSelection = resolveSlashMenuSelection(command, "click");
+    if (nextSelection.mode === "execute") {
+      runSlashCommandRef.current(nextSelection.value);
+      return;
+    }
+
+    setInputValue(nextSelection.value);
+    setSlashQuery(nextSelection.nextQuery);
+    setSlashIndex(0);
+    setSuggestedReply(null);
+    inputRef.current?.focus();
   }, []);
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
     if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1 } }));
@@ -323,24 +338,27 @@ function Terminal() {
     slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements,
     showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
     freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing, setHistory,
-    closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands: filteredSlashCommands,
+    closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
   });
   return (
     <TerminalView
-      activeRegression={activeRegression} outageHp={outageHp} pendingReviewPing={pendingReviewPing} pingAcknowledged={pingAcknowledged} activeTheme={state.activeTheme}
-      regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} inputRef={inputRef} closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
-      onlineCount={onlineCount} rank={rank} state={state} handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout}
-      setInputValue={setInputValue} setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect}
-      isBooting={isBooting} history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString}
-      handleSlashCommandClick={handleSlashCommandClick} bottomRef={bottomRef} slashQuery={slashQuery} slashIndex={slashIndex} runSlashCommand={runSlashCommand}
-      inputValue={inputValue} suggestedReply={suggestedReply} isProcessing={isProcessing} handleChange={handleChange}
-      handleKeyDown={handleKeyDown} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} showStore={showStore}
-      showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout}
-      showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact} showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade}
-      setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard} setShowAchievements={setShowAchievements} setShowPrivacy={setShowPrivacy}
-      setShowTerms={setShowTerms} setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty} setShowSynergize={setShowSynergize}
-      setIsProcessing={setIsProcessing} setHistory={setHistory} pendingNagCommand={pendingNagCommandRef.current} handleUpgradeNagClose={handleUpgradeNagClose}
-      handleManualUpgradeDismiss={handleManualUpgradeDismiss}
+      activeRegression={activeRegression} outageHp={outageHp} pendingReviewPing={pendingReviewPing} pingAcknowledged={pingAcknowledged}
+      activeTheme={state.activeTheme} regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} inputRef={inputRef}
+      closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag} onlineCount={onlineCount} rank={rank} state={state}
+      handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue}
+      setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect}
+      isBooting={isBooting} history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current}
+      promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} bottomRef={bottomRef} slashQuery={slashQuery}
+      slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect} inputValue={inputValue} suggestedReply={suggestedReply}
+      isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown} buyGenerator={buyGenerator}
+      buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} showStore={showStore}
+      showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp}
+      showAbout={showAbout} showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact} showProfile={showProfile}
+      showParty={showParty} showUpgrade={showUpgrade} setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard}
+      setShowAchievements={setShowAchievements} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms}
+      setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty} setShowSynergize={setShowSynergize}
+      setIsProcessing={setIsProcessing} setHistory={setHistory} pendingNagCommand={pendingNagCommandRef.current}
+      handleUpgradeNagClose={handleUpgradeNagClose} handleManualUpgradeDismiss={handleManualUpgradeDismiss}
       upgradeNagDismissPhase={upgradeNagDismissPhase} upgradeNagDismissEffect={upgradeNagDismissEffect} />
   );
 }
