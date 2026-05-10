@@ -30,9 +30,18 @@ describe("Ticker", () => {
 
   const getButtonByText = (text: string) => Array.from(container.querySelectorAll("button"))
     .find((button) => button.textContent?.includes(text)) as HTMLButtonElement | undefined;
+  const getBannerButton = () => getButtonByText("[LIVE]");
+  const activateButtonWithKeyboard = (button: HTMLButtonElement | undefined, key: "Enter" | " ") => {
+    if (!button) return;
+    button.focus();
+    const keydownAccepted = button.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    button.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
+    // jsdom does not consistently perform the browser's default button activation.
+    if (keydownAccepted) button.click();
+  };
 
   it("renders the full desktop command cluster", () => {
-    renderTicker({ onlineCount: 7 });
+    renderTicker({ onlineCount: 7, onSlashCommand: vi.fn() });
 
     expect(container.textContent).toContain("Online:");
     expect(container.textContent).toContain("7");
@@ -68,9 +77,9 @@ describe("Ticker", () => {
 
   it("keeps the live event area clickable for expand behavior", () => {
     const onExpand = vi.fn();
-    renderTicker({ onlineCount: 2, onExpand });
+    renderTicker({ onlineCount: 2, onExpand, onSlashCommand: vi.fn() });
 
-    const banner = container.querySelector("button");
+    const banner = getBannerButton();
     expect(banner).not.toBeNull();
 
     act(() => {
@@ -81,9 +90,22 @@ describe("Ticker", () => {
   });
 
   it("uses a native button for the live event banner", () => {
-    renderTicker({ onlineCount: 2 });
+    renderTicker({ onlineCount: 2, onSlashCommand: vi.fn() });
 
-    const banner = container.querySelector("button");
+    const banner = getBannerButton();
     expect(banner?.tagName).toBe("BUTTON");
+  });
+
+  it("supports keyboard activation for the slash-command buttons", () => {
+    const onSlashCommand = vi.fn();
+    renderTicker({ onlineCount: 5, onSlashCommand });
+
+    act(() => {
+      activateButtonWithKeyboard(getButtonByText("[/who]"), "Enter");
+      activateButtonWithKeyboard(getButtonByText("Firehose [/party]"), " ");
+    });
+
+    expect(onSlashCommand).toHaveBeenNthCalledWith(1, "/who");
+    expect(onSlashCommand).toHaveBeenNthCalledWith(2, "/party");
   });
 });

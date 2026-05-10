@@ -232,7 +232,7 @@ body {
   --color-text: #1a1a1a;
 }
 
-.header-link {
+.ticker-header-link {
   color: #9ca3af;
   cursor: pointer;
   text-decoration: none;
@@ -243,19 +243,19 @@ body {
   transition: color 0.1s ease;
 }
 
-.header-link:focus-visible {
+.ticker-header-link:focus-visible {
   outline: 1px solid #67e8f9;
   outline-offset: 2px;
 }
 
-.header-link-command {
+.ticker-header-link-command {
   color: inherit;
   text-decoration: none;
   transition: color 0.1s ease;
 }
 
-.header-link:hover .header-link-command,
-.header-link:focus-visible .header-link-command {
+.ticker-header-link:hover .ticker-header-link-command,
+.ticker-header-link:focus-visible .ticker-header-link-command {
   color: #a5f3fc;
   text-decoration: underline;
   text-underline-offset: 2px;

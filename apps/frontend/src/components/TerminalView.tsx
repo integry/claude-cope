@@ -159,14 +159,6 @@ export function TerminalView({
 }: TerminalViewProps) {
   const handleTickerCommand = (command: string) => {
     closeAllOverlaysPreservingNag();
-    if (command === "/party") {
-      setShowParty(true);
-      return;
-    }
-    if (command === "/leaderboard") {
-      setShowLeaderboard(true);
-      return;
-    }
     runSlashCommand(command);
   };
 

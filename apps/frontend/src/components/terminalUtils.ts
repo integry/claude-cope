@@ -1,5 +1,4 @@
 import type { Message } from "../hooks/useGameState";
-import { SLASH_COMMANDS } from "./slashCommands";
 import { DEFAULT_CLOSE_EFFECT, UPGRADE_NAG_CLOSE_EFFECTS, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
 
 export const NAG_MINIMUM_OPEN_MS = 3000;
@@ -34,11 +33,4 @@ export function getNextTerminalInputValue(currentValue: string, nextValue: strin
   return isBackwardsTyping && isAppending
     ? nextValue.slice(currentValue.length) + currentValue
     : nextValue;
-}
-
-export function getFilteredSlashCommands(slashQuery: string, totalTDEarned: number) {
-  return SLASH_COMMANDS.filter((command) => (
-    !(command === "/store" && totalTDEarned < 1000)
-    && command.startsWith(slashQuery.toLowerCase())
-  ));
 }
