@@ -13,6 +13,11 @@ const DIM = "#aaaaaa"; // dim footer
 const INNER_W = 64; // inner content width (between ║ chars)
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
 export const UPGRADE_OVERLAY_MOBILE_MAX_WIDTH = 640;
+const BORDER_TOP = `╔${"═".repeat(INNER_W)}╗`;
+const BORDER_MID = `╠${"═".repeat(INNER_W)}╣`;
+const BORDER_BOTTOM = `╚${"═".repeat(INNER_W)}╝`;
+const OPTION_IDS = { single: 0, multi: 1 } as const;
+const RETAIN_TEXT = "[Press ESC to retain your net worth]";
 
 export type LayoutProps = {
   singleLabel: string;
@@ -31,6 +36,13 @@ export type LayoutProps = {
   onDismiss?: () => void;
 };
 
+function getOptionIdList(singleAvailable: boolean, multiAvailable: boolean) {
+  return [singleAvailable ? OPTION_IDS.single : null, multiAvailable ? OPTION_IDS.multi : null].filter((id): id is number => id !== null);
+}
+function getCenteredPadding(text: string) {
+  const left = Math.max(0, Math.floor((INNER_W - text.length) / 2));
+  return { left, right: Math.max(0, INNER_W - text.length - left) };
+}
 export default function DesktopLayout({
   singleLabel,
   multiLabel,
@@ -45,21 +57,16 @@ export default function DesktopLayout({
 }: LayoutProps) {
   const optionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const focusSourceRef = useRef<"pointer" | "tab" | "arrow" | null>(null);
   const getIsDesktopViewport = useCallback(() => typeof window !== "undefined" && window.innerWidth > UPGRADE_OVERLAY_MOBILE_MAX_WIDTH, []);
   const [isDesktopViewport, setIsDesktopViewport] = useState(getIsDesktopViewport);
-  const topBorder = <span style={{ color: B }}>{"╔" + "═".repeat(INNER_W) + "╗"}</span>;
-  const midBorder = <span style={{ color: B }}>{"╠" + "═".repeat(INNER_W) + "╣"}</span>;
-  const botBorder = <span style={{ color: B }}>{"╚" + "═".repeat(INNER_W) + "╝"}</span>;
   const boxLine = (text: string, color = W) => {
     const padded = text.length < INNER_W ? text + " ".repeat(INNER_W - text.length) : text.slice(0, INNER_W);
     return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{padded}</span><span style={{ color: B }}>{"║"}</span></>;
   };
   const emptyLine = boxLine("");
-  const availableOptionIds = useMemo(
-    () => [singleAvailable ? 0 : null, multiAvailable ? 1 : null].filter((id): id is number => id !== null),
-    [singleAvailable, multiAvailable],
-  );
-  const [selectedOptionId, setSelectedOptionId] = useState<number | null>(availableOptionIds[0] ?? null);
+  const availableOptionIds = useMemo(() => getOptionIdList(singleAvailable, multiAvailable), [singleAvailable, multiAvailable]);
+  const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
   const [isKeyboardNavigationMode, setIsKeyboardNavigationMode] = useState(false);
   const boxLineRich = (content: React.ReactNode, textLength: number) => {
     const padLen = Math.max(0, INNER_W - textLength);
@@ -73,9 +80,7 @@ export default function DesktopLayout({
     );
   };
   const centeredBoxLine = (text: string, color = W) => {
-    const totalPad = INNER_W - text.length;
-    const left = Math.max(0, Math.floor(totalPad / 2));
-    const right = Math.max(0, totalPad - left);
+    const { left, right } = getCenteredPadding(text);
     return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{" ".repeat(left) + text + " ".repeat(right)}</span><span style={{ color: B }}>{"║"}</span></>;
   };
   const buttonBlock = (
@@ -124,8 +129,16 @@ export default function DesktopLayout({
         tabIndex={isForcedClosing ? -1 : undefined}
         aria-hidden={isForcedClosing ? true : undefined}
         onClick={(e) => e.stopPropagation()}
-        onMouseDown={() => { setIsKeyboardNavigationMode(false); }}
-        onFocus={() => { setSelectedOptionId(id); }}
+        onMouseDown={() => {
+          focusSourceRef.current = "pointer";
+          setIsKeyboardNavigationMode(false);
+        }}
+        onFocus={() => {
+          setSelectedOptionId(id);
+          if (focusSourceRef.current !== "pointer") {
+            setIsKeyboardNavigationMode(true);
+          }
+        }}
       >
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: "transparent" }}>{emptyInner}</span>
@@ -147,18 +160,16 @@ export default function DesktopLayout({
     );
   };
   const tableLines = { border: boxLine("  +----------------+----------+------------------------------+"), header: boxLine("  | ARCHITECTURE   | CAPACITY | GUARANTEED OUTCOME           |"), legacy: boxLine("  | Legacy AI      | Max 20x  | Manageable pull requests     |"), cope: boxLine("  | Claude Cope    | MAX 429X | Unmitigated request storms   |") };
-  const title = "[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]";
-  const closeBtn = "[x]";
+  const title = "[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]", closeBtn = "[x]";
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
-  const canPointerDismiss = dismissMode === "manual" && !!onDismiss;
-  const isForcedClosing = dismissPhase === "closing";
+  const canPointerDismiss = dismissMode === "manual" && !!onDismiss, isForcedClosing = dismissPhase === "closing";
   useEffect(() => {
     if (availableOptionIds.length === 0) {
       setSelectedOptionId(null);
       return;
     }
-    if (selectedOptionId === null || !availableOptionIds.includes(selectedOptionId)) {
+    if (selectedOptionId !== null && !availableOptionIds.includes(selectedOptionId)) {
       setSelectedOptionId(availableOptionIds[0] ?? null);
     }
   }, [availableOptionIds, selectedOptionId]);
@@ -171,7 +182,8 @@ export default function DesktopLayout({
   const cycleSelection = useCallback((direction: -1 | 1) => {
     if (availableOptionIds.length === 0) return;
     if (selectedOptionId === null) {
-      setSelectedOptionId(availableOptionIds[0] ?? null);
+      const fallbackIndex = direction > 0 ? 0 : availableOptionIds.length - 1;
+      setSelectedOptionId(availableOptionIds[fallbackIndex] ?? null);
       return;
     }
     const currentIndex = availableOptionIds.indexOf(selectedOptionId);
@@ -192,15 +204,17 @@ export default function DesktopLayout({
       }
       return;
     }
+    const overlay = overlayRef.current;
+    if (!overlay) return;
     if (isForcedClosing || (dismissMode === "nag" && !isKeyboardNavigationMode)) {
-      overlayRef.current?.focus();
+      overlay.focus();
       return;
     }
     if (isKeyboardNavigationMode && selectedOptionId !== null) {
       optionRefs.current[selectedOptionId]?.focus();
       return;
     }
-    overlayRef.current?.focus();
+    if (!overlay.contains(document.activeElement)) overlay.focus();
   }, [dismissMode, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, selectedOptionId]);
   useEffect(() => {
     if (!isDesktopViewport || isForcedClosing) return undefined;
@@ -233,18 +247,20 @@ export default function DesktopLayout({
     if (isEditableTarget) return;
     if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
       event.preventDefault();
+      focusSourceRef.current = "arrow";
       setIsKeyboardNavigationMode(true);
       cycleSelection(-1);
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowRight") {
       event.preventDefault();
+      focusSourceRef.current = "arrow";
       setIsKeyboardNavigationMode(true);
       cycleSelection(1);
       return;
     }
     if (event.key === "Tab") {
-      setIsKeyboardNavigationMode(true);
+      focusSourceRef.current = "tab";
       return;
     }
     if (
@@ -291,7 +307,7 @@ export default function DesktopLayout({
           ...(isForcedClosing && closeEffectPresentation ? { animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" as const } : {}),
         }}
       >
-        {topBorder}{"\n"}
+        <span style={{ color: B }}>{BORDER_TOP}</span>{"\n"}
         <span style={{ color: B }}>{"║"}</span>
         <span style={{ color: B }}>{" " + title + " ".repeat(titleGap - 1)}</span>
         {canPointerDismiss ? (
@@ -309,7 +325,7 @@ export default function DesktopLayout({
         <span style={{ color: B }}>{" ".repeat(titlePadRight)}</span>
         <span style={{ color: B }}>{"║"}</span>
         {"\n"}
-        {midBorder}{"\n"}
+        <span style={{ color: B }}>{BORDER_MID}</span>{"\n"}
         {emptyLine}{"\n"}
         {centeredBoxLine("INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]", Y)}{"\n"}
         {boxLine(`  > ${quotaLine}`, DIM)}{"\n"}
@@ -330,7 +346,6 @@ export default function DesktopLayout({
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
         {(() => {
           const creditsStr = `${PRO_QUOTA_LIMIT} non-expiring credits`;
-          const line1 = `  Unlocks: ${creditsStr}, multi-device sync,`;
           return boxLineRich(
             <span style={{ color: W }}>
               {"  Unlocks: "}
@@ -339,7 +354,7 @@ export default function DesktopLayout({
               <span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>
               {","}
             </span>,
-            line1.length,
+            `  Unlocks: ${creditsStr}, multi-device sync,`.length,
           );
         })()}{"\n"}
         {boxLineRich(
@@ -350,19 +365,16 @@ export default function DesktopLayout({
           </span>,
           "  priority generation queue, and advanced Cope models.".length,
         )}{"\n"}
-        {buttonBlock(0, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
+        {buttonBlock(OPTION_IDS.single, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
         {boxLine("  Scale your bottlenecks. Let the entire engineering team")}{"\n"}
         {boxLine("  achieve HTTP 429 compliance simultaneously.")}{"\n"}
         {boxLine("  (5 activation keys will be sent to your email)", "#8892b0")}{"\n"}
-        {buttonBlock(1, multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
-        {midBorder}{"\n"}
+        {buttonBlock(OPTION_IDS.multi, multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
+        <span style={{ color: B }}>{BORDER_MID}</span>{"\n"}
         {(() => {
-          const text = "[Press ESC to retain your net worth]";
-          const totalPad = INNER_W - text.length;
-          const left = Math.max(0, Math.floor(totalPad / 2));
-          const right = Math.max(0, totalPad - left);
+          const { left, right } = getCenteredPadding(RETAIN_TEXT);
           return (
             <span style={{ display: "inline" }} className="upgrade-esc-btn">
               <span style={{ color: B }}>{"║"}</span>
@@ -372,15 +384,15 @@ export default function DesktopLayout({
                   onClick={onDismiss}
                   data-esc=""
                   style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
-                >{" ".repeat(left) + text + " ".repeat(right)}</button>
+                >{" ".repeat(left) + RETAIN_TEXT + " ".repeat(right)}</button>
               ) : (
-                <span data-esc="" style={{ color: DIM }}>{" ".repeat(left) + text + " ".repeat(right)}</span>
+                <span data-esc="" style={{ color: DIM }}>{" ".repeat(left) + RETAIN_TEXT + " ".repeat(right)}</span>
               )}
               <span style={{ color: B }}>{"║"}</span>
             </span>
           );
         })()}{"\n"}
-        {botBorder}
+        <span style={{ color: B }}>{BORDER_BOTTOM}</span>
       </pre>
     </div>
   );

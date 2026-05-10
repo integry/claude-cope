@@ -249,6 +249,33 @@ describe("UpgradeOverlay", () => {
     expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/multi");
   });
 
+  it("preserves manual desktop tab order before arming checkout selection", () => {
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "manual" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    const closeButton = container.querySelector(".upgrade-desktop button") as HTMLButtonElement | null;
+    const singleLink = container.querySelector(".upgrade-desktop a[href='https://example.com/single']") as HTMLAnchorElement | null;
+
+    expect(document.activeElement).toBe(desktop);
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
+
+    act(() => {
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+      closeButton?.focus();
+    });
+
+    expect(document.activeElement).toBe(closeButton);
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
+
+    act(() => {
+      closeButton?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+      singleLink?.focus();
+    });
+
+    expect(document.activeElement).toBe(singleLink);
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/single");
+  });
+
   it("disables desktop keyboard navigation after resizing to mobile", () => {
     setViewportWidth(1024);
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
