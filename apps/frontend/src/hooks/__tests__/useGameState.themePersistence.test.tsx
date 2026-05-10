@@ -31,7 +31,7 @@ vi.mock("../../api/profileApi", () => ({
   updateThemeServer: vi.fn(),
 }));
 
-import { updateThemeServer } from "../../api/profileApi";
+import { buyThemeServer, fetchSessionProfile, updateThemeServer } from "../../api/profileApi";
 
 function makeState(overrides: Partial<GameState> = {}): GameState {
   return {
@@ -187,7 +187,7 @@ describe("useGameState theme persistence", () => {
     await act(async () => {
       request.resolve({
         success: false,
-        error: "Session authentication is required for this purchase",
+        error: "Session authentication is required for theme updates",
         errorCode: "session_auth_required",
       });
       await request.promise;
@@ -197,7 +197,104 @@ describe("useGameState theme persistence", () => {
     expect(hookState.state.hasSessionPro).toBeUndefined();
     expect(hookState.state.chatHistory[hookState.state.chatHistory.length - 1]).toMatchObject({
       role: "error",
-      content: "[❌ Error] Session authentication is required for this purchase",
+      content: "[❌ Error] Session authentication is required for theme updates",
     });
+  });
+
+  it("restores the server active theme for existing paid sessions with non-fresh local state", async () => {
+    vi.mocked(fetchSessionProfile).mockResolvedValueOnce({
+      found: true,
+      isPro: true,
+      username: "alice",
+      profile: createServerProfile({
+        active_theme: "midnight",
+        unlocked_themes: ["default", "amber", "midnight"],
+      }),
+    });
+
+    act(() => {
+      root.unmount();
+    });
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(makeState({
+      activeTheme: "default",
+      unlockedThemes: ["default", "amber", "midnight"],
+      chatHistory: [{ id: 1, role: "user", content: "hello" }],
+    })));
+
+    act(() => {
+      root = createRoot(container);
+      root.render(createElement(HookHarness, {
+        onRender: (value) => {
+          hookState = value;
+        },
+      }));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(hookState.state.activeTheme).toBe("midnight");
+  });
+
+  it("does not let buy-theme overwrite a newer optimistic equip selection", async () => {
+    act(() => {
+      root.unmount();
+    });
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(makeState({
+      activeTheme: "default",
+      unlockedThemes: ["default", "amber"],
+    })));
+
+    act(() => {
+      root = createRoot(container);
+      root.render(createElement(HookHarness, {
+        onRender: (value) => {
+          hookState = value;
+        },
+      }));
+    });
+
+    const buyRequest = deferred<{ success: boolean; profile: ReturnType<typeof createServerProfile> }>();
+    const updateRequest = deferred<{ success: boolean; profile: ReturnType<typeof createServerProfile> }>();
+    vi.mocked(buyThemeServer).mockReturnValueOnce(buyRequest.promise);
+    vi.mocked(updateThemeServer).mockReturnValueOnce(updateRequest.promise);
+
+    act(() => {
+      hookState.buyTheme("midnight");
+    });
+    act(() => {
+      hookState.setActiveTheme("midnight");
+    });
+
+    expect(hookState.state.activeTheme).toBe("midnight");
+
+    await act(async () => {
+      buyRequest.resolve({
+        success: true,
+        profile: createServerProfile({
+          active_theme: "default",
+          unlocked_themes: ["default", "amber", "midnight"],
+        }),
+      });
+      await buyRequest.promise;
+    });
+
+    expect(hookState.state.activeTheme).toBe("midnight");
+
+    await act(async () => {
+      updateRequest.resolve({
+        success: true,
+        profile: createServerProfile({
+          active_theme: "midnight",
+          unlocked_themes: ["default", "amber", "midnight"],
+        }),
+      });
+      await updateRequest.promise;
+    });
+
+    expect(hookState.state.activeTheme).toBe("midnight");
   });
 });

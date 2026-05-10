@@ -315,6 +315,8 @@ export async function resolveThemePurchaseOwnership(
     licenseKeyHash?: string;
     kv?: KVNamespace;
     sessionId?: string;
+    actionLabel?: string;
+    logPrefix?: string;
   },
 ): Promise<OwnershipResult> {
   if (opts.licenseKeyHash) {
@@ -324,13 +326,16 @@ export async function resolveThemePurchaseOwnership(
     }
   }
 
+  const actionLabel = opts.actionLabel ?? "this action";
+  const logPrefix = opts.logPrefix ?? "[account/theme]";
+
   if (!opts.kv || !opts.sessionId) {
-    return { profile: null, status: "unauthorized", error: "Session authentication is required for this purchase", errorCode: "session_auth_required" };
+    return { profile: null, status: "unauthorized", error: `Session authentication is required for ${actionLabel}`, errorCode: "session_auth_required" };
   }
 
   const boundUsername = await opts.kv.get(accountKvKeys.sessionUser(opts.sessionId));
   if (!boundUsername) {
-    return { profile: null, status: "unauthorized", error: "Session authentication is required for this purchase", errorCode: "session_auth_required" };
+    return { profile: null, status: "unauthorized", error: `Session authentication is required for ${actionLabel}`, errorCode: "session_auth_required" };
   }
 
   const requestedUsername = opts.username.toLowerCase();
@@ -343,7 +348,7 @@ export async function resolveThemePurchaseOwnership(
     kv: opts.kv,
     sessionId: opts.sessionId,
     username: boundUsername,
-    logPrefix: "[account/buy-theme]",
+    logPrefix,
   });
   if (!resolved.row) {
     if (requestedAlias && requestedAlias.current.toLowerCase() !== boundUsername.toLowerCase()) {
@@ -360,7 +365,7 @@ export async function resolveThemePurchaseOwnership(
   const row = resolved.row as typeof resolved.row & { license_hash: string | null };
   if (!row) return { profile: null, status: "not_found", error: "Profile not found" };
   if (!row.license_hash) {
-    return { profile: null, status: "unauthorized", error: "An active Max license is required to purchase themes", errorCode: "active_max_license_required" };
+    return { profile: null, status: "unauthorized", error: `An active Max license is required for ${actionLabel}`, errorCode: "active_max_license_required" };
   }
 
   if (!(await isLicenseActive(db, row.license_hash))) {

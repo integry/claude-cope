@@ -93,7 +93,22 @@ export function applyValidatedSessionProState(state: GameState, result: SessionP
     return { ...state, proKey: undefined, proKeyHash: undefined, isPro: undefined, hasSessionPro: undefined };
   }
 
-  const restoredUsername = result.profile?.username ?? result.username;
+  if (result.profile) {
+    return {
+      ...state,
+      username: result.profile.username,
+      economy: {
+        ...state.economy,
+        ...(result.profile.quota_percent != null ? { quotaPercent: result.profile.quota_percent } : {}),
+      },
+      unlockedThemes: result.profile.unlocked_themes,
+      activeTheme: result.profile.active_theme,
+      isPro: true,
+      hasSessionPro: true,
+    };
+  }
+
+  const restoredUsername = result.username;
   if (state.hasSessionPro && state.isPro && (!restoredUsername || state.username === restoredUsername)) {
     return state;
   }

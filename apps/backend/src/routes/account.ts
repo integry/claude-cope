@@ -533,6 +533,8 @@ account.post("/buy-theme", async (c) => {
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
     sessionId: c.get("sessionId"),
+    actionLabel: "theme purchases",
+    logPrefix: "[account/buy-theme]",
   });
   if (ownership.status !== "ok") {
     return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
@@ -591,6 +593,8 @@ account.post("/update-theme", async (c) => {
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
     sessionId: c.get("sessionId"),
+    actionLabel: "theme updates",
+    logPrefix: "[account/update-theme]",
   });
   if (ownership.status !== "ok") {
     return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
