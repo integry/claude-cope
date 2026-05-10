@@ -342,10 +342,29 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
                   </div>
                   <button
                     onClick={() => handleOpenShareTarget(pasteHint.platform)}
-                    style={{ background: "none", border: "none", padding: "8px 0 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", display: "block" }}
+                    className="share-popup-action"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: "8px 0 0 0",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      fontSize: "12px",
+                      display: "block",
+                    }}
                   >
-                    <span style={{ color: "#4ade80", fontWeight: "bold" }}>{">"}</span>
-                    <span style={{ color: "#4ade80", fontWeight: "bold" }}>{` [ OPEN ${pasteHint.platform === "twitter" ? "X" : "LINKEDIN"} TAB ]`}</span>
+                    <span data-cursor="" style={{ color: "#4ade80", fontWeight: "bold" }}>{">"}</span>
+                    <span
+                      data-btn=""
+                      style={{
+                        color: "#4ade80",
+                        fontWeight: "bold",
+                        padding: "2px 6px",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      {` [ OPEN ${pasteHint.platform === "twitter" ? "X" : "LINKEDIN"} TAB ]`}
+                    </span>
                   </button>
                 </div>
               ) : (
@@ -359,10 +378,29 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
                       key={label}
                       onClick={onClick}
                       disabled={status === "generating"}
-                      style={{ background: "none", border: "none", padding: 0, cursor: status === "generating" ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: "12px", opacity: status === "generating" ? 0.5 : 1 }}
+                      className="share-popup-action"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        cursor: status === "generating" ? "not-allowed" : "pointer",
+                        fontFamily: "inherit",
+                        fontSize: "12px",
+                        opacity: status === "generating" ? 0.5 : 1,
+                      }}
                     >
-                      <span style={{ color: "#4ade80", fontWeight: "bold" }}>{">"}</span>
-                      <span style={{ color: "#4ade80", fontWeight: "bold" }}>{` [ ${label} ]`}</span>
+                      <span data-cursor="" style={{ color: "#4ade80", fontWeight: "bold" }}>{">"}</span>
+                      <span
+                        data-btn=""
+                        style={{
+                          color: "#4ade80",
+                          fontWeight: "bold",
+                          padding: "2px 6px",
+                          backgroundColor: "transparent",
+                        }}
+                      >
+                        {` [ ${label} ]`}
+                      </span>
                     </button>
                   ))}
                 </div>
