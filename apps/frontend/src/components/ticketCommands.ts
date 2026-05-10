@@ -15,7 +15,7 @@ import { updateTicketServer } from "../api/profileApi";
 type Reply = (msg: Message) => void;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
 
-/** Cache last backlog results so `/take 2` can resolve by row number */
+/** Cache last backlog results so `/take 2` or `/take BLAME-421` can resolve locally */
 let lastBacklogResults: CommunityBacklogTicket[] = [];
 
 type BacklogRequestOptions = {
@@ -285,7 +285,7 @@ export function handleTakeCommand(
   const input = command.slice("/take".length).trim();
   if (!input) {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: SlashCommandFailureReasons.NO_ARGUMENT });
-    reply({ role: "error", content: "[❌] Usage: `/take <number>` — Run `/backlog` first, then pick a row number." });
+    reply({ role: "error", content: "[❌] Usage: `/take <row-or-id>` — Run `/backlog` first, then pick a row number or ticket ID." });
     return true;
   }
 
@@ -295,7 +295,7 @@ export function handleTakeCommand(
     return true;
   }
 
-  // Resolve ticket: try row number from cached backlog first, then raw ID
+  // Resolve ticket: try row number from cached backlog first, then stable ID/prefix lookup.
   const rowNum = parseInt(input, 10);
   let ticket: CommunityBacklogTicket | undefined;
   if (!isNaN(rowNum) && rowNum >= 1 && rowNum <= lastBacklogResults.length) {

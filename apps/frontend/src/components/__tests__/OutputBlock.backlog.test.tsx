@@ -34,6 +34,8 @@ describe("OutputBlock backlog rendering", () => {
   afterEach(() => {
     act(() => root?.unmount());
     container?.remove();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("renders the responsive backlog component from real backlog copy and keeps slash commands clickable", async () => {
@@ -90,7 +92,7 @@ describe("OutputBlock backlog rendering", () => {
     });
 
     expect(ticketButton?.getAttribute("aria-label")).toBe("Claim ticket BLAME-421");
-    expect(onSlashCommand).toHaveBeenCalledWith("/take 1", "execute");
+    expect(onSlashCommand).toHaveBeenCalledWith("/take BLAME-421", "execute");
     expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "execute");
     expect(onSlashCommand).toHaveBeenCalledWith("/upgrade", "execute");
   });
@@ -199,7 +201,7 @@ describe("OutputBlock backlog rendering", () => {
       ticketButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(ticketButton?.getAttribute("aria-label")).toBe("Claim ticket PIXEL-77");
-    expect(onSlashCommand).toHaveBeenCalledWith("/take 1", "execute");
+    expect(ticketButton?.getAttribute("aria-label")).toBe("View premium ticket PIXEL-77");
+    expect(onSlashCommand).toHaveBeenCalledWith("/take PIXEL-77", "execute");
   });
 });

@@ -11,9 +11,9 @@ function renderLine(
 }
 
 function renderTicketId(
-  row: number,
   fullId: string,
   shortId: string,
+  isLocked: boolean,
   onSlashCommand?: (command: string, action: SlashCommandAction) => void,
 ): React.ReactNode {
   if (!onSlashCommand) return shortId;
@@ -22,10 +22,10 @@ function renderTicketId(
     <button
       type="button"
       className="block max-w-full cursor-pointer truncate bg-transparent p-0 font-inherit text-inherit underline decoration-dotted hover:text-cyan-100"
-      aria-label={`Claim ticket ${fullId}`}
+      aria-label={isLocked ? `View premium ticket ${fullId}` : `Claim ticket ${fullId}`}
       onClick={(event) => {
         event.stopPropagation();
-        onSlashCommand(`/take ${row}`, "execute");
+        onSlashCommand(`/take ${fullId}`, "execute");
       }}
     >
       {shortId}
@@ -46,7 +46,7 @@ function BacklogTicketRow({
     >
       <div className="hidden text-slate-300 md:block">[{ticket.row}]</div>
       <div className="hidden text-cyan-200 md:block">
-        {renderTicketId(ticket.row, ticket.fullId, ticket.shortId, onSlashCommand)}
+        {renderTicketId(ticket.fullId, ticket.shortId, ticket.isLocked, onSlashCommand)}
       </div>
       <div className={`hidden min-w-0 break-words text-cyan-100 [overflow-wrap:anywhere] md:block ${ticket.isLocked ? "text-amber-200" : ""}`}>
         {ticket.title}
@@ -63,7 +63,7 @@ function BacklogTicketRow({
           <div className="flex min-w-0 items-center gap-2">
             <span className="text-slate-200">[{ticket.row}]</span>
             <span className="min-w-0 text-cyan-200">
-              {renderTicketId(ticket.row, ticket.fullId, ticket.shortId, onSlashCommand)}
+              {renderTicketId(ticket.fullId, ticket.shortId, ticket.isLocked, onSlashCommand)}
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">

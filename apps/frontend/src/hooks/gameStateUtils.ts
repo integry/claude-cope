@@ -67,9 +67,7 @@ export type Message = {
 };
 
 export function stripTransientMessageFields(message: Message): Message {
-  if (!message.backlogDisplay) return message;
-  const { backlogDisplay: _backlogDisplay, ...persistentMessage } = message;
-  return persistentMessage;
+  return message;
 }
 
 export interface BuddyState {
