@@ -14,9 +14,12 @@ type SetState = React.Dispatch<React.SetStateAction<GameState>>;
 let lastBacklogResults: CommunityBacklogTicket[] = [];
 
 function formatBacklogTitle(ticket: CommunityBacklogTicket): string {
-  const categoryPrefix = ticket.category_prefix?.trim() ? `${ticket.category_prefix.trim()} ` : "";
   const premiumPrefix = ticket.is_locked ? "🔒 [PREMIUM] " : "";
-  return `${premiumPrefix}${categoryPrefix}${ticket.title}`;
+  const normalizedPrefix = ticket.category_prefix?.trim();
+  const normalizedTitle = normalizedPrefix && ticket.title.startsWith(`${normalizedPrefix} `)
+    ? ticket.title.slice(normalizedPrefix.length + 1)
+    : ticket.title;
+  return `${premiumPrefix}${normalizedTitle}`;
 }
 
 export function formatLockedTicketPrompt(ticket: CommunityBacklogTicket): string {
@@ -93,9 +96,11 @@ export async function handleBacklogCommand(reply: Reply, proKeyHash?: string): P
       align === "right"
         ? " ".repeat(Math.max(0, w - s.length)) + s
         : s + " ".repeat(Math.max(0, w - s.length));
+    const formatReward = (ticket: CommunityBacklogTicket): string =>
+      ticket.is_locked ? pad("--", tdW, "right") : pad(String(ticket.technical_debt * 10), tdW, "right");
     const header = `| ${pad("#", numW)} | ${pad("ID", idW)} | ${pad("Title", titleW)} | ${pad("Status", statusW)} | ${pad("Reward", tdW)} |`;
     const rows = tickets.map((t, i) =>
-      `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(formatBacklogTitle(t), titleW)} | ${pad(t.is_locked ? "PREMIUM" : "OPEN", statusW)} | ${pad(t.is_locked ? "--" : String(t.technical_debt * 10), tdW, "right")} |`
+      `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(formatBacklogTitle(t), titleW)} | ${pad(t.is_locked ? "PREMIUM" : "OPEN", statusW)} | ${formatReward(t)} |`
     );
     const table = [sep, header, sep, ...rows, sep].join("\n");
     const lockedTickets = tickets.filter((ticket) => ticket.is_locked);
@@ -103,10 +108,16 @@ export async function handleBacklogCommand(reply: Reply, proKeyHash?: string): P
       ? [
         "Type `/take <row>` to claim an open ticket. Locked rows are teaser-only for free users.",
         "",
-        "**Premium Teasers**",
-        ...lockedTickets.map((ticket) => `- ${formatBacklogTitle(ticket)}${ticket.upgrade_teaser?.trim() ? ` - ${ticket.upgrade_teaser.trim()}` : ""}`),
+        "[UPGRADE REQUIRED] The following categories are locked behind Wallet Extraction:",
+        ...Array.from(new Map(
+          lockedTickets.map((ticket) => {
+            const prefix = ticket.category_prefix?.trim().replace(/^\[|\]$/g, "") || "PREMIUM";
+            const label = ticket.category_label?.trim() || "Specialized Suffering";
+            return [prefix, ` 🔒 ${prefix} (${label})`] as const;
+          }),
+        ).values()),
         "",
-        "Run `/upgrade` to unlock premium backlog tickets.",
+        "Run `/upgrade` to unlock 50+ specialized categories and premium suffering.",
       ].join("\n")
       : `Type \`/take 1\` through \`/take ${tickets.length}\` to claim a ticket.`;
     reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]\n\n\`\`\`\n${table}\n\`\`\`\n\n${footer}` });

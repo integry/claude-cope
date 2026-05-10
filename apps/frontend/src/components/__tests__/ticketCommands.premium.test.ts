@@ -48,21 +48,22 @@ describe("premium backlog handling", () => {
       ok: true,
       json: async () => ([
         {
-          id: "free-12345",
-          title: "Fix lint config",
+          id: "BLORT-18",
+          title: "BLORT Turn the Backlog into an Agent Swarm",
           description: "Regular ticket",
-          technical_debt: 4,
+          technical_debt: 34,
           kickoff_prompt: "fix the lint config",
-          category_prefix: "[WEB]",
+          category_prefix: "BLORT",
           tier: "free",
         },
         {
-          id: "locked-9999",
-          title: "Reverse engineer the COBOL moonbeam",
+          id: "PIXEL-77",
+          title: "PIXEL Force View Events into Ad Creative Pipelines",
           description: "Locked premium ticket",
           technical_debt: 99,
           kickoff_prompt: "never used",
-          category_prefix: "[WEIRD]",
+          category_prefix: "PIXEL",
+          category_label: "Ad Creative Pipelines",
           is_locked: true,
           tier: "premium",
           upgrade_teaser: "Unlock niche chaos quests with Max.",
@@ -76,11 +77,15 @@ describe("premium backlog handling", () => {
 
     expect(reply).toHaveBeenCalledOnce();
     const message = reply.mock.calls[0]?.[0];
-    expect(message.content).toContain("🔒 [PREMIUM] [WEIRD] Reverse engineer the COBOL moonbeam");
-    expect(message.content).toContain("PREMIUM");
-    expect(message.content).toContain("**Premium Teasers**");
-    expect(message.content).toContain("Unlock niche chaos quests with Max.");
-    expect(message.content).toContain("`/upgrade`");
+    expect(message.content).toContain("BLORT-18");
+    expect(message.content).toContain("Turn the Backlog into an Agent Swarm");
+    expect(message.content).not.toContain("BLORT Turn the Backlog into an Agent Swarm");
+    expect(message.content).toContain("🔒 [PREMIUM] Force View Events into Ad Creative Pipelines");
+    expect(message.content).toContain("| OPEN     |      340 |");
+    expect(message.content).toContain("| PREMIUM  |       -- |");
+    expect(message.content).toContain("[UPGRADE REQUIRED] The following categories are locked behind Wallet Extraction:");
+    expect(message.content).toContain("🔒 PIXEL (Ad Creative Pipelines)");
+    expect(message.content).toContain("Run `/upgrade` to unlock 50+ specialized categories and premium suffering.");
   });
 
   it("blocks locked ticket selection, replies with an upgrade prompt, and leaves free picks unchanged", async () => {
