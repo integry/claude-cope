@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import PartySocket from 'partysocket';
 import { Message } from '../components/Terminal';
-import type { ClientMessage, ServerMessage } from '@claude-cope/shared/multiplayer-types';
+import type {
+  ClientMessage,
+  OutageScenario,
+  ServerMessage,
+} from '@claude-cope/shared/multiplayer-types';
 
 interface ReviewPingTicket {
   id: string;
@@ -142,6 +146,7 @@ export interface ServerMessageHandlers {
   setOnlineCount: React.Dispatch<React.SetStateAction<number>>;
   setOnlineUsers: React.Dispatch<React.SetStateAction<string[]>>;
   setOutageHp: React.Dispatch<React.SetStateAction<number | null>>;
+  setActiveOutageScenario: React.Dispatch<React.SetStateAction<OutageScenario | null>>;
   creditTD: (amount: number) => void;
   debitTD: (amount: number) => void;
   applyReviewSprintBoost: (ticketId: string, boost: number) => void;
@@ -238,29 +243,33 @@ function handleOutageMessage(data: ServerMessage, h: ServerMessageHandlers): boo
     // can't participate and we don't want to stack up alerts.
     if (h.isUserIdle()) return true;
     h.setOutageHp(data.hp);
-    h.setHistory(prev => [...prev, { role: 'error', content: '[CRITICAL ALERT: AWS us-east-1 IS DOWN]' }]);
+    h.setActiveOutageScenario(data.scenario);
+    h.setHistory(prev => [...prev, { role: 'error', content: data.scenario.alert }]);
     return true;
   }
   if (data.type === 'outage_update') {
     // Only sync the bar if the user is already engaged with this outage
     if (h.isUserIdle()) return true;
     h.setOutageHp(data.hp);
+    h.setActiveOutageScenario(data.scenario);
     return true;
   }
   if (data.type === 'outage_cleared') {
     // Always clear the bar state; only reward+announce if not idle
     h.setOutageHp(null);
+    h.setActiveOutageScenario(null);
     if (h.isUserIdle()) return true;
     h.applyOutageReward();
-    h.setHistory(prev => [...prev, { role: 'system', content: '[SUCCESS] AWS us-east-1 is back online. All players receive a TD boost.' }]);
+    h.setHistory(prev => [...prev, { role: 'system', content: data.scenario.success }]);
     return true;
   }
   if (data.type === 'outage_failed') {
     // Always clear the bar state; only penalize+announce if not idle
     h.setOutageHp(null);
+    h.setActiveOutageScenario(null);
     if (h.isUserIdle()) return true;
     h.applyOutagePenalty();
-    h.setHistory(prev => [...prev, { role: 'error', content: '[FAILURE] AWS us-east-1 outage was not resolved in time. Your most expensive generator has been decommissioned.' }]);
+    h.setHistory(prev => [...prev, { role: 'error', content: data.scenario.failure }]);
     return true;
   }
   return false;
@@ -286,6 +295,7 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
   const [pendingReviewPing, setPendingReviewPing] = useState<{ sender: string; amount: number } | null>(null);
   // Track the current outage health to render the global health bar
   const [outageHp, setOutageHp] = useState<number | null>(null);
+  const [activeOutageScenario, setActiveOutageScenario] = useState<OutageScenario | null>(null);
   const socketRef = useRef<PartySocket | null>(null);
   const lastActivityAt = useRef<number>(Date.now());
 
@@ -319,6 +329,7 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
           setOnlineCount,
           setOnlineUsers,
           setOutageHp,
+          setActiveOutageScenario,
           creditTD,
           debitTD,
           applyReviewSprintBoost,
@@ -350,5 +361,14 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
   // Expose a method to allow players to attack the outage
   const sendDamage = () => sendMessage({ type: 'damage_outage' });
 
-  return { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage };
+  return {
+    onlineCount,
+    onlineUsers,
+    sendPing,
+    pendingReviewPing,
+    acceptReviewPing,
+    outageHp,
+    activeOutageScenario,
+    sendDamage,
+  };
 }

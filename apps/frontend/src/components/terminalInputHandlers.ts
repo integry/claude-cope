@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import type { OutageScenario } from "@claude-cope/shared/multiplayer-types";
 import type { Message, GameState } from "../hooks/useGameState";
 import { submitBrag } from "./submitBrag";
 import { rollBuddy } from "./slashCommandExecutor";
@@ -58,25 +59,39 @@ export function handleBuddyConfirm({
   }
 }
 
+export function normalizeOutageCommandInput(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export function tryOutageDamage({
   inputValue,
   outageHp,
-  DAMAGE_COMMANDS,
+  activeOutageScenario,
   sendDamage,
   setHistory,
   setInputValue,
 }: {
   inputValue: string;
   outageHp: number | null;
-  DAMAGE_COMMANDS: string[];
+  activeOutageScenario: OutageScenario | null;
   sendDamage: () => void;
   setHistory: Dispatch<SetStateAction<Message[]>>;
   setInputValue: Dispatch<SetStateAction<string>>;
 }): boolean {
-  if (outageHp === null || !DAMAGE_COMMANDS.includes(inputValue.trim().toLowerCase())) return false;
+  if (outageHp === null || !activeOutageScenario) return false;
+  const normalizedInput = normalizeOutageCommandInput(inputValue);
+  const isDamageCommand = activeOutageScenario.commands.some((command) => {
+    const candidates = [command.label, ...(command.aliases ?? [])];
+    return candidates.some((candidate) => normalizeOutageCommandInput(candidate) === normalizedInput);
+  });
+  if (!isDamageCommand) return false;
   sendDamage();
   setHistory((prev) =>
-    [...prev, { role: "user", content: inputValue }, { role: "system", content: `[💥 HIT] Damage dealt to PROD OUTAGE!` }]
+    [
+      ...prev,
+      { role: "user", content: inputValue },
+      { role: "system", content: `[💥 HIT] Damage dealt to ${activeOutageScenario.title}!` },
+    ]
   );
   setInputValue("");
   return true;

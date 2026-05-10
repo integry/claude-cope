@@ -385,3 +385,67 @@ describe("PartyKit review-request lifecycle", () => {
     expect(bob.allSent("review_ping_cancelled")).toHaveLength(0);
   });
 });
+
+describe("PartyKit outage lifecycle", () => {
+  let harness: ServerHarness;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    harness = new ServerHarness();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("broadcasts authoritative scenario metadata on start, update, and clear", () => {
+    const alice = harness.connect("conn-a", "Alice");
+    vi.spyOn(Math, "random").mockReturnValue(0.3);
+
+    (harness.server as unknown as { startOutage: () => void }).startOutage();
+
+    const start = harness.room.broadcasts.at(-1);
+    expect(start?.type).toBe("outage_start");
+    expect(start && "scenario" in start ? start.scenario.title : "").toBe(
+      "Cloudflare cache stampede"
+    );
+    expect(start && "scenario" in start ? start.scenario.commands[1]?.label : "").toBe(
+      "/purge-cache"
+    );
+
+    harness.send(alice, { type: "damage_outage" });
+    const update = harness.room.broadcasts.at(-1);
+    expect(update?.type).toBe("outage_update");
+    expect(update && "scenario" in update ? update.scenario.id : "").toBe(
+      start && "scenario" in start ? start.scenario.id : ""
+    );
+    expect(update && "hp" in update ? update.hp : null).toBe(90);
+
+    for (let i = 0; i < 9; i++) harness.send(alice, { type: "damage_outage" });
+    const cleared = harness.room.broadcasts.at(-1);
+    expect(cleared?.type).toBe("outage_cleared");
+    expect(cleared && "scenario" in cleared ? cleared.scenario.id : "").toBe(
+      start && "scenario" in start ? start.scenario.id : ""
+    );
+  });
+
+  it("broadcasts the same scenario metadata on outage failure", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.8);
+
+    (harness.server as unknown as { startOutage: () => void }).startOutage();
+    const start = harness.room.broadcasts.at(-1);
+    expect(start?.type).toBe("outage_start");
+
+    vi.advanceTimersByTime(2 * 60 * 1000 + 1);
+
+    const failed = harness.room.broadcasts.at(-1);
+    expect(failed?.type).toBe("outage_failed");
+    expect(failed && "scenario" in failed ? failed.scenario.id : "").toBe(
+      start && "scenario" in start ? start.scenario.id : ""
+    );
+    expect(failed && "scenario" in failed ? failed.scenario.failure : "").toMatch(
+      /generator has been decommissioned/i
+    );
+  });
+});

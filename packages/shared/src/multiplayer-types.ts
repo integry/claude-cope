@@ -45,6 +45,20 @@ export type ClientMessage = PingMessage | AcceptReviewPingMessage | DamageOutage
 
 // ── Server → Client messages ─────────────────────────────────────────
 
+export interface OutageCommand {
+  label: string;
+  aliases?: string[];
+}
+
+export interface OutageScenario {
+  id: string;
+  title: string;
+  alert: string;
+  success: string;
+  failure: string;
+  commands: OutageCommand[];
+}
+
 export interface PresenceMessage {
   type: "presence";
   count: number;
@@ -115,19 +129,23 @@ export interface ReviewPingRefundedMessage {
 export interface OutageStartMessage {
   type: "outage_start";
   hp: number;
+  scenario: OutageScenario;
 }
 
 export interface OutageUpdateMessage {
   type: "outage_update";
   hp: number;
+  scenario: OutageScenario;
 }
 
 export interface OutageClearedMessage {
   type: "outage_cleared";
+  scenario: OutageScenario;
 }
 
 export interface OutageFailedMessage {
   type: "outage_failed";
+  scenario: OutageScenario;
 }
 
 /** Discriminated union of every message the server can send to a client. */

@@ -14,7 +14,6 @@ import {
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
 import { filterChatHistory } from "./filterChatHistory";
-import { DAMAGE_COMMANDS } from "./OutageBar";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
 import { useSoundEffects } from "../hooks/useSoundEffects";
@@ -66,7 +65,7 @@ function Terminal() {
   const applyReviewSprintBoost = useCallback((ticketId: string, boost: number) => {
     if (activeTicketRef.current?.id === ticketId) updateTicketProgress(boost);
   }, [updateTicketProgress]);
-  const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, sendDamage } = useMultiplayer({
+  const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, activeOutageScenario, sendDamage } = useMultiplayer({
     username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost,
   });
   const rank = state.economy.currentRank;
@@ -342,7 +341,7 @@ function Terminal() {
   processCommandRef.current = processCommand;
 
   const handleEnterSubmit = async () => {
-    if (tryOutageDamage({ inputValue, outageHp, DAMAGE_COMMANDS, sendDamage, setHistory, setInputValue })) return;
+    if (tryOutageDamage({ inputValue, outageHp, activeOutageScenario, sendDamage, setHistory, setInputValue })) return;
     if (inputValue.trim().startsWith("/")) { runSlashCommand(inputValue.trim()); return; }
     if (bragPending) { handleBragSubmit({ inputValue, setInputValue, state, setHistory, setBragPending }); return; }
     if (buddyPendingConfirm) { handleBuddyConfirm({ inputValue, setInputValue, setBuddyPendingConfirm, setState, setHistory, buddyType: state.buddy?.type ?? undefined }); return; }
@@ -393,7 +392,7 @@ function Terminal() {
 
   return (
     <TerminalView
-      activeRegression={activeRegression} outageHp={outageHp} pendingReviewPing={pendingReviewPing} pingAcknowledged={pingAcknowledged}
+      activeRegression={activeRegression} outageHp={outageHp} activeOutageScenario={activeOutageScenario} pendingReviewPing={pendingReviewPing} pingAcknowledged={pingAcknowledged}
       activeTheme={state.activeTheme} regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} inputRef={inputRef}
       closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag} onlineCount={onlineCount} rank={rank} state={state}
       handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue}
