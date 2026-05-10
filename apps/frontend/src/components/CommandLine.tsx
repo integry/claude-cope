@@ -7,16 +7,23 @@ type CommandLineProps = {
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   promptString?: string;
   placeholder?: string;
+  assistivePlaceholderHint?: string;
 };
 
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
-  function CommandLine({ value, disabled, onChange, onKeyDown, promptString = "❯ ", placeholder }, ref) {
+  function CommandLine(
+    { value, disabled, onChange, onKeyDown, promptString = "❯ ", placeholder, assistivePlaceholderHint },
+    ref
+  ) {
     const [isFocused, setIsFocused] = useState(false);
     const [isComposing, setIsComposing] = useState(false);
     const showPlaceholder = !value && !!placeholder;
     const showTabHint = showPlaceholder && !disabled;
     const showDecorativeCursor = showPlaceholder && isFocused && !disabled;
-    const accessiblePlaceholder = placeholder ? `${placeholder}. Press Tab to accept suggestion.` : undefined;
+    const accessiblePlaceholder =
+      placeholder && assistivePlaceholderHint && !disabled
+        ? `${placeholder}. ${assistivePlaceholderHint}`
+        : placeholder;
 
     const handleCompositionStart = () => {
       setIsComposing(true);
@@ -27,7 +34,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     };
 
     const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter" && (isComposing || e.nativeEvent.isComposing)) {
+      if (isComposing || e.nativeEvent.isComposing) {
         return;
       }
       onKeyDown(e);

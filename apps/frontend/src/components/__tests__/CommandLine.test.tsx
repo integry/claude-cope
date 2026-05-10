@@ -22,6 +22,7 @@ function renderCommandLine(props: Partial<React.ComponentProps<typeof CommandLin
     onKeyDown: vi.fn(),
     promptString: "❯ ",
     placeholder: "Try /help",
+    assistivePlaceholderHint: "Press Tab to accept suggestion.",
   };
 
   act(() => {
@@ -89,19 +90,25 @@ describe("CommandLine", () => {
 
   it("does not show the decorative cursor while disabled", () => {
     const { container } = renderCommandLine({ disabled: true });
+    const input = container.querySelector("input");
 
     expect(container.querySelector("[data-testid='command-line-placeholder']")).not.toBeNull();
     expect(container.querySelector("[data-testid='command-line-cursor']")).toBeNull();
     expect(container.querySelector("[data-testid='command-line-tab-hint']")).toBeNull();
+    expect(input?.getAttribute("placeholder")).toBe("Try /help");
   });
 
-  it("does not forward enter keydown while IME composition is active", () => {
+  it("does not forward keydown events while IME composition is active", () => {
     const onKeyDown = vi.fn();
     const { input } = renderCommandLine({ onKeyDown });
     expect(input).not.toBeNull();
 
     act(() => {
       input!.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    });
+
+    act(() => {
+      input!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
 
     act(() => {
