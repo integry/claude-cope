@@ -316,16 +316,16 @@ function Terminal() {
     dismissUpgradeOverlay();
     if (pendingNagCommandRef.current !== null) {
       const command = pendingNagCommandRef.current;
-      // Explicitly dismissing the nag should replay the blocked command once
-      // instead of immediately re-opening the same overlay from stale quota state.
       pendingNagCommandRef.current = null;
       nagArmedFromQuotaRef.current = false;
       setInputValue("");
       setHistoryIndex(-1);
+      const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
+      if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
       recordMessageWithoutTicket();
       submitPromptCommand(command);
     }
-  }, [dismissUpgradeOverlay, recordMessageWithoutTicket, submitPromptCommand]);
+  }, [checkQuotaAndHandleExhaustion, dismissUpgradeOverlay, recordMessageWithoutTicket, state.apiKey, submitPromptCommand]);
 
   const handleManualUpgradeDismiss = dismissUpgradeOverlay;
 
