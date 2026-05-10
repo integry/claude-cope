@@ -38,6 +38,7 @@ export type LayoutProps = {
 };
 
 function getOptionIdList(singleAvailable: boolean, multiAvailable: boolean) { return [singleAvailable ? OPTION_IDS.single : null, multiAvailable ? OPTION_IDS.multi : null].filter((id): id is OptionId => id !== null); }
+function getTabEntryOptionId(ids: OptionId[], isReverse: boolean) { return ids[isReverse ? ids.length - 1 : 0] ?? null; }
 function getCenteredPadding(text: string) {
   const left = Math.max(0, Math.floor((INNER_W - text.length) / 2));
   return { left, right: Math.max(0, INNER_W - text.length - left) };
@@ -280,6 +281,12 @@ export default function DesktopLayout({
     }
     if (event.key === "Tab") {
       focusSourceRef.current = "tab";
+      setIsKeyboardNavigationMode(true);
+      if (target === overlayRef.current) {
+        event.preventDefault();
+        const nextOptionId = getTabEntryOptionId(availableOptionIds, event.shiftKey);
+        setSelectedOptionId(nextOptionId);
+      }
       return;
     }
     if (
@@ -293,7 +300,7 @@ export default function DesktopLayout({
       event.preventDefault();
       optionRefs.current[selectedOptionId]?.click();
     }
-  }, [cycleSelection, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, selectedOptionId]);
+  }, [availableOptionIds, cycleSelection, isDesktopViewport, isForcedClosing, isKeyboardNavigationMode, selectedOptionId]);
   return (
     <div
       ref={overlayRef}

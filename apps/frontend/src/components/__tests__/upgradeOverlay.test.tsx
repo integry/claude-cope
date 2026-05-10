@@ -233,20 +233,19 @@ describe("UpgradeOverlay", () => {
     clickSpy.mockRestore();
   });
 
-  it("syncs the selected desktop option when keyboard focus moves to a different link", () => {
+  it("tabs from the desktop overlay into the first checkout link", () => {
     setViewportWidth(1024);
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
     const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
     const links = container.querySelectorAll(".upgrade-desktop a[href]");
-    const multiLink = links[1] as HTMLAnchorElement | undefined;
+    const singleLink = links[0] as HTMLAnchorElement | undefined;
 
     act(() => {
       desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-      multiLink?.focus();
     });
 
-    expect(document.activeElement).toBe(multiLink);
-    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/multi");
+    expect(document.activeElement).toBe(singleLink);
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/single");
   });
 
   it("restores manual desktop focus to the first checkout option on open without arming keyboard selection", () => {

@@ -165,6 +165,11 @@ body {
 .upgrade-mobile button {
   outline: none;
 }
+.upgrade-desktop:focus,
+.upgrade-desktop:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
 .upgrade-btn-primary:hover [data-btn] {
   background-color: #ffffff !important;
   color: #000000 !important;
@@ -173,22 +178,22 @@ body {
   background-color: #4ade80 !important;
   color: #0d1117 !important;
 }
-.upgrade-btn-primary:focus-visible [data-btn],
-.upgrade-btn-secondary:focus-visible [data-btn],
-.upgrade-desktop button:focus-visible [data-esc],
+.upgrade-desktop[data-keyboard-nav="true"] .upgrade-btn-primary:focus [data-btn],
+.upgrade-desktop[data-keyboard-nav="true"] .upgrade-btn-secondary:focus [data-btn],
+.upgrade-desktop[data-keyboard-nav="true"] button:focus [data-esc],
 .upgrade-mobile a:focus-visible [data-btn],
 .upgrade-mobile button:focus-visible [data-esc] {
   background-color: #4ade80 !important;
   color: #0d1117 !important;
 }
-.upgrade-btn-primary:focus-visible [data-cursor],
-.upgrade-btn-secondary:focus-visible [data-cursor],
+.upgrade-desktop[data-keyboard-nav="true"] .upgrade-btn-primary:focus [data-cursor],
+.upgrade-desktop[data-keyboard-nav="true"] .upgrade-btn-secondary:focus [data-cursor],
 .upgrade-mobile a:focus-visible [data-cursor] {
   color: #ffffff !important;
 }
-.upgrade-btn-primary:focus-visible,
-.upgrade-btn-secondary:focus-visible,
-.upgrade-desktop button:focus-visible,
+.upgrade-desktop[data-keyboard-nav="true"] .upgrade-btn-primary:focus,
+.upgrade-desktop[data-keyboard-nav="true"] .upgrade-btn-secondary:focus,
+.upgrade-desktop[data-keyboard-nav="true"] button:focus,
 .upgrade-mobile a:focus-visible,
 .upgrade-mobile button:focus-visible {
   box-shadow: 0 0 0 1px #4ade80, 0 0 0 3px rgba(74, 222, 128, 0.18);
