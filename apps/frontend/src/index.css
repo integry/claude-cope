@@ -185,6 +185,10 @@ body {
   min-width: 0;
 }
 
+.terminal-command-input-caret-hidden {
+  caret-color: transparent;
+}
+
 .terminal-command-input::placeholder {
   color: transparent;
 }

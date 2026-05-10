@@ -20,6 +20,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     const showPlaceholder = !value && !!placeholder;
     const showTabHint = showPlaceholder && !disabled;
     const showDecorativeCursor = showPlaceholder && isFocused && !disabled;
+    const hideNativeCaret = showDecorativeCursor;
     const accessiblePlaceholder =
       placeholder && assistivePlaceholderHint && !disabled
         ? `${placeholder}. ${assistivePlaceholderHint}`
@@ -73,7 +74,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
               onBlur={() => setIsFocused(false)}
               placeholder={accessiblePlaceholder}
               aria-label="Command line input"
-              className="terminal-command-input relative z-10 w-full outline-none bg-transparent text-white font-bold caret-white disabled:opacity-50 py-0 leading-none"
+              className={`terminal-command-input relative z-10 w-full outline-none bg-transparent text-white font-bold disabled:opacity-50 py-0 leading-none ${hideNativeCaret ? "terminal-command-input-caret-hidden" : "caret-white"}`}
               autoFocus
             />
           </div>
