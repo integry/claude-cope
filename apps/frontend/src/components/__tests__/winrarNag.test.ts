@@ -644,6 +644,37 @@ describe("WinRAR nag: Terminal integration", () => {
     expect(container.querySelector(".upgrade-desktop")).toBeNull();
   });
 
+  it("does not arm the next-command nag from quota updates when BYOK is configured", async () => {
+    testConfig.initialQuotaPercent = 50;
+    submitChatMessageMock.mockImplementation(({ onQuotaUpdate, setIsProcessing }: { onQuotaUpdate: (quotaPercent: number) => void; setIsProcessing: (v: boolean) => void }) => {
+      onQuotaUpdate(0);
+      setIsProcessing(false);
+    });
+
+    await renderTerminal();
+    await act(async () => {
+      setMockGameStateRef.current?.((prev: Record<string, unknown>) => ({ ...prev, apiKey: "sk-user-key" }));
+      await Promise.resolve();
+    });
+
+    const input = await submitTerminalCommand("status");
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".upgrade-desktop")).toBeNull();
+    expect(input.value).toBe("");
+
+    await act(async () => {
+      input.value = "why";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(2);
+    expect(triggerQuotaLockoutMock).not.toHaveBeenCalled();
+    expect(container.querySelector(".upgrade-desktop")).toBeNull();
+  });
+
   it("waits briefly for pro entitlement before fetching the startup ticket prompt", async () => {
     await renderTerminal();
 

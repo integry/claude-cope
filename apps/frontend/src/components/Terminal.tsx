@@ -240,7 +240,7 @@ function Terminal() {
     pendingBacklogRollbacksRef.current.delete(rollbackId);
     if (shouldRollback) rollback();
   }, []);
-  const recordValidatedSlashCommand = useCallback((baseCommand?: string) => {
+  const recordValidatedSlashCommand = useCallback((baseCommand: string) => {
     if (baseCommand === "/clear") {
       recordValidCommand(baseCommand, { suppressTip: true });
       return;
@@ -265,8 +265,8 @@ function Terminal() {
     setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
   }, []);
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
-    if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : state.buddy.promptsSinceLastInterjection + 1 } }));
-  }, [state.buddy.type, state.buddy.promptsSinceLastInterjection, setState]);
+    if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : prev.buddy.promptsSinceLastInterjection + 1 } }));
+  }, [state.buddy.type, setState]);
   const applyProfileUpdate = useCallback((profile: ServerProfile) => {
     setState((prev) => applyServerProfile(prev, profile, prev.pendingCompletedTaskIds.length > 0 ? { preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds } : {}));
   }, [setState]);
@@ -324,7 +324,7 @@ function Terminal() {
       modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, getSprintCompleteMessage, addActiveTD, onSuggestedReply: handleSuggestedReply,
       buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades,
       onByokUsage: (usage) => setState((prev) => { const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 }; return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } }; }),
-      onQuotaUpdate: (quotaPercent) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })); if (quotaPercent <= 0 && isFreeTier) nagArmedFromQuotaRef.current = true; },
+      onQuotaUpdate: (quotaPercent) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })); if (quotaPercent <= 0 && isFreeTier && !effectiveApiKey) nagArmedFromQuotaRef.current = true; },
       onQuotaExhausted: effectiveApiKey ? undefined : () => {
         untrackAbortController(controller);
         settlePendingBacklogRollback(rollbackId, true);
