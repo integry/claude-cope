@@ -1,10 +1,12 @@
 import type {
+  CSSProperties,
   ChangeEvent,
   Dispatch,
   KeyboardEvent as ReactKeyboardEvent,
   RefObject,
   SetStateAction,
 } from "react";
+import { useEffect, useRef, useState } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import HeaderBar from "./HeaderBar";
@@ -87,18 +89,81 @@ type TerminalViewProps = OverlayVisibility & {
 
 type BuddyOverlayProps = {
   buddy: GameState["buddy"];
+  bottomOffset: number;
 };
 
-function BuddyOverlay({ buddy }: BuddyOverlayProps) {
+function BuddyOverlay({ buddy, bottomOffset }: BuddyOverlayProps) {
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    if (!buddy.type) {
+      return undefined;
+    }
+
+    const updateScale = () => {
+      const overlay = overlayRef.current;
+      if (!overlay) {
+        return;
+      }
+
+      const width = overlay.scrollWidth;
+      if (!width) {
+        setScale(1);
+        return;
+      }
+
+      const styles = window.getComputedStyle(overlay);
+      const rightInset = Number.parseFloat(styles.right) || 0;
+      const leftPadding = 12;
+      const availableWidth = window.innerWidth - rightInset - leftPadding;
+      const nextScale = availableWidth > 0 ? Math.min(1, availableWidth / width) : 1;
+
+      setScale(nextScale);
+    };
+
+    updateScale();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateScale();
+    });
+
+    resizeObserver.observe(overlayRef.current);
+    window.addEventListener("resize", updateScale);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateScale);
+    };
+  }, [buddy.type, buddy.isShiny]);
+
   if (!buddy.type) {
     return null;
   }
 
+  const overlayStyle = {
+    "--terminal-buddy-offset": `${bottomOffset}px`,
+    "--terminal-buddy-scale": scale,
+  } as CSSProperties;
+
   return (
-    <div className="terminal-buddy-overlay" aria-hidden="true">
+    <div ref={overlayRef} className="terminal-buddy-overlay" style={overlayStyle} aria-hidden="true">
       <BuddyDisplay type={buddy.type} isShiny={buddy.isShiny} className="terminal-buddy-display" />
     </div>
   );
+}
+
+function getUpgradeDismissProps(
+  pendingNagCommand: string | null,
+  handleUpgradeNagClose: () => void,
+  handleManualUpgradeDismiss: () => void,
+) {
+  const nagDismiss = pendingNagCommand !== null;
+
+  return {
+    onUpgradeDismiss: nagDismiss ? handleUpgradeNagClose : handleManualUpgradeDismiss,
+    upgradeDismissMode: nagDismiss ? "nag" : "manual",
+  } as const;
 }
 
 export function TerminalView({
@@ -171,6 +236,39 @@ export function TerminalView({
   upgradeNagDismissPhase,
   upgradeNagDismissEffect,
 }: TerminalViewProps) {
+  const bottomChromeRef = useRef<HTMLDivElement | null>(null);
+  const [buddyBottomOffset, setBuddyBottomOffset] = useState(0);
+
+  useEffect(() => {
+    const node = bottomChromeRef.current;
+    if (!node) {
+      return undefined;
+    }
+
+    const updateBottomOffset = (height?: number) => {
+      const nextHeight = height ?? node.getBoundingClientRect().height;
+      setBuddyBottomOffset(Math.ceil(nextHeight) + 8);
+    };
+
+    updateBottomOffset();
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      updateBottomOffset(entries[0]?.contentRect.height);
+    });
+
+    resizeObserver.observe(node);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
+
+  const upgradeDismissProps = getUpgradeDismissProps(
+    pendingNagCommand,
+    handleUpgradeNagClose,
+    handleManualUpgradeDismiss,
+  );
+
   return (
     <div
       className={terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}
@@ -212,8 +310,8 @@ export function TerminalView({
         />
         <div ref={bottomRef} />
       </div>
-      <BuddyOverlay buddy={state.buddy} />
-      <div className="shrink-0">
+      <BuddyOverlay buddy={state.buddy} bottomOffset={buddyBottomOffset} />
+      <div ref={bottomChromeRef} className="shrink-0">
         <SprintProgressBar
           id={state.activeTicket?.id}
           title={state.activeTicket?.title}
@@ -257,8 +355,8 @@ export function TerminalView({
         setShowSynergize={setShowSynergize}
         setIsProcessing={setIsProcessing}
         setHistory={setHistory}
-        onUpgradeDismiss={pendingNagCommand !== null ? handleUpgradeNagClose : handleManualUpgradeDismiss}
-        upgradeDismissMode={pendingNagCommand !== null ? "nag" : "manual"}
+        onUpgradeDismiss={upgradeDismissProps.onUpgradeDismiss}
+        upgradeDismissMode={upgradeDismissProps.upgradeDismissMode}
         upgradeDismissPhase={upgradeNagDismissPhase}
         upgradeDismissEffect={upgradeNagDismissEffect}
       />

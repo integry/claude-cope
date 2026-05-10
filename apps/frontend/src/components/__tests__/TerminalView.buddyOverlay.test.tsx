@@ -20,6 +20,24 @@ vi.mock("../SprintProgressBar", () => ({ default: () => null }));
 vi.mock("../MessageList", () => ({ default: () => null }));
 vi.mock("../TerminalOverlays", () => ({ TerminalOverlays: () => null }));
 
+class ResizeObserverMock {
+  private readonly callback: ResizeObserverCallback;
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+  }
+
+  observe(target: Element) {
+    const isBottomChrome = target.classList.contains("shrink-0");
+    const height = isBottomChrome ? 96 : 0;
+    this.callback([{ contentRect: { height } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+  }
+
+  disconnect() {}
+}
+
+vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
@@ -184,5 +202,14 @@ describe("TerminalView buddy overlay", () => {
     expect(overlay?.textContent).toContain("Sarcastic Clippy is watching...");
     expect(commandShell?.querySelector(".terminal-buddy-display")).toBeNull();
     expect(commandShell?.textContent).not.toContain("Sarcastic Clippy is watching...");
+  });
+
+  it("anchors the overlay with a measured bottom offset instead of inline layout space", () => {
+    const view = renderTerminalView(createState("Sarcastic Clippy"));
+    const overlay = view.querySelector(".terminal-buddy-overlay");
+
+    expect(overlay).not.toBeNull();
+    expect(overlay?.getAttribute("style")).toContain("--terminal-buddy-offset: 104px");
+    expect(view.querySelector(".terminal-command-shell")?.querySelector(".terminal-buddy-overlay")).toBeNull();
   });
 });

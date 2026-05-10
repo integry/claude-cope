@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { BUDDY_ICONS } from "./buddyConstants";
 
-export function BuddyDisplay({ type, isShiny, className = "" }: { type: string | null; isShiny: boolean; className?: string }) {
+type BuddyDisplayProps = {
+  type: string | null;
+  isShiny: boolean;
+  className?: string;
+};
+
+export function BuddyDisplay({ type, isShiny, className = "" }: BuddyDisplayProps) {
   const [blink, setBlink] = useState(false);
 
   useEffect(() => {

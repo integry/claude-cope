@@ -154,11 +154,13 @@ body {
 .terminal-buddy-overlay {
   position: fixed;
   right: clamp(0.75rem, 2vw, 1.5rem);
-  bottom: clamp(4.75rem, 10vh, 7rem);
+  bottom: calc(var(--terminal-buddy-offset, 0px) + env(safe-area-inset-bottom, 0px));
   z-index: 20;
   pointer-events: none;
-  max-width: min(16rem, calc(100vw - 1.5rem));
   text-align: right;
+  transform: scale(var(--terminal-buddy-scale, 1));
+  transform-origin: bottom right;
+  will-change: transform;
 }
 
 .terminal-buddy-display {
@@ -167,15 +169,12 @@ body {
 
 .terminal-buddy-display pre {
   display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 @media (max-width: 640px) {
   .terminal-buddy-overlay {
     right: 0.5rem;
-    bottom: 5.5rem;
-    max-width: min(11rem, calc(100vw - 1rem));
     opacity: 0.85;
   }
 
