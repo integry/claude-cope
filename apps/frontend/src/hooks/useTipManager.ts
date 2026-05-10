@@ -115,6 +115,8 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   const recentTipHistoryRef = useRef<Record<string, number>>(readRecentTipHistory());
   const isBootingRef = useRef(isBooting);
   const isInteractionBlockedRef = useRef(isInteractionBlocked);
+  const gameStateRef = useRef(gameState);
+  const totalTDEarnedRef = useRef(totalTDEarned);
   const previousStateRef = useRef({
     currentTD: gameState.economy.currentTD,
     quotaPercent: gameState.economy.quotaPercent,
@@ -124,6 +126,20 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
 
   isBootingRef.current = isBooting;
   isInteractionBlockedRef.current = isInteractionBlocked;
+  gameStateRef.current = gameState;
+  totalTDEarnedRef.current = totalTDEarned;
+
+  const emitIdleTip = useCallback(() => {
+    idleTimerRef.current = null;
+    idleDeadlineRef.current = null;
+    const tip = selectIdleTip(
+      { totalTDEarned: totalTDEarnedRef.current },
+      { excludeTipIds: Object.keys(recentTipHistoryRef.current) },
+    );
+    if (!tip) return;
+    appendTip(setHistory, tip.text);
+    markTipShown(recentTipHistoryRef, tip);
+  }, [setHistory]);
 
   const clearIdleTimer = useCallback(() => {
     if (idleTimerRef.current !== null) {
@@ -145,17 +161,9 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
         idleTimerRef.current = null;
         return;
       }
-      idleTimerRef.current = null;
-      idleDeadlineRef.current = null;
-      const tip = selectIdleTip(
-        { totalTDEarned },
-        { excludeTipIds: Object.keys(readRecentTipHistory()) },
-      );
-      if (!tip) return;
-      appendTip(setHistory, tip.text);
-      markTipShown(recentTipHistoryRef, tip);
+      emitIdleTip();
     }, delayMs);
-  }, [clearIdleTimer, setHistory, totalTDEarned]);
+  }, [clearIdleTimer, emitIdleTip]);
 
   const recordEnter = useCallback(() => {
     hasInteractedRef.current = true;
@@ -168,20 +176,28 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     if (actionCountRef.current % MILESTONE_INTERVAL !== 0) return null;
     if (options?.suppressTip) return null;
 
-    const tip = selectMilestoneTip(
+    let tip = selectMilestoneTip(
       usedCommandsRef.current,
       shownMilestoneTipIdsRef.current,
-      { totalTDEarned },
+      { totalTDEarned: totalTDEarnedRef.current },
     );
+    if (!tip && shownMilestoneTipIdsRef.current.size > 0) {
+      shownMilestoneTipIdsRef.current.clear();
+      tip = selectMilestoneTip(
+        usedCommandsRef.current,
+        shownMilestoneTipIdsRef.current,
+        { totalTDEarned: totalTDEarnedRef.current },
+      );
+    }
     if (!tip) return null;
 
     shownMilestoneTipIdsRef.current.add(tip.id);
     appendTip(setHistory, tip.text);
     return tip.text;
-  }, [setHistory, totalTDEarned]);
+  }, [setHistory]);
 
   const recordMessageWithoutTicket = useCallback((): string | null => {
-    if (gameState.activeTicket) {
+    if (gameStateRef.current.activeTicket) {
       noTicketMessageCountRef.current = 0;
       nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
       return null;
@@ -203,7 +219,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     noTicketMessageCountRef.current = 0;
     nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
     return tip.text;
-  }, [gameState.activeTicket, setHistory]);
+  }, [setHistory]);
 
   useEffect(() => {
     if (!gameState.activeTicket) return;

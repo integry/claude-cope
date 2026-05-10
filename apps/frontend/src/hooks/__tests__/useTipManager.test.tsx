@@ -143,6 +143,9 @@ describe("useTipManager", () => {
     root = createRoot(container);
     act(() => {
       renderHarness();
+    });
+
+    act(() => {
       ref.current?.recordEnter();
       vi.advanceTimersByTime(45_000);
     });
@@ -163,13 +166,16 @@ describe("useTipManager", () => {
     ]);
 
     act(() => {
-      vi.setSystemTime(new Date("2026-05-11T00:00:01Z"));
+      vi.setSystemTime(new Date("2026-05-11T00:00:46Z"));
       root.unmount();
     });
 
     root = createRoot(container);
     act(() => {
       renderHarness();
+    });
+
+    act(() => {
       ref.current?.recordEnter();
       vi.advanceTimersByTime(45_000);
     });
