@@ -153,11 +153,12 @@ describe("useGameState theme persistence", () => {
   });
 
   it("rolls back to the last confirmed theme and surfaces update-theme failures", async () => {
-    vi.mocked(updateThemeServer).mockResolvedValue({
-      success: false,
-      error: "Session authentication is required for this purchase",
-      errorCode: "session_auth_required",
-    });
+    const request = deferred<{
+      success: false;
+      error: string;
+      errorCode: "session_auth_required";
+    }>();
+    vi.mocked(updateThemeServer).mockReturnValueOnce(request.promise);
 
     act(() => {
       hookState.setActiveTheme("amber");
@@ -166,8 +167,12 @@ describe("useGameState theme persistence", () => {
     expect(hookState.state.activeTheme).toBe("amber");
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      request.resolve({
+        success: false,
+        error: "Session authentication is required for this purchase",
+        errorCode: "session_auth_required",
+      });
+      await request.promise;
     });
 
     expect(hookState.state.activeTheme).toBe("default");
