@@ -179,7 +179,7 @@ function Terminal() {
       nagArmedFromQuotaRef.current = true;
       if (command) openUpgradeNag(command);
     } else { triggerQuotaLockout({ playError, setHistory, state, unlockAchievementWithSound, resetQuota, setInstantBanReady, setState }); }
-  }, [openUpgradeNag, playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState]);
+  }, [openUpgradeNag, playError, setHistory, state, unlockAchievementWithSound, resetQuota, setState, nagArmedFromQuotaRef]);
   const checkQuotaAndHandleExhaustion = useCallback((command: string, effectiveApiKey: string | undefined): boolean => {
     if (!shouldShowNag(effectiveApiKey, state.proKey, state.proKeyHash, state.economy.quotaPercent)) {
       return false;
