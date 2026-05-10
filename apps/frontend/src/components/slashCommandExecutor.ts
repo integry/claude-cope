@@ -363,7 +363,16 @@ function getSlashCommandAccountingPolicy(baseCommand: string): SlashCommandAccou
 }
 
 export function handleUpgradeCommand(ctx: SlashCommandContext): void {
-  markValidSlashCommand(ctx, "/upgrade");
+  openUpgradeFlow(ctx, { trackCommandUsage: true });
+}
+
+function openUpgradeFlow(
+  ctx: SlashCommandContext,
+  options: { trackCommandUsage: boolean },
+): void {
+  if (options.trackCommandUsage) {
+    markValidSlashCommand(ctx, "/upgrade");
+  }
   openOverlay(ctx, () => ctx.setShowUpgrade(true));
   window.history.pushState(null, "", "/upgrade");
 }
@@ -766,7 +775,7 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.LOCKED });
     clearPendingOffer();
     reply({ role: "system", content: formatLockedTicketPrompt(offer) });
-    handleUpgradeCommand(ctx);
+    openUpgradeFlow(ctx, { trackCommandUsage: false });
   } else if (ctx.state.activeTicket) {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.ALREADY_ACTIVE });
     reply({ role: "error", content: pickRandom(ACCEPT_ALREADY_ACTIVE_MESSAGES)(ctx.state.activeTicket.title) });
