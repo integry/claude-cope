@@ -345,8 +345,7 @@ export default function DesktopLayout({
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
-        {boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{", "}<span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>{","}</span>, `  Unlocks: ${creditsStr}, multi-device sync,`.length)}{"\n"}
-        {boxLineRich(<span style={{ color: W }}>{"  priority generation queue, and "}<span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>{"."}</span>, "  priority generation queue, and advanced Cope models.".length)}{"\n"}
+        {boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{" and "}<span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>{"."}</span>, `  Unlocks: ${creditsStr} and advanced Cope models.`.length)}{"\n"}
         {buttonBlock(OPTION_IDS.single, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
