@@ -93,6 +93,44 @@ type BuddyOverlayProps = {
   containerRef: RefObject<HTMLDivElement | null>;
 };
 
+const BUDDY_OVERLAY_LEFT_PADDING = 12;
+const BUDDY_OVERLAY_TOP_PADDING = 12;
+const MIN_BUDDY_SCALE = 0.35;
+
+type BuddyOverlayStyle = CSSProperties & {
+  "--terminal-buddy-offset": string;
+  "--terminal-buddy-scale": number;
+};
+
+function clampBuddyScale(scale: number) {
+  return Math.max(MIN_BUDDY_SCALE, Math.min(1, scale));
+}
+
+function getBuddyOverlayScale({
+  containerWidth,
+  containerHeight,
+  rightInset,
+  bottomOffset,
+  overlayWidth,
+  overlayHeight,
+}: {
+  containerWidth: number;
+  containerHeight: number;
+  rightInset: number;
+  bottomOffset: number;
+  overlayWidth: number;
+  overlayHeight: number;
+}) {
+  const widthScale = overlayWidth > 0
+    ? clampBuddyScale((containerWidth - rightInset - BUDDY_OVERLAY_LEFT_PADDING) / overlayWidth)
+    : 1;
+  const heightScale = overlayHeight > 0
+    ? clampBuddyScale((containerHeight - bottomOffset - BUDDY_OVERLAY_TOP_PADDING) / overlayHeight)
+    : 1;
+
+  return Math.min(widthScale, heightScale);
+}
+
 function BuddyOverlay({ buddy, bottomOffset, containerRef }: BuddyOverlayProps) {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
@@ -110,7 +148,8 @@ function BuddyOverlay({ buddy, bottomOffset, containerRef }: BuddyOverlayProps) 
     const updateScale = () => {
       const container = containerRef.current;
       const width = overlay.scrollWidth;
-      if (!width) {
+      const height = overlay.scrollHeight;
+      if (!width || !height) {
         setScale(1);
         return;
       }
@@ -123,9 +162,14 @@ function BuddyOverlay({ buddy, bottomOffset, containerRef }: BuddyOverlayProps) 
       const containerRect = container.getBoundingClientRect();
       const overlayRect = overlay.getBoundingClientRect();
       const rightInset = Math.max(0, containerRect.right - overlayRect.right);
-      const leftPadding = 12;
-      const availableWidth = containerRect.width - rightInset - leftPadding;
-      const nextScale = availableWidth > 0 ? Math.min(1, availableWidth / width) : 1;
+      const nextScale = getBuddyOverlayScale({
+        containerWidth: containerRect.width,
+        containerHeight: containerRect.height,
+        rightInset,
+        bottomOffset,
+        overlayWidth: width,
+        overlayHeight: height,
+      });
 
       setScale(nextScale);
     };
@@ -148,16 +192,16 @@ function BuddyOverlay({ buddy, bottomOffset, containerRef }: BuddyOverlayProps) 
       resizeObserver?.disconnect();
       window.removeEventListener("resize", updateScale);
     };
-  }, [buddy.type, buddy.isShiny, containerRef]);
+  }, [bottomOffset, buddy.type, containerRef]);
 
   if (!buddy.type) {
     return null;
   }
 
-  const overlayStyle = {
+  const overlayStyle: BuddyOverlayStyle = {
     "--terminal-buddy-offset": `${bottomOffset}px`,
     "--terminal-buddy-scale": scale,
-  } as CSSProperties;
+  };
 
   return (
     <div ref={overlayRef} className="terminal-buddy-overlay" style={overlayStyle} aria-hidden="true">
