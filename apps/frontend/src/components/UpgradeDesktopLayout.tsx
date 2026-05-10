@@ -37,9 +37,7 @@ export type LayoutProps = {
   onDismiss?: () => void;
 };
 
-function getOptionIdList(singleAvailable: boolean, multiAvailable: boolean) {
-  return [singleAvailable ? OPTION_IDS.single : null, multiAvailable ? OPTION_IDS.multi : null].filter((id): id is OptionId => id !== null);
-}
+function getOptionIdList(singleAvailable: boolean, multiAvailable: boolean) { return [singleAvailable ? OPTION_IDS.single : null, multiAvailable ? OPTION_IDS.multi : null].filter((id): id is OptionId => id !== null); }
 function getCenteredPadding(text: string) {
   const left = Math.max(0, Math.floor((INNER_W - text.length) / 2));
   return { left, right: Math.max(0, INNER_W - text.length - left) };
@@ -355,16 +353,7 @@ export default function DesktopLayout({
         {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
         {(() => {
           const creditsStr = `${PRO_QUOTA_LIMIT} non-expiring credits`;
-          return boxLineRich(
-            <span style={{ color: W }}>
-              {"  Unlocks: "}
-              <span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>
-              {", "}
-              <span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>
-              {","}
-            </span>,
-            `  Unlocks: ${creditsStr}, multi-device sync,`.length,
-          );
+          return boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{", "}<span style={{ color: BW, fontWeight: "bold" }}>multi-device sync</span>{","}</span>, `  Unlocks: ${creditsStr}, multi-device sync,`.length);
         })()}{"\n"}
         {boxLineRich(
           <span style={{ color: W }}>
