@@ -17,6 +17,7 @@ const BORDER_TOP = `╔${"═".repeat(INNER_W)}╗`;
 const BORDER_MID = `╠${"═".repeat(INNER_W)}╣`;
 const BORDER_BOTTOM = `╚${"═".repeat(INNER_W)}╝`;
 const OPTION_IDS = { single: 0, multi: 1 } as const;
+type OptionId = (typeof OPTION_IDS)[keyof typeof OPTION_IDS];
 const RETAIN_TEXT = "[Press ESC to retain your net worth]";
 
 export type LayoutProps = {
@@ -37,7 +38,7 @@ export type LayoutProps = {
 };
 
 function getOptionIdList(singleAvailable: boolean, multiAvailable: boolean) {
-  return [singleAvailable ? OPTION_IDS.single : null, multiAvailable ? OPTION_IDS.multi : null].filter((id): id is number => id !== null);
+  return [singleAvailable ? OPTION_IDS.single : null, multiAvailable ? OPTION_IDS.multi : null].filter((id): id is OptionId => id !== null);
 }
 function getCenteredPadding(text: string) {
   const left = Math.max(0, Math.floor((INNER_W - text.length) / 2));
@@ -66,7 +67,7 @@ export default function DesktopLayout({
   };
   const emptyLine = boxLine("");
   const availableOptionIds = useMemo(() => getOptionIdList(singleAvailable, multiAvailable), [singleAvailable, multiAvailable]);
-  const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
+  const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
   const [isKeyboardNavigationMode, setIsKeyboardNavigationMode] = useState(false);
   const boxLineRich = (content: React.ReactNode, textLength: number) => {
     const padLen = Math.max(0, INNER_W - textLength);
@@ -84,7 +85,7 @@ export default function DesktopLayout({
     return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{" ".repeat(left) + text + " ".repeat(right)}</span><span style={{ color: B }}>{"║"}</span></>;
   };
   const buttonBlock = (
-    id: number,
+    id: OptionId,
     label: string,
     url: string,
     available: boolean,
