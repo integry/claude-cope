@@ -60,6 +60,8 @@ export interface SlashCommandContext {
   setActiveTheme: (themeId: string) => void;
   onValidSlashCommand?: (baseCommand: string) => void;
   queueSlashCommandAccounting?: (baseCommand: string) => void;
+  flushSlashCommandAccounting?: () => void;
+  finalizeSlashCommand?: () => void;
 }
 
 type SlashCommandAccountingPolicy = "tracked" | "conditional";
@@ -343,6 +345,19 @@ function markValidSlashCommand(ctx: SlashCommandContext, baseCommand: string): v
   applySlashCommandAccounting(ctx, baseCommand);
 }
 
+function completeAsyncSlashCommand(promise: Promise<unknown>, ctx: SlashCommandContext): "async" {
+  void promise.finally(() => {
+    if (ctx.finalizeSlashCommand) {
+      ctx.finalizeSlashCommand();
+      return;
+    }
+
+    ctx.setIsProcessing(false);
+  });
+
+  return "async";
+}
+
 function getSlashCommandAccountingPolicy(baseCommand: string): SlashCommandAccountingPolicy {
   return SLASH_COMMAND_ACCOUNTING_POLICY[baseCommand] ?? "conditional";
 }
@@ -573,6 +588,7 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     return true;
   } else if (command === "/brrrrrr") {
     ctx.setHistory((prev) => [...clearLoading(prev), { role: "system", content: "[🔥 BRRRRRR] Initiating nested for-loop flood... Press Ctrl+C to stop before your CPU melts!" }]);
+    ctx.flushSlashCommandAccounting?.();
     let count = 0;
     ctx.brrrrrrIntervalRef.current = setInterval(() => {
       const depth = Math.floor(Math.random() * 5) + 1;
@@ -585,7 +601,11 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
         clearInterval(ctx.brrrrrrIntervalRef.current!);
         ctx.brrrrrrIntervalRef.current = null;
         ctx.setHistory((prev) => [...prev, { role: "error", content: "[💀] CPU melted. Process terminated by thermal shutdown." }]);
-        ctx.setIsProcessing(false);
+        if (ctx.finalizeSlashCommand) {
+          ctx.finalizeSlashCommand();
+        } else {
+          ctx.setIsProcessing(false);
+        }
       }
     }, 100);
     return true;
@@ -851,7 +871,7 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
       return true;
     }
     markValidSlashCommand(ctx, "/key");
-    import("./keyCommandHandler").then(async ({ handleKeyCommand }) => {
+    return completeAsyncSlashCommand(import("./keyCommandHandler").then(async ({ handleKeyCommand }) => {
       // Create a mock setHistory that routes messages through reply
       const mockSetHistory = (action: React.SetStateAction<Message[]>) => {
         if (typeof action === "function") {
@@ -867,27 +887,17 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
         }
       };
       await handleKeyCommand(command, ctx.setState, mockSetHistory, ctx.state);
-      ctx.setIsProcessing(false);
-    });
-    return "async";
+    }), ctx);
   } else if (command.startsWith("/ticket")) {
     const hasTask = Boolean(command.slice("/ticket".length).trim());
     if (hasTask) markValidSlashCommand(ctx, "/ticket");
-    handleTicketCommand(command, reply).then(() => {
-      ctx.setIsProcessing(false);
-    });
-    return "async";
+    return completeAsyncSlashCommand(handleTicketCommand(command, reply), ctx);
   } else if (command === "/backlog") {
-    handleBacklogCommand(reply).then(() => {
-      ctx.setIsProcessing(false);
-    });
-    return "async";
+    return completeAsyncSlashCommand(handleBacklogCommand(reply), ctx);
   } else if (command === "/sync" || command.startsWith("/sync ")) {
-    handleSyncCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
-    return "async";
+    return completeAsyncSlashCommand(handleSyncCommand(command, ctx, reply), ctx);
   } else if (command === "/shill") {
-    handleShillCommand(reply).then(() => ctx.setIsProcessing(false));
-    return "async";
+    return completeAsyncSlashCommand(handleShillCommand(reply), ctx);
   }
   return false;
 }
@@ -931,8 +941,7 @@ function handleExtendedCommand(command: string, ctx: SlashCommandContext, reply:
   }
 
   if (command.startsWith("/alias")) {
-    handleAliasCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
-    return "async";
+    return completeAsyncSlashCommand(handleAliasCommand(command, ctx, reply), ctx);
   }
 
   if (command.startsWith("/model")) {
@@ -1024,7 +1033,6 @@ export function executeSlashCommand(
 
   const reply = (msg: Message): void => {
     ctx.setHistory((prev) => [...clearLoading(prev), msg]);
-    flushPendingAccounting();
   };
 
   const baseCommand = parseBaseCommand(command);
@@ -1032,6 +1040,11 @@ export function executeSlashCommand(
   const accountingCtx: SlashCommandContext = {
     ...ctx,
     queueSlashCommandAccounting,
+    flushSlashCommandAccounting: flushPendingAccounting,
+    finalizeSlashCommand: () => {
+      flushPendingAccounting();
+      ctx.setIsProcessing(false);
+    },
   };
 
   track(AnalyticsEvents.SLASH_COMMAND_ATTEMPTED, { command: baseCommand });
@@ -1053,7 +1066,7 @@ export function executeSlashCommand(
     if (!hasPro && (!isBYOK || needsLicense)) {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: baseCommand, reason: SlashCommandFailureReasons.PRO_GATED });
       reply({ role: "error", content: proGatedMessage(baseCommand) });
-      ctx.setIsProcessing(false);
+      accountingCtx.finalizeSlashCommand();
       return;
     }
   }
@@ -1062,7 +1075,7 @@ export function executeSlashCommand(
   if (command === "/clear") {
     queueSlashCommandAccounting(baseCommand);
     handleClearCommand(accountingCtx);
-    flushPendingAccounting();
+    accountingCtx.finalizeSlashCommand();
     return;
   }
 
@@ -1073,9 +1086,10 @@ export function executeSlashCommand(
     }
 
     if (accountingPolicy === "tracked") queueSlashCommandAccounting(baseCommand);
+    // Accounting is finalized centrally after dispatch so async handlers no
+    // longer depend on reply() side effects to record command usage.
     if (dispatchCommand(command, accountingCtx, reply) === "async") return;
-    flushPendingAccounting();
-    ctx.setIsProcessing(false);
+    accountingCtx.finalizeSlashCommand();
   }, Math.floor(Math.random() * 1500) + 1500);
 }
 

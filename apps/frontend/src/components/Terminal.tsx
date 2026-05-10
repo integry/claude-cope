@@ -189,8 +189,7 @@ function Terminal() {
 
   const recordAcceptedPromptCommand = useCallback(() => {
     recordValidCommand();
-    recordMessageWithoutTicket();
-  }, [recordMessageWithoutTicket, recordValidCommand]);
+  }, [recordValidCommand]);
 
   const submitPromptCommand = useCallback((command: string) => {
     setCommandHistory((prev) => [...prev, command]); processCommandRef.current(command);
@@ -289,6 +288,7 @@ function Terminal() {
     if (BYOK_ENABLED && await handleKeyCommand(inputValue, setState, setHistory, state)) { setInputValue(""); return; }
     const command = inputValue;
     setInputValue(""); setHistoryIndex(-1);
+    recordMessageWithoutTicket();
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
     if (nagArmedFromQuotaRef.current && pendingNagCommandRef.current === null) {
       pendingNagCommandRef.current = command;

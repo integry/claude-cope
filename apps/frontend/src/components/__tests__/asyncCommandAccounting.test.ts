@@ -150,6 +150,16 @@ describe("async slash-command accounting", () => {
     expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/clear");
   });
 
+  it("counts async streaming commands even when they do not reply through reply()", async () => {
+    const ctx = makeCtx(makeGameState({ isPro: true, proKeyHash: "hash" }));
+
+    executeSlashCommand("/brrrrrr", ctx);
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(ctx.state.commandUsage).toEqual({ "/brrrrrr": 1 });
+    expect(ctx.getHistory().map((message) => message.content)).toContain("tip:/brrrrrr");
+  });
+
   it("applies tracked command accounting from the policy after the command row is in history", async () => {
     const ctx = makeCtx(makeGameState());
 
