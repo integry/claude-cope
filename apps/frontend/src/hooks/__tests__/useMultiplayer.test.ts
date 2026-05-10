@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   applyServerMessage,
+  revealDeferredOutage,
   type ServerMessageHandlers,
 } from "../useMultiplayer";
 import type { Message } from "../../components/Terminal";
 import type {
-  OutageScenario,
   ServerMessage,
 } from "@claude-cope/shared/multiplayer-types";
+import { OUTAGE_SCENARIOS } from "@claude-cope/shared/outageScenarios";
+import type { OutageScenario } from "@claude-cope/shared/multiplayer-types";
 
 /**
  * Regression coverage for the multiplayer follow-up logic that lives in
@@ -58,20 +60,10 @@ interface HarnessState {
   onlineUsers: ReturnType<typeof createMockState<string[]>>;
   outageHp: ReturnType<typeof createMockState<number | null>>;
   activeOutageScenario: ReturnType<typeof createMockState<OutageScenario | null>>;
+  deferredOutage: { current: { hp: number; scenario: OutageScenario } | null };
 }
 
-const TEST_OUTAGE_SCENARIO: OutageScenario = {
-  id: "postgres-failover",
-  title: "Postgres failover spiral",
-  alert: "[CRITICAL ALERT: POSTGRES PRIMARY IS FLAPPING]",
-  success: "[SUCCESS] Postgres failover stabilized. All players receive a TD boost.",
-  failure:
-    "[FAILURE] Postgres never elected a sane primary. Your most expensive generator has been decommissioned.",
-  commands: [
-    { label: "psql -c \"select pg_promote();\"" },
-    { label: "systemctl restart patroni" },
-  ],
-};
+const TEST_OUTAGE_SCENARIO = OUTAGE_SCENARIOS.find((scenario) => scenario.id === "postgres-failover")!;
 
 interface Harness {
   handlers: ServerMessageHandlers;
@@ -95,6 +87,7 @@ function makeHarness(): Harness {
     onlineUsers: createMockState<string[]>([]),
     outageHp: createMockState<number | null>(null),
     activeOutageScenario: createMockState<OutageScenario | null>(null),
+    deferredOutage: { current: null },
   };
   const creditTD = vi.fn();
   const debitTD = vi.fn();
@@ -118,6 +111,7 @@ function makeHarness(): Harness {
       setOnlineUsers: state.onlineUsers.setter,
       setOutageHp: state.outageHp.setter,
       setActiveOutageScenario: state.activeOutageScenario.setter,
+      setDeferredOutageState: (next) => { state.deferredOutage.current = next; },
       creditTD,
       debitTD,
       applyReviewSprintBoost,
@@ -363,13 +357,32 @@ describe("applyServerMessage", () => {
     applyServerMessage({ type: "outage_start", hp: 100, scenario: TEST_OUTAGE_SCENARIO }, h.handlers);
     expect(h.state.outageHp.value).toBeNull();
     expect(h.state.activeOutageScenario.value).toBeNull();
+    expect(h.state.deferredOutage.current).toEqual({ hp: 100, scenario: TEST_OUTAGE_SCENARIO });
     expect(h.state.history.value).toHaveLength(0);
   });
 
-  it("outage_update (idle): ignored", () => {
+  it("outage_update (idle): updates deferred outage state for later resync", () => {
     h.setIdle(true);
     applyServerMessage({ type: "outage_update", hp: 42, scenario: TEST_OUTAGE_SCENARIO }, h.handlers);
     expect(h.state.outageHp.value).toBeNull();
+    expect(h.state.deferredOutage.current).toEqual({ hp: 42, scenario: TEST_OUTAGE_SCENARIO });
+  });
+
+  it("revealDeferredOutage: restores the active outage after the user returns from idle", () => {
+    h.state.deferredOutage.current = { hp: 42, scenario: TEST_OUTAGE_SCENARIO };
+
+    revealDeferredOutage({
+      deferredOutage: h.state.deferredOutage.current,
+      setDeferredOutageState: (next) => { h.state.deferredOutage.current = next; },
+      setOutageHp: h.state.outageHp.setter,
+      setActiveOutageScenario: h.state.activeOutageScenario.setter,
+      setHistory: h.state.history.setter,
+    });
+
+    expect(h.state.deferredOutage.current).toBeNull();
+    expect(h.state.outageHp.value).toBe(42);
+    expect(h.state.activeOutageScenario.value).toEqual(TEST_OUTAGE_SCENARIO);
+    expect(h.state.history.value[0]!.content).toBe(TEST_OUTAGE_SCENARIO.alert);
   });
 
   it("outage_cleared: always clears HP, only rewards/announces when not idle", () => {

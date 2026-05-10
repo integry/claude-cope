@@ -6,6 +6,7 @@ import type {
   ReviewTicket,
   ServerMessage,
 } from "@claude-cope/shared/multiplayer-types";
+import { OUTAGE_SCENARIOS } from "@claude-cope/shared/outageScenarios";
 
 /**
  * Regression coverage for the PartyKit review-request state machine (issue #679).
@@ -406,15 +407,14 @@ describe("PartyKit outage lifecycle", () => {
     (harness.server as unknown as { startOutage: () => void }).startOutage();
 
     const start = harness.room.broadcasts.at(-1);
+    const scenario = OUTAGE_SCENARIOS.find((entry) => entry.id === "cloudflare-cache-purge")!;
     expect(start?.type).toBe("outage_start");
-    expect(start && "scenario" in start ? start.scenario.title : "").toBe(
-      "Cloudflare cache stampede"
-    );
+    expect(start && "scenario" in start ? start.scenario.title : "").toBe(scenario.title);
     expect(start && "scenario" in start ? start.scenario.commands[1]?.label : "").toBe(
-      "/purge-cache"
+      scenario.commands[1]?.label
     );
 
-    harness.send(alice, { type: "damage_outage" });
+    harness.send(alice, { type: "damage_outage", command: scenario.commands[1]!.label });
     const update = harness.room.broadcasts.at(-1);
     expect(update?.type).toBe("outage_update");
     expect(update && "scenario" in update ? update.scenario.id : "").toBe(
@@ -422,12 +422,32 @@ describe("PartyKit outage lifecycle", () => {
     );
     expect(update && "hp" in update ? update.hp : null).toBe(90);
 
-    for (let i = 0; i < 9; i++) harness.send(alice, { type: "damage_outage" });
+    for (let i = 0; i < 9; i++) {
+      harness.send(alice, { type: "damage_outage", command: scenario.commands[1]!.label });
+    }
     const cleared = harness.room.broadcasts.at(-1);
     expect(cleared?.type).toBe("outage_cleared");
     expect(cleared && "scenario" in cleared ? cleared.scenario.id : "").toBe(
       start && "scenario" in start ? start.scenario.id : ""
     );
+  });
+
+  it("rejects damage_outage frames whose command does not match the active scenario", () => {
+    const alice = harness.connect("conn-a", "Alice");
+    vi.spyOn(Math, "random").mockReturnValue(0.3);
+
+    (harness.server as unknown as { startOutage: () => void }).startOutage();
+    const beforeCount = harness.room.broadcasts.length;
+
+    harness.send(alice, { type: "damage_outage", command: "echo hacked" });
+
+    expect(harness.room.broadcasts).toHaveLength(beforeCount);
+    const serverState = harness.server as unknown as {
+      outageHp: number;
+      activeOutageScenario: { id: string } | null;
+    };
+    expect(serverState.outageHp).toBe(100);
+    expect(serverState.activeOutageScenario?.id).toBe("cloudflare-cache-purge");
   });
 
   it("broadcasts the same scenario metadata on outage failure", () => {

@@ -38,6 +38,7 @@ export interface AcceptReviewPingMessage {
 
 export interface DamageOutageMessage {
   type: "damage_outage";
+  command: string;
 }
 
 /** Discriminated union of every message a client can send to the server. */

@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Message } from "../../hooks/useGameState";
-import type { OutageScenario } from "@claude-cope/shared/multiplayer-types";
 import {
   normalizeOutageCommandInput,
+  OUTAGE_SCENARIOS,
+} from "@claude-cope/shared/outageScenarios";
+import {
   tryOutageDamage,
 } from "../terminalInputHandlers";
 
@@ -19,18 +21,7 @@ function createMockState<T>(initial: T) {
   };
 }
 
-const TEST_SCENARIO: OutageScenario = {
-  id: "cloudflare-cache-purge",
-  title: "Cloudflare cache stampede",
-  alert: "[CRITICAL ALERT: CLOUDFLARE CACHE STAMPEDE IN PROGRESS]",
-  success: "[SUCCESS] Cloudflare stopped serving haunted cache. All players receive a TD boost.",
-  failure:
-    "[FAILURE] Cloudflare kept serving cursed edge responses. Your most expensive generator has been decommissioned.",
-  commands: [
-    { label: "/purge-cache", aliases: ["curl -X POST /purge-cache"] },
-    { label: "redis-cli flushall", aliases: ["redis-cli   flushdb"] },
-  ],
-};
+const TEST_SCENARIO = OUTAGE_SCENARIOS.find((scenario) => scenario.id === "cloudflare-cache-purge")!;
 
 describe("tryOutageDamage", () => {
   it("intercepts displayed slash-like outage commands before normal slash handling", () => {
@@ -49,6 +40,7 @@ describe("tryOutageDamage", () => {
 
     expect(handled).toBe(true);
     expect(sendDamage).toHaveBeenCalledTimes(1);
+    expect(sendDamage).toHaveBeenCalledWith("/purge-cache");
     expect(input.value).toBe("");
     expect(history.value[1]?.content).toContain(TEST_SCENARIO.title);
   });
@@ -69,6 +61,7 @@ describe("tryOutageDamage", () => {
 
     expect(handled).toBe(true);
     expect(sendDamage).toHaveBeenCalledTimes(1);
+    expect(sendDamage).toHaveBeenCalledWith("  REDIS-CLI   FLUSHDB  ");
   });
 
   it("returns false for non-outage commands", () => {
