@@ -18,6 +18,10 @@ type TipSelectionContext = {
   totalTDEarned?: number;
 };
 
+type TipFilterOptions = {
+  excludeTipIds?: Iterable<string>;
+};
+
 const GENERAL_TIPS: TipDefinition[] = [
   { id: "general-help", text: "Tip: Use /help to see all commands. There is no actual help, only commands.", cmd: "/help", category: "meta" },
   { id: "general-store", text: "Tip: The /store sells generators that produce Technical Debt while you sleep. Or cry.", cmd: "/store", category: "economy" },
@@ -111,6 +115,12 @@ function isSelectableTip(tip: TipDefinition, context?: TipSelectionContext): boo
   return isEnabledTip(tip) && isUnlockedTip(tip, context);
 }
 
+function filterExcludedTips(pool: TipDefinition[], options?: TipFilterOptions): TipDefinition[] {
+  if (!options?.excludeTipIds) return pool;
+  const excluded = new Set(options.excludeTipIds);
+  return pool.filter((tip) => !excluded.has(tip.id));
+}
+
 function pickRandomTip(pool: TipDefinition[]): TipDefinition | undefined {
   if (pool.length === 0) return undefined;
   return pool[Math.floor(Math.random() * pool.length)]!;
@@ -137,22 +147,33 @@ export function getRandomIdleTip(context?: TipSelectionContext): string {
   return toText(pickRandomTip(IDLE_TIPS.filter((tip) => isSelectableTip(tip, context))));
 }
 
+export function selectIdleTip(context?: TipSelectionContext, options?: TipFilterOptions): TipDefinition | null {
+  const eligible = filterExcludedTips(IDLE_TIPS.filter((tip) => isSelectableTip(tip, context)), options);
+  return pickRandomTip(eligible) ?? null;
+}
+
 export function getRandomBacklogReminder(previousTipId?: string): TipDefinition {
   return pickRandomTipAvoidingId(BACKLOG_REMINDER_TIPS.filter(isEnabledTip), previousTipId)
     ?? { id: "backlog-reminder-fallback", text: toText(undefined), cmd: "/backlog", category: "ticket" };
+}
+
+export function selectBacklogReminder(previousTipId?: string, options?: TipFilterOptions): TipDefinition | null {
+  const eligible = filterExcludedTips(BACKLOG_REMINDER_TIPS.filter(isEnabledTip), options);
+  return pickRandomTipAvoidingId(eligible, previousTipId) ?? null;
 }
 
 export function selectMilestoneTip(
   usedCommands: Iterable<string>,
   shownTipIds: Iterable<string> = [],
   context?: TipSelectionContext,
+  options?: TipFilterOptions,
 ): TipDefinition | null {
   const used = new Set(usedCommands);
   const shown = new Set(shownTipIds);
-  const eligible = MILESTONE_TIPS.filter((tip) => {
+  const eligible = filterExcludedTips(MILESTONE_TIPS.filter((tip) => {
     if (!isSelectableTip(tip, context)) return false;
     return !tip.cmd || !used.has(tip.cmd);
-  });
+  }), options);
   if (eligible.length === 0) return null;
 
   const unseenEligible = eligible.filter((tip) => !shown.has(tip.id));
@@ -171,4 +192,16 @@ export function getMilestoneTip(
 export function getContextualTip(trigger: ContextualTipTrigger, context?: TipSelectionContext): string | null {
   const tip = CONTEXTUAL_TIPS.find((entry) => entry.trigger === trigger && isSelectableTip(entry, context));
   return tip ? tip.text : null;
+}
+
+export function selectContextualTip(
+  trigger: ContextualTipTrigger,
+  context?: TipSelectionContext,
+  options?: TipFilterOptions,
+): TipDefinition | null {
+  const eligible = filterExcludedTips(
+    CONTEXTUAL_TIPS.filter((entry) => entry.trigger === trigger && isSelectableTip(entry, context)),
+    options,
+  );
+  return eligible[0] ?? null;
 }

@@ -88,6 +88,8 @@ describe("useTipManager", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.spyOn(Math, "random").mockReturnValue(0);
+    vi.setSystemTime(new Date("2026-05-10T00:00:00Z"));
+    window.localStorage.clear();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -117,6 +119,59 @@ describe("useTipManager", () => {
     act(() => {
       ref.current?.recordEnter();
       vi.advanceTimersByTime(135_000);
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      IDLE_TIPS[0]?.text,
+    ]);
+  });
+
+  it("does not repeat the same idle tip within 24 hours, even after a remount", () => {
+    act(() => {
+      ref.current?.recordEnter();
+      vi.advanceTimersByTime(45_000);
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      IDLE_TIPS[0]?.text,
+    ]);
+
+    act(() => {
+      root.unmount();
+    });
+
+    root = createRoot(container);
+    act(() => {
+      renderHarness();
+      ref.current?.recordEnter();
+      vi.advanceTimersByTime(45_000);
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      IDLE_TIPS[1]?.text,
+    ]);
+  });
+
+  it("allows a previously shown tip again after 24 hours have passed", () => {
+    act(() => {
+      ref.current?.recordEnter();
+      vi.advanceTimersByTime(45_000);
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      IDLE_TIPS[0]?.text,
+    ]);
+
+    act(() => {
+      vi.setSystemTime(new Date("2026-05-11T00:00:01Z"));
+      root.unmount();
+    });
+
+    root = createRoot(container);
+    act(() => {
+      renderHarness();
+      ref.current?.recordEnter();
+      vi.advanceTimersByTime(45_000);
     });
 
     expect(ref.current?.getHistory().map((message) => message.content)).toEqual([

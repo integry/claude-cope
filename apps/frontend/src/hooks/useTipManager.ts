@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { GameState, Message } from "./useGameState";
-import { getContextualTip, getRandomBacklogReminder, getRandomIdleTip, selectMilestoneTip, type ContextualTipTrigger } from "../game/tips";
+import { selectBacklogReminder, selectContextualTip, selectIdleTip, selectMilestoneTip, type ContextualTipTrigger, type TipDefinition } from "../game/tips";
 
 const IDLE_TIP_DELAY_MS = 45_000;
 const MILESTONE_INTERVAL = 6;
 const BACKLOG_REMINDER_MIN_MESSAGES = 6;
 const BACKLOG_REMINDER_MAX_MESSAGES = 7;
+const TIP_REPEAT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const TIP_HISTORY_STORAGE_KEY = "claude-cope.tip-history.v1";
 const SINGLE_FIRE_CONTEXTUAL_TRIGGERS = new Set<ContextualTipTrigger>(["td_1000", "quota_exhausted"]);
 
 type SetHistory = Dispatch<SetStateAction<Message[]>>;
@@ -29,6 +31,48 @@ function getCompletedTaskCount(gameState: GameState): number {
 
 function appendTip(setHistory: SetHistory, content: string): void {
   setHistory((prev) => [...prev, { role: "system", content }]);
+}
+
+function readRecentTipHistory(now = Date.now()): Record<string, number> {
+  if (typeof window === "undefined" || !window.localStorage) return {};
+
+  try {
+    const raw = window.localStorage.getItem(TIP_HISTORY_STORAGE_KEY);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter((entry): entry is [string, number] => typeof entry[0] === "string" && typeof entry[1] === "number")
+        .filter(([, timestamp]) => now - timestamp < TIP_REPEAT_WINDOW_MS),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function persistRecentTipHistory(history: Record<string, number>): void {
+  if (typeof window === "undefined" || !window.localStorage) return;
+
+  try {
+    window.localStorage.setItem(TIP_HISTORY_STORAGE_KEY, JSON.stringify(history));
+  } catch {
+    // Ignore storage failures and keep the in-memory cooldown alive for this session.
+  }
+}
+
+function markTipShown(
+  recentTipHistoryRef: MutableRefObject<Record<string, number>>,
+  tip: TipDefinition,
+  timestamp = Date.now(),
+): void {
+  recentTipHistoryRef.current = {
+    ...readRecentTipHistory(timestamp),
+    [tip.id]: timestamp,
+  };
+  persistRecentTipHistory(recentTipHistoryRef.current);
 }
 
 function getNextBacklogReminderThreshold(): number {
@@ -68,6 +112,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   const noTicketMessageCountRef = useRef(0);
   const nextBacklogReminderThresholdRef = useRef(getNextBacklogReminderThreshold());
   const lastBacklogReminderTipIdRef = useRef<string | null>(null);
+  const recentTipHistoryRef = useRef<Record<string, number>>(readRecentTipHistory());
   const isBootingRef = useRef(isBooting);
   const isInteractionBlockedRef = useRef(isInteractionBlocked);
   const previousStateRef = useRef({
@@ -102,7 +147,13 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       }
       idleTimerRef.current = null;
       idleDeadlineRef.current = null;
-      appendTip(setHistory, getRandomIdleTip({ totalTDEarned }));
+      const tip = selectIdleTip(
+        { totalTDEarned },
+        { excludeTipIds: Object.keys(readRecentTipHistory()) },
+      );
+      if (!tip) return;
+      appendTip(setHistory, tip.text);
+      markTipShown(recentTipHistoryRef, tip);
     }, delayMs);
   }, [clearIdleTimer, setHistory, totalTDEarned]);
 
@@ -117,11 +168,17 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     if (actionCountRef.current % MILESTONE_INTERVAL !== 0) return null;
     if (options?.suppressTip) return null;
 
-    const tip = selectMilestoneTip(usedCommandsRef.current, shownMilestoneTipIdsRef.current, { totalTDEarned });
+    const tip = selectMilestoneTip(
+      usedCommandsRef.current,
+      shownMilestoneTipIdsRef.current,
+      { totalTDEarned },
+      { excludeTipIds: Object.keys(readRecentTipHistory()) },
+    );
     if (!tip) return null;
 
     shownMilestoneTipIdsRef.current.add(tip.id);
     appendTip(setHistory, tip.text);
+    markTipShown(recentTipHistoryRef, tip);
     return tip.text;
   }, [setHistory, totalTDEarned]);
 
@@ -135,9 +192,18 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     noTicketMessageCountRef.current += 1;
     if (noTicketMessageCountRef.current < nextBacklogReminderThresholdRef.current) return null;
 
-    const tip = getRandomBacklogReminder(lastBacklogReminderTipIdRef.current ?? undefined);
+    const tip = selectBacklogReminder(
+      lastBacklogReminderTipIdRef.current ?? undefined,
+      { excludeTipIds: Object.keys(readRecentTipHistory()) },
+    );
+    if (!tip) {
+      noTicketMessageCountRef.current = 0;
+      nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
+      return null;
+    }
     lastBacklogReminderTipIdRef.current = tip.id;
     appendTip(setHistory, tip.text);
+    markTipShown(recentTipHistoryRef, tip);
     noTicketMessageCountRef.current = 0;
     nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
     return tip.text;
@@ -190,8 +256,15 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       return;
     }
 
+    const excludedTipIds = new Set(Object.keys(readRecentTipHistory()));
     const newTips = [...pendingContextualTriggersRef.current, ...eligibleTriggers]
-      .map((trigger) => getContextualTip(trigger, { totalTDEarned }))
+      .map((trigger) => {
+        const tip = selectContextualTip(trigger, { totalTDEarned }, { excludeTipIds: excludedTipIds });
+        if (!tip) return null;
+        excludedTipIds.add(tip.id);
+        markTipShown(recentTipHistoryRef, tip);
+        return tip.text;
+      })
       .filter((tip): tip is string => Boolean(tip));
     pendingContextualTriggersRef.current = [];
 
