@@ -268,21 +268,21 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   // When actively showing feedback, render it inline
   if (status !== "idle" && !previewUrl) {
     return (
-      <div className="flex items-center gap-2 mt-1 text-[11px] font-mono">
+      <span className="inline-flex items-center gap-2 ml-2 text-[11px] font-mono align-baseline">
         {status === "generating" && <span className="text-yellow-400 animate-pulse">{SPINNER_CHAR} {feedback}</span>}
         {status === "copied" && <span className="text-green-400">{feedback}</span>}
         {status === "done" && <span className="text-green-400">{feedback}</span>}
         {status === "error" && <span className="text-red-400">{feedback}</span>}
-      </div>
+      </span>
     );
   }
 
   return (
-    <div className="relative flex justify-end mt-1">
+    <span className="relative ml-2 inline-flex align-baseline">
       <button
         ref={triggerRef}
         onClick={handleOpenPreview}
-        className="text-[11px] text-gray-600 hover:text-gray-400 transition-colors font-mono opacity-0 group-hover:opacity-100"
+        className="font-mono text-[11px] text-gray-600 opacity-20 transition-all duration-200 hover:text-[#56b6c2] group-hover:opacity-100 group-hover:text-[#56b6c2]"
       >
         [share]
       </button>
@@ -389,6 +389,6 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
           </div>
         </div>
       )}
-    </div>
+    </span>
   );
 }

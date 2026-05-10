@@ -180,7 +180,10 @@ function TokenCounter({ tokensSent, tokensReceived }: { tokensSent?: number; tok
   );
 }
 
-function buildMarkdownComponents(onSlashCommand?: (command: string, action: SlashCommandAction) => void) {
+function buildMarkdownComponents(
+  onSlashCommand?: (command: string, action: SlashCommandAction) => void,
+  shareNode?: React.ReactNode,
+) {
   const linkify = (text: string): React.ReactNode =>
     onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
 
@@ -195,112 +198,120 @@ function buildMarkdownComponents(onSlashCommand?: (command: string, action: Slas
   };
 
   return {
-  p({ children }: { children?: React.ReactNode }) {
-    const textContent = flattenTextContent(children);
-    const trimmed = textContent.trim();
-    if (/^[=]{3,}$/.test(trimmed) || /^[-]{3,}$/.test(trimmed)) {
-      return <p className="mb-1 text-gray-600 leading-relaxed select-none">{trimmed}</p>;
-    }
-    // Process [BRACKET TAG] markers in text children, then recursively linkify
-    const processed = React.Children.map(children, (child) => {
-      if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
-      return onSlashCommand ? linkifySlashCommands(child, onSlashCommand) : child;
-    });
-    return <p className="mb-3 leading-relaxed">{processed}</p>;
-  },
-  strong({ children }: { children?: React.ReactNode }) {
-    return <strong className="text-white font-bold">{linkifyChildren(children)}</strong>;
-  },
-  em({ children }: { children?: React.ReactNode }) {
-    return <em className="text-gray-300 italic">{linkifyChildren(children)}</em>;
-  },
-  h1({ children }: { children?: React.ReactNode }) {
-    return <h1 className="text-lg font-bold text-white mb-3 mt-4 border-b border-gray-700 pb-1">{children}</h1>;
-  },
-  h2({ children }: { children?: React.ReactNode }) {
-    return <h2 className="text-base font-bold text-white mb-2 mt-3">{children}</h2>;
-  },
-  h3({ children }: { children?: React.ReactNode }) {
-    return <h3 className="text-sm font-bold text-gray-200 mb-2 mt-2">{children}</h3>;
-  },
-  blockquote({ children }: { children?: React.ReactNode }) {
-    const processed = React.Children.map(children, (child) => {
-      if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
-      return onSlashCommand ? linkifySlashCommands(child, onSlashCommand) : child;
-    });
-    return <blockquote className="border-l-2 border-gray-600 pl-3 ml-1 my-2 text-gray-400 italic">{processed}</blockquote>;
-  },
-  hr() {
-    return <hr className="border-gray-700 my-4" />;
-  },
-  ul({ children }: { children?: React.ReactNode }) {
-    return <ul className="list-disc pl-6 mb-3 space-y-1">{children}</ul>;
-  },
-  ol({ children }: { children?: React.ReactNode }) {
-    return <ol className="list-decimal pl-6 mb-3 space-y-1">{children}</ol>;
-  },
-  li({ children }: { children?: React.ReactNode }) {
-    const processed = React.Children.map(children, (child) => {
-      if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
-      return onSlashCommand ? linkifySlashCommands(child, onSlashCommand) : child;
-    });
-    return <li className="leading-relaxed">{processed}</li>;
-  },
-  pre({ children }: { children?: React.ReactNode }) {
-    return <pre className="my-3 rounded whitespace-pre-wrap break-words">{children}</pre>;
-  },
-  code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
-    const match = /language-(\w+)/.exec(className || "");
-    const codeString = String(children).replace(/\n$/, "");
-    if (match) {
-      // Terminal-ish languages render as plain preformatted text
-      // to avoid clashing with the terminal's own dark/monospace aesthetic
-      const terminalLangs = ["terminal", "bash", "sh", "shell", "console", "text", "log", "plaintext", "markdown", "md"];
-      if (terminalLangs.includes(match[1]!)) {
-        const lines = codeString.split("\n");
+    a({ href, children }: { href?: string; children?: React.ReactNode }) {
+      if (href === "https://__share__") return <>{shareNode ?? null}</>;
+      return (
+        <a href={href} className="text-cyan-300 underline underline-offset-2">
+          {linkifyChildren(children)}
+        </a>
+      );
+    },
+    p({ children }: { children?: React.ReactNode }) {
+      const textContent = flattenTextContent(children);
+      const trimmed = textContent.trim();
+      if (/^[=]{3,}$/.test(trimmed) || /^[-]{3,}$/.test(trimmed)) {
+        return <p className="mb-1 text-gray-600 leading-relaxed select-none">{trimmed}</p>;
+      }
+      // Process [BRACKET TAG] markers in text children, then recursively linkify
+      const processed = React.Children.map(children, (child) => {
+        if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
+        return onSlashCommand ? linkifySlashCommands(child, onSlashCommand) : child;
+      });
+      return <p className="mb-3 leading-relaxed">{processed}</p>;
+    },
+    strong({ children }: { children?: React.ReactNode }) {
+      return <strong className="text-white font-bold">{linkifyChildren(children)}</strong>;
+    },
+    em({ children }: { children?: React.ReactNode }) {
+      return <em className="text-gray-300 italic">{linkifyChildren(children)}</em>;
+    },
+    h1({ children }: { children?: React.ReactNode }) {
+      return <h1 className="text-lg font-bold text-white mb-3 mt-4 border-b border-gray-700 pb-1">{children}</h1>;
+    },
+    h2({ children }: { children?: React.ReactNode }) {
+      return <h2 className="text-base font-bold text-white mb-2 mt-3">{children}</h2>;
+    },
+    h3({ children }: { children?: React.ReactNode }) {
+      return <h3 className="text-sm font-bold text-gray-200 mb-2 mt-2">{children}</h3>;
+    },
+    blockquote({ children }: { children?: React.ReactNode }) {
+      const processed = React.Children.map(children, (child) => {
+        if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
+        return onSlashCommand ? linkifySlashCommands(child, onSlashCommand) : child;
+      });
+      return <blockquote className="border-l-2 border-gray-600 pl-3 ml-1 my-2 text-gray-400 italic">{processed}</blockquote>;
+    },
+    hr() {
+      return <hr className="border-gray-700 my-4" />;
+    },
+    ul({ children }: { children?: React.ReactNode }) {
+      return <ul className="list-disc pl-6 mb-3 space-y-1">{children}</ul>;
+    },
+    ol({ children }: { children?: React.ReactNode }) {
+      return <ol className="list-decimal pl-6 mb-3 space-y-1">{children}</ol>;
+    },
+    li({ children }: { children?: React.ReactNode }) {
+      const processed = React.Children.map(children, (child) => {
+        if (typeof child === "string") return renderLineWithTags(child, onSlashCommand);
+        return onSlashCommand ? linkifySlashCommands(child, onSlashCommand) : child;
+      });
+      return <li className="leading-relaxed">{processed}</li>;
+    },
+    pre({ children }: { children?: React.ReactNode }) {
+      return <pre className="my-3 rounded whitespace-pre-wrap break-words">{children}</pre>;
+    },
+    code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
+      const match = /language-(\w+)/.exec(className || "");
+      const codeString = String(children).replace(/\n$/, "");
+      if (match) {
+        // Terminal-ish languages render as plain preformatted text
+        // to avoid clashing with the terminal's own dark/monospace aesthetic
+        const terminalLangs = ["terminal", "bash", "sh", "shell", "console", "text", "log", "plaintext", "markdown", "md"];
+        if (terminalLangs.includes(match[1]!)) {
+          const lines = codeString.split("\n");
+          return (
+            <code className="block whitespace-pre text-gray-100">
+              {lines.map((line, i) => (
+                <React.Fragment key={i}>
+                  {renderLineWithTags(line, onSlashCommand)}
+                  {i < lines.length - 1 && "\n"}
+                </React.Fragment>
+              ))}
+            </code>
+          );
+        }
         return (
-          <code className="block whitespace-pre text-gray-100">
-            {lines.map((line, i) => (
-              <React.Fragment key={i}>
-                {renderLineWithTags(line, onSlashCommand)}
-                {i < lines.length - 1 && "\n"}
-              </React.Fragment>
-            ))}
-          </code>
+          <SyntaxHighlighter
+            style={vscDarkPlus}
+            language={match[1]}
+            PreTag="div"
+          >
+            {codeString}
+          </SyntaxHighlighter>
         );
       }
+      const tagMatch = TAG_MARKER_REGEX.exec(codeString);
+      if (tagMatch) {
+        const category = tagMatch[1] as TagCategory;
+        const tagText = tagMatch[2];
+        return (
+          <span className={`${TAG_STYLES[category]} px-1.5 py-0 font-mono text-xs font-bold mr-2 inline-block`}>
+            {tagText}
+          </span>
+        );
+      }
+      // Linkify slash commands inside inline code
+      const processed = React.Children.map(children, (child) => {
+        if (typeof child === "string") return linkify(child);
+        return child;
+      });
       return (
-        <SyntaxHighlighter
-          style={vscDarkPlus}
-          language={match[1]}
-          PreTag="div"
-        >
-          {codeString}
-        </SyntaxHighlighter>
+        <code className={`text-cyan-300 px-1 rounded ${className || ""}`} {...props}>
+          {processed}
+        </code>
       );
-    }
-    const tagMatch = TAG_MARKER_REGEX.exec(codeString);
-    if (tagMatch) {
-      const category = tagMatch[1] as TagCategory;
-      const tagText = tagMatch[2];
-      return (
-        <span className={`${TAG_STYLES[category]} px-1.5 py-0 font-mono text-xs font-bold mr-2 inline-block`}>
-          {tagText}
-        </span>
-      );
-    }
-    // Linkify slash commands inside inline code
-    const processed = React.Children.map(children, (child) => {
-      if (typeof child === "string") return linkify(child);
-      return child;
-    });
-    return (
-      <code className={`text-cyan-300 px-1 rounded ${className || ""}`} {...props}>
-        {processed}
-      </code>
-    );
-  },
-};
+    },
+  };
 }
 
 // Buddy interjections have a specific shape: ASCII art on the first lines,
@@ -340,7 +351,17 @@ function getMessageFlags(role: string, content: string) {
   return { useMarkdown, isAwaitingResponse, isStreaming };
 }
 
-function MessageContent({ message, isNew = false, onSlashCommand }: { message: Message; isNew?: boolean; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
+function MessageContent({
+  message,
+  isNew = false,
+  onSlashCommand,
+  shareNode,
+}: {
+  message: Message;
+  isNew?: boolean;
+  onSlashCommand?: (command: string, action: SlashCommandAction) => void;
+  shareNode?: React.ReactNode;
+}) {
   const { role, content } = message;
   const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(role, content);
 
@@ -350,13 +371,13 @@ function MessageContent({ message, isNew = false, onSlashCommand }: { message: M
   const shouldTypewrite = isNew && useMarkdown && role === "system";
   const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite);
 
-  const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand), [onSlashCommand]);
+  const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand, shareNode), [onSlashCommand, shareNode]);
 
   if (role === "user") return null;
 
   if (useMarkdown || isStreaming) {
     const rawContent = shouldTypewrite ? visibleContent : content;
-    const processedContent = cleanLLMOutput(rawContent);
+    const processedContent = cleanLLMOutput(rawContent) + (shareNode ? " [share](https://__share__)" : "");
     const showCursor = isStreaming || isTyping;
     return (
       <div className="space-y-1">
@@ -402,6 +423,9 @@ function getShareProps(message: Message, previousMessage?: Message, nextMessage?
 function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   const { showShareButton, shareSystemMessage } = getShareProps(message, previousMessage, nextMessage);
+  const shareNode = showShareButton ? (
+    <ShareButton userMessage={previousMessage!.content} systemMessage={shareSystemMessage} username={username} />
+  ) : undefined;
 
   return (
     <div className={`group ${getContainerClass(message, isNew)}`}>
@@ -412,11 +436,10 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
         </div>
       )}
       {message.role === "loading" && !isAwaitingResponse && <Spinner />}
-      <MessageContent message={message} isNew={isNew} onSlashCommand={onSlashCommand} />
+      <MessageContent message={message} isNew={isNew} onSlashCommand={onSlashCommand} shareNode={shareNode} />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
       {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
-      {showShareButton && <ShareButton userMessage={previousMessage!.content} systemMessage={shareSystemMessage} username={username} />}
     </div>
   );
 }
