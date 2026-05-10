@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, SetStateAction } from "react";
+import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from "react";
 import { track, identify } from "../analytics";
 import { AnalyticsEvents } from "../analyticsEvents";
 import { GENERATORS, UPGRADES, THEMES, FREE_TIER_RANK_CAP } from "../game/constants";
@@ -11,6 +11,8 @@ import { useScoreSync, useAchievementChecker } from "./useGameEffects";
 export type { Message };
 export type { GameState, BuddyState, EconomyState, ActiveTicket, ByokUsage } from "./gameStateUtils";
 export { calcBulkCost } from "./gameStateUtils";
+
+type SetGameState = Dispatch<SetStateAction<GameState>>;
 
 function hasThemePurchaseAccess(state: Pick<GameState, "proKeyHash" | "hasSessionPro">): boolean {
   return Boolean(state.proKeyHash) || Boolean(state.hasSessionPro);
@@ -44,6 +46,7 @@ type SessionProfileResult = {
   username?: string;
   profile?: { username?: string | null } | null;
   isPro?: boolean;
+  quotaPercent?: number | null;
 };
 
 function isDefinitiveThemePurchaseEntitlementError(error?: string): boolean {
@@ -56,6 +59,31 @@ function isThemePurchaseSessionMismatchError(error?: string): boolean {
   if (!error) return false;
   const normalized = error.toLowerCase();
   return normalized.includes("session authentication is required") || normalized.includes("session user does not match");
+}
+
+function isFreshStateForSessionRestore(state: GameState): boolean {
+  return state.economy.totalTDEarned === 0
+    && state.chatHistory.length === 0
+    && !state.proKey
+    && !state.proKeyHash;
+}
+
+function mergeSessionIdentity(
+  state: GameState,
+  result: SessionProfileResult,
+): GameState {
+  const nextState = result.isPro ? { ...state, isPro: true, hasSessionPro: true } : state;
+  if (result.profile) return applyServerProfile(nextState, result.profile, { includeActiveTicket: true });
+  if (!result.username) return nextState;
+
+  return {
+    ...nextState,
+    username: result.username,
+    economy: {
+      ...nextState.economy,
+      ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}),
+    },
+  };
 }
 
 export function applyValidatedSessionProState(state: GameState, result: SessionProfileResult): GameState {
@@ -84,6 +112,67 @@ export function applyThemePurchaseFailure(state: GameState, themeId: string, err
   return { ...nextState, chatHistory: [...nextState.chatHistory, { id: nextMsgId(), role: "error", content: `[❌ Error] ${message}` }] };
 }
 
+function restoreFreshSession(setState: SetGameState, result: SessionProfileResult): void {
+  if (!result.found) return;
+
+  const restoredUsername = result.profile?.username ?? result.username;
+  if (restoredUsername) identify({ username: restoredUsername });
+  setState((prev) => mergeSessionIdentity(prev, result));
+}
+
+function validatePaidSession(setState: SetGameState, result: SessionProfileResult): void {
+  setState((prev) => (isPaidUser(prev) || prev.hasSessionPro ? applyValidatedSessionProState(prev, result) : prev));
+}
+
+function applyGeneratorPurchase(state: GameState, generatorId: string, amount: number, cost: number): GameState {
+  const owned = state.inventory[generatorId] ?? 0;
+  return {
+    ...state,
+    economy: { ...state.economy, currentTD: state.economy.currentTD - cost },
+    inventory: { ...state.inventory, [generatorId]: owned + amount },
+  };
+}
+
+function rollbackGeneratorPurchase(state: GameState, generatorId: string, amount: number, cost: number): GameState {
+  return {
+    ...state,
+    economy: { ...state.economy, currentTD: state.economy.currentTD + cost },
+    inventory: { ...state.inventory, [generatorId]: (state.inventory[generatorId] ?? 0) - amount },
+  };
+}
+
+function applyUpgradePurchase(state: GameState, upgradeId: string, cost: number): GameState {
+  return {
+    ...state,
+    economy: { ...state.economy, currentTD: state.economy.currentTD - cost },
+    upgrades: [...state.upgrades, upgradeId],
+  };
+}
+
+function rollbackUpgradePurchase(state: GameState, upgradeId: string, cost: number): GameState {
+  return {
+    ...state,
+    economy: { ...state.economy, currentTD: state.economy.currentTD + cost },
+    upgrades: state.upgrades.filter((id) => id !== upgradeId),
+  };
+}
+
+function broadcastHighValuePurchase(generatorName: string, amount: number, cost: number, username: string): void {
+  if (cost <= 1_000_000) return;
+  const playerName = username || "A player";
+  const purchaseMessage = `💰 ${playerName} bought ${amount}x ${generatorName} for ${cost.toLocaleString()} TD!`;
+  fetch("/api/recent-events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: purchaseMessage }),
+  }).catch(() => {});
+  supabase?.channel("global_incidents").send({
+    type: "broadcast",
+    event: "new_incident",
+    payload: { message: purchaseMessage },
+  }).catch(() => {});
+}
+
 export function useGameState() {
   const [state, setState] = useState<GameState>(loadState);
   const stateRef = useRef(state);
@@ -99,22 +188,12 @@ export function useGameState() {
 
   useEffect(() => {
     const initial = stateRef.current;
-    const isFreshState = initial.economy.totalTDEarned === 0 && initial.chatHistory.length === 0 && !initial.proKey && !initial.proKeyHash;
-    if (!isFreshState) return;
+    if (!isFreshStateForSessionRestore(initial)) return;
 
     let cancelled = false;
     fetchSessionProfile().then((result) => {
-      if (cancelled || !result.found) return;
-      const restoredUsername = result.profile?.username ?? result.username;
-      if (restoredUsername) identify({ username: restoredUsername });
-      setState((prev) => {
-        const withPro = result.isPro ? { ...prev, isPro: true, hasSessionPro: true } : prev;
-        if (result.profile) return applyServerProfile(withPro, result.profile, { includeActiveTicket: true });
-        if (result.username) {
-          return { ...withPro, username: result.username, economy: { ...withPro.economy, ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}) } };
-        }
-        return withPro;
-      });
+      if (cancelled) return;
+      restoreFreshSession(setState, result);
     });
     return () => { cancelled = true; };
   }, []);
@@ -126,7 +205,7 @@ export function useGameState() {
     let cancelled = false;
     fetchSessionProfile().then((result) => {
       if (cancelled) return;
-      setState((prev) => isPaidUser(prev) || prev.hasSessionPro ? applyValidatedSessionProState(prev, result) : prev);
+      validatePaidSession(setState, result);
     });
     return () => { cancelled = true; };
   }, []);
@@ -145,7 +224,6 @@ export function useGameState() {
   const buyGenerator = useCallback((generatorId: string, amount: number = 1): boolean => {
     const generator = GENERATORS.find((g) => g.id === generatorId);
     if (!generator || amount < 1) return false;
-
     const current = stateRef.current;
     const owned = current.inventory[generatorId] ?? 0;
     const cost = calcBulkCost(generator.baseCost, owned, amount);
@@ -156,7 +234,7 @@ export function useGameState() {
       const ownedNow = prev.inventory[generatorId] ?? 0;
       const dynamicCost = calcBulkCost(generator.baseCost, ownedNow, amount);
       if (prev.economy.currentTD < dynamicCost) return prev;
-      return { ...prev, economy: { ...prev.economy, currentTD: prev.economy.currentTD - dynamicCost }, inventory: { ...prev.inventory, [generatorId]: ownedNow + amount } };
+      return applyGeneratorPurchase(prev, generatorId, amount, dynamicCost);
     });
 
     if (current.proKeyHash) {
@@ -165,25 +243,12 @@ export function useGameState() {
           setState((prev) => applyServerProfile(prev, result.profile!));
           track(AnalyticsEvents.GENERATOR_PURCHASED, { generator_id: generatorId, amount, cost });
         } else if (!result.success) {
-          setState((prev) => ({
-            ...prev,
-            economy: { ...prev.economy, currentTD: prev.economy.currentTD + cost },
-            inventory: { ...prev.inventory, [generatorId]: (prev.inventory[generatorId] ?? 0) - amount },
-          }));
+          setState((prev) => rollbackGeneratorPurchase(prev, generatorId, amount, cost));
         }
       }).catch(() => {});
     } else {
       track(AnalyticsEvents.GENERATOR_PURCHASED, { generator_id: generatorId, amount, cost });
-      if (cost > 1_000_000) {
-        const playerName = stateRef.current.username || "A player";
-        const purchaseMessage = `💰 ${playerName} bought ${amount}x ${generator.name} for ${cost.toLocaleString()} TD!`;
-        fetch("/api/recent-events", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: purchaseMessage }),
-        }).catch(() => {});
-        supabase?.channel("global_incidents").send({ type: "broadcast", event: "new_incident", payload: { message: purchaseMessage } }).catch(() => {});
-      }
+      broadcastHighValuePurchase(generator.name, amount, cost, stateRef.current.username);
     }
 
     return true;
@@ -241,7 +306,7 @@ export function useGameState() {
       if (prev.upgrades.includes(upgradeId)) return prev;
       if ((prev.inventory[upgrade.requiredGeneratorId] ?? 0) < 1) return prev;
       if (prev.economy.currentTD < upgrade.cost) return prev;
-      return { ...prev, economy: { ...prev.economy, currentTD: prev.economy.currentTD - upgrade.cost }, upgrades: [...prev.upgrades, upgradeId] };
+      return applyUpgradePurchase(prev, upgradeId, upgrade.cost);
     });
 
     if (current.proKeyHash) {
@@ -250,11 +315,7 @@ export function useGameState() {
           setState((prev) => applyServerProfile(prev, result.profile!));
           track(AnalyticsEvents.UPGRADE_PURCHASED, { upgrade_id: upgradeId, cost: upgrade.cost });
         } else if (!result.success) {
-          setState((prev) => ({
-            ...prev,
-            economy: { ...prev.economy, currentTD: prev.economy.currentTD + upgrade.cost },
-            upgrades: prev.upgrades.filter((id) => id !== upgradeId),
-          }));
+          setState((prev) => rollbackUpgradePurchase(prev, upgradeId, upgrade.cost));
         }
       }).catch(() => {});
     } else {
