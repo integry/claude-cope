@@ -62,7 +62,10 @@ vi.mock("../CommandLine", async () => {
   };
 });
 vi.mock("../SlashMenu", () => ({ default: () => null }));
-vi.mock("../slashCommands", () => ({ SLASH_COMMANDS: [] }));
+vi.mock("../slashCommands", () => ({
+  SLASH_COMMANDS: [],
+  getSlashMenuItems: () => [],
+}));
 vi.mock("../HeaderBar", () => ({ default: () => null }));
 vi.mock("../../hooks/useGameState", async () => {
   const React = await import("react");
