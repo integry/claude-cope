@@ -266,7 +266,6 @@ export function submitChatMessage(opts: {
       if (await handleChatErrorResponse(res, setHistory, opts.onQuotaExhausted, onError)) return;
 
       const parsed = await parseChatResponseBody(res, setHistory, opts.addActiveTD, opts.onProfileUpdate);
-      opts.onAccepted?.();
       let { rawReply } = parsed;
       const { tokensSent, tokensReceived, cost, quotaPercent } = parsed;
 
@@ -326,6 +325,8 @@ export function submitChatMessage(opts: {
 
         return updated;
       });
+
+      opts.onAccepted?.();
     })
     .catch((err) => {
       if (err instanceof DOMException && err.name === "AbortError") return;

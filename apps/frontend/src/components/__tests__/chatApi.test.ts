@@ -507,6 +507,40 @@ describe("submitChatMessage - achievement parsing", () => {
     expect(onQuotaExhausted).toHaveBeenCalledTimes(1);
   });
 
+  it("fires onAccepted only after the final assistant message is committed", async () => {
+    const events: string[] = [];
+    const setHistory = vi.fn((updater: unknown) => {
+      if (typeof updater !== "function") return;
+      const next = updater([{ role: "loading", content: "Loading..." }]);
+      if (Array.isArray(next) && next.some((message) => message.role === "system")) {
+        events.push("history-committed");
+      }
+    });
+    const setIsProcessing = vi.fn();
+    const onAccepted = vi.fn(() => {
+      events.push("accepted");
+    });
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockStreamResponse(["Accepted reply"])
+    );
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+      onAccepted,
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(events).toContain("history-committed");
+    expect(events[events.length - 1]).toBe("accepted");
+  });
+
   it("does not fire onAccepted when the response stream cannot be parsed", async () => {
     const setHistory = vi.fn();
     const setIsProcessing = vi.fn();
@@ -537,6 +571,39 @@ describe("submitChatMessage - achievement parsing", () => {
     await vi.advanceTimersByTimeAsync(3000);
 
     expect(onAccepted).not.toHaveBeenCalled();
+  });
+
+  it("does not fire onAccepted when final history commit fails", async () => {
+    const setHistory = vi.fn((updater: unknown) => {
+      if (typeof updater !== "function") return;
+      const next = updater([{ role: "loading", content: "Loading..." }]);
+      if (Array.isArray(next) && next.some((message) => message.role === "system")) {
+        throw new Error("history commit failed");
+      }
+    });
+    const setIsProcessing = vi.fn();
+    const onAccepted = vi.fn();
+    const onError = vi.fn();
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockStreamResponse(["Accepted reply"])
+    );
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+      onAccepted,
+      onError,
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(onAccepted).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
   });
 
   it("handles response with no achievements", async () => {

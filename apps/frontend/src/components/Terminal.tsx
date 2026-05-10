@@ -201,6 +201,11 @@ function Terminal() {
   }, []);
   useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, setHistory, runSlashCommand });
 
+  const handlePromptAccepted = useCallback(() => {
+    pendingNagCommandRef.current = null;
+    nagArmedFromQuotaRef.current = false;
+  }, []);
+
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     if (action === "execute") { runSlashCommandRef.current(command); return; }
     setInputValue(command + " "); setSlashQuery(""); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
@@ -272,6 +277,7 @@ function Terminal() {
         handleQuotaLockout(command);
       },
       onProfileUpdate: (profile) => applyProfileUpdate(profile),
+      onAccepted: handlePromptAccepted,
       onError: playError, signal: controller.signal,
     });
   };
@@ -310,14 +316,16 @@ function Terminal() {
     dismissUpgradeOverlay();
     if (pendingNagCommandRef.current !== null) {
       const command = pendingNagCommandRef.current;
-      pendingNagCommandRef.current = null;
-      nagArmedFromQuotaRef.current = false;
       setInputValue("");
       setHistoryIndex(-1);
+      const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
+      if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
+      pendingNagCommandRef.current = null;
+      nagArmedFromQuotaRef.current = false;
       recordMessageWithoutTicket();
       submitPromptCommand(command);
     }
-  }, [dismissUpgradeOverlay, recordMessageWithoutTicket, submitPromptCommand]);
+  }, [dismissUpgradeOverlay, checkQuotaAndHandleExhaustion, recordMessageWithoutTicket, state.apiKey, submitPromptCommand]);
 
   const handleManualUpgradeDismiss = dismissUpgradeOverlay;
 

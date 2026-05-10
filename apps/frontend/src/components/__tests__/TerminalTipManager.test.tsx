@@ -302,6 +302,7 @@ describe("Terminal tip-manager wiring", () => {
     await renderTerminal();
     await submitCommand("ship it");
 
+    expect(submitChatMessageMock.mock.calls[0]?.[0]?.onAccepted).toEqual(expect.any(Function));
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
     expect(recordValidCommandMock).not.toHaveBeenCalled();
   });
@@ -328,5 +329,27 @@ describe("Terminal tip-manager wiring", () => {
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(2);
     expect(submitChatMessageMock).toHaveBeenCalledTimes(2);
     expect(input!.value).toBe("");
+  });
+
+  it("rechecks the quota gate before replaying a nagged prompt", async () => {
+    await renderTerminal();
+
+    await submitCommand("first prompt");
+    shouldShowNagMock.mockReturnValue(true);
+    await submitCommand("retry me");
+
+    const dismissButton = container.querySelector("button[aria-label='dismiss-upgrade']") as HTMLButtonElement | null;
+    expect(dismissButton).not.toBeNull();
+
+    await act(async () => {
+      dismissButton!.click();
+    });
+
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(1);
+    expect(setShowUpgradeMock).toHaveBeenCalledTimes(3);
+    expect(setShowUpgradeMock).toHaveBeenNthCalledWith(1, true);
+    expect(setShowUpgradeMock).toHaveBeenNthCalledWith(2, false);
+    expect(setShowUpgradeMock).toHaveBeenNthCalledWith(3, true);
   });
 });
