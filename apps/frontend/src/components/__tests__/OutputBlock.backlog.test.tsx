@@ -137,4 +137,67 @@ describe("OutputBlock backlog rendering", () => {
     expect(container.textContent).toContain("Updated title");
     expect(container.textContent).not.toContain("First title");
   });
+
+  it("renders the filtered header and omits the default info line when a category filter is active", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: "MELT-002",
+          title: "MELT Unpick the Mainframe Ritual",
+          description: "Premium category ticket",
+          technical_debt: 55,
+          kickoff_prompt: "touch the cobol",
+          category_prefix: "MELT",
+          category_label: "Mainframes / Legacy",
+          tier: "premium",
+        },
+      ]),
+    }));
+
+    const reply = vi.fn();
+    await handleBacklogCommand(reply, { category: "MELT", paidUser: true });
+
+    const message = reply.mock.calls[0]?.[0] as Message;
+    renderMessage(message);
+
+    expect(container.textContent).toContain("[ FILTER ACTIVE: MELT (Mainframes / Legacy) ]");
+    expect(container.textContent).not.toContain("Want specific trauma?");
+  });
+
+  it("renders the empty backlog fallback without mounting the structured backlog component", () => {
+    const message: Message = {
+      role: "system",
+      content: "[📋 **BACKLOG**]\n\nThe backlog is empty.",
+    };
+
+    renderMessage(message);
+
+    expect(container.textContent).toContain("The backlog is empty.");
+    expect(container.textContent).not.toContain("[ COMMUNITY BACKLOG ]");
+  });
+
+  it("clicks locked ticket ids the same as open rows", () => {
+    const onSlashCommand = renderMessage({
+      role: "system",
+      content: "fallback backlog copy",
+      backlogDisplay: {
+        kind: "community-backlog",
+        title: "[ COMMUNITY BACKLOG ]",
+        footer: ["Run `/upgrade` to unlock premium tickets."],
+        tickets: [
+          { row: 1, fullId: "PIXEL-77", shortId: "PIXEL-77", title: "Locked ticket", status: "PREMIUM", reward: "--", isLocked: true },
+        ],
+      },
+    });
+
+    const ticketButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "PIXEL-77");
+    expect(ticketButton).toBeTruthy();
+
+    act(() => {
+      ticketButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSlashCommand).toHaveBeenCalledWith("/take PIXEL-77", "execute");
+  });
 });

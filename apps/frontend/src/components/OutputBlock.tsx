@@ -228,56 +228,19 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
 
 type OutputBlockProps = Parameters<typeof OutputBlock>[0];
 
-function stringArraysEqual(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) return false;
-
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i] !== b[i]) return false;
-  }
-
-  return true;
-}
-
-function backlogTicketsEqual(a: NonNullable<Message["backlogDisplay"]>["tickets"], b: NonNullable<Message["backlogDisplay"]>["tickets"]): boolean {
-  if (a.length !== b.length) return false;
-
-  for (let i = 0; i < a.length; i += 1) {
-    const prevTicket = a[i];
-    const nextTicket = b[i];
-    if (!prevTicket || !nextTicket) return false;
-    if (prevTicket.row !== nextTicket.row) return false;
-    if (prevTicket.fullId !== nextTicket.fullId) return false;
-    if (prevTicket.shortId !== nextTicket.shortId) return false;
-    if (prevTicket.title !== nextTicket.title) return false;
-    if (prevTicket.status !== nextTicket.status) return false;
-    if (prevTicket.reward !== nextTicket.reward) return false;
-    if (prevTicket.isLocked !== nextTicket.isLocked) return false;
-  }
-
-  return true;
-}
-
-function backlogDisplaysEqual(a: Message["backlogDisplay"], b: Message["backlogDisplay"]): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  if (a.kind !== b.kind) return false;
-  if (a.title !== b.title) return false;
-  if (a.filterHeader !== b.filterHeader) return false;
-  if (a.infoLine !== b.infoLine) return false;
-  return stringArraysEqual(a.footer, b.footer) && backlogTicketsEqual(a.tickets, b.tickets);
-}
-
 function messagesEqual(a: Message | undefined, b: Message | undefined): boolean {
-  return a?.role === b?.role
+  return a === b || (
+    a?.role === b?.role
     && a?.content === b?.content
-    && backlogDisplaysEqual(a?.backlogDisplay, b?.backlogDisplay);
+    && a?.backlogDisplay === b?.backlogDisplay
+  );
 }
 
 function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps): boolean {
   if (prev.message.role !== next.message.role) return false;
   if (prev.message.content !== next.message.content) return false;
   if (prev.message.cost !== next.message.cost) return false;
-  if (!backlogDisplaysEqual(prev.message.backlogDisplay, next.message.backlogDisplay)) return false;
+  if (prev.message.backlogDisplay !== next.message.backlogDisplay) return false;
   if (prev.isNew !== next.isNew) return false;
   if (prev.promptString !== next.promptString) return false;
   if (!messagesEqual(prev.previousMessage, next.previousMessage)) return false;

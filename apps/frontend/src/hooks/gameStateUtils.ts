@@ -66,6 +66,14 @@ export type Message = {
   backlogDisplay?: BacklogDisplayData;
 };
 
+export function stripTransientMessageFields(message: Message): Message {
+  if (!message.backlogDisplay) return message;
+  return {
+    ...message,
+    backlogDisplay: undefined,
+  };
+}
+
 export interface BuddyState {
   type: string | null;
   isShiny: boolean;
@@ -233,6 +241,7 @@ function applyDefensiveDefaults(state: GameState): void {
   if (!Array.isArray(state.chatHistory)) {
     state.chatHistory = [];
   }
+  state.chatHistory = state.chatHistory.map(stripTransientMessageFields);
   if (!state.commandUsage || typeof state.commandUsage !== "object") {
     state.commandUsage = {};
   }
