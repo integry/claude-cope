@@ -165,14 +165,14 @@ describe("UpgradeOverlay", () => {
     act(() => {
       desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
-    expect(getSelectedHref()).toBe("https://example.com/multi");
-    expect(document.activeElement).toBe(multiLink);
+    expect(getSelectedHref()).toBe("https://example.com/single");
+    expect(document.activeElement).toBe(singleLink);
 
     act(() => {
       desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
     });
-    expect(getSelectedHref()).toBe("https://example.com/single");
-    expect(document.activeElement).toBe(singleLink);
+    expect(getSelectedHref()).toBe("https://example.com/multi");
+    expect(document.activeElement).toBe(multiLink);
   });
 
   it("does not activate a desktop option on Enter before keyboard navigation starts", () => {
@@ -249,28 +249,10 @@ describe("UpgradeOverlay", () => {
     expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/multi");
   });
 
-  it("preserves manual desktop tab order before arming checkout selection", () => {
+  it("restores manual desktop focus to the first checkout option on open", () => {
     setViewportWidth(1024);
     render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "manual" });
-    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
-    const closeButton = container.querySelector(".upgrade-desktop button") as HTMLButtonElement | null;
     const singleLink = container.querySelector(".upgrade-desktop a[href='https://example.com/single']") as HTMLAnchorElement | null;
-
-    expect(document.activeElement).toBe(desktop);
-    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
-
-    act(() => {
-      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-      closeButton?.focus();
-    });
-
-    expect(document.activeElement).toBe(closeButton);
-    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
-
-    act(() => {
-      closeButton?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-      singleLink?.focus();
-    });
 
     expect(document.activeElement).toBe(singleLink);
     expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/single");
@@ -327,7 +309,21 @@ describe("UpgradeOverlay", () => {
       desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
 
-    expect(getSelectedHref()).toBe("https://example.com/multi");
+    expect(getSelectedHref()).toBe("https://example.com/single");
+  });
+
+  it("starts unarmed arrow-up navigation on the last checkout option", () => {
+    setViewportWidth(1024);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn(), dismissMode: "nag" });
+    const desktop = container.querySelector(".upgrade-desktop") as HTMLDivElement | null;
+    const multiLink = container.querySelector(".upgrade-desktop a[href='https://example.com/multi']") as HTMLAnchorElement | null;
+
+    act(() => {
+      desktop?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    });
+
+    expect(document.activeElement).toBe(multiLink);
+    expect(container.querySelector(".upgrade-desktop a[data-selected='true']")?.getAttribute("href")).toBe("https://example.com/multi");
   });
 
   it("does not auto-focus a checkout link or show selected styling when the nag opens", () => {

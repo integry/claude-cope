@@ -183,8 +183,7 @@ export default function DesktopLayout({
   const cycleSelection = useCallback((direction: -1 | 1) => {
     if (availableOptionIds.length === 0) return;
     if (selectedOptionId === null) {
-      const baselineIndex = 0;
-      const nextIndex = (baselineIndex + direction + availableOptionIds.length) % availableOptionIds.length;
+      const nextIndex = direction === 1 ? 0 : availableOptionIds.length - 1;
       setSelectedOptionId(availableOptionIds[nextIndex] ?? null);
       return;
     }
@@ -208,11 +207,19 @@ export default function DesktopLayout({
     }
     const overlay = overlayRef.current;
     if (!overlay) return;
-    if (isForcedClosing || (dismissMode === "nag" && !isKeyboardNavigationMode)) {
+    if (isForcedClosing) {
+      overlay.focus();
+      return;
+    }
+    if (dismissMode === "nag" && !isKeyboardNavigationMode) {
       overlay.focus();
       return;
     }
     if (isKeyboardNavigationMode && selectedOptionId !== null) {
+      optionRefs.current[selectedOptionId]?.focus();
+      return;
+    }
+    if (dismissMode === "manual" && selectedOptionId !== null) {
       optionRefs.current[selectedOptionId]?.focus();
       return;
     }
