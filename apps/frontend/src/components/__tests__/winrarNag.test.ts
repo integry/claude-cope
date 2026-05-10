@@ -62,7 +62,10 @@ vi.mock("../CommandLine", async () => {
   };
 });
 vi.mock("../SlashMenu", () => ({ default: () => null }));
-vi.mock("../slashCommands", () => ({ SLASH_COMMANDS: [] }));
+vi.mock("../slashCommands", () => ({
+  SLASH_COMMANDS: [],
+  getSlashMenuItems: () => [],
+}));
 vi.mock("../HeaderBar", () => ({ default: () => null }));
 vi.mock("../../hooks/useGameState", async () => {
   const React = await import("react");
@@ -129,7 +132,11 @@ vi.mock("../../hooks/useGameState", async () => {
     },
   };
 });
-vi.mock("../../hooks/gameStateUtils", () => ({ calculateActiveMultiplier: () => 1, isFreeUser: (s: { proKey?: string; proKeyHash?: string; isPro?: boolean; apiKey?: string }) => !s.proKey && !s.proKeyHash && !s.isPro }));
+vi.mock("../../hooks/gameStateUtils", () => ({
+  calculateActiveMultiplier: () => 1,
+  isPaidUser: (s: { proKey?: string; proKeyHash?: string; isPro?: boolean }) => Boolean(s.proKey) || Boolean(s.proKeyHash) || Boolean(s.isPro),
+  isFreeUser: (s: { proKey?: string; proKeyHash?: string; isPro?: boolean; apiKey?: string }) => !s.proKey && !s.proKeyHash && !s.isPro,
+}));
 vi.mock("../BuddyDisplay", () => ({ BuddyDisplay: () => null }));
 vi.mock("../parseGlitchStyle", () => ({ parseGlitchStyle: () => ({}) }));
 vi.mock("../terminalClassName", () => ({ terminalContainerClassName: () => "terminal" }));

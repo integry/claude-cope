@@ -12,6 +12,8 @@ export interface BacklogCategoryUpgradeGroupMeta {
   categories: readonly BacklogCategoryTierMeta[];
 }
 
+export const BACKLOG_CATEGORY_ALL = "ALL";
+
 type BacklogCategoryDefinition = readonly [
   prefix: string,
   slug: string,

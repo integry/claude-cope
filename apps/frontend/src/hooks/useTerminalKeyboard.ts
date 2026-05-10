@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback, type RefObject, type KeyboardEvent, type Dispatch, type SetStateAction } from "react";
 import type { Message } from "./useGameState";
+import { resolveSlashMenuSelection } from "../components/slashCommands";
 
 export function useTerminalKeyboard({
   slashQuery,
@@ -206,8 +207,10 @@ export function useTerminalKeyboard({
         e.preventDefault();
         const selected = filtered[slashIndex];
         if (selected) {
-          setInputValue(selected);
-          setSlashQuery(selected);
+          const nextSelection = resolveSlashMenuSelection(selected, "tab");
+          setInputValue(nextSelection.value);
+          setSlashQuery(nextSelection.nextQuery);
+          setSlashIndex(0);
         }
       } else if (suggestedReply && !inputValue) {
         e.preventDefault();
@@ -220,7 +223,16 @@ export function useTerminalKeyboard({
       if (slashMenuOpen) {
         e.preventDefault();
         const selected = filtered[slashIndex];
-        if (selected) runSlashCommand(selected);
+        if (selected) {
+          const nextSelection = resolveSlashMenuSelection(selected, "enter");
+          if (nextSelection.mode === "execute") {
+            runSlashCommand(nextSelection.value);
+          } else {
+            setInputValue(nextSelection.value);
+            setSlashQuery(nextSelection.nextQuery);
+            setSlashIndex(0);
+          }
+        }
         return;
       }
       if (inputValue.trim() !== "" && !isProcessing) handleEnterSubmit();

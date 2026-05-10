@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
+  BACKLOG_CATEGORY_ALL,
   FREE_BACKLOG_CATEGORY_PREFIXES,
   PREMIUM_BACKLOG_CATEGORY_PREFIXES,
   getBacklogCategoryPrefix,
@@ -145,6 +146,22 @@ async function queryRandomCommunityRows(db: D1Database, limit: number): Promise<
   return results ?? [];
 }
 
+function parseBacklogCategoryFilter(rawCategory: string | undefined): { category: string | null; error?: string } {
+  if (!rawCategory) return { category: null };
+
+  const normalized = rawCategory.trim().toUpperCase();
+  if (!normalized || normalized === BACKLOG_CATEGORY_ALL) {
+    return { category: null };
+  }
+
+  const categoryMeta = getBacklogCategoryTierMeta(normalized);
+  if (!categoryMeta) {
+    return { category: null, error: `Invalid backlog category "${rawCategory}". Use /backlog to browse valid categories.` };
+  }
+
+  return { category: categoryMeta.prefix };
+}
+
 tickets.get("/community", async (c) => {
   const db = c.env?.DB;
   if (!db) {
@@ -153,8 +170,23 @@ tickets.get("/community", async (c) => {
 
   const proKeyHash = c.req.header("x-pro-key-hash")?.trim();
   const isPaidUser = proKeyHash ? await isLicenseActive(db, proKeyHash) : false;
+  const categoryFilter = parseBacklogCategoryFilter(c.req.query("category"));
   c.header("Cache-Control", "private, max-age=10");
   c.header("Vary", "x-pro-key-hash");
+
+  if (categoryFilter.error) {
+    return c.json({ error: categoryFilter.error }, 400);
+  }
+
+  if (categoryFilter.category) {
+    const categoryMeta = getBacklogCategoryTierMeta(categoryFilter.category);
+    if (categoryMeta?.tier === "premium" && !isPaidUser) {
+      return c.json({ error: `Backlog category ${categoryMeta.prefix} (${categoryMeta.label}) requires Claude Cope Max.` }, 403);
+    }
+
+    const rows = await queryRandomBacklogRows(db, new Set([categoryFilter.category]), BACKLOG_PLAYABLE_LIMIT);
+    return c.json(rows.map(buildPlayableRow));
+  }
 
   if (isPaidUser) {
     const rows = await queryRandomCommunityRows(db, BACKLOG_PLAYABLE_LIMIT);
