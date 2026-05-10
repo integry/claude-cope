@@ -3,6 +3,18 @@ declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
 
+class ResizeObserverMock implements ResizeObserver {
+  observe() {}
+
+  unobserve() {}
+
+  disconnect() {}
+}
+
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = ResizeObserverMock;
+}
 
 export {};
