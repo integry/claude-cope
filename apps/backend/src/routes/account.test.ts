@@ -132,6 +132,24 @@ describe("POST /api/account/buy-theme", () => {
     expect(res.status).toBe(200);
     expect(((await res.json()) as { success: boolean }).success).toBe(true);
   });
+  it("falls back to USAGE_KV for a session-authenticated Max user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, USAGE_KV: kv });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { success: boolean }).success).toBe(true);
+  });
   it("rejects a session-authenticated free user without licenseKeyHash", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
     const { db } = createMockDB({

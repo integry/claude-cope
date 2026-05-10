@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcBulkCost, canBuyTheme, applyOptimisticThemePurchase } from "../useGameState";
+import { calcBulkCost, canBuyTheme, applyOptimisticThemePurchase, rollbackOptimisticThemePurchase } from "../useGameState";
 import { GROWTH_RATE, GENERATORS } from "../../game/constants";
 import type { GameState } from "../gameStateUtils";
 
@@ -124,11 +124,25 @@ describe("canBuyTheme", () => {
     expect(canBuyTheme(state, "amber")).toBe(false);
   });
 
+  it("rejects local proKey state without a session-backed entitlement", () => {
+    const state = makeGameState({ proKey: "max-key", proKeyHash: undefined, isPro: undefined });
+    expect(canBuyTheme(state, "amber")).toBe(false);
+  });
+
   it("applies the optimistic purchase update for restored paid users without proKeyHash", () => {
     const state = makeGameState({ isPro: true, proKeyHash: undefined, proKey: undefined });
     const nextState = applyOptimisticThemePurchase(state, "amber");
 
     expect(nextState.economy.currentTD).toBe(1000);
     expect(nextState.unlockedThemes).toContain("amber");
+  });
+
+  it("rolls back the optimistic purchase update on failure", () => {
+    const state = makeGameState({ isPro: true, proKeyHash: undefined, proKey: undefined });
+    const purchasedState = applyOptimisticThemePurchase(state, "amber");
+    const rolledBackState = rollbackOptimisticThemePurchase(purchasedState, "amber");
+
+    expect(rolledBackState.economy.currentTD).toBe(state.economy.currentTD);
+    expect(rolledBackState.unlockedThemes).toEqual(state.unlockedThemes);
   });
 });

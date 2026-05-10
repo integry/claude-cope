@@ -592,7 +592,7 @@ account.post("/buy-theme", async (c) => {
   const ownership = await resolveThemePurchaseOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
-    kv: c.env?.QUOTA_KV,
+    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
     sessionId: c.get("sessionId"),
   });
   if (ownership.status !== "ok") {

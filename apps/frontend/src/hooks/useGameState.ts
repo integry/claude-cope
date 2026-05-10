@@ -29,10 +29,14 @@ export type { Message };
 export type { GameState, BuddyState, EconomyState, ActiveTicket, ByokUsage } from "./gameStateUtils";
 export { calcBulkCost } from "./gameStateUtils";
 
-export function canBuyTheme(state: Pick<GameState, "economy" | "unlockedThemes" | "proKey" | "proKeyHash" | "isPro">, themeId: string): boolean {
+function hasThemePurchaseAccess(state: Pick<GameState, "proKeyHash" | "isPro">): boolean {
+  return Boolean(state.proKeyHash) || Boolean(state.isPro);
+}
+
+export function canBuyTheme(state: Pick<GameState, "economy" | "unlockedThemes" | "proKeyHash" | "isPro">, themeId: string): boolean {
   const theme = THEMES.find((t) => t.id === themeId);
   if (!theme) return false;
-  if (!isPaidUser(state)) return false;
+  if (!hasThemePurchaseAccess(state)) return false;
   if (state.unlockedThemes.includes(themeId)) return false;
   if (state.economy.currentTD < theme.cost) return false;
   return true;
@@ -50,6 +54,21 @@ export function applyOptimisticThemePurchase(state: GameState, themeId: string):
       currentTD: state.economy.currentTD - theme.cost,
     },
     unlockedThemes: [...state.unlockedThemes, themeId],
+  };
+}
+
+export function rollbackOptimisticThemePurchase(state: GameState, themeId: string): GameState {
+  const theme = THEMES.find((t) => t.id === themeId);
+  if (!theme) return state;
+  if (!state.unlockedThemes.includes(themeId)) return state;
+
+  return {
+    ...state,
+    economy: {
+      ...state.economy,
+      currentTD: state.economy.currentTD + theme.cost,
+    },
+    unlockedThemes: state.unlockedThemes.filter((id) => id !== themeId),
   };
 }
 
@@ -384,14 +403,11 @@ export function useGameState() {
         setState((prev) => applyServerProfile(prev, result.profile!));
         track(AnalyticsEvents.THEME_PURCHASED, { theme_id: themeId, cost: theme.cost });
       } else if (!result.success) {
-        // Rollback
-        setState((prev) => ({
-          ...prev,
-          economy: { ...prev.economy, currentTD: prev.economy.currentTD + theme.cost },
-          unlockedThemes: prev.unlockedThemes.filter((id) => id !== themeId),
-        }));
+        setState((prev) => rollbackOptimisticThemePurchase(prev, themeId));
       }
-    }).catch(() => {});
+    }).catch(() => {
+      setState((prev) => rollbackOptimisticThemePurchase(prev, themeId));
+    });
 
     return true;
   }, []);
