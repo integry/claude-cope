@@ -288,8 +288,12 @@ export function useGameState() {
     if (!current.unlockedThemes.includes(themeId) || current.activeTheme === themeId) return;
     const requestId = themeUpdateRequestIdRef.current + 1;
     themeUpdateRequestIdRef.current = requestId;
+    stateRef.current = { ...current, activeTheme: themeId };
 
-    setState((prev) => (!prev.unlockedThemes.includes(themeId) ? prev : { ...prev, activeTheme: themeId }));
+    setState((prev) => {
+      if (!prev.unlockedThemes.includes(themeId)) return prev;
+      return prev.activeTheme === themeId ? prev : { ...prev, activeTheme: themeId };
+    });
 
     if (!current.username) return;
 
@@ -325,6 +329,8 @@ export function useGameState() {
     const current = stateRef.current;
     if (!canBuyTheme(current, themeId)) return false;
 
+    const optimisticState = applyOptimisticThemePurchase(current, themeId);
+    stateRef.current = optimisticState;
     setState((prev) => applyOptimisticThemePurchase(prev, themeId));
 
     buyThemeServer(current.username, themeId, current.proKeyHash).then((result) => {

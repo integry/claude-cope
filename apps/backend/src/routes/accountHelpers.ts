@@ -308,6 +308,88 @@ export async function verifyOwnership(db: D1Database, username: string, licenseK
   return { profile, status: "ok", licenseKeyHash };
 }
 
+function getSessionAuthRequiredResult(actionLabel: string): OwnershipResult {
+  return {
+    profile: null,
+    status: "unauthorized",
+    error: `Session authentication is required for ${actionLabel}`,
+    errorCode: "session_auth_required",
+  };
+}
+
+function getSessionUserMismatchResult(): OwnershipResult {
+  return {
+    profile: null,
+    status: "unauthorized",
+    error: "Unauthorized: session user does not match this profile",
+    errorCode: "session_user_mismatch",
+  };
+}
+
+async function resolveRequestedThemeAlias(kv: KVNamespace, requestedUsername: string, boundUsername: string) {
+  if (requestedUsername === boundUsername.toLowerCase()) return null;
+  return followRenameChain(kv, requestedUsername);
+}
+
+async function resolveSessionThemePurchaseRow(
+  db: D1Database,
+  opts: {
+    kv: KVNamespace;
+    sessionId: string;
+    username: string;
+    boundUsername: string;
+    logPrefix: string;
+  },
+): Promise<{ username: string; row: ProfileRow | null } | OwnershipResult> {
+  const requestedAlias = await resolveRequestedThemeAlias(opts.kv, opts.username.toLowerCase(), opts.boundUsername);
+  const resolved = await resolveSessionProfileRow({
+    db,
+    kv: opts.kv,
+    sessionId: opts.sessionId,
+    username: opts.boundUsername,
+    logPrefix: opts.logPrefix,
+  });
+
+  if (!resolved.row) {
+    if (requestedAlias && requestedAlias.current.toLowerCase() !== opts.boundUsername) {
+      return getSessionUserMismatchResult();
+    }
+    return { profile: null, status: "not_found", error: "Profile not found" };
+  }
+
+  const sessionMatchesRequested = resolved.username.toLowerCase() === opts.username.toLowerCase()
+    || opts.boundUsername === opts.username.toLowerCase();
+  if (!sessionMatchesRequested && requestedAlias?.current.toLowerCase() !== resolved.username.toLowerCase()) {
+    return getSessionUserMismatchResult();
+  }
+
+  return { username: resolved.username, row: resolved.row };
+}
+
+async function buildThemePurchaseOwnershipFromSessionRow(
+  db: D1Database,
+  username: string,
+  row: ProfileRow & { license_hash: string | null },
+  actionLabel: string,
+): Promise<OwnershipResult> {
+  if (!row.license_hash) {
+    return {
+      profile: null,
+      status: "unauthorized",
+      error: `An active Max license is required for ${actionLabel}`,
+      errorCode: "active_max_license_required",
+    };
+  }
+
+  if (!(await isLicenseActive(db, row.license_hash))) {
+    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active", errorCode: "license_inactive" };
+  }
+
+  const profile = await getProfile(db, username);
+  if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
+  return { profile, status: "ok", licenseKeyHash: row.license_hash };
+}
+
 export async function resolveThemePurchaseOwnership(
   db: D1Database,
   opts: {
@@ -330,51 +412,26 @@ export async function resolveThemePurchaseOwnership(
   const logPrefix = opts.logPrefix ?? "[account/theme]";
 
   if (!opts.kv || !opts.sessionId) {
-    return { profile: null, status: "unauthorized", error: `Session authentication is required for ${actionLabel}`, errorCode: "session_auth_required" };
+    return getSessionAuthRequiredResult(actionLabel);
   }
 
   const boundUsername = await opts.kv.get(accountKvKeys.sessionUser(opts.sessionId));
   if (!boundUsername) {
-    return { profile: null, status: "unauthorized", error: `Session authentication is required for ${actionLabel}`, errorCode: "session_auth_required" };
+    return getSessionAuthRequiredResult(actionLabel);
   }
 
-  const requestedUsername = opts.username.toLowerCase();
-  const requestedAlias = requestedUsername === boundUsername.toLowerCase()
-    ? null
-    : await followRenameChain(opts.kv, opts.username);
-
-  const resolved = await resolveSessionProfileRow({
-    db,
+  const resolved = await resolveSessionThemePurchaseRow(db, {
     kv: opts.kv,
     sessionId: opts.sessionId,
-    username: boundUsername,
+    username: opts.username,
+    boundUsername: boundUsername.toLowerCase(),
     logPrefix,
   });
-  if (!resolved.row) {
-    if (requestedAlias && requestedAlias.current.toLowerCase() !== boundUsername.toLowerCase()) {
-      return { profile: null, status: "unauthorized", error: "Unauthorized: session user does not match this profile", errorCode: "session_user_mismatch" };
-    }
-    return { profile: null, status: "not_found", error: "Profile not found" };
-  }
-  const sessionMatchesRequested = resolved.username.toLowerCase() === requestedUsername
-    || boundUsername.toLowerCase() === requestedUsername;
-  if (!sessionMatchesRequested && requestedAlias?.current.toLowerCase() !== resolved.username.toLowerCase()) {
-    return { profile: null, status: "unauthorized", error: "Unauthorized: session user does not match this profile", errorCode: "session_user_mismatch" };
+  if ("status" in resolved) {
+    return resolved;
   }
 
-  const row = resolved.row as typeof resolved.row & { license_hash: string | null };
-  if (!row) return { profile: null, status: "not_found", error: "Profile not found" };
-  if (!row.license_hash) {
-    return { profile: null, status: "unauthorized", error: `An active Max license is required for ${actionLabel}`, errorCode: "active_max_license_required" };
-  }
-
-  if (!(await isLicenseActive(db, row.license_hash))) {
-    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active", errorCode: "license_inactive" };
-  }
-
-  const profile = await getProfile(db, resolved.username);
-  if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
-  return { profile, status: "ok", licenseKeyHash: row.license_hash };
+  return buildThemePurchaseOwnershipFromSessionRow(db, resolved.username, resolved.row as ProfileRow & { license_hash: string | null }, actionLabel);
 }
 
 export function broadcastPurchase(message: string, db: D1Database | undefined, ctx: { waitUntil: (p: Promise<unknown>) => void }) {
