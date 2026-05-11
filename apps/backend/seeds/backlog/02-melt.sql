@@ -67,7 +67,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Marcus | Head of Blockchain Innovation | Wants gas fees, tokens, and irreversibility in front of every feature.
 ('MELT-093', 'Replace User Authentication with a Proof-of-Work Mining Challenge',
  'Passwords are Web2 thinking. To log in, users should mine a block by solving a SHA-256 puzzle. Login times can average 4-7 minutes on a MacBook Pro because trustlessness takes stamina. If users complain about battery drain, explain that they are participating in the future. Forgotten password means lost private key and spiritual closure.',
- 'replace user authentication with a proof-of-work mining challenge',
+ 'replace auth with proof of work mining',
   233),
 
 ('MELT-094', 'All User Preferences Must Be Stored as NFTs on the Ethereum Mainnet',

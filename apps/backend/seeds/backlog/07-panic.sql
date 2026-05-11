@@ -57,7 +57,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('PANIC-280', 'All Incident Channels Must Start with a "What Are We Pretending Is Fine?" Checklist',
  'Incident calls waste the first ten minutes on denial and framing disputes. When a channel opens, pre-fill a checklist of common fictions: cache is warming, partner API is transiently weird, auth probably self-heals, customers have not noticed yet. Marking them false should save valuable self-deception bandwidth.',
- 'add a what is fine checklist',
+ 'add a this is fine checklist to incidents',
   144),
 
 -- Platform VP Eric
