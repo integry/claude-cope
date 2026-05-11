@@ -97,6 +97,7 @@ export function useGameState() {
   const [state, setState] = useState<GameState>(loadState);
   const stateRef = useRef(state);
   const confirmedActiveThemeRef = useRef(state.activeTheme);
+  const themeMutationVersionRef = useRef(0);
   const themeUpdateRequestIdRef = useRef(0);
   const [offlineTDEarned, setOfflineTDEarned] = useState(0);
 
@@ -286,7 +287,8 @@ export function useGameState() {
   const setActiveTheme = useCallback((themeId: string) => {
     const current = stateRef.current;
     if (!current.unlockedThemes.includes(themeId) || current.activeTheme === themeId) return;
-    const requestId = themeUpdateRequestIdRef.current + 1;
+    const requestId = themeMutationVersionRef.current + 1;
+    themeMutationVersionRef.current = requestId;
     themeUpdateRequestIdRef.current = requestId;
     stateRef.current = { ...current, activeTheme: themeId };
 
@@ -328,6 +330,7 @@ export function useGameState() {
 
     const current = stateRef.current;
     if (!canBuyTheme(current, themeId)) return false;
+    const mutationVersionAtPurchase = themeMutationVersionRef.current;
 
     const optimisticState = applyOptimisticThemePurchase(current, themeId);
     stateRef.current = optimisticState;
@@ -335,7 +338,10 @@ export function useGameState() {
 
     buyThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
       if (result.success && result.profile) {
-        mergeServerProfile(result.profile, { preserveOptimisticActiveTheme: true });
+        const hasNewerThemeMutation = themeMutationVersionRef.current !== mutationVersionAtPurchase;
+        mergeServerProfile(result.profile, {
+          preserveOptimisticActiveTheme: hasNewerThemeMutation || stateRef.current.activeTheme !== result.profile.active_theme,
+        });
         track(AnalyticsEvents.THEME_PURCHASED, { theme_id: themeId, cost: theme.cost });
       } else if (!result.success) {
         setState((prev) => applyThemePurchaseFailure(prev, themeId, result.error, result.errorCode));

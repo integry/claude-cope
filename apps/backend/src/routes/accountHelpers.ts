@@ -390,34 +390,45 @@ async function buildThemePurchaseOwnershipFromSessionRow(
   return { profile, status: "ok", licenseKeyHash: row.license_hash };
 }
 
-export async function resolveThemePurchaseOwnership(
+type ThemePurchaseOwnershipOptions = {
+  username: string;
+  licenseKeyHash?: string;
+  kv?: KVNamespace;
+  sessionId?: string;
+  actionLabel?: string;
+  logPrefix?: string;
+};
+
+async function resolveThemePurchaseOwnershipFromLicenseHash(
+  db: D1Database,
+  opts: Pick<ThemePurchaseOwnershipOptions, "username" | "licenseKeyHash" | "kv" | "sessionId">,
+): Promise<OwnershipResult | null> {
+  if (!opts.licenseKeyHash) return null;
+
+  const ownership = await verifyOwnership(db, opts.username, opts.licenseKeyHash);
+  if (ownership.status === "ok" || !opts.kv || !opts.sessionId) {
+    return ownership;
+  }
+  return null;
+}
+
+async function resolveThemePurchaseOwnershipFromSession(
   db: D1Database,
   opts: {
     username: string;
-    licenseKeyHash?: string;
     kv?: KVNamespace;
     sessionId?: string;
-    actionLabel?: string;
-    logPrefix?: string;
+    actionLabel: string;
+    logPrefix: string;
   },
 ): Promise<OwnershipResult> {
-  if (opts.licenseKeyHash) {
-    const ownership = await verifyOwnership(db, opts.username, opts.licenseKeyHash);
-    if (ownership.status === "ok" || !opts.kv || !opts.sessionId) {
-      return ownership;
-    }
-  }
-
-  const actionLabel = opts.actionLabel ?? "this action";
-  const logPrefix = opts.logPrefix ?? "[account/theme]";
-
   if (!opts.kv || !opts.sessionId) {
-    return getSessionAuthRequiredResult(actionLabel);
+    return getSessionAuthRequiredResult(opts.actionLabel);
   }
 
   const boundUsername = await opts.kv.get(accountKvKeys.sessionUser(opts.sessionId));
   if (!boundUsername) {
-    return getSessionAuthRequiredResult(actionLabel);
+    return getSessionAuthRequiredResult(opts.actionLabel);
   }
 
   const resolved = await resolveSessionThemePurchaseRow(db, {
@@ -425,13 +436,30 @@ export async function resolveThemePurchaseOwnership(
     sessionId: opts.sessionId,
     username: opts.username,
     boundUsername: boundUsername.toLowerCase(),
-    logPrefix,
+    logPrefix: opts.logPrefix,
   });
   if ("status" in resolved) {
     return resolved;
   }
 
-  return buildThemePurchaseOwnershipFromSessionRow(db, resolved.username, resolved.row as ProfileRow & { license_hash: string | null }, actionLabel);
+  return buildThemePurchaseOwnershipFromSessionRow(
+    db,
+    resolved.username,
+    resolved.row as ProfileRow & { license_hash: string | null },
+    opts.actionLabel,
+  );
+}
+
+export async function resolveThemePurchaseOwnership(
+  db: D1Database,
+  opts: ThemePurchaseOwnershipOptions,
+): Promise<OwnershipResult> {
+  const ownershipFromLicenseHash = await resolveThemePurchaseOwnershipFromLicenseHash(db, opts);
+  if (ownershipFromLicenseHash) return ownershipFromLicenseHash;
+
+  const actionLabel = opts.actionLabel ?? "this action";
+  const logPrefix = opts.logPrefix ?? "[account/theme]";
+  return resolveThemePurchaseOwnershipFromSession(db, { ...opts, actionLabel, logPrefix });
 }
 
 export function broadcastPurchase(message: string, db: D1Database | undefined, ctx: { waitUntil: (p: Promise<unknown>) => void }) {
