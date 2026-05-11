@@ -9,7 +9,7 @@ import { act } from "react";
  *
  * These verify:
  *  - Free users see the "Upgrade to Max" CTA button.
- *  - Max (upgraded) users see the "Max" badge and do NOT see the CTA.
+ *  - Max (upgraded) users see the desktop "Max" badge and do NOT see the CTA.
  *  - BYOK users do NOT see the upgrade CTA.
  */
 
@@ -82,22 +82,32 @@ describe("HeaderBar upgrade CTA visibility", () => {
     const rankLine = container.querySelector("[data-testid='desktop-rank-line']");
     const statusBlock = container.querySelector("[data-testid='desktop-status-block']");
     const technicalDebtLine = container.querySelector("[data-testid='desktop-technical-debt-line']");
+    const detailLine = container.querySelector("[data-testid='desktop-status-detail-line']");
+    const mobileIdentityBlock = container.querySelector("[data-testid='mobile-identity-block']");
+    const mobileStatusBlock = container.querySelector("[data-testid='mobile-status-block']");
 
     expect(identityBlock).not.toBeNull();
+    expect(identityBlock?.className).toContain("hidden");
+    expect(identityBlock?.className).toContain("sm:flex");
     expect(identityLine?.textContent).toContain("TestUser");
     expect(identityLine?.textContent).toContain("BYOK");
     expect(identityLine?.textContent).not.toContain("Junior Code Monkey");
 
     expect(rankLine?.textContent).toContain("Junior Code Monkey");
     expect(statusBlock).not.toBeNull();
+    expect(statusBlock?.className).toContain("hidden");
+    expect(statusBlock?.className).toContain("sm:flex");
     expect(technicalDebtLine?.textContent).toContain("Technical Debt:");
-    expect(container.querySelector("[data-testid='desktop-quota-line']")).toBeNull();
+    expect(detailLine?.textContent).toContain("External Billing Active:");
+    expect(detailLine?.textContent).toContain("$1.25");
+    expect(mobileIdentityBlock?.className).toContain("sm:hidden");
+    expect(mobileStatusBlock?.className).toContain("sm:hidden");
   });
 
   it("renders the desktop quota and upgrade CTA on the second status line for free users", () => {
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false });
 
-    const quotaLine = container.querySelector("[data-testid='desktop-quota-line']");
+    const quotaLine = container.querySelector("[data-testid='desktop-status-detail-line']");
     expect(quotaLine).not.toBeNull();
     expect(quotaLine?.textContent).toContain("API Quota:");
     expect(quotaLine?.textContent).toContain("Upgrade to Max 429X");
@@ -107,13 +117,13 @@ describe("HeaderBar upgrade CTA visibility", () => {
 describe("HeaderBar Max badge visibility", () => {
   it("shows the Max badge for upgraded users", () => {
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: true });
-    expect(container.textContent).toContain("MAX 429X");
+    expect(container.querySelector("[data-testid='desktop-max-badge']")?.textContent).toContain("MAX 429X");
   });
 
   it("does NOT show the Max badge for free users", () => {
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false });
     // "Max" appears in the upgrade CTA text but the standalone badge should not render
-    const badge = container.querySelector("[data-testid='max-badge']");
+    const badge = container.querySelector("[data-testid='desktop-max-badge']");
     expect(badge).toBeNull();
   });
 
@@ -122,10 +132,12 @@ describe("HeaderBar Max badge visibility", () => {
 
     const identityBlock = container.querySelector("[data-testid='desktop-identity-block']");
     const rankLine = container.querySelector("[data-testid='desktop-rank-line']");
-    const badge = container.querySelector("[data-testid='max-badge']");
+    const badge = container.querySelector("[data-testid='desktop-max-badge']");
+    const mobileBadge = container.querySelector("[data-testid='mobile-max-badge']");
 
     expect(badge).not.toBeNull();
     expect(identityBlock?.textContent).toContain("MAX 429X");
     expect(rankLine?.textContent).not.toContain("MAX 429X");
+    expect(mobileBadge).not.toBeNull();
   });
 });
