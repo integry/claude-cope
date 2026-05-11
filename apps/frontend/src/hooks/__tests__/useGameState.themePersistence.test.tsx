@@ -245,6 +245,14 @@ describe("useGameState theme persistence", () => {
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(makeState({
       activeTheme: "default",
+      economy: {
+        currentTD: 12000,
+        totalTDEarned: 12000,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
       unlockedThemes: ["default", "amber"],
     })));
 
@@ -263,38 +271,38 @@ describe("useGameState theme persistence", () => {
     vi.mocked(updateThemeServer).mockReturnValueOnce(updateRequest.promise);
 
     act(() => {
-      hookState.buyTheme("midnight");
+      hookState.buyTheme("matrix");
     });
     act(() => {
-      hookState.setActiveTheme("midnight");
+      hookState.setActiveTheme("matrix");
     });
 
-    expect(hookState.state.activeTheme).toBe("midnight");
+    expect(hookState.state.activeTheme).toBe("matrix");
 
     await act(async () => {
       buyRequest.resolve({
         success: true,
         profile: createServerProfile({
           active_theme: "default",
-          unlocked_themes: ["default", "amber", "midnight"],
+          unlocked_themes: ["default", "amber", "matrix"],
         }),
       });
       await buyRequest.promise;
     });
 
-    expect(hookState.state.activeTheme).toBe("midnight");
+    expect(hookState.state.activeTheme).toBe("matrix");
 
     await act(async () => {
       updateRequest.resolve({
         success: true,
         profile: createServerProfile({
-          active_theme: "midnight",
-          unlocked_themes: ["default", "amber", "midnight"],
+          active_theme: "matrix",
+          unlocked_themes: ["default", "amber", "matrix"],
         }),
       });
       await updateRequest.promise;
     });
 
-    expect(hookState.state.activeTheme).toBe("midnight");
+    expect(hookState.state.activeTheme).toBe("matrix");
   });
 });
