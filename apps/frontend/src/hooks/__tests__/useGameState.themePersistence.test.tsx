@@ -136,20 +136,20 @@ describe("useGameState theme persistence", () => {
         success: true,
         profile: createServerProfile({ active_theme: "midnight", unlocked_themes: ["default", "amber", "midnight"] }),
       });
-      await Promise.resolve();
+      await secondRequest.promise;
     });
 
-    expect(hookState.state.activeTheme).toBe("midnight");
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
 
     await act(async () => {
       firstRequest.resolve({
         success: true,
         profile: createServerProfile({ active_theme: "amber", unlocked_themes: ["default", "amber", "midnight"] }),
       });
-      await Promise.resolve();
+      await firstRequest.promise;
     });
 
-    expect(hookState.state.activeTheme).toBe("midnight");
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
   });
 
   it("rolls back to the last confirmed theme and surfaces update-theme failures", async () => {
@@ -193,12 +193,12 @@ describe("useGameState theme persistence", () => {
       await request.promise;
     });
 
-    expect(hookState.state.activeTheme).toBe("midnight");
-    expect(hookState.state.hasSessionPro).toBeUndefined();
-    expect(hookState.state.chatHistory[hookState.state.chatHistory.length - 1]).toMatchObject({
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
+    await vi.waitFor(() => expect(hookState.state.hasSessionPro).toBeUndefined());
+    await vi.waitFor(() => expect(hookState.state.chatHistory[hookState.state.chatHistory.length - 1]).toMatchObject({
       role: "error",
       content: "[❌ Error] Session authentication is required for theme updates",
-    });
+    }));
   });
 
   it("restores the server active theme for existing paid sessions with non-fresh local state", async () => {
@@ -231,11 +231,7 @@ describe("useGameState theme persistence", () => {
       }));
     });
 
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(hookState.state.activeTheme).toBe("midnight");
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
   });
 
   it("rolls back to the validated server theme when update-theme fails after non-fresh /me restoration", async () => {
@@ -268,11 +264,7 @@ describe("useGameState theme persistence", () => {
       }));
     });
 
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(hookState.state.activeTheme).toBe("midnight");
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
 
     const request = deferred<{
       success: false;
@@ -296,7 +288,7 @@ describe("useGameState theme persistence", () => {
       await request.promise;
     });
 
-    expect(hookState.state.activeTheme).toBe("midnight");
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
   });
 
   it("clears stale session-backed paid state when /me no longer finds the session profile", async () => {
@@ -322,12 +314,8 @@ describe("useGameState theme persistence", () => {
       }));
     });
 
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(hookState.state.isPro).toBeUndefined();
-    expect(hookState.state.hasSessionPro).toBeUndefined();
+    await vi.waitFor(() => expect(hookState.state.isPro).toBeUndefined());
+    await vi.waitFor(() => expect(hookState.state.hasSessionPro).toBeUndefined());
   });
 
   it("does not let buy-theme overwrite a newer optimistic equip selection", async () => {

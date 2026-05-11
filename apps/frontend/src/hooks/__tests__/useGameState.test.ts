@@ -127,6 +127,40 @@ describe("canBuyTheme", () => {
     expect(nextState.username).toBe("alice-renamed");
   });
 
+  it("does not clear paid state when /me returns a partial found session without isPro", () => {
+    const state = makeGameState({
+      isPro: true,
+      hasSessionPro: true,
+      activeTheme: "default",
+      unlockedThemes: ["default", "amber"],
+    });
+    const nextState = applyValidatedSessionProState(state, {
+      found: true,
+      username: "alice",
+      profile: {
+        username: "alice",
+        total_td: 6000,
+        current_td: 6000,
+        corporate_rank: "Junior Code Monkey",
+        inventory: {},
+        upgrades: [],
+        achievements: [],
+        buddy_type: null,
+        buddy_is_shiny: false,
+        unlocked_themes: ["default", "amber", "midnight"],
+        active_theme: "midnight",
+        active_ticket: null,
+        td_multiplier: 1,
+        multiplier: 1,
+      },
+    });
+
+    expect(nextState.isPro).toBe(true);
+    expect(nextState.hasSessionPro).toBe(true);
+    expect(nextState.activeTheme).toBe("midnight");
+    expect(nextState.unlockedThemes).toEqual(["default", "amber", "midnight"]);
+  });
+
   it("allows restored paid users without proKeyHash to buy themes", () => {
     const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
     expect(canBuyTheme(state, "amber")).toBe(true);

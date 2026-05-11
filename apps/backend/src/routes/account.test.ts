@@ -258,7 +258,7 @@ describe("POST /api/account/buy-theme", () => {
       error: "Profile not found",
     });
   });
-  it("falls back to session auth when a stale licenseKeyHash is present", async () => {
+  it("rejects buy-theme when a mismatched licenseKeyHash is present even if the session is valid", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
     const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
     const { db } = createMockDB({
@@ -274,8 +274,10 @@ describe("POST /api/account/buy-theme", () => {
       themeId: "amber",
       licenseKeyHash: "stale-hash",
     }, { DB: db, QUOTA_KV: kv });
-    expect(res.status).toBe(200);
-    expect(((await res.json()) as { success: boolean }).success).toBe(true);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      error: "Unauthorized: license key does not match this profile",
+    });
   });
   it("rejects a purchase without licenseKeyHash when there is no authenticated session", async () => {
     const { db } = createMockDB();
@@ -380,6 +382,33 @@ describe("POST /api/account/update-theme", () => {
     const body = await res.json() as { success: boolean; profile: { active_theme: string } };
     expect(body.success).toBe(true);
     expect(body.profile.active_theme).toBe("amber");
+  });
+
+  it("allows persisting the default theme for a session-authenticated user whose Max license is no longer active", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const revokedProfile = {
+      ...BASE_PROFILE,
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "amber",
+    };
+    const updatedProfile = { ...revokedProfile, active_theme: "default" };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: revokedProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: updatedProfile,
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "alice",
+      themeId: "default",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { active_theme: "default" },
+    });
   });
   it("accepts a stale mixed-case requested alias when the session is already rebound to the renamed username", async () => {
     const kv = mockKV({

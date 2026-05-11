@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -286,6 +286,49 @@ async function restoreMeFromFreeAccount(
     sessionId: opts.sessionId,
     username,
   });
+}
+
+async function resolveUpdateThemeOwnership(
+  db: D1Database,
+  c: Context<Env>,
+  body: { username: string; themeId: string; licenseKeyHash?: string },
+) {
+  const ownershipOptions = {
+    username: body.username,
+    licenseKeyHash: body.licenseKeyHash,
+    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
+    sessionId: c.get("sessionId"),
+    actionLabel: "theme updates",
+    logPrefix: "[account/update-theme]",
+  };
+  return body.themeId === "default"
+    ? resolveThemeSelectionOwnership(db, ownershipOptions)
+    : resolveThemePurchaseOwnership(db, ownershipOptions);
+}
+
+async function persistActiveTheme(
+  db: D1Database,
+  username: string,
+  themeId: string,
+  licenseKeyHash: string,
+) {
+  const sql = themeId === "default"
+    ? `UPDATE user_scores SET
+      active_theme = ?,
+      updated_at = datetime('now')
+    WHERE username = ?
+      AND ? IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))`
+    : `UPDATE user_scores SET
+      active_theme = ?,
+      updated_at = datetime('now')
+    WHERE username = ?
+      AND ? IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
+      AND license_hash = ?
+      AND ${ACTIVE_LICENSE_EXISTS_SQL}`;
+  const bindings = themeId === "default"
+    ? [themeId, username, themeId]
+    : [themeId, username, themeId, licenseKeyHash];
+  return db.prepare(sql).bind(...bindings).run();
 }
 
 account.post("/checkout-license", async (c) => {
@@ -588,14 +631,7 @@ account.post("/update-theme", async (c) => {
   const theme = THEMES.find((t) => t.id === body.themeId);
   if (!theme) return c.json({ error: "Unknown theme" }, 400);
 
-  const ownership = await resolveThemePurchaseOwnership(db, {
-    username: body.username,
-    licenseKeyHash: body.licenseKeyHash,
-    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
-    sessionId: c.get("sessionId"),
-    actionLabel: "theme updates",
-    logPrefix: "[account/update-theme]",
-  });
+  const ownership = await resolveUpdateThemeOwnership(db, c, body);
   if (ownership.status !== "ok") {
     return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
   }
@@ -608,19 +644,7 @@ account.post("/update-theme", async (c) => {
     return c.json({ success: true, profile });
   }
 
-  const result = await db.prepare(
-    `UPDATE user_scores SET
-      active_theme = ?,
-      updated_at = datetime('now')
-    WHERE username = ? AND license_hash = ?
-      AND ? IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
-      AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
-  ).bind(
-    body.themeId,
-    profile.username,
-    ownership.licenseKeyHash,
-    body.themeId,
-  ).run();
+  const result = await persistActiveTheme(db, profile.username, body.themeId, ownership.licenseKeyHash);
 
   if (!result.meta.changes) {
     return c.json({ error: "Update failed — profile not found, theme not unlocked, or license revoked" }, 409);

@@ -944,34 +944,7 @@ type OpenRouterCallParams = {
 };
 
 export async function callOpenRouter(params: OpenRouterCallParams): Promise<Response>;
-export async function callOpenRouter(
-  ...args: [
-    apiKey: string,
-    model: string,
-    messages: { role: string; content: string }[],
-    providers?: string[],
-    options?: OpenRouterCallOptions,
-  ]
-): Promise<Response>;
-export async function callOpenRouter(
-  paramsOrApiKey: OpenRouterCallParams | string,
-  ...legacyArgs: [
-    model?: string,
-    messages?: { role: string; content: string }[],
-    providers?: string[],
-    options?: OpenRouterCallOptions,
-  ]
-): Promise<Response> {
-  const params =
-    typeof paramsOrApiKey === "string"
-      ? {
-          apiKey: paramsOrApiKey,
-          model: legacyArgs[0]!,
-          messages: legacyArgs[1]!,
-          providers: legacyArgs[2],
-          options: legacyArgs[3],
-        }
-      : paramsOrApiKey;
+export async function callOpenRouter(params: OpenRouterCallParams): Promise<Response> {
   const {
     apiKey,
     model: resolvedModel,

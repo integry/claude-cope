@@ -808,13 +808,13 @@ describe("Provider configuration in OpenRouter requests", () => {
 
   it("allows lightweight override options for small helper prompts", async () => {
     const { callOpenRouter } = await import("./chat");
-    await callOpenRouter(
-      "test-key",
-      "openai/gpt-oss-20b",
-      [{ role: "user", content: "test" }],
-      [],
-      { maxTokens: 40, temperature: 0.4, topP: 0.8 },
-    );
+    await callOpenRouter({
+      apiKey: "test-key",
+      model: "openai/gpt-oss-20b",
+      messages: [{ role: "user", content: "test" }],
+      providers: [],
+      options: { maxTokens: 40, temperature: 0.4, topP: 0.8 },
+    });
     expect(capturedRequestBody).toMatchObject({
       model: "openai/gpt-oss-20b",
       messages: [{ role: "user", content: "test" }],

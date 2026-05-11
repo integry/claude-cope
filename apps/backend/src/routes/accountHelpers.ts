@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import type { ThemeEntitlementErrorCode } from "@claude-cope/shared/themeEntitlements";
 import type { ProfileRow } from "../utils/profile";
 import { getProfile, getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank } from "../utils/profile";
 import { validatePolarKey } from "../utils/polar";
@@ -216,13 +217,7 @@ export async function rollbackProfileMutation(
 export type OwnershipResult =
   | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; status: "ok"; licenseKeyHash: string }
   | { profile: null; status: "not_found"; error: string; errorCode?: undefined }
-  | { profile: null; status: "unauthorized"; error: string; errorCode?: ThemeOwnershipErrorCode };
-
-export type ThemeOwnershipErrorCode =
-  | "session_auth_required"
-  | "session_user_mismatch"
-  | "active_max_license_required"
-  | "license_inactive";
+  | { profile: null; status: "unauthorized"; error: string; errorCode?: ThemeEntitlementErrorCode };
 
 async function followRenameChain(kv: KVNamespace, username: string) {
   let current = username;
@@ -331,7 +326,7 @@ async function resolveRequestedThemeAlias(kv: KVNamespace, requestedUsername: st
   return followRenameChain(kv, requestedUsername);
 }
 
-async function resolveSessionThemePurchaseRow(
+async function resolveSessionThemeOwnershipRow(
   db: D1Database,
   opts: {
     kv: KVNamespace;
@@ -367,7 +362,7 @@ async function resolveSessionThemePurchaseRow(
   return { username: resolved.username, row: resolved.row };
 }
 
-async function buildThemePurchaseOwnershipFromSessionRow(
+async function buildThemeOwnershipFromSessionRow(
   db: D1Database,
   username: string,
   row: ProfileRow & { license_hash: string | null },
@@ -410,6 +405,9 @@ async function resolveThemePurchaseOwnershipFromLicenseHash(
   if (ownership.status === "ok" || !opts.kv || !opts.sessionId) {
     return ownership;
   }
+  if (ownership.status !== "not_found") {
+    return ownership;
+  }
   return null;
 }
 
@@ -432,7 +430,7 @@ async function resolveThemePurchaseOwnershipFromSession(
     return getSessionAuthRequiredResult(opts.actionLabel);
   }
 
-  const resolved = await resolveSessionThemePurchaseRow(db, {
+  const resolved = await resolveSessionThemeOwnershipRow(db, {
     kv: opts.kv,
     sessionId: opts.sessionId,
     username: opts.username,
@@ -443,12 +441,58 @@ async function resolveThemePurchaseOwnershipFromSession(
     return resolved;
   }
 
-  return buildThemePurchaseOwnershipFromSessionRow(
+  return buildThemeOwnershipFromSessionRow(
     db,
     resolved.username,
     resolved.row as ProfileRow & { license_hash: string | null },
     opts.actionLabel,
   );
+}
+
+export async function resolveThemeSelectionOwnership(
+  db: D1Database,
+  opts: ThemePurchaseOwnershipOptions,
+): Promise<OwnershipResult> {
+  if (opts.licenseKeyHash) {
+    const row = await getProfileRow(db, opts.username);
+    if (!row) return { profile: null, status: "not_found", error: "Profile not found" };
+    const rowWithHash = row as ProfileRow & { license_hash: string | null };
+    if (!rowWithHash.license_hash || rowWithHash.license_hash !== opts.licenseKeyHash) {
+      return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
+    }
+    const profile = await getProfile(db, opts.username);
+    if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
+    return { profile, status: "ok", licenseKeyHash: rowWithHash.license_hash };
+  }
+
+  const actionLabel = opts.actionLabel ?? "theme updates";
+  const logPrefix = opts.logPrefix ?? "[account/theme]";
+  if (!opts.kv || !opts.sessionId) {
+    return getSessionAuthRequiredResult(actionLabel);
+  }
+
+  const boundUsername = await opts.kv.get(accountKvKeys.sessionUser(opts.sessionId));
+  if (!boundUsername) {
+    return getSessionAuthRequiredResult(actionLabel);
+  }
+
+  const resolved = await resolveSessionThemeOwnershipRow(db, {
+    kv: opts.kv,
+    sessionId: opts.sessionId,
+    username: opts.username,
+    boundUsername,
+    logPrefix,
+  });
+  if ("status" in resolved) return resolved;
+
+  const profile = await getProfile(db, resolved.username);
+  if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
+  const rowWithHash = resolved.row as ProfileRow & { license_hash: string | null };
+  return {
+    profile,
+    status: "ok",
+    licenseKeyHash: rowWithHash.license_hash ?? "",
+  };
 }
 
 export async function resolveThemePurchaseOwnership(

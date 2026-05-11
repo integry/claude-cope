@@ -1,11 +1,6 @@
 import type { ServerProfile } from "@claude-cope/shared/profile";
+import type { ThemeEntitlementErrorCode } from "@claude-cope/shared/themeEntitlements";
 import { API_BASE } from "../config";
-
-export type ThemeEntitlementErrorCode =
-  | "session_auth_required"
-  | "session_user_mismatch"
-  | "active_max_license_required"
-  | "license_inactive";
 
 type ProfileResult = { success: boolean; profile?: ServerProfile; error?: string; errorCode?: ThemeEntitlementErrorCode };
 

@@ -1,5 +1,5 @@
 import type { ServerProfile } from "@claude-cope/shared/profile";
-import type { ThemeEntitlementErrorCode } from "../api/profileApi";
+import type { ThemeEntitlementErrorCode } from "@claude-cope/shared/themeEntitlements";
 import { THEMES } from "../game/constants";
 import type { GameState } from "./gameStateUtils";
 import { isPaidUser, nextMsgId } from "./gameStateUtils";
@@ -88,9 +88,30 @@ export function isFreshStateForSessionRestore(state: GameState): boolean {
 }
 
 export function applyValidatedSessionProState(state: GameState, result: SessionProfileResult): GameState {
-  if (!result.found || !result.isPro) {
+  if (!result.found || result.isPro === false) {
     if (!isPaidUser(state) && !state.hasSessionPro) return state;
     return { ...state, proKey: undefined, proKeyHash: undefined, isPro: undefined, hasSessionPro: undefined };
+  }
+
+  if (result.isPro !== true) {
+    if (result.profile) {
+      const nextState = applyServerProfile(state, result.profile, { includeActiveTicket: true });
+      return {
+        ...nextState,
+        isPro: state.isPro,
+        hasSessionPro: state.hasSessionPro,
+      };
+    }
+
+    if (!result.username && result.quotaPercent == null) return state;
+    return {
+      ...state,
+      ...(result.username && state.username !== result.username ? { username: result.username } : {}),
+      economy: {
+        ...state.economy,
+        ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}),
+      },
+    };
   }
 
   if (result.profile) {
