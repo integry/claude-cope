@@ -12,14 +12,12 @@ describe("buddy interjection formatting", () => {
       "Agile Snail",
       "Remember, junior monkey, the backlog wants you to add a lint rule before the next sprint.",
     );
-    const [marker, ...blockLines] = formatted.split("\n");
-    const block = blockLines.join("\n");
 
     expect(extractBuddyInterjectionBlock(formatted)).toEqual({
-      block,
+      block: formatted,
       body: "",
     });
-    expect(marker).toBe("[[BUDDY:Agile Snail]]");
+    expect(formatted.split("\n")[0]).toContain("[Agile Snail]");
   });
 
   it("extracts a buddy block and leaves the following system reply in the body", () => {
@@ -27,7 +25,7 @@ describe("buddy interjection formatting", () => {
     const content = `${block}\n\nThe deploy is still blocked on the failed migration.`;
 
     expect(extractBuddyInterjectionBlock(content)).toEqual({
-      block: block.split("\n").slice(1).join("\n"),
+      block,
       body: "The deploy is still blocked on the failed migration.",
     });
   });

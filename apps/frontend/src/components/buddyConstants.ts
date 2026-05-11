@@ -112,7 +112,6 @@ function escapeRegExp(value: string): string {
 }
 
 export function formatBuddyInterjection(type: string, text: string): string {
-  const marker = `${BUDDY_INTERJECTION_MARKER_PREFIX}${type}${BUDDY_INTERJECTION_MARKER_SUFFIX}`;
   const artLines = (BUDDY_ICONS[type] ?? BUDDY_FALLBACK_ICON).split("\n");
   const wrappedText = wrapBuddyText(text, BUDDY_TEXT_WRAP);
   const artWidth = Math.max(...artLines.map((line) => line.length));
@@ -131,7 +130,7 @@ export function formatBuddyInterjection(type: string, text: string): string {
     output.push(speech ? `${artColumn}${BUDDY_TEXT_GAP}${speech}` : art);
   }
 
-  return `${marker}\n${output.join("\n")}`;
+  return output.join("\n");
 }
 
 function buildBuddyHeaderPattern(type: string, art: string): RegExp {
