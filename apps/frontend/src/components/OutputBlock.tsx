@@ -8,6 +8,7 @@ import { ShareButton } from "./ShareButton";
 import { renderWithSlashLinks } from "./slashCommandLinks";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { appendShareMarker, buildMarkdownComponents, cleanLLMOutput } from "./OutputBlockMarkdown";
+import { BacklogMessage } from "./BacklogMessage";
 import { extractBuddyInterjectionBlock } from "./buddyConstants";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
@@ -161,14 +162,18 @@ function MessageContent({
     content,
     buddyData.isBuddyInterjection,
   );
-
   // Only typewrite actual AI responses (system role). Scaffold messages (ads,
   // queue warnings) render instantly so they don't vanish mid-animation when
   // the fixed delay timers remove them.
   const shouldTypewrite = isNew && useMarkdown && role === "system";
   const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite);
-
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand, shareNode), [onSlashCommand, shareNode]);
+
+  // Backlog messages intentionally bypass markdown rendering so the responsive
+  // table layout stays intact while `message.content` remains as a plain-text fallback.
+  if (message.backlogDisplay && role === "system") {
+    return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
+  }
 
   if (role === "user") return null;
 
@@ -265,7 +270,12 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
 type OutputBlockProps = Parameters<typeof OutputBlock>[0];
 
 function messagesEqual(a: Message | undefined, b: Message | undefined): boolean {
-  return a?.role === b?.role && a?.content === b?.content && a?.buddyType === b?.buddyType;
+  return a === b || (
+    a?.role === b?.role
+    && a?.content === b?.content
+    && a?.buddyType === b?.buddyType
+    && a?.backlogDisplay === b?.backlogDisplay
+  );
 }
 
 function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps): boolean {
@@ -273,6 +283,7 @@ function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps
   if (prev.message.content !== next.message.content) return false;
   if (prev.message.buddyType !== next.message.buddyType) return false;
   if (prev.message.cost !== next.message.cost) return false;
+  if (prev.message.backlogDisplay !== next.message.backlogDisplay) return false;
   if (prev.isNew !== next.isNew) return false;
   if (prev.promptString !== next.promptString) return false;
   if (!messagesEqual(prev.previousMessage, next.previousMessage)) return false;

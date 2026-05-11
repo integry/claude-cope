@@ -932,8 +932,8 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
     return completeAsyncSlashCommand(handleTicketCommand(command, reply), ctx);
   } else if (command === "/backlog" || command.startsWith("/backlog ")) {
     const normalizedCategory = parseBacklogCategoryArgument(command) ?? undefined;
-    if (normalizedCategory) markValidSlashCommand(ctx, "/backlog");
     return completeAsyncSlashCommand(handleBacklogCommand(reply, {
+      proKey: ctx.state.proKey,
       proKeyHash: ctx.state.proKeyHash,
       category: normalizedCategory,
       paidUser: isPaidUser(ctx.state),

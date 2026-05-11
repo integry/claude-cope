@@ -3,6 +3,7 @@ import { AnalyticsEvents, SlashCommandFailureReasons } from "../analyticsEvents"
 import { API_BASE, TICKET_REFINE_ENABLED } from "../config";
 import type { GameState } from "../hooks/useGameState";
 import type { CommunityBacklogTicket } from "@claude-cope/shared/backlogTickets";
+import type { BacklogDisplayData, BacklogDisplayTicket } from "../hooks/gameStateUtils";
 import {
   BACKLOG_CATEGORY_ALL,
   getBacklogCategoryTierMeta,
@@ -14,14 +15,27 @@ import { updateTicketServer } from "../api/profileApi";
 type Reply = (msg: Message) => void;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
 
-/** Cache last backlog results so `/take 2` can resolve by row number */
+/** Cache last backlog results so `/take 2` or `/take BLAME-421` can resolve locally */
 let lastBacklogResults: CommunityBacklogTicket[] = [];
 
+function clearBacklogResultsCache(): void {
+  lastBacklogResults = [];
+}
+
 type BacklogRequestOptions = {
+  proKey?: string;
   proKeyHash?: string;
   category?: string;
   paidUser?: boolean;
 };
+
+async function hashProKey(key: string): Promise<string> {
+  const encoded = new TextEncoder().encode(key);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 function normalizeBacklogCategory(category?: string): string | null {
   if (!category) return null;
@@ -56,6 +70,7 @@ export function formatLockedTicketPrompt(ticket: CommunityBacklogTicket): string
 }
 
 function replyInvalidBacklogCategory(reply: Reply, category: string): boolean {
+  clearBacklogResultsCache();
   track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.VALIDATION_FAILED });
   reply({ role: "error", content: `[❌] Unknown backlog category: \`${category}\`. Try \`/backlog \` to browse valid categories.` });
   return true;
@@ -65,12 +80,14 @@ function replyLockedBacklogCategory(
   reply: Reply,
   categoryMeta: NonNullable<ReturnType<typeof getBacklogCategoryTierMeta>>,
 ): boolean {
+  clearBacklogResultsCache();
   track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.PRO_GATED });
   reply({ role: "warning", content: `[🔒 **CATEGORY LOCKED**] \`${categoryMeta.prefix}\` (${categoryMeta.label}) is a Max backlog category. Free users can preview it in autocomplete, but cannot execute that filter.` });
   return true;
 }
 
 async function handleBacklogFetchFailure(res: Response, reply: Reply): Promise<boolean> {
+  clearBacklogResultsCache();
   const data = await res.json().catch(() => null) as { error?: string } | null;
   const reason = res.status === 400
     ? SlashCommandFailureReasons.VALIDATION_FAILED
@@ -82,25 +99,62 @@ async function handleBacklogFetchFailure(res: Response, reply: Reply): Promise<b
   return true;
 }
 
-function formatBacklogFilterLine(category: string | null): string {
-  return category ? `\n${formatBacklogFilterHeader(category)}` : "";
+type BacklogCopy = {
+  filterHeader?: string;
+  infoLine?: string;
+  footer: string[];
+};
+
+function buildBacklogFooterLines(tickets: CommunityBacklogTicket[]): string[] {
+  const lockedTickets = tickets.filter((ticket) => ticket.is_locked);
+  if (lockedTickets.length === 0) {
+    return [`Type /take 1 through /take ${tickets.length} to claim a ticket.`];
+  }
+
+  return [
+    "Type /take <row> to claim an open ticket. Locked rows are teaser-only for free users.",
+    "",
+    "[UPGRADE REQUIRED] The following categories are locked behind Wallet Extraction:",
+    ...Array.from(new Map(
+      lockedTickets.map((ticket) => {
+        const prefix = ticket.category_prefix?.trim().replace(/^\[|\]$/g, "") || "PREMIUM";
+        const label = ticket.category_label?.trim() || "Specialized Suffering";
+        return [prefix, `🔒 ${prefix} (${label})`] as const;
+      }),
+    ).values()),
+    "",
+    "Run /upgrade to unlock 50+ specialized categories and premium suffering.",
+  ];
 }
 
-function formatBacklogInfoLine(category: string | null): string {
-  if (category) return "";
-  return "\n[INFO] Showing all tickets. Want specific trauma? Try: `/backlog MELT`";
+function buildBacklogCopy(
+  tickets: CommunityBacklogTicket[],
+  normalizedCategory: string | null,
+): BacklogCopy {
+  return {
+    filterHeader: normalizedCategory ? formatBacklogFilterHeader(normalizedCategory) : undefined,
+    infoLine: normalizedCategory
+      ? undefined
+      : "[INFO] Showing all tickets. Want specific trauma? Try: /backlog MELT",
+    footer: buildBacklogFooterLines(tickets),
+  };
+}
+
+function renderBacklogMarkdownText(text: string): string {
+  return text.replace(/(^|[\s(])(\/[a-z]+(?: <[a-z]+>| [A-Z0-9-]+)?)/g, "$1`$2`");
 }
 
 function replyEmptyBacklog(reply: Reply, normalizedCategory: string | null): boolean {
+  clearBacklogResultsCache();
   const hint = TICKET_REFINE_ENABLED ? " Submit tickets with `/ticket <description>`." : "";
-  const filterHeader = formatBacklogFilterLine(normalizedCategory);
+  const filterHeader = normalizedCategory ? `\n${formatBacklogFilterHeader(normalizedCategory)}` : "";
   reply({ role: "system", content: `[📋 **BACKLOG**]${filterHeader}\n\nThe backlog is empty.${hint}` });
   return true;
 }
 
 function formatBacklogTable(tickets: CommunityBacklogTicket[]): string {
   const numW = 3;
-  const idW = 10;
+  const idW = Math.max(10, ...tickets.map((ticket) => ticket.id.length));
   const statusW = 8;
   const titleW = Math.max(5, ...tickets.map((ticket) => formatBacklogTitle(ticket).length));
   const tdW = 8;
@@ -113,31 +167,36 @@ function formatBacklogTable(tickets: CommunityBacklogTicket[]): string {
     ticket.is_locked ? pad("--", tdW, "right") : pad(String(ticket.technical_debt * 10), tdW, "right");
   const header = `| ${pad("#", numW)} | ${pad("ID", idW)} | ${pad("Title", titleW)} | ${pad("Status", statusW)} | ${pad("Reward", tdW)} |`;
   const rows = tickets.map((t, i) =>
-    `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(formatBacklogTitle(t), titleW)} | ${pad(t.is_locked ? "PREMIUM" : "OPEN", statusW)} | ${formatReward(t)} |`
+    `| ${pad(String(i + 1), numW)} | ${pad(t.id, idW)} | ${pad(formatBacklogTitle(t), titleW)} | ${pad(t.is_locked ? "PREMIUM" : "OPEN", statusW)} | ${formatReward(t)} |`
   );
   return [sep, header, sep, ...rows, sep].join("\n");
 }
 
-function formatBacklogFooter(tickets: CommunityBacklogTicket[]): string {
-  const lockedTickets = tickets.filter((ticket) => ticket.is_locked);
-  if (lockedTickets.length === 0) {
-    return `Type \`/take 1\` through \`/take ${tickets.length}\` to claim a ticket.`;
-  }
+function buildBacklogDisplayTicket(ticket: CommunityBacklogTicket, row: number): BacklogDisplayTicket {
+  return {
+    row,
+    fullId: ticket.id,
+    shortId: ticket.id,
+    title: formatBacklogTitle(ticket),
+    status: ticket.is_locked ? "PREMIUM" : "OPEN",
+    reward: ticket.is_locked ? "--" : `${ticket.technical_debt * 10} TD`,
+    isLocked: Boolean(ticket.is_locked),
+  };
+}
 
-  return [
-    "Type `/take <row>` to claim an open ticket. Locked rows are teaser-only for free users.",
-    "",
-    "[UPGRADE REQUIRED] The following categories are locked behind Wallet Extraction:",
-    ...Array.from(new Map(
-      lockedTickets.map((ticket) => {
-        const prefix = ticket.category_prefix?.trim().replace(/^\[|\]$/g, "") || "PREMIUM";
-        const label = ticket.category_label?.trim() || "Specialized Suffering";
-        return [prefix, ` 🔒 ${prefix} (${label})`] as const;
-      }),
-    ).values()),
-    "",
-    "Run `/upgrade` to unlock 50+ specialized categories and premium suffering.",
-  ].join("\n");
+function buildBacklogDisplayData(
+  tickets: CommunityBacklogTicket[],
+  normalizedCategory: string | null,
+): BacklogDisplayData {
+  const copy = buildBacklogCopy(tickets, normalizedCategory);
+  return {
+    kind: "community-backlog",
+    title: "[ COMMUNITY BACKLOG ]",
+    filterHeader: copy.filterHeader,
+    infoLine: copy.infoLine,
+    footer: copy.footer,
+    tickets: tickets.map((ticket, index) => buildBacklogDisplayTicket(ticket, index + 1)),
+  };
 }
 
 function replyBacklogTickets(
@@ -146,10 +205,15 @@ function replyBacklogTickets(
   normalizedCategory: string | null,
 ): boolean {
   const table = formatBacklogTable(tickets);
-  const footer = formatBacklogFooter(tickets);
-  const filterHeader = formatBacklogFilterLine(normalizedCategory);
-  const infoLine = formatBacklogInfoLine(normalizedCategory);
-  reply({ role: "system", content: `[📋 **COMMUNITY BACKLOG**]${filterHeader}${infoLine}\n\n\`\`\`\n${table}\n\`\`\`\n\n${footer}` });
+  const copy = buildBacklogCopy(tickets, normalizedCategory);
+  const footer = copy.footer.map(renderBacklogMarkdownText).join("\n");
+  const filterHeader = copy.filterHeader ? `\n${copy.filterHeader}` : "";
+  const infoLine = copy.infoLine ? `\n${renderBacklogMarkdownText(copy.infoLine)}` : "";
+  reply({
+    role: "system",
+    content: `[📋 **COMMUNITY BACKLOG**]${filterHeader}${infoLine}\n\n\`\`\`\n${table}\n\`\`\`\n\n${footer}`,
+    backlogDisplay: buildBacklogDisplayData(tickets, normalizedCategory),
+  });
   return true;
 }
 
@@ -205,9 +269,10 @@ export async function handleBacklogCommand(reply: Reply, options: BacklogRequest
   }
 
   try {
+    const proKeyHash = options.proKeyHash ?? (options.proKey ? await hashProKey(options.proKey) : undefined);
     const query = normalizedCategory ? `?${new URLSearchParams({ category: normalizedCategory }).toString()}` : "";
     const res = await fetch(`${API_BASE}/api/tickets/community${query}`, {
-      headers: options.proKeyHash ? { "x-pro-key-hash": options.proKeyHash } : undefined,
+      headers: proKeyHash ? { "x-pro-key-hash": proKeyHash } : undefined,
     });
     if (!res.ok) {
       return handleBacklogFetchFailure(res, reply);
@@ -221,6 +286,7 @@ export async function handleBacklogCommand(reply: Reply, options: BacklogRequest
     lastBacklogResults = tickets;
     return replyBacklogTickets(reply, tickets, normalizedCategory);
   } catch {
+    clearBacklogResultsCache();
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/backlog", reason: SlashCommandFailureReasons.NETWORK_ERROR });
     reply({ role: "error", content: "[❌] Network error — the backlog server is unreachable." });
   }
@@ -238,7 +304,7 @@ export function handleTakeCommand(
   const input = command.slice("/take".length).trim();
   if (!input) {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: SlashCommandFailureReasons.NO_ARGUMENT });
-    reply({ role: "error", content: "[❌] Usage: `/take <number>` — Run `/backlog` first, then pick a row number." });
+    reply({ role: "error", content: "[❌] Usage: `/take <row-or-id>` — Run `/backlog` first, then pick a row number or ticket ID." });
     return true;
   }
 
@@ -248,13 +314,19 @@ export function handleTakeCommand(
     return true;
   }
 
-  // Resolve ticket: try row number from cached backlog first, then raw ID
+  // Resolve ticket: try row number from cached backlog first, then a unique stable ID/prefix lookup.
   const rowNum = parseInt(input, 10);
   let ticket: CommunityBacklogTicket | undefined;
   if (!isNaN(rowNum) && rowNum >= 1 && rowNum <= lastBacklogResults.length) {
     ticket = lastBacklogResults[rowNum - 1];
   } else {
-    ticket = lastBacklogResults.find((t) => t.id.startsWith(input));
+    const idMatches = lastBacklogResults.filter((t) => t.id.startsWith(input));
+    if (idMatches.length > 1) {
+      track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/take", reason: SlashCommandFailureReasons.VALIDATION_FAILED });
+      reply({ role: "error", content: `[❌] Ticket ID prefix "${input}" is ambiguous. Use more characters or the row number from \`/backlog\`.` });
+      return true;
+    }
+    ticket = idMatches[0];
   }
 
   if (!ticket) {
