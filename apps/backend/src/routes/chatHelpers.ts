@@ -15,7 +15,10 @@ type EnvBindings = {
 
 export type ChatResponseData = {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
-  choices?: Array<{ message?: { content?: string } }>;
+  choices?: Array<{
+    message?: { content?: string };
+    finish_reason?: string;
+  }>;
   [key: string]: unknown;
 };
 

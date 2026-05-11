@@ -771,7 +771,12 @@ describe("Provider configuration in OpenRouter requests", () => {
     const { parseProviderList } = await import("@claude-cope/shared/openrouter");
     const providerList = parseProviderList("Together,Fireworks");
     expect(providerList).toEqual(["Together", "Fireworks"]);
-    await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
+    await callOpenRouter({
+      apiKey: "test-key",
+      model: "openai/gpt-oss-20b",
+      messages: [{ role: "user", content: "test" }],
+      providers: providerList,
+    });
     expect(capturedRequestBody).toBeDefined();
     expect(capturedRequestBody).toHaveProperty("provider");
     expect(capturedRequestBody).toMatchObject({
@@ -790,7 +795,12 @@ describe("Provider configuration in OpenRouter requests", () => {
     for (const input of [undefined, ""]) {
       const providerList = parseProviderList(input);
       expect(providerList).toEqual([]);
-      await callOpenRouter("test-key", "openai/gpt-oss-20b", [{ role: "user", content: "test" }], providerList);
+      await callOpenRouter({
+        apiKey: "test-key",
+        model: "openai/gpt-oss-20b",
+        messages: [{ role: "user", content: "test" }],
+        providers: providerList,
+      });
       expect(capturedRequestBody).toBeDefined();
       expect(capturedRequestBody).not.toHaveProperty("provider");
     }
@@ -798,18 +808,21 @@ describe("Provider configuration in OpenRouter requests", () => {
 
   it("allows lightweight override options for small helper prompts", async () => {
     const { callOpenRouter } = await import("./chat");
-    await callOpenRouter(
-      "test-key",
-      "openai/gpt-oss-20b",
-      [{ role: "user", content: "test" }],
-      [],
-      { maxTokens: 40, temperature: 0.4, topP: 0.8 },
-    );
+    await callOpenRouter({
+      apiKey: "test-key",
+      model: "openai/gpt-oss-20b",
+      messages: [{ role: "user", content: "test" }],
+      providers: [],
+      options: { maxTokens: 40, temperature: 0.4, topP: 0.8 },
+    });
     expect(capturedRequestBody).toMatchObject({
+      model: "openai/gpt-oss-20b",
+      messages: [{ role: "user", content: "test" }],
       max_tokens: 40,
       temperature: 0.4,
       top_p: 0.8,
     });
+    expect(capturedRequestBody).not.toHaveProperty("provider");
   });
 });
 

@@ -200,18 +200,25 @@ function normalizeReplySeedText(content: string): string {
 }
 
 function extractConcreteUserNextToken(text: string): string | null {
-  return (
-    text.match(/`([^`]{2,40})`/)?.[1]
-    ?? text.match(/\b0x[0-9A-Fa-f]+\b/)?.[0]
-    ?? text.match(/\boffset\s+\d+\b/i)?.[0]
-    ?? text.match(/\brestartPolicy\b/)?.[0]
-    ?? text.match(/\borphaned pods?\b/i)?.[0]
-    ?? text.match(/\blegacy code\b/i)?.[0]
-    ?? text.match(/\bConfigMap\b/)?.[0]
-    ?? text.match(/\bKubernetes\s+\d+(?:\.\d+)?\b/i)?.[0]
-    ?? text.match(/\bmagic(?:=true)?\b/i)?.[0]
-    ?? text.match(/\b[a-z]+-[a-z0-9_.-]{3,}\b/i)?.[0]
-  );
+  const extractors = [
+    () => text.match(/`([^`]{2,40})`/)?.[1],
+    () => text.match(/\b0x[0-9A-Fa-f]+\b/)?.[0],
+    () => text.match(/\boffset\s+\d+\b/i)?.[0],
+    () => text.match(/\brestartPolicy\b/)?.[0],
+    () => text.match(/\borphaned pods?\b/i)?.[0],
+    () => text.match(/\blegacy code\b/i)?.[0],
+    () => text.match(/\bConfigMap\b/)?.[0],
+    () => text.match(/\bKubernetes\s+\d+(?:\.\d+)?\b/i)?.[0],
+    () => text.match(/\bmagic(?:=true)?\b/i)?.[0],
+    () => text.match(/\b[a-z]+-[a-z0-9_.-]{3,}\b/i)?.[0],
+  ];
+
+  for (const extract of extractors) {
+    const token = extract();
+    if (token) return token;
+  }
+
+  return null;
 }
 
 function hashTextForFallback(text: string): number {
@@ -229,7 +236,6 @@ function buildBrokenReplyFallback(content: string): string {
 }
 
 // This fallback intentionally handles a broad set of content patterns.
-// eslint-disable-next-line complexity
 function buildFallbackUserNextMessage(content: string): string {
   const text = normalizeReplySeedText(content);
   const token = extractConcreteUserNextToken(text);
@@ -267,7 +273,6 @@ function normalizeComparableUserNextMessage(text: string | null | undefined): st
 }
 
 // This alternate picker mirrors the broad token heuristics in the primary fallback.
-// eslint-disable-next-line complexity
 function buildAlternateUserNextMessage(content: string, previous: string | null | undefined): string {
   const previousNormalized = normalizeComparableUserNextMessage(previous);
   const text = normalizeReplySeedText(content);
@@ -930,24 +935,34 @@ RETRY OVERRIDE — YOUR LAST DRAFT LEANED ON THE SAME ENTERPRISE CLICHES:
   ];
 }
 
-export async function callOpenRouter(
-  apiKey: string,
-  model: string,
-  messages: { role: string; content: string }[],
-  providers?: string[],
-  options: OpenRouterCallOptions = {},
-) {
+type OpenRouterCallParams = {
+  apiKey: string;
+  model: string;
+  messages: { role: string; content: string }[];
+  providers?: string[];
+  options?: OpenRouterCallOptions;
+};
+
+export async function callOpenRouter(params: OpenRouterCallParams): Promise<Response>;
+export async function callOpenRouter(params: OpenRouterCallParams): Promise<Response> {
+  const {
+    apiKey,
+    model: resolvedModel,
+    messages: resolvedMessages,
+    providers: resolvedProviders,
+  } = params;
+  const resolvedOptions = params.options ?? {};
   const requestBody: OpenRouterRequestBody = {
-    model,
-    messages,
-    max_tokens: options.maxTokens ?? 2000,
+    model: resolvedModel,
+    messages: resolvedMessages,
+    max_tokens: resolvedOptions.maxTokens ?? 2000,
     reasoning: { effort: "low" },
-    temperature: options.temperature ?? 0.9,
-    top_p: options.topP ?? 0.9,
+    temperature: resolvedOptions.temperature ?? 0.9,
+    top_p: resolvedOptions.topP ?? 0.9,
   };
 
-  if (providers && providers.length > 0) {
-    requestBody.provider = { order: providers };
+  if (resolvedProviders && resolvedProviders.length > 0) {
+    requestBody.provider = { order: resolvedProviders };
   }
 
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -980,16 +995,24 @@ function sanitizeGeneratedUserNextMessage(raw: string): string | null {
   return limited || null;
 }
 
-async function generateSuggestedUserNextMessage(
-  apiKey: string,
-  model: string,
-  providers: string[] | undefined,
-  chatMessages: { role: string; content: string }[],
-  assistantReply: string,
-  rank: string | undefined,
-  activeTicket: ChatBody["activeTicket"],
-  previousUserNextMessage?: string | null,
-): Promise<string | null> {
+type UserNextSuggestionParams = {
+  apiKey: string;
+  model: string;
+  providers?: string[];
+  chatMessages: { role: string; content: string }[];
+  assistantReply: string;
+  rank?: string;
+  activeTicket: ChatBody["activeTicket"];
+  previousUserNextMessage?: string | null;
+};
+
+function buildUserNextSuggestionMessages({
+  chatMessages,
+  assistantReply,
+  rank,
+  activeTicket,
+  previousUserNextMessage,
+}: Omit<UserNextSuggestionParams, "apiKey" | "model" | "providers">): { role: string; content: string }[] {
   const recentMessages = chatMessages.slice(-4).map((msg) => ({
     role: msg.role,
     content: msg.content.slice(0, 220),
@@ -999,7 +1022,7 @@ async function generateSuggestedUserNextMessage(
     .trim()
     .slice(0, 600);
 
-  const suggestionMessages = [
+  return [
     {
       role: "system",
       content: [
@@ -1034,47 +1057,83 @@ async function generateSuggestedUserNextMessage(
       content: `previous suggestion: ${previousUserNextMessage ?? "(none)"}\nwrite the next user message only`,
     },
   ];
+}
 
+async function readUserNextSuggestionError(response: Response): Promise<string> {
   try {
-    const response = await callOpenRouter(apiKey, model, suggestionMessages, providers, {
-      maxTokens: 40,
-      temperature: 0.7,
-      topP: 0.8,
+    return await response.text();
+  } catch {
+    return "(failed to read body)";
+  }
+}
+
+function finalizeUserNextSuggestion(
+  model: string,
+  data: ChatResponseData,
+  previousUserNextMessage?: string | null,
+): string | null {
+  const raw = data.choices?.[0]?.message?.content ?? "";
+  const cleaned = sanitizeGeneratedUserNextMessage(raw);
+
+  if (!raw.trim()) {
+    console.log(
+      `[USER_NEXT_DEBUG] helper returned empty content model=${model} promptTokens=${data.usage?.prompt_tokens ?? "?"} completionTokens=${data.usage?.completion_tokens ?? "?"} finishReason=${data.choices?.[0]?.finish_reason ?? "?"}`,
+    );
+    return null;
+  }
+  if (!cleaned) {
+    console.log(
+      `[USER_NEXT_DEBUG] helper content could not be sanitized raw=${JSON.stringify(raw).slice(0, 200)}`,
+    );
+    return null;
+  }
+  if (shouldReplaceUserNextMessage(cleaned, previousUserNextMessage)) {
+    console.log(
+      `[USER_NEXT_DEBUG] helper suggestion rejected cleaned=${JSON.stringify(cleaned)} previous=${JSON.stringify(previousUserNextMessage ?? "")}`,
+    );
+    return null;
+  }
+
+  return cleaned;
+}
+
+async function generateSuggestedUserNextMessage({
+  apiKey,
+  model,
+  providers,
+  chatMessages,
+  assistantReply,
+  rank,
+  activeTicket,
+  previousUserNextMessage,
+}: UserNextSuggestionParams): Promise<string | null> {
+  try {
+    const response = await callOpenRouter({
+      apiKey,
+      model,
+      messages: buildUserNextSuggestionMessages({
+        chatMessages,
+        assistantReply,
+        rank,
+        activeTicket,
+        previousUserNextMessage,
+      }),
+      providers,
+      options: {
+        maxTokens: 40,
+        temperature: 0.7,
+        topP: 0.8,
+      },
     });
     if (!response.ok) {
-      let details = "";
-      try {
-        details = await response.text();
-      } catch {
-        details = "(failed to read body)";
-      }
+      const details = await readUserNextSuggestionError(response);
       console.log(
         `[USER_NEXT_DEBUG] helper request failed status=${response.status} model=${model} details=${details.slice(0, 300)}`,
       );
       return null;
     }
     const data = await response.json() as ChatResponseData;
-    const raw = data.choices?.[0]?.message?.content ?? "";
-    const cleaned = sanitizeGeneratedUserNextMessage(raw);
-    if (!raw.trim()) {
-      console.log(
-        `[USER_NEXT_DEBUG] helper returned empty content model=${model} promptTokens=${data.usage?.prompt_tokens ?? "?"} completionTokens=${data.usage?.completion_tokens ?? "?"} finishReason=${data.choices?.[0]?.finish_reason ?? "?"}`,
-      );
-      return null;
-    }
-    if (!cleaned) {
-      console.log(
-        `[USER_NEXT_DEBUG] helper content could not be sanitized raw=${JSON.stringify(raw).slice(0, 200)}`,
-      );
-      return null;
-    }
-    if (shouldReplaceUserNextMessage(cleaned, previousUserNextMessage)) {
-      console.log(
-        `[USER_NEXT_DEBUG] helper suggestion rejected cleaned=${JSON.stringify(cleaned)} previous=${JSON.stringify(previousUserNextMessage ?? "")}`,
-      );
-      return null;
-    }
-    return cleaned;
+    return finalizeUserNextSuggestion(model, data, previousUserNextMessage);
   } catch (error) {
     console.log(
       `[USER_NEXT_DEBUG] helper threw ${error instanceof Error ? error.message : String(error)}`,
@@ -1110,19 +1169,29 @@ type PreChatResult = {
   deferredKvWrites: (() => void) | null;
 };
 
-function rejectPreChat(msg: string, status: number, base: Partial<PreChatResult>): PreChatResult {
+type RejectPreChatBase = {
+  effectiveProKeyHash?: string | undefined;
+  profileLicenseHash?: string | null;
+  revokedProfileLicenseHash?: string | null;
+  freeAccountId?: string | null;
+  quotaPercent?: number;
+  isProUserForRouting?: boolean;
+  ownsUsername?: boolean;
+  deferredKvWrites?: (() => void) | null;
+};
+
+function rejectPreChat(msg: string, status: number, base: RejectPreChatBase): PreChatResult {
   return {
     error: msg,
     status,
-    effectiveProKeyHash: undefined,
-    profileLicenseHash: null,
-    revokedProfileLicenseHash: null,
-    freeAccountId: null,
-    quotaPercent: 0,
-    isProUserForRouting: false,
-    ownsUsername: false,
-    deferredKvWrites: null,
-    ...base,
+    effectiveProKeyHash: base.effectiveProKeyHash,
+    profileLicenseHash: base.profileLicenseHash ?? null,
+    revokedProfileLicenseHash: base.revokedProfileLicenseHash ?? null,
+    freeAccountId: base.freeAccountId ?? null,
+    quotaPercent: base.quotaPercent ?? 0,
+    isProUserForRouting: base.isProUserForRouting ?? false,
+    ownsUsername: base.ownsUsername ?? false,
+    deferredKvWrites: base.deferredKvWrites ?? null,
   };
 }
 
@@ -1337,7 +1406,12 @@ chat.post("/", async (c) => {
   });
 
   const providerList = resolveProviderList(baseProviders, baseProvidersFreeOnly, category);
-  const orResponse = await callOpenRouter(effectiveApiKey, model, messages, providerList);
+  const orResponse = await callOpenRouter({
+    apiKey: effectiveApiKey,
+    model,
+    messages,
+    providers: providerList,
+  });
 
   if (!orResponse.ok) {
     const errData = await orResponse.json();
@@ -1356,16 +1430,16 @@ chat.post("/", async (c) => {
 
     const currentSuggestion = extractUserNextMessage(normalizedContent);
     if (shouldReplaceUserNextMessage(currentSuggestion, previousUserNextMessage)) {
-      const generatedSuggestion = await generateSuggestedUserNextMessage(
-        effectiveApiKey,
+      const generatedSuggestion = await generateSuggestedUserNextMessage({
+        apiKey: effectiveApiKey,
         model,
-        providerList,
-        trimmedMessages,
-        normalizedContent,
+        providers: providerList,
+        chatMessages: trimmedMessages,
+        assistantReply: normalizedContent,
         rank,
-        body.activeTicket,
+        activeTicket: body.activeTicket,
         previousUserNextMessage,
-      );
+      });
       normalizedContent = replaceUserNextMessageTag(
         normalizedContent,
         generatedSuggestion ?? buildAlternateUserNextMessage(normalizedContent, previousUserNextMessage),

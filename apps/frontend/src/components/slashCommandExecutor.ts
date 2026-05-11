@@ -7,6 +7,7 @@ import { COPE_MODELS } from "@claude-cope/shared/models";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE, BYOK_ENABLED, PRO_QUOTA_LIMIT } from "../config";
 import { applyServerProfile } from "../hooks/profileSync";
+import { applyPaidEntitlementAuthFailure } from "../hooks/themePurchaseState";
 import { isPaidUser } from "../hooks/gameStateUtils";
 import { updateTicketServer } from "../api/profileApi";
 
@@ -75,7 +76,7 @@ function handlePaidRoute403(
 ): void {
   const isRevoked = errorMessage?.toLowerCase().includes("revoked") || errorMessage?.toLowerCase().includes("no longer active");
   if (isRevoked) {
-    ctx.setState((prev) => ({ ...prev, proKey: undefined, proKeyHash: undefined, isPro: undefined }));
+    ctx.setState((prev) => applyPaidEntitlementAuthFailure(prev, errorMessage));
     reply({ role: "error", content: `[🔒 **403 FORBIDDEN**] Your Max license has been revoked or is no longer active. Re-activate with \`/sync <key>\` or upgrade at \`/upgrade\`.` });
   } else {
     reply({ role: "error", content: proGatedMessage(command) });

@@ -1,10 +1,15 @@
 /* eslint-disable max-lines */
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import type { ThemeEntitlementErrorCode } from "@claude-cope/shared/themeEntitlements";
+import type { ProfileRow } from "../utils/profile";
 import { getProfile, getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank } from "../utils/profile";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey } from "../utils/quota";
 
 const LICENSE_STALE_SQL_CUTOFF = "-90 days";
+const MAX_SESSION_RENAME_HOPS = 32;
+export const SESSION_USERNAME_TTL_SECONDS = 60 * 60 * 24 * 365;
+export const RENAME_REDIRECT_TTL_SECONDS = SESSION_USERNAME_TTL_SECONDS;
 export const accountKvKeys = {
   renamed: (username: string) => `renamed:${username}`,
   sessionUser: (sessionId: string) => `session_user:${sessionId}`,
@@ -210,9 +215,74 @@ export async function rollbackProfileMutation(
 }
 
 export type OwnershipResult =
-  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; status: "ok" }
-  | { profile: null; status: "not_found"; error: string }
-  | { profile: null; status: "unauthorized"; error: string };
+  | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; status: "ok"; licenseKeyHash: string }
+  | { profile: null; status: "not_found"; error: string; errorCode?: undefined }
+  | { profile: null; status: "unauthorized"; error: string; errorCode?: ThemeEntitlementErrorCode };
+
+async function followRenameChain(kv: KVNamespace, username: string) {
+  let current = username;
+  let hops = 0;
+  const seen = new Set([username]);
+  const traversed = [username];
+
+  while (hops < MAX_SESSION_RENAME_HOPS) {
+    const renamedTo = await kv.get(accountKvKeys.renamed(current));
+    if (!renamedTo || seen.has(renamedTo)) {
+      break;
+    }
+    current = renamedTo;
+    seen.add(current);
+    traversed.push(current);
+    hops += 1;
+  }
+
+  return { current, hops, traversed };
+}
+
+export async function resolveSessionProfileRow(opts: {
+  db: D1Database | undefined;
+  kv: KVNamespace;
+  sessionId: string;
+  username: string;
+  logPrefix?: string;
+}): Promise<{ username: string; row: ProfileRow | null; redirected?: boolean }> {
+  const { db, kv, sessionId } = opts;
+  const originalUsername = opts.username;
+  const logPrefix = opts.logPrefix ?? "[account/session]";
+  if (!db) return { username: originalUsername, row: null };
+
+  const originalRow = await getProfileRow(db, originalUsername);
+  if (originalRow) {
+    return { username: originalUsername, row: originalRow, redirected: false };
+  }
+
+  const { current, hops, traversed } = await followRenameChain(kv, originalUsername);
+
+  if (hops === MAX_SESSION_RENAME_HOPS) {
+    console.warn(`${logPrefix} rename chain hop cap reached for ${originalUsername}`);
+  }
+
+  const row = await getProfileRow(db, current);
+  const redirected = current !== originalUsername;
+
+  if (row && redirected) {
+    try {
+      await kv.put(accountKvKeys.sessionUser(sessionId), current, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+      await Promise.all(
+        traversed
+          .slice(0, -1)
+          .map((username) => kv.put(accountKvKeys.renamed(username), current, { expirationTtl: RENAME_REDIRECT_TTL_SECONDS })),
+      );
+    } catch (err: unknown) {
+      console.warn(
+        `${logPrefix} failed to repair session rename ${originalUsername} -> ${current}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  return { username: current, row, redirected };
+}
 
 export async function verifyOwnership(db: D1Database, username: string, licenseKeyHash: string): Promise<OwnershipResult> {
   const row = await getProfileRow(db, username);
@@ -225,12 +295,191 @@ export async function verifyOwnership(db: D1Database, username: string, licenseK
   // Keep paid mutation routes aligned with /me and score gating semantics:
   // stale "active" rows are treated as revoked until refreshed.
   if (!(await isLicenseActive(db, licenseKeyHash))) {
-    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active" };
+    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active", errorCode: "license_inactive" };
   }
 
   const profile = await getProfile(db, username);
   if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
-  return { profile, status: "ok" };
+  return { profile, status: "ok", licenseKeyHash };
+}
+
+function getSessionAuthRequiredResult(actionLabel: string): OwnershipResult {
+  return {
+    profile: null,
+    status: "unauthorized",
+    error: `Session authentication is required for ${actionLabel}`,
+    errorCode: "session_auth_required",
+  };
+}
+
+function getSessionUserMismatchResult(): OwnershipResult {
+  return {
+    profile: null,
+    status: "unauthorized",
+    error: "Unauthorized: session user does not match this profile",
+    errorCode: "session_user_mismatch",
+  };
+}
+
+async function resolveRequestedThemeAlias(kv: KVNamespace, requestedUsername: string, boundUsername: string) {
+  if (requestedUsername === boundUsername) return null;
+  return followRenameChain(kv, requestedUsername);
+}
+
+async function resolveSessionThemeOwnershipRow(
+  db: D1Database,
+  opts: {
+    kv: KVNamespace;
+    sessionId: string;
+    username: string;
+    boundUsername: string;
+    logPrefix: string;
+  },
+): Promise<{ username: string; row: ProfileRow | null } | OwnershipResult> {
+  const requestedAlias = await resolveRequestedThemeAlias(opts.kv, opts.username, opts.boundUsername);
+  const boundUsernameLower = opts.boundUsername.toLowerCase();
+  const resolved = await resolveSessionProfileRow({
+    db,
+    kv: opts.kv,
+    sessionId: opts.sessionId,
+    username: opts.boundUsername,
+    logPrefix: opts.logPrefix,
+  });
+
+  if (!resolved.row) {
+    if (requestedAlias && requestedAlias.current.toLowerCase() !== boundUsernameLower) {
+      return getSessionUserMismatchResult();
+    }
+    return { profile: null, status: "not_found", error: "Profile not found" };
+  }
+
+  const sessionMatchesRequested = resolved.username.toLowerCase() === opts.username.toLowerCase()
+    || boundUsernameLower === opts.username.toLowerCase();
+  if (!sessionMatchesRequested && requestedAlias?.current.toLowerCase() !== resolved.username.toLowerCase()) {
+    return getSessionUserMismatchResult();
+  }
+
+  return { username: resolved.username, row: resolved.row };
+}
+
+async function buildThemeOwnershipFromSessionRow(
+  db: D1Database,
+  username: string,
+  row: ProfileRow & { license_hash: string | null },
+  actionLabel: string,
+): Promise<OwnershipResult> {
+  if (!row.license_hash) {
+    return {
+      profile: null,
+      status: "unauthorized",
+      error: `An active Max license is required for ${actionLabel}`,
+      errorCode: "active_max_license_required",
+    };
+  }
+
+  if (!(await isLicenseActive(db, row.license_hash))) {
+    return { profile: null, status: "unauthorized", error: "License has been revoked or is no longer active", errorCode: "license_inactive" };
+  }
+
+  const profile = await getProfile(db, username);
+  if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
+  return { profile, status: "ok", licenseKeyHash: row.license_hash };
+}
+
+type ThemePurchaseOwnershipOptions = {
+  username: string;
+  licenseKeyHash?: string;
+  kv?: KVNamespace;
+  sessionId?: string;
+  actionLabel?: string;
+  logPrefix?: string;
+};
+
+type ThemeOwnershipMode = "purchase" | "selection";
+
+async function resolveThemeOwnershipFromLicenseHash(
+  db: D1Database,
+  opts: Pick<ThemePurchaseOwnershipOptions, "username" | "licenseKeyHash" | "kv" | "sessionId" | "actionLabel" | "logPrefix">,
+): Promise<OwnershipResult | null> {
+  if (!opts.licenseKeyHash) return null;
+
+  const ownership = await verifyOwnership(db, opts.username, opts.licenseKeyHash);
+  if (ownership.status === "ok" || !opts.kv || !opts.sessionId) {
+    return ownership;
+  }
+
+  const sessionOwnership = await resolveThemePurchaseOwnershipFromSession(db, {
+    username: opts.username,
+    kv: opts.kv,
+    sessionId: opts.sessionId,
+    actionLabel: opts.actionLabel ?? "theme updates",
+    logPrefix: opts.logPrefix ?? "[account/theme]",
+  });
+  return sessionOwnership.status === "ok" ? sessionOwnership : ownership;
+}
+
+async function resolveThemePurchaseOwnershipFromSession(
+  db: D1Database,
+  opts: {
+    username: string;
+    kv?: KVNamespace;
+    sessionId?: string;
+    actionLabel: string;
+    logPrefix: string;
+  },
+): Promise<OwnershipResult> {
+  if (!opts.kv || !opts.sessionId) {
+    return getSessionAuthRequiredResult(opts.actionLabel);
+  }
+
+  const boundUsername = await opts.kv.get(accountKvKeys.sessionUser(opts.sessionId));
+  if (!boundUsername) {
+    return getSessionAuthRequiredResult(opts.actionLabel);
+  }
+
+  const resolved = await resolveSessionThemeOwnershipRow(db, {
+    kv: opts.kv,
+    sessionId: opts.sessionId,
+    username: opts.username,
+    boundUsername,
+    logPrefix: opts.logPrefix,
+  });
+  if ("status" in resolved) {
+    return resolved;
+  }
+
+  return buildThemeOwnershipFromSessionRow(
+    db,
+    resolved.username,
+    resolved.row as ProfileRow & { license_hash: string | null },
+    opts.actionLabel,
+  );
+}
+
+async function resolveThemeMutationOwnership(
+  db: D1Database,
+  opts: ThemePurchaseOwnershipOptions & { mode: ThemeOwnershipMode },
+): Promise<OwnershipResult> {
+  const ownershipFromLicenseHash = await resolveThemeOwnershipFromLicenseHash(db, opts);
+  if (ownershipFromLicenseHash) return ownershipFromLicenseHash;
+
+  const actionLabel = opts.actionLabel ?? (opts.mode === "purchase" ? "this action" : "theme updates");
+  const logPrefix = opts.logPrefix ?? "[account/theme]";
+  return resolveThemePurchaseOwnershipFromSession(db, { ...opts, actionLabel, logPrefix });
+}
+
+export async function resolveThemeSelectionOwnership(
+  db: D1Database,
+  opts: ThemePurchaseOwnershipOptions,
+): Promise<OwnershipResult> {
+  return resolveThemeMutationOwnership(db, { ...opts, mode: "selection" });
+}
+
+export async function resolveThemePurchaseOwnership(
+  db: D1Database,
+  opts: ThemePurchaseOwnershipOptions,
+): Promise<OwnershipResult> {
+  return resolveThemeMutationOwnership(db, { ...opts, mode: "purchase" });
 }
 
 export function broadcastPurchase(message: string, db: D1Database | undefined, ctx: { waitUntil: (p: Promise<unknown>) => void }) {

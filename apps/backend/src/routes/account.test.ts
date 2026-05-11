@@ -114,6 +114,475 @@ describe("POST /api/account/buy-theme", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("Unknown theme");
   });
+  it("succeeds for a session-authenticated Max user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { success: boolean }).success).toBe(true);
+  });
+  it("falls back to USAGE_KV for a session-authenticated Max user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, USAGE_KV: kv });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { success: boolean }).success).toBe(true);
+  });
+  it("repairs renamed session bindings and accepts a stale aliased username", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+    });
+    const paidProfile = { ...BASE_PROFILE, username: "bob", current_td: 6000 };
+    const activeLicense = { status: "active", last_activated_at: new Date().toISOString() };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? activeLicense
+              : value === "bob"
+                ? paidProfile
+                : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { success: boolean }).success).toBe(true);
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
+  });
+  it("preserves mixed-case session usernames when following rename redirects", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "Alice",
+      "renamed:Alice": "Bob",
+    });
+    const paidProfile = { ...BASE_PROFILE, username: "Bob", current_td: 6000 };
+    const activeLicense = { status: "active", last_activated_at: new Date().toISOString() };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? activeLicense
+              : value === "Bob"
+                ? paidProfile
+                : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "Alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { success: boolean }).success).toBe(true);
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "Bob", expect.any(Object));
+  });
+  it("accepts stale requested aliases when the session is already rebound to the renamed username", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "Bob",
+      "renamed:Alice": "Bob",
+    });
+    const paidProfile = { ...BASE_PROFILE, username: "Bob", current_td: 6000 };
+    const activeLicense = { status: "active", last_activated_at: new Date().toISOString() };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? activeLicense
+              : value === "Bob"
+                ? paidProfile
+                : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "Alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { success: boolean }).success).toBe(true);
+  });
+  it("returns not_found for a mixed-case renamed alias when the rebound profile row is missing", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "Bob",
+      "renamed:Alice": "Bob",
+    });
+
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "Alice",
+      themeId: "amber",
+    }, { DB: createMockDB({ firstResults: undefined }).db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({
+      error: "Profile not found",
+    });
+  });
+  it("falls back to the session for buy-theme when a mismatched licenseKeyHash is present", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+      licenseKeyHash: "stale-hash",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+    });
+  });
+  it("rejects a purchase without licenseKeyHash when there is no authenticated session", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      error: expect.stringContaining("Session authentication is required"),
+      errorCode: "session_auth_required",
+    });
+  });
+  it("rejects a session-authenticated purchase when the session is bound to a different username", async () => {
+    const kv = mockKV({ "session_user:test-session": "bob" });
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: createMockDB().db, QUOTA_KV: kv });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      error: expect.stringContaining("session user does not match"),
+      errorCode: "session_user_mismatch",
+    });
+  });
+  it("rejects a session-authenticated free user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, license_hash: null, current_td: 6000 },
+      },
+    });
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      error: expect.stringContaining("active Max license"),
+      errorCode: "active_max_license_required",
+    });
+  });
+  it("rejects a session-authenticated revoked user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "revoked", last_activated_at: new Date().toISOString() },
+      },
+    });
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      error: expect.stringContaining("revoked"),
+      errorCode: "license_inactive",
+    });
+  });
+});
+
+describe("POST /api/account/update-theme", () => {
+  it("returns 400 when required fields are missing", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/update-theme", { username: "alice" }, { DB: db });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for unknown themeId", async () => {
+    const { db } = createMockDB();
+    const res = await postJSON("/api/account/update-theme", {
+      username: "alice", themeId: "nonexistent", licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe("Unknown theme");
+  });
+
+  it("persists the active theme for a session-authenticated Max user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = {
+      ...BASE_PROFILE,
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "default",
+    };
+    const updatedProfile = { ...paidProfile, active_theme: "amber" };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: updatedProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean; profile: { active_theme: string } };
+    expect(body.success).toBe(true);
+    expect(body.profile.active_theme).toBe("amber");
+  });
+
+  it("rejects persisting the default theme with a revoked hash and no valid session", async () => {
+    const revokedProfile = {
+      ...BASE_PROFILE,
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "amber",
+    };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: revokedProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "revoked", last_activated_at: new Date().toISOString() },
+      },
+    });
+    const res = await postJSON("/api/account/update-theme", {
+      username: "alice",
+      themeId: "default",
+      licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      error: expect.stringContaining("revoked"),
+      errorCode: "license_inactive",
+    });
+  });
+
+  it("rejects persisting the default theme for a session-authenticated user whose Max license is no longer active", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const revokedProfile = {
+      ...BASE_PROFILE,
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "amber",
+    };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: revokedProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "revoked", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "alice",
+      themeId: "default",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      error: expect.stringContaining("revoked"),
+      errorCode: "license_inactive",
+    });
+  });
+  it("accepts a stale mixed-case requested alias when the session is already rebound to the renamed username", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "Bob",
+      "renamed:Alice": "Bob",
+    });
+    const paidProfile = {
+      ...BASE_PROFILE,
+      username: "Bob",
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "default",
+    };
+    const updatedProfile = { ...paidProfile, active_theme: "amber" };
+    const activeLicense = { status: "active", last_activated_at: new Date().toISOString() };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? activeLicense
+              : value === "Bob"
+                ? (sql.includes(ACCOUNT_TEST_SQL.getProfileRow) ? paidProfile : updatedProfile)
+                : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "Alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { active_theme: "amber" },
+    });
+  });
+
+  it("falls back to the rebound session profile when a stale local hash points at a renamed username", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "Bob",
+      "renamed:Alice": "Bob",
+    });
+    const reboundProfile = {
+      ...BASE_PROFILE,
+      username: "Bob",
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "default",
+    };
+    const updatedProfile = { ...reboundProfile, active_theme: "default" };
+    const activeLicense = { status: "active", last_activated_at: new Date().toISOString() };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? activeLicense
+              : value === "Bob"
+                ? (sql.includes(ACCOUNT_TEST_SQL.getProfileRow) ? reboundProfile : updatedProfile)
+                : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "Alice",
+      themeId: "default",
+      licenseKeyHash: "stale-hash",
+    }, { DB: db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { active_theme: "default" },
+    });
+  });
+
+  it("falls back to the session profile when a stale local hash belongs to a different existing account", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const aliceProfile = {
+      ...BASE_PROFILE,
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "amber",
+    };
+    const updatedAliceProfile = { ...aliceProfile, active_theme: "default" };
+    const otherProfile = {
+      ...BASE_PROFILE,
+      username: "bob",
+      license_hash: "stale-hash",
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "default",
+    };
+    const activeLicense = { status: "active", last_activated_at: new Date().toISOString() };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? activeLicense
+              : value === "alice"
+                ? (sql.includes(ACCOUNT_TEST_SQL.getProfileRow) ? aliceProfile : updatedAliceProfile)
+                : value === "bob"
+                  ? otherProfile
+                  : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "alice",
+      themeId: "default",
+      licenseKeyHash: "stale-hash",
+    }, { DB: db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { active_theme: "default" },
+    });
+  });
+
+  it("rejects equip requests for themes that are not unlocked", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = { ...BASE_PROFILE, current_td: 6000, active_theme: "default" };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe("Theme is not unlocked");
+  });
 });
 
 describe("POST /api/account/unlock-achievement", () => {
