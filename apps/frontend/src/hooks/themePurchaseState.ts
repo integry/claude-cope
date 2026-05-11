@@ -2,7 +2,7 @@ import type { ServerProfile } from "@claude-cope/shared/profile";
 import type { ThemeEntitlementErrorCode } from "@claude-cope/shared/themeEntitlements";
 import { THEMES } from "../game/constants";
 import type { GameState } from "./gameStateUtils";
-import { isPaidUser, nextMsgId } from "./gameStateUtils";
+import { nextMsgId } from "./gameStateUtils";
 import { applyServerProfile } from "./profileSync";
 
 export type SessionProfileResult = {
@@ -40,6 +40,26 @@ function clearStaleSessionEntitlement(state: GameState): GameState {
     isPro: undefined,
     hasSessionPro: undefined,
   };
+}
+
+export function applyPaidEntitlementAuthFailure(
+  state: GameState,
+  error?: string,
+  errorCode?: ThemeEntitlementErrorCode,
+): GameState {
+  if (isDefinitiveThemePurchaseEntitlementError(error, errorCode)) {
+    return {
+      ...state,
+      proKey: undefined,
+      proKeyHash: undefined,
+      isPro: undefined,
+      hasSessionPro: undefined,
+    };
+  }
+  if (isThemePurchaseSessionMismatchError(error, errorCode)) {
+    return clearStaleSessionEntitlement(state);
+  }
+  return state;
 }
 
 export function canBuyTheme(state: Pick<GameState, "economy" | "unlockedThemes" | "proKeyHash" | "hasSessionPro">, themeId: string): boolean {
@@ -89,8 +109,8 @@ export function isFreshStateForSessionRestore(state: GameState): boolean {
 
 export function applyValidatedSessionProState(state: GameState, result: SessionProfileResult): GameState {
   if (!result.found || result.isPro === false) {
-    if (!isPaidUser(state) && !state.hasSessionPro) return state;
-    return { ...state, proKey: undefined, proKeyHash: undefined, isPro: undefined, hasSessionPro: undefined };
+    if (!state.hasSessionPro) return state;
+    return clearStaleSessionEntitlement(state);
   }
 
   if (result.isPro !== true) {
@@ -116,14 +136,7 @@ export function applyValidatedSessionProState(state: GameState, result: SessionP
 
   if (result.profile) {
     return {
-      ...state,
-      username: result.profile.username,
-      economy: {
-        ...state.economy,
-        ...(result.profile.quota_percent != null ? { quotaPercent: result.profile.quota_percent } : {}),
-      },
-      unlockedThemes: result.profile.unlocked_themes,
-      activeTheme: result.profile.active_theme,
+      ...applyServerProfile(state, result.profile, { includeActiveTicket: true }),
       isPro: true,
       hasSessionPro: true,
     };
@@ -137,13 +150,7 @@ export function applyValidatedSessionProState(state: GameState, result: SessionP
 }
 
 export function applyThemeEntitlementFailure(state: GameState, error?: string, errorCode?: ThemeEntitlementErrorCode): GameState {
-  const nextState = isDefinitiveThemePurchaseEntitlementError(error, errorCode) ? {
-    ...state,
-    proKey: undefined,
-    proKeyHash: undefined,
-    isPro: undefined,
-    hasSessionPro: undefined,
-  } : isThemePurchaseSessionMismatchError(error, errorCode) ? clearStaleSessionEntitlement(state) : state;
+  const nextState = applyPaidEntitlementAuthFailure(state, error, errorCode);
   const message = error ?? "Theme purchase failed";
   return { ...nextState, chatHistory: [...nextState.chatHistory, { id: nextMsgId(), role: "error", content: `[❌ Error] ${message}` }] };
 }

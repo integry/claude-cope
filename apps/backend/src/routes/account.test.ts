@@ -451,6 +451,45 @@ describe("POST /api/account/update-theme", () => {
     });
   });
 
+  it("falls back to the rebound session profile when a stale local hash points at a renamed username", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "Bob",
+      "renamed:Alice": "Bob",
+    });
+    const reboundProfile = {
+      ...BASE_PROFILE,
+      username: "Bob",
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "default",
+    };
+    const updatedProfile = { ...reboundProfile, active_theme: "default" };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            value === "Bob"
+              ? (sql.includes(ACCOUNT_TEST_SQL.getProfileRow) ? reboundProfile : updatedProfile)
+              : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "Alice",
+      themeId: "default",
+      licenseKeyHash: "stale-hash",
+    }, { DB: db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { active_theme: "default" },
+    });
+  });
+
   it("rejects equip requests for themes that are not unlocked", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
     const paidProfile = { ...BASE_PROFILE, current_td: 6000, active_theme: "default" };

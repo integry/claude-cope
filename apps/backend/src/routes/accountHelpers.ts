@@ -453,20 +453,21 @@ export async function resolveThemeSelectionOwnership(
   db: D1Database,
   opts: ThemePurchaseOwnershipOptions,
 ): Promise<OwnershipResult> {
-  if (opts.licenseKeyHash) {
-    const row = await getProfileRow(db, opts.username);
-    if (!row) return { profile: null, status: "not_found", error: "Profile not found" };
-    const rowWithHash = row as ProfileRow & { license_hash: string | null };
-    if (!rowWithHash.license_hash || rowWithHash.license_hash !== opts.licenseKeyHash) {
-      return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
-    }
-    const profile = await getProfile(db, opts.username);
-    if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
-    return { profile, status: "ok", licenseKeyHash: rowWithHash.license_hash };
-  }
-
   const actionLabel = opts.actionLabel ?? "theme updates";
   const logPrefix = opts.logPrefix ?? "[account/theme]";
+  if (opts.licenseKeyHash) {
+    const row = await getProfileRow(db, opts.username);
+    if (row) {
+      const rowWithHash = row as ProfileRow & { license_hash: string | null };
+      if (!rowWithHash.license_hash || rowWithHash.license_hash !== opts.licenseKeyHash) {
+        return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
+      }
+      const profile = await getProfile(db, opts.username);
+      if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
+      return { profile, status: "ok", licenseKeyHash: rowWithHash.license_hash };
+    }
+  }
+
   if (!opts.kv || !opts.sessionId) {
     return getSessionAuthRequiredResult(actionLabel);
   }

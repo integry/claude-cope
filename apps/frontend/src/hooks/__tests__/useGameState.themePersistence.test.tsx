@@ -11,16 +11,13 @@ vi.mock("../../analytics", () => ({
   track: vi.fn(),
   identify: vi.fn(),
 }));
-
 vi.mock("../../supabaseClient", () => ({
   supabase: null,
 }));
-
 vi.mock("../useGameEffects", () => ({
   useScoreSync: vi.fn(),
   useAchievementChecker: vi.fn(),
 }));
-
 vi.mock("../../api/profileApi", () => ({
   buyGeneratorServer: vi.fn(),
   buyUpgradeServer: vi.fn(),
@@ -89,6 +86,17 @@ describe("useGameState theme persistence", () => {
   let root!: ReturnType<typeof createRoot>;
   let hookState!: ReturnType<typeof useGameState>;
 
+  function remountWithState(state: GameState) {
+    act(() => {
+      root.unmount();
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    act(() => {
+      root = createRoot(container);
+      root.render(createElement(HookHarness, { onRender: (value) => { hookState = value; } }));
+    });
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
@@ -96,7 +104,6 @@ describe("useGameState theme persistence", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-
     act(() => {
       root.render(createElement(HookHarness, {
         onRender: (value) => {
@@ -121,7 +128,6 @@ describe("useGameState theme persistence", () => {
     vi.mocked(updateThemeServer)
       .mockReturnValueOnce(firstRequest.promise)
       .mockReturnValueOnce(secondRequest.promise);
-
     act(() => {
       hookState.setActiveTheme("amber");
     });
@@ -138,9 +144,7 @@ describe("useGameState theme persistence", () => {
       });
       await secondRequest.promise;
     });
-
     await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
-
     await act(async () => {
       firstRequest.resolve({
         success: true,
@@ -211,25 +215,11 @@ describe("useGameState theme persistence", () => {
         unlocked_themes: ["default", "amber", "midnight"],
       }),
     });
-
-    act(() => {
-      root.unmount();
-    });
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(makeState({
+    remountWithState(makeState({
       activeTheme: "default",
       unlockedThemes: ["default", "amber", "midnight"],
       chatHistory: [{ id: 1, role: "user", content: "hello" }],
-    })));
-
-    act(() => {
-      root = createRoot(container);
-      root.render(createElement(HookHarness, {
-        onRender: (value) => {
-          hookState = value;
-        },
-      }));
-    });
+    }));
 
     await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
   });
@@ -244,25 +234,11 @@ describe("useGameState theme persistence", () => {
         unlocked_themes: ["default", "amber", "midnight"],
       }),
     });
-
-    act(() => {
-      root.unmount();
-    });
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(makeState({
+    remountWithState(makeState({
       activeTheme: "default",
       unlockedThemes: ["default", "amber", "midnight"],
       chatHistory: [{ id: 1, role: "user", content: "hello" }],
-    })));
-
-    act(() => {
-      root = createRoot(container);
-      root.render(createElement(HookHarness, {
-        onRender: (value) => {
-          hookState = value;
-        },
-      }));
-    });
+    }));
 
     await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
 
@@ -293,37 +269,75 @@ describe("useGameState theme persistence", () => {
 
   it("clears stale session-backed paid state when /me no longer finds the session profile", async () => {
     vi.mocked(fetchSessionProfile).mockResolvedValueOnce({ found: false });
-
-    act(() => {
-      root.unmount();
-    });
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(makeState({
+    remountWithState(makeState({
       isPro: true,
       hasSessionPro: true,
       proKey: undefined,
       proKeyHash: undefined,
-    })));
-
-    act(() => {
-      root = createRoot(container);
-      root.render(createElement(HookHarness, {
-        onRender: (value) => {
-          hookState = value;
-        },
-      }));
-    });
+    }));
 
     await vi.waitFor(() => expect(hookState.state.isPro).toBeUndefined());
     await vi.waitFor(() => expect(hookState.state.hasSessionPro).toBeUndefined());
   });
 
-  it("does not let buy-theme overwrite a newer optimistic equip selection", async () => {
-    act(() => {
-      root.unmount();
-    });
+  it("preserves local license-backed paid state when /me no longer finds the session profile", async () => {
+    vi.mocked(fetchSessionProfile).mockResolvedValueOnce({ found: false });
+    remountWithState(makeState({
+      isPro: true,
+      hasSessionPro: true,
+      proKey: "pro-key",
+      proKeyHash: "pro-hash",
+    }));
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(makeState({
+    await vi.waitFor(() => expect(hookState.state.proKeyHash).toBe("pro-hash"));
+    await vi.waitFor(() => expect(hookState.state.isPro).toBe(true));
+    await vi.waitFor(() => expect(hookState.state.hasSessionPro).toBeUndefined());
+  });
+
+  it("restores the full server-authoritative profile for paid sessions during /me reconciliation", async () => {
+    vi.mocked(fetchSessionProfile).mockResolvedValueOnce({
+      found: true,
+      isPro: true,
+      username: "alice",
+      profile: createServerProfile({
+        total_td: 1500,
+        current_td: 900,
+        corporate_rank: "Staff Engineer",
+        inventory: { coffee: 3 },
+        upgrades: ["ci_cd"],
+        achievements: ["ship_it"],
+        buddy_type: "cat",
+        buddy_is_shiny: true,
+        active_ticket: { id: "T-1", title: "Ship it", sprintProgress: 1, sprintGoal: 3 },
+        active_theme: "midnight",
+        unlocked_themes: ["default", "amber", "midnight"],
+      }),
+    });
+    remountWithState(makeState({
+      activeTheme: "default",
+      inventory: { tea: 2 },
+      upgrades: [],
+      achievements: [],
+      buddy: {
+        type: null,
+        isShiny: false,
+        promptsSinceLastInterjection: 0,
+      },
+      activeTicket: null,
+      chatHistory: [{ id: 1, role: "user", content: "hello" }],
+    }));
+
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
+    await vi.waitFor(() => expect(hookState.state.inventory).toEqual({ coffee: 3 }));
+    await vi.waitFor(() => expect(hookState.state.upgrades).toEqual(["ci_cd"]));
+    await vi.waitFor(() => expect(hookState.state.achievements).toEqual(["ship_it"]));
+    await vi.waitFor(() => expect(hookState.state.buddy.type).toBe("cat"));
+    await vi.waitFor(() => expect(hookState.state.buddy.isShiny).toBe(true));
+    await vi.waitFor(() => expect(hookState.state.activeTicket).toMatchObject({ id: "T-1" }));
+  });
+
+  it("does not let buy-theme overwrite a newer optimistic equip selection", async () => {
+    remountWithState(makeState({
       activeTheme: "default",
       economy: {
         currentTD: 12000,
@@ -334,16 +348,7 @@ describe("useGameState theme persistence", () => {
         tdMultiplier: 1,
       },
       unlockedThemes: ["default", "amber"],
-    })));
-
-    act(() => {
-      root = createRoot(container);
-      root.render(createElement(HookHarness, {
-        onRender: (value) => {
-          hookState = value;
-        },
-      }));
-    });
+    }));
 
     const buyRequest = deferred<{ success: boolean; profile: ReturnType<typeof createServerProfile> }>();
     const updateRequest = deferred<{ success: boolean; profile: ReturnType<typeof createServerProfile> }>();
