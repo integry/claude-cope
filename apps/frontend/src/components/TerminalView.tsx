@@ -5,7 +5,6 @@ import type {
   RefObject,
   SetStateAction,
 } from "react";
-import { useRef } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import HeaderBar from "./HeaderBar";
@@ -20,7 +19,7 @@ import SprintProgressBar from "./SprintProgressBar";
 import MessageList from "./MessageList";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { TerminalOverlays } from "./TerminalOverlays";
-import { BuddyOverlay } from "./BuddyOverlay";
+import { BuddyDisplay } from "./BuddyDisplay";
 import type { GameState, Message } from "../hooks/useGameState";
 import type { PendingReviewPing } from "../hooks/useMultiplayer";
 import type { OverlayVisibility } from "./terminalViewUtils";
@@ -175,9 +174,6 @@ export function TerminalView({
   upgradeNagDismissPhase,
   upgradeNagDismissEffect,
 }: TerminalViewProps) {
-  const terminalContainerRef = useRef<HTMLDivElement | null>(null);
-  const bottomChromeRef = useRef<HTMLDivElement | null>(null);
-
   const upgradeDismissProps = getUpgradeDismissProps(
     pendingNagCommand,
     handleUpgradeNagClose,
@@ -191,7 +187,6 @@ export function TerminalView({
 
   return (
     <div
-      ref={terminalContainerRef}
       className={`relative ${terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}`}
       style={{
         ...parseGlitchStyle(regressionGlitch),
@@ -267,7 +262,6 @@ export function TerminalView({
         <div ref={bottomRef} />
       </div>
       <div
-        ref={bottomChromeRef}
         className="terminal-bottom-chrome shrink-0 gap-4 md:flex md:items-end md:justify-between"
         data-terminal-bottom-chrome="true"
       >
@@ -300,12 +294,14 @@ export function TerminalView({
             />
           </div>
         </div>
+        {state.buddy.type && (
+          <BuddyDisplay
+            type={state.buddy.type}
+            isShiny={state.buddy.isShiny}
+            className="terminal-buddy-display terminal-buddy-dock"
+          />
+        )}
       </div>
-      <BuddyOverlay
-        buddy={state.buddy}
-        containerRef={terminalContainerRef}
-        bottomChromeRef={bottomChromeRef}
-      />
       <TerminalOverlays
         showStore={showStore}
         showLeaderboard={showLeaderboard}

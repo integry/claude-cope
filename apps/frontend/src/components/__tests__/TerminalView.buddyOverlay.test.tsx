@@ -164,43 +164,42 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("TerminalView buddy overlay", () => {
-  it("renders a docked buddy only when a buddy exists", () => {
+describe("TerminalView buddy docking", () => {
+  it("renders the docked buddy only when a buddy exists", () => {
     const withoutBuddy = renderTerminalView(createState(null));
-    expect(withoutBuddy.querySelector(".terminal-buddy-overlay")).toBeNull();
+    expect(withoutBuddy.querySelector(".terminal-buddy-dock")).toBeNull();
 
     act(() => {
       root!.render(createElement(TerminalView, createProps(createState("Sarcastic Clippy"))));
     });
 
-    const overlay = withoutBuddy.querySelector(".terminal-buddy-overlay");
-    expect(overlay).not.toBeNull();
-    expect(overlay?.querySelector(".terminal-buddy-display")).not.toBeNull();
+    const dockedBuddy = withoutBuddy.querySelector(".terminal-buddy-dock");
+    expect(dockedBuddy).not.toBeNull();
+    expect(dockedBuddy?.classList.contains("terminal-buddy-display")).toBe(true);
   });
 
-  it("keeps buddy markup out of the inline command shell", () => {
+  it("keeps buddy markup out of the inline command shell and docks it beside the bottom chrome", () => {
     const view = renderTerminalView(createState("Sarcastic Clippy"));
-    const overlay = view.querySelector(".terminal-buddy-overlay");
     const commandShell = view.querySelector(".terminal-command-shell");
+    const bottomChrome = view.querySelector("[data-terminal-bottom-chrome='true']");
+    const dockedBuddy = view.querySelector(".terminal-buddy-dock");
 
-    expect(overlay).not.toBeNull();
-    expect(overlay?.textContent).toContain("Sarcastic Clippy is watching...");
+    expect(dockedBuddy).not.toBeNull();
+    expect(dockedBuddy?.textContent).toContain("Sarcastic Clippy is watching...");
+    expect(bottomChrome?.contains(dockedBuddy!)).toBe(true);
     expect(commandShell?.querySelector(".terminal-buddy-display")).toBeNull();
     expect(commandShell?.textContent).not.toContain("Sarcastic Clippy is watching...");
   });
 
-  it("renders the buddy as a root-level overlay instead of a bottom chrome child", () => {
+  it("renders the buddy as a bottom chrome child instead of a root-level overlay", () => {
     const view = renderTerminalView(createState("Sarcastic Clippy"));
-    const overlay = view.querySelector(".terminal-buddy-overlay");
     const bottomChrome = view.querySelector("[data-terminal-bottom-chrome='true']");
-    const terminalRoot = view.firstElementChild;
+    const dockedBuddy = view.querySelector(".terminal-buddy-dock");
 
-    expect(overlay).not.toBeNull();
     expect(bottomChrome).not.toBeNull();
-    expect(terminalRoot).not.toBeNull();
-    expect(bottomChrome?.contains(overlay!)).toBe(false);
-    expect(overlay?.parentElement).toBe(terminalRoot);
-    expect(overlay?.getAttribute("aria-hidden")).toBe("true");
+    expect(dockedBuddy).not.toBeNull();
+    expect(bottomChrome?.contains(dockedBuddy!)).toBe(true);
+    expect(view.querySelector(".terminal-buddy-overlay")).toBeNull();
     expect(view.querySelector("[data-testid='terminal-footer']")).not.toBeNull();
   });
 });

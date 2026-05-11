@@ -171,6 +171,12 @@ body {
   max-width: min(100%, 28rem);
 }
 
+.terminal-buddy-dock {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  padding: 0 0.9rem 0.8rem 0;
+}
+
 .terminal-buddy-inline {
   display: flex;
   align-items: flex-start;
@@ -206,6 +212,10 @@ body {
   .terminal-buddy-display {
     font-size: 0.625rem;
     line-height: 1.1;
+  }
+
+  .terminal-buddy-dock {
+    padding: 0 0.9rem 0.8rem;
   }
 
   .terminal-buddy-inline {
