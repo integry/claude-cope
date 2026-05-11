@@ -41,7 +41,6 @@ function restoreFreshSession(setState: SetGameState, result: SessionProfileResul
 }
 
 function validatePaidSession(setState: SetGameState, result: SessionProfileResult): void {
-  if (!result.found) return;
   setState((prev) => (isPaidUser(prev) || prev.hasSessionPro ? applyValidatedSessionProState(prev, result) : prev));
 }
 

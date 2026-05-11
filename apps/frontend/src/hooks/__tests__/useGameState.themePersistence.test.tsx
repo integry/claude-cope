@@ -238,6 +238,37 @@ describe("useGameState theme persistence", () => {
     expect(hookState.state.activeTheme).toBe("midnight");
   });
 
+  it("clears stale session-backed paid state when /me no longer finds the session profile", async () => {
+    vi.mocked(fetchSessionProfile).mockResolvedValueOnce({ found: false });
+
+    act(() => {
+      root.unmount();
+    });
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(makeState({
+      isPro: true,
+      hasSessionPro: true,
+      proKey: undefined,
+      proKeyHash: undefined,
+    })));
+
+    act(() => {
+      root = createRoot(container);
+      root.render(createElement(HookHarness, {
+        onRender: (value) => {
+          hookState = value;
+        },
+      }));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(hookState.state.isPro).toBeUndefined();
+    expect(hookState.state.hasSessionPro).toBeUndefined();
+  });
+
   it("does not let buy-theme overwrite a newer optimistic equip selection", async () => {
     act(() => {
       root.unmount();

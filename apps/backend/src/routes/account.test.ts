@@ -181,6 +181,37 @@ describe("POST /api/account/buy-theme", () => {
     expect(((await res.json()) as { success: boolean }).success).toBe(true);
     expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
   });
+  it("preserves mixed-case session usernames when following rename redirects", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "Alice",
+      "renamed:Alice": "Bob",
+    });
+    const paidProfile = { ...BASE_PROFILE, username: "Bob", current_td: 6000 };
+    const activeLicense = { status: "active", last_activated_at: new Date().toISOString() };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? activeLicense
+              : value === "Bob"
+                ? paidProfile
+                : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "Alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { success: boolean }).success).toBe(true);
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "Bob", expect.any(Object));
+  });
   it("falls back to session auth when a stale licenseKeyHash is present", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
     const paidProfile = { ...BASE_PROFILE, current_td: 6000 };

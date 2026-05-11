@@ -327,7 +327,7 @@ function getSessionUserMismatchResult(): OwnershipResult {
 }
 
 async function resolveRequestedThemeAlias(kv: KVNamespace, requestedUsername: string, boundUsername: string) {
-  if (requestedUsername === boundUsername.toLowerCase()) return null;
+  if (requestedUsername.toLowerCase() === boundUsername.toLowerCase()) return null;
   return followRenameChain(kv, requestedUsername);
 }
 
@@ -341,7 +341,7 @@ async function resolveSessionThemePurchaseRow(
     logPrefix: string;
   },
 ): Promise<{ username: string; row: ProfileRow | null } | OwnershipResult> {
-  const requestedAlias = await resolveRequestedThemeAlias(opts.kv, opts.username.toLowerCase(), opts.boundUsername);
+  const requestedAlias = await resolveRequestedThemeAlias(opts.kv, opts.username, opts.boundUsername);
   const resolved = await resolveSessionProfileRow({
     db,
     kv: opts.kv,
@@ -435,7 +435,7 @@ async function resolveThemePurchaseOwnershipFromSession(
     kv: opts.kv,
     sessionId: opts.sessionId,
     username: opts.username,
-    boundUsername: boundUsername.toLowerCase(),
+    boundUsername,
     logPrefix: opts.logPrefix,
   });
   if ("status" in resolved) {
