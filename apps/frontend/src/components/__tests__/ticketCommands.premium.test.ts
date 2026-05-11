@@ -89,6 +89,41 @@ describe("premium backlog handling", () => {
     expect(message.content).toContain("Run `/upgrade` to unlock 50+ specialized categories and premium suffering.");
   });
 
+  it("renders full ticket ids in the fallback table so similar ids stay distinct", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: "CART-1170",
+          title: "CART First cart ticket",
+          description: "Regular ticket",
+          technical_debt: 34,
+          kickoff_prompt: "first",
+          category_prefix: "CART",
+          tier: "free",
+        },
+        {
+          id: "CART-1171",
+          title: "CART Second cart ticket",
+          description: "Regular ticket",
+          technical_debt: 35,
+          kickoff_prompt: "second",
+          category_prefix: "CART",
+          tier: "free",
+        },
+      ]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const reply = vi.fn();
+
+    await handleBacklogCommand(reply);
+
+    const message = reply.mock.calls[0]?.[0];
+    expect(message.content).toContain("CART-1170");
+    expect(message.content).toContain("CART-1171");
+    expect(message.content).not.toContain("| CART-117 ");
+  });
+
   it("blocks locked ticket selection, replies with an upgrade prompt, and leaves free picks unchanged", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,

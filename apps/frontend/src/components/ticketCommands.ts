@@ -154,7 +154,7 @@ function replyEmptyBacklog(reply: Reply, normalizedCategory: string | null): boo
 
 function formatBacklogTable(tickets: CommunityBacklogTicket[]): string {
   const numW = 3;
-  const idW = 10;
+  const idW = Math.max(10, ...tickets.map((ticket) => ticket.id.length));
   const statusW = 8;
   const titleW = Math.max(5, ...tickets.map((ticket) => formatBacklogTitle(ticket).length));
   const tdW = 8;
@@ -167,7 +167,7 @@ function formatBacklogTable(tickets: CommunityBacklogTicket[]): string {
     ticket.is_locked ? pad("--", tdW, "right") : pad(String(ticket.technical_debt * 10), tdW, "right");
   const header = `| ${pad("#", numW)} | ${pad("ID", idW)} | ${pad("Title", titleW)} | ${pad("Status", statusW)} | ${pad("Reward", tdW)} |`;
   const rows = tickets.map((t, i) =>
-    `| ${pad(String(i + 1), numW)} | ${pad(t.id.slice(0, 8), idW)} | ${pad(formatBacklogTitle(t), titleW)} | ${pad(t.is_locked ? "PREMIUM" : "OPEN", statusW)} | ${formatReward(t)} |`
+    `| ${pad(String(i + 1), numW)} | ${pad(t.id, idW)} | ${pad(formatBacklogTitle(t), titleW)} | ${pad(t.is_locked ? "PREMIUM" : "OPEN", statusW)} | ${formatReward(t)} |`
   );
   return [sep, header, sep, ...rows, sep].join("\n");
 }
@@ -176,7 +176,7 @@ function buildBacklogDisplayTicket(ticket: CommunityBacklogTicket, row: number):
   return {
     row,
     fullId: ticket.id,
-    shortId: ticket.id.slice(0, 8),
+    shortId: ticket.id,
     title: formatBacklogTitle(ticket),
     status: ticket.is_locked ? "PREMIUM" : "OPEN",
     reward: ticket.is_locked ? "--" : `${ticket.technical_debt * 10} TD`,

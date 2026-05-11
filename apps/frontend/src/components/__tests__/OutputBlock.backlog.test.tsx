@@ -72,14 +72,14 @@ describe("OutputBlock backlog rendering", () => {
     const onSlashCommand = renderMessage(message);
 
     expect(container.textContent).toContain("[ COMMUNITY BACKLOG ]");
-    expect(container.textContent).toContain("BLAME-42");
+    expect(container.textContent).toContain("BLAME-421");
     expect(container.textContent).toContain("1440 TD");
     expect(container.textContent).toContain("Rewrite Domain Warmup");
 
     const buttons = Array.from(container.querySelectorAll("button"));
     const backlogButton = buttons.find((button) => button.textContent === "/backlog");
     const upgradeButton = buttons.find((button) => button.textContent === "/upgrade");
-    const ticketButton = buttons.find((button) => button.textContent === "BLAME-42");
+    const ticketButton = buttons.find((button) => button.textContent === "BLAME-421");
 
     expect(backlogButton).toBeTruthy();
     expect(upgradeButton).toBeTruthy();
@@ -110,7 +110,7 @@ describe("OutputBlock backlog rendering", () => {
         title: "[ COMMUNITY BACKLOG ]",
         footer: ["Type /take 1 through /take 1 to claim a ticket."],
         tickets: [
-          { row: 1, fullId: "BLAME-421", shortId: "BLAME-42", title: "First title", status: "OPEN", reward: "1440 TD", isLocked: false },
+          { row: 1, fullId: "BLAME-421", shortId: "BLAME-421", title: "First title", status: "OPEN", reward: "1440 TD", isLocked: false },
         ],
       },
     };
@@ -120,7 +120,7 @@ describe("OutputBlock backlog rendering", () => {
       backlogDisplay: {
         ...firstMessage.backlogDisplay!,
         tickets: [
-          { row: 1, fullId: "BLAME-421", shortId: "BLAME-42", title: "Updated title", status: "OPEN", reward: "1440 TD", isLocked: false },
+          { row: 1, fullId: "BLAME-421", shortId: "BLAME-421", title: "Updated title", status: "OPEN", reward: "1440 TD", isLocked: false },
         ],
       },
     };
@@ -203,5 +203,40 @@ describe("OutputBlock backlog rendering", () => {
 
     expect(ticketButton?.getAttribute("aria-label")).toBe("View premium ticket PIXEL-77");
     expect(onSlashCommand).toHaveBeenCalledWith("/take PIXEL-77", "execute");
+  });
+
+  it("shows full ids when tickets share the same first 8 characters", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: "CART-1170",
+          title: "CART First ticket",
+          description: "Regular ticket",
+          technical_debt: 10,
+          kickoff_prompt: "first",
+          category_prefix: "CART",
+          tier: "free",
+        },
+        {
+          id: "CART-1171",
+          title: "CART Second ticket",
+          description: "Regular ticket",
+          technical_debt: 11,
+          kickoff_prompt: "second",
+          category_prefix: "CART",
+          tier: "free",
+        },
+      ]),
+    }));
+
+    const reply = vi.fn();
+    await handleBacklogCommand(reply);
+
+    const message = reply.mock.calls[0]?.[0] as Message;
+    renderMessage(message);
+
+    expect(container.textContent).toContain("CART-1170");
+    expect(container.textContent).toContain("CART-1171");
   });
 });
