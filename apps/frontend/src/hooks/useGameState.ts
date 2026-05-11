@@ -4,7 +4,18 @@ import { track, identify } from "../analytics";
 import { AnalyticsEvents } from "../analyticsEvents";
 import { GENERATORS, UPGRADES, THEMES, FREE_TIER_RANK_CAP } from "../game/constants";
 import { supabase } from "../supabaseClient";
-import { type Message, type GameState, loadState, calcBulkCost, calculateActiveMultiplier, resolveRank, isPaidUser, isFreeUser, STORAGE_KEY } from "./gameStateUtils";
+import {
+  type Message,
+  type GameState,
+  loadState,
+  calcBulkCost,
+  calculateActiveMultiplier,
+  resolveRank,
+  isPaidUser,
+  isFreeUser,
+  normalizePersistedMessage,
+  STORAGE_KEY,
+} from "./gameStateUtils";
 import { applyServerProfile } from "./profileSync";
 import { buyGeneratorServer, buyUpgradeServer, buyThemeServer, unlockAchievementServer, updateTicketServer, fetchSessionProfile, updateThemeServer } from "../api/profileApi";
 import {
@@ -162,7 +173,12 @@ export function useGameState() {
 
   useEffect(() => {
     try {
-      const toSave = { ...state, chatHistory: state.chatHistory.filter((m) => m.role !== "loading") };
+      const toSave = {
+        ...state,
+        chatHistory: state.chatHistory
+          .filter((m) => m.role !== "loading")
+          .map(normalizePersistedMessage),
+      };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     } catch {
     }

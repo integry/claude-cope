@@ -37,6 +37,25 @@ function generateUsername(): string {
 let _msgId = 0;
 export function nextMsgId(): number { return ++_msgId; }
 
+export type BacklogDisplayTicket = {
+  row: number;
+  fullId: string;
+  shortId: string;
+  title: string;
+  status: "OPEN" | "PREMIUM";
+  reward: string;
+  isLocked: boolean;
+};
+
+export type BacklogDisplayData = {
+  kind: "community-backlog";
+  title: string;
+  filterHeader?: string;
+  infoLine?: string;
+  footer: string[];
+  tickets: BacklogDisplayTicket[];
+};
+
 export type Message = {
   id?: number;
   role: "user" | "system" | "loading" | "warning" | "error";
@@ -45,7 +64,14 @@ export type Message = {
   tokensSent?: number;
   tokensReceived?: number;
   cost?: number;
+  backlogDisplay?: BacklogDisplayData;
 };
+
+// Backlog messages persist their structured payload so the responsive renderer
+// survives reloads; this hook exists as the single normalization point if that changes.
+export function normalizePersistedMessage(message: Message): Message {
+  return message;
+}
 
 export interface BuddyState {
   type: string | null;
@@ -215,6 +241,7 @@ function applyDefensiveDefaults(state: GameState): void {
   if (!Array.isArray(state.chatHistory)) {
     state.chatHistory = [];
   }
+  state.chatHistory = state.chatHistory.map(normalizePersistedMessage);
   if (!state.commandUsage || typeof state.commandUsage !== "object") {
     state.commandUsage = {};
   }

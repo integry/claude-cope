@@ -89,6 +89,41 @@ describe("premium backlog handling", () => {
     expect(message.content).toContain("Run `/upgrade` to unlock 50+ specialized categories and premium suffering.");
   });
 
+  it("renders full ticket ids in the fallback table so similar ids stay distinct", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: "CART-1170",
+          title: "CART First cart ticket",
+          description: "Regular ticket",
+          technical_debt: 34,
+          kickoff_prompt: "first",
+          category_prefix: "CART",
+          tier: "free",
+        },
+        {
+          id: "CART-1171",
+          title: "CART Second cart ticket",
+          description: "Regular ticket",
+          technical_debt: 35,
+          kickoff_prompt: "second",
+          category_prefix: "CART",
+          tier: "free",
+        },
+      ]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const reply = vi.fn();
+
+    await handleBacklogCommand(reply);
+
+    const message = reply.mock.calls[0]?.[0];
+    expect(message.content).toContain("CART-1170");
+    expect(message.content).toContain("CART-1171");
+    expect(message.content).not.toContain("| CART-117 ");
+  });
+
   it("blocks locked ticket selection, replies with an upgrade prompt, and leaves free picks unchanged", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
@@ -153,6 +188,105 @@ describe("premium backlog handling", () => {
     expect(freeReply.mock.calls[0]?.[0].content).toContain("[🎫 **TICKET CLAIMED**]");
   });
 
+  it("clears cached backlog rows when a later backlog request returns empty", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ([
+          {
+            id: "free-12345",
+            title: "Fix lint config",
+            description: "Regular ticket",
+            technical_debt: 4,
+            kickoff_prompt: "fix the lint config",
+          },
+        ]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      }));
+
+    await handleBacklogCommand(vi.fn());
+    await handleBacklogCommand(vi.fn());
+
+    const reply = vi.fn();
+    handleTakeCommand("/take 1", makeGameState(), vi.fn(), reply, {
+      setInputValue: vi.fn(),
+    });
+
+    expect(reply.mock.calls[0]?.[0].content).toContain("not found");
+  });
+
+  it("rejects ambiguous ticket ID prefixes instead of claiming the first match", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: "ABCDEF12-1111",
+          title: "First ticket",
+          description: "Regular ticket",
+          technical_debt: 4,
+          kickoff_prompt: "first prompt",
+        },
+        {
+          id: "ABCDEF12-2222",
+          title: "Second ticket",
+          description: "Regular ticket",
+          technical_debt: 8,
+          kickoff_prompt: "second prompt",
+        },
+      ]),
+    }));
+
+    await handleBacklogCommand(vi.fn());
+
+    const setState = vi.fn();
+    const reply = vi.fn();
+    handleTakeCommand("/take ABCDEF12", makeGameState(), setState, reply, {
+      setInputValue: vi.fn(),
+    });
+
+    expect(setState).not.toHaveBeenCalled();
+    expect(reply.mock.calls[0]?.[0].content).toContain("ambiguous");
+  });
+
+  it("allows unique ticket ID prefixes for manual /take commands", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: "ABCDEF12-1111",
+          title: "First ticket",
+          description: "Regular ticket",
+          technical_debt: 4,
+          kickoff_prompt: "first prompt",
+        },
+        {
+          id: "ABCDE999-2222",
+          title: "Second ticket",
+          description: "Regular ticket",
+          technical_debt: 8,
+          kickoff_prompt: "second prompt",
+        },
+      ]),
+    }));
+
+    await handleBacklogCommand(vi.fn());
+
+    const setState = vi.fn();
+    const reply = vi.fn();
+    const onSuggestedReply = vi.fn();
+    handleTakeCommand("/take ABCDEF12", makeGameState(), setState, reply, {
+      setInputValue: vi.fn(),
+      onSuggestedReply,
+    });
+
+    expect(setState).toHaveBeenCalledOnce();
+    expect(reply.mock.calls[0]?.[0].content).toContain("ABCDEF12-1111");
+    expect(onSuggestedReply).toHaveBeenCalledWith("first prompt");
+  });
+
   it("renders a filtered backlog header for valid category filters", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -181,6 +315,44 @@ describe("premium backlog handling", () => {
     );
     expect(reply.mock.calls[0]?.[0].content).toContain("[ FILTER ACTIVE: MELT (Mainframes / Legacy) ]");
     expect(reply.mock.calls[0]?.[0].content).not.toContain("Want specific trauma?");
+  });
+
+  it("derives the pro hash from the stored license key for paid backlog requests", async () => {
+    const digestMock = vi.fn().mockResolvedValue(new Uint8Array([0xde, 0xad, 0xbe, 0xef]).buffer);
+    Object.defineProperty(globalThis, "crypto", {
+      value: {
+        subtle: {
+          digest: digestMock,
+        },
+      },
+      configurable: true,
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: "MELT-02",
+          title: "MELT Unpick the Mainframe Ritual",
+          description: "Regular ticket",
+          technical_debt: 55,
+          kickoff_prompt: "touch the cobol",
+          category_prefix: "MELT",
+          category_label: "Mainframes / Legacy",
+          is_locked: false,
+          tier: "premium",
+        },
+      ]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await handleBacklogCommand(vi.fn(), { category: "MELT", paidUser: true, proKey: "COPE-123" });
+
+    expect(digestMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/tickets/community?category=MELT"),
+      expect.objectContaining({ headers: { "x-pro-key-hash": "deadbeef" } }),
+    );
   });
 
   it("blocks premium category filters for free users before any request is made", async () => {
