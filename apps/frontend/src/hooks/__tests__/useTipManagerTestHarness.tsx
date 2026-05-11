@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { act } from "react";
 import { createRef, forwardRef, useImperativeHandle, useState, type RefObject } from "react";
 import { createRoot, type Root } from "react-dom/client";
