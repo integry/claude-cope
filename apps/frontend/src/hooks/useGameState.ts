@@ -98,6 +98,7 @@ export function useGameState() {
   const [state, setState] = useState<GameState>(loadState);
   const stateRef = useRef(state);
   const confirmedActiveThemeRef = useRef(state.activeTheme);
+  const optimisticActiveThemeRef = useRef<string | null>(null);
   const themeMutationVersionRef = useRef(0);
   const themeUpdateRequestIdRef = useRef(0);
   const [offlineTDEarned, setOfflineTDEarned] = useState(0);
@@ -109,7 +110,7 @@ export function useGameState() {
       const nextState = applyServerProfile(prev, profile);
       if (!opts?.preserveOptimisticActiveTheme) return nextState;
 
-      const optimisticTheme = prev.activeTheme;
+      const optimisticTheme = optimisticActiveThemeRef.current ?? stateRef.current.activeTheme;
       const hasNewerOptimisticTheme = optimisticTheme !== previouslyConfirmedTheme;
       if (!hasNewerOptimisticTheme || !nextState.unlockedThemes.includes(optimisticTheme)) {
         return nextState;
@@ -292,6 +293,7 @@ export function useGameState() {
     const requestId = themeMutationVersionRef.current + 1;
     themeMutationVersionRef.current = requestId;
     themeUpdateRequestIdRef.current = requestId;
+    optimisticActiveThemeRef.current = themeId;
     stateRef.current = { ...current, activeTheme: themeId };
 
     setState((prev) => {
@@ -304,10 +306,12 @@ export function useGameState() {
     updateThemeServer(current.username, themeId, current.proKeyHash).then((result) => {
       if (themeUpdateRequestIdRef.current !== requestId) return;
       if (result.success && result.profile) {
+        optimisticActiveThemeRef.current = null;
         mergeServerProfile(result.profile);
         return;
       }
       if (!result.success) {
+        optimisticActiveThemeRef.current = null;
         setState((prev) => {
           const rollbackThemeId = prev.unlockedThemes.includes(confirmedActiveThemeRef.current) ? confirmedActiveThemeRef.current : "default";
           return applyThemeEntitlementFailure({ ...prev, activeTheme: rollbackThemeId }, result.error, result.errorCode);
@@ -315,6 +319,7 @@ export function useGameState() {
       }
     }).catch(() => {
       if (themeUpdateRequestIdRef.current !== requestId) return;
+      optimisticActiveThemeRef.current = null;
       setState((prev) => {
         const rollbackThemeId = prev.unlockedThemes.includes(confirmedActiveThemeRef.current) ? confirmedActiveThemeRef.current : "default";
         return applyThemeEntitlementFailure({ ...prev, activeTheme: rollbackThemeId }, "Network error");
