@@ -151,6 +151,62 @@ body {
   box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.2);
 }
 
+.terminal-buddy-overlay {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+.terminal-bottom-chrome {
+  align-items: flex-end;
+}
+
+.terminal-buddy-display {
+  text-shadow: 0 0 12px rgba(251, 146, 60, 0.22);
+}
+
+.terminal-buddy-dock {
+  display: flex;
+  align-items: flex-end;
+  flex: 0 0 auto;
+  align-self: flex-end;
+  max-width: min(100%, 24rem);
+  padding: 0 0.9rem 0.4rem 0;
+}
+
+.terminal-buddy-status {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-align: right;
+  text-shadow: 0 0 12px rgba(251, 146, 60, 0.22);
+}
+
+.terminal-buddy-display pre {
+  display: block;
+  overflow: visible;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .terminal-buddy-display {
+    font-size: 0.625rem;
+    line-height: 1.1;
+  }
+
+  .terminal-buddy-dock {
+    padding: 0 0.9rem 0.4rem;
+  }
+
+  .terminal-buddy-status {
+    justify-content: flex-end;
+  }
+}
+
 .terminal-command-line {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.035) 100%);

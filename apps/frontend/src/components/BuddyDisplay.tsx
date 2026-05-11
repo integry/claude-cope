@@ -1,32 +1,85 @@
 import { useEffect, useState } from "react";
 import { BUDDY_ICONS } from "./buddyConstants";
 
-export function BuddyDisplay({ type, isShiny }: { type: string | null; isShiny: boolean }) {
+type BuddyDisplayProps = {
+  type: string | null;
+  isShiny: boolean;
+  className?: string;
+};
+
+type BuddyWatcherStatusProps = {
+  type: string | null;
+  isShiny: boolean;
+  className?: string;
+};
+
+function getBuddyArt(type: string, blink: boolean) {
+  let art = BUDDY_ICONS[type] ?? "🐾";
+  if (!blink) {
+    return art;
+  }
+
+  if (type === "Agile Snail") {
+    return art.replace("@..@", "@--@");
+  }
+
+  return art.replace(/O/g, "-").replace(/o\.o/g, "-.-").replace(/o/g, "-");
+}
+
+function getBuddyWatcherCopy(type: string, isShiny: boolean) {
+  return isShiny ? `Shiny ${type} is watching...` : `${type} is watching...`;
+}
+
+export function BuddyWatcherStatus({
+  type,
+  isShiny,
+  className = "",
+}: BuddyWatcherStatusProps) {
+  if (!type) return null;
+
+  return (
+    <div
+      className={
+        `terminal-buddy-status ${isShiny ? "text-amber-300" : "text-orange-400"} ${className}`.trim()
+      }
+    >
+      <span>{getBuddyWatcherCopy(type, isShiny)}</span>
+    </div>
+  );
+}
+
+export function BuddyDisplay({ type, isShiny, className = "" }: BuddyDisplayProps) {
   const [blink, setBlink] = useState(false);
 
   useEffect(() => {
+    let blinkTimeout: ReturnType<typeof setTimeout> | null = null;
+
     const interval = setInterval(() => {
       setBlink(true);
-      setTimeout(() => setBlink(false), 200);
+      if (blinkTimeout) {
+        clearTimeout(blinkTimeout);
+      }
+      blinkTimeout = setTimeout(() => {
+        setBlink(false);
+        blinkTimeout = null;
+      }, 200);
     }, 4000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      if (blinkTimeout) {
+        clearTimeout(blinkTimeout);
+      }
+    };
   }, []);
 
   if (!type) return null;
 
-  let art = BUDDY_ICONS[type] ?? "🐾";
-  if (blink) {
-    if (type === "Agile Snail") {
-      art = art.replace("@..@", "@--@");
-    } else {
-      art = art.replace(/O/g, "-").replace(/o\.o/g, "-.-").replace(/o/g, "-");
-    }
-  }
+  const art = getBuddyArt(type, blink);
 
   return (
-    <div className={`text-xs mt-2 mb-4 text-center ${isShiny ? "text-amber-300" : "text-orange-400"}`}>
-      <pre className="font-mono whitespace-pre inline-block">{art}</pre>
-      <div>{isShiny ? `✨ Shiny ${type} ✨` : type} is watching...</div>
+    <div className={`text-xs ${isShiny ? "text-amber-300" : "text-orange-400"} ${className}`.trim()}>
+      <pre className="font-mono whitespace-pre">{art}</pre>
     </div>
   );
 }

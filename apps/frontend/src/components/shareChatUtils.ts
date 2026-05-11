@@ -7,7 +7,13 @@
 
 import { parseSegments, drawStyledLine, wrapText } from "./shareChatTextUtils";
 import { SHARE_PUNCHLINES } from "./sharePunchlines";
-import { BUDDY_ICONS } from "./buddyConstants";
+import {
+  BUDDY_ICONS,
+  BUDDY_TEXT_GAP,
+  extractBuddyInterjectionBlock,
+  formatBuddyInterjection,
+  parseBuddyInterjection,
+} from "./buddyConstants";
 
 export type ChatMessage = {
   role: "user" | "system";
@@ -74,26 +80,11 @@ export async function renderChatCard(userMessage: string, systemMessage: string,
   const userPrefixWidth = ctx.measureText(userPrefix).width;
   const userLines = wrapText(ctx, userMessage, contentMaxWidth - userPrefixWidth);
 
-  // Detect buddy ASCII art prefix in system message
-  let buddyArtLines: string[] = [];
-  let buddyLabelLine: string | null = null;
-  let systemBody = systemMessage;
-  for (const [, art] of Object.entries(BUDDY_ICONS)) {
-    if (systemMessage.startsWith(art)) {
-      buddyArtLines = art.split("\n");
-      const afterArt = systemMessage.slice(art.length);
-      const labelMatch = afterArt.match(/^\n(\[.+?\].+?)(?:\n|$)/);
-      if (labelMatch?.[1]) {
-        buddyLabelLine = labelMatch[1];
-        systemBody = afterArt.slice(labelMatch[0].length);
-      } else {
-        systemBody = afterArt.replace(/^\n/, "");
-      }
-      break;
-    }
-  }
+  const buddyBlock = extractBuddyInterjectionBlock(systemMessage);
+  const buddyLines = getBuddyRenderLines(ctx, buddyBlock?.block, contentMaxWidth);
+  const systemBody = buddyBlock ? buddyBlock.body : systemMessage;
 
-  const systemLines = wrapText(ctx, systemBody, contentMaxWidth);
+  const systemLines = systemBody === "" ? [] : wrapText(ctx, systemBody, contentMaxWidth);
   const headerText = username ?? "";
 
   const PARAGRAPH_BREAK_HEIGHT = Math.round(lineHeight * PARAGRAPH_BREAK_RATIO);
@@ -104,8 +95,8 @@ export async function renderChatCard(userMessage: string, systemMessage: string,
 
   const userBlockHeight = calcBlockHeight(userLines);
   const systemBlockHeight = calcBlockHeight(systemLines);
-  const buddyBlockHeight = (buddyArtLines.length + (buddyLabelLine ? 1 : 0)) * lineHeight;
-  const buddySpacing = buddyArtLines.length > 0 ? Math.round(lineHeight * SPACING_RATIO) : 0;
+  const buddyBlockHeight = buddyLines.length * lineHeight;
+  const buddySpacing = buddyLines.length > 0 ? Math.round(lineHeight * SPACING_RATIO) : 0;
   const spacingBetween = Math.round(lineHeight * SPACING_RATIO);
 
   const fixedHeight = HEADER_BAR_HEIGHT + CANVAS_PADDING + userBlockHeight + spacingBetween + buddyBlockHeight + buddySpacing + CANVAS_PADDING;
@@ -148,15 +139,11 @@ export async function renderChatCard(userMessage: string, systemMessage: string,
   y += spacingBetween;
 
   // Draw buddy ASCII art left-aligned in orange, preserving leading whitespace
-  if (buddyArtLines.length > 0) {
+  if (buddyLines.length > 0) {
     ctx.fillStyle = BUDDY_COLOR;
     ctx.font = font;
-    for (const artLine of buddyArtLines) {
-      ctx.fillText(artLine, CANVAS_PADDING, y);
-      y += lineHeight;
-    }
-    if (buddyLabelLine) {
-      ctx.fillText(buddyLabelLine, CANVAS_PADDING, y);
+    for (const buddyLine of buddyLines) {
+      ctx.fillText(buddyLine, CANVAS_PADDING, y);
       y += lineHeight;
     }
     y += buddySpacing;
@@ -178,6 +165,30 @@ export async function renderChatCard(userMessage: string, systemMessage: string,
   });
 
   return canvas;
+}
+
+function getBuddyRenderLines(
+  ctx: CanvasRenderingContext2D,
+  block: string | undefined,
+  contentMaxWidth: number,
+): string[] {
+  if (!block) {
+    return [];
+  }
+
+  const parsed = parseBuddyInterjection(block);
+  if (!parsed) {
+    return block.split("\n");
+  }
+
+  const artLines = (BUDDY_ICONS[parsed.type] ?? "").split("\n").map((line) => line.replace(/\s+$/, ""));
+  const artColumnWidth = Math.max(...artLines.map((line) => ctx.measureText(line).width));
+  const gapWidth = ctx.measureText(BUDDY_TEXT_GAP).width;
+  const charWidth = Math.max(ctx.measureText("M").width, 1);
+  const availableTextWidth = Math.max(contentMaxWidth - artColumnWidth - gapWidth, charWidth * 8);
+  const wrapWidth = Math.max(8, Math.floor(availableTextWidth / charWidth));
+
+  return formatBuddyInterjection(parsed.type, parsed.speech, wrapWidth).split("\n");
 }
 
 function truncateLines(
