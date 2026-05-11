@@ -42,7 +42,7 @@ function BacklogTicketRow({
 }) {
   return (
     <div
-      className="border-b border-dashed border-cyan-400/40 py-2 last:border-b-0 md:grid md:grid-cols-[3rem_7.5rem_minmax(0,1fr)_5rem_6rem] md:items-start md:gap-4"
+      className="border-b border-dashed border-cyan-400/40 py-2 last:border-b-0 md:grid md:grid-cols-[3rem_7rem_minmax(0,1fr)_5rem_5.5rem] md:items-start md:gap-3"
     >
       <div className="hidden text-slate-300 md:block">[{ticket.row}]</div>
       <div className="hidden text-cyan-200 md:block">
@@ -89,14 +89,14 @@ export function BacklogMessage({
   const footerLineCounts = new Map<string, number>();
 
   return (
-    <div className="max-w-full font-mono text-[13px] leading-relaxed text-cyan-100">
+    <div className="max-w-full font-mono text-[13px] leading-relaxed text-cyan-100 md:pr-3">
       <div className="border-y border-dashed border-cyan-400/60 py-2">
         <div className="text-cyan-200">{backlog.title}</div>
         {backlog.filterHeader && <div className="mt-1 text-cyan-300/85">{backlog.filterHeader}</div>}
         {backlog.infoLine && <div className="mt-1 text-slate-400">{renderLine(backlog.infoLine, onSlashCommand)}</div>}
       </div>
 
-      <div className="hidden border-b border-dashed border-cyan-400/40 py-2 text-[11px] uppercase tracking-[0.2em] text-slate-400 md:grid md:grid-cols-[3rem_7.5rem_minmax(0,1fr)_5rem_6rem] md:gap-4">
+      <div className="hidden border-b border-dashed border-cyan-400/40 py-2 text-[11px] uppercase tracking-[0.2em] text-slate-400 md:grid md:grid-cols-[3rem_7rem_minmax(0,1fr)_5rem_5.5rem] md:gap-3">
         <div>#</div>
         <div>ID</div>
         <div>Title</div>
