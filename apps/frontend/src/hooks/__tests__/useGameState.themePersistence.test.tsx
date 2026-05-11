@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useGameState } from "../useGameState";
 import { createServerProfile } from "../../test/createServerProfile";
+import { ALL_ACHIEVEMENTS } from "../../game/achievements";
 import type { GameState } from "../gameStateUtils";
 import { STORAGE_KEY } from "../storageKey";
 
@@ -28,7 +29,7 @@ vi.mock("../../api/profileApi", () => ({
   updateThemeServer: vi.fn(),
 }));
 
-import { buyThemeServer, fetchSessionProfile, updateThemeServer } from "../../api/profileApi";
+import { buyGeneratorServer, buyThemeServer, buyUpgradeServer, fetchSessionProfile, unlockAchievementServer, updateThemeServer, updateTicketServer } from "../../api/profileApi";
 
 function makeState(overrides: Partial<GameState> = {}): GameState {
   return {
@@ -389,5 +390,101 @@ describe("useGameState theme persistence", () => {
     });
 
     expect(hookState.state.activeTheme).toBe("matrix");
+  });
+
+  it("persists generator purchases through the paid session path without proKeyHash", async () => {
+    const request = deferred<{
+      success: boolean;
+      profile: ReturnType<typeof createServerProfile>;
+    }>();
+    vi.mocked(buyGeneratorServer).mockReturnValueOnce(request.promise);
+
+    act(() => {
+      expect(hookState.buyGenerator("intern", 1)).toBe(true);
+    });
+
+    expect(buyGeneratorServer).toHaveBeenCalledWith("alice", "intern", 1, undefined);
+    expect(hookState.state.inventory.intern).toBe(1);
+    expect(hookState.state.economy.currentTD).toBe(5900);
+
+    await act(async () => {
+      request.resolve({
+        success: true,
+        profile: createServerProfile({
+          current_td: 5900,
+          total_td: 6000,
+          inventory: { intern: 1 },
+        }),
+      });
+      await request.promise;
+    });
+
+    await vi.waitFor(() => expect(hookState.state.inventory).toEqual({ intern: 1 }));
+    await vi.waitFor(() => expect(hookState.state.economy.currentTD).toBe(5900));
+  });
+
+  it("persists upgrade purchases through the paid session path without proKeyHash", async () => {
+    remountWithState(makeState({
+      inventory: { intern: 1 },
+      upgrades: [],
+    }));
+    const request = deferred<{
+      success: boolean;
+      profile: ReturnType<typeof createServerProfile>;
+    }>();
+    vi.mocked(buyUpgradeServer).mockReturnValueOnce(request.promise);
+
+    act(() => {
+      expect(hookState.buyUpgrade("intern-boost-copypaster")).toBe(true);
+    });
+
+    expect(buyUpgradeServer).toHaveBeenCalledWith("alice", "intern-boost-copypaster", undefined);
+
+    await act(async () => {
+      request.resolve({
+        success: true,
+        profile: createServerProfile({
+          current_td: 5000,
+          total_td: 6000,
+          inventory: { intern: 1 },
+          upgrades: ["intern-boost-copypaster"],
+        }),
+      });
+      await request.promise;
+    });
+
+    await vi.waitFor(() => expect(hookState.state.upgrades).toEqual(["intern-boost-copypaster"]));
+    await vi.waitFor(() => expect(hookState.state.economy.currentTD).toBe(5000));
+  });
+
+  it("persists achievement unlocks through the paid session path without proKeyHash", () => {
+    const achievementId = ALL_ACHIEVEMENTS[0]?.id ?? "the_leaker";
+    vi.mocked(unlockAchievementServer).mockResolvedValueOnce({ success: true });
+
+    act(() => {
+      expect(hookState.unlockAchievement(achievementId)).toBe(true);
+    });
+
+    expect(unlockAchievementServer).toHaveBeenCalledWith("alice", achievementId, undefined);
+    expect(hookState.state.achievements).toContain(achievementId);
+  });
+
+  it("persists ticket progress updates through the paid session path without proKeyHash", () => {
+    vi.mocked(updateTicketServer).mockResolvedValueOnce({ success: true });
+    remountWithState(makeState({
+      activeTicket: { id: "T-1", title: "Ship it", sprintProgress: 1, sprintGoal: 3 },
+    }));
+
+    act(() => {
+      hookState.updateTicketProgress(1);
+    });
+
+    expect(updateTicketServer).toHaveBeenCalledWith("alice", {
+      id: "T-1",
+      title: "Ship it",
+      sprintProgress: 2,
+      sprintGoal: 3,
+    }, undefined);
+    expect(hookState.state.activeTicket).toMatchObject({ sprintProgress: 2 });
   });
 });

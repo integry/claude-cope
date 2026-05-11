@@ -223,11 +223,12 @@ interface UseTerminalEffectsArgs {
   history: Message[];
   setHistory: Dispatch<SetStateAction<Message[]>>;
   setState: Dispatch<SetStateAction<GameState>>;
+  totalTDEarned: number;
   offlineTDEarned: number;
   clearOfflineTDEarned: () => void;
 }
 
-export function useTerminalEffects({ history, setHistory, setState, offlineTDEarned, clearOfflineTDEarned }: UseTerminalEffectsArgs) {
+export function useTerminalEffects({ history, setHistory, setState, totalTDEarned, offlineTDEarned, clearOfflineTDEarned }: UseTerminalEffectsArgs) {
   const [isBooting, setIsBooting] = useState<boolean>(() => {
     if (history.length > 0) return false;
     const params = new URLSearchParams(window.location.search);
@@ -253,7 +254,7 @@ export function useTerminalEffects({ history, setHistory, setState, offlineTDEar
       "[OK] Disabling all unit tests...",
       "[OK] Replacing documentation with TODO comments...",
       "[OK] Boot complete. Welcome to Claude Cope.",
-      `[INFO] ${getRandomTip()}`,
+      `[INFO] ${getRandomTip({ totalTDEarned })}`,
     ];
     const interval = 3000 / bootLines.length;
     const timeouts: ReturnType<typeof setTimeout>[] = [];
@@ -266,7 +267,7 @@ export function useTerminalEffects({ history, setHistory, setState, offlineTDEar
     const finishId = setTimeout(() => setIsBooting(false), 3000);
     timeouts.push(finishId);
     return () => timeouts.forEach(clearTimeout);
-  }, [isBooting, setHistory]);
+  }, [isBooting, setHistory, totalTDEarned]);
 
   // Welcome-back message for offline TD earnings
   useEffect(() => {

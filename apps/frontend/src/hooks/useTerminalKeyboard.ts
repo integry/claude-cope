@@ -2,6 +2,8 @@ import { useRef, useEffect, useCallback, type RefObject, type KeyboardEvent, typ
 import type { Message } from "./useGameState";
 import { resolveSlashMenuSelection } from "../components/slashCommands";
 
+type AbortHandle = { abort: () => void };
+
 export function useTerminalKeyboard({
   slashQuery,
   slashIndex,
@@ -59,7 +61,7 @@ export function useTerminalKeyboard({
   showParty: boolean;
   showUpgrade: boolean;
   brrrrrrIntervalRef: RefObject<ReturnType<typeof setInterval> | null>;
-  abortControllerRef: RefObject<AbortController | null>;
+  abortControllerRef: RefObject<AbortHandle | null>;
   freeTierDelayRef: RefObject<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>;
   inputRef: RefObject<HTMLInputElement | null>;
   setSlashIndex: (val: number | ((prev: number) => number)) => void;

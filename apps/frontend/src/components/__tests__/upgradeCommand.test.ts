@@ -132,8 +132,11 @@ describe("/upgrade command", () => {
 
     handleUpgradeCommand(ctx);
 
-    // setState should NOT be called — no inventory mutation
-    expect(ctx.setState).not.toHaveBeenCalled();
+    expect(ctx.setState).toHaveBeenCalledOnce();
+    const update = (ctx.setState as ReturnType<typeof vi.fn>).mock.calls[0]![0] as (prev: GameState) => GameState;
+    const nextState = update(ctx.state);
+    expect(nextState.inventory).toEqual({ jokes: 5 });
+    expect(nextState.commandUsage).toEqual({ "/upgrade": 1 });
     // The inventory object itself should be untouched
     expect(ctx.state.inventory).toEqual({ jokes: 5 });
   });
@@ -144,6 +147,19 @@ describe("/upgrade command", () => {
     handleUpgradeCommand(ctx);
 
     expect(window.history.pushState).toHaveBeenCalledWith(null, "", "/upgrade");
+  });
+
+  it("still opens the overlay when window history is unavailable", () => {
+    const ctx = makeCtx();
+    vi.unstubAllGlobals();
+    vi.stubGlobal("window", {});
+    try {
+      expect(() => handleUpgradeCommand(ctx)).not.toThrow();
+      expect(ctx.closeAllOverlays).toHaveBeenCalledOnce();
+      expect(ctx.setShowUpgrade).toHaveBeenCalledWith(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("clears loading messages from history before opening the overlay", () => {

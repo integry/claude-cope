@@ -10,11 +10,11 @@ import { applyServerProfile } from "../hooks/profileSync";
 import { applyPaidEntitlementAuthFailure } from "../hooks/themePurchaseState";
 import { isPaidUser } from "../hooks/gameStateUtils";
 import { updateTicketServer } from "../api/profileApi";
+import { ALL_SLASH_COMMANDS } from "./slashCommands";
 
 import type { GameState } from "../hooks/useGameState";
 import type { Message } from "./Terminal";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
-import { getRandomTip } from "../game/tips";
 import { buildAchievementBox } from "./achievementBox";
 import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand, formatLockedTicketPrompt, parseBacklogCategoryArgument } from "./ticketCommands";
 import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
@@ -60,7 +60,57 @@ export interface SlashCommandContext {
   playChime: () => void;
   playError: () => void;
   setActiveTheme: (themeId: string) => void;
+  onValidSlashCommand?: (baseCommand: string) => void;
+  queueSlashCommandAccounting?: (baseCommand: string) => void;
+  flushSlashCommandAccounting?: () => void;
+  finalizeSlashCommand?: () => void;
 }
+
+type SlashCommandAccountingPolicy = "tracked" | "conditional";
+type SupportedSlashCommand = (typeof ALL_SLASH_COMMANDS)[number];
+type SlashCommandAccountingOptions = {
+  notifyValidSlashCommand?: boolean;
+};
+
+export const SLASH_COMMAND_ACCOUNTING_POLICY: Record<SupportedSlashCommand, SlashCommandAccountingPolicy> = {
+  "/backlog": "tracked",
+  "/take": "conditional",
+  "/clear": "tracked",
+  "/support": "tracked",
+  "/preworkout": "tracked",
+  "/buddy": "conditional",
+  "/store": "conditional",
+  "/synergize": "tracked",
+  "/compact": "tracked",
+  "/who": "tracked",
+  "/ping": "conditional",
+  "/help": "tracked",
+  "/about": "tracked",
+  "/privacy": "tracked",
+  "/terms": "tracked",
+  "/contact": "tracked",
+  "/fast": "tracked",
+  "/voice": "tracked",
+  "/blame": "tracked",
+  "/brrrrrr": "tracked",
+  "/feedback": "tracked",
+  "/bug": "tracked",
+  "/key": "conditional",
+  "/upgrade": "tracked",
+  "/leaderboard": "tracked",
+  "/achievements": "tracked",
+  "/profile": "tracked",
+  "/ticket": "tracked",
+  "/accept": "conditional",
+  "/abandon": "conditional",
+  "/alias": "conditional",
+  "/model": "conditional",
+  "/user": "tracked",
+  "/sync": "conditional",
+  "/shill": "tracked",
+  "/party": "tracked",
+  "/theme": "conditional",
+};
 
 const clearLoading = (prev: Message[]) => prev.filter((m) => m.role !== "loading");
 
@@ -172,7 +222,6 @@ function handleClearCommand(ctx: SlashCommandContext): boolean {
       ctx.unlockAchievement("the_nuclear_option");
       messages.push({ role: "warning", content: buildAchievementBox("the_nuclear_option") });
     }
-    messages.push({ role: "system", content: getRandomTip() });
     ctx.setHistory(messages);
     ctx.setIsProcessing(false);
 
@@ -265,6 +314,7 @@ export function handlePingCommand(command: string, ctx: SlashCommandContext, rep
     return true;
   }
   const ticketPayload = { id: ticket.id, title: ticket.title, sprintGoal: ticket.sprintGoal, sprintProgress: ticket.sprintProgress };
+  markValidSlashCommand(ctx, "/ping");
   if (target) {
     ctx.sendPing(ticketPayload, PING_COST, target);
     reply({ role: "system", content: pickRandom(PING_SENT_TARGETED_MESSAGES)(target, ticket.id, PING_COST) });
@@ -281,9 +331,76 @@ function openOverlay(ctx: SlashCommandContext, open: () => void) {
   open();
 }
 
+function applySlashCommandAccounting(
+  ctx: SlashCommandContext,
+  baseCommand: string,
+  options?: SlashCommandAccountingOptions,
+): void {
+  ctx.setState((prev) => ({
+    ...prev,
+    commandUsage: {
+      ...prev.commandUsage,
+      [baseCommand]: (prev.commandUsage[baseCommand] ?? 0) + 1,
+    },
+  }));
+  if (options?.notifyValidSlashCommand !== false) {
+    ctx.onValidSlashCommand?.(baseCommand);
+  }
+}
+
+function markValidSlashCommand(ctx: SlashCommandContext, baseCommand: string): void {
+  if (ctx.queueSlashCommandAccounting) {
+    ctx.queueSlashCommandAccounting(baseCommand);
+    return;
+  }
+
+  applySlashCommandAccounting(ctx, baseCommand);
+}
+
+function completeAsyncSlashCommand(promise: Promise<unknown>, ctx: SlashCommandContext): "async" {
+  void promise.finally(() => {
+    if (ctx.finalizeSlashCommand) {
+      ctx.finalizeSlashCommand();
+      return;
+    }
+
+    ctx.setIsProcessing(false);
+  });
+
+  return "async";
+}
+
+function getSlashCommandAccountingPolicy(baseCommand: string): SlashCommandAccountingPolicy {
+  if (!ALL_SLASH_COMMANDS.includes(baseCommand)) {
+    return "conditional";
+  }
+  const policy = SLASH_COMMAND_ACCOUNTING_POLICY[baseCommand as SupportedSlashCommand];
+  if (!policy) {
+    throw new Error(`Missing slash-command accounting policy for ${baseCommand}`);
+  }
+  return policy;
+}
+
 export function handleUpgradeCommand(ctx: SlashCommandContext): void {
+  openUpgradeFlow(ctx, { trackCommandUsage: true });
+}
+
+function pushHistoryPath(pathname: string): void {
+  if (typeof window === "undefined" || typeof window.history?.pushState !== "function") {
+    return;
+  }
+  window.history.pushState(null, "", pathname);
+}
+
+function openUpgradeFlow(
+  ctx: SlashCommandContext,
+  options: { trackCommandUsage: boolean },
+): void {
+  if (options.trackCommandUsage) {
+    markValidSlashCommand(ctx, "/upgrade");
+  }
   openOverlay(ctx, () => ctx.setShowUpgrade(true));
-  window.history.pushState(null, "", "/upgrade");
+  pushHistoryPath("/upgrade");
 }
 
 function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
@@ -291,6 +408,7 @@ function handleStoreCommand(ctx: SlashCommandContext, reply: Reply): boolean {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/store", reason: SlashCommandFailureReasons.LOCKED });
     reply({ role: "error", content: "[❌ Error] Store access denied. Requires **1,000 Technical Debt**." });
   } else {
+    markValidSlashCommand(ctx, "/store");
     openOverlay(ctx, () => ctx.setShowStore(true));
   }
   return true;
@@ -304,17 +422,20 @@ function handleBuddyCommand(command: string, ctx: SlashCommandContext, reply: Re
       reply({ role: "system", content: "[❌] You don't have a buddy to dismiss. Use `/buddy` to roll for one." });
       return true;
     }
+    markValidSlashCommand(ctx, "/buddy");
     const dismissed = ctx.state.buddy.type;
     ctx.setState((prev) => ({ ...prev, buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 } }));
     reply({ role: "system", content: `[✓] **${dismissed}** has been dismissed. They didn't even say goodbye.` });
     return true;
   }
   if (ctx.state.buddy.type) {
+    markValidSlashCommand(ctx, "/buddy");
     ctx.setBuddyPendingConfirm(true);
     reply({ role: "system", content: `[⚠️] You already have a buddy (**${ctx.state.buddy.type}**). Re-rolling will replace it. Are you sure? (y/n) (Hint: use \`/buddy remove\` to dismiss)` });
     return true;
   }
   const roll = Math.random() * 100;
+  markValidSlashCommand(ctx, "/buddy");
   const [buddyType, buddyIcon] = roll < 50 ? ["Agile Snail", "🐌"] : roll < 75 ? ["Sarcastic Clippy", "📎"] : roll < 88 ? ["Grumpy Senior", "👴"] : roll < 97 ? ["Panic Intern", "😰"] : ["10x Dragon", "🐉"];
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
@@ -328,6 +449,7 @@ function handleThemeCommand(command: string, ctx: SlashCommandContext, reply: Re
   const unlocked = THEMES.filter((t) => ctx.state.unlockedThemes.includes(t.id));
 
   if (!arg) {
+    markValidSlashCommand(ctx, "/theme");
     const unlockedLines = unlocked.map((t) => {
       const active = t.id === ctx.state.activeTheme ? " ← active" : "";
       return `  ${t.id}${active}`;
@@ -356,10 +478,12 @@ function handleThemeCommand(command: string, ctx: SlashCommandContext, reply: Re
   }
 
   if (ctx.state.activeTheme === theme.id) {
+    markValidSlashCommand(ctx, "/theme");
     reply({ role: "system", content: `[🎨] Theme \`${theme.name}\` is already active.` });
     return true;
   }
 
+  markValidSlashCommand(ctx, "/theme");
   ctx.setActiveTheme(theme.id);
   reply({ role: "system", content: `[🎨] Theme switched to **${theme.name}**. Your terminal has been reskinned.` });
   return true;
@@ -499,6 +623,7 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
     return true;
   } else if (command === "/brrrrrr") {
     ctx.setHistory((prev) => [...clearLoading(prev), { role: "system", content: "[🔥 BRRRRRR] Initiating nested for-loop flood... Press Ctrl+C to stop before your CPU melts!" }]);
+    ctx.flushSlashCommandAccounting?.();
     let count = 0;
     ctx.brrrrrrIntervalRef.current = setInterval(() => {
       const depth = Math.floor(Math.random() * 5) + 1;
@@ -511,7 +636,11 @@ function handleNewCommand(command: string, ctx: SlashCommandContext, reply: Repl
         clearInterval(ctx.brrrrrrIntervalRef.current!);
         ctx.brrrrrrIntervalRef.current = null;
         ctx.setHistory((prev) => [...prev, { role: "error", content: "[💀] CPU melted. Process terminated by thermal shutdown." }]);
-        ctx.setIsProcessing(false);
+        if (ctx.finalizeSlashCommand) {
+          ctx.finalizeSlashCommand();
+        } else {
+          ctx.setIsProcessing(false);
+        }
       }
     }, 100);
     return true;
@@ -546,6 +675,7 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
     return;
   }
   const oldName = ctx.state.username;
+  markValidSlashCommand(ctx, "/alias");
   try {
     const res = await fetch(`${API_BASE}/api/account/update-alias`, {
       method: "POST",
@@ -595,6 +725,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   const isPro = isPaidUser(ctx.state);
 
   if (!modelName) {
+    markValidSlashCommand(ctx, "/model");
     const current = ctx.state.selectedModel ?? "default";
     const modelList = COPE_MODELS.map((m) => {
       const costLabel = `${m.multiplier}x cost`;
@@ -614,6 +745,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   }
 
   if (modelName === "clear") {
+    markValidSlashCommand(ctx, "/model");
     ctx.setState((prev) => {
       const { selectedModel: _, ...rest } = prev;
       return { ...rest } as GameState;
@@ -639,6 +771,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
     return;
   }
 
+  markValidSlashCommand(ctx, "/model");
   ctx.setState((prev) => ({ ...prev, selectedModel: modelName }));
 
   if (isBYOK) {
@@ -654,6 +787,7 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
   // Pending review-pings take precedence: they're time-boxed (60s) and you
   // get paid for accepting them, so the user almost certainly meant the ping.
   if (ctx.pendingReviewPing) {
+    markValidSlashCommand(ctx, "/accept");
     const { sender, amount } = ctx.pendingReviewPing;
     ctx.acceptReviewPing();
     reply({ role: "system", content: pickRandom(ACCEPT_REVIEW_MESSAGES)(sender, amount) });
@@ -667,11 +801,12 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.LOCKED });
     clearPendingOffer();
     reply({ role: "system", content: formatLockedTicketPrompt(offer) });
-    handleUpgradeCommand(ctx);
+    openUpgradeFlow(ctx, { trackCommandUsage: false });
   } else if (ctx.state.activeTicket) {
     track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/accept", reason: SlashCommandFailureReasons.ALREADY_ACTIVE });
     reply({ role: "error", content: pickRandom(ACCEPT_ALREADY_ACTIVE_MESSAGES)(ctx.state.activeTicket.title) });
   } else {
+    markValidSlashCommand(ctx, "/accept");
     clearPendingOffer();
     const newTicket = { id: offer.id, title: offer.title, sprintProgress: 0, sprintGoal: offer.technical_debt };
     ctx.setState((prev) => ({ ...prev, activeTicket: newTicket }));
@@ -691,6 +826,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
     reply({ role: "system", content: "[🔑] Usage: `/sync <COPE-XXX>` — Link your Polar license key to unlock Max tier." });
     return;
   }
+  markValidSlashCommand(ctx, "/sync");
   try {
     const current = ctx.state;
     const res = await fetch(`${API_BASE}/api/account/sync`, {
@@ -745,7 +881,7 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
   }
 }
 
-async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Promise<void> {
+async function handleShillCommand(reply: Reply): Promise<void> {
   const tweetText = encodeURIComponent("I'm mass-producing Technical Debt at mass velocity in Claude COPE — the idle game where every prompt is a mistake. https://claudecope.com");
   window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, "_blank");
   try {
@@ -767,14 +903,15 @@ async function handleShillCommand(_ctx: SlashCommandContext, reply: Reply): Prom
   }
 }
 
-function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | false {
+function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | boolean {
   if (command === "/key" || command.startsWith("/key ")) {
     if (!BYOK_ENABLED) {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/key", reason: SlashCommandFailureReasons.DISABLED });
       reply({ role: "error", content: `[❌ Error] Command not found: \`/key\`` });
-      return false;
+      return true;
     }
-    import("./keyCommandHandler").then(async ({ handleKeyCommand }) => {
+    markValidSlashCommand(ctx, "/key");
+    return completeAsyncSlashCommand(import("./keyCommandHandler").then(async ({ handleKeyCommand }) => {
       // Create a mock setHistory that routes messages through reply
       const mockSetHistory = (action: React.SetStateAction<Message[]>) => {
         if (typeof action === "function") {
@@ -790,27 +927,81 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
         }
       };
       await handleKeyCommand(command, ctx.setState, mockSetHistory, ctx.state);
-      ctx.setIsProcessing(false);
-    });
-    return "async";
+    }), ctx);
   } else if (command.startsWith("/ticket")) {
-    handleTicketCommand(command, reply).then(() => ctx.setIsProcessing(false));
-    return "async";
+    return completeAsyncSlashCommand(handleTicketCommand(command, reply), ctx);
   } else if (command === "/backlog" || command.startsWith("/backlog ")) {
-    handleBacklogCommand(reply, {
+    const normalizedCategory = parseBacklogCategoryArgument(command) ?? undefined;
+    return completeAsyncSlashCommand(handleBacklogCommand(reply, {
       proKey: ctx.state.proKey,
       proKeyHash: ctx.state.proKeyHash,
-      category: parseBacklogCategoryArgument(command) ?? undefined,
+      category: normalizedCategory,
       paidUser: isPaidUser(ctx.state),
-    }).then(() => ctx.setIsProcessing(false));
-    return "async";
+    }), ctx);
   } else if (command === "/sync" || command.startsWith("/sync ")) {
-    handleSyncCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
-    return "async";
+    return completeAsyncSlashCommand(handleSyncCommand(command, ctx, reply), ctx);
   } else if (command === "/shill") {
-    handleShillCommand(ctx, reply).then(() => ctx.setIsProcessing(false));
-    return "async";
+    return completeAsyncSlashCommand(handleShillCommand(reply), ctx);
   }
+  return false;
+}
+
+function handleExtendedCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | boolean {
+  if (command === "/key" || command.startsWith("/key ")) {
+    return handleAsyncCommand(command, ctx, reply);
+  }
+
+  if (command === "/feedback" || command === "/bug") {
+    reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
+    return true;
+  }
+
+  if (command === "/upgrade") {
+    openUpgradeFlow(ctx, { trackCommandUsage: false });
+    return true;
+  }
+
+  const asyncResult = handleAsyncCommand(command, ctx, reply);
+  if (asyncResult === "async") return "async";
+
+  if (command.startsWith("/take")) {
+    const hadActiveTicket = Boolean(ctx.state.activeTicket);
+    const input = command.slice("/take".length).trim();
+    const handled = handleTakeCommand(command, ctx.state, ctx.setState, reply, {
+      setInputValue: ctx.setInputValue,
+      onAccept: ctx.playChime,
+      onSuggestedReply: ctx.onSuggestedReply,
+      onLocked: () => openUpgradeFlow(ctx, { trackCommandUsage: false }),
+    });
+    if (handled && input && !hadActiveTicket) markValidSlashCommand(ctx, "/take");
+    return handled;
+  }
+
+  if (command === "/accept") {
+    handleAcceptCommand(ctx, reply);
+    return true;
+  }
+
+  if (command === "/abandon") {
+    if (ctx.state.activeTicket) ctx.playError();
+    if (ctx.state.activeTicket) markValidSlashCommand(ctx, "/abandon");
+    handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
+    return true;
+  }
+
+  if (command.startsWith("/alias")) {
+    return completeAsyncSlashCommand(handleAliasCommand(command, ctx, reply), ctx);
+  }
+
+  if (command.startsWith("/model")) {
+    handleModelCommand(command, ctx, reply);
+    return true;
+  }
+
+  if (handleNewCommand(command, ctx, reply)) {
+    return command === "/brrrrrr" ? "async" : true;
+  }
+
   return false;
 }
 
@@ -818,45 +1009,18 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
 function dispatchCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | void {
   if (handleCoreCommand(command, ctx, reply)) {
     if (command === "/synergize") return;
-  } else if (command === "/key" || command.startsWith("/key ")) {
-    const asyncResult = handleAsyncCommand(command, ctx, reply);
-    if (asyncResult === "async") return "async";
-    // BYOK disabled — handleAsyncCommand already tracked SLASH_COMMAND_FAILED
-    // with reason: "disabled", so no additional tracking needed here.
-  } else if (command === "/feedback" || command === "/bug") {
-    reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
-  } else if (command === "/upgrade") {
-    handleUpgradeCommand(ctx);
+    return;
+  }
+
+  const extendedResult = handleExtendedCommand(command, ctx, reply);
+  if (extendedResult === "async") return "async";
+  if (extendedResult) return;
+
+  if (command.startsWith("/")) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: parseBaseCommand(command), reason: SlashCommandFailureReasons.UNKNOWN_COMMAND });
+    reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
   } else {
-    const asyncResult = handleAsyncCommand(command, ctx, reply);
-    if (asyncResult === "async") return "async";
-    if (!asyncResult) {
-      if (command.startsWith("/take")) {
-        handleTakeCommand(command, ctx.state, ctx.setState, reply, {
-          setInputValue: ctx.setInputValue,
-          onAccept: ctx.playChime,
-          onSuggestedReply: ctx.onSuggestedReply,
-          onLocked: () => handleUpgradeCommand(ctx),
-        });
-      } else if (command === "/accept") {
-        handleAcceptCommand(ctx, reply);
-      } else if (command === "/abandon") {
-        if (ctx.state.activeTicket) ctx.playError();
-        handleAbandonCommand(ctx.state, ctx.setState, ctx.addActiveTD, reply);
-      } else if (command.startsWith("/alias")) {
-        handleAliasCommand(command, ctx, reply).then(() => ctx.setIsProcessing(false));
-        return "async";
-      } else if (command.startsWith("/model")) {
-        handleModelCommand(command, ctx, reply);
-      } else if (handleNewCommand(command, ctx, reply)) {
-        if (command === "/brrrrrr") return "async";
-      } else if (command.startsWith("/")) {
-        track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: parseBaseCommand(command), reason: SlashCommandFailureReasons.UNKNOWN_COMMAND });
-        reply({ role: "error", content: `[❌ Error] Command not found: \`${command}\`` });
-      } else {
-        reply({ role: "system", content: `[✓] Executed \`${command}\`` });
-      }
-    }
+    reply({ role: "system", content: `[✓] Executed \`${command}\`` });
   }
 }
 
@@ -907,21 +1071,30 @@ export function executeSlashCommand(
     { role: "loading", content: getRandomLoadingPhrase() },
   ]);
 
+  const pendingAccounting = new Map<string, SlashCommandAccountingOptions | undefined>();
+  const flushPendingAccounting = (): void => {
+    pendingAccounting.forEach((options, baseCommand) => applySlashCommandAccounting(ctx, baseCommand, options));
+    pendingAccounting.clear();
+  };
+  const queueSlashCommandAccounting = (baseCommand: string, options?: SlashCommandAccountingOptions): void => {
+    pendingAccounting.set(baseCommand, options);
+  };
+
   const reply = (msg: Message): void => {
     ctx.setHistory((prev) => [...clearLoading(prev), msg]);
   };
 
-  // Track command usage for performance review brag card
   const baseCommand = parseBaseCommand(command);
-  if (baseCommand !== "/unknown") {
-    ctx.setState((prev) => ({
-      ...prev,
-      commandUsage: {
-        ...prev.commandUsage,
-        [baseCommand]: (prev.commandUsage[baseCommand] ?? 0) + 1,
-      },
-    }));
-  }
+  const accountingPolicy = getSlashCommandAccountingPolicy(baseCommand);
+  const accountingCtx: SlashCommandContext = {
+    ...ctx,
+    queueSlashCommandAccounting,
+    flushSlashCommandAccounting: flushPendingAccounting,
+    finalizeSlashCommand: () => {
+      flushPendingAccounting();
+      ctx.setIsProcessing(false);
+    },
+  };
 
   track(AnalyticsEvents.SLASH_COMMAND_ATTEMPTED, { command: baseCommand });
 
@@ -942,14 +1115,16 @@ export function executeSlashCommand(
     if (!hasPro && (!isBYOK || needsLicense)) {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: baseCommand, reason: SlashCommandFailureReasons.PRO_GATED });
       reply({ role: "error", content: proGatedMessage(baseCommand) });
-      ctx.setIsProcessing(false);
+      accountingCtx.finalizeSlashCommand?.();
       return;
     }
   }
 
   // /clear fires instantly — no fake processing delay
   if (command === "/clear") {
-    handleClearCommand(ctx);
+    queueSlashCommandAccounting(baseCommand, { notifyValidSlashCommand: false });
+    handleClearCommand(accountingCtx);
+    accountingCtx.finalizeSlashCommand?.();
     return;
   }
 
@@ -959,8 +1134,11 @@ export function executeSlashCommand(
       ctx.unlockAchievement("the_final_escape");
     }
 
-    if (dispatchCommand(command, ctx, reply) === "async") return;
-    ctx.setIsProcessing(false);
+    if (accountingPolicy === "tracked") queueSlashCommandAccounting(baseCommand);
+    // Accounting is finalized centrally after dispatch so async handlers no
+    // longer depend on reply() side effects to record command usage.
+    if (dispatchCommand(command, accountingCtx, reply) === "async") return;
+    accountingCtx.finalizeSlashCommand?.();
   }, Math.floor(Math.random() * 1500) + 1500);
 }
 

@@ -254,7 +254,12 @@ describe("/accept prefers review-pings over ticket offers", () => {
 
     expect(ctx.acceptReviewPing).not.toHaveBeenCalled();
     expect(clearPendingOffer).toHaveBeenCalledOnce();
-    expect(ctx.setState).toHaveBeenCalledOnce();
+    const setStateMock = vi.mocked(ctx.setState);
+    expect(setStateMock).toHaveBeenCalledTimes(2);
+    const markValidUpdate = setStateMock.mock.calls[0]![0];
+    const ticketUpdate = setStateMock.mock.calls[1]![0];
+    expect(typeof markValidUpdate).toBe("function");
+    expect(typeof ticketUpdate).toBe("function");
     expect(ctx.playChime).toHaveBeenCalledOnce();
     const msg = reply.mock.calls[0]![0];
     expect(msg.role).toBe("system");

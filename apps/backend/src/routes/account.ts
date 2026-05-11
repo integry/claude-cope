@@ -446,19 +446,26 @@ account.post("/buy-generator", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{ username: string; generatorId: string; amount: number; licenseKeyHash: string }>();
-  if (!body.username || !body.generatorId || !body.amount || body.amount < 1 || !Number.isInteger(body.amount) || body.amount > 1000 || !body.licenseKeyHash) {
-    return c.json({ error: "username, generatorId, amount (positive integer, max 1000), and licenseKeyHash are required" }, 400);
+  const body = await c.req.json<{ username: string; generatorId: string; amount: number; licenseKeyHash?: string }>();
+  if (!body.username || !body.generatorId || !body.amount || body.amount < 1 || !Number.isInteger(body.amount) || body.amount > 1000) {
+    return c.json({ error: "username, generatorId, and amount (positive integer, max 1000) are required" }, 400);
   }
 
   const generator = GENERATORS.find((g) => g.id === body.generatorId);
   if (!generator) return c.json({ error: "Unknown generator" }, 400);
 
-  const ownership = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  const ownership = await resolveThemePurchaseOwnership(db, {
+    username: body.username,
+    licenseKeyHash: body.licenseKeyHash,
+    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
+    sessionId: c.get("sessionId"),
+    actionLabel: "generator purchases",
+    logPrefix: "[account/generator]",
+  });
   if (ownership.status !== "ok") {
-    return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
+    return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
   }
-  const { profile } = ownership;
+  const { profile, licenseKeyHash } = ownership;
 
   const owned = profile.inventory[body.generatorId] ?? 0;
   const cost = calcBulkCost(generator.baseCost, owned, body.amount);
@@ -482,14 +489,14 @@ account.post("/buy-generator", async (c) => {
         AND COALESCE(json_extract(inventory, '$."' || ? || '"'), 0) = ?
         AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
     )
-    .bind(cost, body.generatorId, body.generatorId, body.amount, body.username, cost, body.licenseKeyHash, body.generatorId, owned)
+    .bind(cost, body.generatorId, body.generatorId, body.amount, profile.username, cost, licenseKeyHash, body.generatorId, owned)
     .run();
 
   if (!result.meta.changes) {
     return c.json({ error: "Insufficient TD (concurrent update)", required: cost }, 409);
   }
 
-  const updated = await getProfile(db, body.username);
+  const updated = await getProfile(db, profile.username);
 
   if (cost > 1_000_000) {
     const purchaseMessage = `💰 ${body.username} bought ${body.amount}x ${generator.name} for ${cost.toLocaleString()} TD!`;
@@ -503,19 +510,26 @@ account.post("/buy-upgrade", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{ username: string; upgradeId: string; licenseKeyHash: string }>();
-  if (!body.username || !body.upgradeId || !body.licenseKeyHash) {
-    return c.json({ error: "username, upgradeId, and licenseKeyHash are required" }, 400);
+  const body = await c.req.json<{ username: string; upgradeId: string; licenseKeyHash?: string }>();
+  if (!body.username || !body.upgradeId) {
+    return c.json({ error: "username and upgradeId are required" }, 400);
   }
 
   const upgrade = UPGRADES.find((u) => u.id === body.upgradeId);
   if (!upgrade) return c.json({ error: "Unknown upgrade" }, 400);
 
-  const ownership = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  const ownership = await resolveThemePurchaseOwnership(db, {
+    username: body.username,
+    licenseKeyHash: body.licenseKeyHash,
+    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
+    sessionId: c.get("sessionId"),
+    actionLabel: "upgrade purchases",
+    logPrefix: "[account/upgrade]",
+  });
   if (ownership.status !== "ok") {
-    return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
+    return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
   }
-  const { profile } = ownership;
+  const { profile, licenseKeyHash } = ownership;
 
   if (profile.upgrades.includes(body.upgradeId)) {
     return c.json({ error: "Upgrade already owned" }, 400);
@@ -540,14 +554,14 @@ account.post("/buy-upgrade", async (c) => {
         AND ? NOT IN (SELECT value FROM json_each(COALESCE(upgrades, '[]')))
         AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
     )
-    .bind(upgrade.cost, body.upgradeId, body.username, upgrade.cost, body.licenseKeyHash, body.upgradeId)
+    .bind(upgrade.cost, body.upgradeId, profile.username, upgrade.cost, licenseKeyHash, body.upgradeId)
     .run();
 
   if (!result.meta.changes) {
     return c.json({ error: "Insufficient TD or upgrade already owned (concurrent update)", required: upgrade.cost }, 409);
   }
 
-  const updated = await getProfile(db, body.username);
+  const updated = await getProfile(db, profile.username);
   return c.json({ success: true, profile: updated });
 });
 
@@ -650,19 +664,26 @@ account.post("/unlock-achievement", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{ username: string; achievementId: string; licenseKeyHash: string }>();
-  if (!body.username || !body.achievementId || !body.licenseKeyHash) {
-    return c.json({ error: "username, achievementId, and licenseKeyHash are required" }, 400);
+  const body = await c.req.json<{ username: string; achievementId: string; licenseKeyHash?: string }>();
+  if (!body.username || !body.achievementId) {
+    return c.json({ error: "username and achievementId are required" }, 400);
   }
   if (!ACHIEVEMENT_IDS.has(body.achievementId)) {
     return c.json({ error: "Unknown achievementId" }, 400);
   }
 
-  const ownership = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  const ownership = await resolveThemePurchaseOwnership(db, {
+    username: body.username,
+    licenseKeyHash: body.licenseKeyHash,
+    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
+    sessionId: c.get("sessionId"),
+    actionLabel: "achievement unlocks",
+    logPrefix: "[account/achievement]",
+  });
   if (ownership.status !== "ok") {
-    return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
+    return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
   }
-  const { profile } = ownership;
+  const { profile, licenseKeyHash } = ownership;
 
   if (profile.achievements.includes(body.achievementId)) {
     return c.json({ success: true, profile });
@@ -679,14 +700,14 @@ account.post("/unlock-achievement", async (c) => {
         AND ? NOT IN (SELECT value FROM json_each(COALESCE(achievements, '[]')))
         AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
     )
-    .bind(body.achievementId, body.username, body.licenseKeyHash, body.achievementId)
+    .bind(body.achievementId, profile.username, licenseKeyHash, body.achievementId)
     .run();
 
   if (!result.meta.changes) {
     return c.json({ error: "Update failed — profile not found, license mismatch, or license revoked" }, 409);
   }
 
-  const updated = await getProfile(db, body.username);
+  const updated = await getProfile(db, profile.username);
   return c.json({ success: true, profile: updated });
 });
 
@@ -694,9 +715,9 @@ account.post("/update-buddy", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{ username: string; buddyType: string | null; isShiny: boolean; licenseKeyHash: string }>();
-  if (!body.username || !body.licenseKeyHash) {
-    return c.json({ error: "username and licenseKeyHash are required" }, 400);
+  const body = await c.req.json<{ username: string; buddyType: string | null; isShiny: boolean; licenseKeyHash?: string }>();
+  if (!body.username) {
+    return c.json({ error: "username is required" }, 400);
   }
   if (typeof body.isShiny !== "boolean") {
     return c.json({ error: "isShiny must be a boolean" }, 400);
@@ -705,10 +726,18 @@ account.post("/update-buddy", async (c) => {
     return c.json({ error: "Unknown buddyType" }, 400);
   }
 
-  const ownership = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  const ownership = await resolveThemePurchaseOwnership(db, {
+    username: body.username,
+    licenseKeyHash: body.licenseKeyHash,
+    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
+    sessionId: c.get("sessionId"),
+    actionLabel: "buddy updates",
+    logPrefix: "[account/buddy]",
+  });
   if (ownership.status !== "ok") {
-    return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
+    return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
   }
+  const { profile, licenseKeyHash } = ownership;
 
   // Atomic: include license_hash + active-license subquery in WHERE to
   // prevent TOCTOU between verifyOwnership and the actual update.
@@ -718,14 +747,14 @@ account.post("/update-buddy", async (c) => {
        WHERE username = ? AND license_hash = ?
          AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
     )
-    .bind(body.buddyType ?? null, body.isShiny ? 1 : 0, body.username, body.licenseKeyHash)
+    .bind(body.buddyType ?? null, body.isShiny ? 1 : 0, profile.username, licenseKeyHash)
     .run();
 
   if (!result.meta.changes) {
     return c.json({ error: "Update failed — profile not found, license mismatch, or license revoked" }, 409);
   }
 
-  const updated = await getProfile(db, body.username);
+  const updated = await getProfile(db, profile.username);
   return c.json({ success: true, profile: updated });
 });
 
@@ -736,20 +765,28 @@ account.post("/update-ticket", async (c) => {
   const body = await c.req.json<{
     username: string;
     activeTicket: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null;
-    licenseKeyHash: string;
+    licenseKeyHash?: string;
   }>();
-  if (!body.username || !body.licenseKeyHash) {
-    return c.json({ error: "username and licenseKeyHash are required" }, 400);
+  if (!body.username) {
+    return c.json({ error: "username is required" }, 400);
   }
   const ticketError = validateActiveTicket(body.activeTicket);
   if (ticketError) {
     return c.json({ error: ticketError }, 400);
   }
 
-  const ownership = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  const ownership = await resolveThemePurchaseOwnership(db, {
+    username: body.username,
+    licenseKeyHash: body.licenseKeyHash,
+    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
+    sessionId: c.get("sessionId"),
+    actionLabel: "ticket updates",
+    logPrefix: "[account/ticket]",
+  });
   if (ownership.status !== "ok") {
-    return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
+    return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
   }
+  const { profile, licenseKeyHash } = ownership;
 
   // Atomic: include license_hash + active-license subquery in WHERE to
   // prevent TOCTOU between verifyOwnership and the actual update.
@@ -759,14 +796,14 @@ account.post("/update-ticket", async (c) => {
        WHERE username = ? AND license_hash = ?
          AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
     )
-    .bind(body.activeTicket ? JSON.stringify(body.activeTicket) : null, body.username, body.licenseKeyHash)
+    .bind(body.activeTicket ? JSON.stringify(body.activeTicket) : null, profile.username, licenseKeyHash)
     .run();
 
   if (!result.meta.changes) {
     return c.json({ error: "Update failed — profile not found, license mismatch, or license revoked" }, 409);
   }
 
-  const updated = await getProfile(db, body.username);
+  const updated = await getProfile(db, profile.username);
   return c.json({ success: true, profile: updated });
 });
 

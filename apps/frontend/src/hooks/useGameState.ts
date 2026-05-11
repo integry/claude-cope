@@ -93,6 +93,10 @@ function rollbackUpgradePurchase(state: GameState, upgradeId: string, cost: numb
   };
 }
 
+function hasServerBackedPaidEntitlement(state: Pick<GameState, "proKeyHash" | "hasSessionPro">): boolean {
+  return Boolean(state.proKeyHash) || Boolean(state.hasSessionPro);
+}
+
 function broadcastHighValuePurchase(generatorName: string, amount: number, cost: number, username: string): void {
   if (cost <= 1_000_000) return;
   const playerName = username || "A player";
@@ -199,7 +203,7 @@ export function useGameState() {
       return applyGeneratorPurchase(prev, generatorId, amount, dynamicCost);
     });
 
-    if (current.proKeyHash) {
+    if (hasServerBackedPaidEntitlement(current)) {
       buyGeneratorServer(current.username, generatorId, amount, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           mergeServerProfile(result.profile);
@@ -242,7 +246,7 @@ export function useGameState() {
       return { ...prev, achievements: [...prev.achievements, achievement] };
     });
     const current = stateRef.current;
-    if (current.proKeyHash) {
+    if (hasServerBackedPaidEntitlement(current)) {
       unlockAchievementServer(current.username, achievement, current.proKeyHash).catch(() => {});
     }
     return true;
@@ -271,7 +275,7 @@ export function useGameState() {
       return applyUpgradePurchase(prev, upgradeId, upgrade.cost);
     });
 
-    if (current.proKeyHash) {
+    if (hasServerBackedPaidEntitlement(current)) {
       buyUpgradeServer(current.username, upgradeId, current.proKeyHash).then((result) => {
         if (result.success && result.profile) {
           mergeServerProfile(result.profile);
@@ -390,7 +394,7 @@ export function useGameState() {
       const newProgress = Math.min(prev.activeTicket.sprintProgress + amount, prev.activeTicket.sprintGoal);
       const updatedTicket = { ...prev.activeTicket, sprintProgress: newProgress };
 
-      if (prev.proKeyHash) {
+      if (hasServerBackedPaidEntitlement(prev)) {
         updateTicketServer(prev.username, updatedTicket, prev.proKeyHash).catch(() => {});
       }
       return { ...prev, activeTicket: updatedTicket };
