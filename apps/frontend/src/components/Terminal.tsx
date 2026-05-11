@@ -29,8 +29,10 @@ import { TerminalView } from "./TerminalView";
 import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
 import { useUpgradeNagState } from "./useUpgradeNagState";
-import { STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, removeCommandFromHistory, removeUserCommandMessage, syncMessageKeys } from "./terminalUtils";
+import { STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, syncMessageKeys } from "./terminalUtils";
 export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
+type PromptSubmission = { command: string; replayId: number | null; submissionId: number };
+
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
@@ -82,6 +84,8 @@ function Terminal() {
   const nextPendingBacklogRollbackIdRef = useRef(0);
   const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
   const activePromptCountRef = useRef(0);
+  const nextPromptSubmissionIdRef = useRef(0);
+  const commandHistoryEntriesRef = useRef<Array<{ submissionId: number; command: string }>>([]);
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
@@ -95,11 +99,17 @@ function Terminal() {
     if (startupTicketPromptTimeoutRef.current) clearTimeout(startupTicketPromptTimeoutRef.current);
   }, []);
   const scheduleHistoryCommitCallback = useHistoryCommitQueue(history.length);
+  const setCommandHistoryEntries = useCallback((updater: (prev: Array<{ submissionId: number; command: string }>) => Array<{ submissionId: number; command: string }>) => {
+    const nextEntries = updater(commandHistoryEntriesRef.current); commandHistoryEntriesRef.current = nextEntries; setCommandHistory(nextEntries.map(({ command }) => command));
+  }, []);
   const syncAbortControllerHandle = useCallback(() => {
     const activeControllers = Array.from(activeAbortControllersRef.current);
     if (activeControllers.length === 0) return void (abortControllerRef.current = null);
     const [latestController] = activeControllers.slice(-1);
-    abortControllerRef.current = { abort: () => Array.from(activeAbortControllersRef.current).forEach((controller) => controller.abort()), signal: latestController!.signal } as AbortController;
+    const aggregateController = new AbortController();
+    aggregateController.abort = () => { Array.from(activeAbortControllersRef.current).forEach((controller) => controller.abort()); };
+    Object.defineProperty(aggregateController, "signal", { value: latestController!.signal });
+    abortControllerRef.current = aggregateController;
   }, []);
   const syncPromptProcessingState = useCallback(() => {
     setIsProcessing(activePromptCountRef.current > 0);
@@ -127,11 +137,7 @@ function Terminal() {
   const createPromptProcessingSetter = useCallback((controller: AbortController) => {
     let processingSettled = false;
     let controllerReleased = false;
-    const releaseController = () => {
-      if (controllerReleased) return;
-      controllerReleased = true;
-      untrackAbortController(controller);
-    };
+    const releaseController = () => { if (!controllerReleased) { controllerReleased = true; untrackAbortController(controller); } };
     return (value: boolean | ((prev: boolean) => boolean)) => {
       const nextValue = typeof value === "function" ? value(activePromptCountRef.current > 0) : value;
       if (nextValue) {
@@ -147,22 +153,16 @@ function Terminal() {
   }, [finishPromptProcessing, startPromptProcessing, untrackAbortController]);
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
     const isNew = unlockAchievement(id);
-    if (isNew) {
-      playChime();
-    }
+    if (isNew) playChime();
     return isNew;
   }, [unlockAchievement, playChime]);
-  const handleSuggestedReply = useCallback((suggestion: string) => {
-    const merged = mergeSuggestedReply(lastSuggestedReplyRef.current, suggestion);
-    if (!merged) return void setSuggestedReply(null);
-    lastSuggestedReplyRef.current = merged;
-    setSuggestedReply(merged);
-  }, []);
-  const processCommandRef = useRef<(submission: { command: string; replayId: number | null }) => void>(() => {});
+  const handleSuggestedReply = useCallback((suggestion: string) => { const merged = mergeSuggestedReply(lastSuggestedReplyRef.current, suggestion); if (!merged) return void setSuggestedReply(null); lastSuggestedReplyRef.current = merged; setSuggestedReply(merged); }, []);
+  const processCommandRef = useRef<(submission: PromptSubmission) => void>(() => {});
   const submitPromptCommand = useCallback((command: string, replayId: number | null = null) => {
-    setCommandHistory((prev) => [...prev, command]);
-    processCommandRef.current({ command, replayId });
-  }, []);
+    const submissionId = nextPromptSubmissionIdRef.current++;
+    setCommandHistoryEntries((prev) => [...prev, { submissionId, command }]);
+    processCommandRef.current({ command, replayId, submissionId });
+  }, [setCommandHistoryEntries]);
   const {
     closeAllOverlaysAndRestoreNag,
     closeAllOverlaysPreservingNag,
@@ -276,16 +276,16 @@ function Terminal() {
       return mergeAuthoritativeProfile(prev, profile, prev.pendingCompletedTaskIds.length > 0 ? { preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds, settledPendingCompletedRewardTaskIds: [ticketId] } : {});
     });
   }, [setState]);
-  const processCommand = async ({ command, replayId }: { command: string; replayId: number | null }) => {
+  const processCommand = async ({ command, replayId, submissionId }: PromptSubmission) => {
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
     if (!effectiveApiKey && instantBanReady) {
-      setHistory((prev) => [...prev, { role: "user", content: command }]);
+      setHistory((prev) => [...prev, { id: submissionId, role: "user", content: command }]);
       handleInstantBan();
       return;
     }
     const buddyResult = computeBuddyInterjection(state.buddy);
     handleBuddyInterjection(buddyResult);
-    const userMessage: Message = { role: "user", content: command };
+    const userMessage: Message = { id: submissionId, role: "user", content: command };
     if (isFreeTier) {
       const newCount = freeCommandCount + 1;
       setFreeCommandCount(newCount);
@@ -328,8 +328,8 @@ function Terminal() {
       onQuotaExhausted: effectiveApiKey ? undefined : () => {
         untrackAbortController(controller);
         settlePendingBacklogRollback(rollbackId, true);
-        setCommandHistory((prev) => removeCommandFromHistory(prev, command));
-        setHistory((prev) => removeUserCommandMessage(prev, command));
+        setCommandHistoryEntries((prev) => prev.filter((entry) => entry.submissionId !== submissionId));
+        setHistory((prev) => prev.filter((message) => !(message.role === "user" && message.id === submissionId)));
         handleQuotaLockout(command);
       },
       onProfileUpdate: applyProfileUpdate,

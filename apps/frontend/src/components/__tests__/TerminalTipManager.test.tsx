@@ -3,6 +3,8 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cleanupRenderedTerminal,
+  commitAcceptedPrompt,
+  getHistoryContents,
   getInput,
   renderTerminal,
   submitCommand,
@@ -76,19 +78,6 @@ vi.mock("../../hooks/useGameState", async () => (await import("./TerminalTipMana
 import Terminal from "../Terminal";
 
 let rendered: RenderedTerminal | null = null;
-
-async function commitAcceptedPrompt(callIndex: number) {
-  const request = submitChatMessageMock.mock.calls[callIndex]?.[0] as {
-    setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
-    onAccepted?: () => void;
-    scheduleHistoryCommitCallback?: (callback: () => void) => void;
-  };
-  await act(async () => {
-    request.setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
-    request.scheduleHistoryCommitCallback?.(() => request.onAccepted?.());
-    await Promise.resolve();
-  });
-}
 
 describe("Terminal tip-manager wiring", () => {
   beforeEach(() => {
@@ -232,10 +221,30 @@ describe("Terminal tip-manager wiring", () => {
     const firstRequest = submitChatMessageMock.mock.calls[0]?.[0] as { onAccepted?: () => void };
     const secondRequest = submitChatMessageMock.mock.calls[1]?.[0] as { onError?: () => void };
     expect(firstRequest.onAccepted).toEqual(expect.any(Function));
-    await commitAcceptedPrompt(0);
+    await commitAcceptedPrompt(submitChatMessageMock, 0);
     secondRequest.onError?.();
 
     expect(rollbackMessageWithoutTicketMocks[0]).not.toHaveBeenCalled();
     expect(rollbackMessageWithoutTicketMocks[1]).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes only the failing duplicate prompt when quota exhaustion hits overlapping submissions", async () => {
+    submitChatMessageMock.mockImplementationOnce(() => {}).mockImplementationOnce(({ onQuotaExhausted }: { onQuotaExhausted?: () => void }) => {
+      onQuotaExhausted?.();
+    });
+    rendered = await renderTerminal(Terminal);
+    await submitCommand(rendered.container, "duplicate prompt");
+    await submitCommand(rendered.container, "duplicate prompt");
+
+    await commitAcceptedPrompt(submitChatMessageMock, 0);
+
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(2);
+    expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(2);
+    expect(rollbackMessageWithoutTicketMocks[0]).not.toHaveBeenCalled();
+    expect(rollbackMessageWithoutTicketMocks[1]).toHaveBeenCalledTimes(1);
+    expect(getHistoryContents(rendered.container, "user")).toEqual(["duplicate prompt"]);
+    expect(getHistoryContents(rendered.container, "system")).toEqual(["accepted"]);
+    expect(rendered.container.querySelector("[data-role='user']")?.getAttribute("data-message-id")).toBe("0");
+    expect(getInput(rendered.container).value).toBe("");
   });
 });

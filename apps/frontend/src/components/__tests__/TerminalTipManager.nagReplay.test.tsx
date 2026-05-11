@@ -3,6 +3,7 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cleanupRenderedTerminal,
+  commitAcceptedPrompt,
   getButton,
   getInput,
   renderTerminal,
@@ -81,19 +82,6 @@ vi.mock("../../hooks/useGameState", async () => (await import("./TerminalTipMana
 import Terminal from "../Terminal";
 
 let rendered: RenderedTerminal | null = null;
-
-async function commitAcceptedPrompt(callIndex: number) {
-  const request = submitChatMessageMock.mock.calls[callIndex]?.[0] as {
-    setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
-    onAccepted?: () => void;
-    scheduleHistoryCommitCallback?: (callback: () => void) => void;
-  };
-  await act(async () => {
-    request.setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
-    request.scheduleHistoryCommitCallback?.(() => request.onAccepted?.());
-    await Promise.resolve();
-  });
-}
 
 async function triggerNaggedPrompt() {
   rendered = await renderTerminal(Terminal);
@@ -214,7 +202,7 @@ describe("Terminal tip-manager nag replay wiring", () => {
     shouldShowNagMock.mockReturnValueOnce(true);
     await submitCommand(rendered.container, "retry me");
 
-    await commitAcceptedPrompt(0);
+    await commitAcceptedPrompt(submitChatMessageMock, 0);
 
     await replayNaggedPrompt("button");
     expect(submitChatMessageMock.mock.calls[1]?.[0]?.chatMessages.at(-1)?.content).toBe("retry me");

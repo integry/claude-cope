@@ -3,10 +3,12 @@ import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type React from "react";
 import { vi } from "vitest";
+import type { GameState, Message } from "../../hooks/gameStateUtils";
 
 export function createTerminalViewModule() {
   return {
     TerminalView: ({
+      history,
       inputRef,
       inputValue,
       handleChange,
@@ -14,6 +16,7 @@ export function createTerminalViewModule() {
       handleUpgradeNagClose,
       handleManualUpgradeDismiss,
     }: {
+      history: Message[];
       inputRef: { current: HTMLInputElement | null };
       inputValue: string;
       handleChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -21,6 +24,13 @@ export function createTerminalViewModule() {
       handleUpgradeNagClose: () => void;
       handleManualUpgradeDismiss: () => void;
     }) => createElement("div", null,
+      createElement("div", { "aria-label": "terminal-history" },
+        history.map((message, index) => createElement("div", {
+          key: `${message.id ?? "message"}-${index}`,
+          "data-role": message.role,
+          "data-message-id": message.id ?? "",
+        }, message.content)),
+      ),
       createElement("input", {
         ref: inputRef,
         "aria-label": "terminal-input",
@@ -50,25 +60,7 @@ export function createUseGameStateModule() {
     const React = await import("react");
     return {
       useGameState: () => {
-        const [state, setState] = React.useState({
-          version: "1",
-          username: "TestUser0",
-          lastLogin: Date.now(),
-          economy: { currentTD: 0, totalTDEarned: 0, currentRank: "Junior Code Monkey", quotaPercent: 100, quotaLockouts: 0, tdMultiplier: 1 },
-          inventory: {},
-          upgrades: [],
-          achievements: [],
-          buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 },
-          chatHistory: [],
-          commandUsage: {},
-          modes: { fast: false, voice: false },
-          activeTicket: null,
-          hasSeenTicketPrompt: true,
-          activeTheme: "default",
-          unlockedThemes: ["default"],
-          soundEnabled: true,
-          pendingCompletedTaskIds: [],
-        });
+        const [state, setState] = React.useState<GameState>(createGameState());
         const setChatHistory = (updater: React.SetStateAction<typeof state.chatHistory>) => {
           setState((prev) => ({
             ...prev,
@@ -170,6 +162,51 @@ export function createUseTerminalKeyboardModule() {
   };
 }
 
+export function createGameState(overrides: Partial<GameState> = {}): GameState {
+  return {
+    version: "1",
+    username: "TestUser0",
+    lastLogin: Date.now(),
+    economy: {
+      currentTD: 0,
+      totalTDEarned: 0,
+      currentRank: "Junior Code Monkey",
+      quotaPercent: 100,
+      quotaLockouts: 0,
+      tdMultiplier: 1,
+    },
+    inventory: {},
+    upgrades: [],
+    achievements: [],
+    buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 },
+    chatHistory: [],
+    commandUsage: {},
+    modes: { fast: false, voice: false },
+    activeTicket: null,
+    hasSeenTicketPrompt: true,
+    activeTheme: "default",
+    unlockedThemes: ["default"],
+    soundEnabled: true,
+    pendingCompletedTaskIds: [],
+    pendingCompletedTaskRewards: {},
+    authoritativeProfileFloor: null,
+    ...overrides,
+  };
+}
+
+export async function commitAcceptedPrompt(submitChatMessageMock: ReturnType<typeof vi.fn>, callIndex: number) {
+  const request = submitChatMessageMock.mock.calls[callIndex]?.[0] as {
+    setHistory: (updater: (prev: Message[]) => Message[]) => void;
+    onAccepted?: () => void;
+    scheduleHistoryCommitCallback?: (callback: () => void) => void;
+  };
+  await act(async () => {
+    request.setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
+    request.scheduleHistoryCommitCallback?.(() => request.onAccepted?.());
+    await Promise.resolve();
+  });
+}
+
 export type RenderedTerminal = {
   container: HTMLDivElement;
   root: Root;
@@ -204,6 +241,12 @@ export function getButton(container: HTMLDivElement, label: string) {
     throw new Error(`button not found: ${label}`);
   }
   return button;
+}
+
+export function getHistoryContents(container: HTMLDivElement, role?: Message["role"]) {
+  return Array.from(container.querySelectorAll("[data-role]"))
+    .filter((element) => !role || element.getAttribute("data-role") === role)
+    .map((element) => element.textContent ?? "");
 }
 
 export async function submitCommand(container: HTMLDivElement, command: string) {
