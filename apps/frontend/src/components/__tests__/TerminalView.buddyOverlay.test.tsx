@@ -165,7 +165,7 @@ afterEach(() => {
 });
 
 describe("TerminalView buddy layout", () => {
-  it("renders bottom chrome watcher status only when a buddy exists", () => {
+  it("renders docked buddy chrome only when a buddy exists", () => {
     const withoutBuddy = renderTerminalView(createState(null));
     expect(withoutBuddy.querySelector(".terminal-buddy-dock")).toBeNull();
     expect(withoutBuddy.querySelector(".terminal-buddy-overlay")).toBeNull();
@@ -178,11 +178,11 @@ describe("TerminalView buddy layout", () => {
     const overlay = withoutBuddy.querySelector(".terminal-buddy-overlay");
 
     expect(watcherStatus).not.toBeNull();
-    expect(watcherStatus?.classList.contains("terminal-buddy-status")).toBe(true);
+    expect(watcherStatus?.querySelector(".terminal-buddy-status")).not.toBeNull();
     expect(overlay).not.toBeNull();
   });
 
-  it("keeps the watcher status in bottom chrome and the decorative buddy overlay out of command shell flow", () => {
+  it("keeps the buddy art and watcher status in bottom chrome and out of command shell flow", () => {
     const view = renderTerminalView(createState("Sarcastic Clippy"));
     const commandShell = view.querySelector(".terminal-command-shell");
     const bottomChrome = view.querySelector("[data-terminal-bottom-chrome='true']");
@@ -192,14 +192,16 @@ describe("TerminalView buddy layout", () => {
 
     expect(watcherStatus).not.toBeNull();
     expect(watcherStatus?.textContent).toContain("Sarcastic Clippy is watching...");
+    expect(watcherStatus?.textContent).not.toContain("[BUDDY]");
     expect(bottomChrome?.contains(watcherStatus!)).toBe(true);
     expect(overlayBuddy).not.toBeNull();
     expect(overlayBuddy?.textContent).not.toContain("Sarcastic Clippy is watching...");
+    expect(bottomChrome?.contains(overlay!)).toBe(true);
     expect(commandShell?.querySelector(".terminal-buddy-display")).toBeNull();
     expect(commandShell?.textContent).not.toContain("Sarcastic Clippy is watching...");
   });
 
-  it("renders watcher status in bottom chrome while keeping the buddy as a root-level overlay", () => {
+  it("renders the buddy dock as part of bottom chrome", () => {
     const view = renderTerminalView(createState("Sarcastic Clippy"));
     const bottomChrome = view.querySelector("[data-terminal-bottom-chrome='true']");
     const watcherStatus = view.querySelector(".terminal-buddy-dock");
@@ -209,6 +211,7 @@ describe("TerminalView buddy layout", () => {
     expect(watcherStatus).not.toBeNull();
     expect(bottomChrome?.contains(watcherStatus!)).toBe(true);
     expect(overlay).not.toBeNull();
+    expect(bottomChrome?.contains(overlay!)).toBe(true);
     expect(view.querySelector("[data-testid='terminal-footer']")).not.toBeNull();
   });
 });

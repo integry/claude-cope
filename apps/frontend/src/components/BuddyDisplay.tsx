@@ -43,7 +43,6 @@ export function BuddyWatcherStatus({
         `terminal-buddy-status ${isShiny ? "text-amber-300" : "text-orange-400"} ${className}`.trim()
       }
     >
-      <span className="terminal-buddy-status-label">[BUDDY]</span>
       <span>{getBuddyWatcherCopy(type, isShiny)}</span>
     </div>
   );

@@ -2,7 +2,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { createRef } from "react";
 
 import { BuddyOverlay } from "../BuddyOverlay";
 import {
@@ -104,7 +103,7 @@ describe("BuddyOverlay scale helpers", () => {
   });
 });
 
-describe("BuddyOverlay layout measurement", () => {
+describe("BuddyOverlay rendering", () => {
   let container: HTMLDivElement | null = null;
   let root: Root | null = null;
 
@@ -117,119 +116,37 @@ describe("BuddyOverlay layout measurement", () => {
     container = null;
   });
 
-  it("reserves the bottom command chrome instead of only the footer", () => {
-    const terminalRef = createRef<HTMLDivElement>();
-    const bottomChromeRef = createRef<HTMLDivElement>();
+  it("renders nothing when no buddy exists", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
 
     act(() => {
-      root!.render(
-        createElement(
-          "div",
-          { ref: terminalRef },
-          createElement("div", { ref: bottomChromeRef }),
-          createElement("footer"),
-          createElement(BuddyOverlay, {
-            buddy: { type: "Agile Snail", isShiny: false, promptsSinceLastInterjection: 0 },
-            containerRef: terminalRef,
-            bottomChromeRef,
-          }),
-        ),
-      );
+      root!.render(createElement(BuddyOverlay, {
+        buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 },
+        containerRef: { current: null },
+        bottomChromeRef: { current: null },
+      }));
     });
 
-    Object.defineProperty(terminalRef.current!, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({ width: 800, height: 600, top: 0, bottom: 600, left: 0, right: 800 }),
-    });
-    Object.defineProperty(bottomChromeRef.current!, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({ width: 800, height: 120, top: 420, bottom: 540, left: 0, right: 800 }),
-    });
-
-    const footer = terminalRef.current!.querySelector("footer")!;
-    Object.defineProperty(footer, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({ width: 800, height: 48, top: 552, bottom: 600, left: 0, right: 800 }),
-    });
-
-    const measureNode = container.querySelector(".terminal-buddy-overlay-measure") as HTMLDivElement;
-    Object.defineProperty(measureNode, "offsetWidth", { configurable: true, value: 200 });
-    Object.defineProperty(measureNode, "offsetHeight", { configurable: true, value: 160 });
-
-    act(() => {
-      globalThis.__triggerResizeObserver?.();
-    });
-
-    const overlay = container.querySelector(".terminal-buddy-overlay") as HTMLDivElement;
-    expect(overlay.style.getPropertyValue("--terminal-buddy-bottom-offset")).toBe("188px");
+    expect(container.querySelector(".terminal-buddy-overlay")).toBeNull();
   });
 
-  it("remeasures when the footer height changes", () => {
-    const terminalRef = createRef<HTMLDivElement>();
-    const bottomChromeRef = createRef<HTMLDivElement>();
+  it("renders the docked buddy art when a buddy exists", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
 
-    let footerHeight = 48;
-
     act(() => {
-      root!.render(
-        createElement(
-          "div",
-          { ref: terminalRef },
-          createElement("div", { ref: bottomChromeRef }),
-          createElement("footer"),
-          createElement(BuddyOverlay, {
-            buddy: { type: "Agile Snail", isShiny: false, promptsSinceLastInterjection: 0 },
-            containerRef: terminalRef,
-            bottomChromeRef,
-          }),
-        ),
-      );
-    });
-
-    Object.defineProperty(terminalRef.current!, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({ width: 800, height: 600, top: 0, bottom: 600, left: 0, right: 800 }),
-    });
-    Object.defineProperty(bottomChromeRef.current!, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({ width: 800, height: 40, top: 560, bottom: 600, left: 0, right: 800 }),
-    });
-
-    const footer = terminalRef.current!.querySelector("footer")!;
-    Object.defineProperty(footer, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({
-        width: 800,
-        height: footerHeight,
-        top: 600 - footerHeight,
-        bottom: 600,
-        left: 0,
-        right: 800,
-      }),
-    });
-
-    const measureNode = container.querySelector(".terminal-buddy-overlay-measure") as HTMLDivElement;
-    Object.defineProperty(measureNode, "offsetWidth", { configurable: true, value: 200 });
-    Object.defineProperty(measureNode, "offsetHeight", { configurable: true, value: 160 });
-
-    act(() => {
-      globalThis.__triggerResizeObserver?.();
+      root!.render(createElement(BuddyOverlay, {
+        buddy: { type: "Agile Snail", isShiny: false, promptsSinceLastInterjection: 0 },
+        containerRef: { current: null },
+        bottomChromeRef: { current: null },
+      }));
     });
 
     const overlay = container.querySelector(".terminal-buddy-overlay") as HTMLDivElement;
-    expect(overlay.style.getPropertyValue("--terminal-buddy-bottom-offset")).toBe("56px");
-
-    footerHeight = 96;
-    act(() => {
-      globalThis.__triggerResizeObserver?.();
-    });
-
-    expect(overlay.style.getPropertyValue("--terminal-buddy-bottom-offset")).toBe("104px");
+    expect(overlay).not.toBeNull();
+    expect(overlay.querySelector(".terminal-buddy-display")).not.toBeNull();
   });
 });

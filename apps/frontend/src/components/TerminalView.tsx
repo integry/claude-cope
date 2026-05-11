@@ -301,18 +301,19 @@ export function TerminalView({
           </div>
         </div>
         {state.buddy.type && (
-          <BuddyWatcherStatus
-            type={state.buddy.type}
-            isShiny={state.buddy.isShiny}
-            className="terminal-buddy-dock"
-          />
+          <div className="terminal-buddy-dock">
+            <BuddyOverlay
+              buddy={state.buddy}
+              containerRef={terminalRef}
+              bottomChromeRef={bottomChromeRef}
+            />
+            <BuddyWatcherStatus
+              type={state.buddy.type}
+              isShiny={state.buddy.isShiny}
+            />
+          </div>
         )}
       </div>
-      <BuddyOverlay
-        buddy={state.buddy}
-        containerRef={terminalRef}
-        bottomChromeRef={bottomChromeRef}
-      />
       <TerminalOverlays
         showStore={showStore}
         showLeaderboard={showLeaderboard}

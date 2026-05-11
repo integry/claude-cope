@@ -152,14 +152,10 @@ body {
 }
 
 .terminal-buddy-overlay {
-  position: absolute;
-  right: 0.75rem;
-  bottom: var(--terminal-buddy-bottom-offset, 3.5rem);
+  display: flex;
+  justify-content: flex-end;
   flex: 0 0 auto;
   pointer-events: none;
-  z-index: 20;
-  transform-origin: bottom right;
-  will-change: transform, opacity;
 }
 
 .terminal-bottom-chrome {
@@ -171,6 +167,10 @@ body {
 }
 
 .terminal-buddy-dock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
   flex: 0 0 auto;
   align-self: flex-end;
   max-width: min(100%, 24rem);
@@ -180,7 +180,6 @@ body {
 .terminal-buddy-status {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
   flex-wrap: wrap;
   font-size: 0.75rem;
   line-height: 1.35;
@@ -195,16 +194,7 @@ body {
   margin: 0;
 }
 
-.terminal-buddy-status-label {
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
 @media (max-width: 640px) {
-  .terminal-buddy-overlay {
-    right: 0.35rem;
-  }
-
   .terminal-buddy-display {
     font-size: 0.625rem;
     line-height: 1.1;
