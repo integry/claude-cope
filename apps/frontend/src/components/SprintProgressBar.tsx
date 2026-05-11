@@ -14,6 +14,13 @@ export default function SprintProgressBar({ id, title, sprintProgress, sprintGoa
   const hasActiveTicket = Boolean(id && title && sprintProgress !== undefined && sprintGoal !== undefined);
   const totalBlocks = 30;
   const idleBarBlocks = 17;
+  const safeProgress = sprintProgress ?? 0;
+  const safeGoal = sprintGoal ?? 0;
+  const animatedProgress = useAnimatedCounter(safeProgress, {
+    duration: 2200,
+    animateDecreases: false,
+    resetKey: hasActiveTicket ? `${id}:${safeGoal}` : "idle",
+  });
 
   if (!hasActiveTicket) {
     return (
@@ -42,13 +49,6 @@ export default function SprintProgressBar({ id, title, sprintProgress, sprintGoa
     );
   }
 
-  const safeProgress = sprintProgress!;
-  const safeGoal = sprintGoal!;
-  const animatedProgress = useAnimatedCounter(safeProgress, {
-    duration: 2200,
-    animateDecreases: false,
-    resetKey: `${id}:${safeGoal}`,
-  });
   const displayProgress = Math.floor(animatedProgress);
   const sprintPercent = safeGoal > 0 ? Math.min(100, Math.round((animatedProgress / safeGoal) * 100)) : 0;
   const filledBlocks = Math.round((sprintPercent / 100) * totalBlocks);
