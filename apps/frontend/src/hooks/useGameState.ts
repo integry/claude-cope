@@ -102,13 +102,14 @@ export function useGameState() {
   const [offlineTDEarned, setOfflineTDEarned] = useState(0);
 
   const mergeServerProfile = useCallback((profile: ServerProfile, opts?: { preserveOptimisticActiveTheme?: boolean }) => {
+    const previouslyConfirmedTheme = confirmedActiveThemeRef.current;
     confirmedActiveThemeRef.current = profile.active_theme;
     setState((prev) => {
       const nextState = applyServerProfile(prev, profile);
       if (!opts?.preserveOptimisticActiveTheme) return nextState;
 
       const optimisticTheme = prev.activeTheme;
-      const hasNewerOptimisticTheme = optimisticTheme !== confirmedActiveThemeRef.current;
+      const hasNewerOptimisticTheme = optimisticTheme !== previouslyConfirmedTheme;
       if (!hasNewerOptimisticTheme || !nextState.unlockedThemes.includes(optimisticTheme)) {
         return nextState;
       }
