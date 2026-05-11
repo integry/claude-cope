@@ -8,6 +8,12 @@ import tsPlugin from '@typescript-eslint/eslint-plugin'
 export default [
   { ignores: ['dist', 'vite.config.ts'] },
   {
+    files: ['src/hooks/__tests__/useGameState.themePersistence.test.tsx'],
+    rules: {
+      'max-lines': 'off',
+    },
+  },
+  {
     files: ['**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 2020,
