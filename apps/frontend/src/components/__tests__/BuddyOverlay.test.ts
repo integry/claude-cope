@@ -122,7 +122,10 @@ describe("BuddyOverlay layout measurement", () => {
     const bottomChromeRef = createRef<HTMLDivElement>();
     const originalResizeObserver = globalThis.ResizeObserver;
     // Force the effect onto the resize-event path so the test can retrigger measurement.
-    globalThis.ResizeObserver = undefined as typeof ResizeObserver;
+    Object.defineProperty(globalThis, "ResizeObserver", {
+      configurable: true,
+      value: undefined,
+    });
 
     try {
       container = document.createElement("div");
@@ -171,7 +174,10 @@ describe("BuddyOverlay layout measurement", () => {
       const overlay = container.querySelector(".terminal-buddy-overlay") as HTMLDivElement;
       expect(overlay.style.getPropertyValue("--terminal-buddy-bottom-offset")).toBe("188px");
     } finally {
-      globalThis.ResizeObserver = originalResizeObserver;
+      Object.defineProperty(globalThis, "ResizeObserver", {
+        configurable: true,
+        value: originalResizeObserver,
+      });
     }
   });
 });
