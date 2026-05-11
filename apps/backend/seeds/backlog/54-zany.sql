@@ -3,13 +3,13 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- Office Infrastructure Curator Nell
 -- REPORTER: Nell | Office Infrastructure Curator | Takes missing yogurt and fake room occupancy more seriously than some teams take platform risk.
 ('ZANY-976', 'Treat Missing Yogurt as a Supply Chain Incident',
- 'Snack disappearance has crossed the line from petty annoyance into measurable trust collapse. Escalate repeated dairy theft so facilities can finally determine whether we are dealing with procurement failure, office banditry, or a morale problem with blueberry residue.',
- 'treat missing yogurt as a supply chain incident',
+ 'Snack disappearance has crossed the line from petty annoyance into measurable trust collapse. Wire the breakroom fridge weight-sensors into the ERP system. If the yogurt inventory drops without a corresponding badge swipe, trigger an automated "Supply Chain Incident" alert to the Facilities Slack channel.',
+ 'wire breakroom fridge sensors to incident alerts',
   89),
 
 ('ZANY-977', 'Teach Room Tablets the Difference Between Real Meetings and Prestige Linger',
- 'Conference rooms stay occupied because people keep performing importance for six extra minutes after the useful part ends. Detect prestige cooldown so the scheduling data stops worshipping fake duration.',
- 'teach room tablets prestige linger',
+ 'Conference rooms stay occupied because people keep performing importance for six extra minutes after the useful part ends. Write a script that checks the room''s motion sensors against the calendar end-time. If there is movement but no active screen-sharing, label the duration "Prestige Linger" in the utilization dashboard.',
+ 'track fake meeting extensions in the dashboard',
   89),
 
 -- Corporate Archivist Simon
@@ -44,8 +44,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
   144),
 
 ('ZANY-983', 'Warn When a Calendar Invite Is Really Just Passive-Aggressive Performance Art',
- 'Shared calendars now carry subtext through titles, attendee lists, room choice, and the strategic misuse of optional. Flag the invites doing more emotional warfare than actual coordination.',
- 'warn when invites become passive-aggressive performance art',
+ 'Shared calendars now carry subtext through titles and the strategic misuse of "optional." Build an Outlook plugin that analyzes attendee hierarchy vs. meeting topic. If an invite includes three VPs for a "Quick Sync" at 4:45 PM on a Friday, append a red `[HOSTILE]` tag to the subject line.',
+ 'make outlook plugin flag hostile calendar invites',
   89),
 
 -- Customer Demo Engineer Becca
@@ -75,13 +75,13 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- Corporate Folklore Analyst Mina
 -- REPORTER: Mina | Corporate Folklore Analyst | Catalogs the exact moment a managerly rumor turns into an office law everyone follows despite no document ever authorizing it.
 ('ZANY-988', 'Split Real Policy from the Stories Managers Keep Telling with Authority',
- 'Companies accumulate a layer of oral compliance where half-remembered decisions and one-off exceptions harden into superstition. Tag the folklore so search stops returning ghost rules as if they were law.',
- 'split real policy from manager folklore',
+ 'Companies accumulate a layer of oral compliance where half-remembered decisions harden into superstition. Add an "Is This Real?" upvote button to the HR Wiki. If a policy page gets downvoted by more than three legal team members, automatically prepend `[FOLKLORE]` to the page title.',
+ 'add folklore voting button to hr wiki',
   144),
 
 ('ZANY-989', 'Predict Which Exception Will Be Remembered as Tradition in Six Months',
- 'Temporary exceptions rarely stay temporary once enough confident people repeat them. Add a future-normalization field so ops can spot which workaround is already growing roots in workplace memory.',
- 'predict which exceptions become tradition',
+ 'Temporary exceptions rarely stay temporary once enough confident people repeat them. Add a "Tradition Forecast" column to the Ops approval queue. Train a basic model to flag any workaround that has been approved three times in one month, so we know which duct tape is becoming load-bearing.',
+ 'add tradition forecast column to ops queue',
   89),
 
 -- Platform Curiosity Officer Devon
@@ -104,8 +104,8 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
   144),
 
 ('ZANY-993', 'Let Procurement Requests Say "The Current Thing Offends My Soul"',
- 'Not every purchase request comes from clean ROI. Some come from long exposure to a tool, device, or workflow that has become spiritually corrosive. Add a soul-offense path so people can be honest for once.',
- 'let procurement requests say this offends my soul',
+ 'Not every purchase request comes from clean ROI. Some come from long exposure to a tool that has become spiritually corrosive. Add a "This Offends My Soul" option to the Procurement Intake dropdown. If selected, disable the ROI calculator and automatically route the ticket to the VP of Finance with a mandatory text box for venting.',
+ 'add soul offense override to procurement form',
   89),
 
 -- Workflow Anthropologist Oscar
@@ -116,32 +116,32 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
   89),
 
 ('ZANY-995', 'Count Survey Questions Added Because Somebody Had a Bad Tuesday',
- 'Survey sprawl often comes from one recent incident, one worried leader, or one rough week getting promoted into quarter-scale listening theater. Count the reactive questions before emotionally fresh curiosity starts claiming permanent residency.',
- 'count survey questions added because of bad tuesdays',
+ 'Survey sprawl often comes from one recent incident getting promoted into quarter-scale listening theater. Build a cron job that checks the SurveyMonkey API for new questions and cross-references them against PagerDuty alerts from the last 48 hours. Print a dashboard metric showing exactly how much of our "curiosity" is just fresh trauma.',
+ 'cross reference new survey questions with pagerduty',
   89),
 
 -- Enterprise Absurdity Fellow Lana
 -- REPORTER: Lana | Enterprise Absurdity Fellow | Maintains the sacred registry of acronyms clearly reverse-engineered from panic, slide urgency, and funding opportunity.
 ('ZANY-996', 'Flag New Acronyms That Were Obviously Reverse-Engineered from Panic',
- 'Some internal programs are named first and explained later with heroic creativity. Detect panic backronyms before they settle into decks, budgets, and little branded lanyards.',
- 'flag acronyms reverse-engineered from panic',
+ 'Some internal programs are named first and explained later with heroic creativity. Build a Confluence webhook that runs a dictionary check on new project acronyms. If the underlying words do not form a grammatically coherent sentence, highlight the acronym in neon pink so it stops settling into budgets without shame.',
+ 'highlight fake confluence backronyms in neon pink',
   144),
 
 ('ZANY-997', 'Put a "Would Fewer People Help?" Prompt on Steering Committee Invites',
- 'Committee gravity is one of our most renewable resources. Add a recurring invite prompt asking whether the attendance list improves the decision or merely deepens the ambiance of procedural adulthood.',
- 'ask if fewer people would help',
+ 'Committee gravity is one of our most renewable resources. Add a prompt to calendar invites with more than eight people asking if the guest list improves the decision, or merely deepens the ambiance of procedural adulthood.',
+ 'warn when meeting invites look like hostage situations',
   89),
 
 -- Misc Systems Custodian Ravi
 -- REPORTER: Ravi | Misc Systems Custodian | Has accepted that the fax bridge is no longer temporary and is in fact a mature organism with legal significance and a pulse.
 ('ZANY-998', 'Reclassify the Legacy Fax Integration as a Native Species',
- 'We have spent too long calling the fax bridge temporary while routing critical traffic through it with the serenity usually reserved for payroll. Promote it honestly so planning stops treating a long-lived organ like a sticky note.',
- 'reclassify legacy fax as native species',
+ 'We have spent too long calling the fax bridge temporary while routing critical traffic through it. Go into the AWS tag editor and the internal Service Registry. Remove the "deprecated" tag, add "load-bearing," and change its lifecycle status from "Sunsetting" to "Immortal." It is time to treat this organ with respect.',
+ 'remove deprecated tag from the fax bridge',
   144),
 
 ('ZANY-999', 'Give Every Temporary Workaround Old Enough to Rent a Car a Birthday Badge',
- 'Temporary fixes gain camouflage from familiarity. Add birthday badges once they outlive intern cohorts, managers, or office leases so nobody keeps speaking on behalf of their youth with a straight face.',
- 'give ancient workarounds a birthday badge',
+ 'Temporary fixes gain camouflage from familiarity. Write a script that scans the codebase for `// TODO: temporary` comments using `git blame`. If the comment is older than 5 years, automatically inject a 🎂 emoji next to it in the GitHub UI, and post a birthday announcement in the `#engineering` Slack channel.',
+ 'make slack bot celebrate five year old todos',
   89),
 
 -- Grand Marshal of Backlog Excess Inez

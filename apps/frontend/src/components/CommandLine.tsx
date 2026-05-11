@@ -25,6 +25,8 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
       placeholder && assistivePlaceholderHint && !disabled
         ? `${placeholder}. ${assistivePlaceholderHint}`
         : placeholder;
+    const leadingPlaceholderChar = placeholder?.charAt(0) ?? "";
+    const trailingPlaceholderText = placeholder?.slice(1) ?? "";
 
     const handleCompositionStart = () => {
       setIsComposing(true);
@@ -52,8 +54,16 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                 data-testid="command-line-placeholder"
                 className="terminal-command-placeholder pointer-events-none absolute inset-0 flex items-center gap-2 overflow-hidden whitespace-nowrap"
               >
-                {showDecorativeCursor && <span data-testid="command-line-cursor" className="terminal-command-cursor shrink-0" />}
-                <span className="truncate">{placeholder}</span>
+                <span data-testid="command-line-suggested-reply" className="min-w-0 truncate">
+                  <span
+                    data-testid="command-line-suggested-reply-leading-char"
+                    className="terminal-command-placeholder-leading-char"
+                  >
+                    {showDecorativeCursor && <span data-testid="command-line-cursor" className="terminal-command-cursor" />}
+                    <span className="terminal-command-placeholder-leading-char-text">{leadingPlaceholderChar}</span>
+                  </span>
+                  <span>{trailingPlaceholderText}</span>
+                </span>
                 {showTabHint && (
                   <span data-testid="command-line-tab-hint" className="terminal-command-tab-hint shrink-0">
                     [Tab]

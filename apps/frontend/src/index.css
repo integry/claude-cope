@@ -253,15 +253,29 @@ body {
   color: rgba(226, 232, 240, 0.62);
 }
 
+.terminal-command-placeholder-leading-char {
+  position: relative;
+  display: inline-block;
+}
+
+.terminal-command-placeholder-leading-char-text {
+  position: relative;
+  z-index: 1;
+}
+
 .terminal-command-tab-hint {
   color: #67e8f9;
   opacity: 0.92;
 }
 
 .terminal-command-cursor {
-  width: 0.72ch;
-  height: 1.05em;
-  background-color: rgba(125, 211, 252, 0.95);
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1ch;
+  height: 1.2em;
+  background-color: rgba(125, 211, 252, 0.72);
   border-radius: 1px;
   box-shadow: 0 0 14px rgba(103, 232, 249, 0.28);
   animation: terminal-command-cursor-blink 1.1s steps(1, end) infinite;

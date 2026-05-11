@@ -28,7 +28,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Alicia | Customer Ops Director | Prefers centralized confusion to scattered confusion with worse filters.
 ('CRUD-305', 'Support Needs a Timeline View That Combines User Actions, Internal Notes, and Pure Suspicion',
  'The current customer timeline tells me what happened but not what people privately feared was happening. Build one view that merges audit events, support notes, account changes, Slack excerpts, and unverified hunches typed during live escalations. If the truth stays messy, the mess should at least be filterable.',
- 'make a support timeline for everything',
+ 'build support timeline to track pure suspicion',
   144),
 
 ('CRUD-306', 'Add a One-Click "Fix Customer" Button for the Executive Escalation Queue',

@@ -71,7 +71,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 -- REPORTER: Glenn | SOC Manager | Wants every alert scored for whether it might become a LinkedIn apology post.
 ('OMEN-267', 'All Alerts Must Escalate Through a "Could This Be Headlines?" Classifier First',
  'Our alerts are technically descriptive but narratively underpowered. Score each one for headline potential before paging anybody. If the answer is yes, jump to the scary rotation and invite Legal before the graph finishes loading.',
- 'make alerts escalate through could be',
+ 'route alerts through a PR disaster classifier',
   233),
 
 ('OMEN-268', 'Build a Shared Inbox for Customer Reports of "Something Weird" and Treat It Like Telemetry',
@@ -88,5 +88,5 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 
 ('OMEN-270', 'Every Export Button Must Ask Whether the User Intends to Create Future Discovery Risk',
  'Data export is too frictionless for something that can later become evidence. Before any CSV, JSON dump, or PDF leaves the system, ask whether the user intends to create future discovery risk or an attachment chain that ruins somebody''s quarter. The point is not to stop them. The point is to make download feel faintly indictable.',
- 'put a legal conscience popup in front',
+ 'add legal conscience popup before data exports',
   138),;
