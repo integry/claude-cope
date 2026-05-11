@@ -76,7 +76,7 @@ function MobileQuotaLine({ quotaPercent, quotaTooltip }: { quotaPercent: number;
 
 function DesktopIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, onProfileClick }: { username: string; rank: string; isBYOK: boolean; isMax: boolean; byokTotalCost?: number; onProfileClick: () => void }) {
   return (
-    <div data-testid="desktop-identity-block" className="hidden sm:flex flex-col justify-center min-w-0 leading-tight">
+    <div data-testid="desktop-identity-block" className="hidden sm:flex flex-col justify-center min-w-0 gap-1 leading-snug">
       <div className="flex items-center gap-2 min-w-0">
         <button onClick={onProfileClick} className="text-cyan-400 hover:text-white hover:underline cursor-pointer truncate">{username}</button>
         <EntitlementBadges isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} maxBadgeTestId="desktop-max-badge" />
@@ -120,7 +120,7 @@ function DesktopStatusBlock({
   onUpgradeClick?: () => void;
 }) {
   return (
-    <div data-testid="desktop-status-block" className="hidden sm:flex flex-col items-end gap-0.5 ml-auto flex-shrink-0 justify-center px-2 sm:px-0 leading-tight">
+    <div data-testid="desktop-status-block" className="hidden sm:flex flex-col items-end gap-1 ml-auto flex-shrink-0 justify-center px-2 sm:px-0 leading-snug">
       <div data-testid="desktop-technical-debt-line" className="whitespace-nowrap flex items-center gap-1">
         <span className="text-gray-500 text-xs">Technical Debt:</span>
         <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD</span>
@@ -162,7 +162,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
   }, [menuOpen]);
 
   return (
-    <div className={`sticky top-0 z-10 border-b pt-2 pb-2 mb-2 relative flex items-center gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "border-gray-700"}`} style={outageHp !== null ? undefined : { backgroundColor: 'var(--color-bg)' }}>
+    <div className={`sticky top-0 z-10 border-b pt-3 pb-2 mb-2 relative flex items-center gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "border-gray-700"}`} style={outageHp !== null ? undefined : { backgroundColor: 'var(--color-bg)' }}>
       {/* Left group: identity */}
       <div className="flex items-center gap-2 min-w-0 px-2 sm:px-0">
         <img src="/media/logo-400-transparent.png" alt="Logo" className="hidden sm:block max-h-12 w-auto flex-shrink-0 object-contain sm:mr-2" />
