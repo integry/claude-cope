@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { calcBulkCost } from "../useGameState";
+import { calcBulkCost, canBuyTheme, applyOptimisticThemePurchase, rollbackOptimisticThemePurchase, applyThemePurchaseFailure, applyValidatedSessionProState } from "../useGameState";
 import { GROWTH_RATE, GENERATORS } from "../../game/constants";
+import type { GameState } from "../gameStateUtils";
 
 describe("calcBulkCost", () => {
   const r = GROWTH_RATE; // 1.15
@@ -75,5 +76,193 @@ describe("calcBulkCost", () => {
     const cost1 = calcBulkCost(100, 1, 1);
     // Each additional owned unit multiplies cost by GROWTH_RATE
     expect(Math.abs(cost1 / cost0 - r)).toBeLessThan(0.01);
+  });
+});
+
+function makeGameState(overrides: Partial<GameState> = {}): GameState {
+  return {
+    version: "1.0",
+    username: "alice",
+    lastLogin: 0,
+    economy: {
+      currentTD: 6000,
+      totalTDEarned: 6000,
+      currentRank: "Junior Code Monkey",
+      quotaPercent: 100,
+      quotaLockouts: 0,
+      tdMultiplier: 1,
+    },
+    inventory: {},
+    upgrades: [],
+    achievements: [],
+    buddy: {
+      type: null,
+      isShiny: false,
+      promptsSinceLastInterjection: 0,
+    },
+    chatHistory: [],
+    commandUsage: {},
+    modes: { fast: false, voice: false },
+    activeTicket: null,
+    hasSeenTicketPrompt: false,
+    activeTheme: "default",
+    unlockedThemes: ["default"],
+    soundEnabled: true,
+    pendingCompletedTaskIds: [],
+    ...overrides,
+  };
+}
+
+describe("canBuyTheme", () => {
+  it("marks persisted paid state as session-backed after successful validation", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: undefined, proKeyHash: undefined, proKey: undefined });
+    const nextState = applyValidatedSessionProState(state, {
+      found: true,
+      isPro: true,
+      username: "alice-renamed",
+    });
+
+    expect(nextState.isPro).toBe(true);
+    expect(nextState.hasSessionPro).toBe(true);
+    expect(nextState.username).toBe("alice-renamed");
+  });
+
+  it("does not clear paid state when /me returns a partial found session without isPro", () => {
+    const state = makeGameState({
+      isPro: true,
+      hasSessionPro: true,
+      activeTheme: "default",
+      unlockedThemes: ["default", "amber"],
+    });
+    const nextState = applyValidatedSessionProState(state, {
+      found: true,
+      username: "alice",
+      profile: {
+        username: "alice",
+        total_td: 6000,
+        current_td: 6000,
+        corporate_rank: "Junior Code Monkey",
+        inventory: {},
+        upgrades: [],
+        achievements: [],
+        buddy_type: null,
+        buddy_is_shiny: false,
+        unlocked_themes: ["default", "amber", "midnight"],
+        active_theme: "midnight",
+        active_ticket: null,
+        td_multiplier: 1,
+        multiplier: 1,
+      },
+    });
+
+    expect(nextState.isPro).toBe(true);
+    expect(nextState.hasSessionPro).toBe(true);
+    expect(nextState.activeTheme).toBe("midnight");
+    expect(nextState.unlockedThemes).toEqual(["default", "amber", "midnight"]);
+  });
+
+  it("allows restored paid users without proKeyHash to buy themes", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
+    expect(canBuyTheme(state, "amber")).toBe(true);
+  });
+
+  it("rejects free users without paid status", () => {
+    const state = makeGameState({ isPro: undefined, proKeyHash: undefined, proKey: undefined });
+    expect(canBuyTheme(state, "amber")).toBe(false);
+  });
+
+  it("rejects stale local isPro state without a session-backed entitlement", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: undefined, proKeyHash: undefined, proKey: undefined });
+    expect(canBuyTheme(state, "amber")).toBe(false);
+  });
+
+  it("rejects local proKey state without a session-backed entitlement", () => {
+    const state = makeGameState({ proKey: "max-key", proKeyHash: undefined, isPro: undefined });
+    expect(canBuyTheme(state, "amber")).toBe(false);
+  });
+
+  it("applies the optimistic purchase update for restored paid users without proKeyHash", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
+    const nextState = applyOptimisticThemePurchase(state, "amber");
+
+    expect(nextState.economy.currentTD).toBe(1000);
+    expect(nextState.unlockedThemes).toContain("amber");
+  });
+
+  it("rolls back the optimistic purchase update on failure", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
+    const purchasedState = applyOptimisticThemePurchase(state, "amber");
+    const rolledBackState = rollbackOptimisticThemePurchase(purchasedState, "amber");
+
+    expect(rolledBackState.economy.currentTD).toBe(state.economy.currentTD);
+    expect(rolledBackState.unlockedThemes).toEqual(state.unlockedThemes);
+  });
+
+  it("surfaces theme purchase failures in chat history", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
+    const purchasedState = applyOptimisticThemePurchase(state, "amber");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "Session authentication is required for this purchase");
+
+    expect(failedState.economy.currentTD).toBe(state.economy.currentTD);
+    expect(failedState.unlockedThemes).toEqual(state.unlockedThemes);
+    expect(failedState.chatHistory[failedState.chatHistory.length - 1]).toMatchObject({
+      role: "error",
+      content: "[❌ Error] Session authentication is required for this purchase",
+    });
+  });
+
+  it("clears stale paid entitlements on auth-related theme purchase failures", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: "stale-hash", proKey: "stale-key" });
+    const purchasedState = applyOptimisticThemePurchase(state, "amber");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "License has been revoked or is no longer active", "license_inactive");
+
+    expect(failedState.proKey).toBeUndefined();
+    expect(failedState.proKeyHash).toBeUndefined();
+    expect(failedState.isPro).toBeUndefined();
+    expect(failedState.hasSessionPro).toBeUndefined();
+  });
+
+  it("does not clear paid entitlements on non-definitive theme purchase failures", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: "pro-hash", proKey: "pro-key" });
+    const purchasedState = applyOptimisticThemePurchase(state, "amber");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "Profile not found");
+
+    expect(failedState.proKey).toBe("pro-key");
+    expect(failedState.proKeyHash).toBe("pro-hash");
+    expect(failedState.isPro).toBe(true);
+    expect(failedState.hasSessionPro).toBe(true);
+  });
+
+  it("clears only the session-backed entitlement on session mismatch failures", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: "pro-hash", proKey: "pro-key" });
+    const purchasedState = applyOptimisticThemePurchase(state, "amber");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "Session authentication is required for this purchase", "session_auth_required");
+
+    expect(failedState.proKey).toBe("pro-key");
+    expect(failedState.proKeyHash).toBe("pro-hash");
+    expect(failedState.isPro).toBe(true);
+    expect(failedState.hasSessionPro).toBeUndefined();
+  });
+
+  it("uses structured entitlement error codes even if backend error copy changes", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: "pro-hash", proKey: "pro-key" });
+    const purchasedState = applyOptimisticThemePurchase(state, "amber");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "Temporary auth issue", "session_auth_required");
+
+    expect(failedState.proKey).toBe("pro-key");
+    expect(failedState.proKeyHash).toBe("pro-hash");
+    expect(failedState.isPro).toBe(true);
+    expect(failedState.hasSessionPro).toBeUndefined();
+  });
+
+  it("clears stale paid state for session-only users on session mismatch failures", () => {
+    const state = makeGameState({ isPro: true, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
+    const purchasedState = applyOptimisticThemePurchase(state, "amber");
+    const failedState = applyThemePurchaseFailure(purchasedState, "amber", "Session user does not match the requested account", "session_user_mismatch");
+
+    expect(failedState.proKey).toBeUndefined();
+    expect(failedState.proKeyHash).toBeUndefined();
+    expect(failedState.isPro).toBeUndefined();
+    expect(failedState.hasSessionPro).toBeUndefined();
   });
 });

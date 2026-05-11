@@ -13,6 +13,7 @@
     "./buddies": "./src/buddies.ts",
     "./migrations": "./src/migrations.ts",
     "./openrouter": "./src/openrouter.ts",
+    "./themeEntitlements": "./src/themeEntitlements.ts",
     "./turnstile": "./src/turnstile.ts",
     "./config": "./src/config.ts",
     "./backlogTiers": "./src/backlogTiers.ts",

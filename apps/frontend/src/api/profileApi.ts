@@ -1,7 +1,8 @@
 import type { ServerProfile } from "@claude-cope/shared/profile";
+import type { ThemeEntitlementErrorCode } from "@claude-cope/shared/themeEntitlements";
 import { API_BASE } from "../config";
 
-type ProfileResult = { success: boolean; profile?: ServerProfile; error?: string };
+type ProfileResult = { success: boolean; profile?: ServerProfile; error?: string; errorCode?: ThemeEntitlementErrorCode };
 
 async function profilePost(path: string, body: Record<string, unknown>): Promise<ProfileResult> {
   try {
@@ -12,7 +13,7 @@ async function profilePost(path: string, body: Record<string, unknown>): Promise
     });
     const data = await res.json() as ProfileResult;
     if (!res.ok) {
-      return { success: false, error: data.error ?? `HTTP ${res.status}` };
+      return { success: false, error: data.error ?? `HTTP ${res.status}`, errorCode: data.errorCode };
     }
     return data;
   } catch {
@@ -28,8 +29,12 @@ export function buyUpgradeServer(username: string, upgradeId: string, licenseKey
   return profilePost("buy-upgrade", { username, upgradeId, licenseKeyHash });
 }
 
-export function buyThemeServer(username: string, themeId: string, licenseKeyHash: string): Promise<ProfileResult> {
-  return profilePost("buy-theme", { username, themeId, licenseKeyHash });
+export function buyThemeServer(username: string, themeId: string, licenseKeyHash?: string): Promise<ProfileResult> {
+  return profilePost("buy-theme", { username, themeId, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
+}
+
+export function updateThemeServer(username: string, themeId: string, licenseKeyHash?: string): Promise<ProfileResult> {
+  return profilePost("update-theme", { username, themeId, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
 }
 
 export function unlockAchievementServer(username: string, achievementId: string, licenseKeyHash: string): Promise<ProfileResult> {
