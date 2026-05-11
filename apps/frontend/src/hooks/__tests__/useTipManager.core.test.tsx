@@ -74,6 +74,28 @@ describe("useTipManager core behavior", () => {
     expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([IDLE_TIPS[0]?.text]);
   });
 
+  it("does not show backlog idle tips while an active ticket is in progress", () => {
+    act(() => {
+      harness.ref.current?.recordEnter();
+      vi.advanceTimersByTime(45_000);
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([IDLE_TIPS[0]?.text]);
+
+    harness = remountHarness(harness, {
+      initialGameState: makeState({
+        activeTicket: { id: "COPE-1", title: "Fix prod", sprintProgress: 50, sprintGoal: 100 },
+      }),
+    });
+
+    act(() => {
+      harness.ref.current?.recordEnter();
+      vi.advanceTimersByTime(45_000);
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([IDLE_TIPS[3]?.text]);
+  });
+
   it("does not fire idle tips while interaction is intentionally blocked", () => {
     act(() => {
       harness.ref.current?.recordEnter();

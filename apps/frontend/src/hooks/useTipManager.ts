@@ -114,6 +114,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   const currentTD = gameState.economy.currentTD;
   const totalTDEarned = gameState.economy.totalTDEarned;
   const quotaPercent = gameState.economy.quotaPercent;
+  const hasActiveTicket = Boolean(gameState.activeTicket);
   const idleTimerRef = useRef<number | null>(null);
   const idleDeadlineRef = useRef<number | null>(null);
   const hasInteractedRef = useRef(false);
@@ -148,7 +149,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     idleDeadlineRef.current = null;
     recentTipHistoryRef.current = readRecentTipHistory();
     const tip = selectIdleTip(
-      { totalTDEarned: totalTDEarnedRef.current },
+      { totalTDEarned: totalTDEarnedRef.current, hasActiveTicket: Boolean(gameStateRef.current.activeTicket) },
       { excludeTipIds: Object.keys(recentTipHistoryRef.current) },
     );
     if (!tip) return;
@@ -194,14 +195,14 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     let tip = selectMilestoneTip(
       usedCommandsRef.current,
       shownMilestoneTipIdsRef.current,
-      { totalTDEarned: totalTDEarnedRef.current },
+      { totalTDEarned: totalTDEarnedRef.current, hasActiveTicket: Boolean(gameStateRef.current.activeTicket) },
     );
     if (!tip && shownMilestoneTipIdsRef.current.size > 0) {
       shownMilestoneTipIdsRef.current.clear();
       tip = selectMilestoneTip(
         usedCommandsRef.current,
         shownMilestoneTipIdsRef.current,
-        { totalTDEarned: totalTDEarnedRef.current },
+        { totalTDEarned: totalTDEarnedRef.current, hasActiveTicket: Boolean(gameStateRef.current.activeTicket) },
       );
     }
     if (!tip) return null;
@@ -249,6 +250,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
 
     const tip = selectBacklogReminder(
       lastBacklogReminderTipIdRef.current ?? undefined,
+      { hasActiveTicket: Boolean(gameStateRef.current.activeTicket) },
       { excludeTipIds: Object.keys(recentTipHistoryRef.current) },
     );
     if (!tip) {
@@ -331,7 +333,10 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
 
     const newTips = [...pendingContextualTriggersRef.current, ...eligibleTriggers]
       .map((trigger) => {
-        const tip = selectContextualTip(trigger, { totalTDEarned });
+        const tip = selectContextualTip(trigger, {
+          totalTDEarned,
+          hasActiveTicket: Boolean(gameStateRef.current.activeTicket),
+        });
         if (!tip) return null;
         return tip.text;
       })
@@ -353,6 +358,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     currentTD,
     quotaPercent,
     totalTDEarned,
+    hasActiveTicket,
     isBooting,
     isInteractionBlocked,
     onlineCount,

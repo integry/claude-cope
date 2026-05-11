@@ -16,6 +16,7 @@ export type ContextualTipTrigger =
 
 type TipSelectionContext = {
   totalTDEarned?: number;
+  hasActiveTicket?: boolean;
 };
 
 type TipFilterOptions = {
@@ -105,6 +106,9 @@ function isEnabledTip(tip: TipDefinition): boolean {
 }
 
 function isUnlockedTip(tip: TipDefinition, context?: TipSelectionContext): boolean {
+  if (context?.hasActiveTicket && (tip.cmd === "/backlog" || tip.cmd === "/take")) {
+    return false;
+  }
   if (tip.cmd === "/store") {
     return (context?.totalTDEarned ?? 0) >= 1_000;
   }
@@ -157,8 +161,12 @@ export function getRandomBacklogReminder(previousTipId?: string): TipDefinition 
     ?? { id: "backlog-reminder-fallback", text: toText(undefined), cmd: "/backlog", category: "ticket" };
 }
 
-export function selectBacklogReminder(previousTipId?: string, options?: TipFilterOptions): TipDefinition | null {
-  const eligible = filterExcludedTips(BACKLOG_REMINDER_TIPS.filter(isEnabledTip), options);
+export function selectBacklogReminder(
+  previousTipId?: string,
+  context?: TipSelectionContext,
+  options?: TipFilterOptions,
+): TipDefinition | null {
+  const eligible = filterExcludedTips(BACKLOG_REMINDER_TIPS.filter((tip) => isSelectableTip(tip, context)), options);
   return pickRandomTipAvoidingId(eligible, previousTipId) ?? null;
 }
 
