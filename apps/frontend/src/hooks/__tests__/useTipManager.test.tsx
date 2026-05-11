@@ -369,6 +369,96 @@ describe("useTipManager", () => {
     ]);
   });
 
+  it("does not show another backlog reminder within 24 hours, even after a remount", () => {
+    act(() => {
+      for (let i = 0; i < 6; i++) {
+        ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      BACKLOG_REMINDER_TIPS[0]?.text,
+    ]);
+
+    act(() => {
+      for (let i = 0; i < 12; i++) {
+        ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      BACKLOG_REMINDER_TIPS[0]?.text,
+    ]);
+
+    act(() => {
+      root.unmount();
+    });
+
+    root = createRoot(container);
+    act(() => {
+      renderHarness();
+      for (let i = 0; i < 6; i++) {
+        ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(ref.current?.getHistory()).toHaveLength(0);
+  });
+
+  it("allows backlog reminders again after 24 hours have passed", () => {
+    act(() => {
+      for (let i = 0; i < 6; i++) {
+        ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      BACKLOG_REMINDER_TIPS[0]?.text,
+    ]);
+
+    act(() => {
+      vi.setSystemTime(new Date("2026-05-11T00:00:01Z"));
+      root.unmount();
+    });
+
+    root = createRoot(container);
+    act(() => {
+      renderHarness();
+      for (let i = 0; i < 6; i++) {
+        ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      BACKLOG_REMINDER_TIPS[0]?.text,
+    ]);
+  });
+
+  it("restores backlog reminder eligibility when a pending prompt rollback removes the tip", () => {
+    let rollback: (() => void) | undefined;
+
+    act(() => {
+      for (let i = 0; i < 6; i++) {
+        rollback = ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      BACKLOG_REMINDER_TIPS[0]?.text,
+    ]);
+
+    act(() => {
+      rollback?.();
+      for (let i = 0; i < 6; i++) {
+        ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
+      BACKLOG_REMINDER_TIPS[0]?.text,
+    ]);
+  });
+
   it("resets the backlog reminder streak when an active ticket is opened", () => {
     act(() => {
       for (let i = 0; i < 5; i++) {
@@ -395,22 +485,9 @@ describe("useTipManager", () => {
     expect(ref.current?.getHistory()).toHaveLength(0);
   });
 
-  it("does not repeat the same backlog reminder back-to-back", () => {
-    act(() => {
-      for (let i = 0; i < 12; i++) {
-        ref.current?.recordMessageWithoutTicket();
-      }
-    });
-
-    expect(ref.current?.getHistory().map((message) => message.content)).toEqual([
-      BACKLOG_REMINDER_TIPS[0]?.text,
-      BACKLOG_REMINDER_TIPS[1]?.text,
-    ]);
-  });
-
   it("does not stream backlog reminders on every message after the first threshold", () => {
     act(() => {
-      for (let i = 0; i < 11; i++) {
+      for (let i = 0; i < 20; i++) {
         ref.current?.recordMessageWithoutTicket();
       }
     });

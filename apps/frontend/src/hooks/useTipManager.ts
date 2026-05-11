@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { GameState, Message } from "./useGameState";
-import { selectBacklogReminder, selectContextualTip, selectIdleTip, selectMilestoneTip, type ContextualTipTrigger, type TipDefinition } from "../game/tips";
+import {
+  BACKLOG_REMINDER_TIPS,
+  selectBacklogReminder,
+  selectContextualTip,
+  selectIdleTip,
+  selectMilestoneTip,
+  type ContextualTipTrigger,
+  type TipDefinition,
+} from "../game/tips";
 
 const IDLE_TIP_DELAY_MS = 45_000;
 const MILESTONE_INTERVAL = 6;
@@ -79,6 +87,10 @@ function markTipShown(
 
 function getNextBacklogReminderThreshold(): number {
   return BACKLOG_REMINDER_MIN_MESSAGES + Math.floor(Math.random() * (BACKLOG_REMINDER_MAX_MESSAGES - BACKLOG_REMINDER_MIN_MESSAGES + 1));
+}
+
+function hasRecentBacklogReminder(history: Record<string, number>): boolean {
+  return BACKLOG_REMINDER_TIPS.some((tip) => history[tip.id] !== undefined);
 }
 
 function getInitialContextualTriggers(currentTD: number, quotaPercent: number, onlineCount: number): ContextualTipTrigger[] {
@@ -223,8 +235,21 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       };
     }
 
+    recentTipHistoryRef.current = readRecentTipHistory();
+    const previousRecentTipHistory = recentTipHistoryRef.current;
+    if (hasRecentBacklogReminder(recentTipHistoryRef.current)) {
+      noTicketMessageCountRef.current = 0;
+      nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
+      return () => {
+        noTicketMessageCountRef.current = previousCount;
+        nextBacklogReminderThresholdRef.current = previousThreshold;
+        lastBacklogReminderTipIdRef.current = previousTipId;
+      };
+    }
+
     const tip = selectBacklogReminder(
       lastBacklogReminderTipIdRef.current ?? undefined,
+      { excludeTipIds: Object.keys(recentTipHistoryRef.current) },
     );
     if (!tip) {
       noTicketMessageCountRef.current = 0;
@@ -237,12 +262,15 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     }
     lastBacklogReminderTipIdRef.current = tip.id;
     appendTip(setHistory, tip.text);
+    markTipShown(recentTipHistoryRef, tip);
     noTicketMessageCountRef.current = 0;
     nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
     return () => {
       noTicketMessageCountRef.current = previousCount;
       nextBacklogReminderThresholdRef.current = previousThreshold;
       lastBacklogReminderTipIdRef.current = previousTipId;
+      recentTipHistoryRef.current = previousRecentTipHistory;
+      persistRecentTipHistory(previousRecentTipHistory);
       setHistory((prev) => {
         for (let i = prev.length - 1; i >= 0; i--) {
           if (prev[i]?.role === "system" && prev[i]?.content === tip.text) {
