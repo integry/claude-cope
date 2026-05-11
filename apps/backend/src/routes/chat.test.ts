@@ -213,6 +213,20 @@ describe("USER_NEXT_MESSAGE dedupe", () => {
   });
 });
 
+describe("normalizeReplyContent prompt leak cleanup", () => {
+  it("strips leaked response-style labels from the visible reply", () => {
+    const input = `Short sarcastic prose. No list. No fake structure.
+
+Your Redis mausoleum is doing crimes again.
+[USER_NEXT_MESSAGE: poke the mausoleum]`;
+    const output = normalizeReplyContent(input);
+    expect(output).not.toContain("Short sarcastic prose");
+    expect(output).not.toContain("No fake structure");
+    expect(output).toContain("Your Redis mausoleum is doing crimes again.");
+    expect(output).toContain("[USER_NEXT_MESSAGE: poke the mausoleum]");
+  });
+});
+
 describe("enforceContextTrimming", () => {
   it("restricts messages to 6 most recent elements", () => {
     const input = [

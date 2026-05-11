@@ -48,6 +48,20 @@ describe("filterChatHistory", () => {
     expect(result[0]).toEqual({ role: "assistant", content: "Welcome!" });
   });
 
+  it("filters ticket offer and backlog scaffolding from model context", () => {
+    const history = [
+      msg("system", "[📋 INCOMING TICKET] Your PM has assigned you a ticket:\n\nhaunted backlog"),
+      msg("system", "[📋 **COMMUNITY BACKLOG**]\n\n```table```"),
+      msg("user", "what is this mess"),
+      msg("system", "Regular assistant reply"),
+    ];
+    const result = filterChatHistory(history);
+    expect(result).toEqual([
+      { role: "user", content: "what is this mess" },
+      { role: "assistant", content: "Regular assistant reply" },
+    ]);
+  });
+
   it("filters out non-user non-system roles (e.g. warning)", () => {
     const history = [
       msg("user", "hello"),

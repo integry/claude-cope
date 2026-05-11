@@ -440,6 +440,16 @@ function normalizeNonCodeSegment(segment: string): string {
   // Strip leaked meta-structure labels if the model emits them literally.
   text = text.replace(/(?:^|\n)\s*(?:\*\*)?(?:Diagnosis|Options|Choices|Punchline|Sign-off|Deadpan)(?:\*\*)?:\s*/gi, "\n");
 
+  // Strip leaked response-style narration copied from the hidden prompt.
+  text = text.replace(
+    /(?:^|\n)\s*(?:response style|style choice|chosen style|format)\s*:\s*(?:short sarcastic prose|condescending diagnosis|dramatic [^\n]*rant|terse fake terminal exchange|tiny cursed code fragment|tiny absurd diff)[^\n]*/gi,
+    "\n",
+  );
+  text = text.replace(
+    /(?:^|\n)\s*(?:short sarcastic prose|no list|no fake structure|diagnosis-plus-choices|prefer structured|prefer exotic)(?:[^\n]*)/gi,
+    "\n",
+  );
+
   // Strip leaked prompt-planning lines if the model starts narrating hidden instructions.
   text = text.replace(
     /(?:^|\n)\s*(?:we|i)\s+(?:need|should|must)\s+to\s+(?:output|write|return|end)\b[^\n]*?(?:USER_NEXT_MESSAGE|deadpan|absurd diff|code fence)[^\n]*/gi,
