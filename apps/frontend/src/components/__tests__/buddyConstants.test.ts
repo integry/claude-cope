@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BUDDY_ICONS,
   extractBuddyInterjectionBlock,
   formatBuddyInterjection,
 } from "../buddyConstants";
@@ -40,6 +41,16 @@ describe("buddy interjection formatting", () => {
       "             Third paragraph.",
     ].join("\n");
     const content = `[[BUDDY:Agile Snail]]\n${block}\n\nFollow-up system reply.`;
+
+    expect(extractBuddyInterjectionBlock(content)).toEqual({
+      block,
+      body: "Follow-up system reply.",
+    });
+  });
+
+  it("parses the pre-upgrade stacked buddy format from persisted chat history", () => {
+    const block = `${BUDDY_ICONS["Agile Snail"]}\n[Agile Snail] Remember the backlog.`;
+    const content = `${block}\n\nFollow-up system reply.`;
 
     expect(extractBuddyInterjectionBlock(content)).toEqual({
       block,

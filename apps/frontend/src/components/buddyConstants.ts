@@ -161,7 +161,7 @@ function getBuddyVariant(type: string): BuddyVariant {
   };
 }
 
-const LEGACY_BUDDY_VARIANTS = Object.keys(BUDDY_ICONS).map(getBuddyVariant);
+const SIDE_BY_SIDE_BUDDY_VARIANTS = Object.keys(BUDDY_ICONS).map(getBuddyVariant);
 
 function extractBuddyMarker(content: string): { rest: string; type: string } | null {
   const firstLineBreak = content.indexOf("\n");
@@ -217,10 +217,9 @@ function matchBuddyBlockLines(lines: string[], variant: BuddyVariant): number {
 
 function buildBuddyExtraction(
   trimmedContent: string,
-  variant: BuddyVariant,
+  blockLineCount: number,
 ): { block: string; body: string } | null {
   const lines = trimmedContent.split("\n");
-  const blockLineCount = matchBuddyBlockLines(lines, variant);
   if (blockLineCount === 0) {
     return null;
   }
@@ -230,16 +229,49 @@ function buildBuddyExtraction(
   return { block, body };
 }
 
+function buildSideBySideBuddyExtraction(
+  trimmedContent: string,
+  variant: BuddyVariant,
+): { block: string; body: string } | null {
+  return buildBuddyExtraction(trimmedContent, matchBuddyBlockLines(trimmedContent.split("\n"), variant));
+}
+
+function matchLegacyStackedBuddyBlockLines(lines: string[], variant: BuddyVariant): number {
+  if (lines.length <= variant.artLines.length) {
+    return 0;
+  }
+
+  for (let index = 0; index < variant.artLines.length; index++) {
+    if (lines[index] !== variant.artLines[index]) {
+      return 0;
+    }
+  }
+
+  const speechLine = lines[variant.artLines.length] ?? "";
+  const speechPattern = new RegExp(`^\\[${escapeRegExp(variant.type)}\\](?:\\s+.*)?$`);
+  return speechPattern.test(speechLine) ? variant.artLines.length + 1 : 0;
+}
+
+function buildLegacyStackedBuddyExtraction(
+  trimmedContent: string,
+  variant: BuddyVariant,
+): { block: string; body: string } | null {
+  return buildBuddyExtraction(trimmedContent, matchLegacyStackedBuddyBlockLines(trimmedContent.split("\n"), variant));
+}
+
 export function extractBuddyInterjectionBlock(content: string): { block: string; body: string } | null {
   const trimmedContent = content.replace(/^\n+/, "");
   const marker = extractBuddyMarker(trimmedContent);
 
   if (marker) {
-    return buildBuddyExtraction(marker.rest, getBuddyVariant(marker.type));
+    const variant = getBuddyVariant(marker.type);
+    return buildSideBySideBuddyExtraction(marker.rest, variant)
+      ?? buildLegacyStackedBuddyExtraction(marker.rest, variant);
   }
 
-  for (const variant of LEGACY_BUDDY_VARIANTS) {
-    const extracted = buildBuddyExtraction(trimmedContent, variant);
+  for (const variant of SIDE_BY_SIDE_BUDDY_VARIANTS) {
+    const extracted = buildSideBySideBuddyExtraction(trimmedContent, variant)
+      ?? buildLegacyStackedBuddyExtraction(trimmedContent, variant);
     if (extracted) {
       return extracted;
     }

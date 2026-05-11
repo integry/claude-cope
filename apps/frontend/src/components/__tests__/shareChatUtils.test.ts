@@ -8,7 +8,7 @@ import {
   getChatCardBlob,
   type ShareResult,
 } from "../shareChatUtils";
-import { formatBuddyInterjection } from "../buddyConstants";
+import { BUDDY_ICONS, formatBuddyInterjection } from "../buddyConstants";
 
 // Mock image loading
 const mockImage = {
@@ -118,6 +118,19 @@ describe("renderChatCard", () => {
     await renderChatCard("Test", buddyBlock);
 
     const renderedText = mockCtx.fillText.mock.calls.map(([text]) => text);
+    expect(
+      renderedText.filter(
+        (text) => typeof text === "string" && text.includes("Remember the backlog.")
+      )
+    ).toHaveLength(1);
+  });
+
+  it("parses legacy stacked buddy interjections in shared chat cards", async () => {
+    const legacyBuddyBlock = `${BUDDY_ICONS["Agile Snail"]}\n[Agile Snail] Remember the backlog.`;
+    await renderChatCard("Test", `${legacyBuddyBlock}\n\nShip the lint rule before Friday.`);
+
+    const renderedText = mockCtx.fillText.mock.calls.map(([text]) => text);
+    expect(renderedText).toContain("Ship the lint rule before Friday.");
     expect(
       renderedText.filter(
         (text) => typeof text === "string" && text.includes("Remember the backlog.")
