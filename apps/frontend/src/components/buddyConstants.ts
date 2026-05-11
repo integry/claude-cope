@@ -40,6 +40,8 @@ export const BUDDY_ICONS: Record<string, string> = {
 const BUDDY_TEXT_GAP = "   ";
 const BUDDY_TEXT_WRAP = 64;
 const BUDDY_FALLBACK_ICON = "🐾";
+// Persisted warnings may include an explicit buddy marker even when the
+// companion type is no longer available as structured message metadata.
 const BUDDY_INTERJECTION_MARKER_PREFIX = "[[BUDDY:";
 const BUDDY_INTERJECTION_MARKER_SUFFIX = "]]";
 
@@ -111,9 +113,9 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function formatBuddyInterjection(type: string, text: string): string {
+export function formatBuddyInterjection(type: string, text: string, maxTextWidth = BUDDY_TEXT_WRAP): string {
   const artLines = (BUDDY_ICONS[type] ?? BUDDY_FALLBACK_ICON).split("\n");
-  const wrappedText = wrapBuddyText(text, BUDDY_TEXT_WRAP);
+  const wrappedText = wrapBuddyText(text, maxTextWidth);
   const artWidth = Math.max(...artLines.map((line) => line.length));
   const totalLines = Math.max(artLines.length, wrappedText.length + 1);
   const output: string[] = [];
@@ -214,7 +216,8 @@ function matchBuddyBlockLines(lines: string[], variant: BuddyVariant): number {
 function buildBuddyExtraction(
   trimmedContent: string,
   blockLineCount: number,
-): { block: string; body: string } | null {
+  type?: string,
+): { block: string; body: string; type?: string } | null {
   const lines = trimmedContent.split("\n");
   if (blockLineCount === 0) {
     return null;
@@ -222,14 +225,14 @@ function buildBuddyExtraction(
 
   const block = lines.slice(0, blockLineCount).join("\n");
   const body = lines.slice(blockLineCount).join("\n").replace(/^\n+/, "");
-  return { block, body };
+  return { block, body, type };
 }
 
 function buildSideBySideBuddyExtraction(
   trimmedContent: string,
   variant: BuddyVariant,
-): { block: string; body: string } | null {
-  return buildBuddyExtraction(trimmedContent, matchBuddyBlockLines(trimmedContent.split("\n"), variant));
+): { block: string; body: string; type?: string } | null {
+  return buildBuddyExtraction(trimmedContent, matchBuddyBlockLines(trimmedContent.split("\n"), variant), variant.type);
 }
 
 function matchLegacyStackedBuddyBlockLines(lines: string[], variant: BuddyVariant): number {
@@ -251,14 +254,14 @@ function matchLegacyStackedBuddyBlockLines(lines: string[], variant: BuddyVarian
 function buildLegacyStackedBuddyExtraction(
   trimmedContent: string,
   variant: BuddyVariant,
-): { block: string; body: string } | null {
-  return buildBuddyExtraction(trimmedContent, matchLegacyStackedBuddyBlockLines(trimmedContent.split("\n"), variant));
+): { block: string; body: string; type?: string } | null {
+  return buildBuddyExtraction(trimmedContent, matchLegacyStackedBuddyBlockLines(trimmedContent.split("\n"), variant), variant.type);
 }
 
 export function extractBuddyInterjectionBlock(
   content: string,
   buddyType?: string | null,
-): { block: string; body: string } | null {
+): { block: string; body: string; type?: string } | null {
   const trimmedContent = content.replace(/^\n+/, "");
   const marker = extractBuddyMarker(trimmedContent);
 
@@ -279,6 +282,69 @@ export function extractBuddyInterjectionBlock(
       ?? buildLegacyStackedBuddyExtraction(trimmedContent, variant);
     if (extracted) {
       return extracted;
+    }
+  }
+
+  return null;
+}
+
+function extractSpeechLine(line: string, prefix: string): string | null {
+  if (line === prefix) {
+    return "";
+  }
+  return line.startsWith(prefix) ? line.slice(prefix.length) : null;
+}
+
+function parseSideBySideBuddyInterjection(lines: string[], variant: BuddyVariant): { type: string; speech: string } | null {
+  const lineCount = matchBuddyBlockLines(lines, variant);
+  if (lineCount !== lines.length || lineCount === 0) {
+    return null;
+  }
+
+  const blankArt = " ".repeat(variant.artWidth);
+  const headerPrefix = `${variant.artLines[0]!.padEnd(variant.artWidth, " ")}${BUDDY_TEXT_GAP}`;
+  if (extractSpeechLine(lines[0] ?? "", headerPrefix) !== `[${variant.type}]`) {
+    return null;
+  }
+
+  const speechLines: string[] = [];
+  for (let index = 1; index < lines.length; index++) {
+    const line = lines[index] ?? "";
+    const artLine = variant.artLines[index]?.padEnd(variant.artWidth, " ") ?? blankArt;
+    const speech = extractSpeechLine(line, `${artLine}${BUDDY_TEXT_GAP}`);
+    if (speech !== null) {
+      speechLines.push(speech);
+    }
+  }
+
+  return { type: variant.type, speech: speechLines.join(" ").trim() };
+}
+
+function parseLegacyBuddyInterjection(lines: string[], variant: BuddyVariant): { type: string; speech: string } | null {
+  const lineCount = matchLegacyStackedBuddyBlockLines(lines, variant);
+  if (lineCount !== lines.length || lineCount === 0) {
+    return null;
+  }
+
+  const speechLine = lines[variant.artLines.length] ?? "";
+  const speech = speechLine.replace(new RegExp(`^\\[${escapeRegExp(variant.type)}\\]\\s*`), "");
+  return { type: variant.type, speech: speech.trim() };
+}
+
+export function parseBuddyInterjection(block: string): { type: string; speech: string } | null {
+  const lines = block.split("\n");
+
+  for (const variant of SIDE_BY_SIDE_BUDDY_VARIANTS) {
+    const parsed = parseSideBySideBuddyInterjection(lines, variant);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  for (const variant of SIDE_BY_SIDE_BUDDY_VARIANTS) {
+    const parsed = parseLegacyBuddyInterjection(lines, variant);
+    if (parsed) {
+      return parsed;
     }
   }
 

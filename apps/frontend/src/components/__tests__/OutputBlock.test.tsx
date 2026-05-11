@@ -36,6 +36,9 @@ describe("OutputBlock", () => {
     expect(container.textContent).toContain("[Sarcastic Clippy]");
     expect(container.textContent).toContain("Remember the migration.");
     expect(container.textContent).toContain("The deploy is still blocked on the failed migration.");
+    expect(container.firstElementChild?.className).not.toContain("font-mono");
+    expect(container.querySelector("pre")?.textContent).toContain("[Sarcastic Clippy]");
+    expect(container.querySelector("p")?.textContent).toContain("The deploy is still blocked on the failed migration.");
   });
 
   it("rerenders when buddy metadata arrives for persisted warning content", () => {
@@ -70,7 +73,7 @@ describe("OutputBlock", () => {
       );
     });
 
-    expect(container.firstElementChild?.className).toContain("font-mono");
+    expect(container.querySelector("pre")?.className).toContain("font-mono");
     expect(container.textContent).toContain("[Mystery Buddy]");
     expect(container.textContent).toContain("Remember the migration.");
   });

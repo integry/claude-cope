@@ -137,6 +137,24 @@ describe("renderChatCard", () => {
       )
     ).toHaveLength(1);
   });
+
+  it("rewraps long buddy interjections to fit within the share card width", async () => {
+    const longBuddyBlock = formatBuddyInterjection(
+      "Agile Snail",
+      "Remember, junior monkey, the backlog wants you to add a lint rule for non-ASCII bytes before the next sprint, then write the postmortem before lunch, and do not ship another surprise migration.",
+    );
+    await renderChatCard("Test", longBuddyBlock);
+
+    const renderedText = mockCtx.fillText.mock.calls.map(([text]) => text as string);
+    expect(renderedText).not.toContain(longBuddyBlock.split("\n")[1]);
+
+    const buddySpeechLines = renderedText.filter((text) => text.includes("[Agile Snail]") || text.includes("migration."));
+
+    expect(buddySpeechLines.length).toBeGreaterThan(1);
+    expect(
+      buddySpeechLines.every((line) => mockCtx.measureText(line).width <= 720 - 24 * 2)
+    ).toBe(true);
+  });
 });
 
 describe("getChatCardBlob", () => {

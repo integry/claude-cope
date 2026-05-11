@@ -96,28 +96,28 @@ function TokenCounter({ tokensSent, tokensReceived }: { tokensSent?: number; tok
 
 type BuddyRenderData = {
   isBuddyInterjection: boolean;
-  warningText: string;
+  buddyBlock: string;
+  body: string;
 };
 
 function getBuddyRenderData(message: Message): BuddyRenderData {
   if (message.role !== "warning") {
-    return { isBuddyInterjection: false, warningText: message.content };
+    return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
   }
 
   const buddyBlock = extractBuddyInterjectionBlock(message.content, message.buddyType);
   if (!buddyBlock) {
-    return { isBuddyInterjection: false, warningText: message.content };
+    return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
   }
 
   return {
     isBuddyInterjection: true,
-    warningText: buddyBlock.body
-      ? `${buddyBlock.block}\n\n${buddyBlock.body}`
-      : buddyBlock.block,
+    buddyBlock: buddyBlock.block,
+    body: buddyBlock.body,
   };
 }
 
-function getContainerClass(message: Message, isNew: boolean, buddyData: BuddyRenderData): string {
+function getContainerClass(message: Message, isNew: boolean): string {
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
   // While streaming, the message has role "loading" but we want it to render
   // in the same color as the final system message (not the yellow loading color)
@@ -128,8 +128,6 @@ function getContainerClass(message: Message, isNew: boolean, buddyData: BuddyRen
   let modifier = "leading-relaxed";
   if (isAchievement) {
     modifier = `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold`;
-  } else if (buddyData.isBuddyInterjection) {
-    modifier = "whitespace-pre font-mono";
   }
   return `mb-5 ${colorClass} ${modifier}`;
 }
@@ -174,6 +172,20 @@ function MessageContent({
 
   if (role === "user") return null;
 
+  if (buddyData.isBuddyInterjection) {
+    const processedBody = buddyData.body ? appendShareMarker(cleanLLMOutput(buddyData.body), Boolean(shareNode)) : "";
+    return (
+      <div className="space-y-3">
+        <pre className="whitespace-pre font-mono">{buddyData.buddyBlock}</pre>
+        {processedBody && (
+          <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
+            {processedBody}
+          </ReactMarkdown>
+        )}
+      </div>
+    );
+  }
+
   if (useMarkdown || isStreaming) {
     const rawContent = shouldTypewrite ? visibleContent : content;
     const processedContent = appendShareMarker(cleanLLMOutput(rawContent), Boolean(shareNode));
@@ -191,7 +203,7 @@ function MessageContent({
   if (role !== "loading") {
     const linkify = (text: string): React.ReactNode =>
       onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
-    return <>{linkify(buddyData.warningText)}</>;
+    return <>{linkify(buddyData.body)}</>;
   }
   return null;
 }
@@ -228,7 +240,7 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
   ) : undefined;
 
   return (
-    <div className={`group ${getContainerClass(message, isNew, buddyData)}`}>
+    <div className={`group ${getContainerClass(message, isNew)}`}>
       {message.role === "user" && (
         <div className="inline-block bg-gray-200 text-gray-900 px-2 py-1 sm:px-3 sm:py-1.5 font-bold">
           <span className="text-gray-500 mr-1">{promptString}</span>

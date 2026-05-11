@@ -7,7 +7,11 @@
 
 import { parseSegments, drawStyledLine, wrapText } from "./shareChatTextUtils";
 import { SHARE_PUNCHLINES } from "./sharePunchlines";
-import { extractBuddyInterjectionBlock } from "./buddyConstants";
+import {
+  extractBuddyInterjectionBlock,
+  formatBuddyInterjection,
+  parseBuddyInterjection,
+} from "./buddyConstants";
 
 export type ChatMessage = {
   role: "user" | "system";
@@ -75,7 +79,7 @@ export async function renderChatCard(userMessage: string, systemMessage: string,
   const userLines = wrapText(ctx, userMessage, contentMaxWidth - userPrefixWidth);
 
   const buddyBlock = extractBuddyInterjectionBlock(systemMessage);
-  const buddyLines = buddyBlock?.block.split("\n") ?? [];
+  const buddyLines = getBuddyRenderLines(ctx, buddyBlock?.block, contentMaxWidth);
   const systemBody = buddyBlock ? buddyBlock.body : systemMessage;
 
   const systemLines = systemBody === "" ? [] : wrapText(ctx, systemBody, contentMaxWidth);
@@ -159,6 +163,30 @@ export async function renderChatCard(userMessage: string, systemMessage: string,
   });
 
   return canvas;
+}
+
+function getBuddyRenderLines(
+  ctx: CanvasRenderingContext2D,
+  block: string | undefined,
+  contentMaxWidth: number,
+): string[] {
+  if (!block) {
+    return [];
+  }
+
+  const parsed = parseBuddyInterjection(block);
+  if (!parsed) {
+    return block.split("\n");
+  }
+
+  const artLines = block.split("\n").map((line) => line.replace(/\s+$/, ""));
+  const artColumnWidth = Math.max(...artLines.map((line) => ctx.measureText(line).width));
+  const gapWidth = ctx.measureText("   ").width;
+  const charWidth = Math.max(ctx.measureText("M").width, 1);
+  const availableTextWidth = Math.max(contentMaxWidth - artColumnWidth - gapWidth, charWidth * 8);
+  const wrapWidth = Math.max(8, Math.floor(availableTextWidth / charWidth));
+
+  return formatBuddyInterjection(parsed.type, parsed.speech, wrapWidth).split("\n");
 }
 
 function truncateLines(
