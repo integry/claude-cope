@@ -259,6 +259,7 @@ describe("Terminal tip-manager wiring", () => {
     expect(rollbackMessageWithoutTicketMocks[0]).not.toHaveBeenCalled();
     expect(rollbackMessageWithoutTicketMocks[1]).toHaveBeenCalledTimes(1);
     expect(getHistoryContents(rendered.container, "user")).toEqual(["duplicate prompt"]);
+    expect(getHistoryContents(rendered.container, "loading")).toEqual([]);
     expect(getHistoryContents(rendered.container, "system")).toEqual(["accepted"]);
     expect(rendered.container.querySelector("[data-role='user']")?.getAttribute("data-message-id")).toBe("0");
     expect(getInput(rendered.container).value).toBe("");

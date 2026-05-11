@@ -78,6 +78,7 @@ type SubmitChatMessageBaseOpts = {
   onProfileUpdate?: (profile: ServerProfile) => void;
   onError?: () => void;
   signal?: AbortSignal;
+  loadingMessageId?: number;
 };
 
 type SubmitChatMessageAcceptedOpts =
@@ -227,7 +228,7 @@ async function assertByokHumanSession(): Promise<void> {
 }
 
 export function submitChatMessage(opts: SubmitChatMessageOpts) {
-  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, onError, signal } = opts;
+  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, onError, signal, loadingMessageId } = opts;
   // Ignore any locally-stored apiKey when BYOK is disabled at the operator
   // level — stale keys from prior sessions must not reach OpenRouter.
   const isBYOK = BYOK_ENABLED && Boolean(apiKey);
@@ -299,9 +300,9 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
 
   requestPromise
     .then(async (res) => {
-      if (await handleChatErrorResponse(res, setHistory, opts.onQuotaExhausted, onError)) return;
+      if (await handleChatErrorResponse(res, setHistory, loadingMessageId, opts.onQuotaExhausted, onError)) return;
 
-      const parsed = await parseChatResponseBody(res, setHistory, opts.addActiveTD, opts.onProfileUpdate);
+      const parsed = await parseChatResponseBody(res, setHistory, loadingMessageId, opts.addActiveTD, opts.onProfileUpdate);
       let { rawReply } = parsed;
       const { tokensSent, tokensReceived, cost, quotaPercent } = parsed;
 
@@ -337,7 +338,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
 
       setHistory((prev) => {
         let updated = [
-          ...prev.filter((msg) => msg.role !== "loading"),
+          ...prev.filter((msg) => msg.role !== "loading" || (loadingMessageId !== undefined && msg.id !== loadingMessageId)),
           { role: "system" as const, content: finalReply, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
           ...achievementMessages,
           ...(buddyMessage ? [buddyMessage] : []),
@@ -373,18 +374,18 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
         onError?.();
         if (err.reverify) {
           window.dispatchEvent(new CustomEvent(TURNSTILE_REQUIRED_EVENT));
-          setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
+          setHistory((prev) => prev.filter((msg) => msg.role !== "loading" || (loadingMessageId !== undefined && msg.id !== loadingMessageId)));
           return;
         }
         setHistory((prev) => [
-          ...prev.filter((msg) => msg.role !== "loading"),
+          ...prev.filter((msg) => msg.role !== "loading" || (loadingMessageId !== undefined && msg.id !== loadingMessageId)),
           { role: "error", content: `[❌ Error] ${err.message}` },
         ]);
         return;
       }
       onError?.();
       setHistory((prev) => [
-        ...prev.filter((msg) => msg.role !== "loading"),
+        ...prev.filter((msg) => msg.role !== "loading" || (loadingMessageId !== undefined && msg.id !== loadingMessageId)),
         { role: "error", content: "[❌ Error] Network error. Is the backend running?" },
       ]);
     })

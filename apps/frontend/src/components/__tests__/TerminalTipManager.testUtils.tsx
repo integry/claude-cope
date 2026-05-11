@@ -199,9 +199,16 @@ export async function commitAcceptedPrompt(submitChatMessageMock: ReturnType<typ
     setHistory: (updater: (prev: Message[]) => Message[]) => void;
     onAccepted?: () => void;
     scheduleHistoryCommitCallback?: (callback: () => void) => void;
+    loadingMessageId?: number;
   };
   await act(async () => {
-    request.setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
+    request.setHistory((prev) => [
+      ...prev.filter((message) =>
+        message.role !== "loading"
+        || (request.loadingMessageId !== undefined && message.id !== request.loadingMessageId),
+      ),
+      { role: "system", content: "accepted" },
+    ]);
     request.scheduleHistoryCommitCallback?.(() => request.onAccepted?.());
     await Promise.resolve();
   });

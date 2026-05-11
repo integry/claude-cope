@@ -28,11 +28,23 @@ import { shouldShowNag } from "./winrarNag";
 import { TerminalView } from "./TerminalView";
 import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
+import { usePromptSubmissionState } from "./usePromptSubmissionState";
 import { useUpgradeNagState } from "./useUpgradeNagState";
 import { STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, syncMessageKeys } from "./terminalUtils";
 export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
 type PromptSubmission = { command: string; replayId: number | null; submissionId: number };
-type PromptAbortHandle = { abort: () => void };
+
+function createPromptLoadingMessage(submissionId: number): Message {
+  return { id: submissionId, role: "loading", content: getRandomLoadingPhrase() };
+}
+
+function removePromptMessages(submissionId: number) {
+  return (prev: Message[]) =>
+    prev.filter((message) => !(
+      message.id === submissionId
+      && (message.role === "user" || message.role === "loading")
+    ));
+}
 
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
@@ -54,7 +66,6 @@ function Terminal() {
   const [instantBanReady, setInstantBanReady] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
   const [inputValue, setInputValue] = useState("");
@@ -75,8 +86,6 @@ function Terminal() {
   const messageKeys = useRef<number[]>([]);
   const nextKeyId = useRef(0);
   syncMessageKeys(messageKeys.current, nextKeyId, history.length);
-  const abortControllerRef = useRef<PromptAbortHandle | null>(null);
-  const activeAbortControllersRef = useRef(new Set<AbortController>());
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
   const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyRef = useRef(history);
@@ -84,12 +93,21 @@ function Terminal() {
   const lastSuggestedReplyRef = useRef<string | null>(null);
   const nextPendingBacklogRollbackIdRef = useRef(0);
   const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
-  const activePromptCountRef = useRef(0);
   const nextPromptSubmissionIdRef = useRef(0);
   const commandHistoryEntriesRef = useRef<Array<{ submissionId: number; command: string }>>([]);
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
+  const {
+    abortControllerRef,
+    createPromptProcessingSetter,
+    isProcessing,
+    resetPromptProcessing,
+    setIsProcessing,
+    startPromptProcessing,
+    trackAbortController,
+    untrackAbortController,
+  } = usePromptSubmissionState();
   const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
   useEffect(() => () => {
     const ds = freeTierDelayRef.current;
@@ -103,55 +121,6 @@ function Terminal() {
   const setCommandHistoryEntries = useCallback((updater: (prev: Array<{ submissionId: number; command: string }>) => Array<{ submissionId: number; command: string }>) => {
     const nextEntries = updater(commandHistoryEntriesRef.current); commandHistoryEntriesRef.current = nextEntries; setCommandHistory(nextEntries.map(({ command }) => command));
   }, []);
-  const syncAbortControllerHandle = useCallback(() => {
-    abortControllerRef.current = activeAbortControllersRef.current.size === 0
-      ? null
-      : { abort: () => { Array.from(activeAbortControllersRef.current).forEach((controller) => controller.abort()); } };
-  }, []);
-  const syncPromptProcessingState = useCallback(() => {
-    setIsProcessing(activePromptCountRef.current > 0);
-  }, []);
-  const startPromptProcessing = useCallback(() => {
-    activePromptCountRef.current += 1;
-    setIsProcessing(true);
-  }, []);
-  const finishPromptProcessing = useCallback(() => {
-    activePromptCountRef.current = Math.max(0, activePromptCountRef.current - 1);
-    syncPromptProcessingState();
-  }, [syncPromptProcessingState]);
-  const resetPromptProcessing = useCallback(() => {
-    activePromptCountRef.current = 0;
-    setIsProcessing(false);
-  }, []);
-  const trackAbortController = useCallback((controller: AbortController) => {
-    activeAbortControllersRef.current.add(controller);
-    syncAbortControllerHandle();
-  }, [syncAbortControllerHandle]);
-  const untrackAbortController = useCallback((controller: AbortController) => {
-    if (!activeAbortControllersRef.current.delete(controller)) return;
-    syncAbortControllerHandle();
-  }, [syncAbortControllerHandle]);
-  const createPromptProcessingSetter = useCallback((controller: AbortController) => {
-    // The prompt is already counted as active before the chat layer receives
-    // this setter, and it may only signal completion with `false`.
-    let promptProcessingActive = true;
-    let controllerReleased = false;
-    const releaseController = () => { if (!controllerReleased) { controllerReleased = true; untrackAbortController(controller); } };
-    return (value: boolean | ((prev: boolean) => boolean)) => {
-      const nextValue = typeof value === "function" ? value(promptProcessingActive) : value;
-      if (nextValue === promptProcessingActive) {
-        if (!nextValue) releaseController();
-        return;
-      }
-      promptProcessingActive = nextValue;
-      if (promptProcessingActive) {
-        startPromptProcessing();
-        return;
-      }
-      releaseController();
-      finishPromptProcessing();
-    };
-  }, [finishPromptProcessing, startPromptProcessing, untrackAbortController]);
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
     const isNew = unlockAchievement(id);
     if (isNew) playChime();
@@ -250,7 +219,7 @@ function Terminal() {
   }, [recordValidCommand]);
   const runSlashCommand = useCallback((command: string) => {
     executeSlashCommand(command, { state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply, setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); }, playChime, playError, setActiveTheme, onValidSlashCommand: recordValidatedSlashCommand });
-  }, [state, setState, setHistory, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply, recordValidatedSlashCommand]);
+  }, [state, setState, setHistory, setIsProcessing, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply, recordValidatedSlashCommand]);
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
   useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, setHistory, runSlashCommand });
@@ -297,7 +266,7 @@ function Terminal() {
       if (!completed) return;
       freeTierDelayRef.current = { cancelled: false, timeoutId: null };
     } else {
-      setHistory((prev) => [...prev, userMessage, { role: "loading", content: getRandomLoadingPhrase() }]);
+      setHistory((prev) => [...prev, userMessage, createPromptLoadingMessage(submissionId)]);
       startPromptProcessing();
     }
     const rollbackId = nextPendingBacklogRollbackIdRef.current++;
@@ -326,11 +295,12 @@ function Terminal() {
       buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades,
       onByokUsage: (usage) => setState((prev) => { const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 }; return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } }; }),
       onQuotaUpdate: (quotaPercent) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })); if (quotaPercent <= 0 && isFreeTier && !effectiveApiKey) nagArmedFromQuotaRef.current = true; },
+      loadingMessageId: isFreeTier ? undefined : submissionId,
       onQuotaExhausted: effectiveApiKey ? undefined : () => {
         untrackAbortController(controller);
         settlePendingBacklogRollback(rollbackId, true);
         setCommandHistoryEntries((prev) => prev.filter((entry) => entry.submissionId !== submissionId));
-        setHistory((prev) => prev.filter((message) => !(message.role === "user" && message.id === submissionId)));
+        setHistory(removePromptMessages(submissionId));
         handleQuotaLockout(command);
       },
       onProfileUpdate: applyProfileUpdate,
