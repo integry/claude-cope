@@ -108,7 +108,7 @@ function Terminal() {
     trackAbortController,
     untrackAbortController,
   } = usePromptSubmissionState();
-  const { recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
+  const { recordConversationRound, recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
   useEffect(() => () => {
     const ds = freeTierDelayRef.current;
     ds.cancelled = true;
@@ -305,6 +305,7 @@ function Terminal() {
       },
       onProfileUpdate: applyProfileUpdate,
       onAccepted: () => {
+        recordConversationRound();
         untrackAbortController(controller);
         handlePromptAccepted(rollbackId, replayId);
       },

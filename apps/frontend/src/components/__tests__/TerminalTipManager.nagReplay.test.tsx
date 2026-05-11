@@ -27,6 +27,7 @@ import {
 
 const {
   executeSlashCommandMock,
+  recordConversationRoundMock,
   recordEnterMock,
   recordValidCommandMock,
   recordMessageWithoutTicketMock,
@@ -37,6 +38,7 @@ const {
   isFreeUserMock,
 } = vi.hoisted(() => ({
   executeSlashCommandMock: vi.fn(),
+  recordConversationRoundMock: vi.fn(),
   recordEnterMock: vi.fn(),
   recordValidCommandMock: vi.fn(),
   recordMessageWithoutTicketMock: vi.fn(),
@@ -61,6 +63,7 @@ vi.mock("../../hooks/useSoundEffects", () => createUseSoundEffectsModule());
 vi.mock("../../hooks/usePingAcknowledged", () => ({ usePingAcknowledged: () => false }));
 vi.mock("../../hooks/useOverlays", async () => (await import("./TerminalTipManager.testUtils")).createUseOverlaysModule((value) => setShowUpgradeMock(value))());
 vi.mock("../../hooks/useTipManager", () => createUseTipManagerModule({
+  recordConversationRoundMock,
   recordEnterMock,
   recordValidCommandMock,
   recordMessageWithoutTicketMock,
@@ -117,6 +120,7 @@ describe("Terminal tip-manager nag replay wiring", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-10T00:00:00.000Z"));
     recordMessageWithoutTicketMock.mockImplementation(() => vi.fn());
+    recordConversationRoundMock.mockReset();
     isFreeUserMock.mockReset();
     isFreeUserMock.mockReturnValue(false);
     runFreeTierDelayMock.mockReset();

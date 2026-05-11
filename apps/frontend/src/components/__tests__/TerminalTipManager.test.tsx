@@ -27,6 +27,7 @@ import {
 
 const {
   executeSlashCommandMock,
+  recordConversationRoundMock,
   recordEnterMock,
   recordValidCommandMock,
   recordMessageWithoutTicketMock,
@@ -35,6 +36,7 @@ const {
   shouldShowNagMock,
 } = vi.hoisted(() => ({
   executeSlashCommandMock: vi.fn(),
+  recordConversationRoundMock: vi.fn(),
   recordEnterMock: vi.fn(),
   recordValidCommandMock: vi.fn(),
   recordMessageWithoutTicketMock: vi.fn(),
@@ -57,6 +59,7 @@ vi.mock("../../hooks/useSoundEffects", () => createUseSoundEffectsModule());
 vi.mock("../../hooks/usePingAcknowledged", () => ({ usePingAcknowledged: () => false }));
 vi.mock("../../hooks/useOverlays", async () => (await import("./TerminalTipManager.testUtils")).createUseOverlaysModule()());
 vi.mock("../../hooks/useTipManager", () => createUseTipManagerModule({
+  recordConversationRoundMock,
   recordEnterMock,
   recordValidCommandMock,
   recordMessageWithoutTicketMock,
@@ -93,6 +96,7 @@ describe("Terminal tip-manager wiring", () => {
       ctx.onValidSlashCommand?.(command.trim());
     });
     submitChatMessageMock.mockReset();
+    recordConversationRoundMock.mockReset();
     shouldShowNagMock.mockReset();
     shouldShowNagMock.mockReturnValue(false);
   });
@@ -166,6 +170,24 @@ describe("Terminal tip-manager wiring", () => {
     expect(submitChatMessageMock.mock.calls[0]?.[0]?.onAccepted).toEqual(expect.any(Function));
     expect(recordMessageWithoutTicketMock).toHaveBeenCalledTimes(1);
     expect(recordValidCommandMock).not.toHaveBeenCalled();
+  });
+
+  it("marks a conversation round only after the accepted prompt commits", async () => {
+    submitChatMessageMock.mockImplementation(({ setHistory, onAccepted, scheduleHistoryCommitCallback }: {
+      setHistory: (updater: (prev: unknown[]) => unknown[]) => void;
+      onAccepted?: () => void;
+      scheduleHistoryCommitCallback?: (callback: () => void) => void;
+    }) => {
+      act(() => {
+        setHistory((prev) => [...prev, { role: "system", content: "accepted" }]);
+        scheduleHistoryCommitCallback?.(() => onAccepted?.());
+      });
+    });
+
+    rendered = await renderTerminal(Terminal);
+    await submitCommand(rendered.container, "ship it");
+
+    expect(recordConversationRoundMock).toHaveBeenCalledTimes(1);
   });
 
   it("aborts all overlapping in-flight prompts on Escape", async () => {

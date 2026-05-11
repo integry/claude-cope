@@ -133,4 +133,30 @@ describe("useTipManager backlog reminders", () => {
 
     expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([BACKLOG_REMINDER_TIPS[0]?.text]);
   });
+
+  it("requires a completed conversation round before another backlog reminder can be shown", () => {
+    act(() => {
+      for (let i = 0; i < 6; i++) {
+        harness.ref.current?.recordMessageWithoutTicket();
+      }
+      for (let i = 0; i < 12; i++) {
+        harness.ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([BACKLOG_REMINDER_TIPS[0]?.text]);
+
+    act(() => {
+      harness.ref.current?.recordConversationRound();
+      vi.setSystemTime(new Date("2026-05-11T00:00:01Z"));
+      for (let i = 0; i < 6; i++) {
+        harness.ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([
+      BACKLOG_REMINDER_TIPS[0]?.text,
+      BACKLOG_REMINDER_TIPS[1]?.text,
+    ]);
+  });
 });

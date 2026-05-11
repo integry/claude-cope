@@ -128,6 +128,8 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   const nextBacklogReminderThresholdRef = useRef(getNextBacklogReminderThreshold());
   const lastBacklogReminderTipIdRef = useRef<string | null>(null);
   const recentTipHistoryRef = useRef<Record<string, number>>(readRecentTipHistory());
+  const conversationRoundsRef = useRef(0);
+  const lastTipConversationRoundRef = useRef<number | null>(null);
   const isBootingRef = useRef(isBooting);
   const isInteractionBlockedRef = useRef(isInteractionBlocked);
   const gameStateRef = useRef(gameState);
@@ -144,18 +146,52 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   gameStateRef.current = gameState;
   totalTDEarnedRef.current = totalTDEarned;
 
+  const canEmitTip = useCallback(() => (
+    lastTipConversationRoundRef.current === null
+    || conversationRoundsRef.current > lastTipConversationRoundRef.current
+  ), []);
+
+  const noteTipEmitted = useCallback(() => {
+    lastTipConversationRoundRef.current = conversationRoundsRef.current;
+  }, []);
+
+  const appendManagedTip = useCallback((content: string): boolean => {
+    if (!canEmitTip()) return false;
+    appendTip(setHistory, content);
+    noteTipEmitted();
+    return true;
+  }, [canEmitTip, noteTipEmitted, setHistory]);
+
+  const flushPendingContextualTip = useCallback(() => {
+    if (!canEmitTip()) return;
+
+    const pending = pendingContextualTriggersRef.current;
+    while (pending.length > 0) {
+      const trigger = pending.shift();
+      if (!trigger) continue;
+      const tip = selectContextualTip(trigger, {
+        totalTDEarned: totalTDEarnedRef.current,
+        hasActiveTicket: Boolean(gameStateRef.current.activeTicket),
+      });
+      if (!tip) continue;
+      appendManagedTip(tip.text);
+      break;
+    }
+  }, [appendManagedTip, canEmitTip]);
+
   const emitIdleTip = useCallback(() => {
     idleTimerRef.current = null;
     idleDeadlineRef.current = null;
+    if (!canEmitTip()) return;
     recentTipHistoryRef.current = readRecentTipHistory();
     const tip = selectIdleTip(
       { totalTDEarned: totalTDEarnedRef.current, hasActiveTicket: Boolean(gameStateRef.current.activeTicket) },
       { excludeTipIds: Object.keys(recentTipHistoryRef.current) },
     );
     if (!tip) return;
-    appendTip(setHistory, tip.text);
+    appendManagedTip(tip.text);
     markTipShown(recentTipHistoryRef, tip);
-  }, [setHistory]);
+  }, [appendManagedTip, canEmitTip]);
 
   const clearIdleTimer = useCallback(() => {
     if (idleTimerRef.current !== null) {
@@ -186,11 +222,17 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     scheduleIdleTip();
   }, [scheduleIdleTip]);
 
+  const recordConversationRound = useCallback(() => {
+    conversationRoundsRef.current += 1;
+    flushPendingContextualTip();
+  }, [flushPendingContextualTip]);
+
   const recordValidCommand = useCallback((baseCommand?: string, options?: RecordValidCommandOptions): string | null => {
     actionCountRef.current += 1;
     if (baseCommand) usedCommandsRef.current.add(baseCommand);
     if (actionCountRef.current % MILESTONE_INTERVAL !== 0) return null;
     if (options?.suppressTip) return null;
+    if (!canEmitTip()) return null;
 
     let tip = selectMilestoneTip(
       usedCommandsRef.current,
@@ -208,9 +250,9 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     if (!tip) return null;
 
     shownMilestoneTipIdsRef.current.add(tip.id);
-    appendTip(setHistory, tip.text);
+    appendManagedTip(tip.text);
     return tip.text;
-  }, [setHistory]);
+  }, [appendManagedTip, canEmitTip]);
 
   const recordMessageWithoutTicket = useCallback((): MessageWithoutTicketRollback => {
     const previousCount = noTicketMessageCountRef.current;
@@ -238,6 +280,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
 
     recentTipHistoryRef.current = readRecentTipHistory();
     const previousRecentTipHistory = recentTipHistoryRef.current;
+    const previousLastTipConversationRound = lastTipConversationRoundRef.current;
     if (hasRecentBacklogReminder(recentTipHistoryRef.current)) {
       noTicketMessageCountRef.current = 0;
       nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
@@ -262,8 +305,15 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
         lastBacklogReminderTipIdRef.current = previousTipId;
       };
     }
+    if (!canEmitTip()) {
+      return () => {
+        noTicketMessageCountRef.current = previousCount;
+        nextBacklogReminderThresholdRef.current = previousThreshold;
+        lastBacklogReminderTipIdRef.current = previousTipId;
+      };
+    }
     lastBacklogReminderTipIdRef.current = tip.id;
-    appendTip(setHistory, tip.text);
+    appendManagedTip(tip.text);
     markTipShown(recentTipHistoryRef, tip);
     noTicketMessageCountRef.current = 0;
     nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
@@ -272,6 +322,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       nextBacklogReminderThresholdRef.current = previousThreshold;
       lastBacklogReminderTipIdRef.current = previousTipId;
       recentTipHistoryRef.current = previousRecentTipHistory;
+      lastTipConversationRoundRef.current = previousLastTipConversationRound;
       persistRecentTipHistory(previousRecentTipHistory);
       setHistory((prev) => {
         for (let i = prev.length - 1; i >= 0; i--) {
@@ -282,7 +333,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
         return prev;
       });
     };
-  }, [setHistory]);
+  }, [appendManagedTip, canEmitTip, setHistory]);
 
   useEffect(() => {
     if (!gameState.activeTicket) return;
@@ -320,7 +371,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
         return trigger;
       });
 
-    if (isInteractionBlocked) {
+    if (isInteractionBlocked || !canEmitTip()) {
       pendingContextualTriggersRef.current.push(...eligibleTriggers);
       previousStateRef.current = {
         currentTD,
@@ -331,21 +382,8 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       return;
     }
 
-    const newTips = [...pendingContextualTriggersRef.current, ...eligibleTriggers]
-      .map((trigger) => {
-        const tip = selectContextualTip(trigger, {
-          totalTDEarned,
-          hasActiveTicket: Boolean(gameStateRef.current.activeTicket),
-        });
-        if (!tip) return null;
-        return tip.text;
-      })
-      .filter((tip): tip is string => Boolean(tip));
-    pendingContextualTriggersRef.current = [];
-
-    if (newTips.length > 0) {
-      setHistory((prev) => [...prev, ...newTips.map((content) => ({ role: "system" as const, content }))]);
-    }
+    pendingContextualTriggersRef.current.push(...eligibleTriggers);
+    flushPendingContextualTip();
 
     previousStateRef.current = {
       currentTD,
@@ -362,7 +400,8 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     isBooting,
     isInteractionBlocked,
     onlineCount,
-    setHistory,
+    canEmitTip,
+    flushPendingContextualTip,
   ]);
 
   useEffect(() => clearIdleTimer, [clearIdleTimer]);
@@ -380,5 +419,5 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     scheduleIdleTip(remainingDelayMs > 0 ? remainingDelayMs : 250);
   }, [clearIdleTimer, isInteractionBlocked, scheduleIdleTip]);
 
-  return { recordEnter, recordValidCommand, recordMessageWithoutTicket };
+  return { recordConversationRound, recordEnter, recordValidCommand, recordMessageWithoutTicket };
 }

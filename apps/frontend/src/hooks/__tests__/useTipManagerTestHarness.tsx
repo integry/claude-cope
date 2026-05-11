@@ -38,6 +38,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
 }
 
 export type HarnessHandle = {
+  recordConversationRound: () => void;
   recordEnter: () => void;
   recordValidCommand: (baseCommand?: string, options?: { suppressTip?: boolean }) => void;
   recordMessageWithoutTicket: () => (() => void);

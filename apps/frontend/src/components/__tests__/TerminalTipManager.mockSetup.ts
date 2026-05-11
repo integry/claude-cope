@@ -56,16 +56,19 @@ export function createUseSoundEffectsModule() {
 }
 
 export function createUseTipManagerModule({
+  recordConversationRoundMock,
   recordEnterMock,
   recordValidCommandMock,
   recordMessageWithoutTicketMock,
 }: {
+  recordConversationRoundMock: ReturnType<typeof vi.fn>;
   recordEnterMock: ReturnType<typeof vi.fn>;
   recordValidCommandMock: ReturnType<typeof vi.fn>;
   recordMessageWithoutTicketMock: ReturnType<typeof vi.fn>;
 }) {
   return {
     useTipManager: () => ({
+      recordConversationRound: recordConversationRoundMock,
       recordEnter: recordEnterMock,
       recordValidCommand: recordValidCommandMock,
       recordMessageWithoutTicket: (...args: unknown[]) => recordMessageWithoutTicketMock(...args),

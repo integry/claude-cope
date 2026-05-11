@@ -147,21 +147,32 @@ describe("useTipManager core behavior", () => {
     expect(harness.ref.current?.getHistory()[0]?.content).toBe(MILESTONE_TIPS[1]?.text);
   });
 
-  it("keeps firing milestone tips after all eligible milestone tips have been shown once", () => {
+  it("requires a completed conversation round before another milestone tip can fire", () => {
     act(() => {
       harness.ref.current?.setGameState((prev) => ({
         ...prev,
         economy: { ...prev.economy, totalTDEarned: 1_000 },
       }));
-      for (let i = 0; i < 72; i++) {
+      for (let i = 0; i < 12; i++) {
+        harness.ref.current?.recordValidCommand("/help");
+      }
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(1);
+
+    act(() => {
+      harness.ref.current?.recordConversationRound();
+      for (let i = 0; i < 6; i++) {
         harness.ref.current?.recordValidCommand("/help");
       }
       vi.runOnlyPendingTimers();
     });
 
     const history = harness.ref.current?.getHistory() ?? [];
-    expect(history).toHaveLength(12);
-    expect(history[11]?.content).toBe(MILESTONE_TIPS[1]?.text);
+    expect(history).toHaveLength(2);
+    expect(history[0]?.content).toBe(MILESTONE_TIPS[1]?.text);
+    expect(history[1]?.content).toBe(MILESTONE_TIPS[2]?.text);
   });
 
   it("still advances milestone accounting when tip rendering is suppressed", () => {
@@ -203,7 +214,6 @@ describe("useTipManager core behavior", () => {
 
     expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([
       getContextualTip("td_1000", { totalTDEarned: 1_200 }),
-      getContextualTip("lone_user_online"),
     ]);
   });
 
@@ -224,8 +234,6 @@ describe("useTipManager core behavior", () => {
 
     expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([
       getContextualTip("td_1000", { totalTDEarned: 1_200 }),
-      getContextualTip("quota_exhausted", { totalTDEarned: 1_200 }),
-      getContextualTip("lone_user_online"),
     ]);
   });
 
@@ -247,13 +255,35 @@ describe("useTipManager core behavior", () => {
     });
 
     act(() => {
+      harness.ref.current?.recordConversationRound();
       harness.ref.current?.setOnlineCount(1);
     });
 
     expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([
       getContextualTip("ticket_completed"),
       getContextualTip("lone_user_online"),
-      getContextualTip("ticket_completed"),
+    ]);
+  });
+
+  it("releases pending contextual tips one per conversation round", () => {
+    act(() => {
+      harness.ref.current?.setGameState((prev) => ({
+        ...prev,
+        economy: { ...prev.economy, currentTD: 1_200, totalTDEarned: 1_200 },
+      }));
+      harness.ref.current?.setOnlineCount(1);
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([
+      getContextualTip("td_1000", { totalTDEarned: 1_200 }),
+    ]);
+
+    act(() => {
+      harness.ref.current?.recordConversationRound();
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([
+      getContextualTip("td_1000", { totalTDEarned: 1_200 }),
       getContextualTip("lone_user_online"),
     ]);
   });
