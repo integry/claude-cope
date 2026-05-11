@@ -14,7 +14,17 @@ vi.mock("../CommandLine", () => ({
 vi.mock("../SlashMenu", () => ({ default: () => null }));
 vi.mock("../HeaderBar", () => ({ default: () => null }));
 vi.mock("../TerminalFooter", () => ({
-  TerminalFooter: () => createElement("div", { "data-testid": "terminal-footer" }),
+  TerminalFooter: ({
+    buddyType,
+  }: {
+    buddyType: string | null;
+  }) => createElement(
+    "div",
+    { "data-testid": "terminal-footer" },
+    buddyType
+      ? createElement("div", { className: "terminal-buddy-status" }, `${buddyType} is watching...`)
+      : null,
+  ),
 }));
 vi.mock("../Ticker", () => ({ default: () => null }));
 vi.mock("../OutageBar", () => ({ OutageBar: () => null }));
@@ -169,31 +179,32 @@ describe("TerminalView buddy layout", () => {
     const withoutBuddy = renderTerminalView(createState(null));
     expect(withoutBuddy.querySelector(".terminal-buddy-dock")).toBeNull();
     expect(withoutBuddy.querySelector(".terminal-buddy-overlay")).toBeNull();
+    expect(withoutBuddy.querySelector(".terminal-buddy-status")).toBeNull();
 
     act(() => {
       root!.render(createElement(TerminalView, createProps(createState("Sarcastic Clippy"))));
     });
 
-    const watcherStatus = withoutBuddy.querySelector(".terminal-buddy-dock");
+    const watcherStatus = withoutBuddy.querySelector(".terminal-buddy-status");
     const overlay = withoutBuddy.querySelector(".terminal-buddy-overlay");
 
     expect(watcherStatus).not.toBeNull();
-    expect(watcherStatus?.querySelector(".terminal-buddy-status")).not.toBeNull();
     expect(overlay).not.toBeNull();
   });
 
-  it("keeps the buddy art and watcher status in bottom chrome and out of command shell flow", () => {
+  it("keeps the buddy art in bottom chrome and moves watcher status into the footer", () => {
     const view = renderTerminalView(createState("Sarcastic Clippy"));
     const commandShell = view.querySelector(".terminal-command-shell");
     const bottomChrome = view.querySelector("[data-terminal-bottom-chrome='true']");
-    const watcherStatus = view.querySelector(".terminal-buddy-dock");
+    const buddyDock = view.querySelector(".terminal-buddy-dock");
+    const watcherStatus = view.querySelector("[data-testid='terminal-footer'] .terminal-buddy-status");
     const overlay = view.querySelector(".terminal-buddy-overlay");
     const overlayBuddy = overlay?.querySelector(".terminal-buddy-display");
 
-    expect(watcherStatus).not.toBeNull();
+    expect(buddyDock).not.toBeNull();
     expect(watcherStatus?.textContent).toContain("Sarcastic Clippy is watching...");
     expect(watcherStatus?.textContent).not.toContain("[BUDDY]");
-    expect(bottomChrome?.contains(watcherStatus!)).toBe(true);
+    expect(bottomChrome?.contains(watcherStatus!)).toBe(false);
     expect(overlayBuddy).not.toBeNull();
     expect(overlayBuddy?.textContent).not.toContain("Sarcastic Clippy is watching...");
     expect(bottomChrome?.contains(overlay!)).toBe(true);
@@ -201,17 +212,20 @@ describe("TerminalView buddy layout", () => {
     expect(commandShell?.textContent).not.toContain("Sarcastic Clippy is watching...");
   });
 
-  it("renders the buddy dock as part of bottom chrome", () => {
+  it("renders the buddy dock in bottom chrome and the watcher line in the footer", () => {
     const view = renderTerminalView(createState("Sarcastic Clippy"));
     const bottomChrome = view.querySelector("[data-terminal-bottom-chrome='true']");
-    const watcherStatus = view.querySelector(".terminal-buddy-dock");
+    const buddyDock = view.querySelector(".terminal-buddy-dock");
     const overlay = view.querySelector(".terminal-buddy-overlay");
+    const footer = view.querySelector("[data-testid='terminal-footer']");
+    const watcherStatus = footer?.querySelector(".terminal-buddy-status");
 
     expect(bottomChrome).not.toBeNull();
-    expect(watcherStatus).not.toBeNull();
-    expect(bottomChrome?.contains(watcherStatus!)).toBe(true);
+    expect(buddyDock).not.toBeNull();
+    expect(bottomChrome?.contains(buddyDock!)).toBe(true);
     expect(overlay).not.toBeNull();
     expect(bottomChrome?.contains(overlay!)).toBe(true);
-    expect(view.querySelector("[data-testid='terminal-footer']")).not.toBeNull();
+    expect(footer).not.toBeNull();
+    expect(watcherStatus).not.toBeNull();
   });
 });

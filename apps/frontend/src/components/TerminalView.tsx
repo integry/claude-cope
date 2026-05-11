@@ -20,7 +20,6 @@ import SprintProgressBar from "./SprintProgressBar";
 import MessageList from "./MessageList";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { TerminalOverlays } from "./TerminalOverlays";
-import { BuddyWatcherStatus } from "./BuddyDisplay";
 import { BuddyOverlay } from "./BuddyOverlay";
 import type { GameState, Message } from "../hooks/useGameState";
 import type { PendingReviewPing } from "../hooks/useMultiplayer";
@@ -303,10 +302,6 @@ export function TerminalView({
         {state.buddy.type && (
           <div className="terminal-buddy-dock">
             <BuddyOverlay buddy={state.buddy} />
-            <BuddyWatcherStatus
-              type={state.buddy.type}
-              isShiny={state.buddy.isShiny}
-            />
           </div>
         )}
       </div>
@@ -348,6 +343,8 @@ export function TerminalView({
       />
       <TerminalFooter
         closeAllOverlays={closeAllOverlaysPreservingNag}
+        buddyType={state.buddy.type}
+        buddyIsShiny={state.buddy.isShiny}
         setShowTerms={setShowTerms}
         setShowPrivacy={setShowPrivacy}
         setShowAbout={setShowAbout}
