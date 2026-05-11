@@ -44,7 +44,11 @@ export function computeBuddyInterjection(buddy: BuddyState): BuddyInterjectionRe
   const text = lines[Math.floor(Math.random() * lines.length)]!;
   const shouldDeleteHistory = buddy.type === "10x Dragon" && Math.random() < 0.5;
   return {
-    message: { role: "warning", content: formatBuddyInterjection(buddy.type, text) },
+    message: {
+      role: "warning",
+      content: formatBuddyInterjection(buddy.type, text),
+      buddyType: buddy.type,
+    },
     shouldDeleteHistory,
   };
 }
@@ -291,7 +295,11 @@ export function submitChatMessage(opts: {
 
       // Build buddy message from LLM-generated interjection or fallback to client-side
       const buddyMessage = buddySays && opts.buddyType
-        ? { role: "warning" as const, content: formatBuddyInterjection(opts.buddyType, buddySays) }
+        ? {
+            role: "warning" as const,
+            content: formatBuddyInterjection(opts.buddyType, buddySays),
+            buddyType: opts.buddyType,
+          }
         : buddyResult?.message ?? null;
 
       // Merge sprint-complete text into the AI reply so they appear as a single message

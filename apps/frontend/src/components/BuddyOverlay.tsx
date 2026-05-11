@@ -12,6 +12,7 @@ import type { GameState } from "../hooks/useGameState";
 type BuddyOverlayProps = {
   buddy: GameState["buddy"];
   containerRef: RefObject<HTMLDivElement | null>;
+  bottomChromeRef: RefObject<HTMLDivElement | null>;
 };
 
 const DEFAULT_BUDDY_BOTTOM_OFFSET = 56;
@@ -28,6 +29,7 @@ function getVisibleFooterHeight(container: HTMLDivElement) {
 export function BuddyOverlay({
   buddy,
   containerRef,
+  bottomChromeRef,
 }: BuddyOverlayProps) {
   const displayRef = useRef<HTMLDivElement | null>(null);
   const [overlayMetrics, setOverlayMetrics] = useState({
@@ -49,7 +51,13 @@ export function BuddyOverlay({
       }
 
       const containerRect = container.getBoundingClientRect();
-      const bottomOffset = getVisibleFooterHeight(container) + BUDDY_BOTTOM_GAP;
+      const bottomChromeRect = bottomChromeRef.current?.getBoundingClientRect() ?? null;
+      const bottomOffset = bottomChromeRect
+        ? Math.max(
+            getVisibleFooterHeight(container) + BUDDY_BOTTOM_GAP,
+            containerRect.bottom - bottomChromeRect.top + BUDDY_BOTTOM_GAP,
+          )
+        : getVisibleFooterHeight(container) + BUDDY_BOTTOM_GAP;
       const overlayWidth = display.offsetWidth;
       const overlayHeight = display.offsetHeight;
       const scale = getBuddyOverlayScale({
@@ -85,6 +93,9 @@ export function BuddyOverlay({
       if (containerRef.current) {
         resizeObserver.observe(containerRef.current);
       }
+      if (bottomChromeRef.current) {
+        resizeObserver.observe(bottomChromeRef.current);
+      }
       if (displayRef.current) {
         resizeObserver.observe(displayRef.current);
       }
@@ -98,7 +109,7 @@ export function BuddyOverlay({
         window.removeEventListener("resize", measure);
       }
     };
-  }, [buddy.type, containerRef]);
+  }, [buddy.type, bottomChromeRef, containerRef]);
 
   if (!buddy.type) {
     return null;

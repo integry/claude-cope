@@ -176,6 +176,7 @@ export function TerminalView({
   upgradeNagDismissEffect,
 }: TerminalViewProps) {
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
+  const bottomChromeRef = useRef<HTMLDivElement | null>(null);
 
   const upgradeDismissProps = getUpgradeDismissProps(
     pendingNagCommand,
@@ -266,6 +267,7 @@ export function TerminalView({
         <div ref={bottomRef} />
       </div>
       <div
+        ref={bottomChromeRef}
         className="terminal-bottom-chrome shrink-0 gap-4 md:flex md:items-end md:justify-between"
         data-terminal-bottom-chrome="true"
       >
@@ -302,6 +304,7 @@ export function TerminalView({
       <BuddyOverlay
         buddy={state.buddy}
         containerRef={terminalContainerRef}
+        bottomChromeRef={bottomChromeRef}
       />
       <TerminalOverlays
         showStore={showStore}

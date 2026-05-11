@@ -111,10 +111,6 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function buildBuddyMarker(type: string): string {
-  return `${BUDDY_INTERJECTION_MARKER_PREFIX}${type}${BUDDY_INTERJECTION_MARKER_SUFFIX}`;
-}
-
 export function formatBuddyInterjection(type: string, text: string): string {
   const artLines = (BUDDY_ICONS[type] ?? BUDDY_FALLBACK_ICON).split("\n");
   const wrappedText = wrapBuddyText(text, BUDDY_TEXT_WRAP);
@@ -134,7 +130,7 @@ export function formatBuddyInterjection(type: string, text: string): string {
     output.push(speech ? `${artColumn}${BUDDY_TEXT_GAP}${speech}` : art);
   }
 
-  return `${buildBuddyMarker(type)}\n${output.join("\n")}`;
+  return output.join("\n");
 }
 
 function buildBuddyHeaderPattern(type: string, art: string): RegExp {
@@ -259,7 +255,10 @@ function buildLegacyStackedBuddyExtraction(
   return buildBuddyExtraction(trimmedContent, matchLegacyStackedBuddyBlockLines(trimmedContent.split("\n"), variant));
 }
 
-export function extractBuddyInterjectionBlock(content: string): { block: string; body: string } | null {
+export function extractBuddyInterjectionBlock(
+  content: string,
+  buddyType?: string | null,
+): { block: string; body: string } | null {
   const trimmedContent = content.replace(/^\n+/, "");
   const marker = extractBuddyMarker(trimmedContent);
 
@@ -267,6 +266,12 @@ export function extractBuddyInterjectionBlock(content: string): { block: string;
     const variant = getBuddyVariant(marker.type);
     return buildSideBySideBuddyExtraction(marker.rest, variant)
       ?? buildLegacyStackedBuddyExtraction(marker.rest, variant);
+  }
+
+  if (buddyType) {
+    const variant = getBuddyVariant(buddyType);
+    return buildSideBySideBuddyExtraction(trimmedContent, variant)
+      ?? buildLegacyStackedBuddyExtraction(trimmedContent, variant);
   }
 
   for (const variant of SIDE_BY_SIDE_BUDDY_VARIANTS) {

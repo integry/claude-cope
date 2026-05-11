@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it } from "vitest";
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { createRef } from "react";
 
+import { BuddyOverlay } from "../BuddyOverlay";
 import {
   clampBuddyScale,
   getBuddyOverlayScale,
@@ -96,5 +101,77 @@ describe("BuddyOverlay scale helpers", () => {
         overlayHeight: 220,
       }),
     ).toBe(1);
+  });
+});
+
+describe("BuddyOverlay layout measurement", () => {
+  let container: HTMLDivElement | null = null;
+  let root: Root | null = null;
+
+  afterEach(() => {
+    act(() => {
+      root?.unmount();
+    });
+    container?.remove();
+    root = null;
+    container = null;
+  });
+
+  it("reserves the bottom command chrome instead of only the footer", () => {
+    const terminalRef = createRef<HTMLDivElement>();
+    const bottomChromeRef = createRef<HTMLDivElement>();
+    const originalResizeObserver = globalThis.ResizeObserver;
+    // Force the effect onto the resize-event path so the test can retrigger measurement.
+    globalThis.ResizeObserver = undefined as typeof ResizeObserver;
+
+    try {
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      root = createRoot(container);
+
+      act(() => {
+        root!.render(
+          createElement(
+            "div",
+            { ref: terminalRef },
+            createElement("div", { ref: bottomChromeRef }),
+            createElement("footer"),
+            createElement(BuddyOverlay, {
+              buddy: { type: "Agile Snail", isShiny: false, promptsSinceLastInterjection: 0 },
+              containerRef: terminalRef,
+              bottomChromeRef,
+            }),
+          ),
+        );
+      });
+
+      Object.defineProperty(terminalRef.current!, "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({ width: 800, height: 600, top: 0, bottom: 600, left: 0, right: 800 }),
+      });
+      Object.defineProperty(bottomChromeRef.current!, "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({ width: 800, height: 120, top: 420, bottom: 540, left: 0, right: 800 }),
+      });
+
+      const footer = terminalRef.current!.querySelector("footer")!;
+      Object.defineProperty(footer, "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({ width: 800, height: 48, top: 552, bottom: 600, left: 0, right: 800 }),
+      });
+
+      const measureNode = container.querySelector(".terminal-buddy-overlay-measure") as HTMLDivElement;
+      Object.defineProperty(measureNode, "offsetWidth", { configurable: true, value: 200 });
+      Object.defineProperty(measureNode, "offsetHeight", { configurable: true, value: 160 });
+
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+
+      const overlay = container.querySelector(".terminal-buddy-overlay") as HTMLDivElement;
+      expect(overlay.style.getPropertyValue("--terminal-buddy-bottom-offset")).toBe("188px");
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver;
+    }
   });
 });

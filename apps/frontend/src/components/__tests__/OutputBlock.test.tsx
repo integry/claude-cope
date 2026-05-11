@@ -26,7 +26,7 @@ describe("OutputBlock", () => {
     act(() => {
       root.render(
         <OutputBlock
-          message={{ role: "warning", content }}
+          message={{ role: "warning", content, buddyType: "Sarcastic Clippy" }}
           promptString=">"
           username=""
         />,

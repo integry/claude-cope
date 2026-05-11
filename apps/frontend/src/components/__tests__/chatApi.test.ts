@@ -83,9 +83,10 @@ describe("computeBuddyInterjection", () => {
     const result = computeBuddyInterjection(buddy);
     expect(result).not.toBeNull();
     expect(result!.message.role).toBe("warning");
+    expect(result!.message.buddyType).toBe("Agile Snail");
     expect(result!.message.content).toContain("@..@");
     expect(result!.message.content).toContain("[Agile Snail]");
-    expect(result!.message.content.split("\n")[1]).toContain("[Agile Snail]");
+    expect(result!.message.content.split("\n")[0]).toContain("[Agile Snail]");
   });
 
   it("returns interjection for Sarcastic Clippy with correct icon", () => {

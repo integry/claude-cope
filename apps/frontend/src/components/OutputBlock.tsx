@@ -94,17 +94,31 @@ function TokenCounter({ tokensSent, tokensReceived }: { tokensSent?: number; tok
   );
 }
 
-// Buddy interjections are emitted as side-by-side ASCII art with a
-// `[Buddy Name]` header on the first line and wrapped body lines after it.
-// Render those as preformatted monospace so the art stays aligned; other
-// multi-line warnings (rate-limit errors, etc.) should wrap normally.
-function isBuddyMessage(content: string): boolean {
-  return extractBuddyInterjectionBlock(content) !== null;
+type BuddyRenderData = {
+  isBuddyInterjection: boolean;
+  warningText: string;
+};
+
+function getBuddyRenderData(message: Message): BuddyRenderData {
+  if (message.role !== "warning") {
+    return { isBuddyInterjection: false, warningText: message.content };
+  }
+
+  const buddyBlock = extractBuddyInterjectionBlock(message.content, message.buddyType);
+  if (!buddyBlock) {
+    return { isBuddyInterjection: false, warningText: message.content };
+  }
+
+  return {
+    isBuddyInterjection: true,
+    warningText: buddyBlock.body
+      ? `${buddyBlock.block}\n\n${buddyBlock.body}`
+      : buddyBlock.block,
+  };
 }
 
-function getContainerClass(message: Message, isNew: boolean): string {
+function getContainerClass(message: Message, isNew: boolean, buddyData: BuddyRenderData): string {
   const isAchievement = message.role === "warning" && message.content.includes("ACHIEVEMENT UNLOCKED");
-  const isBuddyInterjection = message.role === "warning" && isBuddyMessage(message.content);
   // While streaming, the message has role "loading" but we want it to render
   // in the same color as the final system message (not the yellow loading color)
   // so the transition doesn't look jarring.
@@ -114,16 +128,15 @@ function getContainerClass(message: Message, isNew: boolean): string {
   let modifier = "leading-relaxed";
   if (isAchievement) {
     modifier = `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold`;
-  } else if (isBuddyInterjection) {
+  } else if (buddyData.isBuddyInterjection) {
     modifier = "whitespace-pre font-mono";
   }
   return `mb-5 ${colorClass} ${modifier}`;
 }
 
-function getMessageFlags(role: string, content: string) {
+function getMessageFlags(role: string, content: string, isBuddyInterjection: boolean) {
   const isWarning = role === "warning";
   const isAchievement = isWarning && content.includes("ACHIEVEMENT UNLOCKED");
-  const isBuddyInterjection = isWarning && isBuddyMessage(content);
   const isMarkdownRole = role === "system" || isWarning || role === "error";
   const useMarkdown = isMarkdownRole && !isAchievement && !isBuddyInterjection;
   const isAwaitingResponse = role === "loading" && content.startsWith("[⚙️]");
@@ -143,9 +156,12 @@ function MessageContent({
   shareNode?: React.ReactNode;
 }) {
   const { role, content } = message;
-  const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(role, content);
-  const buddyBlock = role === "warning" ? extractBuddyInterjectionBlock(content) : null;
-  const warningText = buddyBlock?.body ? `${buddyBlock.block}\n\n${buddyBlock.body}` : (buddyBlock?.block ?? content);
+  const buddyData = getBuddyRenderData(message);
+  const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(
+    role,
+    content,
+    buddyData.isBuddyInterjection,
+  );
 
   // Only typewrite actual AI responses (system role). Scaffold messages (ads,
   // queue warnings) render instantly so they don't vanish mid-animation when
@@ -174,7 +190,7 @@ function MessageContent({
   if (role !== "loading") {
     const linkify = (text: string): React.ReactNode =>
       onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
-    return <>{linkify(warningText)}</>;
+    return <>{linkify(buddyData.warningText)}</>;
   }
   return null;
 }
@@ -205,12 +221,13 @@ function getShareProps(message: Message, previousMessage?: Message, nextMessage?
 function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   const { showShareButton, shareSystemMessage } = getShareProps(message, previousMessage, nextMessage);
+  const buddyData = getBuddyRenderData(message);
   const shareNode = showShareButton ? (
     <ShareButton userMessage={previousMessage!.content} systemMessage={shareSystemMessage} username={username} />
   ) : undefined;
 
   return (
-    <div className={`group ${getContainerClass(message, isNew)}`}>
+    <div className={`group ${getContainerClass(message, isNew, buddyData)}`}>
       {message.role === "user" && (
         <div className="inline-block bg-gray-200 text-gray-900 px-2 py-1 sm:px-3 sm:py-1.5 font-bold">
           <span className="text-gray-500 mr-1">{promptString}</span>
