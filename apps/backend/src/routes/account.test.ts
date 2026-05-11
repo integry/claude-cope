@@ -258,7 +258,7 @@ describe("POST /api/account/buy-theme", () => {
       error: "Profile not found",
     });
   });
-  it("rejects buy-theme when a mismatched licenseKeyHash is present even if the session is valid", async () => {
+  it("falls back to the session for buy-theme when a mismatched licenseKeyHash is present", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
     const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
     const { db } = createMockDB({
@@ -274,9 +274,9 @@ describe("POST /api/account/buy-theme", () => {
       themeId: "amber",
       licenseKeyHash: "stale-hash",
     }, { DB: db, QUOTA_KV: kv });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
-      error: "Unauthorized: license key does not match this profile",
+      success: true,
     });
   });
   it("rejects a purchase without licenseKeyHash when there is no authenticated session", async () => {
@@ -384,7 +384,32 @@ describe("POST /api/account/update-theme", () => {
     expect(body.profile.active_theme).toBe("amber");
   });
 
-  it("allows persisting the default theme for a session-authenticated user whose Max license is no longer active", async () => {
+  it("rejects persisting the default theme with a revoked hash and no valid session", async () => {
+    const revokedProfile = {
+      ...BASE_PROFILE,
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "amber",
+    };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: revokedProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "revoked", last_activated_at: new Date().toISOString() },
+      },
+    });
+    const res = await postJSON("/api/account/update-theme", {
+      username: "alice",
+      themeId: "default",
+      licenseKeyHash: "hash",
+    }, { DB: db });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      error: expect.stringContaining("revoked"),
+      errorCode: "license_inactive",
+    });
+  });
+
+  it("rejects persisting the default theme for a session-authenticated user whose Max license is no longer active", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
     const revokedProfile = {
       ...BASE_PROFILE,
@@ -392,11 +417,10 @@ describe("POST /api/account/update-theme", () => {
       unlocked_themes: '["default","amber"]',
       active_theme: "amber",
     };
-    const updatedProfile = { ...revokedProfile, active_theme: "default" };
     const { db } = createMockDB({
       firstBySQL: {
         [ACCOUNT_TEST_SQL.getProfileRow]: revokedProfile,
-        [ACCOUNT_TEST_SQL.getProfile]: updatedProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "revoked", last_activated_at: new Date().toISOString() },
       },
       runChanges: 1,
     });
@@ -404,10 +428,10 @@ describe("POST /api/account/update-theme", () => {
       username: "alice",
       themeId: "default",
     }, { DB: db, QUOTA_KV: kv });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({
-      success: true,
-      profile: { active_theme: "default" },
+      error: expect.stringContaining("revoked"),
+      errorCode: "license_inactive",
     });
   });
   it("accepts a stale mixed-case requested alias when the session is already rebound to the renamed username", async () => {
@@ -464,13 +488,16 @@ describe("POST /api/account/update-theme", () => {
       active_theme: "default",
     };
     const updatedProfile = { ...reboundProfile, active_theme: "default" };
+    const activeLicense = { status: "active", last_activated_at: new Date().toISOString() };
     const db = {
       prepare: vi.fn((sql: string) => ({
         bind: vi.fn((value: string) => ({
           first: vi.fn().mockResolvedValue(
-            value === "Bob"
-              ? (sql.includes(ACCOUNT_TEST_SQL.getProfileRow) ? reboundProfile : updatedProfile)
-              : null,
+            sql.includes("FROM licenses")
+              ? activeLicense
+              : value === "Bob"
+                ? (sql.includes(ACCOUNT_TEST_SQL.getProfileRow) ? reboundProfile : updatedProfile)
+                : null,
           ),
           run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
         })),
@@ -479,6 +506,54 @@ describe("POST /api/account/update-theme", () => {
 
     const res = await postWithSession("/api/account/update-theme", {
       username: "Alice",
+      themeId: "default",
+      licenseKeyHash: "stale-hash",
+    }, { DB: db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { active_theme: "default" },
+    });
+  });
+
+  it("falls back to the session profile when a stale local hash belongs to a different existing account", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const aliceProfile = {
+      ...BASE_PROFILE,
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "amber",
+    };
+    const updatedAliceProfile = { ...aliceProfile, active_theme: "default" };
+    const otherProfile = {
+      ...BASE_PROFILE,
+      username: "bob",
+      license_hash: "stale-hash",
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "default",
+    };
+    const activeLicense = { status: "active", last_activated_at: new Date().toISOString() };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? activeLicense
+              : value === "alice"
+                ? (sql.includes(ACCOUNT_TEST_SQL.getProfileRow) ? aliceProfile : updatedAliceProfile)
+                : value === "bob"
+                  ? otherProfile
+                  : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "alice",
       themeId: "default",
       licenseKeyHash: "stale-hash",
     }, { DB: db, QUOTA_KV: kv });

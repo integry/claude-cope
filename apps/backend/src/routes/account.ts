@@ -312,23 +312,15 @@ async function persistActiveTheme(
   themeId: string,
   licenseKeyHash: string,
 ) {
-  const sql = themeId === "default"
-    ? `UPDATE user_scores SET
-      active_theme = ?,
-      updated_at = datetime('now')
-    WHERE username = ?
-      AND ? IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))`
-    : `UPDATE user_scores SET
+  return db.prepare(
+    `UPDATE user_scores SET
       active_theme = ?,
       updated_at = datetime('now')
     WHERE username = ?
       AND ? IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
       AND license_hash = ?
-      AND ${ACTIVE_LICENSE_EXISTS_SQL}`;
-  const bindings = themeId === "default"
-    ? [themeId, username, themeId]
-    : [themeId, username, themeId, licenseKeyHash];
-  return db.prepare(sql).bind(...bindings).run();
+      AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
+  ).bind(themeId, username, themeId, licenseKeyHash).run();
 }
 
 account.post("/checkout-license", async (c) => {

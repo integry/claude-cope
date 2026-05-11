@@ -395,9 +395,11 @@ type ThemePurchaseOwnershipOptions = {
   logPrefix?: string;
 };
 
-async function resolveThemePurchaseOwnershipFromLicenseHash(
+type ThemeOwnershipMode = "purchase" | "selection";
+
+async function resolveThemeOwnershipFromLicenseHash(
   db: D1Database,
-  opts: Pick<ThemePurchaseOwnershipOptions, "username" | "licenseKeyHash" | "kv" | "sessionId">,
+  opts: Pick<ThemePurchaseOwnershipOptions, "username" | "licenseKeyHash" | "kv" | "sessionId" | "actionLabel" | "logPrefix">,
 ): Promise<OwnershipResult | null> {
   if (!opts.licenseKeyHash) return null;
 
@@ -405,10 +407,15 @@ async function resolveThemePurchaseOwnershipFromLicenseHash(
   if (ownership.status === "ok" || !opts.kv || !opts.sessionId) {
     return ownership;
   }
-  if (ownership.status !== "not_found") {
-    return ownership;
-  }
-  return null;
+
+  const sessionOwnership = await resolveThemePurchaseOwnershipFromSession(db, {
+    username: opts.username,
+    kv: opts.kv,
+    sessionId: opts.sessionId,
+    actionLabel: opts.actionLabel ?? "theme updates",
+    logPrefix: opts.logPrefix ?? "[account/theme]",
+  });
+  return sessionOwnership.status === "ok" ? sessionOwnership : ownership;
 }
 
 async function resolveThemePurchaseOwnershipFromSession(
@@ -449,63 +456,30 @@ async function resolveThemePurchaseOwnershipFromSession(
   );
 }
 
+async function resolveThemeMutationOwnership(
+  db: D1Database,
+  opts: ThemePurchaseOwnershipOptions & { mode: ThemeOwnershipMode },
+): Promise<OwnershipResult> {
+  const ownershipFromLicenseHash = await resolveThemeOwnershipFromLicenseHash(db, opts);
+  if (ownershipFromLicenseHash) return ownershipFromLicenseHash;
+
+  const actionLabel = opts.actionLabel ?? (opts.mode === "purchase" ? "this action" : "theme updates");
+  const logPrefix = opts.logPrefix ?? "[account/theme]";
+  return resolveThemePurchaseOwnershipFromSession(db, { ...opts, actionLabel, logPrefix });
+}
+
 export async function resolveThemeSelectionOwnership(
   db: D1Database,
   opts: ThemePurchaseOwnershipOptions,
 ): Promise<OwnershipResult> {
-  const actionLabel = opts.actionLabel ?? "theme updates";
-  const logPrefix = opts.logPrefix ?? "[account/theme]";
-  if (opts.licenseKeyHash) {
-    const row = await getProfileRow(db, opts.username);
-    if (row) {
-      const rowWithHash = row as ProfileRow & { license_hash: string | null };
-      if (!rowWithHash.license_hash || rowWithHash.license_hash !== opts.licenseKeyHash) {
-        return { profile: null, status: "unauthorized", error: "Unauthorized: license key does not match this profile" };
-      }
-      const profile = await getProfile(db, opts.username);
-      if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
-      return { profile, status: "ok", licenseKeyHash: rowWithHash.license_hash };
-    }
-  }
-
-  if (!opts.kv || !opts.sessionId) {
-    return getSessionAuthRequiredResult(actionLabel);
-  }
-
-  const boundUsername = await opts.kv.get(accountKvKeys.sessionUser(opts.sessionId));
-  if (!boundUsername) {
-    return getSessionAuthRequiredResult(actionLabel);
-  }
-
-  const resolved = await resolveSessionThemeOwnershipRow(db, {
-    kv: opts.kv,
-    sessionId: opts.sessionId,
-    username: opts.username,
-    boundUsername,
-    logPrefix,
-  });
-  if ("status" in resolved) return resolved;
-
-  const profile = await getProfile(db, resolved.username);
-  if (!profile) return { profile: null, status: "not_found", error: "Profile not found" };
-  const rowWithHash = resolved.row as ProfileRow & { license_hash: string | null };
-  return {
-    profile,
-    status: "ok",
-    licenseKeyHash: rowWithHash.license_hash ?? "",
-  };
+  return resolveThemeMutationOwnership(db, { ...opts, mode: "selection" });
 }
 
 export async function resolveThemePurchaseOwnership(
   db: D1Database,
   opts: ThemePurchaseOwnershipOptions,
 ): Promise<OwnershipResult> {
-  const ownershipFromLicenseHash = await resolveThemePurchaseOwnershipFromLicenseHash(db, opts);
-  if (ownershipFromLicenseHash) return ownershipFromLicenseHash;
-
-  const actionLabel = opts.actionLabel ?? "this action";
-  const logPrefix = opts.logPrefix ?? "[account/theme]";
-  return resolveThemePurchaseOwnershipFromSession(db, { ...opts, actionLabel, logPrefix });
+  return resolveThemeMutationOwnership(db, { ...opts, mode: "purchase" });
 }
 
 export function broadcastPurchase(message: string, db: D1Database | undefined, ctx: { waitUntil: (p: Promise<unknown>) => void }) {
