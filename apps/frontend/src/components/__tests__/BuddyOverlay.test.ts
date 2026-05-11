@@ -166,4 +166,70 @@ describe("BuddyOverlay layout measurement", () => {
     const overlay = container.querySelector(".terminal-buddy-overlay") as HTMLDivElement;
     expect(overlay.style.getPropertyValue("--terminal-buddy-bottom-offset")).toBe("188px");
   });
+
+  it("remeasures when the footer height changes", () => {
+    const terminalRef = createRef<HTMLDivElement>();
+    const bottomChromeRef = createRef<HTMLDivElement>();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    let footerHeight = 48;
+
+    act(() => {
+      root!.render(
+        createElement(
+          "div",
+          { ref: terminalRef },
+          createElement("div", { ref: bottomChromeRef }),
+          createElement("footer"),
+          createElement(BuddyOverlay, {
+            buddy: { type: "Agile Snail", isShiny: false, promptsSinceLastInterjection: 0 },
+            containerRef: terminalRef,
+            bottomChromeRef,
+          }),
+        ),
+      );
+    });
+
+    Object.defineProperty(terminalRef.current!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ width: 800, height: 600, top: 0, bottom: 600, left: 0, right: 800 }),
+    });
+    Object.defineProperty(bottomChromeRef.current!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ width: 800, height: 40, top: 560, bottom: 600, left: 0, right: 800 }),
+    });
+
+    const footer = terminalRef.current!.querySelector("footer")!;
+    Object.defineProperty(footer, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        width: 800,
+        height: footerHeight,
+        top: 600 - footerHeight,
+        bottom: 600,
+        left: 0,
+        right: 800,
+      }),
+    });
+
+    const measureNode = container.querySelector(".terminal-buddy-overlay-measure") as HTMLDivElement;
+    Object.defineProperty(measureNode, "offsetWidth", { configurable: true, value: 200 });
+    Object.defineProperty(measureNode, "offsetHeight", { configurable: true, value: 160 });
+
+    act(() => {
+      globalThis.__triggerResizeObserver?.();
+    });
+
+    const overlay = container.querySelector(".terminal-buddy-overlay") as HTMLDivElement;
+    expect(overlay.style.getPropertyValue("--terminal-buddy-bottom-offset")).toBe("56px");
+
+    footerHeight = 96;
+    act(() => {
+      globalThis.__triggerResizeObserver?.();
+    });
+
+    expect(overlay.style.getPropertyValue("--terminal-buddy-bottom-offset")).toBe("104px");
+  });
 });

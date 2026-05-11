@@ -92,6 +92,9 @@ export function BuddyOverlay({
     if (resizeObserver) {
       if (containerRef.current) {
         resizeObserver.observe(containerRef.current);
+        for (const footer of containerRef.current.querySelectorAll("footer")) {
+          resizeObserver.observe(footer);
+        }
       }
       if (bottomChromeRef.current) {
         resizeObserver.observe(bottomChromeRef.current);

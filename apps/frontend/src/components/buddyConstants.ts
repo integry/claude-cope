@@ -37,7 +37,7 @@ export const BUDDY_ICONS: Record<string, string> = {
   ].join("\n"),
 };
 
-const BUDDY_TEXT_GAP = "   ";
+export const BUDDY_TEXT_GAP = "   ";
 const BUDDY_TEXT_WRAP = 64;
 const BUDDY_FALLBACK_ICON = "🐾";
 // Persisted warnings may include an explicit buddy marker even when the

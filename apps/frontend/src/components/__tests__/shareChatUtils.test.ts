@@ -8,7 +8,7 @@ import {
   getChatCardBlob,
   type ShareResult,
 } from "../shareChatUtils";
-import { BUDDY_ICONS, formatBuddyInterjection } from "../buddyConstants";
+import { BUDDY_ICONS, BUDDY_TEXT_GAP, formatBuddyInterjection } from "../buddyConstants";
 
 // Mock image loading
 const mockImage = {
@@ -154,6 +154,34 @@ describe("renderChatCard", () => {
     expect(
       buddySpeechLines.every((line) => mockCtx.measureText(line).width <= 720 - 24 * 2)
     ).toBe(true);
+  });
+
+  it("uses the buddy art width instead of the rendered block width when rewrapping", async () => {
+    const speech = "Remember the backlog wants cleaner wrapping in the share card renderer.";
+    const sideBySideBlock = formatBuddyInterjection("Agile Snail", speech, 12);
+    await renderChatCard("Test", sideBySideBlock);
+
+    const firstBuddyLine = mockCtx.fillText.mock.calls
+      .map(([text]) => text as string)
+      .find((text) => text.includes("[Agile Snail]"));
+
+    const agileSnailIcon = BUDDY_ICONS["Agile Snail"] ?? "";
+    const firstArtLine = agileSnailIcon.split("\n").find(() => true) ?? "";
+    const artWidth = firstArtLine.replace(/\s+$/, "").length;
+    const expectedWrapWidth = Math.floor((720 - 24 * 2 - artWidth * 10 - BUDDY_TEXT_GAP.length * 10) / 10);
+    const expectedFirstLine = formatBuddyInterjection("Agile Snail", speech, expectedWrapWidth).split("\n").find(() => true);
+
+    expect(firstBuddyLine).toBe(expectedFirstLine);
+  });
+
+  it("rewraps legacy stacked buddy interjections using the art column width", async () => {
+    const speech = "Remember the backlog wants cleaner wrapping in the share card renderer.";
+    const legacyBuddyBlock = `${BUDDY_ICONS["Agile Snail"]}\n[Agile Snail] ${speech}`;
+    await renderChatCard("Test", legacyBuddyBlock);
+
+    const renderedText = mockCtx.fillText.mock.calls.map(([text]) => text as string);
+    expect(renderedText.some((text) => text.includes("share card renderer."))).toBe(true);
+    expect(renderedText.filter((text) => text.includes("[Agile Snail]") || text.includes("share card renderer.")).length).toBeGreaterThan(1);
   });
 });
 

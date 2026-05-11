@@ -8,6 +8,8 @@
 import { parseSegments, drawStyledLine, wrapText } from "./shareChatTextUtils";
 import { SHARE_PUNCHLINES } from "./sharePunchlines";
 import {
+  BUDDY_ICONS,
+  BUDDY_TEXT_GAP,
   extractBuddyInterjectionBlock,
   formatBuddyInterjection,
   parseBuddyInterjection,
@@ -179,9 +181,9 @@ function getBuddyRenderLines(
     return block.split("\n");
   }
 
-  const artLines = block.split("\n").map((line) => line.replace(/\s+$/, ""));
+  const artLines = (BUDDY_ICONS[parsed.type] ?? "").split("\n").map((line) => line.replace(/\s+$/, ""));
   const artColumnWidth = Math.max(...artLines.map((line) => ctx.measureText(line).width));
-  const gapWidth = ctx.measureText("   ").width;
+  const gapWidth = ctx.measureText(BUDDY_TEXT_GAP).width;
   const charWidth = Math.max(ctx.measureText("M").width, 1);
   const availableTextWidth = Math.max(contentMaxWidth - artColumnWidth - gapWidth, charWidth * 8);
   const wrapWidth = Math.max(8, Math.floor(availableTextWidth / charWidth));
