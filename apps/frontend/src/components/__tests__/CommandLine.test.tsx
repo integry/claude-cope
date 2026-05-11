@@ -51,14 +51,19 @@ afterEach(() => {
 describe("CommandLine", () => {
   it("renders the custom placeholder overlay and tab hint when empty", () => {
     const { container } = renderCommandLine();
+    const placeholder = container.querySelector("[data-testid='command-line-placeholder']");
+    const suggestedReply = container.querySelector("[data-testid='command-line-suggested-reply']");
+    const leadingChar = container.querySelector("[data-testid='command-line-suggested-reply-leading-char']");
 
     expect(container.textContent).toContain("Try /help");
-    expect(container.querySelector("[data-testid='command-line-placeholder']")).not.toBeNull();
+    expect(placeholder).not.toBeNull();
+    expect(suggestedReply?.textContent).toBe("Try /help");
+    expect(leadingChar?.textContent).toBe("T");
     expect(container.querySelector("[data-testid='command-line-tab-hint']")?.textContent).toBe("[Tab]");
     expect(container.querySelector("input")?.getAttribute("placeholder")).toBe("Try /help. Press Tab to accept suggestion.");
   });
 
-  it("shows the decorative cursor only while focused and empty", () => {
+  it("shows the decorative cursor over the first suggested character only while focused and empty", () => {
     const { container, input } = renderCommandLine();
     expect(input).not.toBeNull();
 
@@ -66,7 +71,11 @@ describe("CommandLine", () => {
       input!.focus();
     });
 
-    expect(container.querySelector("[data-testid='command-line-cursor']")).not.toBeNull();
+    const cursor = container.querySelector("[data-testid='command-line-cursor']");
+    const leadingChar = container.querySelector("[data-testid='command-line-suggested-reply-leading-char']");
+
+    expect(cursor).not.toBeNull();
+    expect(leadingChar?.contains(cursor)).toBe(true);
 
     act(() => {
       input!.blur();
@@ -91,9 +100,11 @@ describe("CommandLine", () => {
   it("does not show the decorative cursor while disabled", () => {
     const { container } = renderCommandLine({ disabled: true });
     const input = container.querySelector("input");
+    const leadingChar = container.querySelector("[data-testid='command-line-suggested-reply-leading-char']");
 
     expect(container.querySelector("[data-testid='command-line-placeholder']")).not.toBeNull();
     expect(container.querySelector("[data-testid='command-line-cursor']")).toBeNull();
+    expect(leadingChar?.textContent).toBe("T");
     expect(container.querySelector("[data-testid='command-line-tab-hint']")).toBeNull();
     expect(input?.getAttribute("placeholder")).toBe("Try /help");
   });
