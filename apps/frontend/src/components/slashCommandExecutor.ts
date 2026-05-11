@@ -797,6 +797,7 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
     return "async";
   } else if (command === "/backlog" || command.startsWith("/backlog ")) {
     handleBacklogCommand(reply, {
+      proKey: ctx.state.proKey,
       proKeyHash: ctx.state.proKeyHash,
       category: parseBacklogCategoryArgument(command) ?? undefined,
       paidUser: isPaidUser(ctx.state),

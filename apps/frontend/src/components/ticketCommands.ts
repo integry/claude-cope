@@ -23,10 +23,19 @@ function clearBacklogResultsCache(): void {
 }
 
 type BacklogRequestOptions = {
+  proKey?: string;
   proKeyHash?: string;
   category?: string;
   paidUser?: boolean;
 };
+
+async function hashProKey(key: string): Promise<string> {
+  const encoded = new TextEncoder().encode(key);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 function normalizeBacklogCategory(category?: string): string | null {
   if (!category) return null;
@@ -260,9 +269,10 @@ export async function handleBacklogCommand(reply: Reply, options: BacklogRequest
   }
 
   try {
+    const proKeyHash = options.proKeyHash ?? (options.proKey ? await hashProKey(options.proKey) : undefined);
     const query = normalizedCategory ? `?${new URLSearchParams({ category: normalizedCategory }).toString()}` : "";
     const res = await fetch(`${API_BASE}/api/tickets/community${query}`, {
-      headers: options.proKeyHash ? { "x-pro-key-hash": options.proKeyHash } : undefined,
+      headers: proKeyHash ? { "x-pro-key-hash": proKeyHash } : undefined,
     });
     if (!res.ok) {
       return handleBacklogFetchFailure(res, reply);

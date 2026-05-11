@@ -282,6 +282,44 @@ describe("premium backlog handling", () => {
     expect(reply.mock.calls[0]?.[0].content).not.toContain("Want specific trauma?");
   });
 
+  it("derives the pro hash from the stored license key for paid backlog requests", async () => {
+    const digestMock = vi.fn().mockResolvedValue(new Uint8Array([0xde, 0xad, 0xbe, 0xef]).buffer);
+    Object.defineProperty(globalThis, "crypto", {
+      value: {
+        subtle: {
+          digest: digestMock,
+        },
+      },
+      configurable: true,
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: "MELT-02",
+          title: "MELT Unpick the Mainframe Ritual",
+          description: "Regular ticket",
+          technical_debt: 55,
+          kickoff_prompt: "touch the cobol",
+          category_prefix: "MELT",
+          category_label: "Mainframes / Legacy",
+          is_locked: false,
+          tier: "premium",
+        },
+      ]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await handleBacklogCommand(vi.fn(), { category: "MELT", paidUser: true, proKey: "COPE-123" });
+
+    expect(digestMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/tickets/community?category=MELT"),
+      expect.objectContaining({ headers: { "x-pro-key-hash": "deadbeef" } }),
+    );
+  });
+
   it("blocks premium category filters for free users before any request is made", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
