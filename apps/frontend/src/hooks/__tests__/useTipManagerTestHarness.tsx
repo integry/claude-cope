@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { act } from "react";
 import { createRef, forwardRef, useImperativeHandle, useState, type RefObject } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { vi } from "vitest";
 import { useTipManager } from "../useTipManager";
@@ -63,9 +64,17 @@ const Harness = forwardRef<HarnessHandle, HarnessProps>(function Harness({
 
   useImperativeHandle(ref, () => ({
     ...manager,
-    setBlocked,
+    setBlocked: (value) => {
+      flushSync(() => {
+        setBlocked(value);
+      });
+    },
     setOnlineCount,
-    setGameState,
+    setGameState: (updater) => {
+      flushSync(() => {
+        setGameState(updater);
+      });
+    },
     getHistory: () => history,
   }), [history, manager]);
 
