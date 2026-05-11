@@ -16,7 +16,11 @@ vi.mock("../OutageBar", () => ({ OutageBar: () => <div data-testid="outage-bar" 
 vi.mock("../SprintProgressBar", () => ({ default: () => <div data-testid="sprint-progress" /> }));
 vi.mock("../MessageList", () => ({ default: () => <div data-testid="message-list" /> }));
 vi.mock("../TerminalOverlays", () => ({ TerminalOverlays: () => <div data-testid="terminal-overlays" /> }));
-vi.mock("../BuddyDisplay", () => ({ BuddyDisplay: () => <div data-testid="buddy-display" /> }));
+vi.mock("../BuddyDisplay", () => ({
+  BuddyDisplay: () => <div data-testid="buddy-display" />,
+  BuddyWatcherStatus: () => <div data-testid="buddy-status" />,
+}));
+vi.mock("../BuddyOverlay", () => ({ BuddyOverlay: () => <div data-testid="buddy-overlay" /> }));
 
 vi.mock("../Ticker", () => ({
   default: ({ onSlashCommand }: { onSlashCommand: (command: string) => void }) => (

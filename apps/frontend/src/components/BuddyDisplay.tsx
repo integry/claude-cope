@@ -7,6 +7,48 @@ type BuddyDisplayProps = {
   className?: string;
 };
 
+type BuddyWatcherStatusProps = {
+  type: string | null;
+  isShiny: boolean;
+  className?: string;
+};
+
+function getBuddyArt(type: string, blink: boolean) {
+  let art = BUDDY_ICONS[type] ?? "🐾";
+  if (!blink) {
+    return art;
+  }
+
+  if (type === "Agile Snail") {
+    return art.replace("@..@", "@--@");
+  }
+
+  return art.replace(/O/g, "-").replace(/o\.o/g, "-.-").replace(/o/g, "-");
+}
+
+function getBuddyWatcherCopy(type: string, isShiny: boolean) {
+  return isShiny ? `Shiny ${type} is watching...` : `${type} is watching...`;
+}
+
+export function BuddyWatcherStatus({
+  type,
+  isShiny,
+  className = "",
+}: BuddyWatcherStatusProps) {
+  if (!type) return null;
+
+  return (
+    <div
+      className={
+        `terminal-buddy-status ${isShiny ? "text-amber-300" : "text-orange-400"} ${className}`.trim()
+      }
+    >
+      <span className="terminal-buddy-status-label">[BUDDY]</span>
+      <span>{getBuddyWatcherCopy(type, isShiny)}</span>
+    </div>
+  );
+}
+
 export function BuddyDisplay({ type, isShiny, className = "" }: BuddyDisplayProps) {
   const [blink, setBlink] = useState(false);
 
@@ -34,24 +76,11 @@ export function BuddyDisplay({ type, isShiny, className = "" }: BuddyDisplayProp
 
   if (!type) return null;
 
-  let art = BUDDY_ICONS[type] ?? "🐾";
-  if (blink) {
-    if (type === "Agile Snail") {
-      art = art.replace("@..@", "@--@");
-    } else {
-      art = art.replace(/O/g, "-").replace(/o\.o/g, "-.-").replace(/o/g, "-");
-    }
-  }
+  const art = getBuddyArt(type, blink);
 
   return (
     <div className={`text-xs ${isShiny ? "text-amber-300" : "text-orange-400"} ${className}`.trim()}>
-      <div className="terminal-buddy-inline">
-        <pre className="font-mono whitespace-pre">{art}</pre>
-        <div className="terminal-buddy-copy">
-          <div className="terminal-buddy-label">[BUDDY]</div>
-          <div>{isShiny ? `Shiny ${type} is watching...` : `${type} is watching...`}</div>
-        </div>
-      </div>
+      <pre className="font-mono whitespace-pre">{art}</pre>
     </div>
   );
 }

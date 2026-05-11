@@ -168,19 +168,24 @@ body {
 
 .terminal-buddy-display {
   text-shadow: 0 0 12px rgba(251, 146, 60, 0.22);
-  max-width: min(100%, 28rem);
 }
 
 .terminal-buddy-dock {
   flex: 0 0 auto;
   align-self: flex-end;
+  max-width: min(100%, 24rem);
   padding: 0 0.9rem 0.8rem 0;
 }
 
-.terminal-buddy-inline {
+.terminal-buddy-status {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-align: right;
+  text-shadow: 0 0 12px rgba(251, 146, 60, 0.22);
 }
 
 .terminal-buddy-display pre {
@@ -190,16 +195,7 @@ body {
   margin: 0;
 }
 
-.terminal-buddy-copy {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.125rem;
-  padding-top: 0.125rem;
-  text-align: left;
-}
-
-.terminal-buddy-label {
+.terminal-buddy-status-label {
   font-weight: 700;
   letter-spacing: 0.08em;
 }
@@ -218,8 +214,8 @@ body {
     padding: 0 0.9rem 0.8rem;
   }
 
-  .terminal-buddy-inline {
-    gap: 0.5rem;
+  .terminal-buddy-status {
+    justify-content: flex-end;
   }
 }
 
