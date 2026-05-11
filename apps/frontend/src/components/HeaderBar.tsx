@@ -69,15 +69,34 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
       {/* Left group: identity */}
       <div className="flex items-center gap-2 min-w-0 px-2 sm:px-0">
         <img src="/media/logo-400-transparent.png" alt="Logo" className="hidden sm:block max-h-12 w-auto flex-shrink-0 object-contain sm:mr-2" />
-        <button onClick={onProfileClick} className="text-cyan-400 hover:text-white hover:underline cursor-pointer truncate">{username}</button>
-        <span className="text-[11px] text-gray-400 leading-none sm:text-xs">[{rank}]</span>
-        {isBYOK && <span className="text-[10px] font-bold text-yellow-400 whitespace-nowrap">[BYOK{byokTotalCost != null && byokTotalCost > 0 ? ` $${formatByokCost(byokTotalCost)}` : ""}]</span>}
-        {isMax && <span data-testid="max-badge" className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: '#ff00ff' }}>[MAX 429X]</span>}
+        <div data-testid="desktop-identity-block" className="hidden sm:flex flex-col justify-center min-w-0 leading-tight">
+          <div className="flex items-center gap-2 min-w-0">
+            <button onClick={onProfileClick} className="text-cyan-400 hover:text-white hover:underline cursor-pointer truncate">{username}</button>
+            {isBYOK && <span className="text-[10px] font-bold text-yellow-400 whitespace-nowrap">[BYOK{byokTotalCost != null && byokTotalCost > 0 ? ` $${formatByokCost(byokTotalCost)}` : ""}]</span>}
+            {isMax && <span data-testid="max-badge" className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: '#ff00ff' }}>[MAX 429X]</span>}
+          </div>
+          <div data-testid="desktop-rank-line" className="text-xs text-gray-400 whitespace-nowrap">[{rank}]</div>
+        </div>
+        <div className="flex sm:hidden items-center gap-2 min-w-0">
+          <button onClick={onProfileClick} className="text-cyan-400 hover:text-white hover:underline cursor-pointer truncate">{username}</button>
+          <span className="text-[11px] text-gray-400 leading-none sm:text-xs">[{rank}]</span>
+          {isBYOK && <span className="text-[10px] font-bold text-yellow-400 whitespace-nowrap">[BYOK{byokTotalCost != null && byokTotalCost > 0 ? ` $${formatByokCost(byokTotalCost)}` : ""}]</span>}
+          {isMax && <span data-testid="max-badge" className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: '#ff00ff' }}>[MAX 429X]</span>}
+        </div>
       </div>
       {/* Right group: status (desktop) */}
-      <div className="hidden sm:flex items-center gap-6 ml-auto flex-shrink-0 justify-end px-2 sm:px-0">
-        <span className="whitespace-nowrap flex items-center gap-1"><span className="text-gray-500 text-xs">Technical Debt:</span> <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD</span>{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
-        {!isBYOK && <><span className="text-gray-600">|</span><DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} />{!isMax && onUpgradeClick && <button onClick={onUpgradeClick} className="ml-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 rounded whitespace-nowrap hover:bg-yellow-500/30 cursor-pointer">Upgrade to Max 429X</button>}</>}
+      <div data-testid="desktop-status-block" className="hidden sm:flex flex-col items-end gap-0.5 ml-auto flex-shrink-0 justify-center px-2 sm:px-0 leading-tight">
+        <div data-testid="desktop-technical-debt-line" className="whitespace-nowrap flex items-center gap-1">
+          <span className="text-gray-500 text-xs">Technical Debt:</span>
+          <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD</span>
+          {activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}
+        </div>
+        {!isBYOK && (
+          <div data-testid="desktop-quota-line" className="whitespace-nowrap flex items-center gap-2">
+            <DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} />
+            {!isMax && onUpgradeClick && <button onClick={onUpgradeClick} className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 rounded whitespace-nowrap hover:bg-yellow-500/30 cursor-pointer">Upgrade to Max 429X</button>}
+          </div>
+        )}
       </div>
       {/* Right group: status (mobile) */}
       <div className="flex sm:hidden items-center gap-2 ml-auto flex-shrink-0 px-2">

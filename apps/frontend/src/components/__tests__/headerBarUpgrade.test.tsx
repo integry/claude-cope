@@ -73,6 +73,34 @@ describe("HeaderBar upgrade CTA visibility", () => {
     renderHeaderBar({ ...propsWithoutUpgrade, isBYOK: false, isMax: false });
     expect(container.textContent).not.toContain("Upgrade to Max");
   });
+
+  it("renders the desktop identity and status as stacked lines", () => {
+    renderHeaderBar({ ...baseProps, isBYOK: true, isMax: false, byokTotalCost: 1.25 });
+
+    const identityBlock = container.querySelector("[data-testid='desktop-identity-block']");
+    const rankLine = container.querySelector("[data-testid='desktop-rank-line']");
+    const statusBlock = container.querySelector("[data-testid='desktop-status-block']");
+    const technicalDebtLine = container.querySelector("[data-testid='desktop-technical-debt-line']");
+
+    expect(identityBlock).not.toBeNull();
+    expect(identityBlock?.textContent).toContain("TestUser");
+    expect(identityBlock?.textContent).toContain("BYOK");
+    expect(identityBlock?.textContent).not.toContain("Junior Code Monkey");
+
+    expect(rankLine?.textContent).toContain("Junior Code Monkey");
+    expect(statusBlock).not.toBeNull();
+    expect(technicalDebtLine?.textContent).toContain("Technical Debt:");
+    expect(container.querySelector("[data-testid='desktop-quota-line']")).toBeNull();
+  });
+
+  it("renders the desktop quota and upgrade CTA on the second status line for free users", () => {
+    renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false });
+
+    const quotaLine = container.querySelector("[data-testid='desktop-quota-line']");
+    expect(quotaLine).not.toBeNull();
+    expect(quotaLine?.textContent).toContain("API Quota:");
+    expect(quotaLine?.textContent).toContain("Upgrade to Max 429X");
+  });
 });
 
 describe("HeaderBar Max badge visibility", () => {
@@ -86,5 +114,17 @@ describe("HeaderBar Max badge visibility", () => {
     // "Max" appears in the upgrade CTA text but the standalone badge should not render
     const badge = container.querySelector("[data-testid='max-badge']");
     expect(badge).toBeNull();
+  });
+
+  it("keeps the Max badge on the first desktop identity line only for upgraded users", () => {
+    renderHeaderBar({ ...baseProps, isBYOK: false, isMax: true });
+
+    const identityBlock = container.querySelector("[data-testid='desktop-identity-block']");
+    const rankLine = container.querySelector("[data-testid='desktop-rank-line']");
+    const badge = container.querySelector("[data-testid='max-badge']");
+
+    expect(badge).not.toBeNull();
+    expect(identityBlock?.textContent).toContain("MAX 429X");
+    expect(rankLine?.textContent).not.toContain("MAX 429X");
   });
 });
