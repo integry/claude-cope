@@ -327,7 +327,7 @@ function getSessionUserMismatchResult(): OwnershipResult {
 }
 
 async function resolveRequestedThemeAlias(kv: KVNamespace, requestedUsername: string, boundUsername: string) {
-  if (requestedUsername.toLowerCase() === boundUsername.toLowerCase()) return null;
+  if (requestedUsername === boundUsername) return null;
   return followRenameChain(kv, requestedUsername);
 }
 
@@ -358,7 +358,7 @@ async function resolveSessionThemePurchaseRow(
   }
 
   const sessionMatchesRequested = resolved.username.toLowerCase() === opts.username.toLowerCase()
-    || opts.boundUsername === opts.username.toLowerCase();
+    || opts.boundUsername.toLowerCase() === opts.username.toLowerCase();
   if (!sessionMatchesRequested && requestedAlias?.current.toLowerCase() !== resolved.username.toLowerCase()) {
     return getSessionUserMismatchResult();
   }

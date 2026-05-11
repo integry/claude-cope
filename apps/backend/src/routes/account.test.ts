@@ -212,6 +212,36 @@ describe("POST /api/account/buy-theme", () => {
     expect(((await res.json()) as { success: boolean }).success).toBe(true);
     expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "Bob", expect.any(Object));
   });
+  it("accepts stale requested aliases when the session is already rebound to the renamed username", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "Bob",
+      "renamed:Alice": "Bob",
+    });
+    const paidProfile = { ...BASE_PROFILE, username: "Bob", current_td: 6000 };
+    const activeLicense = { status: "active", last_activated_at: new Date().toISOString() };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? activeLicense
+              : value === "Bob"
+                ? paidProfile
+                : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "Alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { success: boolean }).success).toBe(true);
+  });
   it("falls back to session auth when a stale licenseKeyHash is present", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
     const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
@@ -334,6 +364,46 @@ describe("POST /api/account/update-theme", () => {
     const body = await res.json() as { success: boolean; profile: { active_theme: string } };
     expect(body.success).toBe(true);
     expect(body.profile.active_theme).toBe("amber");
+  });
+  it("accepts a stale mixed-case requested alias when the session is already rebound to the renamed username", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "Bob",
+      "renamed:Alice": "Bob",
+    });
+    const paidProfile = {
+      ...BASE_PROFILE,
+      username: "Bob",
+      current_td: 6000,
+      unlocked_themes: '["default","amber"]',
+      active_theme: "default",
+    };
+    const updatedProfile = { ...paidProfile, active_theme: "amber" };
+    const activeLicense = { status: "active", last_activated_at: new Date().toISOString() };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? activeLicense
+              : value === "Bob"
+                ? (sql.includes(ACCOUNT_TEST_SQL.getProfileRow) ? paidProfile : updatedProfile)
+                : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "Alice",
+      themeId: "amber",
+    }, { DB: db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { active_theme: "amber" },
+    });
   });
 
   it("rejects equip requests for themes that are not unlocked", async () => {
