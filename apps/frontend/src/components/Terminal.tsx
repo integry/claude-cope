@@ -132,7 +132,9 @@ function Terminal() {
     syncAbortControllerHandle();
   }, [syncAbortControllerHandle]);
   const createPromptProcessingSetter = useCallback((controller: AbortController) => {
-    let promptProcessingActive = false;
+    // The prompt is already counted as active before the chat layer receives
+    // this setter, and it may only signal completion with `false`.
+    let promptProcessingActive = true;
     let controllerReleased = false;
     const releaseController = () => { if (!controllerReleased) { controllerReleased = true; untrackAbortController(controller); } };
     return (value: boolean | ((prev: boolean) => boolean)) => {
