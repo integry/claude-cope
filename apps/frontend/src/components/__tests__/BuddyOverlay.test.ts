@@ -85,7 +85,7 @@ describe("BuddyOverlay scale helpers", () => {
     ).toBe(0);
   });
 
-  it("caps the overlay to the measured right-side chrome gap", () => {
+  it("does not depend on a reserved right-side chrome gap", () => {
     expect(
       getBuddyOverlayScale({
         containerWidth: 900,
@@ -94,20 +94,7 @@ describe("BuddyOverlay scale helpers", () => {
         bottomOffset: 96,
         overlayWidth: 200,
         overlayHeight: 220,
-        availableRightWidth: 100,
       }),
-    ).toBe(0.5);
-
-    expect(
-      getBuddyOverlayScale({
-        containerWidth: 900,
-        containerHeight: 600,
-        rightInset: 12,
-        bottomOffset: 96,
-        overlayWidth: 200,
-        overlayHeight: 220,
-        availableRightWidth: 40,
-      }),
-    ).toBe(0);
+    ).toBe(1);
   });
 });

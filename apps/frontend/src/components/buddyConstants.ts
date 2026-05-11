@@ -40,6 +40,8 @@ export const BUDDY_ICONS: Record<string, string> = {
 const BUDDY_TEXT_GAP = "   ";
 const BUDDY_TEXT_WRAP = 64;
 const BUDDY_FALLBACK_ICON = "🐾";
+const BUDDY_INTERJECTION_MARKER_PREFIX = "[[BUDDY:";
+const BUDDY_INTERJECTION_MARKER_SUFFIX = "]]";
 
 export const BUDDY_INTERJECTIONS: Record<string, string[]> = {
   "Agile Snail": [
@@ -105,6 +107,14 @@ function wrapBuddyText(text: string, maxWidth: number): string[] {
   return lines;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildBuddyMarker(type: string): string {
+  return `${BUDDY_INTERJECTION_MARKER_PREFIX}${type}${BUDDY_INTERJECTION_MARKER_SUFFIX}`;
+}
+
 export function formatBuddyInterjection(type: string, text: string): string {
   const artLines = (BUDDY_ICONS[type] ?? BUDDY_FALLBACK_ICON).split("\n");
   const wrappedText = wrapBuddyText(text, BUDDY_TEXT_WRAP);
@@ -124,35 +134,114 @@ export function formatBuddyInterjection(type: string, text: string): string {
     output.push(speech ? `${artColumn}${BUDDY_TEXT_GAP}${speech}` : art);
   }
 
-  return output.join("\n");
+  return `${buildBuddyMarker(type)}\n${output.join("\n")}`;
 }
 
-function buildBuddyHeaderPattern(type: string | null, art: string): RegExp {
+function buildBuddyHeaderPattern(type: string, art: string): RegExp {
   const firstArtLine = art.split("\n")[0] ?? "";
-  const escapedArt = firstArtLine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (type === null) {
-    return new RegExp(`^${escapedArt}\\s{3,}\\[[^\\]]+\\]$`);
-  }
-  const escapedType = type.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedArt = escapeRegExp(firstArtLine);
+  const escapedType = escapeRegExp(type);
   return new RegExp(`^${escapedArt}\\s{3,}\\[${escapedType}\\]$`);
+}
+
+type BuddyVariant = {
+  artLines: string[];
+  artWidth: number;
+  headerPattern: RegExp;
+  type: string;
+};
+
+function getBuddyVariant(type: string): BuddyVariant {
+  const artLines = (BUDDY_ICONS[type] ?? BUDDY_FALLBACK_ICON).split("\n");
+  return {
+    artLines,
+    artWidth: Math.max(...artLines.map((line) => line.length)),
+    headerPattern: buildBuddyHeaderPattern(type, artLines.join("\n")),
+    type,
+  };
+}
+
+const LEGACY_BUDDY_VARIANTS = Object.keys(BUDDY_ICONS).map(getBuddyVariant);
+
+function extractBuddyMarker(content: string): { rest: string; type: string } | null {
+  const firstLineBreak = content.indexOf("\n");
+  const firstLine = firstLineBreak >= 0 ? content.slice(0, firstLineBreak) : content;
+  if (
+    !firstLine.startsWith(BUDDY_INTERJECTION_MARKER_PREFIX) ||
+    !firstLine.endsWith(BUDDY_INTERJECTION_MARKER_SUFFIX)
+  ) {
+    return null;
+  }
+
+  const type = firstLine.slice(
+    BUDDY_INTERJECTION_MARKER_PREFIX.length,
+    firstLine.length - BUDDY_INTERJECTION_MARKER_SUFFIX.length,
+  );
+  const rest = firstLineBreak >= 0 ? content.slice(firstLineBreak + 1) : "";
+  return type ? { rest, type } : null;
+}
+
+function matchBuddyBlockLines(lines: string[], variant: BuddyVariant): number {
+  if (!variant.headerPattern.test(lines[0] ?? "")) {
+    return 0;
+  }
+
+  const blankArt = " ".repeat(variant.artWidth);
+  let lineCount = 1;
+
+  while (lineCount < lines.length) {
+    const line = lines[lineCount] ?? "";
+    if (line === "") {
+      break;
+    }
+
+    const artLine = variant.artLines[lineCount];
+    if (artLine) {
+      const paddedArt = artLine.padEnd(variant.artWidth, " ");
+      if (line === artLine || line.startsWith(`${paddedArt}${BUDDY_TEXT_GAP}`)) {
+        lineCount += 1;
+        continue;
+      }
+      break;
+    }
+
+    if (line.startsWith(`${blankArt}${BUDDY_TEXT_GAP}`)) {
+      lineCount += 1;
+      continue;
+    }
+    break;
+  }
+
+  return lineCount;
+}
+
+function buildBuddyExtraction(
+  trimmedContent: string,
+  variant: BuddyVariant,
+): { block: string; body: string } | null {
+  const lines = trimmedContent.split("\n");
+  const blockLineCount = matchBuddyBlockLines(lines, variant);
+  if (blockLineCount === 0) {
+    return null;
+  }
+
+  const block = lines.slice(0, blockLineCount).join("\n");
+  const body = lines.slice(blockLineCount).join("\n").replace(/^\n+/, "");
+  return { block, body };
 }
 
 export function extractBuddyInterjectionBlock(content: string): { block: string; body: string } | null {
   const trimmedContent = content.replace(/^\n+/, "");
-  const separatorIndex = trimmedContent.indexOf("\n\n");
-  const block = separatorIndex >= 0 ? trimmedContent.slice(0, separatorIndex) : trimmedContent;
-  const body = separatorIndex >= 0 ? trimmedContent.slice(separatorIndex + 2) : "";
-  const lines = block.split("\n");
+  const marker = extractBuddyMarker(trimmedContent);
 
-  const buddyVariants: ReadonlyArray<readonly [string | null, string]> = [
-    ...Object.entries(BUDDY_ICONS),
-    [null, BUDDY_FALLBACK_ICON],
-  ];
-  for (const [type, art] of buddyVariants) {
-    const artLines = art.split("\n");
-    const hasMatchingArt = artLines.every((artLine, index) => lines[index]?.startsWith(artLine));
-    if (hasMatchingArt && buildBuddyHeaderPattern(type, art).test(lines[0] ?? "")) {
-      return { block, body };
+  if (marker) {
+    return buildBuddyExtraction(marker.rest, getBuddyVariant(marker.type));
+  }
+
+  for (const variant of LEGACY_BUDDY_VARIANTS) {
+    const extracted = buildBuddyExtraction(trimmedContent, variant);
+    if (extracted) {
+      return extracted;
     }
   }
 

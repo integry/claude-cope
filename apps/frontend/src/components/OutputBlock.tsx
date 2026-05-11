@@ -144,6 +144,7 @@ function MessageContent({
 }) {
   const { role, content } = message;
   const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(role, content);
+  const buddyBlock = role === "warning" ? extractBuddyInterjectionBlock(content) : null;
 
   // Only typewrite actual AI responses (system role). Scaffold messages (ads,
   // queue warnings) render instantly so they don't vanish mid-animation when
@@ -172,7 +173,7 @@ function MessageContent({
   if (role !== "loading") {
     const linkify = (text: string): React.ReactNode =>
       onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
-    return <>{linkify(content)}</>;
+    return <>{linkify(buddyBlock?.block ?? content)}</>;
   }
   return null;
 }

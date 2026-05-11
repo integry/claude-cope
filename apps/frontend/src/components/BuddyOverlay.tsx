@@ -12,8 +12,6 @@ import type { GameState } from "../hooks/useGameState";
 type BuddyOverlayProps = {
   buddy: GameState["buddy"];
   containerRef: RefObject<HTMLDivElement | null>;
-  bottomChromeRef: RefObject<HTMLDivElement | null>;
-  bottomChromeContentRef: RefObject<HTMLDivElement | null>;
 };
 
 const DEFAULT_BUDDY_BOTTOM_OFFSET = 56;
@@ -27,27 +25,9 @@ function getVisibleFooterHeight(container: HTMLDivElement) {
   }, 0);
 }
 
-function getAvailableRightWidth(
-  container: HTMLDivElement,
-  bottomChrome: HTMLDivElement | null,
-  bottomChromeContent: HTMLDivElement | null,
-) {
-  const occupiedRect = bottomChromeContent?.getBoundingClientRect()
-    ?? bottomChrome?.getBoundingClientRect();
-
-  if (!occupiedRect) {
-    return undefined;
-  }
-
-  const containerRect = container.getBoundingClientRect();
-  return Math.max(0, containerRect.right - occupiedRect.right - BUDDY_RIGHT_INSET);
-}
-
 export function BuddyOverlay({
   buddy,
   containerRef,
-  bottomChromeRef,
-  bottomChromeContentRef,
 }: BuddyOverlayProps) {
   const displayRef = useRef<HTMLDivElement | null>(null);
   const [overlayMetrics, setOverlayMetrics] = useState({
@@ -70,11 +50,6 @@ export function BuddyOverlay({
 
       const containerRect = container.getBoundingClientRect();
       const bottomOffset = getVisibleFooterHeight(container) + BUDDY_BOTTOM_GAP;
-      const availableRightWidth = getAvailableRightWidth(
-        container,
-        bottomChromeRef.current,
-        bottomChromeContentRef.current,
-      );
       const overlayWidth = display.offsetWidth;
       const overlayHeight = display.offsetHeight;
       const scale = getBuddyOverlayScale({
@@ -84,7 +59,6 @@ export function BuddyOverlay({
         bottomOffset,
         overlayWidth,
         overlayHeight,
-        availableRightWidth,
       });
 
       setOverlayMetrics((current) => {
@@ -111,12 +85,6 @@ export function BuddyOverlay({
       if (containerRef.current) {
         resizeObserver.observe(containerRef.current);
       }
-      if (bottomChromeRef.current) {
-        resizeObserver.observe(bottomChromeRef.current);
-      }
-      if (bottomChromeContentRef.current) {
-        resizeObserver.observe(bottomChromeContentRef.current);
-      }
       if (displayRef.current) {
         resizeObserver.observe(displayRef.current);
       }
@@ -130,7 +98,7 @@ export function BuddyOverlay({
         window.removeEventListener("resize", measure);
       }
     };
-  }, [buddy.type, bottomChromeContentRef, bottomChromeRef, containerRef]);
+  }, [buddy.type, containerRef]);
 
   if (!buddy.type) {
     return null;

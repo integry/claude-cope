@@ -17,7 +17,6 @@ export function getBuddyOverlayScale({
   bottomOffset,
   overlayWidth,
   overlayHeight,
-  availableRightWidth,
 }: {
   containerWidth: number;
   containerHeight: number;
@@ -25,7 +24,6 @@ export function getBuddyOverlayScale({
   bottomOffset: number;
   overlayWidth: number;
   overlayHeight: number;
-  availableRightWidth?: number;
 }) {
   const containerWidthScale =
     overlayWidth > 0
@@ -33,10 +31,6 @@ export function getBuddyOverlayScale({
           (containerWidth - rightInset - BUDDY_OVERLAY_LEFT_PADDING) /
             overlayWidth,
         )
-      : 1;
-  const chromeWidthScale =
-    overlayWidth > 0 && availableRightWidth !== undefined
-      ? clampBuddyScale(availableRightWidth / overlayWidth)
       : 1;
   const heightScale =
     overlayHeight > 0
@@ -46,5 +40,5 @@ export function getBuddyOverlayScale({
         )
       : 1;
 
-  return Math.min(containerWidthScale, chromeWidthScale, heightScale);
+  return Math.min(containerWidthScale, heightScale);
 }
