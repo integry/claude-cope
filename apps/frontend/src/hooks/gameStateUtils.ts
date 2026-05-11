@@ -60,6 +60,7 @@ export type Message = {
   id?: number;
   role: "user" | "system" | "loading" | "warning" | "error";
   content: string;
+  buddyType?: string;
   tokensSent?: number;
   tokensReceived?: number;
   cost?: number;

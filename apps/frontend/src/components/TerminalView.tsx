@@ -5,6 +5,7 @@ import type {
   RefObject,
   SetStateAction,
 } from "react";
+import { useRef } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import HeaderBar from "./HeaderBar";
@@ -19,7 +20,7 @@ import SprintProgressBar from "./SprintProgressBar";
 import MessageList from "./MessageList";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { TerminalOverlays } from "./TerminalOverlays";
-import { BuddyDisplay } from "./BuddyDisplay";
+import { BuddyOverlay } from "./BuddyOverlay";
 import type { GameState, Message } from "../hooks/useGameState";
 import type { PendingReviewPing } from "../hooks/useMultiplayer";
 import type { OverlayVisibility } from "./terminalViewUtils";
@@ -53,7 +54,10 @@ type TerminalViewProps = OverlayVisibility & {
   messageKeys: number[];
   initialHistoryLen: number;
   promptString: string;
-  handleSlashCommandClick: (command: string, action: SlashCommandAction) => void;
+  handleSlashCommandClick: (
+    command: string,
+    action: SlashCommandAction,
+  ) => void;
   bottomRef: RefObject<HTMLDivElement | null>;
   slashQuery: string;
   slashIndex: number;
@@ -85,6 +89,20 @@ type TerminalViewProps = OverlayVisibility & {
   upgradeNagDismissPhase: "idle" | "closing";
   upgradeNagDismissEffect: UpgradeNagCloseEffect;
 };
+
+function getUpgradeDismissProps(
+  pendingNagCommand: string | null,
+  handleUpgradeNagClose: () => void,
+  handleManualUpgradeDismiss: () => void,
+) {
+  const nagDismiss = pendingNagCommand !== null;
+  return {
+    onUpgradeDismiss: nagDismiss
+      ? handleUpgradeNagClose
+      : handleManualUpgradeDismiss,
+    upgradeDismissMode: nagDismiss ? "nag" : "manual",
+  } as const;
+}
 
 export function TerminalView({
   activeRegression,
@@ -157,6 +175,14 @@ export function TerminalView({
   upgradeNagDismissPhase,
   upgradeNagDismissEffect,
 }: TerminalViewProps) {
+  const terminalRef = useRef<HTMLDivElement | null>(null);
+  const bottomChromeRef = useRef<HTMLDivElement | null>(null);
+  const upgradeDismissProps = getUpgradeDismissProps(
+    pendingNagCommand,
+    handleUpgradeNagClose,
+    handleManualUpgradeDismiss,
+  );
+
   const handleTickerCommand = (command: string) => {
     closeAllOverlaysPreservingNag();
     runSlashCommand(command);
@@ -164,37 +190,69 @@ export function TerminalView({
 
   return (
     <div
-      className={terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}
-      style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : "var(--color-bg)", color: "var(--color-text)" }}
+      ref={terminalRef}
+      className={`relative ${terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}`}
+      style={{
+        ...parseGlitchStyle(regressionGlitch),
+        backgroundColor: outageHp !== null ? undefined : "var(--color-bg)",
+        color: "var(--color-text)",
+      }}
       onClick={() => {
-        if (!anyOverlayOpen && !window.getSelection()?.toString()) inputRef.current?.focus();
+        if (!anyOverlayOpen && !window.getSelection()?.toString()) {
+          inputRef.current?.focus();
+        }
       }}
     >
       <div className="shrink-0">
         <Ticker
-          onExpand={() => { closeAllOverlaysPreservingNag(); setShowParty(true); }}
+          onExpand={() => {
+            closeAllOverlaysPreservingNag();
+            setShowParty(true);
+          }}
           onSlashCommand={handleTickerCommand}
           onlineCount={onlineCount}
         />
-        {outageHp !== null && activeOutageScenario && <OutageBar outageHp={outageHp} scenario={activeOutageScenario} />}
+        {outageHp !== null && activeOutageScenario && (
+          <OutageBar outageHp={outageHp} scenario={activeOutageScenario} />
+        )}
         <HeaderBar
           rank={rank}
           currentTD={state.economy.currentTD}
           quotaPercent={state.economy.quotaPercent}
           outageHp={outageHp}
-          activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier}
+          activeMultiplier={
+            calculateActiveMultiplier(state.inventory, state.upgrades) *
+            state.economy.tdMultiplier
+          }
           username={state.username}
           isBYOK={BYOK_ENABLED && !!state.apiKey}
           isMax={!!state.proKey || !!state.proKeyHash}
           byokTotalCost={state.byokTotalCost}
           onProfileClick={handleProfileClick}
-          onHelpClick={() => { closeAllOverlaysPreservingNag(); setShowHelp(true); }}
-          onAboutClick={() => { closeAllOverlaysPreservingNag(); setShowAbout(true); }}
-          onSlashMenuClick={() => { setInputValue("/"); setSlashQuery("/"); setSlashIndex(0); inputRef.current?.focus(); }}
-          onUpgradeClick={() => { closeAllOverlaysPreservingNag(); setShowUpgrade(true); window.history.pushState(null, "", "/upgrade"); }}
+          onHelpClick={() => {
+            closeAllOverlaysPreservingNag();
+            setShowHelp(true);
+          }}
+          onAboutClick={() => {
+            closeAllOverlaysPreservingNag();
+            setShowAbout(true);
+          }}
+          onSlashMenuClick={() => {
+            setInputValue("/");
+            setSlashQuery("/");
+            setSlashIndex(0);
+            inputRef.current?.focus();
+          }}
+          onUpgradeClick={() => {
+            closeAllOverlaysPreservingNag();
+            setShowUpgrade(true);
+            window.history.pushState(null, "", "/upgrade");
+          }}
         />
       </div>
-      <div className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
+      <div
+        className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}
+      >
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
         <MessageList
           history={history}
@@ -207,19 +265,45 @@ export function TerminalView({
         />
         <div ref={bottomRef} />
       </div>
-      <div className="shrink-0">
-        <SprintProgressBar
-          id={state.activeTicket?.id}
-          title={state.activeTicket?.title}
-          sprintProgress={state.activeTicket?.sprintProgress}
-          sprintGoal={state.activeTicket?.sprintGoal}
-          onSlashCommand={handleSlashCommandClick}
-        />
-        <div className="terminal-command-shell relative border-b border-white/20">
-          {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} paidUser={isPaidUser(state)} onSelect={handleSlashMenuSelect} />}
-        <BuddyDisplay type={state.buddy.type} isShiny={state.buddy.isShiny} />
-          <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} promptString={promptString} placeholder={suggestedReply ?? undefined} />
+      <div
+        ref={bottomChromeRef}
+        className="terminal-bottom-chrome shrink-0 gap-4 md:flex md:items-end md:justify-between"
+        data-terminal-bottom-chrome="true"
+      >
+        <div className="min-w-0 flex-1">
+          <SprintProgressBar
+            id={state.activeTicket?.id}
+            title={state.activeTicket?.title}
+            sprintProgress={state.activeTicket?.sprintProgress}
+            sprintGoal={state.activeTicket?.sprintGoal}
+            onSlashCommand={handleSlashCommandClick}
+          />
+          <div className="terminal-command-shell relative border-b border-white/20">
+            {slashQuery && (
+              <SlashMenu
+                query={slashQuery}
+                activeIndex={slashIndex}
+                totalTechnicalDebt={state.economy.totalTDEarned}
+                paidUser={isPaidUser(state)}
+                onSelect={handleSlashMenuSelect}
+              />
+            )}
+            <CommandLine
+              ref={inputRef}
+              value={inputValue}
+              disabled={isProcessing || isBooting || anyOverlayOpen}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              promptString={promptString}
+              placeholder={suggestedReply ?? undefined}
+            />
+          </div>
         </div>
+        {state.buddy.type && (
+          <div className="terminal-buddy-dock">
+            <BuddyOverlay buddy={state.buddy} />
+          </div>
+        )}
       </div>
       <TerminalOverlays
         showStore={showStore}
@@ -252,12 +336,21 @@ export function TerminalView({
         setShowSynergize={setShowSynergize}
         setIsProcessing={setIsProcessing}
         setHistory={setHistory}
-        onUpgradeDismiss={pendingNagCommand !== null ? handleUpgradeNagClose : handleManualUpgradeDismiss}
-        upgradeDismissMode={pendingNagCommand !== null ? "nag" : "manual"}
+        onUpgradeDismiss={upgradeDismissProps.onUpgradeDismiss}
+        upgradeDismissMode={upgradeDismissProps.upgradeDismissMode}
         upgradeDismissPhase={upgradeNagDismissPhase}
         upgradeDismissEffect={upgradeNagDismissEffect}
       />
-      <TerminalFooter closeAllOverlays={closeAllOverlaysPreservingNag} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
+      <TerminalFooter
+        closeAllOverlays={closeAllOverlaysPreservingNag}
+        buddyType={state.buddy.type}
+        buddyIsShiny={state.buddy.isShiny}
+        setShowTerms={setShowTerms}
+        setShowPrivacy={setShowPrivacy}
+        setShowAbout={setShowAbout}
+        setShowHelp={setShowHelp}
+        setShowContact={setShowContact}
+      />
     </div>
   );
 }

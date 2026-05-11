@@ -67,4 +67,10 @@ export default [
       'max-params': ['warn', { max: 5 }],
     },
   },
+  {
+    files: ['src/hooks/__tests__/useGameState.themePersistence.test.tsx'],
+    rules: {
+      'max-lines': 'off',
+    },
+  },
 ]
