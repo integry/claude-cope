@@ -124,8 +124,6 @@ describe("BuddyOverlay rendering", () => {
     act(() => {
       root!.render(createElement(BuddyOverlay, {
         buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 },
-        containerRef: { current: null },
-        bottomChromeRef: { current: null },
       }));
     });
 
@@ -140,8 +138,6 @@ describe("BuddyOverlay rendering", () => {
     act(() => {
       root!.render(createElement(BuddyOverlay, {
         buddy: { type: "Agile Snail", isShiny: false, promptsSinceLastInterjection: 0 },
-        containerRef: { current: null },
-        bottomChromeRef: { current: null },
       }));
     });
 
