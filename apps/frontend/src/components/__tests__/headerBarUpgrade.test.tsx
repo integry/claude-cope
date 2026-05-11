@@ -78,14 +78,15 @@ describe("HeaderBar upgrade CTA visibility", () => {
     renderHeaderBar({ ...baseProps, isBYOK: true, isMax: false, byokTotalCost: 1.25 });
 
     const identityBlock = container.querySelector("[data-testid='desktop-identity-block']");
+    const identityLine = identityBlock?.firstElementChild;
     const rankLine = container.querySelector("[data-testid='desktop-rank-line']");
     const statusBlock = container.querySelector("[data-testid='desktop-status-block']");
     const technicalDebtLine = container.querySelector("[data-testid='desktop-technical-debt-line']");
 
     expect(identityBlock).not.toBeNull();
-    expect(identityBlock?.textContent).toContain("TestUser");
-    expect(identityBlock?.textContent).toContain("BYOK");
-    expect(identityBlock?.textContent).not.toContain("Junior Code Monkey");
+    expect(identityLine?.textContent).toContain("TestUser");
+    expect(identityLine?.textContent).toContain("BYOK");
+    expect(identityLine?.textContent).not.toContain("Junior Code Monkey");
 
     expect(rankLine?.textContent).toContain("Junior Code Monkey");
     expect(statusBlock).not.toBeNull();
