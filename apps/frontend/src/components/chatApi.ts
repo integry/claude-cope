@@ -28,6 +28,71 @@ function normalizeSuggestedReply(text: string | null | undefined): string {
     .replace(/\s+/g, " ");
 }
 
+function runAcceptedCallback(onAccepted?: () => void): void {
+  if (!onAccepted) return;
+  try {
+    onAccepted();
+  } catch (error) {
+    console.error("submitChatMessage onAccepted callback failed", error);
+    // Consumer callbacks must not turn a committed assistant reply into a chat failure.
+  }
+}
+
+function settleAcceptedCallback(
+  onAccepted: (() => void) | undefined,
+  scheduleHistoryCommitCallback: ((callback: () => void) => void) | undefined,
+): void {
+  if (!onAccepted) return;
+  if (!scheduleHistoryCommitCallback) {
+    console.error("submitChatMessage onAccepted requires scheduleHistoryCommitCallback");
+    return;
+  }
+  const callback = () => runAcceptedCallback(onAccepted);
+  scheduleHistoryCommitCallback(callback);
+}
+
+type SubmitChatMessageBaseOpts = {
+  chatMessages: { role: string; content: string }[];
+  buddyResult: BuddyInterjectionResult | null;
+  unlockAchievement: (id: string) => void;
+  setHistory: Dispatch<SetStateAction<Message[]>>;
+  setIsProcessing: Dispatch<SetStateAction<boolean>>;
+  currentRank: string;
+  apiKey?: string;
+  customModel?: string;
+  proKey?: string;
+  proKeyHash?: string;
+  modes?: ModesState;
+  activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
+  onSprintProgress?: (amount: number) => void;
+  getSprintCompleteMessage?: () => Message | null;
+  addActiveTD?: (n: number, raw?: boolean) => void;
+  onSuggestedReply?: (suggestion: string) => void;
+  buddyType?: string | null;
+  username?: string;
+  inventory?: Record<string, number>;
+  upgrades?: string[];
+  onByokUsage?: (usage: { model: string; prompt_tokens?: number; completion_tokens?: number; cost?: number }) => void;
+  onQuotaUpdate?: (quotaPercent: number) => void;
+  onQuotaExhausted?: () => void;
+  onProfileUpdate?: (profile: ServerProfile) => void;
+  onError?: () => void;
+  signal?: AbortSignal;
+  loadingMessageId?: number;
+};
+
+type SubmitChatMessageAcceptedOpts =
+  | {
+      onAccepted?: undefined;
+      scheduleHistoryCommitCallback?: undefined;
+    }
+  | {
+      onAccepted: () => void;
+      scheduleHistoryCommitCallback: (callback: () => void) => void;
+    };
+
+type SubmitChatMessageOpts = SubmitChatMessageBaseOpts & SubmitChatMessageAcceptedOpts;
+
 export function mergeSuggestedReply(previous: string | null, next: string | null): string | null {
   const trimmedNext = next?.trim() ?? "";
   if (!trimmedNext) return null;
@@ -162,35 +227,8 @@ async function assertByokHumanSession(): Promise<void> {
   throw new ByokVerificationError("Unable to determine verification status from the server.", false);
 }
 
-export function submitChatMessage(opts: {
-  chatMessages: { role: string; content: string }[];
-  buddyResult: BuddyInterjectionResult | null;
-  unlockAchievement: (id: string) => void;
-  setHistory: Dispatch<SetStateAction<Message[]>>;
-  setIsProcessing: Dispatch<SetStateAction<boolean>>;
-  currentRank: string;
-  apiKey?: string;
-  customModel?: string;
-  proKey?: string;
-  proKeyHash?: string;
-  modes?: ModesState;
-  activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
-  onSprintProgress?: (amount: number) => void;
-  getSprintCompleteMessage?: () => Message | null;
-  addActiveTD?: (n: number, raw?: boolean) => void;
-  onSuggestedReply?: (suggestion: string) => void;
-  buddyType?: string | null;
-  username?: string;
-  inventory?: Record<string, number>;
-  upgrades?: string[];
-  onByokUsage?: (usage: { model: string; prompt_tokens?: number; completion_tokens?: number; cost?: number }) => void;
-  onQuotaUpdate?: (quotaPercent: number) => void;
-  onQuotaExhausted?: () => void;
-  onProfileUpdate?: (profile: ServerProfile) => void;
-  onError?: () => void;
-  signal?: AbortSignal;
-}) {
-  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, onError, signal } = opts;
+export function submitChatMessage(opts: SubmitChatMessageOpts) {
+  const { chatMessages, buddyResult, unlockAchievement, setHistory, setIsProcessing, currentRank, apiKey, customModel, modes, activeTicket, onSprintProgress, onError, signal, loadingMessageId } = opts;
   // Ignore any locally-stored apiKey when BYOK is disabled at the operator
   // level — stale keys from prior sessions must not reach OpenRouter.
   const isBYOK = BYOK_ENABLED && Boolean(apiKey);
@@ -262,9 +300,9 @@ export function submitChatMessage(opts: {
 
   requestPromise
     .then(async (res) => {
-      if (await handleChatErrorResponse(res, setHistory, opts.onQuotaExhausted, onError)) return;
+      if (await handleChatErrorResponse(res, setHistory, loadingMessageId, opts.onQuotaExhausted, onError)) return;
 
-      const parsed = await parseChatResponseBody(res, setHistory, opts.addActiveTD, opts.onProfileUpdate);
+      const parsed = await parseChatResponseBody(res, setHistory, loadingMessageId, opts.addActiveTD, opts.onProfileUpdate);
       let { rawReply } = parsed;
       const { tokensSent, tokensReceived, cost, quotaPercent } = parsed;
 
@@ -300,7 +338,7 @@ export function submitChatMessage(opts: {
 
       setHistory((prev) => {
         let updated = [
-          ...prev.filter((msg) => msg.role !== "loading"),
+          ...prev.filter((msg) => msg.role !== "loading" || (loadingMessageId !== undefined && msg.id !== loadingMessageId)),
           { role: "system" as const, content: finalReply, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
           ...achievementMessages,
           ...(buddyMessage ? [buddyMessage] : []),
@@ -324,6 +362,11 @@ export function submitChatMessage(opts: {
 
         return updated;
       });
+
+      settleAcceptedCallback(
+        opts.onAccepted,
+        opts.scheduleHistoryCommitCallback,
+      );
     })
     .catch((err) => {
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -331,18 +374,18 @@ export function submitChatMessage(opts: {
         onError?.();
         if (err.reverify) {
           window.dispatchEvent(new CustomEvent(TURNSTILE_REQUIRED_EVENT));
-          setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
+          setHistory((prev) => prev.filter((msg) => msg.role !== "loading" || (loadingMessageId !== undefined && msg.id !== loadingMessageId)));
           return;
         }
         setHistory((prev) => [
-          ...prev.filter((msg) => msg.role !== "loading"),
+          ...prev.filter((msg) => msg.role !== "loading" || (loadingMessageId !== undefined && msg.id !== loadingMessageId)),
           { role: "error", content: `[❌ Error] ${err.message}` },
         ]);
         return;
       }
       onError?.();
       setHistory((prev) => [
-        ...prev.filter((msg) => msg.role !== "loading"),
+        ...prev.filter((msg) => msg.role !== "loading" || (loadingMessageId !== undefined && msg.id !== loadingMessageId)),
         { role: "error", content: "[❌ Error] Network error. Is the backend running?" },
       ]);
     })

@@ -27,6 +27,7 @@ function processSSEChunk(
   chunk: string,
   state: { rawReply: string; usage?: StreamUsage },
   setHistory: Dispatch<SetStateAction<Message[]>>,
+  loadingMessageId?: number,
 ) {
   const lines = chunk.split("\n");
   for (const line of lines) {
@@ -48,7 +49,9 @@ function processSSEChunk(
       const currentReply = state.rawReply;
       setHistory((prev) =>
         prev.map((msg) =>
-          msg.role === "loading" ? { ...msg, content: currentReply } : msg,
+          msg.role === "loading" && (loadingMessageId === undefined || msg.id === loadingMessageId)
+            ? { ...msg, content: currentReply }
+            : msg,
         ),
       );
     } catch {
@@ -60,6 +63,7 @@ function processSSEChunk(
 async function readStreamedResponse(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
+  loadingMessageId?: number,
 ): Promise<StreamResult> {
   const state: { rawReply: string; usage?: StreamUsage } = { rawReply: "" };
   const reader = res.body?.getReader();
@@ -69,7 +73,7 @@ async function readStreamedResponse(
   while (!done) {
     const { value, done: readerDone } = await reader.read();
     done = readerDone;
-    if (value) processSSEChunk(decoder.decode(value, { stream: true }), state, setHistory);
+    if (value) processSSEChunk(decoder.decode(value, { stream: true }), state, setHistory, loadingMessageId);
   }
   return { rawReply: state.rawReply, usage: state.usage };
 }
@@ -99,12 +103,13 @@ function extractStreamFields(usage: StreamResult["usage"]): Omit<ParsedResponse,
 export async function parseChatResponseBody(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
+  loadingMessageId?: number,
   addActiveTD?: (n: number, raw?: boolean) => void,
   onProfileUpdate?: (profile: ServerProfile) => void,
 ): Promise<ParsedResponse> {
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("text/event-stream")) {
-    const streamResult = await readStreamedResponse(res, setHistory);
+    const streamResult = await readStreamedResponse(res, setHistory, loadingMessageId);
     return { rawReply: streamResult.rawReply, ...extractStreamFields(streamResult.usage) };
   }
 
@@ -121,12 +126,15 @@ export async function parseChatResponseBody(
 export async function handleChatErrorResponse(
   res: Response,
   setHistory: Dispatch<SetStateAction<Message[]>>,
+  loadingMessageId?: number,
   onQuotaExhausted?: () => void,
   onError?: () => void,
 ): Promise<boolean> {
-  const removeLoading = () => setHistory((prev) => prev.filter((msg) => msg.role !== "loading"));
+  const matchesLoadingMessage = (msg: Message) =>
+    msg.role === "loading" && (loadingMessageId === undefined || msg.id === loadingMessageId);
+  const removeLoading = () => setHistory((prev) => prev.filter((msg) => !matchesLoadingMessage(msg)));
   const pushMessage = (message: Message) =>
-    setHistory((prev) => [...prev.filter((msg) => msg.role !== "loading"), message]);
+    setHistory((prev) => [...prev.filter((msg) => !matchesLoadingMessage(msg)), message]);
   const readErrorData = () => res.json().catch(() => null);
   const matchesBotProtectionMessage = (error: unknown) =>
     typeof error === "string" && error.toLowerCase().includes("human verification required");
