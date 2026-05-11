@@ -82,6 +82,25 @@ describe("POST /api/account/buy-generator", () => {
     const res = await postJSON("/api/account/buy-generator", GEN_BODY, { DB: db });
     expect(res.status).toBe(409);
   });
+  it("succeeds for a session-authenticated Max user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/buy-generator", {
+      username: "alice",
+      generatorId: "intern",
+      amount: 1,
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true });
+  });
 });
 
 describe("POST /api/account/buy-upgrade", () => {
@@ -97,6 +116,29 @@ describe("POST /api/account/buy-upgrade", () => {
     }, { DB: db });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("Unknown upgrade");
+  });
+  it("succeeds for a session-authenticated Max user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = {
+      ...BASE_PROFILE,
+      current_td: 6000,
+      inventory: "{\"intern\":1}",
+      upgrades: "[]",
+    };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/buy-upgrade", {
+      username: "alice",
+      upgradeId: "intern-boost-copypaster",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true });
   });
 });
 
@@ -606,6 +648,27 @@ describe("POST /api/account/unlock-achievement", () => {
     }, { DB: db });
     expect(res.status).toBe(404);
   });
+  it("succeeds for a session-authenticated Max user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = {
+      ...BASE_PROFILE,
+      achievements: "[]",
+    };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: paidProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/unlock-achievement", {
+      username: "alice",
+      achievementId: "the_leaker",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true });
+  });
 });
 
 describe("POST /api/account/update-buddy", () => {
@@ -661,6 +724,33 @@ describe("POST /api/account/update-buddy", () => {
     }, { DB: db });
     expect(res.status).toBe(409);
   });
+  it("succeeds for a session-authenticated Max user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = {
+      ...BASE_PROFILE,
+      buddy_type: null,
+      buddy_is_shiny: false,
+    };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: {
+          ...paidProfile,
+          buddy_type: "Agile Snail",
+          buddy_is_shiny: 1,
+        },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/update-buddy", {
+      username: "alice",
+      buddyType: "Agile Snail",
+      isShiny: true,
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true });
+  });
 });
 
 describe("POST /api/account/update-ticket", () => {
@@ -710,6 +800,28 @@ describe("POST /api/account/update-ticket", () => {
     const ticket = { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 };
     const res = await postJSON("/api/account/update-ticket", { username: "alice", activeTicket: ticket, licenseKeyHash: "hash" }, { DB: db });
     expect(res.status).toBe(409);
+  });
+  it("succeeds for a session-authenticated Max user without licenseKeyHash", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = {
+      ...BASE_PROFILE,
+      active_ticket: null,
+    };
+    const ticket = { id: "t1", title: "Task", sprintProgress: 5, sprintGoal: 10 };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: { ...paidProfile, active_ticket: JSON.stringify(ticket) },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/update-ticket", {
+      username: "alice",
+      activeTicket: ticket,
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true });
   });
 });
 

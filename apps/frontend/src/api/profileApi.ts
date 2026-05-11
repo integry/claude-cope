@@ -21,12 +21,12 @@ async function profilePost(path: string, body: Record<string, unknown>): Promise
   }
 }
 
-export function buyGeneratorServer(username: string, generatorId: string, amount: number, licenseKeyHash: string): Promise<ProfileResult> {
-  return profilePost("buy-generator", { username, generatorId, amount, licenseKeyHash });
+export function buyGeneratorServer(username: string, generatorId: string, amount: number, licenseKeyHash?: string): Promise<ProfileResult> {
+  return profilePost("buy-generator", { username, generatorId, amount, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
 }
 
-export function buyUpgradeServer(username: string, upgradeId: string, licenseKeyHash: string): Promise<ProfileResult> {
-  return profilePost("buy-upgrade", { username, upgradeId, licenseKeyHash });
+export function buyUpgradeServer(username: string, upgradeId: string, licenseKeyHash?: string): Promise<ProfileResult> {
+  return profilePost("buy-upgrade", { username, upgradeId, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
 }
 
 export function buyThemeServer(username: string, themeId: string, licenseKeyHash?: string): Promise<ProfileResult> {
@@ -37,16 +37,16 @@ export function updateThemeServer(username: string, themeId: string, licenseKeyH
   return profilePost("update-theme", { username, themeId, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
 }
 
-export function unlockAchievementServer(username: string, achievementId: string, licenseKeyHash: string): Promise<ProfileResult> {
-  return profilePost("unlock-achievement", { username, achievementId, licenseKeyHash });
+export function unlockAchievementServer(username: string, achievementId: string, licenseKeyHash?: string): Promise<ProfileResult> {
+  return profilePost("unlock-achievement", { username, achievementId, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
 }
 
-export function updateBuddyServer(username: string, buddyType: string | null, isShiny: boolean, licenseKeyHash: string): Promise<ProfileResult> {
-  return profilePost("update-buddy", { username, buddyType, isShiny, licenseKeyHash });
+export function updateBuddyServer(username: string, buddyType: string | null, isShiny: boolean, licenseKeyHash?: string): Promise<ProfileResult> {
+  return profilePost("update-buddy", { username, buddyType, isShiny, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
 }
 
-export function updateTicketServer(username: string, activeTicket: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null, licenseKeyHash: string): Promise<ProfileResult> {
-  return profilePost("update-ticket", { username, activeTicket, licenseKeyHash });
+export function updateTicketServer(username: string, activeTicket: { id: string; title: string; sprintProgress: number; sprintGoal: number } | null, licenseKeyHash?: string): Promise<ProfileResult> {
+  return profilePost("update-ticket", { username, activeTicket, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
 }
 
 type SessionRestoreResult = {
