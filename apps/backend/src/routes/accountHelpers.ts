@@ -342,6 +342,7 @@ async function resolveSessionThemePurchaseRow(
   },
 ): Promise<{ username: string; row: ProfileRow | null } | OwnershipResult> {
   const requestedAlias = await resolveRequestedThemeAlias(opts.kv, opts.username, opts.boundUsername);
+  const boundUsernameLower = opts.boundUsername.toLowerCase();
   const resolved = await resolveSessionProfileRow({
     db,
     kv: opts.kv,
@@ -351,14 +352,14 @@ async function resolveSessionThemePurchaseRow(
   });
 
   if (!resolved.row) {
-    if (requestedAlias && requestedAlias.current.toLowerCase() !== opts.boundUsername) {
+    if (requestedAlias && requestedAlias.current.toLowerCase() !== boundUsernameLower) {
       return getSessionUserMismatchResult();
     }
     return { profile: null, status: "not_found", error: "Profile not found" };
   }
 
   const sessionMatchesRequested = resolved.username.toLowerCase() === opts.username.toLowerCase()
-    || opts.boundUsername.toLowerCase() === opts.username.toLowerCase();
+    || boundUsernameLower === opts.username.toLowerCase();
   if (!sessionMatchesRequested && requestedAlias?.current.toLowerCase() !== resolved.username.toLowerCase()) {
     return getSessionUserMismatchResult();
   }

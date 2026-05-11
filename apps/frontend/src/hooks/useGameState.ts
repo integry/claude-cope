@@ -40,7 +40,12 @@ function restoreFreshSession(setState: SetGameState, result: SessionProfileResul
   setState((prev) => mergeSessionIdentity(prev, result));
 }
 
-function validatePaidSession(setState: SetGameState, result: SessionProfileResult): void {
+function validatePaidSession(
+  setState: SetGameState,
+  result: SessionProfileResult,
+  confirmedActiveThemeRef: { current: string },
+): void {
+  if (result.profile) confirmedActiveThemeRef.current = result.profile.active_theme;
   setState((prev) => (isPaidUser(prev) || prev.hasSessionPro ? applyValidatedSessionProState(prev, result) : prev));
 }
 
@@ -146,7 +151,7 @@ export function useGameState() {
     let cancelled = false;
     fetchSessionProfile().then((result) => {
       if (cancelled) return;
-      validatePaidSession(setState, result);
+      validatePaidSession(setState, result, confirmedActiveThemeRef);
     });
     return () => { cancelled = true; };
   }, []);

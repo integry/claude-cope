@@ -238,6 +238,67 @@ describe("useGameState theme persistence", () => {
     expect(hookState.state.activeTheme).toBe("midnight");
   });
 
+  it("rolls back to the validated server theme when update-theme fails after non-fresh /me restoration", async () => {
+    vi.mocked(fetchSessionProfile).mockResolvedValueOnce({
+      found: true,
+      isPro: true,
+      username: "alice",
+      profile: createServerProfile({
+        active_theme: "midnight",
+        unlocked_themes: ["default", "amber", "midnight"],
+      }),
+    });
+
+    act(() => {
+      root.unmount();
+    });
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(makeState({
+      activeTheme: "default",
+      unlockedThemes: ["default", "amber", "midnight"],
+      chatHistory: [{ id: 1, role: "user", content: "hello" }],
+    })));
+
+    act(() => {
+      root = createRoot(container);
+      root.render(createElement(HookHarness, {
+        onRender: (value) => {
+          hookState = value;
+        },
+      }));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(hookState.state.activeTheme).toBe("midnight");
+
+    const request = deferred<{
+      success: false;
+      error: string;
+      errorCode: "session_auth_required";
+    }>();
+    vi.mocked(updateThemeServer).mockReturnValueOnce(request.promise);
+
+    act(() => {
+      hookState.setActiveTheme("amber");
+    });
+
+    expect(hookState.state.activeTheme).toBe("amber");
+
+    await act(async () => {
+      request.resolve({
+        success: false,
+        error: "Session authentication is required for theme updates",
+        errorCode: "session_auth_required",
+      });
+      await request.promise;
+    });
+
+    expect(hookState.state.activeTheme).toBe("midnight");
+  });
+
   it("clears stale session-backed paid state when /me no longer finds the session profile", async () => {
     vi.mocked(fetchSessionProfile).mockResolvedValueOnce({ found: false });
 

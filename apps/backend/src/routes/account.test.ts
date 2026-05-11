@@ -242,6 +242,22 @@ describe("POST /api/account/buy-theme", () => {
     expect(res.status).toBe(200);
     expect(((await res.json()) as { success: boolean }).success).toBe(true);
   });
+  it("returns not_found for a mixed-case renamed alias when the rebound profile row is missing", async () => {
+    const kv = mockKV({
+      "session_user:test-session": "Bob",
+      "renamed:Alice": "Bob",
+    });
+
+    const res = await postWithSession("/api/account/buy-theme", {
+      username: "Alice",
+      themeId: "amber",
+    }, { DB: createMockDB({ firstResults: undefined }).db, QUOTA_KV: kv });
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({
+      error: "Profile not found",
+    });
+  });
   it("falls back to session auth when a stale licenseKeyHash is present", async () => {
     const kv = mockKV({ "session_user:test-session": "alice" });
     const paidProfile = { ...BASE_PROFILE, current_td: 6000 };
