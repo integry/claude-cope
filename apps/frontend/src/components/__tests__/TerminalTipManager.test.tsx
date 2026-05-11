@@ -211,6 +211,22 @@ describe("Terminal tip-manager wiring", () => {
     expect(rollbackMessageWithoutTicketMocks[1]).toHaveBeenCalledTimes(1);
   });
 
+  it("does not leak prompt processing when a request toggles processing true more than once", async () => {
+    submitChatMessageMock.mockImplementation(() => {});
+    rendered = await renderTerminal(Terminal);
+    await submitCommand(rendered.container, "first prompt");
+
+    const firstRequest = submitChatMessageMock.mock.calls[0]?.[0] as { setIsProcessing: (value: boolean) => void };
+    await act(async () => {
+      firstRequest.setIsProcessing(true);
+      firstRequest.setIsProcessing(true);
+      firstRequest.setIsProcessing(false);
+    });
+
+    await submitCommand(rendered.container, "second prompt");
+    expect(submitChatMessageMock).toHaveBeenCalledTimes(2);
+  });
+
   it("settles backlog accounting per prompt when submissions overlap", async () => {
     submitChatMessageMock.mockImplementation(() => {});
     rendered = await renderTerminal(Terminal);

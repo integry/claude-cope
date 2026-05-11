@@ -143,7 +143,7 @@ export function createUseTerminalKeyboardModule() {
     }: {
       handleEnterSubmit: () => void;
       handleUpgradeNagClose: () => void;
-      abortControllerRef: { current: AbortController | null };
+      abortControllerRef: { current: { abort: () => void } | null };
       isProcessing: boolean;
       showUpgrade: boolean;
     }) => ({

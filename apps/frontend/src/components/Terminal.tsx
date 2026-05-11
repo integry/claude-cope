@@ -32,6 +32,7 @@ import { useUpgradeNagState } from "./useUpgradeNagState";
 import { STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, syncMessageKeys } from "./terminalUtils";
 export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
 type PromptSubmission = { command: string; replayId: number | null; submissionId: number };
+type PromptAbortHandle = { abort: () => void };
 
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
@@ -74,7 +75,7 @@ function Terminal() {
   const messageKeys = useRef<number[]>([]);
   const nextKeyId = useRef(0);
   syncMessageKeys(messageKeys.current, nextKeyId, history.length);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const abortControllerRef = useRef<PromptAbortHandle | null>(null);
   const activeAbortControllersRef = useRef(new Set<AbortController>());
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
   const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,13 +104,9 @@ function Terminal() {
     const nextEntries = updater(commandHistoryEntriesRef.current); commandHistoryEntriesRef.current = nextEntries; setCommandHistory(nextEntries.map(({ command }) => command));
   }, []);
   const syncAbortControllerHandle = useCallback(() => {
-    const activeControllers = Array.from(activeAbortControllersRef.current);
-    if (activeControllers.length === 0) return void (abortControllerRef.current = null);
-    const [latestController] = activeControllers.slice(-1);
-    const aggregateController = new AbortController();
-    aggregateController.abort = () => { Array.from(activeAbortControllersRef.current).forEach((controller) => controller.abort()); };
-    Object.defineProperty(aggregateController, "signal", { value: latestController!.signal });
-    abortControllerRef.current = aggregateController;
+    abortControllerRef.current = activeAbortControllersRef.current.size === 0
+      ? null
+      : { abort: () => { Array.from(activeAbortControllersRef.current).forEach((controller) => controller.abort()); } };
   }, []);
   const syncPromptProcessingState = useCallback(() => {
     setIsProcessing(activePromptCountRef.current > 0);
@@ -135,19 +132,21 @@ function Terminal() {
     syncAbortControllerHandle();
   }, [syncAbortControllerHandle]);
   const createPromptProcessingSetter = useCallback((controller: AbortController) => {
-    let processingSettled = false;
+    let promptProcessingActive = false;
     let controllerReleased = false;
     const releaseController = () => { if (!controllerReleased) { controllerReleased = true; untrackAbortController(controller); } };
     return (value: boolean | ((prev: boolean) => boolean)) => {
-      const nextValue = typeof value === "function" ? value(activePromptCountRef.current > 0) : value;
-      if (nextValue) {
+      const nextValue = typeof value === "function" ? value(promptProcessingActive) : value;
+      if (nextValue === promptProcessingActive) {
+        if (!nextValue) releaseController();
+        return;
+      }
+      promptProcessingActive = nextValue;
+      if (promptProcessingActive) {
         startPromptProcessing();
-        processingSettled = false;
         return;
       }
       releaseController();
-      if (processingSettled) return;
-      processingSettled = true;
       finishPromptProcessing();
     };
   }, [finishPromptProcessing, startPromptProcessing, untrackAbortController]);
