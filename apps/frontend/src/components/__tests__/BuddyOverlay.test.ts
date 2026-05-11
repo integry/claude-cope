@@ -120,64 +120,50 @@ describe("BuddyOverlay layout measurement", () => {
   it("reserves the bottom command chrome instead of only the footer", () => {
     const terminalRef = createRef<HTMLDivElement>();
     const bottomChromeRef = createRef<HTMLDivElement>();
-    const originalResizeObserver = globalThis.ResizeObserver;
-    // Force the effect onto the resize-event path so the test can retrigger measurement.
-    Object.defineProperty(globalThis, "ResizeObserver", {
-      configurable: true,
-      value: undefined,
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root!.render(
+        createElement(
+          "div",
+          { ref: terminalRef },
+          createElement("div", { ref: bottomChromeRef }),
+          createElement("footer"),
+          createElement(BuddyOverlay, {
+            buddy: { type: "Agile Snail", isShiny: false, promptsSinceLastInterjection: 0 },
+            containerRef: terminalRef,
+            bottomChromeRef,
+          }),
+        ),
+      );
     });
 
-    try {
-      container = document.createElement("div");
-      document.body.appendChild(container);
-      root = createRoot(container);
+    Object.defineProperty(terminalRef.current!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ width: 800, height: 600, top: 0, bottom: 600, left: 0, right: 800 }),
+    });
+    Object.defineProperty(bottomChromeRef.current!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ width: 800, height: 120, top: 420, bottom: 540, left: 0, right: 800 }),
+    });
 
-      act(() => {
-        root!.render(
-          createElement(
-            "div",
-            { ref: terminalRef },
-            createElement("div", { ref: bottomChromeRef }),
-            createElement("footer"),
-            createElement(BuddyOverlay, {
-              buddy: { type: "Agile Snail", isShiny: false, promptsSinceLastInterjection: 0 },
-              containerRef: terminalRef,
-              bottomChromeRef,
-            }),
-          ),
-        );
-      });
+    const footer = terminalRef.current!.querySelector("footer")!;
+    Object.defineProperty(footer, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ width: 800, height: 48, top: 552, bottom: 600, left: 0, right: 800 }),
+    });
 
-      Object.defineProperty(terminalRef.current!, "getBoundingClientRect", {
-        configurable: true,
-        value: () => ({ width: 800, height: 600, top: 0, bottom: 600, left: 0, right: 800 }),
-      });
-      Object.defineProperty(bottomChromeRef.current!, "getBoundingClientRect", {
-        configurable: true,
-        value: () => ({ width: 800, height: 120, top: 420, bottom: 540, left: 0, right: 800 }),
-      });
+    const measureNode = container.querySelector(".terminal-buddy-overlay-measure") as HTMLDivElement;
+    Object.defineProperty(measureNode, "offsetWidth", { configurable: true, value: 200 });
+    Object.defineProperty(measureNode, "offsetHeight", { configurable: true, value: 160 });
 
-      const footer = terminalRef.current!.querySelector("footer")!;
-      Object.defineProperty(footer, "getBoundingClientRect", {
-        configurable: true,
-        value: () => ({ width: 800, height: 48, top: 552, bottom: 600, left: 0, right: 800 }),
-      });
+    act(() => {
+      globalThis.__triggerResizeObserver?.();
+    });
 
-      const measureNode = container.querySelector(".terminal-buddy-overlay-measure") as HTMLDivElement;
-      Object.defineProperty(measureNode, "offsetWidth", { configurable: true, value: 200 });
-      Object.defineProperty(measureNode, "offsetHeight", { configurable: true, value: 160 });
-
-      act(() => {
-        window.dispatchEvent(new Event("resize"));
-      });
-
-      const overlay = container.querySelector(".terminal-buddy-overlay") as HTMLDivElement;
-      expect(overlay.style.getPropertyValue("--terminal-buddy-bottom-offset")).toBe("188px");
-    } finally {
-      Object.defineProperty(globalThis, "ResizeObserver", {
-        configurable: true,
-        value: originalResizeObserver,
-      });
-    }
+    const overlay = container.querySelector(".terminal-buddy-overlay") as HTMLDivElement;
+    expect(overlay.style.getPropertyValue("--terminal-buddy-bottom-offset")).toBe("188px");
   });
 });

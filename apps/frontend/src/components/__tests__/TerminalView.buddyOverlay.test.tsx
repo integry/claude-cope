@@ -5,7 +5,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import { TerminalView } from "../TerminalView";
-import type { GameState } from "../../hooks/gameStateUtils";
+import type { GameState } from "../../hooks/useGameState";
 import { DEFAULT_CLOSE_EFFECT } from "../upgradeOverlayEffects";
 
 vi.mock("../CommandLine", () => ({

@@ -146,17 +146,18 @@ function getMessageFlags(role: string, content: string, isBuddyInterjection: boo
 
 function MessageContent({
   message,
+  buddyData,
   isNew = false,
   onSlashCommand,
   shareNode,
 }: {
   message: Message;
+  buddyData: BuddyRenderData;
   isNew?: boolean;
   onSlashCommand?: (command: string, action: SlashCommandAction) => void;
   shareNode?: React.ReactNode;
 }) {
   const { role, content } = message;
-  const buddyData = getBuddyRenderData(message);
   const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(
     role,
     content,
@@ -235,7 +236,13 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
         </div>
       )}
       {message.role === "loading" && !isAwaitingResponse && <Spinner />}
-      <MessageContent message={message} isNew={isNew} onSlashCommand={onSlashCommand} shareNode={shareNode} />
+      <MessageContent
+        message={message}
+        buddyData={buddyData}
+        isNew={isNew}
+        onSlashCommand={onSlashCommand}
+        shareNode={shareNode}
+      />
       {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
       {message.role === "loading" && <TokenCounter />}
       {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
@@ -246,12 +253,13 @@ function OutputBlock({ message, previousMessage, nextMessage, isNew = false, pro
 type OutputBlockProps = Parameters<typeof OutputBlock>[0];
 
 function messagesEqual(a: Message | undefined, b: Message | undefined): boolean {
-  return a?.role === b?.role && a?.content === b?.content;
+  return a?.role === b?.role && a?.content === b?.content && a?.buddyType === b?.buddyType;
 }
 
 function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps): boolean {
   if (prev.message.role !== next.message.role) return false;
   if (prev.message.content !== next.message.content) return false;
+  if (prev.message.buddyType !== next.message.buddyType) return false;
   if (prev.message.cost !== next.message.cost) return false;
   if (prev.isNew !== next.isNew) return false;
   if (prev.promptString !== next.promptString) return false;
