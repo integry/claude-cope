@@ -16,6 +16,7 @@ describe("buddy interjection formatting", () => {
     expect(extractBuddyInterjectionBlock(formatted)).toEqual({
       block: formatted,
       body: "",
+      type: "Agile Snail",
     });
     expect(formatted.split("\n")[0]).toContain("[Agile Snail]");
   });
@@ -27,6 +28,7 @@ describe("buddy interjection formatting", () => {
     expect(extractBuddyInterjectionBlock(content)).toEqual({
       block,
       body: "The deploy is still blocked on the failed migration.",
+      type: "Sarcastic Clippy",
     });
   });
 
@@ -44,6 +46,7 @@ describe("buddy interjection formatting", () => {
     expect(extractBuddyInterjectionBlock(content)).toEqual({
       block,
       body: "Follow-up system reply.",
+      type: "Agile Snail",
     });
   });
 
@@ -54,6 +57,7 @@ describe("buddy interjection formatting", () => {
     expect(extractBuddyInterjectionBlock(content)).toEqual({
       block,
       body: "Follow-up system reply.",
+      type: "Agile Snail",
     });
   });
 
