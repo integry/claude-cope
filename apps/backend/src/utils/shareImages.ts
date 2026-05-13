@@ -3,6 +3,7 @@ import {
   SHARE_CARD_DEFAULT_BASE_ORIGIN,
   SHARE_CARD_RENDERER_VERSION,
 } from "@claude-cope/shared/shareCards";
+import puppeteer from "@cloudflare/puppeteer";
 import { escapeHtml, renderBoundedTextBlock, truncateDisplayWidth, truncateGraphemes } from "./shareTextLayout";
 
 export const SHARE_CARD_ROOT_SELECTOR = "#share-card-root";
@@ -154,7 +155,6 @@ export class CloudflareBrowserShareImageRenderer implements ShareImageRenderer {
   constructor(private readonly browserBinding: Fetcher) {}
 
   async renderCardPng(input: { renderUrl: string; selector: string; width: number; height: number }): Promise<Uint8Array> {
-    const { default: puppeteer } = await import("@cloudflare/puppeteer");
     const browser = await puppeteer.launch(this.browserBinding);
     try {
       const page = await browser.newPage();

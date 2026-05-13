@@ -91,6 +91,7 @@ create_kv() {
 
 create_kv "USAGE_KV" "CF_USAGE_KV_ID"
 create_kv "QUOTA_KV" "CF_QUOTA_KV_ID"
+create_kv "RATE_LIMIT_KV" "CF_RATE_LIMIT_KV_ID"
 
 # ── Create Pages project ────────────────────────────
 echo "--- Creating Pages project: $CF_PAGES_PROJECT ---"
@@ -107,6 +108,6 @@ fi
 echo "==> Setup complete for [$ENV]."
 echo ""
 echo "Next steps:"
-echo "  1. Verify CF_D1_DATABASE_ID, CF_USAGE_KV_ID, CF_QUOTA_KV_ID are set in $ENV_FILE"
+echo "  1. Verify CF_D1_DATABASE_ID, CF_USAGE_KV_ID, CF_QUOTA_KV_ID, CF_RATE_LIMIT_KV_ID are set in $ENV_FILE"
 echo "  2. Fill in remaining values (OPENROUTER_API_KEY, VITE_*, ALLOWED_ORIGINS)"
 echo "  3. First deploy: scripts/deploy.sh $ENV --migrate"
