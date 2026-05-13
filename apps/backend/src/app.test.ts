@@ -237,7 +237,7 @@ describe("app", () => {
         },
       );
 
-      expect(res.status).toBe(302);
+      expect(res.status).toBe(308);
       expect(res.headers.get("location")).toBe("http://localhost/api/share-image/share-1");
     });
   });

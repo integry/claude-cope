@@ -26,6 +26,7 @@ type AppBindings = {
   DB?: D1Database;
   ALLOWED_ORIGINS?: string;
   SHARE_CARD_BASE_ORIGIN?: string;
+  APP_BASE_ORIGIN?: string;
 };
 
 function createShareCardMockDB() {
@@ -191,6 +192,7 @@ describe("share image and public share routes", () => {
       DB: db,
       SHARE_CARD_BASE_ORIGIN: "https://public.example.com",
       ALLOWED_ORIGINS: "https://app.example.com",
+      APP_BASE_ORIGIN: "https://app.example.com",
     });
     const { shareId } = await create.json() as { shareId: string };
 
@@ -198,6 +200,7 @@ describe("share image and public share routes", () => {
       DB: db,
       SHARE_CARD_BASE_ORIGIN: "https://public.example.com",
       ALLOWED_ORIGINS: "https://app.example.com",
+      APP_BASE_ORIGIN: "https://app.example.com",
     });
     const html = await res.text();
 
@@ -207,6 +210,29 @@ describe("share image and public share routes", () => {
     expect(html).toContain('<img src="https://share.example/api/share-image/share-1"');
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
     expect(html).toContain('href="https://app.example.com/"');
+  });
+
+  it("uses APP_BASE_ORIGIN for the share-page CTA when multiple allowed origins exist", async () => {
+    const { db } = createShareCardMockDB();
+    const app = createTestApp();
+    const create = await createCard(app, {
+      DB: db,
+      SHARE_CARD_BASE_ORIGIN: "https://public.example.com",
+      ALLOWED_ORIGINS: "http://localhost:5173,https://staging.example.com",
+      APP_BASE_ORIGIN: "https://claudecope.com",
+    });
+    const { shareId } = await create.json() as { shareId: string };
+
+    const res = await app.request(`https://worker.example/s/${shareId}`, {}, {
+      DB: db,
+      SHARE_CARD_BASE_ORIGIN: "https://public.example.com",
+      ALLOWED_ORIGINS: "http://localhost:5173,https://staging.example.com",
+      APP_BASE_ORIGIN: "https://claudecope.com",
+    });
+    const html = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(html).toContain('href="https://claudecope.com/"');
   });
 
   it("returns image/png with immutable cache headers and reuses the same cache key on repeated requests", async () => {
@@ -277,7 +303,8 @@ describe("share image and public share routes", () => {
     expect(imageRes.status).toBe(404);
     await expect(imageRes.json()).resolves.toEqual({ error: "Share card not found" });
     expect(pageRes.status).toBe(404);
-    await expect(pageRes.json()).resolves.toEqual({ error: "Share card not found" });
+    expect(pageRes.headers.get("content-type")).toContain("text/html");
+    await expect(pageRes.text()).resolves.toContain("Share not found");
   });
 
   it("rejects persisted rows with unsupported renderer_version", async () => {
@@ -298,17 +325,18 @@ describe("share image and public share routes", () => {
     expect(imageRes.status).toBe(409);
     await expect(imageRes.json()).resolves.toEqual({ error: "Unsupported share card renderer version" });
     expect(pageRes.status).toBe(409);
-    await expect(pageRes.json()).resolves.toEqual({ error: "Unsupported share card renderer version" });
+    expect(pageRes.headers.get("content-type")).toContain("text/html");
+    await expect(pageRes.text()).resolves.toContain("Share unavailable");
     expect(logger.error).toHaveBeenCalledWith("share image rendering failed", {
       shareId: "share-1",
       error: "Unsupported share card renderer version: 2026-05-12",
     });
   });
 
-  it("keeps long text bounded, preserves blank lines and escapes HTML in rendered card HTML", () => {
+  it("keeps long text bounded, preserves blank lines, wraps wide glyphs conservatively, and escapes HTML in rendered card HTML", () => {
     const html = renderDeterministicShareCardHtml(createRecord({
       prompt: `line 1\n\n<tag>${"A".repeat(500)}`,
-      response: `emoji ${"🙂".repeat(40)}\n${"B".repeat(500)}`,
+      response: `${"漢".repeat(200)}\n${"B".repeat(500)}`,
     }));
 
     expect(html).toContain('class="text truncate"');
@@ -316,7 +344,8 @@ describe("share image and public share routes", () => {
     expect(html).toContain("&nbsp;");
     expect(html).toContain("&lt;tag&gt;");
     expect(html).not.toContain("<tag>");
-    expect(html).toContain("🙂");
+    expect(html).toContain(`${"漢".repeat(16)}...`);
+    expect(html).not.toContain("漢".repeat(18));
     expect(html).toContain("...");
   });
 

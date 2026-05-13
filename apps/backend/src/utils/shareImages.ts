@@ -1,4 +1,9 @@
-import { getAllowedOrigins, SHARE_CARD_RENDERER_VERSION } from "@claude-cope/shared/shareCards";
+import {
+  getAllowedOrigins,
+  SHARE_CARD_DEFAULT_BASE_ORIGIN,
+  SHARE_CARD_RENDERER_VERSION,
+} from "@claude-cope/shared/shareCards";
+import { escapeHtml, renderBoundedTextBlock } from "./shareTextLayout";
 
 export const SHARE_CARD_ROOT_SELECTOR = "#share-card-root";
 export const SHARE_IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
@@ -25,6 +30,7 @@ export type ShareImageBindings = {
   DB?: D1Database;
   ALLOWED_ORIGINS?: string;
   SHARE_CARD_BASE_ORIGIN?: string;
+  APP_BASE_ORIGIN?: string;
   BROWSER?: Fetcher;
 };
 
@@ -44,23 +50,9 @@ export type ShareImageRenderer = {
 
 export type ShareImageLogger = Pick<Console, "error" | "warn">;
 
-type RenderedTextBlock = {
-  html: string;
-  truncated: boolean;
-};
-
 const graphemeSegmenter = typeof Intl !== "undefined" && "Segmenter" in Intl
   ? new Intl.Segmenter("en", { granularity: "grapheme" })
   : null;
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
 
 function splitGraphemes(value: string): string[] {
   if (!value) return [];
@@ -75,35 +67,6 @@ function truncateGraphemes(value: string, maxLength: number): string {
   return `${graphemes.slice(0, maxLength - ELLIPSIS.length).join("")}${ELLIPSIS}`;
 }
 
-function truncateOverflowLine(value: string, maxLength: number): string {
-  if (maxLength <= ELLIPSIS.length) return ELLIPSIS.slice(0, maxLength);
-  const graphemes = splitGraphemes(value);
-  return `${graphemes.slice(0, Math.max(0, maxLength - ELLIPSIS.length)).join("")}${ELLIPSIS}`;
-}
-
-function wrapLineByColumns(line: string, maxColumns: number): string[] {
-  if (line.length === 0) return [""];
-  const graphemes = splitGraphemes(line);
-  const wrapped: string[] = [];
-  for (let cursor = 0; cursor < graphemes.length; cursor += maxColumns) {
-    wrapped.push(graphemes.slice(cursor, cursor + maxColumns).join(""));
-  }
-  return wrapped;
-}
-
-function renderBoundedTextBlock(value: string, maxColumns: number, maxLines: number): RenderedTextBlock {
-  const wrapped = value.replace(/\r\n?/g, "\n").split("\n").flatMap((line) => wrapLineByColumns(line, maxColumns));
-  const overflow = wrapped.length > maxLines;
-  const visible = wrapped.slice(0, maxLines);
-  if (overflow && visible.length > 0) {
-    visible[visible.length - 1] = truncateOverflowLine(visible[visible.length - 1] ?? "", maxColumns);
-  }
-  return {
-    html: visible.map((line) => `<div class="line">${line ? escapeHtml(line) : "&nbsp;"}</div>`).join(""),
-    truncated: overflow,
-  };
-}
-
 function buildMetaDescription(record: SharedCardRecord): string {
   const summary = `${record.username} shared a Claude Cope exchange. Prompt: ${record.prompt.replace(/\s+/g, " ").trim()} Response: ${record.response.replace(/\s+/g, " ").trim()}`;
   return truncateGraphemes(summary, 280);
@@ -114,8 +77,9 @@ function buildVisibleExcerpt(value: string, maxLength: number): string {
   return truncateGraphemes(normalized, maxLength);
 }
 
-function getPrimaryAppOrigin(rawAllowedOrigins?: string): string {
-  const origins = getAllowedOrigins(rawAllowedOrigins);
+function getFirstConfiguredOrigin(rawOrigins?: string): string | undefined {
+  if (!rawOrigins?.trim()) return undefined;
+  const origins = getAllowedOrigins(rawOrigins);
   for (const origin of origins) {
     try {
       return new URL(origin).origin;
@@ -123,30 +87,57 @@ function getPrimaryAppOrigin(rawAllowedOrigins?: string): string {
       continue;
     }
   }
-  return "https://claudecope.com";
+  return undefined;
 }
 
-export function getPublicShareOrigin(requestUrl: string, env: Pick<ShareImageBindings, "SHARE_CARD_BASE_ORIGIN" | "ALLOWED_ORIGINS">): string {
+function getOrigin(candidate?: string): string | undefined {
+  if (!candidate) return undefined;
+  try {
+    return new URL(candidate).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function getPrimaryAppOrigin(env: Pick<ShareImageBindings, "APP_BASE_ORIGIN" | "ALLOWED_ORIGINS">): string {
   const candidates = [
-    env.SHARE_CARD_BASE_ORIGIN?.trim(),
-    new URL(requestUrl).origin,
-    getPrimaryAppOrigin(env.ALLOWED_ORIGINS),
-    "https://claudecope.com",
+    env.APP_BASE_ORIGIN?.trim(),
+    getFirstConfiguredOrigin(env.ALLOWED_ORIGINS),
+    SHARE_CARD_DEFAULT_BASE_ORIGIN,
   ];
 
   for (const candidate of candidates) {
-    if (!candidate) continue;
-    try {
-      return new URL(candidate).origin;
-    } catch {
-      continue;
-    }
+    const origin = getOrigin(candidate);
+    if (origin) return origin;
   }
 
-  return "https://claudecope.com";
+  return SHARE_CARD_DEFAULT_BASE_ORIGIN;
 }
 
-export function buildPublicShareUrls(requestUrl: string, env: Pick<ShareImageBindings, "SHARE_CARD_BASE_ORIGIN" | "ALLOWED_ORIGINS">, shareId: string) {
+export function getPublicShareOrigin(
+  requestUrl: string,
+  env: Pick<ShareImageBindings, "SHARE_CARD_BASE_ORIGIN" | "ALLOWED_ORIGINS">,
+): string {
+  const candidates = [
+    env.SHARE_CARD_BASE_ORIGIN?.trim(),
+    getFirstConfiguredOrigin(env.ALLOWED_ORIGINS),
+    getOrigin(requestUrl),
+    SHARE_CARD_DEFAULT_BASE_ORIGIN,
+  ];
+
+  for (const candidate of candidates) {
+    const origin = getOrigin(candidate);
+    if (origin) return origin;
+  }
+
+  return SHARE_CARD_DEFAULT_BASE_ORIGIN;
+}
+
+export function buildPublicShareUrls(
+  requestUrl: string,
+  env: Pick<ShareImageBindings, "SHARE_CARD_BASE_ORIGIN" | "ALLOWED_ORIGINS">,
+  shareId: string,
+) {
   const publicOrigin = getPublicShareOrigin(requestUrl, env);
   return {
     shareId,
@@ -293,13 +284,17 @@ export async function getCachedOrRenderedShareImage(input: {
   return { response, cacheKey };
 }
 
-export function buildShareImageRouteContext(requestUrl: string, env: Pick<ShareImageBindings, "SHARE_CARD_BASE_ORIGIN" | "ALLOWED_ORIGINS">, record: SharedCardRecord) {
+export function buildShareImageRouteContext(
+  requestUrl: string,
+  env: Pick<ShareImageBindings, "SHARE_CARD_BASE_ORIGIN" | "ALLOWED_ORIGINS" | "APP_BASE_ORIGIN">,
+  record: SharedCardRecord,
+) {
   const urls = buildPublicShareUrls(requestUrl, env, record.id);
   return {
     ...urls,
     pageImageUrl: new URL(`/api/share-image/${record.id}`, requestUrl).toString(),
     renderUrl: new URL(`/share/render/${record.id}`, requestUrl).toString(),
-    appUrl: new URL("/", getPrimaryAppOrigin(env.ALLOWED_ORIGINS)).toString(),
+    appUrl: new URL("/", getPrimaryAppOrigin(env)).toString(),
   };
 }
 

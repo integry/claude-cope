@@ -30,6 +30,7 @@ type AppBindings = {
   DB: D1Database;
   ALLOWED_ORIGINS?: string;
   SHARE_CARD_BASE_ORIGIN?: string;
+  APP_BASE_ORIGIN?: string;
 };
 
 function createShareCardMockDB() {
@@ -123,8 +124,8 @@ describe("POST /api/share-cards", () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       shareId: "share-1",
-      imageUrl: "https://share.example/api/share-image/share-1",
-      shareUrl: "https://share.example/s/share-1",
+      imageUrl: "https://app.example.com/api/share-image/share-1",
+      shareUrl: "https://app.example.com/s/share-1",
     });
     expect(getRows()).toEqual([{
       id: "share-1",
@@ -155,6 +156,26 @@ describe("POST /api/share-cards", () => {
       shareId: "share-1",
       imageUrl: "https://public.example.com/api/share-image/share-1",
       shareUrl: "https://public.example.com/s/share-1",
+    });
+  });
+
+  it("prefers the configured allowed origin over the request host when no share base origin is set", async () => {
+    const app = createTestApp();
+    const { db } = createShareCardMockDB();
+    const res = await postShareCard(app, {
+      prompt: "Ship it",
+      response: "Looks good.",
+      username: "alice",
+    }, {
+      DB: db,
+      ALLOWED_ORIGINS: "https://app.example.com,http://localhost:5173",
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      shareId: "share-1",
+      imageUrl: "https://app.example.com/api/share-image/share-1",
+      shareUrl: "https://app.example.com/s/share-1",
     });
   });
 
