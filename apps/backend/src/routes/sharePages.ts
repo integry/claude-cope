@@ -5,6 +5,7 @@ import {
   type ShareImageCache,
   type ShareImageLogger,
   type ShareImageRenderer,
+  type SharedCardRecord,
   getCachedOrRenderedShareImage,
   getDefaultShareImageCache,
   getDefaultShareImageRenderer,
@@ -25,6 +26,11 @@ type SharePageDependencies = {
   cache?: ShareImageCache;
   renderer?: ShareImageRenderer;
   logger?: ShareImageLogger;
+};
+
+type ShareImageAvailability = {
+  imageUrl?: string;
+  pageImageUrl?: string;
 };
 
 function renderSharePageErrorHtml(title: string, detail: string): string {
@@ -51,6 +57,34 @@ export function createSharePages(deps: SharePageDependencies = {}) {
     return { record };
   };
 
+  const resolveShareImageAvailability = async (
+    c: Context<Env>,
+    record: SharedCardRecord,
+  ): Promise<ShareImageAvailability> => {
+    const renderer = deps.renderer ?? getDefaultShareImageRenderer(c.env);
+    if (!renderer) {
+      logShareImageFailure(logger, record.id, "Browser rendering binding is not configured");
+      return {};
+    }
+
+    const context = buildShareImageRouteContext(c.req.url, c.env, record);
+    try {
+      await getCachedOrRenderedShareImage({
+        record,
+        renderUrl: context.renderUrl,
+        cache: deps.cache ?? getDefaultShareImageCache(),
+        renderer,
+      });
+      return {
+        imageUrl: context.imageUrl,
+        pageImageUrl: context.pageImageUrl,
+      };
+    } catch (error) {
+      logShareImageFailure(logger, record.id, error);
+      return {};
+    }
+  };
+
   sharePages.get("/share/render/:shareId", async (c) => {
     const loaded = await loadSupportedRecord(c);
     if ("response" in loaded) return loaded.response;
@@ -70,21 +104,14 @@ export function createSharePages(deps: SharePageDependencies = {}) {
       return loaded.response;
     }
     const { record } = loaded;
-
-    const renderer = deps.renderer ?? getDefaultShareImageRenderer(c.env);
-    if (!renderer) {
-      logShareImageFailure(logger, record.id, "Browser rendering binding is not configured");
-      return c.json({ error: "Browser rendering is not configured" }, 503);
-    }
-
     try {
       const context = buildShareImageRouteContext(c.req.url, c.env, record);
-      const { response } = await getCachedOrRenderedShareImage({
-        record,
-        renderUrl: context.renderUrl,
-        cache: deps.cache ?? getDefaultShareImageCache(),
-        renderer,
-      });
+      const renderer = deps.renderer ?? getDefaultShareImageRenderer(c.env);
+      if (!renderer) {
+        logShareImageFailure(logger, record.id, "Browser rendering binding is not configured");
+        return c.json({ error: "Browser rendering is not configured" }, 503);
+      }
+      const { response } = await getCachedOrRenderedShareImage({ record, renderUrl: context.renderUrl, cache: deps.cache ?? getDefaultShareImageCache(), renderer });
       return response;
     } catch (error) {
       logShareImageFailure(logger, record.id, error);
@@ -111,10 +138,10 @@ export function createSharePages(deps: SharePageDependencies = {}) {
     const { record } = loaded;
 
     const context = buildShareImageRouteContext(c.req.url, c.env, record);
-    const renderer = deps.renderer ?? getDefaultShareImageRenderer(c.env);
+    const imageAvailability = await resolveShareImageAvailability(c, record);
     return c.html(renderPublicSharePageHtml(record, {
       ...context,
-      pageImageUrl: renderer ? context.pageImageUrl : undefined,
+      ...imageAvailability,
     }), 200, {
       "Cache-Control": "no-store",
     });

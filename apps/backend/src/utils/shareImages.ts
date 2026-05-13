@@ -69,11 +69,10 @@ function getPrimaryAppOrigin(env: Pick<ShareImageBindings, "APP_BASE_ORIGIN" | "
 
 export function getPublicShareOrigin(
   requestUrl: string,
-  env: Pick<ShareImageBindings, "SHARE_CARD_BASE_ORIGIN" | "ALLOWED_ORIGINS">,
+  env: Pick<ShareImageBindings, "SHARE_CARD_BASE_ORIGIN">,
 ): string {
   const candidates = [
     env.SHARE_CARD_BASE_ORIGIN?.trim(),
-    getFirstConfiguredOrigin(env.ALLOWED_ORIGINS),
     getOrigin(requestUrl),
     SHARE_CARD_DEFAULT_BASE_ORIGIN,
   ];
@@ -88,7 +87,7 @@ export function getPublicShareOrigin(
 
 export function buildPublicShareUrls(
   requestUrl: string,
-  env: Pick<ShareImageBindings, "SHARE_CARD_BASE_ORIGIN" | "ALLOWED_ORIGINS">,
+  env: Pick<ShareImageBindings, "SHARE_CARD_BASE_ORIGIN">,
   shareId: string,
 ) {
   const publicOrigin = getPublicShareOrigin(requestUrl, env);
@@ -136,7 +135,7 @@ export function renderPublicSharePageHtml(
   const visibleImageUrl = urls.pageImageUrl ?? urls.imageUrl;
   const imageSection = visibleImageUrl
     ? `<img src="${escapeHtml(visibleImageUrl)}" alt="${escapeHtml(title)}">`
-    : `<section class="fallback" aria-label="Share image unavailable"><p class="fallback-eyebrow">Share image unavailable</p><p class="fallback-copy">This immutable snapshot is still available, but image rendering is not configured on this deployment yet.</p></section>`;
+    : `<section class="fallback" aria-label="Share image unavailable"><p class="fallback-eyebrow">Share image unavailable</p><p class="fallback-copy">This immutable snapshot is still available, but the rendered share image is temporarily unavailable.</p></section>`;
   const socialImageMeta = socialImageUrl
     ? `<meta property="og:image" content="${escapeHtml(socialImageUrl)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${escapeHtml(socialImageUrl)}">`
     : `<meta name="twitter:card" content="summary">`;
