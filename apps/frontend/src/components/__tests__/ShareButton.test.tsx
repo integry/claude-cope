@@ -20,7 +20,8 @@ describe("ShareButton modal share flow", () => {
     testScope.renderComponent();
     const dialog = await testScope.openPreview();
     expect(dialog.querySelector("#share-card-root")).not.toBeNull();
-    expect(dialog.querySelector(`img[src="${shareCardResponse.imageUrl}"]`)).toBeNull();
+    expect(dialog.querySelector('img[alt="Share preview for @testuser"]')).toBeNull();
+    expect(testScope.container.textContent).toContain("Rendering final image...");
     expect(testScope.fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -37,11 +38,11 @@ describe("ShareButton modal share flow", () => {
       await Promise.resolve();
     });
 
-    const previewImage = dialog.querySelector("img");
+    const previewImage = dialog.querySelector('img[alt="Share preview for @testuser"]');
     expect(previewImage).not.toBeNull();
     expect(previewImage?.getAttribute("src")).toBe("blob:mock-12");
     expect(previewImage?.getAttribute("alt")).toBe("Share preview for @testuser");
-    expect(dialog.querySelector("#share-card-root")).toBeNull();
+    expect(testScope.container.textContent).not.toContain("Rendering final image...");
     expect(testScope.createObjectURLMock).toHaveBeenCalledTimes(1);
   });
 

@@ -9,7 +9,7 @@ type PasteHintState =
   | { platform: "twitter"; method: "image" | "link" }
   | { platform: "linkedin" };
 
-const SPINNER_CHAR = "/";
+const SPINNER_FRAMES = ["|", "/", "-", "\\"];
 const modalStyle: CSSProperties = { fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace", fontSize: "13px", lineHeight: "1.4", backgroundColor: "#1e232b", border: "2px solid #ff5555", boxShadow: "8px 8px 0px rgba(0, 0, 0, 0.9)", maxWidth: "calc(100vw - 2rem)", maxHeight: "calc(100vh - 2rem)", overflow: "auto", color: "#c9d1d9" };
 const modalHeaderStyle: CSSProperties = { padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #ff5555" };
 const modalTitleStyle: CSSProperties = { color: "#ff5555", fontWeight: "bold", fontSize: "11px" };
@@ -23,6 +23,9 @@ const actionRowStyle: CSSProperties = { display: "flex", gap: "16px", justifyCon
 const linkStyle: CSSProperties = { background: "none", border: "none", padding: "8px 0 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", display: "block" };
 const previewFrameStyle: CSSProperties = { display: "flex", justifyContent: "center", alignItems: "flex-start", overflow: "auto", maxWidth: "100%", maxHeight: "calc(100vh - 14rem)" };
 const previewScaleWrapStyle: CSSProperties = { width: "min(100%, 760px)" };
+const previewSurfaceStyle: CSSProperties = { position: "relative", width: "100%" };
+const previewLayerBaseStyle: CSSProperties = { transition: "opacity 140ms ease-out" };
+const previewLayerOverlayStyle: CSSProperties = { position: "absolute", inset: 0 };
 const modalStatusStyle: CSSProperties = { fontSize: "12px", textAlign: "left" };
 const modalStatusGeneratingStyle: CSSProperties = { ...modalStatusStyle, color: "#ffff55" };
 const modalStatusErrorStyle: CSSProperties = { ...modalStatusStyle, color: "#ff5555" };
@@ -38,7 +41,9 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [previewCard, setPreviewCard] = useState<CreateShareCardResult | null>(null);
+  const [previewImageStatus, setPreviewImageStatus] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [previewImageObjectUrl, setPreviewImageObjectUrl] = useState<string | null>(null);
+  const [spinnerFrameIndex, setSpinnerFrameIndex] = useState(0);
   const [pasteHint, setPasteHint] = useState<PasteHintState | null>(null);
   const timeoutIds = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const modalRef = useRef<HTMLDivElement>(null);
@@ -79,6 +84,19 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
 
   useEffect(() => () => { clearTimeouts(); }, [clearTimeouts]);
   useEffect(() => () => { previewCreationAbortRef.current?.abort(); }, []);
+  useEffect(() => {
+    const spinnerActive = status === "generating" || previewImageStatus === "loading";
+    if (!spinnerActive) {
+      setSpinnerFrameIndex(0);
+      return;
+    }
+
+    const id = setInterval(() => {
+      setSpinnerFrameIndex((current) => (current + 1) % SPINNER_FRAMES.length);
+    }, 120);
+
+    return () => clearInterval(id);
+  }, [status, previewImageStatus]);
 
   const resetAfterDelay = useCallback((ms: number) => {
     clearTimeouts();
@@ -100,6 +118,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     sharingRef.current = false;
     clearTimeouts();
     setPreviewCard(null);
+    setPreviewImageStatus("idle");
     if (previewImageObjectUrlRef.current) {
       URL.revokeObjectURL(previewImageObjectUrlRef.current);
       previewImageObjectUrlRef.current = null;
@@ -145,6 +164,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
 
   useEffect(() => {
     if (!previewCard) return;
+    setPreviewImageStatus("loading");
     if (previewImageObjectUrlRef.current) {
       URL.revokeObjectURL(previewImageObjectUrlRef.current);
       previewImageObjectUrlRef.current = null;
@@ -161,10 +181,12 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
           URL.revokeObjectURL(previewImageObjectUrlRef.current);
         }
         previewImageObjectUrlRef.current = objectUrl;
+        setPreviewImageStatus("ready");
         setPreviewImageObjectUrl(objectUrl);
       })
       .catch(() => {
         if (cancelled) return;
+        setPreviewImageStatus("failed");
       });
 
     return () => {
@@ -352,10 +374,12 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   }, [previewCard, closePreview]);
 
   const isGenerating = status === "generating";
+  const spinnerChar = SPINNER_FRAMES[spinnerFrameIndex]!;
+  const isPreviewImageLoading = previewImageStatus === "loading";
 
   if (status !== "idle" && !previewCard) return (
     <span className="inline-flex items-center gap-2 ml-2 text-[11px] font-mono align-baseline">
-      {isGenerating ? <><span className="text-yellow-400 animate-pulse">{SPINNER_CHAR} {feedback}</span><button onClick={() => closePreview()} className="font-mono text-[11px] text-gray-400 transition-colors hover:text-[#ff5555]">[cancel]</button></> : null}
+      {isGenerating ? <><span className="text-yellow-400 animate-pulse">{spinnerChar} {feedback}</span><button onClick={() => closePreview()} className="font-mono text-[11px] text-gray-400 transition-colors hover:text-[#ff5555]">[cancel]</button></> : null}
       {status === "copied" && <span className="text-green-400">{feedback}</span>}
       {status === "error" && <span className="text-red-400">{feedback}</span>}
     </span>
@@ -392,19 +416,32 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
             <div style={modalBodyStyle}>
               <div style={previewFrameStyle}>
                 <div style={previewScaleWrapStyle}>
-                  {previewImageObjectUrl ? (
-                    <img
-                      src={previewImageObjectUrl}
-                      alt={`Share preview for @${username}`}
-                      className="block h-auto w-full"
-                    />
-                  ) : (
-                    <ShareCardRenderSurface
-                      prompt={userMessage}
-                      response={systemMessage}
-                      username={username}
-                    />
-                  )}
+                  <div style={previewSurfaceStyle}>
+                    <div
+                      style={{
+                        ...previewLayerBaseStyle,
+                        opacity: previewImageObjectUrl ? 0 : 1,
+                      }}
+                    >
+                      <ShareCardRenderSurface
+                        prompt={userMessage}
+                        response={systemMessage}
+                        username={username}
+                      />
+                    </div>
+                    {previewImageObjectUrl ? (
+                      <img
+                        src={previewImageObjectUrl}
+                        alt={`Share preview for @${username}`}
+                        className="block h-auto w-full"
+                        style={{
+                          ...previewLayerBaseStyle,
+                          ...previewLayerOverlayStyle,
+                          opacity: 1,
+                        }}
+                      />
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>
@@ -443,7 +480,9 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
                   </button>
                 </div>
               ) : isGenerating ? (
-                <div style={modalStatusGeneratingStyle}>{SPINNER_CHAR} {feedback}</div>
+                <div style={modalStatusGeneratingStyle}>{spinnerChar} {feedback}</div>
+              ) : isPreviewImageLoading ? (
+                <div style={modalStatusGeneratingStyle}>{spinnerChar} Rendering final image...</div>
               ) : status === "error" && feedback ? (
                 <div style={modalStatusErrorStyle}>{feedback}</div>
               ) : (
