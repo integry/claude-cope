@@ -1,10 +1,23 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
 import { openShareIntent } from "./shareChatUtils";
 
 type MountToken = { cancelled: boolean };
+type SharePlatform = "twitter" | "linkedin";
 
 const SPINNER_CHAR = "/";
+const modalStyle: CSSProperties = { fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace", fontSize: "13px", lineHeight: "1.4", backgroundColor: "#1e232b", border: "2px solid #ff5555", boxShadow: "8px 8px 0px rgba(0, 0, 0, 0.9)", maxWidth: "calc(100vw - 2rem)", maxHeight: "calc(100vh - 2rem)", overflow: "auto", color: "#c9d1d9" };
+const modalHeaderStyle: CSSProperties = { padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #ff5555" };
+const modalTitleStyle: CSSProperties = { color: "#ff5555", fontWeight: "bold", fontSize: "11px" };
+const closeButtonStyle: CSSProperties = { color: "#aaaaaa", cursor: "pointer", fontSize: "14px", background: "none", border: "none", padding: 0 };
+const modalBodyStyle: CSSProperties = { padding: "12px" };
+const modalFooterStyle: CSSProperties = { borderTop: "1px solid #ff5555", padding: "10px 12px" };
+const pasteHintStyle: CSSProperties = { fontSize: "12px", lineHeight: "1.6", textAlign: "left" };
+const emphasisStyle: CSSProperties = { color: "#ff5555", fontWeight: "bold" };
+const highlightStyle: CSSProperties = { color: "#ffff55" };
+const actionRowStyle: CSSProperties = { display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" };
+const linkStyle: CSSProperties = { background: "none", border: "none", padding: "8px 0 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", display: "block" };
+const previewImageStyle: CSSProperties = { display: "block", maxWidth: "100%", maxHeight: "calc(100vh - 14rem)" };
 
 function isMacPlatform(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -36,7 +49,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [previewCard, setPreviewCard] = useState<CreateShareCardResult | null>(null);
-  const [pasteHint, setPasteHint] = useState<{ platform: "twitter" | "linkedin" } | null>(null);
+  const [pasteHint, setPasteHint] = useState<{ platform: SharePlatform } | null>(null);
   const timeoutIds = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const modalRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -66,9 +79,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     return () => { token.cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    return () => { clearTimeouts(); };
-  }, [clearTimeouts]);
+  useEffect(() => () => { clearTimeouts(); }, [clearTimeouts]);
 
   const resetAfterDelay = useCallback((ms: number) => {
     clearTimeouts();
@@ -96,24 +107,16 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
 
   const loadPreviewBlob = useCallback(async (imageUrl: string): Promise<Blob> => {
     const cached = previewBlobRef.current;
-    if (cached && cached.imageUrl === imageUrl) {
-      return cached.blob;
-    }
+    if (cached && cached.imageUrl === imageUrl) return cached.blob;
     const inFlight = previewBlobRequestRef.current;
-    if (inFlight && inFlight.imageUrl === imageUrl) {
-      return inFlight.request;
-    }
-
+    if (inFlight && inFlight.imageUrl === imageUrl) return inFlight.request;
     const request = (async () => {
       const res = await fetch(imageUrl, { cache: "no-store" });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       previewBlobRef.current = { imageUrl, blob };
       return blob;
     })();
-
     previewBlobRequestRef.current = { imageUrl, request };
     try {
       return await request;
@@ -140,9 +143,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         username,
       });
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
-      if (previewBlobRef.current?.imageUrl !== card.imageUrl) {
-        previewBlobRef.current = null;
-      }
+      if (previewBlobRef.current?.imageUrl !== card.imageUrl) previewBlobRef.current = null;
       setPreviewCard(card);
       setStatus("idle");
       setFeedback(null);
@@ -156,7 +157,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     }
   }, [userMessage, systemMessage, username, resetAfterDelay]);
 
-  const handleShare = useCallback(async (platform: "twitter" | "linkedin") => {
+  const handleShare = useCallback(async (platform: SharePlatform) => {
     if (!previewCard || sharingRef.current) return;
     sharingRef.current = true;
     const token = mountTokenRef.current;
@@ -170,15 +171,12 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         addTimeout(() => setPasteHint(null), 30000);
         return;
       }
-
       setStatus("generating");
       setFeedback("Copying image to clipboard...");
-
       const previewBlob = await loadPreviewBlob(previewCard.imageUrl);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
       const imageCopied = await copyBlobToClipboard(previewBlob);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
-
       if (imageCopied) {
         setStatus("idle");
         setFeedback(null);
@@ -186,10 +184,8 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         addTimeout(() => setPasteHint(null), 30000);
         return;
       }
-
       const textCopied = await copyTextToClipboard(previewCard.shareUrl);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
-
       if (textCopied) {
         setPasteHint(null);
         closePreview({ resetStatus: false });
@@ -215,7 +211,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     }
   }, [previewCard, loadPreviewBlob, addTimeout, closePreview, resetAfterDelay]);
 
-  const handleOpenShareTarget = useCallback((platform: "twitter" | "linkedin") => {
+  const handleOpenShareTarget = useCallback((platform: SharePlatform) => {
     if (!previewCard) return;
     openShareIntent(platform, previewCard.shareUrl);
     closePreview();
@@ -227,15 +223,12 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     sharingRef.current = true;
     const token = mountTokenRef.current;
     const sessionId = previewSessionRef.current;
-
     clearTimeouts();
     setStatus("generating");
     setFeedback("Copying image to clipboard...");
-
     try {
       const previewBlob = await loadPreviewBlob(previewCard.imageUrl);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
-
       const imageCopied = await copyBlobToClipboard(previewBlob);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
       closePreview();
@@ -245,7 +238,6 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         resetAfterDelay(3000);
         return;
       }
-
       const textCopied = await copyTextToClipboard(previewCard.shareUrl);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
       if (textCopied) {
@@ -271,13 +263,8 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
 
   useEffect(() => {
     if (!previewCard) return;
-
     const modal = modalRef.current;
-    if (modal) {
-      const closeBtn = modal.querySelector<HTMLButtonElement>("[aria-label='Close']");
-      closeBtn?.focus();
-    }
-
+    if (modal) modal.querySelector<HTMLButtonElement>("[aria-label='Close']")?.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -309,15 +296,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [previewCard, closePreview]);
 
-  if (status !== "idle" && !previewCard) {
-    return (
-      <span className="inline-flex items-center gap-2 ml-2 text-[11px] font-mono align-baseline">
-        {status === "generating" && <span className="text-yellow-400 animate-pulse">{SPINNER_CHAR} {feedback}</span>}
-        {status === "copied" && <span className="text-green-400">{feedback}</span>}
-        {status === "error" && <span className="text-red-400">{feedback}</span>}
-      </span>
-    );
-  }
+  if (status !== "idle" && !previewCard) return <span className="inline-flex items-center gap-2 ml-2 text-[11px] font-mono align-baseline">{status === "generating" && <span className="text-yellow-400 animate-pulse">{SPINNER_CHAR} {feedback}</span>}{status === "copied" && <span className="text-green-400">{feedback}</span>}{status === "error" && <span className="text-red-400">{feedback}</span>}</span>;
 
   return (
     <span className="relative ml-2 inline-flex align-baseline">
@@ -340,47 +319,24 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
           <div
             ref={modalRef}
             className="relative z-10"
-            style={{
-              fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
-              fontSize: "13px",
-              lineHeight: "1.4",
-              backgroundColor: "#1e232b",
-              border: "2px solid #ff5555",
-              boxShadow: "8px 8px 0px rgba(0, 0, 0, 0.9)",
-              maxWidth: "calc(100vw - 2rem)",
-              maxHeight: "calc(100vh - 2rem)",
-              overflow: "auto",
-              color: "#c9d1d9",
-            }}
+            style={modalStyle}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #ff5555" }}>
-              <span style={{ color: "#ff5555", fontWeight: "bold", fontSize: "11px" }}>SHARE PREVIEW</span>
-              <button
-                onClick={() => { closePreview(); triggerRef.current?.focus(); }}
-                style={{ color: "#aaaaaa", cursor: "pointer", fontSize: "14px", background: "none", border: "none", padding: 0 }}
-                aria-label="Close"
-              >
-                [x]
-              </button>
+            <div style={modalHeaderStyle}>
+              <span style={modalTitleStyle}>SHARE PREVIEW</span>
+              <button onClick={() => { closePreview(); triggerRef.current?.focus(); }} style={closeButtonStyle} aria-label="Close">[x]</button>
             </div>
-            <div style={{ padding: "12px" }}>
-              <img
-                src={previewCard.imageUrl}
-                alt="Share preview"
-                style={{ display: "block", maxWidth: "100%", maxHeight: "calc(100vh - 14rem)" }}
-              />
-            </div>
-            <div style={{ borderTop: "1px solid #ff5555", padding: "10px 12px" }}>
+            <div style={modalBodyStyle}><img src={previewCard.imageUrl} alt="Share preview" style={previewImageStyle} /></div>
+            <div style={modalFooterStyle}>
               {pasteHint ? (
-                <div style={{ fontSize: "12px", lineHeight: "1.6", textAlign: "left" }}>
-                  <div style={{ color: "#ff5555", fontWeight: "bold" }}>
+                <div style={pasteHintStyle}>
+                  <div style={emphasisStyle}>
                     {pasteHint.platform === "twitter" ? (
                       <>
                         <div>{"> [SYSTEM] IMAGE COPIED TO CLIPBOARD."}</div>
                         <div>
                           {"> MANDATORY ACTION: GO TO THE NEW TAB AND PRESS "}
-                          <span style={{ color: "#ffff55" }}>{`[ ${isMacPlatform() ? "CMD" : "CTRL"} + V ]`}</span>
+                          <span style={highlightStyle}>{`[ ${isMacPlatform() ? "CMD" : "CTRL"} + V ]`}</span>
                           {" TO PASTE."}
                         </div>
                       </>
@@ -391,44 +347,20 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
                       </>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleOpenShareTarget(pasteHint.platform)}
-                    className="share-popup-action"
-                    style={{
-                      background: "none",
-                      border: "none",
-                      padding: "8px 0 0 0",
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      fontSize: "12px",
-                      display: "block",
-                    }}
-                  >
+                  <button onClick={() => handleOpenShareTarget(pasteHint.platform)} className="share-popup-action" style={linkStyle}>
                     <span data-cursor="">{">"}</span>
                     <span data-btn="">{` [ OPEN ${pasteHint.platform === "twitter" ? "X" : "LINKEDIN"} TAB ]`}</span>
                   </button>
                 </div>
               ) : (
-                <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" }}>
-                  {[
-                    { label: "COPY IMAGE", onClick: handleCopyImage },
-                    { label: "SHARE ON X", onClick: () => handleShare("twitter") },
-                    { label: "SHARE ON LINKEDIN", onClick: () => handleShare("linkedin") },
-                  ].map(({ label, onClick }) => (
+                <div style={actionRowStyle}>
+                  {[{ label: "COPY IMAGE", onClick: handleCopyImage }, { label: "SHARE ON X", onClick: () => handleShare("twitter") }, { label: "SHARE ON LINKEDIN", onClick: () => handleShare("linkedin") }].map(({ label, onClick }) => (
                     <button
                       key={label}
                       onClick={onClick}
                       disabled={status === "generating"}
                       className="share-popup-action"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        padding: 0,
-                        cursor: status === "generating" ? "not-allowed" : "pointer",
-                        fontFamily: "inherit",
-                        fontSize: "12px",
-                        opacity: status === "generating" ? 0.5 : 1,
-                      }}
+                      style={{ ...closeButtonStyle, padding: 0, cursor: status === "generating" ? "not-allowed" : "pointer", fontSize: "12px", opacity: status === "generating" ? 0.5 : 1 }}
                     >
                       <span data-cursor="">{">"}</span>
                       <span data-btn="">{` [ ${label} ]`}</span>
