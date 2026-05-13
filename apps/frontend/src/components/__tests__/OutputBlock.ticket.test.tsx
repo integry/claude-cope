@@ -61,7 +61,7 @@ describe("OutputBlock ticket dossier rendering", () => {
   it("renders claimed tickets as a corporate dossier with separated metadata and body", () => {
     renderMessage(buildTicketMessage(makeTicket(), "claimed"));
 
-    expect(container.textContent).toContain("[ CORPORATE DOSSIER ]");
+    expect(container.textContent).toContain("[ JIRA PAYLOAD IMPORTED ]");
     expect(container.textContent).toContain("ID:");
     expect(container.textContent).toContain("BLAME-421");
     expect(container.textContent).toContain("TITLE:");
@@ -70,19 +70,23 @@ describe("OutputBlock ticket dossier rendering", () => {
     expect(container.textContent).toContain("Brenda [Platform Governance]");
     expect(container.textContent).toContain("PROFILE:");
     expect(container.textContent).toContain("Treats naming as policy");
-    expect(container.textContent).toContain("Brief");
+    expect(container.textContent).toContain("DESCRIPTION:");
     expect(container.textContent).toContain("we need the login flow refactored by EOD.");
     expect(container.textContent).toContain("REWARD:");
     expect(container.textContent).toContain("1,440 TD");
   });
 
-  it("renders reporter bright and profile dim italicized", () => {
+  it("renders labels dim while title and reporter values carry emphasis", () => {
     renderMessage(buildTicketMessage(makeTicket(), "claimed"));
 
+    const titleValue = Array.from(container.querySelectorAll("div")).find((node) => node.textContent === "Rewrite the RCA template");
     const reporterValue = Array.from(container.querySelectorAll("div")).find((node) => node.textContent === "Brenda [Platform Governance]");
+    const reporterLabel = Array.from(container.querySelectorAll("div")).find((node) => node.textContent === "REPORTER:");
     const profileValue = Array.from(container.querySelectorAll("div")).find((node) => node.textContent === "Treats naming as policy and spontaneity as a security flaw.");
 
-    expect(reporterValue?.className).toContain("text-lime-300");
+    expect(titleValue?.className).toContain("text-white");
+    expect(reporterValue?.className).toContain("text-cyan-300");
+    expect(reporterLabel?.className).toContain("text-slate-400");
     expect(profileValue?.className).toContain("text-slate-400");
     expect(profileValue?.className).toContain("italic");
   });

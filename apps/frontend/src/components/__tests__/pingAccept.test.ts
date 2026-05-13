@@ -35,11 +35,11 @@ vi.mock("../ticketPrompt", () => ({
   fetchRandomTicketPrompt: vi.fn(),
   buildTicketMessage: vi.fn((offer: PlayableBacklogTicket) => ({
     role: "system",
-    content: `[ CORPORATE DOSSIER ]\n\nID: ${offer.id}\nTITLE: ${offer.title}`,
+    content: `[ JIRA PAYLOAD IMPORTED ]\n\nID: ${offer.id}\nTITLE: ${offer.title}`,
     ticketDisplay: {
       kind: "corporate-dossier",
       status: "claimed",
-      heading: "[ CORPORATE DOSSIER ]",
+      heading: "[ JIRA PAYLOAD IMPORTED ]",
       ticketId: offer.id,
       title: offer.title,
       reporter: offer.reporter_name ?? offer.reporter ?? "Unknown reporter",
@@ -294,7 +294,7 @@ describe("/accept prefers review-pings over ticket offers", () => {
       ticketId: "BACKLOG-99",
       title: "Rewrite the monolith",
     });
-    expect(msg.content).toContain("[ CORPORATE DOSSIER ]");
+    expect(msg.content).toContain("[ JIRA PAYLOAD IMPORTED ]");
     expect(msg.content).toContain("ID: BACKLOG-99");
   });
 

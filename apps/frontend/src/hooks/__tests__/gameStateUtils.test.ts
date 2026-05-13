@@ -17,7 +17,7 @@ describe("normalizePersistedMessage", () => {
     ticketDisplay: {
       kind: "corporate-dossier",
       status: "claimed",
-      heading: "[ CORPORATE DOSSIER ]",
+      heading: "[ JIRA PAYLOAD IMPORTED ]",
       ticketId: "BLAME-421",
       title: "Rewrite the template",
       reporter: "Brenda [Platform Governance]",

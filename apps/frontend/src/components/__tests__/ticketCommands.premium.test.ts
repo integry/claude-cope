@@ -191,7 +191,7 @@ describe("premium backlog handling", () => {
       ticketId: "free-12345",
       title: "Fix lint config",
     });
-    expect(freeReply.mock.calls[0]?.[0].content).toContain("[ CORPORATE DOSSIER ]");
+    expect(freeReply.mock.calls[0]?.[0].content).toContain("[ JIRA PAYLOAD IMPORTED ]");
     expect(freeReply.mock.calls[0]?.[0].content).toContain("ID: free-12345");
   });
 

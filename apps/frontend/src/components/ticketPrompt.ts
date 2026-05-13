@@ -46,7 +46,7 @@ export function buildTicketDisplay(
   return {
     kind: "corporate-dossier",
     status,
-    heading: status === "offered" ? "[ INCOMING TICKET ]" : "[ CORPORATE DOSSIER ]",
+    heading: status === "offered" ? "[ INCOMING TICKET ]" : "[ JIRA PAYLOAD IMPORTED ]",
     ticketId: ticket.id,
     title: ticket.title,
     reporter: buildReporter(ticket),
@@ -65,6 +65,10 @@ export function buildTicketDisplay(
 
 export function buildTicketFallbackText(ticketDisplay: TicketDisplayData): string {
   const profileLine = ticketDisplay.profile ? `PROFILE: ${ticketDisplay.profile}\n` : "";
+  const descriptionLines = ticketDisplay.body.split("\n");
+  const descriptionBlock = descriptionLines.length
+    ? `DESCRIPTION: ${descriptionLines[0]}\n${descriptionLines.slice(1).map((line) => `             ${line}`).join("\n")}`
+    : "DESCRIPTION:";
   const footerBlock = ticketDisplay.footer.length ? `\n${ticketDisplay.footer.join("\n")}` : "";
 
   return (
@@ -73,7 +77,7 @@ export function buildTicketFallbackText(ticketDisplay: TicketDisplayData): strin
     `TITLE: ${ticketDisplay.title}\n` +
     `REPORTER: ${ticketDisplay.reporter}\n` +
     profileLine +
-    `\n${ticketDisplay.body}\n\n` +
+    `\n${descriptionBlock}\n\n` +
     `REWARD: ${ticketDisplay.reward}` +
     footerBlock
   );

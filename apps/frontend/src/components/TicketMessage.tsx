@@ -13,17 +13,15 @@ function renderLine(
 function DossierField({
   label,
   value,
-  labelClassName,
   valueClassName,
 }: {
   label: string;
   value: React.ReactNode;
-  labelClassName?: string;
   valueClassName?: string;
 }) {
   return (
     <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3">
-      <div className={labelClassName ?? "text-slate-500"}>{label}</div>
+      <div className="text-slate-400">{label}</div>
       <div className={valueClassName}>{value}</div>
     </div>
   );
@@ -44,16 +42,18 @@ export function TicketMessage({
 
       <div className="space-y-2 border-b border-dashed border-cyan-400/40 py-3">
         <DossierField label="ID:" value={ticket.ticketId} valueClassName="text-cyan-200" />
-        <DossierField label="TITLE:" value={ticket.title} valueClassName="text-cyan-100" />
-        <DossierField label="REPORTER:" value={ticket.reporter} labelClassName="text-lime-300" valueClassName="text-lime-300" />
+        <DossierField label="TITLE:" value={ticket.title} valueClassName="text-white" />
+        <DossierField label="REPORTER:" value={ticket.reporter} valueClassName="text-cyan-300" />
         {ticket.profile && (
-          <DossierField label="PROFILE:" value={ticket.profile} labelClassName="text-slate-400 italic" valueClassName="text-slate-400 italic" />
+          <DossierField label="PROFILE:" value={ticket.profile} valueClassName="text-slate-400 italic" />
         )}
       </div>
 
       <div className="border-b border-dashed border-cyan-400/40 py-3">
-        <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-slate-500">Brief</div>
-        <div className="whitespace-pre-wrap break-words text-cyan-100 [overflow-wrap:anywhere]">{ticket.body}</div>
+        <DossierField
+          label="DESCRIPTION:"
+          value={<div className="whitespace-pre-wrap break-words text-cyan-100 [overflow-wrap:anywhere]">{ticket.body}</div>}
+        />
       </div>
 
       <div className="border-b border-dashed border-cyan-400/40 py-3">

@@ -8,7 +8,7 @@ import { Message } from "../hooks/useGameState";
 export function filterChatHistory(history: Message[]): { role: string; content: string }[] {
   const isSlashCmd = (content: string) => content.startsWith("/");
   const isTicketOfferOrBoardScaffold = (content: string) =>
-    /^\[\s*(?:📋\s+INCOMING TICKET|INCOMING TICKET|CORPORATE DOSSIER|📋\s+\*\*(?:BACKLOG|COMMUNITY BACKLOG)\*\*)\s*\]/.test(content);
+    /^\[\s*(?:📋\s+INCOMING TICKET|INCOMING TICKET|CORPORATE DOSSIER|JIRA PAYLOAD IMPORTED|📋\s+\*\*(?:BACKLOG|COMMUNITY BACKLOG)\*\*)\s*\]/.test(content);
 
   return history.filter((m, i) => {
     // Never send free-tier scaffolding (ads, queue messages) to the model
