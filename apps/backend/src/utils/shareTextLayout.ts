@@ -108,6 +108,12 @@ function truncateOverflowLine(value: string, maxColumns: number): string {
   return `${visible.join("")}${ELLIPSIS}`;
 }
 
+export function truncateDisplayWidth(value: string, maxColumns: number): string {
+  const wrapped = wrapLineByColumns(value, maxColumns);
+  if (wrapped.length <= 1) return value;
+  return truncateOverflowLine(wrapped[0] ?? "", maxColumns);
+}
+
 function wrapLineByColumns(line: string, maxColumns: number): string[] {
   if (line.length === 0) return [""];
 

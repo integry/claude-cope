@@ -235,13 +235,34 @@ describe("share image and public share routes", () => {
     expect(html).toContain('href="https://claudecope.com/"');
   });
 
-  it("uses the request origin for public share URLs when no explicit public share origin is configured", async () => {
+  it("prefers a non-local allowed origin for the share-page CTA when APP_BASE_ORIGIN is unset", async () => {
+    const { db } = createShareCardMockDB();
+    const app = createTestApp();
+    const create = await createCard(app, {
+      DB: db,
+      SHARE_CARD_BASE_ORIGIN: "https://public.example.com",
+      ALLOWED_ORIGINS: "http://localhost:5173,https://staging.example.com",
+    });
+    const { shareId } = await create.json() as { shareId: string };
+
+    const res = await app.request(`https://worker.example/s/${shareId}`, {}, {
+      DB: db,
+      SHARE_CARD_BASE_ORIGIN: "https://public.example.com",
+      ALLOWED_ORIGINS: "http://localhost:5173,https://staging.example.com",
+    });
+    const html = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(html).toContain('href="https://staging.example.com/"');
+  });
+
+  it("prefers ALLOWED_ORIGINS for public share URLs when no explicit public share origin is configured", async () => {
     const { db } = createShareCardMockDB();
     const app = createTestApp();
     const create = await createCard(app, { DB: db, ALLOWED_ORIGINS: "http://localhost:5173,https://staging.example.com" });
     const created = await create.json() as { imageUrl: string; shareUrl: string };
-    expect(created.imageUrl).toBe("https://share.example/api/share-image/share-1");
-    expect(created.shareUrl).toBe("https://share.example/s/share-1");
+    expect(created.imageUrl).toBe("https://staging.example.com/api/share-image/share-1");
+    expect(created.shareUrl).toBe("https://staging.example.com/s/share-1");
   });
 
   it("returns image/png with immutable cache headers and reuses the same cache key on repeated requests", async () => {
@@ -294,7 +315,7 @@ describe("share image and public share routes", () => {
     });
   });
 
-  it("returns 503 from the image route and removes social-image metadata on the public page when browser rendering is unavailable", async () => {
+  it("returns 503 from the image route while leaving the public page metadata stable when browser rendering is unavailable", async () => {
     const { db } = createShareCardMockDB();
     const logger = { error: vi.fn(), warn: vi.fn() };
     const app = createTestApp({ logger });
@@ -307,18 +328,17 @@ describe("share image and public share routes", () => {
     expect(imageRes.status).toBe(503);
     await expect(imageRes.json()).resolves.toEqual({ error: "Browser rendering is not configured" });
     expect(pageRes.status).toBe(200);
-    expect(pageHtml).toContain("Share image unavailable");
-    expect(pageHtml).not.toContain('<img src=');
-    expect(pageHtml).not.toContain('<meta property="og:image"');
-    expect(pageHtml).not.toContain('<meta name="twitter:image"');
-    expect(pageHtml).toContain('<meta name="twitter:card" content="summary">');
+    expect(pageHtml).toContain('<img src="https://share.example/api/share-image/share-1"');
+    expect(pageHtml).toContain('<meta property="og:image" content="https://public.example.com/api/share-image/share-1">');
+    expect(pageHtml).toContain('<meta name="twitter:image" content="https://public.example.com/api/share-image/share-1">');
+    expect(pageHtml).toContain('<meta name="twitter:card" content="summary_large_image">');
     expect(logger.error).toHaveBeenCalledWith("share image rendering failed", {
       shareId: "share-1",
       error: "Browser rendering binding is not configured",
     });
   });
 
-  it("removes image metadata and inline images from the public page when rendering fails", async () => {
+  it("keeps image metadata and inline images on the public page when rendering fails", async () => {
     const { db } = createShareCardMockDB();
     const logger = { error: vi.fn(), warn: vi.fn() };
     const renderer: ShareImageRenderer = {
@@ -333,12 +353,11 @@ describe("share image and public share routes", () => {
     const pageHtml = await pageRes.text();
 
     expect(pageRes.status).toBe(200);
-    expect(pageHtml).toContain("Share image unavailable");
-    expect(pageHtml).not.toContain('<img src=');
-    expect(pageHtml).not.toContain('<meta property="og:image"');
-    expect(pageHtml).not.toContain('<meta name="twitter:image"');
-    expect(pageHtml).toContain('<meta name="twitter:card" content="summary">');
-    expect(logger.error).toHaveBeenCalledWith("share image rendering failed", {
+    expect(pageHtml).toContain('<img src="https://share.example/api/share-image/share-1"');
+    expect(pageHtml).toContain('<meta property="og:image" content="https://public.example.com/api/share-image/share-1">');
+    expect(pageHtml).toContain('<meta name="twitter:image" content="https://public.example.com/api/share-image/share-1">');
+    expect(pageHtml).toContain('<meta name="twitter:card" content="summary_large_image">');
+    expect(logger.error).not.toHaveBeenCalledWith("share image rendering failed", {
       shareId: "share-1",
       error: "browser crashed",
     });
@@ -389,6 +408,8 @@ describe("share image and public share routes", () => {
     const html = renderDeterministicShareCardHtml(createRecord({
       prompt: `line 1\n\n<tag>${"A".repeat(500)}`,
       response: `${"漢".repeat(200)}\n${"B".repeat(500)}`,
+      username: `${"漢".repeat(40)}-overflow`,
+      theme: "ultra-wide-theme-label",
     }));
 
     expect(html).toContain('class="text truncate"');
@@ -398,6 +419,9 @@ describe("share image and public share routes", () => {
     expect(html).not.toContain("<tag>");
     expect(html).toContain(`${"漢".repeat(16)}...`);
     expect(html).not.toContain("漢".repeat(18));
+    expect(html).toContain(`${"漢".repeat(14)}...`);
+    expect(html).toContain("ULTRA-WIDE-...");
+    expect(html).not.toContain("ultra-wide-theme-label".toUpperCase());
     expect(html).toContain("...");
   });
 

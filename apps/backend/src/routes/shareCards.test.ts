@@ -168,7 +168,7 @@ describe("POST /api/share-cards", () => {
       username: "alice",
     }, {
       DB: db,
-      ALLOWED_ORIGINS: "https://app.example.com,http://localhost:5173",
+      ALLOWED_ORIGINS: "http://localhost:5173,https://app.example.com",
     });
 
     expect(res.status).toBe(200);
