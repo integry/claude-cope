@@ -17,6 +17,7 @@
     "./turnstile": "./src/turnstile.ts",
     "./config": "./src/config.ts",
     "./backlogTiers": "./src/backlogTiers.ts",
-    "./backlogTickets": "./src/backlogTickets.ts"
+    "./backlogTickets": "./src/backlogTickets.ts",
+    "./shareCards": "./src/shareCards.ts"
   }
 }
