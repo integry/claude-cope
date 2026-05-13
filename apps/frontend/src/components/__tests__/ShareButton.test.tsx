@@ -242,6 +242,9 @@ describe("ShareButton modal share flow", () => {
     renderComponent();
     await openPreview();
 
+    mockClipboard.write.mockReset();
+    mockClipboard.write.mockResolvedValue(undefined);
+
     await clickShareButton("SHARE ON X");
     expect(container.textContent).toContain("IMAGE COPIED TO CLIPBOARD");
 
