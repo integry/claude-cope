@@ -9,7 +9,7 @@ describe("ShareButton modal share flow", () => {
   let root: ReturnType<typeof createRoot>;
   let fetchMock: ReturnType<typeof vi.fn>;
   let shareCardResponses: Array<{ shareId: string; imageUrl: string; shareUrl: string }>;
-  let imageBodies: Map<string, Uint8Array>;
+  let imageBodies: Map<string, ArrayBuffer>;
   let imageFetchOverrides: Map<string, Promise<Response>>;
 
   const mockClipboard = {
@@ -23,6 +23,8 @@ describe("ShareButton modal share flow", () => {
   }));
 
   const imageBytes = new TextEncoder().encode("server-image");
+  const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer =>
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   const shareCardResponse = {
     shareId: "share-123",
     imageUrl: "https://claudecope.com/api/share-image/share-123",
@@ -44,7 +46,7 @@ describe("ShareButton modal share flow", () => {
     document.body.appendChild(container);
     root = createRoot(container);
     shareCardResponses = [shareCardResponse];
-    imageBodies = new Map([[shareCardResponse.imageUrl, imageBytes]]);
+    imageBodies = new Map([[shareCardResponse.imageUrl, toArrayBuffer(imageBytes)]]);
     imageFetchOverrides = new Map();
 
     Object.defineProperty(navigator, "clipboard", {
@@ -68,7 +70,7 @@ describe("ShareButton modal share flow", () => {
         if (override) {
           return override;
         }
-        const imageBody = imageBodies.get(url) ?? imageBytes;
+        const imageBody = imageBodies.get(url) ?? toArrayBuffer(imageBytes);
         return new Response(new Blob([imageBody], { type: "image/png" }), {
           status: 200,
           headers: { "Content-Type": "image/png" },
@@ -285,7 +287,7 @@ describe("ShareButton modal share flow", () => {
     expect(container.textContent).not.toContain("Copying image to clipboard");
     expect(container.querySelector("button")?.textContent).toBe("[share]");
 
-    deferredImage.resolve(new Response(imageBytes, {
+    deferredImage.resolve(new Response(new Blob([toArrayBuffer(imageBytes)], { type: "image/png" }), {
       status: 200,
       headers: { "Content-Type": "image/png" },
     }));
@@ -306,7 +308,10 @@ describe("ShareButton modal share flow", () => {
       shareUrl: "https://claudecope.com/s/share-456",
     };
     shareCardResponses = [shareCardResponse, secondShareCardResponse];
-    imageBodies.set(secondShareCardResponse.imageUrl, new TextEncoder().encode("server-image-b"));
+    imageBodies.set(
+      secondShareCardResponse.imageUrl,
+      toArrayBuffer(new TextEncoder().encode("server-image-b")),
+    );
 
     renderComponent();
     await openPreview();
@@ -336,7 +341,7 @@ describe("ShareButton modal share flow", () => {
     const copiedBlob = await clipboardItem.getType("image/png");
     expect(await copiedBlob.text()).toBe("server-image-b");
 
-    firstDeferredImage.resolve(new Response(imageBytes, {
+    firstDeferredImage.resolve(new Response(new Blob([toArrayBuffer(imageBytes)], { type: "image/png" }), {
       status: 200,
       headers: { "Content-Type": "image/png" },
     }));
