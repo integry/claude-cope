@@ -122,4 +122,60 @@ describe("app", () => {
     });
   });
 
+  describe("/api/share-cards protections", () => {
+    it("requires prior human verification when Turnstile is enabled", async () => {
+      const usageKv = {
+        get: vi.fn().mockResolvedValue(null),
+      };
+
+      const res = await app.request(
+        "/api/share-cards",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" },
+          body: JSON.stringify({ prompt: "p", response: "r", username: "alice" }),
+        },
+        {
+          ALLOWED_ORIGINS: "http://localhost:5173",
+          TURNSTILE_SECRET_KEY: "secret",
+          USAGE_KV: usageKv,
+        },
+      );
+
+      expect(res.status).toBe(403);
+      await expect(res.json()).resolves.toEqual({
+        error: "Human verification required",
+        reason: "human_verification_required",
+      });
+    });
+
+    it("applies rate limiting before the share-card route when KV rate limiting is configured", async () => {
+      const windowSeconds = 60;
+      const rateLimitKv = {
+        get: vi.fn().mockResolvedValue(JSON.stringify({
+          count: 20,
+          expiresAt: Date.now() + windowSeconds * 1000,
+        })),
+        put: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const res = await app.request(
+        "/api/share-cards",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Origin: "http://localhost:5173", "cf-connecting-ip": "1.2.3.4" },
+          body: JSON.stringify({ prompt: "p", response: "r", username: "alice" }),
+        },
+        {
+          ALLOWED_ORIGINS: "http://localhost:5173",
+          RATE_LIMIT_KV: rateLimitKv,
+          IP_HASH_PEPPER: "pepper",
+        },
+      );
+
+      expect(res.status).toBe(429);
+      expect(res.headers.get("retry-after")).toBeTruthy();
+    });
+  });
+
 });

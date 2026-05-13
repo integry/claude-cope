@@ -3,7 +3,7 @@ import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
 import { getAllowedOrigins } from "@claude-cope/shared/shareCards";
-import { rateLimiter } from "./middleware/rateLimiter";
+import { createKvRateLimiter, rateLimiter } from "./middleware/rateLimiter";
 import { botProtection } from "./middleware/botProtection";
 import { sessionMiddleware } from "./middleware/session";
 import { applyMigrations } from "./utils/migrations";
@@ -96,6 +96,8 @@ app.use("*", async (c, next) => {
 
 app.use("/api/chat", rateLimiter);
 app.use("/api/chat", botProtection);
+app.use("/api/share-cards", createKvRateLimiter("share-cards:", 20, 60));
+app.use("/api/share-cards", botProtection);
 
 app.route("/api/chat", chat);
 app.route("/api/verify", verify);

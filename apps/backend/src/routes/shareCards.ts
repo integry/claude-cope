@@ -1,14 +1,14 @@
 import { Hono } from "hono";
 import {
   computeShareCardContentHash,
-  getAllowedOrigins,
+  getShareCardBaseOrigin,
   validateAndNormalizeShareCardInput,
 } from "@claude-cope/shared/shareCards";
 
 type Env = {
   Bindings: {
     DB: D1Database;
-    ALLOWED_ORIGINS?: string;
+    SHARE_CARD_BASE_ORIGIN?: string;
   };
 };
 
@@ -26,25 +26,12 @@ type SharedCardImageRow = {
 
 const shareCards = new Hono<Env>();
 
-function getSharePageOrigin(requestUrl: string, allowedOrigins: string[]) {
-  const primaryAllowedOrigin = allowedOrigins[0];
-  if (primaryAllowedOrigin) {
-    try {
-      return new URL(primaryAllowedOrigin).origin;
-    } catch {
-      // Fall back to the request origin if operators supply an invalid origin.
-    }
-  }
-  return new URL(requestUrl).origin;
-}
-
-function buildShareCardUrls(requestUrl: string, allowedOrigins: string[], shareId: string) {
+function buildShareCardUrls(requestUrl: string, sharePageOrigin: string, shareId: string) {
   const apiBase = new URL(requestUrl);
-  const shareBase = getSharePageOrigin(requestUrl, allowedOrigins);
   return {
     shareId,
     imageUrl: new URL(`/api/share-cards/${shareId}/image`, apiBase).toString(),
-    shareUrl: new URL(`/share/${shareId}`, shareBase).toString(),
+    shareUrl: new URL(`/share/${shareId}`, sharePageOrigin).toString(),
   };
 }
 
@@ -151,7 +138,7 @@ function buildShareCardImage(row: SharedCardImageRow): string {
   <style>
     .eyebrow { fill: #A9D6E5; font: 600 24px sans-serif; letter-spacing: 0.08em; text-transform: uppercase; }
     .heading { fill: #6FFFE9; font: 700 28px sans-serif; }
-    .body { fill: #F4F7F5; font: 400 28px sans-serif; }
+    .body { fill: #F4F7F5; font: 400 28px monospace; }
     .theme { fill: #FFD166; font: 700 22px sans-serif; text-anchor: end; letter-spacing: 0.12em; }
   </style>
   ${text}
@@ -225,7 +212,7 @@ shareCards.post("/", async (c) => {
   }
 
   return c.json(
-    buildShareCardUrls(c.req.url, getAllowedOrigins(c.env.ALLOWED_ORIGINS), row.id),
+    buildShareCardUrls(c.req.url, getShareCardBaseOrigin(c.env.SHARE_CARD_BASE_ORIGIN), row.id),
     200,
     { "Cache-Control": "no-store" },
   );

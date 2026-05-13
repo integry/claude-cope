@@ -148,6 +148,32 @@ describe("POST /api/share-cards", () => {
     ]);
   });
 
+  it("uses SHARE_CARD_BASE_ORIGIN instead of ALLOWED_ORIGINS ordering for shareUrl", async () => {
+    const app = createTestApp();
+    const { db } = createShareCardMockDB();
+
+    const res = await app.request("https://share.example/api/share-cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Ship it",
+        response: "Looks good.",
+        username: "alice",
+      }),
+    }, {
+      DB: db,
+      ALLOWED_ORIGINS: "http://localhost:5173,https://app.example.com",
+      SHARE_CARD_BASE_ORIGIN: "https://app.example.com",
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      shareId: "share-1",
+      imageUrl: "https://share.example/api/share-cards/share-1/image",
+      shareUrl: "https://app.example.com/share/share-1",
+    });
+  });
+
   it("dedupes identical normalized payloads and reuses the same shareId", async () => {
     const app = createTestApp();
     const { db, getRowCount } = createShareCardMockDB();
@@ -320,6 +346,32 @@ describe("POST /api/share-cards", () => {
 
     expect(svg).toContain(">alpha</text><text x=\"72\" y=\"230\" class=\"body\"></text><text x=\"72\" y=\"264\" class=\"body\">omega</text>");
     expect(svg).toContain(">first</text><text x=\"72\" y=\"450\" class=\"body\"></text><text x=\"72\" y=\"482\" class=\"body\">third</text>");
+  });
+
+  it("escapes SVG-sensitive characters in rendered fields", async () => {
+    const app = createTestApp();
+    const { db } = createShareCardMockDB();
+
+    const create = await app.request("https://share.example/api/share-cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: `<tag> & "quote" 'apostrophe'`,
+        response: `5 > 3 & 2 < 4`,
+        username: `ali<ce>&"'`,
+        theme: `neo&<"'`,
+      }),
+    }, { DB: db });
+
+    const body = await create.json() as { imageUrl: string };
+    const image = await app.request(body.imageUrl, {}, { DB: db });
+    const svg = await image.text();
+
+    expect(svg).toContain("Shared by @ali&lt;ce&gt;&amp;&quot;&#39;");
+    expect(svg).toContain("&lt;tag&gt; &amp; &quot;quote&quot; &#39;apostrophe&#39;");
+    expect(svg).toContain("5 &gt; 3 &amp; 2 &lt; 4");
+    expect(svg).toContain("NEO&amp;&lt;&quot;&#39;");
+    expect(svg).not.toContain("<tag>");
   });
 
   it("rejects invalid payloads with 400", async () => {
