@@ -8,6 +8,7 @@ import {
 type Env = {
   Bindings: {
     DB: D1Database;
+    ALLOWED_ORIGINS?: string;
     SHARE_CARD_BASE_ORIGIN?: string;
   };
 };
@@ -44,6 +45,20 @@ function escapeSvgText(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function splitGraphemes(value: string): string[] {
+  const segmenterCtor = (globalThis.Intl as typeof Intl & {
+    Segmenter?: new (
+      locales?: string | string[],
+      options?: { granularity?: "grapheme" | "word" | "sentence" },
+    ) => { segment(input: string): Iterable<{ segment: string }> };
+  }).Segmenter;
+
+  if (segmenterCtor) {
+    return Array.from(new segmenterCtor(undefined, { granularity: "grapheme" }).segment(value), ({ segment }) => segment);
+  }
+  return Array.from(value);
+}
+
 function wrapText(value: string, maxLineLength: number, maxLines: number): string[] {
   const rawLines = value.split("\n");
   const lines: string[] = [];
@@ -58,21 +73,22 @@ function wrapText(value: string, maxLineLength: number, maxLines: number): strin
     if (!rawLine) {
       lines.push("");
     } else {
-      let remaining = rawLine;
-      while (remaining.length > maxLineLength) {
+      const graphemes = splitGraphemes(rawLine);
+      let offset = 0;
+      while (graphemes.length - offset > maxLineLength) {
         if (lines.length === maxLines) {
           truncated = true;
           break;
         }
-        lines.push(remaining.slice(0, maxLineLength));
-        remaining = remaining.slice(maxLineLength);
+        lines.push(graphemes.slice(offset, offset + maxLineLength).join(""));
+        offset += maxLineLength;
       }
       if (truncated) break;
       if (lines.length === maxLines) {
         truncated = true;
         break;
       }
-      lines.push(remaining);
+      lines.push(graphemes.slice(offset).join(""));
     }
 
     if (lines.length === maxLines && index < rawLines.length - 1) {
@@ -88,7 +104,7 @@ function wrapText(value: string, maxLineLength: number, maxLines: number): strin
 
   if (truncated && lines.length > 0) {
     const lastIndex = lines.length - 1;
-    lines[lastIndex] = `${lines[lastIndex].slice(0, Math.max(0, maxLineLength - 1))}\u2026`;
+    lines[lastIndex] = `${splitGraphemes(lines[lastIndex]).slice(0, Math.max(0, maxLineLength - 1)).join("")}\u2026`;
   }
 
   return lines;
@@ -212,7 +228,11 @@ shareCards.post("/", async (c) => {
   }
 
   return c.json(
-    buildShareCardUrls(c.req.url, getShareCardBaseOrigin(c.env.SHARE_CARD_BASE_ORIGIN), row.id),
+    buildShareCardUrls(
+      c.req.url,
+      getShareCardBaseOrigin(c.env.SHARE_CARD_BASE_ORIGIN, c.env.ALLOWED_ORIGINS),
+      row.id,
+    ),
     200,
     { "Cache-Control": "no-store" },
   );

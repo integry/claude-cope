@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import {
@@ -268,6 +269,21 @@ describe("POST /api/share-cards", () => {
 
     expect(svg).toContain(`>${"p".repeat(47)}\u2026</text>`);
     expect(svg).toContain(`>${"r".repeat(51)}\u2026</text>`);
+  });
+
+  it("wraps emoji text without splitting grapheme clusters", async () => {
+    const app = createTestApp();
+    const { db } = createShareCardMockDB();
+    const emoji = "👨‍👩‍👧‍👦";
+    const { svg } = await createAndFetchImage(app, {
+      prompt: emoji.repeat(49),
+      response: "Looks good.",
+      username: "alice",
+    }, { DB: db });
+
+    expect(svg).toContain(`>${emoji.repeat(48)}</text>`);
+    expect(svg).toContain(`>${emoji}\u2026</text>`);
+    expect(svg).not.toContain("\uFFFD");
   });
 
   it("preserves embedded blank lines when rendering the image", async () => {

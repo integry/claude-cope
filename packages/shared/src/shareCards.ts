@@ -56,14 +56,26 @@ export function getAllowedOrigins(raw: string | undefined): string[] {
   return csv.split(",").map((value) => value.trim()).filter(Boolean);
 }
 
-export function getShareCardBaseOrigin(raw: string | undefined): string {
-  const candidate = raw?.trim() || SHARE_CARD_DEFAULT_BASE_ORIGIN;
-  try {
-    const url = new URL(candidate);
-    return url.origin;
-  } catch {
-    return SHARE_CARD_DEFAULT_BASE_ORIGIN;
+export function getShareCardBaseOrigin(
+  rawBaseOrigin: string | undefined,
+  rawAllowedOrigins?: string | undefined,
+): string {
+  const candidates = [
+    rawBaseOrigin?.trim(),
+    getAllowedOrigins(rawAllowedOrigins)[0],
+    SHARE_CARD_DEFAULT_BASE_ORIGIN,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      return new URL(candidate).origin;
+    } catch {
+      continue;
+    }
   }
+
+  return SHARE_CARD_DEFAULT_BASE_ORIGIN;
 }
 
 export function validateAndNormalizeShareCardInput(input: unknown): ValidationResult {
