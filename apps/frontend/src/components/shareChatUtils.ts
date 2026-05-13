@@ -250,16 +250,18 @@ async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
   });
 }
 
-async function copyImageToClipboard(blob: Blob): Promise<boolean> {
+export async function copyBlobToClipboard(blob: Blob): Promise<boolean> {
+  const ClipboardItemCtor = globalThis.ClipboardItem;
+  if (typeof ClipboardItemCtor === "undefined") return false;
   try {
-    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    await navigator.clipboard.write([new ClipboardItemCtor({ [blob.type || "image/png"]: blob })]);
     return true;
   } catch {
     return false;
   }
 }
 
-async function copyTextToClipboard(text: string): Promise<boolean> {
+export async function copyTextToClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     return true;
@@ -359,20 +361,17 @@ export function generateShareText(): string {
   return `${punchline}\n\n[paste your image here]\n\n${generateShareHashtags()}\nhttps://cope.bot`;
 }
 
-export function openShareIntent(platform: "twitter" | "linkedin"): void {
+export function openShareIntent(platform: "twitter" | "linkedin", shareUrl?: string): void {
   const punchline = getRandomPunchline();
   if (platform === "twitter") {
-    // Twitter expands the URL inline anyway, so the longer canonical domain
-    // costs no characters. The image card still renders the short cope.bot
-    // brand for compact visual readability.
-    const tweetText = `${punchline}\n\n${generateShareHashtags()}\nhttps://claudecope.com`;
+    const tweetText = `${punchline}\n\n${generateShareHashtags()}\n${shareUrl ?? "https://claudecope.com"}`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   } else {
-    // LinkedIn's share-offsite endpoint only supports URL sharing, not image
-    // uploads. Open the feed instead so the user can start a new post and
-    // paste the copied image directly into the composer.
-    window.open("https://www.linkedin.com/feed/", "_blank", "noopener,noreferrer");
+    const url = shareUrl
+      ? `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`
+      : "https://www.linkedin.com/feed/";
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 }
 
@@ -387,6 +386,7 @@ export type ShareChatOptions = {
   systemMessage: string;
   platform?: "twitter" | "linkedin";
   openShareUrl?: boolean;
+  shareUrl?: string;
   username?: string;
   previewBlob?: Blob;
 };
@@ -396,7 +396,7 @@ export type ShareChatOptions = {
  * Renders the chat card, copies to clipboard, and optionally opens share intent.
  */
 export async function shareChatImage(options: ShareChatOptions): Promise<ShareResult> {
-  const { userMessage, systemMessage, platform, openShareUrl = false, username, previewBlob } = options;
+  const { userMessage, systemMessage, platform, openShareUrl = false, shareUrl, username, previewBlob } = options;
 
   let blob: Blob | null = previewBlob ?? null;
   if (!blob) {
@@ -405,9 +405,9 @@ export async function shareChatImage(options: ShareChatOptions): Promise<ShareRe
   }
 
   if (blob) {
-    const imageCopied = await copyImageToClipboard(blob);
+    const imageCopied = await copyBlobToClipboard(blob);
     if (imageCopied) {
-      if (openShareUrl && platform) openShareIntent(platform);
+      if (openShareUrl && platform) openShareIntent(platform, shareUrl);
       return { success: true, method: "image", message: "Share card image copied to clipboard! Paste it anywhere to share." };
     }
   }
@@ -415,12 +415,12 @@ export async function shareChatImage(options: ShareChatOptions): Promise<ShareRe
   const shareText = generateShareText();
   const textCopied = await copyTextToClipboard(shareText);
   if (textCopied) {
-    if (openShareUrl && platform) openShareIntent(platform);
+    if (openShareUrl && platform) openShareIntent(platform, shareUrl);
     return { success: true, method: "text", message: "Chat copied to clipboard as text (image copy not supported in this browser)." };
   }
 
   if (openShareUrl && platform) {
-    openShareIntent(platform);
+    openShareIntent(platform, shareUrl);
     return { success: true, method: "none", message: "Opening share dialog... (clipboard access denied)" };
   }
 

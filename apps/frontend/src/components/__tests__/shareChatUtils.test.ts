@@ -302,11 +302,13 @@ describe("shareChatImage", () => {
       systemMessage: "World",
       platform: "twitter",
       openShareUrl: true,
+      shareUrl: "https://claudecope.com/s/share-1",
     });
 
     expect(mockOpen).toHaveBeenCalled();
     const callArgs = mockOpen.mock.calls[0]!;
     expect(callArgs[0]).toContain("twitter.com/intent/tweet");
+    expect(decodeURIComponent(String(callArgs[0]))).toContain("https://claudecope.com/s/share-1");
 
     mockOpen.mockRestore();
   });
