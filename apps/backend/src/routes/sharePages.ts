@@ -55,10 +55,8 @@ export function createSharePages(deps: SharePageDependencies = {}) {
     const loaded = await loadSupportedRecord(c);
     if ("response" in loaded) return loaded.response;
     const { record } = loaded;
-
-    return c.html(renderDeterministicShareCardHtml(record), 200, {
-      "Cache-Control": "no-store",
-    });
+    const context = buildShareImageRouteContext(c.req.url, c.env, record);
+    return c.redirect(context.renderUrl, 308);
   });
 
   const imageHandler = async (c: Context<Env>) => {

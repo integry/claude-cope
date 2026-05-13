@@ -4,7 +4,7 @@ import {
   SHARE_CARD_RENDERER_VERSION,
 } from "@claude-cope/shared/shareCards";
 import puppeteer from "@cloudflare/puppeteer";
-import { escapeHtml, renderBoundedTextBlock, truncateDisplayWidth, truncateGraphemes } from "./shareTextLayout";
+import { escapeHtml, truncateGraphemes } from "./shareTextLayout";
 
 export const SHARE_CARD_ROOT_SELECTOR = "#share-card-root";
 export const SHARE_IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
@@ -12,12 +12,6 @@ export const SHARE_IMAGE_WIDTH = 1200;
 export const SHARE_IMAGE_HEIGHT = 630;
 const SHARE_IMAGE_CACHE_ORIGIN = "https://share-image-cache.invalid";
 const inFlightShareImageRenders = new Map<string, Promise<Response>>();
-const PROMPT_MAX_COLUMNS = 35;
-const RESPONSE_MAX_COLUMNS = 35;
-const PROMPT_MAX_LINES = 11;
-const RESPONSE_MAX_LINES = 11;
-const HEADER_USERNAME_MAX_COLUMNS = 32;
-const HEADER_THEME_MAX_COLUMNS = 14;
 export type SharedCardRecord = { id: string; prompt: string; response: string; username: string; theme: string | null; renderer_version: string; created_at: string };
 export type ShareImageBindings = { DB?: D1Database; ALLOWED_ORIGINS?: string; SHARE_CARD_BASE_ORIGIN?: string; APP_BASE_ORIGIN?: string; BROWSER?: Fetcher };
 export type ShareImageCache = { match(request: Request | string): Promise<Response | undefined>; put(request: Request | string, response: Response): Promise<unknown> };
@@ -120,15 +114,6 @@ export async function loadShareCardRecord(db: D1Database, shareId: string): Prom
 
 export function hasSupportedShareCardRendererVersion(record: Pick<SharedCardRecord, "renderer_version">): boolean {
   return record.renderer_version === SHARE_CARD_RENDERER_VERSION;
-}
-
-export function renderDeterministicShareCardHtml(record: SharedCardRecord): string {
-  const themeLabel = escapeHtml(truncateDisplayWidth((record.theme ?? "default").toUpperCase(), HEADER_THEME_MAX_COLUMNS));
-  const sharedByLabel = escapeHtml(truncateDisplayWidth(`Shared by @${record.username}`, HEADER_USERNAME_MAX_COLUMNS));
-  const prompt = renderBoundedTextBlock(record.prompt, PROMPT_MAX_COLUMNS, PROMPT_MAX_LINES);
-  const response = renderBoundedTextBlock(record.response, RESPONSE_MAX_COLUMNS, RESPONSE_MAX_LINES);
-
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light only"><title>Claude Cope share ${escapeHtml(record.id)}</title><style>:root{color-scheme:light}*{box-sizing:border-box}html,body{margin:0;width:${SHARE_IMAGE_WIDTH}px;height:${SHARE_IMAGE_HEIGHT}px;background:#04121c}body{overflow:hidden}${SHARE_CARD_ROOT_SELECTOR}{width:${SHARE_IMAGE_WIDTH}px;height:${SHARE_IMAGE_HEIGHT}px;display:flex;flex-direction:column;justify-content:space-between;padding:48px;background:radial-gradient(circle at top left,rgba(111,255,233,.14),transparent 34%),linear-gradient(135deg,#0a2239 0%,#114b5f 100%);color:#f4f7f5}.frame{flex:1;display:flex;flex-direction:column;border:1px solid rgba(169,214,229,.24);border-radius:28px;padding:38px 40px;background:rgba(7,20,31,.78);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px;gap:16px}.eyebrow,.theme{min-width:0;overflow:hidden;white-space:nowrap}.eyebrow{flex:1;color:#a9d6e5;font:700 22px/1.2 "Courier New",Courier,monospace;letter-spacing:.08em;text-transform:uppercase}.theme{max-width:40%;color:#ffd166;font:700 18px/1.2 "Courier New",Courier,monospace;letter-spacing:.16em;text-transform:uppercase;text-align:right}.columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;min-height:0;flex:1}.panel{min-height:0;padding:24px 26px;border-radius:22px;background:rgba(255,255,255,.03);border:1px solid rgba(169,214,229,.16)}.label{margin:0 0 14px;color:#6fffe9;font:700 24px/1.2 "Courier New",Courier,monospace}.text{display:grid;grid-auto-rows:28px;row-gap:0;font:400 22px/28px "Courier New",Courier,monospace;color:#f4f7f5}.line{white-space:pre}.truncate::after{content:"";display:block}</style></head><body><main id="share-card-root" aria-label="Claude Cope share card"><section class="frame"><header class="topbar"><div class="eyebrow">${sharedByLabel}</div><div class="theme">${themeLabel}</div></header><section class="columns"><article class="panel"><h1 class="label">Prompt</h1><div class="text${prompt.truncated ? " truncate" : ""}">${prompt.html}</div></article><article class="panel"><h2 class="label">Response</h2><div class="text${response.truncated ? " truncate" : ""}">${response.html}</div></article></section></section></main></body></html>`;
 }
 
 export function renderPublicSharePageHtml(
@@ -255,11 +240,12 @@ export function buildShareImageRouteContext(
   record: SharedCardRecord,
 ) {
   const urls = buildPublicShareUrls(requestUrl, env, record.id);
+  const appOrigin = getPrimaryAppOrigin(env);
   return {
     ...urls,
     pageImageUrl: new URL(`/api/share-image/${record.id}`, requestUrl).toString(),
-    renderUrl: new URL(`/share/render/${record.id}`, requestUrl).toString(),
-    appUrl: new URL("/", getPrimaryAppOrigin(env)).toString(),
+    renderUrl: new URL(`/share-card-render/${record.id}`, appOrigin).toString(),
+    appUrl: new URL("/", appOrigin).toString(),
   };
 }
 

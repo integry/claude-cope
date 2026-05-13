@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
 import { copyBlobToClipboard, copyTextToClipboard, openShareIntent } from "./shareChatUtils";
+import ShareCard from "./ShareCard";
 
 type MountToken = { cancelled: boolean };
 type SharePlatform = "twitter" | "linkedin";
@@ -20,7 +21,8 @@ const emphasisStyle: CSSProperties = { color: "#ff5555", fontWeight: "bold" };
 const highlightStyle: CSSProperties = { color: "#ffff55" };
 const actionRowStyle: CSSProperties = { display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" };
 const linkStyle: CSSProperties = { background: "none", border: "none", padding: "8px 0 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", display: "block" };
-const previewImageStyle: CSSProperties = { display: "block", maxWidth: "100%", maxHeight: "calc(100vh - 14rem)" };
+const previewFrameStyle: CSSProperties = { display: "flex", justifyContent: "center", alignItems: "flex-start", overflow: "auto", maxWidth: "100%", maxHeight: "calc(100vh - 14rem)" };
+const previewScaleWrapStyle: CSSProperties = { width: "min(100%, 1200px)" };
 const modalStatusStyle: CSSProperties = { fontSize: "12px", textAlign: "left" };
 const modalStatusGeneratingStyle: CSSProperties = { ...modalStatusStyle, color: "#ffff55" };
 const modalStatusErrorStyle: CSSProperties = { ...modalStatusStyle, color: "#ff5555" };
@@ -335,7 +337,13 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
               <span style={modalTitleStyle}>SHARE PREVIEW</span>
               <button onClick={() => { closePreview(); triggerRef.current?.focus(); }} style={closeButtonStyle} aria-label="Close">[x]</button>
             </div>
-            <div style={modalBodyStyle}><img src={previewCard.imageUrl} alt="Share preview" style={previewImageStyle} /></div>
+            <div style={modalBodyStyle}>
+              <div style={previewFrameStyle}>
+                <div style={previewScaleWrapStyle}>
+                  <ShareCard prompt={userMessage} response={systemMessage} username={username} rootId="share-card-preview-root" />
+                </div>
+              </div>
+            </div>
             <div style={modalFooterStyle}>
               {pasteHint ? (
                 <div style={pasteHintStyle}>

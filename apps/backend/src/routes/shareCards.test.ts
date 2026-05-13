@@ -47,6 +47,19 @@ function createShareCardMockDB() {
                 const row = rows.get(String(args[0]));
                 return (row ? { id: row.id } : null) as T | null;
               }
+              if (upper === "SELECT ID, PROMPT, RESPONSE, USERNAME, THEME, RENDERER_VERSION FROM SHARED_CARDS WHERE ID = ?") {
+                const row = Array.from(rows.values()).find((value) => value.id === String(args[0]));
+                return row
+                  ? {
+                    id: row.id,
+                    prompt: row.prompt,
+                    response: row.response,
+                    username: row.username,
+                    theme: row.theme,
+                    renderer_version: row.renderer_version,
+                  } as T
+                  : null;
+              }
               throw new Error(`Unsupported first SQL in test mock: ${sql}`);
             },
             async all<T = unknown>() {
@@ -202,6 +215,29 @@ describe("POST /api/share-cards", () => {
     expect(second.status).toBe(200);
     expect(await first.json()).toEqual(await second.json());
     expect(getRowCount()).toBe(1);
+  });
+
+  it("returns share-card data by id for frontend render routes", async () => {
+    const app = createTestApp();
+    const { db } = createShareCardMockDB();
+    await postShareCard(app, {
+      prompt: "Hello\nworld",
+      response: "Looks **bad**",
+      username: " alice ",
+      theme: " default ",
+    }, { DB: db });
+
+    const res = await app.request("https://share.example/api/share-cards/share-1", {}, { DB: db });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      shareId: "share-1",
+      prompt: "Hello\nworld",
+      response: "Looks **bad**",
+      username: "alice",
+      theme: "default",
+      rendererVersion: SHARE_CARD_RENDERER_VERSION,
+    });
+    expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
   });
 
   it("keeps distinct prompt and response whitespace snapshots separate", async () => {

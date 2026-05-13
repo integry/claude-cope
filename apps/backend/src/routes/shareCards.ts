@@ -18,6 +18,15 @@ type SharedCardRow = {
   id: string;
 };
 
+type SharedCardRecord = {
+  id: string;
+  prompt: string;
+  response: string;
+  username: string;
+  theme: string | null;
+  renderer_version: string;
+};
+
 const shareCards = new Hono<Env>();
 
 shareCards.get("/:id/image", (c) => {
@@ -73,6 +82,34 @@ shareCards.post("/", async (c) => {
     200,
     { "Cache-Control": "no-store" },
   );
+});
+
+shareCards.get("/:id", async (c) => {
+  const db = c.env?.DB;
+  if (!db) {
+    return c.json({ error: "Database is not configured" }, 500);
+  }
+
+  const shareId = c.req.param("id");
+  const row = await db
+    .prepare("SELECT id, prompt, response, username, theme, renderer_version FROM shared_cards WHERE id = ?")
+    .bind(shareId)
+    .first<SharedCardRecord>();
+
+  if (!row) {
+    return c.json({ error: "Share card not found" }, 404);
+  }
+
+  return c.json({
+    shareId: row.id,
+    prompt: row.prompt,
+    response: row.response,
+    username: row.username,
+    theme: row.theme,
+    rendererVersion: row.renderer_version,
+  }, 200, {
+    "Cache-Control": "public, max-age=31536000, immutable",
+  });
 });
 
 export default shareCards;

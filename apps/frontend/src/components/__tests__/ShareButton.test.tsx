@@ -17,9 +17,11 @@ describe("ShareButton modal share flow", () => {
   it("opens preview modal when share button is clicked", async () => {
     testScope.renderComponent();
     const dialog = await testScope.openPreview();
-    const img = dialog.querySelector("img[alt='Share preview']");
-    expect(img).not.toBeNull();
-    expect(img?.getAttribute("src")).toBe(shareCardResponse.imageUrl);
+    const previewRoot = dialog.querySelector("#share-card-preview-root");
+    expect(previewRoot).not.toBeNull();
+    expect(dialog.textContent).toContain("shared by @testuser");
+    expect(dialog.textContent).toContain("Hello");
+    expect(dialog.textContent).toContain("World");
     expect(testScope.fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -7,7 +7,6 @@ import { createSharePages } from "./sharePages";
 import {
   buildShareImageCacheKey,
   getCachedOrRenderedShareImage,
-  renderDeterministicShareCardHtml,
   renderPublicSharePageHtml,
   type ShareImageCache,
   type ShareImageRenderer,
@@ -188,19 +187,13 @@ function expectPublicPageImageMetadata(html: string) {
 }
 
 describe("share image and public share routes", () => {
-  it("returns deterministic standalone HTML from /share/render/:shareId", async () => {
+  it("redirects /share/render/:shareId to the frontend render route", async () => {
     const { db, app } = createDbBackedApp();
-    const { shareId } = await createCardJson<{ shareId: string }>(app, { DB: db });
-    const res = await app.request(`https://share.example/share/render/${shareId}`, {}, { DB: db });
-    const html = await res.text();
-    expect(res.status).toBe(200);
-    expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(res.headers.get("content-type")).toContain("text/html");
-    expect(html).toContain('id="share-card-root"');
-    expect(html).toContain("width:1200px");
-    expect(html).toContain("Shared by @alice");
-    expect(html).not.toContain("posthog");
-    expect(html).not.toContain("root\"></div>");
+    const env = { DB: db, ALLOWED_ORIGINS: APP_ORIGIN, APP_BASE_ORIGIN: APP_ORIGIN };
+    const { shareId } = await createCardJson<{ shareId: string }>(app, env);
+    const res = await app.request(`https://share.example/share/render/${shareId}`, {}, env);
+    expect(res.status).toBe(308);
+    expect(res.headers.get("location")).toBe(`${APP_ORIGIN}/share-card-render/${shareId}`);
   });
 
   it("returns public unfurl metadata from /s/:shareId with absolute image URLs", async () => {
@@ -294,13 +287,13 @@ describe("share image and public share routes", () => {
     };
     const firstRequest = getCachedOrRenderedShareImage({
       record,
-      renderUrl: "https://worker.example/share/render/share-1",
+      renderUrl: "https://app.example.com/share-card-render/share-1",
       cache,
       renderer,
     });
     const secondRequest = getCachedOrRenderedShareImage({
       record,
-      renderUrl: "https://worker.example/share/render/share-1",
+      renderUrl: "https://app.example.com/share-card-render/share-1",
       cache,
       renderer,
     });
@@ -402,21 +395,6 @@ describe("share image and public share routes", () => {
       shareId: "share-1",
       error: "Unsupported share card renderer version: 2026-05-12",
     });
-  });
-
-  it("keeps long text bounded, preserves blank lines, wraps wide glyphs conservatively, and escapes HTML in rendered card HTML", () => {
-    const html = renderDeterministicShareCardHtml(createRecord({ prompt: `line 1\n\n<tag>${"A".repeat(500)}`, response: `${"漢".repeat(200)}\n${"B".repeat(500)}`, username: `${"漢".repeat(40)}-overflow`, theme: "ultra-wide-theme-label" }));
-    expect(html).toContain('class="text truncate"');
-    expect(html).toContain("line 1");
-    expect(html).toContain("&nbsp;");
-    expect(html).toContain("&lt;tag&gt;");
-    expect(html).not.toContain("<tag>");
-    expect(html).toContain(`${"漢".repeat(16)}...`);
-    expect(html).not.toContain("漢".repeat(18));
-    expect(html).toContain(`${"漢".repeat(14)}...`);
-    expect(html).toContain("ULTRA-WIDE-...");
-    expect(html).not.toContain("ultra-wide-theme-label".toUpperCase());
-    expect(html).toContain("...");
   });
 
   it("truncates public page excerpts on grapheme boundaries", () => {
