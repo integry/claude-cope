@@ -68,8 +68,12 @@ shareCards.post("/", async (c) => {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
-  const shareClaim = typeof body === "object" && body !== null && "shareClaim" in body && typeof body.shareClaim === "string"
-    ? body.shareClaim
+  const bodyRecord = typeof body === "object" && body !== null
+    ? body as Record<string, unknown>
+    : null;
+
+  const shareClaim = typeof bodyRecord?.shareClaim === "string"
+    ? bodyRecord.shareClaim
     : null;
   if (!shareClaim) {
     return c.json({ error: "shareClaim is required" }, 400);
@@ -89,7 +93,7 @@ shareCards.post("/", async (c) => {
     prompt: verifiedClaim.p,
     response: verifiedClaim.r,
     username: verifiedClaim.u,
-    theme: "theme" in body ? body.theme : undefined,
+    theme: bodyRecord?.theme,
   });
   if (!normalized.ok) {
     return c.json({ error: normalized.error }, 400);

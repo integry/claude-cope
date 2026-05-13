@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useState, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
 import { copyBlobToClipboard, copyTextToClipboard, openShareIntent } from "./shareChatUtils";

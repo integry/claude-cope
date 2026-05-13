@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { SHARE_CARD_RENDERER_VERSION } from "@claude-cope/shared/shareCards";
@@ -29,6 +30,10 @@ type AppBindings = {
   SHARE_CARD_BASE_ORIGIN?: string;
   APP_BASE_ORIGIN?: string;
   FREE_ACCOUNT_COOKIE_SECRET?: string;
+};
+
+type AppVariables = {
+  sessionId: string;
 };
 
 const PUBLIC_SHARE_ORIGIN = "https://public.example.com";
@@ -155,7 +160,7 @@ function createTestApp(options: {
   cache?: ShareImageCache;
   logger?: Pick<Console, "error" | "warn">;
 } = {}) {
-  const app = new Hono();
+  const app = new Hono<{ Bindings: AppBindings; Variables: AppVariables }>();
   app.use("*", async (c, next) => {
     c.set("sessionId", TEST_SESSION_ID);
     await next();

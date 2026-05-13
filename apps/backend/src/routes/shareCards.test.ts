@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import {
-  SHARE_CARD_MAX_PROMPT_LENGTH,
   SHARE_CARD_MAX_RESPONSE_LENGTH,
   SHARE_CARD_MAX_THEME_LENGTH,
   SHARE_CARD_MAX_USERNAME_LENGTH,
@@ -36,6 +35,10 @@ type AppBindings = {
   SHARE_CARD_BASE_ORIGIN?: string;
   APP_BASE_ORIGIN?: string;
   FREE_ACCOUNT_COOKIE_SECRET?: string;
+};
+
+type AppVariables = {
+  sessionId: string;
 };
 
 function createShareCardMockDB() {
@@ -115,7 +118,7 @@ function createShareCardMockDB() {
 }
 
 function createTestApp() {
-  const app = new Hono();
+  const app = new Hono<{ Bindings: AppBindings; Variables: AppVariables }>();
   app.use("*", async (c, next) => {
     c.set("sessionId", TEST_SESSION_ID);
     await next();

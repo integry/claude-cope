@@ -248,7 +248,8 @@ function getShareProps(
   };
 }
 
-function OutputBlock({ message, previousMessage, nextMessage: _nextMessage, shareUserMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand, enableShare = true }: { message: Message; previousMessage?: Message; nextMessage?: Message; shareUserMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void; enableShare?: boolean }) {
+function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand, enableShare = true }: { message: Message; previousMessage?: Message; nextMessage?: Message; shareUserMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void; enableShare?: boolean }) {
+  void nextMessage;
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   const { showShareButton, shareClaim, shareSystemMessage, shareUserPrompt } = getShareProps(message, previousMessage, shareUserMessage, enableShare);
   const buddyData = getBuddyRenderData(message);
