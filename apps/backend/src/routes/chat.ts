@@ -146,10 +146,15 @@ function isTutorialBaitPrompt(text: string): boolean {
 }
 
 function hasTutorialLeak(reply: string): boolean {
-  const stripped = reply
-    .replace(/\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g, "")
-    .trim();
+  const stripped = stripSyntheticReplyTags(reply);
   return TUTORIAL_LEAK_RE.test(stripped) || TUTORIAL_TEACHER_RE.test(stripped) || /\n\d+\.\s/.test(stripped);
+}
+
+function stripSyntheticReplyTags(reply: string): string {
+  return reply
+    .replace(/\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export function rewriteTutorialLeakIfNeeded(
@@ -1463,7 +1468,7 @@ chat.post("/", async (c) => {
     const shareClaim = await issueShareCardClaim(c.env, {
       sessionId,
       prompt: latestUserPrompt,
-      response: normalizedContent,
+      response: stripSyntheticReplyTags(normalizedContent),
       username,
     });
     if (shareClaim) {

@@ -260,6 +260,41 @@ describe("POST /api/share-cards", () => {
     expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
   });
 
+  it("does not persist synthetic assistant metadata tags in shared card content", async () => {
+    const app = createTestApp();
+    const { db, getRows } = createShareCardMockDB();
+    const taggedResponse = "Looks bad.\n[SPRINT_PROGRESS: 12]\n[USER_NEXT_MESSAGE: show me the logs]";
+    const shareClaim = await issueShareCardClaim({
+      FREE_ACCOUNT_COOKIE_SECRET: TEST_SHARE_SIGNING_SECRET,
+    }, {
+      sessionId: TEST_SESSION_ID,
+      prompt: "Ship it?",
+      response: taggedResponse
+        .replace(/\[SPRINT_PROGRESS:[^\]]*\]/g, "")
+        .replace(/\[USER_NEXT_MESSAGE:[^\]]*\]/g, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim(),
+      username: "alice",
+    });
+
+    const res = await app.request("https://share.example/api/share-cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shareClaim }),
+    }, { DB: db, FREE_ACCOUNT_COOKIE_SECRET: TEST_SHARE_SIGNING_SECRET });
+
+    expect(res.status).toBe(200);
+    expect(getRows()).toEqual([{
+      id: "share-1",
+      prompt: "Ship it?",
+      response: "Looks bad.",
+      username: "alice",
+      theme: null,
+      renderer_version: SHARE_CARD_RENDERER_VERSION,
+      content_hash: expect.any(String),
+    }]);
+  });
+
   it("keeps distinct prompt and response whitespace snapshots separate", async () => {
     const app = createTestApp();
     const { db, getRowCount } = createShareCardMockDB();
