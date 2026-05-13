@@ -200,7 +200,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     } finally {
       sharingRef.current = false;
     }
-  }, [previewCard, userMessage, systemMessage, username, loadPreviewBlob, addTimeout, closePreview, resetAfterDelay]);
+  }, [previewCard, loadPreviewBlob, addTimeout, closePreview, resetAfterDelay]);
 
   const handleOpenShareTarget = useCallback((platform: "twitter" | "linkedin") => {
     if (!previewCard) return;
@@ -252,7 +252,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     } finally {
       sharingRef.current = false;
     }
-  }, [previewCard, clearTimeouts, loadPreviewBlob, userMessage, systemMessage, username, closePreview, resetAfterDelay]);
+  }, [previewCard, clearTimeouts, loadPreviewBlob, closePreview, resetAfterDelay]);
 
   useEffect(() => {
     if (!previewCard) return;
