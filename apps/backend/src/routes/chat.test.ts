@@ -713,6 +713,15 @@ describe("reply formatting normalizer", () => {
     expect(output).toContain("[BUDDY_SAYS: Agile Snail reminds you to add a retro.]");
     expect(output).not.toContain("](#)");
   });
+
+  it("strips orphan bold markers leaked around prose paragraphs", () => {
+    const input = "You asked for the sidecar? **\n\nIt will expose the pod memory as a REST endpoint. **\n[USER_NEXT_MESSAGE: Show the pod logs]";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("You asked for the sidecar?");
+    expect(output).toContain("It will expose the pod memory as a REST endpoint.");
+    expect(output).not.toContain("**");
+    expect(output).toContain("[USER_NEXT_MESSAGE: Show the pod logs]");
+  });
 });
 
 describe("enterprise cliche guard", () => {

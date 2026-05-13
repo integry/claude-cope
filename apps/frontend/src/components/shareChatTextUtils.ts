@@ -12,6 +12,13 @@ export type TextSegment = {
 // Internal marker for italic text (preserved through the pipeline like ** for bold)
 const ITALIC_MARKER = "\x02";
 
+function stripOrphanEmphasisMarkers(text: string): string {
+  return text
+    .replace(/^[ \t]*(?:\*\*|__)[ \t]*$/gm, "")
+    .replace(/(^|[\s([{'"`])(\*\*|__)(?=\s)/g, "$1")
+    .replace(/(?<=\s)(\*\*|__)(?=$|[\s)\]}'".,!?;:])/g, "");
+}
+
 /**
  * Strips non-bold/italic markdown formatting for plain-text canvas rendering.
  * Preserves bold (**) and italic (converted to \x02) markers for later styled rendering.
@@ -34,6 +41,7 @@ export function stripMarkdownKeepBold(text: string): string {
   s = s.replace(/(\n)(#{1,3}\s+)/g, "\n\n$2");
   s = s.replace(/^#{1,3}\s+/gm, "");
   s = s.replace(/`([^`]+)`/g, "$1");
+  s = stripOrphanEmphasisMarkers(s);
   return s;
 }
 
