@@ -114,7 +114,7 @@ export function createSharePages(deps: SharePageDependencies = {}) {
     const renderer = deps.renderer ?? getDefaultShareImageRenderer(c.env);
     return c.html(renderPublicSharePageHtml(record, {
       ...context,
-      imageUrl: renderer ? context.imageUrl : undefined,
+      pageImageUrl: renderer ? context.pageImageUrl : undefined,
     }), 200, {
       "Cache-Control": "no-store",
     });

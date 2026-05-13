@@ -235,13 +235,13 @@ describe("share image and public share routes", () => {
     expect(html).toContain('href="https://claudecope.com/"');
   });
 
-  it("prefers the request origin ahead of ALLOWED_ORIGINS when no explicit public share origin is configured", async () => {
+  it("prefers the configured allowed origin ahead of the request origin when no explicit public share origin is configured", async () => {
     const { db } = createShareCardMockDB();
     const app = createTestApp();
     const create = await createCard(app, { DB: db, ALLOWED_ORIGINS: "http://localhost:5173,https://staging.example.com" });
     const created = await create.json() as { imageUrl: string; shareUrl: string };
-    expect(created.imageUrl).toBe("https://share.example/api/share-image/share-1");
-    expect(created.shareUrl).toBe("https://share.example/s/share-1");
+    expect(created.imageUrl).toBe("http://localhost:5173/api/share-image/share-1");
+    expect(created.shareUrl).toBe("http://localhost:5173/s/share-1");
   });
 
   it("returns image/png with immutable cache headers and reuses the same cache key on repeated requests", async () => {
