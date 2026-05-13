@@ -68,7 +68,8 @@ describe("ShareButton modal share flow", () => {
         if (override) {
           return override;
         }
-        return new Response(imageBodies.get(url) ?? imageBytes, {
+        const imageBody = imageBodies.get(url) ?? imageBytes;
+        return new Response(new Blob([imageBody], { type: "image/png" }), {
           status: 200,
           headers: { "Content-Type": "image/png" },
         });
