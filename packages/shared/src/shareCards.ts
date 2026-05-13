@@ -1,4 +1,5 @@
 export const SHARE_CARD_RENDERER_VERSION = "2026-05-13";
+export const SHARE_CARD_DEFAULT_ALLOWED_ORIGINS = "https://claudecope.com,http://localhost:5173";
 
 export const SHARE_CARD_MAX_PROMPT_LENGTH = 4_000;
 export const SHARE_CARD_MAX_RESPONSE_LENGTH = 16_000;
@@ -47,6 +48,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function toHex(bytes: ArrayBuffer): string {
   return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export function getAllowedOrigins(raw: string | undefined): string[] {
+  const csv = raw || SHARE_CARD_DEFAULT_ALLOWED_ORIGINS;
+  return csv.split(",").map((value) => value.trim()).filter(Boolean);
 }
 
 export function validateAndNormalizeShareCardInput(input: unknown): ValidationResult {

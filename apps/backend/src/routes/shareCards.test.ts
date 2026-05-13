@@ -179,6 +179,29 @@ describe("POST /api/share-cards", () => {
     expect(getRowCount()).toBe(1);
   });
 
+  it("uses the default allowed frontend origin for shareUrl when ALLOWED_ORIGINS is unset", async () => {
+    const app = createTestApp();
+    const { db } = createShareCardMockDB();
+
+    const res = await app.request("https://api.example.com/api/share-cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Hello",
+        response: "World",
+        username: "alice",
+      }),
+    }, { DB: db });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    await expect(res.json()).resolves.toEqual({
+      shareId: "share-1",
+      imageUrl: "https://api.example.com/api/share-cards/share-1/image",
+      shareUrl: "https://claudecope.com/share/share-1",
+    });
+  });
+
   it("keeps distinct prompt and response whitespace snapshots separate", async () => {
     const app = createTestApp();
     const { db, getRowCount } = createShareCardMockDB();
@@ -229,6 +252,74 @@ describe("POST /api/share-cards", () => {
     expect(image.status).toBe(200);
     expect(image.headers.get("content-type")).toContain("image/svg+xml");
     await expect(image.text()).resolves.toContain("Shared by @alice");
+  });
+
+  it("renders exact-fit wrapped text without adding an ellipsis", async () => {
+    const app = createTestApp();
+    const { db } = createShareCardMockDB();
+
+    const create = await app.request("https://share.example/api/share-cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "p".repeat(48 * 4),
+        response: "r".repeat(52 * 6),
+        username: "alice",
+      }),
+    }, { DB: db });
+
+    const body = await create.json() as { imageUrl: string };
+    const image = await app.request(body.imageUrl, {}, { DB: db });
+    const svg = await image.text();
+
+    expect(svg).toContain(`>${"p".repeat(48)}</text>`);
+    expect(svg).not.toContain(`>${"p".repeat(47)}\u2026</text>`);
+    expect(svg).toContain(`>${"r".repeat(52)}</text>`);
+    expect(svg).not.toContain(`>${"r".repeat(51)}\u2026</text>`);
+  });
+
+  it("renders overflow text with an ellipsis on the last visible line", async () => {
+    const app = createTestApp();
+    const { db } = createShareCardMockDB();
+
+    const create = await app.request("https://share.example/api/share-cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "p".repeat(48 * 4 + 1),
+        response: "r".repeat(52 * 6 + 1),
+        username: "alice",
+      }),
+    }, { DB: db });
+
+    const body = await create.json() as { imageUrl: string };
+    const image = await app.request(body.imageUrl, {}, { DB: db });
+    const svg = await image.text();
+
+    expect(svg).toContain(`>${"p".repeat(47)}\u2026</text>`);
+    expect(svg).toContain(`>${"r".repeat(51)}\u2026</text>`);
+  });
+
+  it("preserves embedded blank lines when rendering the image", async () => {
+    const app = createTestApp();
+    const { db } = createShareCardMockDB();
+
+    const create = await app.request("https://share.example/api/share-cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "alpha\n\nomega",
+        response: "first\n\nthird",
+        username: "alice",
+      }),
+    }, { DB: db });
+
+    const body = await create.json() as { imageUrl: string };
+    const image = await app.request(body.imageUrl, {}, { DB: db });
+    const svg = await image.text();
+
+    expect(svg).toContain(">alpha</text><text x=\"72\" y=\"230\" class=\"body\"></text><text x=\"72\" y=\"264\" class=\"body\">omega</text>");
+    expect(svg).toContain(">first</text><text x=\"72\" y=\"450\" class=\"body\"></text><text x=\"72\" y=\"482\" class=\"body\">third</text>");
   });
 
   it("rejects invalid payloads with 400", async () => {

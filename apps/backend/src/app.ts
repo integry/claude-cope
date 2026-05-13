@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
+import { getAllowedOrigins } from "@claude-cope/shared/shareCards";
 import { rateLimiter } from "./middleware/rateLimiter";
 import { botProtection } from "./middleware/botProtection";
 import { sessionMiddleware } from "./middleware/session";
@@ -18,12 +19,6 @@ import shareCards from "./routes/shareCards";
 import webhooks from "./routes/webhooks";
 
 const app = new Hono();
-const DEFAULT_ALLOWED_ORIGINS = "https://claudecope.com,http://localhost:5173";
-
-function getAllowedOrigins(env: Record<string, string | undefined>): string[] {
-  const csv = env.ALLOWED_ORIGINS || DEFAULT_ALLOWED_ORIGINS;
-  return csv.split(",").map((s: string) => s.trim()).filter(Boolean);
-}
 
 function toConnectSrcOrigin(origin: string): string | undefined {
   try {
@@ -39,7 +34,7 @@ function toConnectSrcOrigin(origin: string): string | undefined {
 
 app.use("*", (c, next) => {
   const env = c.env as Record<string, string | undefined>;
-  const origins = getAllowedOrigins(env);
+  const origins = getAllowedOrigins(env.ALLOWED_ORIGINS);
   const connectSrc: string[] = ["'self'", "https://openrouter.ai", "https://challenges.cloudflare.com", "https://us.i.posthog.com", "https://us-assets.i.posthog.com", "https://eu.i.posthog.com", "https://eu-assets.i.posthog.com", "https://*.supabase.co", "wss:", "ws:"];
   for (const origin of origins) {
     const connectOrigin = toConnectSrcOrigin(origin);
@@ -61,7 +56,7 @@ app.use("*", (c, next) => {
 
 app.use("*", (c, next) => {
   const env = c.env as Record<string, string | undefined>;
-  const allowed = getAllowedOrigins(env);
+  const allowed = getAllowedOrigins(env.ALLOWED_ORIGINS);
   return cors({
     origin: (origin) => {
       if (!origin || allowed.includes(origin)) return origin;
@@ -73,7 +68,7 @@ app.use("*", (c, next) => {
 
 app.use("/api/*", (c, next) => {
   const env = c.env as Record<string, string | undefined>;
-  const allowed = getAllowedOrigins(env);
+  const allowed = getAllowedOrigins(env.ALLOWED_ORIGINS);
   return csrf({ origin: allowed })(c, next);
 });
 

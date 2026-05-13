@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   computeShareCardContentHash,
+  getAllowedOrigins,
   validateAndNormalizeShareCardInput,
 } from "@claude-cope/shared/shareCards";
 
@@ -24,10 +25,6 @@ type SharedCardImageRow = {
 };
 
 const shareCards = new Hono<Env>();
-
-function getAllowedOrigins(raw: string | undefined): string[] {
-  return (raw ?? "").split(",").map((value) => value.trim()).filter(Boolean);
-}
 
 function getSharePageOrigin(requestUrl: string, allowedOrigins: string[]) {
   const primaryAllowedOrigin = allowedOrigins[0];
@@ -65,7 +62,12 @@ function wrapText(value: string, maxLineLength: number, maxLines: number): strin
   const lines: string[] = [];
   let truncated = false;
 
-  for (const rawLine of rawLines) {
+  for (const [index, rawLine] of rawLines.entries()) {
+    if (lines.length === maxLines) {
+      truncated = true;
+      break;
+    }
+
     if (!rawLine) {
       lines.push("");
     } else {
@@ -85,7 +87,8 @@ function wrapText(value: string, maxLineLength: number, maxLines: number): strin
       }
       lines.push(remaining);
     }
-    if (lines.length >= maxLines) {
+
+    if (lines.length === maxLines && index < rawLines.length - 1) {
       truncated = true;
       break;
     }
@@ -221,7 +224,11 @@ shareCards.post("/", async (c) => {
     return c.json({ error: "Failed to persist share card" }, 500);
   }
 
-  return c.json(buildShareCardUrls(c.req.url, getAllowedOrigins(c.env.ALLOWED_ORIGINS), row.id));
+  return c.json(
+    buildShareCardUrls(c.req.url, getAllowedOrigins(c.env.ALLOWED_ORIGINS), row.id),
+    200,
+    { "Cache-Control": "no-store" },
+  );
 });
 
 export default shareCards;
