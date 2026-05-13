@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import ShareCard from "./ShareCard";
+import ShareCardRenderSurface from "./ShareCardRenderSurface";
 import { getShareCard, type ShareCardRecord } from "../api/shareCards";
 
 function getShareIdFromPath(pathname: string): string | null {
@@ -46,11 +46,10 @@ export default function ShareCardRenderPage() {
 
   return (
     <div className="min-h-screen bg-[#0d1117] flex items-center justify-center p-0">
-      <ShareCard
+      <ShareCardRenderSurface
         prompt={record.prompt}
         response={record.response}
         username={record.username}
-        theme={record.theme}
       />
     </div>
   );
