@@ -23,8 +23,11 @@ describe("ShareButton modal share flow", () => {
   }));
 
   const imageBytes = new TextEncoder().encode("server-image");
-  const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer =>
-    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
+    const buffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(buffer).set(bytes);
+    return buffer;
+  };
   const shareCardResponse = {
     shareId: "share-123",
     imageUrl: "https://claudecope.com/api/share-image/share-123",
