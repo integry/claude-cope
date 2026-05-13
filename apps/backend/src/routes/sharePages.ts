@@ -1,6 +1,10 @@
 import { type Context, Hono } from "hono";
 import {
   buildShareImageRouteContext,
+  type ShareImageBindings,
+  type ShareImageCache,
+  type ShareImageLogger,
+  type ShareImageRenderer,
   getCachedOrRenderedShareImage,
   getDefaultShareImageCache,
   getDefaultShareImageRenderer,
@@ -9,12 +13,9 @@ import {
   logShareImageFailure,
   renderDeterministicShareCardHtml,
   renderPublicSharePageHtml,
-  type ShareImageBindings,
-  type ShareImageCache,
-  type ShareImageLogger,
-  type ShareImageRenderer,
   unsupportedShareCardRendererVersionError,
 } from "../utils/shareImages";
+import { escapeHtml } from "../utils/shareTextLayout";
 
 type Env = {
   Bindings: ShareImageBindings;
@@ -27,7 +28,7 @@ type SharePageDependencies = {
 };
 
 function renderSharePageErrorHtml(title: string, detail: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title><style>:root{color-scheme:light;font-family:Georgia,"Times New Roman",serif;background:linear-gradient(180deg,#f5f1e8 0%,#ebe2d1 100%);color:#1b2631}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}.page{width:min(100%,680px);padding:32px;border-radius:28px;background:rgba(255,252,246,.94);box-shadow:0 28px 80px rgba(27,38,49,.14);border:1px solid rgba(27,38,49,.08)}.eyebrow{margin:0 0 10px;font:700 12px/1.2 "Courier New",Courier,monospace;letter-spacing:.16em;text-transform:uppercase;color:#114b5f}h1{margin:0 0 12px;font-size:clamp(30px,4vw,40px);line-height:1.05}p{margin:0;font-size:18px;line-height:1.5}</style></head><body><main class="page"><p class="eyebrow">Claude Cope share</p><h1>${title}</h1><p>${detail}</p></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><style>:root{color-scheme:light;font-family:Georgia,"Times New Roman",serif;background:linear-gradient(180deg,#f5f1e8 0%,#ebe2d1 100%);color:#1b2631}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}.page{width:min(100%,680px);padding:32px;border-radius:28px;background:rgba(255,252,246,.94);box-shadow:0 28px 80px rgba(27,38,49,.14);border:1px solid rgba(27,38,49,.08)}.eyebrow{margin:0 0 10px;font:700 12px/1.2 "Courier New",Courier,monospace;letter-spacing:.16em;text-transform:uppercase;color:#114b5f}h1{margin:0 0 12px;font-size:clamp(30px,4vw,40px);line-height:1.05}p{margin:0;font-size:18px;line-height:1.5}</style></head><body><main class="page"><p class="eyebrow">Claude Cope share</p><h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></main></body></html>`;
 }
 
 export function createSharePages(deps: SharePageDependencies = {}) {
@@ -113,7 +114,7 @@ export function createSharePages(deps: SharePageDependencies = {}) {
     const renderer = deps.renderer ?? getDefaultShareImageRenderer(c.env);
     return c.html(renderPublicSharePageHtml(record, {
       ...context,
-      pageImageUrl: renderer ? context.pageImageUrl : undefined,
+      imageUrl: renderer ? context.imageUrl : undefined,
     }), 200, {
       "Cache-Control": "no-store",
     });
