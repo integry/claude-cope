@@ -7,6 +7,13 @@ function getShareIdFromPath(pathname: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
+function getShareIdFromLocation(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  const queryShareId = params.get("sid");
+  if (queryShareId) return queryShareId;
+  return getShareIdFromPath(window.location.pathname);
+}
+
 function getInlineRecord(search: string, shareId: string): ShareCardRecord | null {
   const params = new URLSearchParams(search);
   const prompt = params.get("p");
@@ -25,7 +32,7 @@ function getInlineRecord(search: string, shareId: string): ShareCardRecord | nul
 }
 
 export default function ShareCardRenderPage() {
-  const initialShareId = getShareIdFromPath(window.location.pathname);
+  const initialShareId = getShareIdFromLocation();
   const [record, setRecord] = useState<ShareCardRecord | null>(() => {
     if (!initialShareId) return null;
     return getInlineRecord(window.location.search, initialShareId);
@@ -33,7 +40,7 @@ export default function ShareCardRenderPage() {
   const [status, setStatus] = useState<"loading" | "error">("loading");
 
   useEffect(() => {
-    const shareId = getShareIdFromPath(window.location.pathname);
+    const shareId = getShareIdFromLocation();
     if (!shareId) {
       setStatus("error");
       return;

@@ -196,7 +196,8 @@ describe("share image and public share routes", () => {
     expect(location).toBeTruthy();
     const renderUrl = new URL(location!);
     expect(renderUrl.origin).toBe(APP_ORIGIN);
-    expect(renderUrl.pathname).toBe(`/share-card-render/${shareId}`);
+    expect(renderUrl.pathname).toBe("/share-card-render.html");
+    expect(renderUrl.searchParams.get("sid")).toBe(shareId);
     expect(renderUrl.searchParams.get("p")).toBe("Ship it");
     expect(renderUrl.searchParams.get("r")).toBe("Looks good.");
     expect(renderUrl.searchParams.get("u")).toBe("alice");

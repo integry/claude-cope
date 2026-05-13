@@ -254,7 +254,8 @@ export function buildShareImageRouteContext(
 ) {
   const urls = buildPublicShareUrls(requestUrl, env, record.id);
   const appOrigin = getPrimaryAppOrigin(env);
-  const renderUrl = new URL(`/share-card-render/${record.id}`, appOrigin);
+  const renderUrl = new URL("/share-card-render.html", appOrigin);
+  renderUrl.searchParams.set("sid", record.id);
   renderUrl.searchParams.set("p", record.prompt);
   renderUrl.searchParams.set("r", record.response);
   renderUrl.searchParams.set("u", record.username);
