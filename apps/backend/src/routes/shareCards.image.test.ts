@@ -36,6 +36,8 @@ type AppVariables = {
   sessionId: string;
 };
 
+type TestApp = Hono<{ Bindings: AppBindings; Variables: AppVariables }>;
+
 const PUBLIC_SHARE_ORIGIN = "https://public.example.com";
 const APP_ORIGIN = "https://app.example.com";
 const STAGING_ALLOWED_ORIGINS = "http://localhost:5173,https://staging.example.com";
@@ -174,11 +176,11 @@ function createDbBackedApp(options?: Parameters<typeof createTestApp>[0]) {
   return { ...createShareCardMockDB(), app: createTestApp(options) };
 }
 
-async function createCard(app: Hono, env: AppBindings, body?: Record<string, unknown>) {
+async function createCard(app: TestApp, env: AppBindings, body?: Record<string, unknown>) {
   return createCardAtUrl(app, "https://share.example/api/share-cards", env, body);
 }
 
-async function createCardAtUrl(app: Hono, requestUrl: string, env: AppBindings, body?: Record<string, unknown>) {
+async function createCardAtUrl(app: TestApp, requestUrl: string, env: AppBindings, body?: Record<string, unknown>) {
   const prompt = typeof body?.prompt === "string" ? body.prompt : "Ship it";
   const response = typeof body?.response === "string" ? body.response : "Looks good.";
   const username = typeof body?.username === "string" ? body.username : "alice";
@@ -197,7 +199,7 @@ async function createCardAtUrl(app: Hono, requestUrl: string, env: AppBindings, 
   }, { ...env, FREE_ACCOUNT_COOKIE_SECRET: env.FREE_ACCOUNT_COOKIE_SECRET ?? TEST_SHARE_SIGNING_SECRET });
 }
 
-async function createCardJson<T>(app: Hono, env: AppBindings, body?: Record<string, unknown>) {
+async function createCardJson<T>(app: TestApp, env: AppBindings, body?: Record<string, unknown>) {
   const response = await createCard(app, env, body);
   return response.json() as Promise<T>;
 }

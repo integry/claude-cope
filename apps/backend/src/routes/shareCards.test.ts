@@ -41,6 +41,8 @@ type AppVariables = {
   sessionId: string;
 };
 
+type TestApp = Hono<{ Bindings: AppBindings; Variables: AppVariables }>;
+
 function createShareCardMockDB() {
   const rows = new Map<string, SharedCardRecord>();
   let nextId = 1;
@@ -127,11 +129,11 @@ function createTestApp() {
   return app;
 }
 
-async function postShareCard(app: Hono, payload: ShareCardPayload, env: AppBindings) {
+async function postShareCard(app: TestApp, payload: ShareCardPayload, env: AppBindings) {
   return postShareCardToUrl(app, "https://share.example/api/share-cards", payload, env);
 }
 
-async function postShareCardToUrl(app: Hono, requestUrl: string, payload: ShareCardPayload, env: AppBindings) {
+async function postShareCardToUrl(app: TestApp, requestUrl: string, payload: ShareCardPayload, env: AppBindings) {
   const shareClaim = await issueShareCardClaim({
     FREE_ACCOUNT_COOKIE_SECRET: env.FREE_ACCOUNT_COOKIE_SECRET ?? TEST_SHARE_SIGNING_SECRET,
   }, {
