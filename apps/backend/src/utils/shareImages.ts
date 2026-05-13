@@ -8,8 +8,8 @@ import { escapeHtml, truncateGraphemes } from "./shareTextLayout";
 
 export const SHARE_CARD_ROOT_SELECTOR = "#share-card-root";
 export const SHARE_IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
-export const SHARE_IMAGE_WIDTH = 1200;
-export const SHARE_IMAGE_HEIGHT = 630;
+export const SHARE_IMAGE_VIEWPORT_WIDTH = 900;
+export const SHARE_IMAGE_INITIAL_VIEWPORT_HEIGHT = 800;
 const SHARE_IMAGE_CACHE_ORIGIN = "https://share-image-cache.invalid";
 const inFlightShareImageRenders = new Map<string, Promise<Response>>();
 export type SharedCardRecord = { id: string; prompt: string; response: string; username: string; theme: string | null; renderer_version: string; created_at: string };
@@ -17,6 +17,7 @@ export type ShareImageBindings = { DB?: D1Database; ALLOWED_ORIGINS?: string; SH
 export type ShareImageCache = { match(request: Request | string): Promise<Response | undefined>; put(request: Request | string, response: Response): Promise<unknown> };
 export type ShareImageRenderer = { renderCardPng(input: { renderUrl: string; selector: string; width: number; height: number }): Promise<Uint8Array | ArrayBuffer> };
 export type ShareImageLogger = Pick<Console, "error" | "warn">;
+type ShareCardBounds = { width: number; height: number };
 
 function buildMetaDescription(record: SharedCardRecord): string {
   const summary = `${record.username} shared a Claude Cope exchange. Prompt: ${record.prompt.replace(/\s+/g, " ").trim()} Response: ${record.response.replace(/\s+/g, " ").trim()}`;
@@ -166,6 +167,20 @@ export class CloudflareBrowserShareImageRenderer implements ShareImageRenderer {
         }));
       }, input.selector);
 
+      const rootBounds = await page.$eval(input.selector, (root) => {
+        const { width, height } = root.getBoundingClientRect();
+        return {
+          width: Math.ceil(width),
+          height: Math.ceil(height),
+        };
+      }) as ShareCardBounds;
+
+      await page.setViewport({
+        width: Math.max(input.width, rootBounds.width),
+        height: Math.max(input.height, rootBounds.height),
+        deviceScaleFactor: 1,
+      });
+
       const handle = await page.$(input.selector);
       if (!handle) {
         throw new Error(`Missing card root after wait: ${input.selector}`);
@@ -203,8 +218,8 @@ export async function getCachedOrRenderedShareImage(input: { record: SharedCardR
       const png = await input.renderer.renderCardPng({
         renderUrl: input.renderUrl,
         selector: SHARE_CARD_ROOT_SELECTOR,
-        width: SHARE_IMAGE_WIDTH,
-        height: SHARE_IMAGE_HEIGHT,
+        width: SHARE_IMAGE_VIEWPORT_WIDTH,
+        height: SHARE_IMAGE_INITIAL_VIEWPORT_HEIGHT,
       });
       const bytes = png instanceof Uint8Array ? png : new Uint8Array(png);
       const pngBuffer = new Uint8Array(bytes).buffer;
