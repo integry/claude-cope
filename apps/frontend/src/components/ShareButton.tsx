@@ -162,10 +162,18 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     const token = mountTokenRef.current;
     const sessionId = previewSessionRef.current;
 
-    setStatus("generating");
-    setFeedback("Copying image to clipboard...");
-
     try {
+      if (platform === "linkedin") {
+        setStatus("idle");
+        setFeedback(null);
+        setPasteHint({ platform });
+        addTimeout(() => setPasteHint(null), 30000);
+        return;
+      }
+
+      setStatus("generating");
+      setFeedback("Copying image to clipboard...");
+
       const previewBlob = await loadPreviewBlob(previewCard.imageUrl);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
       const imageCopied = await copyBlobToClipboard(previewBlob);
@@ -227,9 +235,10 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     try {
       const previewBlob = await loadPreviewBlob(previewCard.imageUrl);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
-      closePreview();
 
       const imageCopied = await copyBlobToClipboard(previewBlob);
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      closePreview();
       if (imageCopied) {
         setStatus("copied");
         setFeedback("Image copied to clipboard!");
@@ -238,6 +247,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       }
 
       const textCopied = await copyTextToClipboard(previewCard.shareUrl);
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
       if (textCopied) {
         setStatus("copied");
         setFeedback("Share link copied to clipboard (image copy not supported in this browser).");

@@ -186,6 +186,9 @@ describe("ShareButton modal share flow", () => {
 
     expect(container.textContent).toContain("LINKEDIN WILL SHARE THE PUBLIC LINK DIRECTLY");
     expect(container.textContent).not.toContain("PRESS CTRL + V");
+    expect(fetchMock).not.toHaveBeenCalledWith(shareCardResponse.imageUrl, { cache: "no-store" });
+    expect(mockClipboard.write).not.toHaveBeenCalled();
+    expect(mockClipboard.writeText).not.toHaveBeenCalled();
 
     const mockOpen = vi.spyOn(window, "open").mockImplementation(() => null);
     const openTabBtn = getButtonByLabel("OPEN LINKEDIN TAB");
@@ -201,6 +204,24 @@ describe("ShareButton modal share flow", () => {
       "noopener,noreferrer",
     );
     mockOpen.mockRestore();
+  });
+
+  it("keeps the LinkedIn offsite-share action available when image clipboard copy is unsupported", async () => {
+    renderComponent();
+    await openPreview();
+
+    // @ts-expect-error - simulate browsers without ClipboardItem support
+    globalThis.ClipboardItem = undefined;
+    mockClipboard.write.mockRejectedValueOnce(new Error("Not supported"));
+
+    await clickShareButton("SHARE ON LINKEDIN");
+
+    expect(container.textContent).toContain("LINKEDIN WILL SHARE THE PUBLIC LINK DIRECTLY");
+    expect(container.textContent).not.toContain("image copy not supported");
+    expect(getButtonByLabel("OPEN LINKEDIN TAB")).not.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalledWith(shareCardResponse.imageUrl, { cache: "no-store" });
+    expect(mockClipboard.write).not.toHaveBeenCalled();
+    expect(mockClipboard.writeText).not.toHaveBeenCalled();
   });
 
   it("guards against overlapping preview creation from repeated clicks", async () => {
@@ -352,6 +373,46 @@ describe("ShareButton modal share flow", () => {
       await firstDeferredImage.promise;
       await Promise.resolve();
     });
+  });
+
+  it("ignores stale COPY IMAGE completions after the user closes and reopens share", async () => {
+    renderComponent();
+    await openPreview();
+
+    const deferredClipboardWrite = createDeferred<void>();
+    mockClipboard.write.mockImplementationOnce(() => deferredClipboardWrite.promise);
+
+    const copyImageButton = getButtonByLabel("COPY IMAGE");
+    expect(copyImageButton).not.toBeNull();
+
+    await act(async () => {
+      copyImageButton!.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Copying image to clipboard");
+
+    const closeButton = getButtonByLabel("[x]");
+    expect(closeButton).not.toBeNull();
+    await act(async () => {
+      closeButton!.click();
+    });
+
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+    expect(container.querySelector("button")?.textContent).toBe("[share]");
+
+    await openPreview();
+    expect(container.querySelector("[role='dialog']")).not.toBeNull();
+
+    deferredClipboardWrite.resolve();
+    await act(async () => {
+      await deferredClipboardWrite.promise;
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector("[role='dialog']")).not.toBeNull();
+    expect(container.textContent).not.toContain("Image copied to clipboard!");
+    expect(container.textContent).not.toContain("Share link copied to clipboard");
   });
 
   it("copies the backend PNG when COPY IMAGE is selected", async () => {
