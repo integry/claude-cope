@@ -28,7 +28,11 @@ function normalizeLineEndings(value: string): string {
   return value.replace(/\r\n?/g, "\n");
 }
 
-function normalizeRequiredText(value: string): string {
+function normalizePreservedText(value: string): string {
+  return normalizeLineEndings(value);
+}
+
+function normalizeTrimmedRequiredText(value: string): string {
   return normalizeLineEndings(value).trim();
 }
 
@@ -63,15 +67,15 @@ export function validateAndNormalizeShareCardInput(input: unknown): ValidationRe
     return { ok: false, error: "theme must be a string when provided" };
   }
 
-  const prompt = normalizeRequiredText(input.prompt);
-  const response = normalizeRequiredText(input.response);
-  const username = normalizeRequiredText(input.username);
+  const prompt = normalizePreservedText(input.prompt);
+  const response = normalizePreservedText(input.response);
+  const username = normalizeTrimmedRequiredText(input.username);
   const theme = input.theme === undefined ? undefined : normalizeOptionalText(input.theme);
 
-  if (!prompt) {
+  if (!prompt.trim()) {
     return { ok: false, error: "prompt must be a non-empty string" };
   }
-  if (!response) {
+  if (!response.trim()) {
     return { ok: false, error: "response must be a non-empty string" };
   }
   if (!username) {
