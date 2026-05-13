@@ -11,7 +11,6 @@ import {
   hasSupportedShareCardRendererVersion,
   loadShareCardRecord,
   logShareImageFailure,
-  renderDeterministicShareCardHtml,
   renderPublicSharePageHtml,
   unsupportedShareCardRendererVersionError,
 } from "../utils/shareImages";
