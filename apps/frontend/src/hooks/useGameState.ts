@@ -31,7 +31,7 @@ import {
 import { useScoreSync, useAchievementChecker } from "./useGameEffects";
 
 export type { Message };
-export type { GameState, BuddyState, EconomyState, ActiveTicket, ByokUsage } from "./gameStateUtils";
+export type { GameState, BuddyState, EconomyState, ActiveTicket, ByokUsage, TicketDisplayData } from "./gameStateUtils";
 export { calcBulkCost } from "./gameStateUtils";
 export {
   canBuyTheme,

@@ -62,6 +62,45 @@ describe("filterChatHistory", () => {
     ]);
   });
 
+  it("filters structured dossier and backlog payloads from model context", () => {
+    const history: Message[] = [
+      {
+        role: "system",
+        content: "[ INCOMING TICKET ]\n\nID: BLAME-421",
+        ticketDisplay: {
+          kind: "corporate-dossier",
+          status: "offered",
+          heading: "[ INCOMING TICKET ]",
+          ticketId: "BLAME-421",
+          title: "Rewrite the RCA template",
+          reporter: "Brenda [Platform Governance]",
+          body: "Please fix it.",
+          reward: "1440 TD",
+          footer: ["Type `/accept` to start working on it, or `/backlog` to browse other tickets."],
+        },
+      },
+      {
+        role: "system",
+        content: "[ COMMUNITY BACKLOG ]",
+        backlogDisplay: {
+          kind: "community-backlog",
+          title: "[ COMMUNITY BACKLOG ]",
+          footer: [],
+          tickets: [],
+        },
+      },
+      msg("user", "what is this mess"),
+      msg("system", "Regular assistant reply"),
+    ];
+
+    const result = filterChatHistory(history);
+
+    expect(result).toEqual([
+      { role: "user", content: "what is this mess" },
+      { role: "assistant", content: "Regular assistant reply" },
+    ]);
+  });
+
   it("filters out non-user non-system roles (e.g. warning)", () => {
     const history = [
       msg("user", "hello"),

@@ -12,6 +12,7 @@ vi.mock("../../supabaseClient", () => ({ supabase: {} }));
 vi.mock("../ticketPrompt", () => ({
   getPendingOffer: vi.fn(() => null),
   clearPendingOffer: vi.fn(),
+  buildTicketMessage: vi.fn(),
 }));
 
 import { executeSlashCommand, type SlashCommandContext } from "../slashCommandExecutor";

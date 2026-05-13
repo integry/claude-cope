@@ -185,7 +185,14 @@ describe("premium backlog handling", () => {
     expect(freeSetState).toHaveBeenCalledOnce();
     expect(freeAccept).toHaveBeenCalledOnce();
     expect(freeSuggestedReply).toHaveBeenCalledWith("fix the lint config");
-    expect(freeReply.mock.calls[0]?.[0].content).toContain("[🎫 **TICKET CLAIMED**]");
+    expect(freeReply.mock.calls[0]?.[0].ticketDisplay).toMatchObject({
+      kind: "corporate-dossier",
+      status: "claimed",
+      ticketId: "free-12345",
+      title: "Fix lint config",
+    });
+    expect(freeReply.mock.calls[0]?.[0].content).toContain("[ CORPORATE DOSSIER ]");
+    expect(freeReply.mock.calls[0]?.[0].content).toContain("ID: free-12345");
   });
 
   it("clears cached backlog rows when a later backlog request returns empty", async () => {

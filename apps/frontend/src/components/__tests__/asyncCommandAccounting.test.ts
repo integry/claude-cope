@@ -15,6 +15,7 @@ vi.mock("../ticketPrompt", () => ({
   getPendingOffer: vi.fn(() => null),
   clearPendingOffer: vi.fn(),
   fetchRandomTicketPrompt: vi.fn(),
+  buildTicketMessage: vi.fn(),
 }));
 vi.mock("../ticketCommands", async () => {
   const actual = await vi.importActual<typeof import("../ticketCommands")>("../ticketCommands");

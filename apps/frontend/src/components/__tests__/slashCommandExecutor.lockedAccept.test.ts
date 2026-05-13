@@ -18,6 +18,7 @@ vi.mock("../ticketPrompt", () => ({
   })),
   clearPendingOffer,
   fetchRandomTicketPrompt: vi.fn(),
+  buildTicketMessage: vi.fn(),
 }));
 
 import { handleAcceptCommand, type SlashCommandContext } from "../slashCommandExecutor";
