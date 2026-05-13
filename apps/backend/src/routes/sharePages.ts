@@ -4,6 +4,7 @@ import {
   getCachedOrRenderedShareImage,
   getDefaultShareImageCache,
   getDefaultShareImageRenderer,
+  hasSupportedShareCardRendererVersion,
   loadShareCardRecord,
   logShareImageFailure,
   renderDeterministicShareCardHtml,
@@ -12,6 +13,7 @@ import {
   type ShareImageCache,
   type ShareImageLogger,
   type ShareImageRenderer,
+  unsupportedShareCardRendererVersionError,
 } from "../utils/shareImages";
 
 type Env = {
@@ -28,21 +30,26 @@ export function createSharePages(deps: SharePageDependencies = {}) {
   const sharePages = new Hono<Env>();
   const logger = deps.logger ?? console;
 
-  sharePages.get("/share/render/:shareId", async (c) => {
+  const loadSupportedRecord = async (c: Context<Env>) => {
     const db = c.env?.DB;
-    if (!db) {
-      return c.json({ error: "Database is not configured" }, 500);
-    }
+    if (!db) return { response: c.json({ error: "Database is not configured" }, 500) };
 
     const shareId = c.req.param("shareId");
-    if (!shareId) {
-      return c.json({ error: "Share card not found" }, 404);
-    }
+    if (!shareId) return { response: c.json({ error: "Share card not found" }, 404) };
 
     const record = await loadShareCardRecord(db, shareId);
-    if (!record) {
-      return c.json({ error: "Share card not found" }, 404);
+    if (!record) return { response: c.json({ error: "Share card not found" }, 404) };
+    if (!hasSupportedShareCardRendererVersion(record)) {
+      return { response: c.json({ error: "Unsupported share card renderer version" }, 409), record };
     }
+
+    return { record };
+  };
+
+  sharePages.get("/share/render/:shareId", async (c) => {
+    const loaded = await loadSupportedRecord(c);
+    if ("response" in loaded) return loaded.response;
+    const { record } = loaded;
 
     return c.html(renderDeterministicShareCardHtml(record), 200, {
       "Cache-Control": "no-store",
@@ -50,20 +57,14 @@ export function createSharePages(deps: SharePageDependencies = {}) {
   });
 
   const imageHandler = async (c: Context<Env>) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json({ error: "Database is not configured" }, 500);
+    const loaded = await loadSupportedRecord(c);
+    if ("response" in loaded) {
+      if (loaded.record) {
+        logShareImageFailure(logger, loaded.record.id, unsupportedShareCardRendererVersionError(loaded.record));
+      }
+      return loaded.response;
     }
-
-    const shareId = c.req.param("shareId");
-    if (!shareId) {
-      return c.json({ error: "Share card not found" }, 404);
-    }
-
-    const record = await loadShareCardRecord(db, shareId);
-    if (!record) {
-      return c.json({ error: "Share card not found" }, 404);
-    }
+    const { record } = loaded;
 
     const renderer = deps.renderer ?? getDefaultShareImageRenderer(c.env);
     if (!renderer) {
@@ -88,23 +89,11 @@ export function createSharePages(deps: SharePageDependencies = {}) {
   };
 
   sharePages.get("/api/share-image/:shareId", imageHandler);
-  sharePages.get("/api/share-cards/:shareId/image", imageHandler);
 
   sharePages.get("/s/:shareId", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json({ error: "Database is not configured" }, 500);
-    }
-
-    const shareId = c.req.param("shareId");
-    if (!shareId) {
-      return c.json({ error: "Share card not found" }, 404);
-    }
-
-    const record = await loadShareCardRecord(db, shareId);
-    if (!record) {
-      return c.json({ error: "Share card not found" }, 404);
-    }
+    const loaded = await loadSupportedRecord(c);
+    if ("response" in loaded) return loaded.response;
+    const { record } = loaded;
 
     const context = buildShareImageRouteContext(c.req.url, c.env, record);
     return c.html(renderPublicSharePageHtml(record, context), 200, {

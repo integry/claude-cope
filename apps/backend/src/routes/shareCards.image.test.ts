@@ -3,7 +3,13 @@ import { Hono } from "hono";
 import { SHARE_CARD_RENDERER_VERSION } from "@claude-cope/shared/shareCards";
 import shareCards from "./shareCards";
 import { createSharePages } from "./sharePages";
-import type { ShareImageCache, ShareImageRenderer } from "../utils/shareImages";
+import {
+  buildShareImageCacheKey,
+  renderDeterministicShareCardHtml,
+  renderPublicSharePageHtml,
+  type ShareImageCache,
+  type ShareImageRenderer,
+} from "../utils/shareImages";
 
 type SharedCardRecord = {
   id: string;
@@ -97,7 +103,13 @@ function createShareCardMockDB() {
     },
   } as unknown as D1Database;
 
-  return { db, getRows: () => Array.from(rows.values()) };
+  return {
+    db,
+    getRows: () => Array.from(rows.values()),
+    insertRow: (row: SharedCardRecord) => {
+      rows.set(row.content_hash, row);
+    },
+  };
 }
 
 function createMemoryCache() {
@@ -117,6 +129,20 @@ function createMemoryCache() {
     },
   };
   return { cache, seenKeys };
+}
+
+function createRecord(overrides: Partial<SharedCardRecord> = {}): SharedCardRecord {
+  return {
+    id: "share-1",
+    prompt: "Ship it",
+    response: "Looks good.",
+    username: "alice",
+    theme: null,
+    renderer_version: SHARE_CARD_RENDERER_VERSION,
+    content_hash: "hash-1",
+    created_at: "2026-05-13 12:26:00",
+    ...overrides,
+  };
 }
 
 function createTestApp(options: {
@@ -152,7 +178,7 @@ describe("share image and public share routes", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(res.headers.get("content-type")).toContain("text/html");
     expect(html).toContain('id="share-card-root"');
-    expect(html).toContain("width: 1200px");
+    expect(html).toContain("width:1200px");
     expect(html).toContain("Shared by @alice");
     expect(html).not.toContain("posthog");
     expect(html).not.toContain("root\"></div>");
@@ -205,7 +231,16 @@ describe("share image and public share routes", () => {
     expect(firstBytes).toEqual(new Uint8Array([137, 80, 78, 71]));
     expect(secondBytes).toEqual(new Uint8Array([137, 80, 78, 71]));
     expect(renderer.renderCardPng).toHaveBeenCalledTimes(1);
-    expect(seenKeys.filter((key) => key.includes(`/__share-image-cache/${SHARE_CARD_RENDERER_VERSION}/share-1.png`)).length).toBeGreaterThanOrEqual(2);
+    expect(seenKeys).toContain(`https://share-image-cache.invalid/__share-image-cache/${SHARE_CARD_RENDERER_VERSION}/share-1.png`);
+  });
+
+  it("uses the same cache key across different request origins", () => {
+    const record = createRecord();
+    const workersDevKey = buildShareImageCacheKey(record);
+    const customDomainKey = buildShareImageCacheKey({ ...record });
+
+    expect(workersDevKey.url).toBe(`https://share-image-cache.invalid/__share-image-cache/${SHARE_CARD_RENDERER_VERSION}/share-1.png`);
+    expect(customDomainKey.url).toBe(workersDevKey.url);
   });
 
   it("returns explicit 500 responses and logs shareId-scoped context on renderer failures", async () => {
@@ -242,5 +277,69 @@ describe("share image and public share routes", () => {
     await expect(imageRes.json()).resolves.toEqual({ error: "Share card not found" });
     expect(pageRes.status).toBe(404);
     await expect(pageRes.json()).resolves.toEqual({ error: "Share card not found" });
+  });
+
+  it("rejects persisted rows with unsupported renderer_version", async () => {
+    const { db, insertRow } = createShareCardMockDB();
+    const logger = { error: vi.fn(), warn: vi.fn() };
+    const app = createTestApp({ logger });
+    insertRow(createRecord({
+      renderer_version: "2026-05-12",
+      content_hash: "hash-legacy",
+    }));
+
+    const renderRes = await app.request("https://share.example/share/render/share-1", {}, { DB: db });
+    const imageRes = await app.request("https://share.example/api/share-image/share-1", {}, { DB: db });
+    const pageRes = await app.request("https://share.example/s/share-1", {}, { DB: db });
+
+    expect(renderRes.status).toBe(409);
+    await expect(renderRes.json()).resolves.toEqual({ error: "Unsupported share card renderer version" });
+    expect(imageRes.status).toBe(409);
+    await expect(imageRes.json()).resolves.toEqual({ error: "Unsupported share card renderer version" });
+    expect(pageRes.status).toBe(409);
+    await expect(pageRes.json()).resolves.toEqual({ error: "Unsupported share card renderer version" });
+    expect(logger.error).toHaveBeenCalledWith("share image rendering failed", {
+      shareId: "share-1",
+      error: "Unsupported share card renderer version: 2026-05-12",
+    });
+  });
+
+  it("keeps long text bounded, preserves blank lines and escapes HTML in rendered card HTML", () => {
+    const html = renderDeterministicShareCardHtml(createRecord({
+      prompt: `line 1\n\n<tag>${"A".repeat(500)}`,
+      response: `emoji ${"🙂".repeat(40)}\n${"B".repeat(500)}`,
+    }));
+
+    expect(html).toContain('class="text truncate"');
+    expect(html).toContain("line 1");
+    expect(html).toContain("&nbsp;");
+    expect(html).toContain("&lt;tag&gt;");
+    expect(html).not.toContain("<tag>");
+    expect(html).toContain("🙂");
+    expect(html).toContain("...");
+  });
+
+  it("truncates public page excerpts on grapheme boundaries", () => {
+    const descriptionHtml = renderPublicSharePageHtml(createRecord({
+      prompt: `${"🙂".repeat(180)}x`,
+      response: `${"🚀".repeat(220)}y`,
+    }), {
+      imageUrl: "https://public.example.com/api/share-image/share-1",
+      shareUrl: "https://public.example.com/s/share-1",
+      appUrl: "https://app.example.com/",
+    });
+
+    expect(descriptionHtml).toContain(`${"🙂".repeat(177)}...`);
+    expect(descriptionHtml).toContain(`${"🚀".repeat(217)}...`);
+  });
+
+  it("keeps the legacy image path as a redirect from the shareCards router", async () => {
+    const app = new Hono();
+    app.route("/api/share-cards", shareCards);
+
+    const res = await app.request("https://share.example/api/share-cards/share-1/image");
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("https://share.example/api/share-image/share-1");
   });
 });
