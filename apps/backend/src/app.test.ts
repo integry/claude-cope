@@ -225,7 +225,7 @@ describe("app", () => {
       expect(res.headers.get("retry-after")).toBeTruthy();
     });
 
-    it("does not require write protections for public image fetches", async () => {
+    it("does not require write protections for legacy public image URLs", async () => {
       const res = await app.request(
         "/api/share-cards/share-1/image",
         {
@@ -237,10 +237,8 @@ describe("app", () => {
         },
       );
 
-      expect(res.status).toBe(500);
-      await expect(res.json()).resolves.toEqual({
-        error: "Database is not configured",
-      });
+      expect(res.status).toBe(308);
+      expect(res.headers.get("location")).toBe("http://localhost/api/share-image/share-1");
     });
   });
 

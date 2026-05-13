@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { SHARE_CARD_RENDERER_VERSION } from "@claude-cope/shared/shareCards";
 import shareCards from "./shareCards";
+import { createSharePages } from "./sharePages";
+import {
+  buildShareImageCacheKey,
+  renderDeterministicShareCardHtml,
+  renderPublicSharePageHtml,
+  type ShareImageCache,
+  type ShareImageRenderer,
+} from "../utils/shareImages";
 
 type SharedCardRecord = {
   id: string;
@@ -11,13 +19,21 @@ type SharedCardRecord = {
   theme: string | null;
   renderer_version: string;
   content_hash: string;
+  created_at: string;
 };
 
 type AppBindings = {
   DB?: D1Database;
   ALLOWED_ORIGINS?: string;
   SHARE_CARD_BASE_ORIGIN?: string;
+  APP_BASE_ORIGIN?: string;
 };
+
+const PUBLIC_SHARE_ORIGIN = "https://public.example.com";
+const APP_ORIGIN = "https://app.example.com";
+const STAGING_ALLOWED_ORIGINS = "http://localhost:5173,https://staging.example.com";
+const PUBLIC_IMAGE_URL = `${PUBLIC_SHARE_ORIGIN}/api/share-image/share-1`;
+const PAGE_IMAGE_FRAGMENT = '<img src="https://share.example/api/share-image/share-1"';
 
 function createShareCardMockDB() {
   const rows = new Map<string, SharedCardRecord>();
@@ -33,8 +49,7 @@ function createShareCardMockDB() {
                 const row = rows.get(String(args[0]));
                 return (row ? { id: row.id } : null) as T | null;
               }
-
-              if (upper === "SELECT ID, PROMPT, RESPONSE, USERNAME, THEME, RENDERER_VERSION FROM SHARED_CARDS WHERE ID = ?") {
+              if (upper === "SELECT ID, PROMPT, RESPONSE, USERNAME, THEME, RENDERER_VERSION, CREATED_AT FROM SHARED_CARDS WHERE ID = ?") {
                 const row = Array.from(rows.values()).find((value) => value.id === String(args[0]));
                 return row
                   ? {
@@ -44,10 +59,10 @@ function createShareCardMockDB() {
                     username: row.username,
                     theme: row.theme,
                     renderer_version: row.renderer_version,
+                    created_at: row.created_at,
                   } as T
                   : null;
               }
-
               throw new Error(`Unsupported first SQL in test mock: ${sql}`);
             },
             async all<T = unknown>() {
@@ -64,7 +79,6 @@ function createShareCardMockDB() {
                   string,
                   string,
                 ];
-
                 if (!rows.has(contentHash)) {
                   rows.set(contentHash, {
                     id: `share-${nextId++}`,
@@ -74,12 +88,11 @@ function createShareCardMockDB() {
                     theme,
                     renderer_version: rendererVersion,
                     content_hash: contentHash,
+                    created_at: "2026-05-13 12:26:00",
                   });
                 }
-
                 return { success: true };
               }
-
               if (upper.includes("SCHEMA_MIGRATIONS")) return { success: true };
               throw new Error(`Unsupported bound run SQL in test mock: ${sql}`);
             },
@@ -97,13 +110,55 @@ function createShareCardMockDB() {
     },
   } as unknown as D1Database;
 
-  return { db, getRows: () => Array.from(rows.values()) };
+  return { db, insertRow: (row: SharedCardRecord) => rows.set(row.content_hash, row) };
 }
 
-function createTestApp() {
+function createMemoryCache() {
+  const store = new Map<string, Response>();
+  const seenKeys: string[] = [];
+  const cache: ShareImageCache = {
+    async match(request: Request | string) {
+      const key = typeof request === "string" ? request : request.url;
+      seenKeys.push(key);
+      const response = store.get(key);
+      return response ? response.clone() : undefined;
+    },
+    async put(request: Request | string, response: Response) {
+      const key = typeof request === "string" ? request : request.url;
+      seenKeys.push(key);
+      store.set(key, response.clone());
+    },
+  };
+  return { cache, seenKeys };
+}
+
+function createRecord(overrides: Partial<SharedCardRecord> = {}): SharedCardRecord {
+  return {
+    id: "share-1",
+    prompt: "Ship it",
+    response: "Looks good.",
+    username: "alice",
+    theme: null,
+    renderer_version: SHARE_CARD_RENDERER_VERSION,
+    content_hash: "hash-1",
+    created_at: "2026-05-13 12:26:00",
+    ...overrides,
+  };
+}
+
+function createTestApp(options: {
+  renderer?: ShareImageRenderer;
+  cache?: ShareImageCache;
+  logger?: Pick<Console, "error" | "warn">;
+} = {}) {
   const app = new Hono();
   app.route("/api/share-cards", shareCards);
+  app.route("/", createSharePages(options));
   return app;
+}
+
+function createDbBackedApp(options?: Parameters<typeof createTestApp>[0]) {
+  return { ...createShareCardMockDB(), app: createTestApp(options) };
 }
 
 async function createCard(app: Hono, env: AppBindings, body?: Record<string, unknown>) {
@@ -114,85 +169,230 @@ async function createCard(app: Hono, env: AppBindings, body?: Record<string, unk
   }, env);
 }
 
-describe("GET /api/share-cards/:id/image", () => {
-  it("returns 404 when the share card does not exist", async () => {
-    const app = createTestApp();
-    const { db } = createShareCardMockDB();
+async function createCardJson<T>(app: Hono, env: AppBindings, body?: Record<string, unknown>) {
+  const response = await createCard(app, env, body);
+  return response.json() as Promise<T>;
+}
 
-    const res = await app.request("https://share.example/api/share-cards/missing/image", {}, { DB: db });
+function expectPublicPageImageMetadata(html: string) {
+  for (const fragment of [
+    PAGE_IMAGE_FRAGMENT,
+    `<meta property="og:image" content="${PUBLIC_IMAGE_URL}">`,
+    `<meta name="twitter:image" content="${PUBLIC_IMAGE_URL}">`,
+    '<meta name="twitter:card" content="summary_large_image">',
+  ]) {
+    expect(html).toContain(fragment);
+  }
+}
 
-    expect(res.status).toBe(404);
-    await expect(res.json()).resolves.toEqual({ error: "Share card not found" });
+describe("share image and public share routes", () => {
+  it("returns deterministic standalone HTML from /share/render/:shareId", async () => {
+    const { db, app } = createDbBackedApp();
+    const { shareId } = await createCardJson<{ shareId: string }>(app, { DB: db });
+    const res = await app.request(`https://share.example/share/render/${shareId}`, {}, { DB: db });
+    const html = await res.text();
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(html).toContain('id="share-card-root"');
+    expect(html).toContain("width:1200px");
+    expect(html).toContain("Shared by @alice");
+    expect(html).not.toContain("posthog");
+    expect(html).not.toContain("root\"></div>");
   });
 
-  it("returns 500 when the database binding is missing for image requests", async () => {
-    const app = createTestApp();
-
-    const res = await app.request("https://share.example/api/share-cards/share-1/image");
-
-    expect(res.status).toBe(500);
-    await expect(res.json()).resolves.toEqual({ error: "Database is not configured" });
+  it("returns public unfurl metadata from /s/:shareId with absolute image URLs", async () => {
+    const { db, app } = createDbBackedApp();
+    const env = {
+      DB: db,
+      SHARE_CARD_BASE_ORIGIN: PUBLIC_SHARE_ORIGIN,
+      ALLOWED_ORIGINS: APP_ORIGIN,
+      APP_BASE_ORIGIN: APP_ORIGIN,
+    };
+    const { shareId } = await createCardJson<{ shareId: string }>(app, env);
+    const res = await app.request(`https://share.example/s/${shareId}`, {}, env);
+    const html = await res.text();
+    expect(res.status).toBe(200);
+    expectPublicPageImageMetadata(html);
+    expect(html).toContain(`href="${APP_ORIGIN}/"`);
   });
 
-  it("returns 500 when the database binding is missing for create requests", async () => {
-    const app = createTestApp();
-
-    const res = await createCard(app, {});
-
-    expect(res.status).toBe(500);
-    await expect(res.json()).resolves.toEqual({ error: "Database is not configured" });
+  it.each([
+    {
+      name: "uses APP_BASE_ORIGIN for the share-page CTA when multiple allowed origins exist",
+      env: {
+        SHARE_CARD_BASE_ORIGIN: PUBLIC_SHARE_ORIGIN,
+        ALLOWED_ORIGINS: STAGING_ALLOWED_ORIGINS,
+        APP_BASE_ORIGIN: "https://claudecope.com",
+      },
+      expectedHref: 'href="https://claudecope.com/"',
+    },
+    {
+      name: "prefers a non-local allowed origin for the share-page CTA when APP_BASE_ORIGIN is unset",
+      env: {
+        SHARE_CARD_BASE_ORIGIN: PUBLIC_SHARE_ORIGIN,
+        ALLOWED_ORIGINS: STAGING_ALLOWED_ORIGINS,
+      },
+      expectedHref: 'href="https://staging.example.com/"',
+    },
+  ])("$name", async ({ env, expectedHref }) => {
+    const { db, app } = createDbBackedApp();
+    const requestEnv = { DB: db, ...env };
+    const { shareId } = await createCardJson<{ shareId: string }>(app, requestEnv);
+    const res = await app.request(`https://worker.example/s/${shareId}`, {}, requestEnv);
+    expect(res.status).toBe(200);
+    await expect(res.text()).resolves.toContain(expectedHref);
   });
 
-  it("rejects persisted cards with an unsupported renderer version", async () => {
-    const app = createTestApp();
-    const { db, getRows } = createShareCardMockDB();
-    const create = await createCard(app, { DB: db });
-    const { imageUrl } = await create.json() as { imageUrl: string };
-    getRows()[0]!.renderer_version = "2025-01-01";
+  it("prefers ALLOWED_ORIGINS for public share URLs when no explicit public share origin is configured", async () => {
+    const { db, app } = createDbBackedApp();
+    const created = await createCardJson<{ imageUrl: string; shareUrl: string }>(app, {
+      DB: db,
+      ALLOWED_ORIGINS: STAGING_ALLOWED_ORIGINS,
+    });
+    expect(created.imageUrl).toBe("https://staging.example.com/api/share-image/share-1");
+    expect(created.shareUrl).toBe("https://staging.example.com/s/share-1");
+  });
 
+  it("returns image/png with immutable cache headers and reuses the same cache key on repeated requests", async () => {
+    const { cache, seenKeys } = createMemoryCache();
+    const renderer: ShareImageRenderer = {
+      renderCardPng: vi.fn().mockResolvedValue(new Uint8Array([137, 80, 78, 71])),
+    };
+    const { db, app } = createDbBackedApp({ renderer, cache });
+    const { shareId, imageUrl } = await createCardJson<{ shareId: string; imageUrl: string }>(app, { DB: db });
+    const first = await app.request(imageUrl, {}, { DB: db });
+    const second = await app.request(imageUrl, {}, { DB: db });
+    const firstBytes = new Uint8Array(await first.arrayBuffer());
+    const secondBytes = new Uint8Array(await second.arrayBuffer());
+    expect(shareId).toBe("share-1");
+    expect(first.status).toBe(200);
+    expect(first.headers.get("content-type")).toBe("image/png");
+    expect(first.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    expect(second.status).toBe(200);
+    expect(firstBytes).toEqual(new Uint8Array([137, 80, 78, 71]));
+    expect(secondBytes).toEqual(new Uint8Array([137, 80, 78, 71]));
+    expect(renderer.renderCardPng).toHaveBeenCalledTimes(1);
+    expect(seenKeys).toContain(`https://share-image-cache.invalid/__share-image-cache/${SHARE_CARD_RENDERER_VERSION}/share-1.png`);
+  });
+
+  it("uses the same cache key across different request origins", () => {
+    const record = createRecord();
+    const workersDevKey = buildShareImageCacheKey(record);
+    const customDomainKey = buildShareImageCacheKey({ ...record });
+    expect(workersDevKey.url).toBe(`https://share-image-cache.invalid/__share-image-cache/${SHARE_CARD_RENDERER_VERSION}/share-1.png`);
+    expect(customDomainKey.url).toBe(workersDevKey.url);
+  });
+
+  it("returns explicit 500 responses and logs shareId-scoped context on renderer failures", async () => {
+    const logger = { error: vi.fn(), warn: vi.fn() };
+    const renderer: ShareImageRenderer = {
+      renderCardPng: vi.fn().mockRejectedValue(new Error("browser crashed")),
+    };
+    const { db, app } = createDbBackedApp({ renderer, logger });
+    const { imageUrl } = await createCardJson<{ imageUrl: string }>(app, { DB: db });
     const res = await app.request(imageUrl, {}, { DB: db });
-
     expect(res.status).toBe(500);
-    await expect(res.json()).resolves.toEqual({
-      error: "Unsupported share card renderer version: 2025-01-01",
+    await expect(res.json()).resolves.toEqual({ error: "Failed to render share image" });
+    expect(logger.error).toHaveBeenCalledWith("share image rendering failed", {
+      shareId: "share-1",
+      error: "browser crashed",
+    });
+  });
+  it("returns 503 from the image route while leaving the public page metadata stable when browser rendering is unavailable", async () => {
+    const logger = { error: vi.fn(), warn: vi.fn() };
+    const { db, app } = createDbBackedApp({ logger });
+    const env = { DB: db, SHARE_CARD_BASE_ORIGIN: PUBLIC_SHARE_ORIGIN, APP_BASE_ORIGIN: APP_ORIGIN };
+    const { imageUrl, shareId } = await createCardJson<{ imageUrl: string; shareId: string }>(app, env);
+    const imageRes = await app.request(imageUrl, {}, { DB: db });
+    const pageRes = await app.request(`https://share.example/s/${shareId}`, {}, env);
+    const pageHtml = await pageRes.text();
+    expect(imageRes.status).toBe(503);
+    await expect(imageRes.json()).resolves.toEqual({ error: "Browser rendering is not configured" });
+    expect(pageRes.status).toBe(200);
+    expectPublicPageImageMetadata(pageHtml);
+    expect(logger.error).toHaveBeenCalledWith("share image rendering failed", {
+      shareId: "share-1",
+      error: "Browser rendering binding is not configured",
+    });
+  });
+  it("keeps image metadata and inline images on the public page when rendering fails", async () => {
+    const logger = { error: vi.fn(), warn: vi.fn() };
+    const renderer: ShareImageRenderer = { renderCardPng: vi.fn().mockRejectedValue(new Error("browser crashed")) };
+    const { db, app } = createDbBackedApp({ renderer, logger });
+    const env = { DB: db, SHARE_CARD_BASE_ORIGIN: PUBLIC_SHARE_ORIGIN, APP_BASE_ORIGIN: APP_ORIGIN };
+    const { shareId } = await createCardJson<{ shareId: string }>(app, env);
+    const pageRes = await app.request(`https://share.example/s/${shareId}`, {}, env);
+    const pageHtml = await pageRes.text();
+    expect(pageRes.status).toBe(200);
+    expectPublicPageImageMetadata(pageHtml);
+    expect(logger.error).not.toHaveBeenCalledWith("share image rendering failed", {
+      shareId: "share-1",
+      error: "browser crashed",
+    });
+  });
+  it("returns 404 for unknown share IDs across the public routes", async () => {
+    const { db, app } = createDbBackedApp();
+    for (const path of ["/share/render/missing", "/api/share-image/missing"]) {
+      const response = await app.request(`https://share.example${path}`, {}, { DB: db });
+      expect(response.status).toBe(404);
+      await expect(response.json()).resolves.toEqual({ error: "Share card not found" });
+    }
+    const pageRes = await app.request("https://share.example/s/missing", {}, { DB: db });
+    expect(pageRes.status).toBe(404);
+    expect(pageRes.headers.get("content-type")).toContain("text/html");
+    await expect(pageRes.text()).resolves.toContain("Share not found");
+  });
+  it("rejects persisted rows with unsupported renderer_version", async () => {
+    const logger = { error: vi.fn(), warn: vi.fn() };
+    const { db, insertRow, app } = createDbBackedApp({ logger });
+    insertRow(createRecord({ renderer_version: "2026-05-12", content_hash: "hash-legacy" }));
+    for (const path of ["/share/render/share-1", "/api/share-image/share-1"]) {
+      const response = await app.request(`https://share.example${path}`, {}, { DB: db });
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toEqual({ error: "Unsupported share card renderer version" });
+    }
+    const pageRes = await app.request("https://share.example/s/share-1", {}, { DB: db });
+    expect(pageRes.status).toBe(409);
+    expect(pageRes.headers.get("content-type")).toContain("text/html");
+    await expect(pageRes.text()).resolves.toContain("Share unavailable");
+    expect(logger.error).toHaveBeenCalledWith("share image rendering failed", {
+      shareId: "share-1",
+      error: "Unsupported share card renderer version: 2026-05-12",
     });
   });
 
-  it("truncates long usernames and themes before rendering them", async () => {
-    const app = createTestApp();
-    const { db } = createShareCardMockDB();
-    const username = "u".repeat(64);
-    const theme = "sunset".repeat(10);
-    const create = await createCard(app, { DB: db }, {
-      prompt: "Ship it",
-      response: "Looks good.",
-      username,
-      theme,
-    });
-    const { imageUrl } = await create.json() as { imageUrl: string };
-
-    const svg = await (await app.request(imageUrl, {}, { DB: db })).text();
-
-    expect(svg).toContain("Shared by @");
-    expect(svg).toContain("\u2026");
-    expect(svg).not.toContain(`Shared by @${username}`);
-    expect(svg).not.toContain(theme.toUpperCase());
+  it("keeps long text bounded, preserves blank lines, wraps wide glyphs conservatively, and escapes HTML in rendered card HTML", () => {
+    const html = renderDeterministicShareCardHtml(createRecord({ prompt: `line 1\n\n<tag>${"A".repeat(500)}`, response: `${"漢".repeat(200)}\n${"B".repeat(500)}`, username: `${"漢".repeat(40)}-overflow`, theme: "ultra-wide-theme-label" }));
+    expect(html).toContain('class="text truncate"');
+    expect(html).toContain("line 1");
+    expect(html).toContain("&nbsp;");
+    expect(html).toContain("&lt;tag&gt;");
+    expect(html).not.toContain("<tag>");
+    expect(html).toContain(`${"漢".repeat(16)}...`);
+    expect(html).not.toContain("漢".repeat(18));
+    expect(html).toContain(`${"漢".repeat(14)}...`);
+    expect(html).toContain("ULTRA-WIDE-...");
+    expect(html).not.toContain("ultra-wide-theme-label".toUpperCase());
+    expect(html).toContain("...");
   });
 
-  it("wraps wide glyphs more conservatively than ASCII text", async () => {
-    const app = createTestApp();
-    const { db } = createShareCardMockDB();
-    const create = await createCard(app, { DB: db }, {
-      prompt: "漢".repeat(25),
-      response: "Looks good.",
-      username: "alice",
-      theme: SHARE_CARD_RENDERER_VERSION,
+  it("truncates public page excerpts on grapheme boundaries", () => {
+    const descriptionHtml = renderPublicSharePageHtml(createRecord({ prompt: `${"🙂".repeat(180)}x`, response: `${"🚀".repeat(220)}y` }), {
+      imageUrl: "https://public.example.com/api/share-image/share-1",
+      pageImageUrl: "https://share.example/api/share-image/share-1",
+      shareUrl: "https://public.example.com/s/share-1",
+      appUrl: "https://app.example.com/",
     });
-    const { imageUrl } = await create.json() as { imageUrl: string };
+    expect(descriptionHtml).toContain(`${"🙂".repeat(177)}...`);
+    expect(descriptionHtml).toContain(`${"🚀".repeat(217)}...`);
+  });
 
-    const svg = await (await app.request(imageUrl, {}, { DB: db })).text();
-
-    expect(svg).toContain(`>${"漢".repeat(24)}</text>`);
-    expect(svg).toContain(">漢</text>");
+  it("keeps the legacy image path as a redirect from the shareCards router", async () => {
+    const app = new Hono();
+    app.route("/api/share-cards", shareCards);
+    const res = await app.request("https://share.example/api/share-cards/share-1/image");
+    expect(res.status).toBe(308);
+    expect(res.headers.get("location")).toBe("https://share.example/api/share-image/share-1");
   });
 });
