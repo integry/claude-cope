@@ -29,6 +29,21 @@ type SharedCardRecord = {
 
 const shareCards = new Hono<Env>();
 
+function prewarmShareImage(url: string, ctx: { waitUntil?: (promise: Promise<unknown>) => void } | undefined) {
+  if (!ctx?.waitUntil) return;
+  ctx.waitUntil(
+    fetch(url, { method: "GET" }).catch(() => undefined),
+  );
+}
+
+function getExecutionContext(c: { executionCtx: { waitUntil: (promise: Promise<unknown>) => void } }): { waitUntil: (promise: Promise<unknown>) => void } | undefined {
+  try {
+    return c.executionCtx;
+  } catch {
+    return undefined;
+  }
+}
+
 shareCards.get("/:id/image", (c) => {
   const location = new URL(`/api/share-image/${c.req.param("id")}`, c.req.url).toString();
   return c.redirect(location, 308);
@@ -77,8 +92,11 @@ shareCards.post("/", async (c) => {
     return c.json({ error: "Failed to persist share card" }, 500);
   }
 
+  const urls = buildPublicShareUrls(c.req.url, c.env, row.id);
+  prewarmShareImage(urls.imageUrl, getExecutionContext(c));
+
   return c.json(
-    buildPublicShareUrls(c.req.url, c.env, row.id),
+    urls,
     200,
     { "Cache-Control": "no-store" },
   );

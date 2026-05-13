@@ -4,7 +4,6 @@ import SplashScreen from "./components/SplashScreen";
 import LegalTermsPage from "./components/LegalTermsPage";
 import LegalPrivacyPage from "./components/LegalPrivacyPage";
 import TurnstileWidget from "./components/TurnstileWidget";
-import ShareCardRenderPage from "./components/ShareCardRenderPage";
 import { TURNSTILE_REQUIRED_EVENT } from "./turnstileEvents";
 
 type VerificationPhase = "boot" | "idle" | "required" | "retrying";
@@ -45,7 +44,6 @@ function App() {
   }, []);
 
   const path = window.location.pathname;
-  if (path.startsWith("/share-card-render/")) return <ShareCardRenderPage />;
   if (path === "/legal/terms") return <LegalTermsPage />;
   if (path === "/legal/privacy") return <LegalPrivacyPage />;
   const showSplashScreen = showSplash || (!isHumanVerified && verificationPhase === "boot");

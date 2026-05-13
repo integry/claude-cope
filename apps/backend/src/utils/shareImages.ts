@@ -9,7 +9,7 @@ import { escapeHtml, truncateGraphemes } from "./shareTextLayout";
 export const SHARE_CARD_ROOT_SELECTOR = "#share-card-root";
 export const SHARE_IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 export const SHARE_IMAGE_VIEWPORT_WIDTH = 900;
-export const SHARE_IMAGE_INITIAL_VIEWPORT_HEIGHT = 800;
+export const SHARE_IMAGE_INITIAL_VIEWPORT_HEIGHT = 1600;
 const SHARE_IMAGE_CACHE_ORIGIN = "https://share-image-cache.invalid";
 const inFlightShareImageRenders = new Map<string, Promise<Response>>();
 export type SharedCardRecord = { id: string; prompt: string; response: string; username: string; theme: string | null; renderer_version: string; created_at: string };
@@ -175,15 +175,13 @@ export class CloudflareBrowserShareImageRenderer implements ShareImageRenderer {
         };
       }) as ShareCardBounds;
 
-      await page.setViewport({
-        width: Math.max(input.width, rootBounds.width),
-        height: Math.max(input.height, rootBounds.height),
-        deviceScaleFactor: 1,
-      });
-
       const handle = await page.$(input.selector);
       if (!handle) {
         throw new Error(`Missing card root after wait: ${input.selector}`);
+      }
+
+      if (rootBounds.width > input.width || rootBounds.height > input.height) {
+        throw new Error(`Share card exceeded screenshot viewport (${rootBounds.width}x${rootBounds.height})`);
       }
 
       const screenshot = await handle.screenshot({ type: "png" });
@@ -256,10 +254,17 @@ export function buildShareImageRouteContext(
 ) {
   const urls = buildPublicShareUrls(requestUrl, env, record.id);
   const appOrigin = getPrimaryAppOrigin(env);
+  const renderUrl = new URL(`/share-card-render/${record.id}`, appOrigin);
+  renderUrl.searchParams.set("p", record.prompt);
+  renderUrl.searchParams.set("r", record.response);
+  renderUrl.searchParams.set("u", record.username);
+  if (record.theme) {
+    renderUrl.searchParams.set("t", record.theme);
+  }
   return {
     ...urls,
     pageImageUrl: new URL(`/api/share-image/${record.id}`, requestUrl).toString(),
-    renderUrl: new URL(`/share-card-render/${record.id}`, appOrigin).toString(),
+    renderUrl: renderUrl.toString(),
     appUrl: new URL("/", appOrigin).toString(),
   };
 }

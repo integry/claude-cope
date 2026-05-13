@@ -227,21 +227,32 @@ function CostDisplay({ cost }: { cost: number }) {
 }
 
 
-function getShareProps(message: Message, previousMessage?: Message, nextMessage?: Message, enableShare = true): { showShareButton: boolean; shareSystemMessage: string } {
-  const isSlashCommandResponse = previousMessage?.role === "user" && previousMessage.content.startsWith("/");
-  const showShareButton = enableShare && message.role === "system" && previousMessage?.role === "user" && !isSlashCommandResponse;
+function getShareProps(
+  message: Message,
+  previousMessage?: Message,
+  nextMessage?: Message,
+  shareUserMessage?: Message,
+  enableShare = true,
+): { showShareButton: boolean; shareSystemMessage: string; shareUserPrompt: string } {
+  const userTurn = shareUserMessage?.role === "user"
+    ? shareUserMessage
+    : previousMessage?.role === "user"
+      ? previousMessage
+      : undefined;
+  const isSlashCommandResponse = userTurn?.content.startsWith("/") ?? false;
+  const showShareButton = enableShare && message.role === "system" && Boolean(userTurn) && !isSlashCommandResponse;
   const shareSystemMessage = showShareButton && nextMessage?.role === "warning"
     ? nextMessage.content + "\n\n" + message.content
     : message.content;
-  return { showShareButton, shareSystemMessage };
+  return { showShareButton, shareSystemMessage, shareUserPrompt: userTurn?.content ?? "" };
 }
 
-function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand, enableShare = true }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void; enableShare?: boolean }) {
+function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand, enableShare = true }: { message: Message; previousMessage?: Message; nextMessage?: Message; shareUserMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void; enableShare?: boolean }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
-  const { showShareButton, shareSystemMessage } = getShareProps(message, previousMessage, nextMessage, enableShare);
+  const { showShareButton, shareSystemMessage, shareUserPrompt } = getShareProps(message, previousMessage, nextMessage, shareUserMessage, enableShare);
   const buddyData = getBuddyRenderData(message);
   const shareNode = showShareButton ? (
-    <ShareButton userMessage={previousMessage!.content} systemMessage={shareSystemMessage} username={username} />
+    <ShareButton userMessage={shareUserPrompt} systemMessage={shareSystemMessage} username={username} />
   ) : undefined;
 
   return (
@@ -288,6 +299,7 @@ function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps
   if (prev.promptString !== next.promptString) return false;
   if (!messagesEqual(prev.previousMessage, next.previousMessage)) return false;
   if (!messagesEqual(prev.nextMessage, next.nextMessage)) return false;
+  if (!messagesEqual(prev.shareUserMessage, next.shareUserMessage)) return false;
   if (prev.username !== next.username) return false;
   if (prev.onSlashCommand !== next.onSlashCommand) return false;
   if (prev.enableShare !== next.enableShare) return false;

@@ -192,7 +192,14 @@ describe("share image and public share routes", () => {
     const { shareId } = await createCardJson<{ shareId: string }>(app, env);
     const res = await app.request(`https://share.example/share/render/${shareId}`, {}, env);
     expect(res.status).toBe(308);
-    expect(res.headers.get("location")).toBe(`${APP_ORIGIN}/share-card-render/${shareId}`);
+    const location = res.headers.get("location");
+    expect(location).toBeTruthy();
+    const renderUrl = new URL(location!);
+    expect(renderUrl.origin).toBe(APP_ORIGIN);
+    expect(renderUrl.pathname).toBe(`/share-card-render/${shareId}`);
+    expect(renderUrl.searchParams.get("p")).toBe("Ship it");
+    expect(renderUrl.searchParams.get("r")).toBe("Looks good.");
+    expect(renderUrl.searchParams.get("u")).toBe("alice");
   });
 
   it("returns public unfurl metadata from /s/:shareId with absolute image URLs", async () => {

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
 import { copyBlobToClipboard, copyTextToClipboard, openShareIntent } from "./shareChatUtils";
+import ShareCardRenderSurface from "./ShareCardRenderSurface";
 
 type MountToken = { cancelled: boolean };
 type SharePlatform = "twitter" | "linkedin";
@@ -21,8 +22,7 @@ const highlightStyle: CSSProperties = { color: "#ffff55" };
 const actionRowStyle: CSSProperties = { display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" };
 const linkStyle: CSSProperties = { background: "none", border: "none", padding: "8px 0 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", display: "block" };
 const previewFrameStyle: CSSProperties = { display: "flex", justifyContent: "center", alignItems: "flex-start", overflow: "auto", maxWidth: "100%", maxHeight: "calc(100vh - 14rem)" };
-const previewScaleWrapStyle: CSSProperties = { width: "min(100%, 1200px)" };
-const previewImageStyle: CSSProperties = { display: "block", width: "100%", height: "auto" };
+const previewScaleWrapStyle: CSSProperties = { width: "min(100%, 760px)" };
 const modalStatusStyle: CSSProperties = { fontSize: "12px", textAlign: "left" };
 const modalStatusGeneratingStyle: CSSProperties = { ...modalStatusStyle, color: "#ffff55" };
 const modalStatusErrorStyle: CSSProperties = { ...modalStatusStyle, color: "#ff5555" };
@@ -121,6 +121,15 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     }
   }, []);
 
+  const prewarmPreviewImage = useCallback((imageUrl: string) => {
+    if (previewBlobRef.current?.imageUrl === imageUrl || previewBlobRequestRef.current?.imageUrl === imageUrl) {
+      return;
+    }
+    void loadPreviewBlob(imageUrl).catch(() => {
+      // Best-effort warmup only; preview rendering should not fail if prewarm fails.
+    });
+  }, [loadPreviewBlob]);
+
   const handleOpenPreview = useCallback(async () => {
     if (generatingRef.current) return;
     generatingRef.current = true;
@@ -142,6 +151,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
       if (previewBlobRef.current?.imageUrl !== card.imageUrl) previewBlobRef.current = null;
       setPreviewCard(card);
+      prewarmPreviewImage(card.imageUrl);
       setStatus("idle");
       setFeedback(null);
     } catch (error) {
@@ -157,7 +167,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         generatingRef.current = false;
       }
     }
-  }, [userMessage, systemMessage, username, resetAfterDelay]);
+  }, [userMessage, systemMessage, username, resetAfterDelay, prewarmPreviewImage]);
 
   const handleShare = useCallback(async (platform: SharePlatform) => {
     if (!previewCard || sharingRef.current) return;
@@ -340,10 +350,10 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
             <div style={modalBodyStyle}>
               <div style={previewFrameStyle}>
                 <div style={previewScaleWrapStyle}>
-                  <img
-                    src={previewCard.imageUrl}
-                    alt={`Share preview for @${username}`}
-                    style={previewImageStyle}
+                  <ShareCardRenderSurface
+                    prompt={userMessage}
+                    response={systemMessage}
+                    username={username}
                   />
                 </div>
               </div>
