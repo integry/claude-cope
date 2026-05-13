@@ -250,16 +250,18 @@ async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
   });
 }
 
-async function copyImageToClipboard(blob: Blob): Promise<boolean> {
+export async function copyBlobToClipboard(blob: Blob): Promise<boolean> {
+  const ClipboardItemCtor = globalThis.ClipboardItem;
+  if (typeof ClipboardItemCtor === "undefined") return false;
   try {
-    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    await navigator.clipboard.write([new ClipboardItemCtor({ [blob.type || "image/png"]: blob })]);
     return true;
   } catch {
     return false;
   }
 }
 
-async function copyTextToClipboard(text: string): Promise<boolean> {
+export async function copyTextToClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     return true;
@@ -403,7 +405,7 @@ export async function shareChatImage(options: ShareChatOptions): Promise<ShareRe
   }
 
   if (blob) {
-    const imageCopied = await copyImageToClipboard(blob);
+    const imageCopied = await copyBlobToClipboard(blob);
     if (imageCopied) {
       if (openShareUrl && platform) openShareIntent(platform, shareUrl);
       return { success: true, method: "image", message: "Share card image copied to clipboard! Paste it anywhere to share." };

@@ -33,4 +33,26 @@ describe("createShareCard", () => {
       .rejects
       .toThrow("prompt must be a non-empty string");
   });
+
+  it("throws for malformed success responses", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      shareId: "share-1",
+      imageUrl: "https://claudecope.com/api/share-image/share-1",
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })));
+
+    await expect(createShareCard({ prompt: "Hello", response: "World", username: "alice" }))
+      .rejects
+      .toThrow("Invalid share-card response");
+  });
+
+  it("throws a network error when the request fails before a response is received", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("socket hang up")));
+
+    await expect(createShareCard({ prompt: "Hello", response: "World", username: "alice" }))
+      .rejects
+      .toThrow("Network error");
+  });
 });

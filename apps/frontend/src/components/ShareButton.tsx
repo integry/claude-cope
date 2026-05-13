@@ -1,9 +1,12 @@
 import { useState, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
-import { openShareIntent } from "./shareChatUtils";
+import { copyBlobToClipboard, copyTextToClipboard, openShareIntent } from "./shareChatUtils";
 
 type MountToken = { cancelled: boolean };
 type SharePlatform = "twitter" | "linkedin";
+type PasteHintState =
+  | { platform: "twitter"; method: "image" | "link" }
+  | { platform: "linkedin" };
 
 const SPINNER_CHAR = "/";
 const modalStyle: CSSProperties = { fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace", fontSize: "13px", lineHeight: "1.4", backgroundColor: "#1e232b", border: "2px solid #ff5555", boxShadow: "8px 8px 0px rgba(0, 0, 0, 0.9)", maxWidth: "calc(100vw - 2rem)", maxHeight: "calc(100vh - 2rem)", overflow: "auto", color: "#c9d1d9" };
@@ -29,31 +32,11 @@ function isMacPlatform(): boolean {
   return /mac/i.test(navigator.platform || "");
 }
 
-async function copyBlobToClipboard(blob: Blob): Promise<boolean> {
-  const ClipboardItemCtor = globalThis.ClipboardItem;
-  if (typeof ClipboardItemCtor === "undefined") return false;
-  try {
-    await navigator.clipboard.write([new ClipboardItemCtor({ [blob.type || "image/png"]: blob })]);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function copyTextToClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function ShareButton({ userMessage, systemMessage, username }: { userMessage: string; systemMessage: string; username: string }) {
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [previewCard, setPreviewCard] = useState<CreateShareCardResult | null>(null);
-  const [pasteHint, setPasteHint] = useState<{ platform: SharePlatform } | null>(null);
+  const [pasteHint, setPasteHint] = useState<PasteHintState | null>(null);
   const timeoutIds = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const modalRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -151,10 +134,10 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       setPreviewCard(card);
       setStatus("idle");
       setFeedback(null);
-    } catch {
+    } catch (error) {
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
       setStatus("error");
-      setFeedback("Failed to create share preview.");
+      setFeedback(error instanceof Error ? error.message : "Failed to create share preview.");
       resetAfterDelay(3000);
     } finally {
       generatingRef.current = false;
@@ -171,7 +154,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       if (platform === "linkedin") {
         setStatus("idle");
         setFeedback(null);
-        setPasteHint({ platform });
+        setPasteHint({ platform: "linkedin" });
         addTimeout(() => setPasteHint(null), 30000);
         return;
       }
@@ -184,18 +167,17 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       if (imageCopied) {
         setStatus("idle");
         setFeedback(null);
-        setPasteHint({ platform });
+        setPasteHint({ platform: "twitter", method: "image" });
         addTimeout(() => setPasteHint(null), 30000);
         return;
       }
       const textCopied = await copyTextToClipboard(previewCard.shareUrl);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
       if (textCopied) {
-        setPasteHint(null);
-        closePreview({ resetStatus: false });
-        setStatus("copied");
-        setFeedback("Share link copied to clipboard (image copy not supported in this browser).");
-        resetAfterDelay(4000);
+        setStatus("idle");
+        setFeedback(null);
+        setPasteHint({ platform: "twitter", method: "link" });
+        addTimeout(() => setPasteHint(null), 30000);
       } else {
         setPasteHint(null);
         closePreview({ resetStatus: false });
@@ -339,12 +321,21 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
                   <div style={emphasisStyle}>
                     {pasteHint.platform === "twitter" ? (
                       <>
-                        <div>{"> [SYSTEM] IMAGE COPIED TO CLIPBOARD."}</div>
-                        <div>
-                          {"> MANDATORY ACTION: GO TO THE NEW TAB AND PRESS "}
-                          <span style={highlightStyle}>{`[ ${isMacPlatform() ? "CMD" : "CTRL"} + V ]`}</span>
-                          {" TO PASTE."}
-                        </div>
+                        {pasteHint.method === "image" ? (
+                          <>
+                            <div>{"> [SYSTEM] IMAGE COPIED TO CLIPBOARD."}</div>
+                            <div>
+                              {"> MANDATORY ACTION: GO TO THE NEW TAB AND PRESS "}
+                              <span style={highlightStyle}>{`[ ${isMacPlatform() ? "CMD" : "CTRL"} + V ]`}</span>
+                              {" TO PASTE."}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div>{"> [SYSTEM] SHARE LINK COPIED TO CLIPBOARD."}</div>
+                            <div>{"> IMAGE COPY IS NOT SUPPORTED IN THIS BROWSER. OPEN X TO POST THE LINK."}</div>
+                          </>
+                        )}
                       </>
                     ) : (
                       <>

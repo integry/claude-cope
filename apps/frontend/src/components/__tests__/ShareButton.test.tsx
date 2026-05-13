@@ -266,7 +266,42 @@ describe("ShareButton modal share flow", () => {
     await clickShareButton("SHARE ON X");
 
     expect(container.textContent).not.toContain("IMAGE COPIED TO CLIPBOARD");
-    expect(container.textContent).toContain("image copy not supported");
+    expect(container.textContent).toContain("SHARE LINK COPIED TO CLIPBOARD");
+    expect(container.textContent).toContain("IMAGE COPY IS NOT SUPPORTED IN THIS BROWSER");
+    expect(getButtonByLabel("OPEN X TAB")).not.toBeNull();
+
+    const mockOpen = vi.spyOn(window, "open").mockImplementation(() => null);
+    const openTabBtn = getButtonByLabel("OPEN X TAB");
+    expect(openTabBtn).not.toBeNull();
+
+    await act(async () => {
+      openTabBtn!.click();
+    });
+
+    expect(mockOpen).toHaveBeenCalledTimes(1);
+    expect(String(mockOpen.mock.calls[0]?.[0])).toContain("twitter.com/intent/tweet");
+    expect(decodeURIComponent(String(mockOpen.mock.calls[0]?.[0]))).toContain(shareCardResponse.shareUrl);
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+    mockOpen.mockRestore();
+  });
+
+  it("shows backend preview creation errors instead of replacing them with a generic message", async () => {
+    fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({ error: "share service unavailable" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    }));
+
+    renderComponent();
+
+    const shareBtn = container.querySelector("button");
+    expect(shareBtn).not.toBeNull();
+
+    await act(async () => {
+      shareBtn!.click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(container.textContent).toContain("share service unavailable");
   });
 
   it("shows error and resets when image fetch fails during platform share", async () => {
