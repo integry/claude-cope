@@ -41,6 +41,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   const modalRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const previewSessionRef = useRef(0);
+  const previewCreationAbortRef = useRef<AbortController | null>(null);
   const previewBlobRef = useRef<{ imageUrl: string; blob: Blob } | null>(null);
   const previewBlobRequestRef = useRef<{ imageUrl: string; request: Promise<Blob> } | null>(null);
 
@@ -67,6 +68,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   }, []);
 
   useEffect(() => () => { clearTimeouts(); }, [clearTimeouts]);
+  useEffect(() => () => { previewCreationAbortRef.current?.abort(); }, []);
 
   const resetAfterDelay = useCallback((ms: number) => {
     clearTimeouts();
@@ -82,6 +84,9 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
 
   const closePreview = useCallback((options?: { resetStatus?: boolean }) => {
     previewSessionRef.current += 1;
+    previewCreationAbortRef.current?.abort();
+    previewCreationAbortRef.current = null;
+    generatingRef.current = false;
     sharingRef.current = false;
     clearTimeouts();
     setPreviewCard(null);
@@ -98,7 +103,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     const inFlight = previewBlobRequestRef.current;
     if (inFlight && inFlight.imageUrl === imageUrl) return inFlight.request;
     const request = (async () => {
-      const res = await fetch(imageUrl, { cache: "no-store" });
+      const res = await fetch(imageUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       previewBlobRef.current = { imageUrl, blob };
@@ -119,6 +124,8 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     generatingRef.current = true;
     const token = mountTokenRef.current;
     const sessionId = ++previewSessionRef.current;
+    const abortController = new AbortController();
+    previewCreationAbortRef.current = abortController;
     setStatus("generating");
     setFeedback("Creating share preview...");
     setPasteHint(null);
@@ -128,6 +135,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         prompt: userMessage,
         response: systemMessage,
         username,
+        signal: abortController.signal,
       });
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
       if (previewBlobRef.current?.imageUrl !== card.imageUrl) previewBlobRef.current = null;
@@ -140,7 +148,12 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       setFeedback(error instanceof Error ? error.message : "Failed to create share preview.");
       resetAfterDelay(3000);
     } finally {
-      generatingRef.current = false;
+      if (previewCreationAbortRef.current === abortController) {
+        previewCreationAbortRef.current = null;
+      }
+      if (sessionId === previewSessionRef.current) {
+        generatingRef.current = false;
+      }
     }
   }, [userMessage, systemMessage, username, resetAfterDelay]);
 
@@ -217,8 +230,8 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
       const imageCopied = await copyBlobToClipboard(previewBlob);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
-      closePreview();
       if (imageCopied) {
+        closePreview();
         setStatus("copied");
         setFeedback("Image copied to clipboard!");
         resetAfterDelay(3000);
@@ -227,12 +240,14 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       const textCopied = await copyTextToClipboard(previewCard.shareUrl);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
       if (textCopied) {
+        closePreview();
         setStatus("copied");
         setFeedback("Share link copied to clipboard (image copy not supported in this browser).");
         resetAfterDelay(3000);
         return;
       }
 
+      closePreview();
       setStatus("error");
       setFeedback("Failed to copy to clipboard. Please try again or check browser permissions.");
       resetAfterDelay(3000);
@@ -284,7 +299,13 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
 
   const isGenerating = status === "generating";
 
-  if (status !== "idle" && !previewCard) return <span className="inline-flex items-center gap-2 ml-2 text-[11px] font-mono align-baseline">{isGenerating && <span className="text-yellow-400 animate-pulse">{SPINNER_CHAR} {feedback}</span>}{status === "copied" && <span className="text-green-400">{feedback}</span>}{status === "error" && <span className="text-red-400">{feedback}</span>}</span>;
+  if (status !== "idle" && !previewCard) return (
+    <span className="inline-flex items-center gap-2 ml-2 text-[11px] font-mono align-baseline">
+      {isGenerating ? <><span className="text-yellow-400 animate-pulse">{SPINNER_CHAR} {feedback}</span><button onClick={() => closePreview()} className="font-mono text-[11px] text-gray-400 transition-colors hover:text-[#ff5555]">[cancel]</button></> : null}
+      {status === "copied" && <span className="text-green-400">{feedback}</span>}
+      {status === "error" && <span className="text-red-400">{feedback}</span>}
+    </span>
+  );
 
   return (
     <span className="relative ml-2 inline-flex align-baseline">

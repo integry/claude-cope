@@ -16,11 +16,11 @@ describe("createShareCard", () => {
 
     await createShareCard({ prompt: "Hello", response: "World", username: "alice", theme: "amber" });
 
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), {
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt: "Hello", response: "World", username: "alice", theme: "amber" }),
-    });
+    }));
   });
 
   it("throws the backend error message for non-OK responses", async () => {

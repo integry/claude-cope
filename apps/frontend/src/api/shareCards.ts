@@ -5,6 +5,7 @@ export type CreateShareCardInput = {
   response: string;
   username: string;
   theme?: string;
+  signal?: AbortSignal;
 };
 
 export type CreateShareCardResult = {
@@ -14,12 +15,14 @@ export type CreateShareCardResult = {
 };
 
 export async function createShareCard(input: CreateShareCardInput): Promise<CreateShareCardResult> {
+  const { signal, ...payload } = input;
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/api/share-cards`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
+      body: JSON.stringify(payload),
+      signal,
     });
   } catch {
     throw new Error("Network error");

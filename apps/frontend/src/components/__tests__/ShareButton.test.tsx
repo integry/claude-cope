@@ -304,6 +304,46 @@ describe("ShareButton modal share flow", () => {
     expect(container.textContent).toContain("share service unavailable");
   });
 
+  it("lets the user cancel an in-flight preview creation and try again", async () => {
+    const deferredShareCard = createDeferred<Response>();
+    fetchMock.mockImplementationOnce(async () => deferredShareCard.promise);
+
+    renderComponent();
+
+    const shareBtn = container.querySelector("button");
+    expect(shareBtn).not.toBeNull();
+
+    await act(async () => {
+      shareBtn!.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Creating share preview");
+    const cancelButton = getButtonByLabel("cancel");
+    expect(cancelButton).not.toBeNull();
+
+    await act(async () => {
+      cancelButton!.click();
+    });
+
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+    expect(container.querySelector("button")?.textContent).toBe("[share]");
+
+    deferredShareCard.resolve(new Response(JSON.stringify(shareCardResponse), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    await act(async () => {
+      await deferredShareCard.promise;
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+
+    await openPreview();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("shows error and resets when image fetch fails during platform share", async () => {
     renderComponent();
     await openPreview();
@@ -459,9 +499,24 @@ describe("ShareButton modal share flow", () => {
 
     await clickShareButton("COPY IMAGE");
 
-    expect(fetchMock).toHaveBeenCalledWith(shareCardResponse.imageUrl, { cache: "no-store" });
+    expect(fetchMock).toHaveBeenCalledWith(shareCardResponse.imageUrl);
     expect(mockClipboard.write).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("Image copied to clipboard!");
+  });
+
+  it("falls back to copying the share link when COPY IMAGE cannot write an image", async () => {
+    renderComponent();
+    await openPreview();
+
+    mockClipboard.write.mockRejectedValueOnce(new Error("Not supported"));
+    mockClipboard.writeText.mockResolvedValueOnce(undefined);
+
+    await clickShareButton("COPY IMAGE");
+
+    expect(mockClipboard.write).toHaveBeenCalledTimes(1);
+    expect(mockClipboard.writeText).toHaveBeenCalledWith(shareCardResponse.shareUrl);
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+    expect(container.textContent).toContain("Share link copied to clipboard");
   });
 
   it("passes username through to share-card creation", async () => {
