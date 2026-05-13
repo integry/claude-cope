@@ -111,7 +111,7 @@ function logChatDiagnostics(messages: { role: string; content: string }[], data:
   const replyContent = data.choices?.[0]?.message?.content ?? "";
   const hasUserNext = /\[USER_NEXT_MESSAGE:/i.test(replyContent);
   console.log(
-    `[CHAT] user="${lastUserMsg.slice(0, 80)}" | reply=${replyContent.length}c | tag=${hasUserNext ? "✓" : "✗"} | tail="${replyContent.slice(-200).replace(/\n/g, " ")}"`,
+    `[CHAT] user="${lastUserMsg.slice(0, 80)}" | reply=${replyContent.length}c | tag=${hasUserNext ? "✓" : "✗"}\n[CHAT_REPLY_BEGIN]\n${replyContent}\n[CHAT_REPLY_END]`,
   );
 }
 
@@ -439,6 +439,13 @@ function splitReadableParagraphs(text: string): string {
   return `${sentences.slice(0, splitIndex).join(" ")}\n\n${sentences.slice(splitIndex).join(" ")}`;
 }
 
+function stripOrphanEmphasisMarkers(text: string): string {
+  return text
+    .replace(/^[ \t]*(?:\*\*|__)[ \t]*$/gm, "")
+    .replace(/(^|[\s([{'"`])(\*\*|__)(?=\s)/g, "$1")
+    .replace(/(?<=\s)(\*\*|__)(?=$|[\s)\]}'".,!?;:])/g, "");
+}
+
 function normalizeNonCodeSegment(segment: string): string {
   let text = segment;
 
@@ -482,6 +489,7 @@ function normalizeNonCodeSegment(segment: string): string {
 
   // Normalize em/en dash clause breaks into spaced ASCII hyphens for readability.
   text = text.replace(/\s*[—–]\s*/g, " - ");
+  text = stripOrphanEmphasisMarkers(text);
 
   // If numbered options are flattened inline, put them on separate lines.
   text = text.replace(/([^\n])\s+(1\.\s)/g, "$1\n\n$2");

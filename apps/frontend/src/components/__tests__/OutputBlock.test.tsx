@@ -98,4 +98,26 @@ describe("OutputBlock", () => {
     expect(container.textContent).toContain("[Agile Snail]");
     expect(container.textContent).toContain("Remember the backlog.");
   });
+
+  it("strips orphan bold markers leaked by the model", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const content = "You asked for the next step? **\n\nYour latest ok ok left the sprint board with a blank stare. **";
+
+    act(() => {
+      root.render(
+        <OutputBlock
+          message={{ role: "system", content }}
+          promptString=">"
+          username=""
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain("You asked for the next step?");
+    expect(container.textContent).toContain("Your latest ok ok left the sprint board with a blank stare.");
+    expect(container.textContent).not.toContain("**");
+  });
 });
