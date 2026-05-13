@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import {
+  SHARE_CARD_RENDERER_VERSION,
   computeShareCardContentHash,
   getShareCardBaseOrigin,
   validateAndNormalizeShareCardInput,
@@ -23,9 +24,11 @@ type SharedCardImageRow = {
   response: string;
   username: string;
   theme: string | null;
+  renderer_version: string;
 };
 
 const shareCards = new Hono<Env>();
+let baseOriginFallbackWarningLogged = false;
 
 function buildShareCardUrls(requestUrl: string, sharePageOrigin: string, shareId: string) {
   const apiBase = new URL(requestUrl);
@@ -59,7 +62,29 @@ function splitGraphemes(value: string): string[] {
   return Array.from(value);
 }
 
-function wrapText(value: string, maxLineLength: number, maxLines: number): string[] {
+function getGraphemeDisplayWidth(grapheme: string): number {
+  return /^[\x00-\x7F]+$/u.test(grapheme) ? grapheme.length : 2;
+}
+
+function clampTextByDisplayWidth(value: string, maxDisplayWidth: number): string {
+  const graphemes = splitGraphemes(value);
+  let width = 0;
+  let result = "";
+
+  for (const grapheme of graphemes) {
+    const graphemeWidth = getGraphemeDisplayWidth(grapheme);
+    if (width + graphemeWidth > maxDisplayWidth) {
+      return `${result}\u2026`;
+    }
+
+    result += grapheme;
+    width += graphemeWidth;
+  }
+
+  return result;
+}
+
+function wrapText(value: string, maxLineWidth: number, maxLines: number): string[] {
   const rawLines = value.split("\n");
   const lines: string[] = [];
   let truncated = false;
@@ -74,21 +99,48 @@ function wrapText(value: string, maxLineLength: number, maxLines: number): strin
       lines.push("");
     } else {
       const graphemes = splitGraphemes(rawLine);
-      let offset = 0;
-      while (graphemes.length - offset > maxLineLength) {
+      let currentLine = "";
+      let currentWidth = 0;
+
+      for (const grapheme of graphemes) {
+        const graphemeWidth = getGraphemeDisplayWidth(grapheme);
+        if (currentLine && currentWidth + graphemeWidth > maxLineWidth) {
+          if (lines.length === maxLines) {
+            truncated = true;
+            break;
+          }
+          lines.push(currentLine);
+          currentLine = grapheme;
+          currentWidth = graphemeWidth;
+          continue;
+        }
+
+        if (!currentLine && graphemeWidth > maxLineWidth) {
+          if (lines.length === maxLines) {
+            truncated = true;
+            break;
+          }
+          lines.push(grapheme);
+          continue;
+        }
+
+        currentLine += grapheme;
+        currentWidth += graphemeWidth;
+      }
+
+      if (truncated) break;
+      if (currentLine === "" && graphemes.length > 0) {
         if (lines.length === maxLines) {
           truncated = true;
           break;
         }
-        lines.push(graphemes.slice(offset, offset + maxLineLength).join(""));
-        offset += maxLineLength;
+        continue;
       }
-      if (truncated) break;
       if (lines.length === maxLines) {
         truncated = true;
         break;
       }
-      lines.push(graphemes.slice(offset).join(""));
+      lines.push(currentLine);
     }
 
     if (lines.length === maxLines && index < rawLines.length - 1) {
@@ -104,18 +156,19 @@ function wrapText(value: string, maxLineLength: number, maxLines: number): strin
 
   if (truncated && lines.length > 0) {
     const lastIndex = lines.length - 1;
-    lines[lastIndex] = `${splitGraphemes(lines[lastIndex]).slice(0, Math.max(0, maxLineLength - 1)).join("")}\u2026`;
+    lines[lastIndex] = clampTextByDisplayWidth(lines[lastIndex], Math.max(1, maxLineWidth - 1));
   }
 
   return lines;
 }
 
-function buildShareCardImage(row: SharedCardImageRow): string {
+function buildShareCardImageV20260513(row: SharedCardImageRow): string {
   const promptLines = wrapText(row.prompt, 48, 4);
   const responseLines = wrapText(row.response, 52, 6);
-  const themeLabel = row.theme ?? "default";
+  const sharedByLabel = clampTextByDisplayWidth(`Shared by @${row.username}`, 44);
+  const themeLabel = clampTextByDisplayWidth((row.theme ?? "default").toUpperCase(), 18);
   const textLines = [
-    { x: 72, y: 104, className: "eyebrow", value: `Shared by @${row.username}` },
+    { x: 72, y: 104, className: "eyebrow", value: sharedByLabel },
     { x: 72, y: 156, className: "heading", value: "Prompt" },
     ...promptLines.map((value, index) => ({
       x: 72,
@@ -161,6 +214,24 @@ function buildShareCardImage(row: SharedCardImageRow): string {
 </svg>`;
 }
 
+function buildShareCardImage(row: SharedCardImageRow): string | null {
+  switch (row.renderer_version) {
+    case SHARE_CARD_RENDERER_VERSION:
+      return buildShareCardImageV20260513(row);
+    default:
+      return null;
+  }
+}
+
+function getSharePageOrigin(env: Env["Bindings"]): string {
+  if (!env.SHARE_CARD_BASE_ORIGIN && !baseOriginFallbackWarningLogged) {
+    console.warn("SHARE_CARD_BASE_ORIGIN is not configured for share cards; falling back to ALLOWED_ORIGINS/default origin.");
+    baseOriginFallbackWarningLogged = true;
+  }
+
+  return getShareCardBaseOrigin(env.SHARE_CARD_BASE_ORIGIN, env.ALLOWED_ORIGINS);
+}
+
 shareCards.get("/:id/image", async (c) => {
   const db = c.env?.DB;
   if (!db) {
@@ -168,7 +239,7 @@ shareCards.get("/:id/image", async (c) => {
   }
 
   const row = await db
-    .prepare("SELECT id, prompt, response, username, theme FROM shared_cards WHERE id = ?")
+    .prepare("SELECT id, prompt, response, username, theme, renderer_version FROM shared_cards WHERE id = ?")
     .bind(c.req.param("id"))
     .first<SharedCardImageRow>();
 
@@ -176,7 +247,12 @@ shareCards.get("/:id/image", async (c) => {
     return c.json({ error: "Share card not found" }, 404);
   }
 
-  return new Response(buildShareCardImage(row), {
+  const svg = buildShareCardImage(row);
+  if (!svg) {
+    return c.json({ error: `Unsupported share card renderer version: ${row.renderer_version}` }, 500);
+  }
+
+  return new Response(svg, {
     headers: {
       "Content-Type": "image/svg+xml; charset=utf-8",
       "Cache-Control": "public, max-age=31536000, immutable",
@@ -230,7 +306,7 @@ shareCards.post("/", async (c) => {
   return c.json(
     buildShareCardUrls(
       c.req.url,
-      getShareCardBaseOrigin(c.env.SHARE_CARD_BASE_ORIGIN, c.env.ALLOWED_ORIGINS),
+      getSharePageOrigin(c.env),
       row.id,
     ),
     200,

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
@@ -19,6 +20,37 @@ import shareCards from "./routes/shareCards";
 import webhooks from "./routes/webhooks";
 
 const app = new Hono();
+
+function isShareCardCreateRequest(request: Request): boolean {
+  const pathname = new URL(request.url).pathname.replace(/\/+$/, "");
+  return request.method === "POST" && pathname === "/api/share-cards";
+}
+
+const shareCardCreateOnly = (middleware: MiddlewareHandler): MiddlewareHandler => async (c, next) => {
+  if (!isShareCardCreateRequest(c.req.raw)) {
+    return next();
+  }
+
+  return middleware(c, next);
+};
+
+const requireShareCardProtections: MiddlewareHandler = async (c, next) => {
+  const env = c.env as Record<string, unknown>;
+
+  if (!env.RATE_LIMIT_KV) {
+    return c.json({ error: "Share card creation is temporarily unavailable" }, 503);
+  }
+
+  if (!env.TURNSTILE_SECRET_KEY) {
+    return c.json({ error: "Share card creation is temporarily unavailable" }, 503);
+  }
+
+  if (!env.USAGE_KV) {
+    return c.json({ error: "Share card creation is temporarily unavailable" }, 503);
+  }
+
+  return next();
+};
 
 function toConnectSrcOrigin(origin: string): string | undefined {
   try {
@@ -96,8 +128,9 @@ app.use("*", async (c, next) => {
 
 app.use("/api/chat", rateLimiter);
 app.use("/api/chat", botProtection);
-app.use("/api/share-cards", createKvRateLimiter("share-cards:", 20, 60));
-app.use("/api/share-cards", botProtection);
+app.use("/api/share-cards", shareCardCreateOnly(requireShareCardProtections));
+app.use("/api/share-cards", shareCardCreateOnly(createKvRateLimiter("share-cards:", 20, 60)));
+app.use("/api/share-cards", shareCardCreateOnly(botProtection));
 
 app.route("/api/chat", chat);
 app.route("/api/verify", verify);

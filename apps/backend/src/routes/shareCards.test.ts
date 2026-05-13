@@ -46,9 +46,18 @@ function createShareCardMockDB() {
                 const row = rows.get(String(args[0]));
                 return (row ? { id: row.id } : null) as T | null;
               }
-              if (upper === "SELECT ID, PROMPT, RESPONSE, USERNAME, THEME FROM SHARED_CARDS WHERE ID = ?") {
+              if (upper === "SELECT ID, PROMPT, RESPONSE, USERNAME, THEME, RENDERER_VERSION FROM SHARED_CARDS WHERE ID = ?") {
                 const row = Array.from(rows.values()).find((value) => value.id === String(args[0]));
-                return row ? { id: row.id, prompt: row.prompt, response: row.response, username: row.username, theme: row.theme } as T : null;
+                return row
+                  ? {
+                    id: row.id,
+                    prompt: row.prompt,
+                    response: row.response,
+                    username: row.username,
+                    theme: row.theme,
+                    renderer_version: row.renderer_version,
+                  } as T
+                  : null;
               }
               throw new Error(`Unsupported first SQL in test mock: ${sql}`);
             },
@@ -270,18 +279,18 @@ describe("POST /api/share-cards", () => {
     expect(svg).toContain(`>${"r".repeat(51)}\u2026</text>`);
   });
 
-  it("wraps emoji text without splitting grapheme clusters", async () => {
+  it("wraps emoji text conservatively without splitting grapheme clusters", async () => {
     const app = createTestApp();
     const { db } = createShareCardMockDB();
     const emoji = "👨‍👩‍👧‍👦";
     const { svg } = await createAndFetchImage(app, {
-      prompt: emoji.repeat(49),
+      prompt: emoji.repeat(97),
       response: "Looks good.",
       username: "alice",
     }, { DB: db });
 
-    expect(svg).toContain(`>${emoji.repeat(48)}</text>`);
-    expect(svg).toContain(`>${emoji}\u2026</text>`);
+    expect(svg).toContain(`>${emoji.repeat(24)}</text>`);
+    expect(svg).toContain(`>${emoji.repeat(23)}\u2026</text>`);
     expect(svg).not.toContain("\uFFFD");
   });
 

@@ -123,9 +123,53 @@ describe("app", () => {
   });
 
   describe("/api/share-cards protections", () => {
-    it("requires prior human verification when Turnstile is enabled", async () => {
+    it("fails closed when share-card rate limiting is not configured", async () => {
+      const res = await app.request(
+        "/api/share-cards",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" },
+          body: JSON.stringify({ prompt: "p", response: "r", username: "alice" }),
+        },
+        {
+          ALLOWED_ORIGINS: "http://localhost:5173",
+        },
+      );
+
+      expect(res.status).toBe(503);
+      await expect(res.json()).resolves.toEqual({
+        error: "Share card creation is temporarily unavailable",
+      });
+    });
+
+    it("fails closed when Turnstile is not configured", async () => {
+      const res = await app.request(
+        "/api/share-cards",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Origin: "http://localhost:5173", "cf-connecting-ip": "1.2.3.4" },
+          body: JSON.stringify({ prompt: "p", response: "r", username: "alice" }),
+        },
+        {
+          ALLOWED_ORIGINS: "http://localhost:5173",
+          RATE_LIMIT_KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn().mockResolvedValue(undefined) },
+          IP_HASH_PEPPER: "pepper",
+        },
+      );
+
+      expect(res.status).toBe(503);
+      await expect(res.json()).resolves.toEqual({
+        error: "Share card creation is temporarily unavailable",
+      });
+    });
+
+    it("requires prior human verification when protections are configured", async () => {
       const usageKv = {
         get: vi.fn().mockResolvedValue(null),
+      };
+      const rateLimitKv = {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockResolvedValue(undefined),
       };
 
       const res = await app.request(
@@ -137,6 +181,8 @@ describe("app", () => {
         },
         {
           ALLOWED_ORIGINS: "http://localhost:5173",
+          RATE_LIMIT_KV: rateLimitKv,
+          IP_HASH_PEPPER: "pepper",
           TURNSTILE_SECRET_KEY: "secret",
           USAGE_KV: usageKv,
         },
@@ -170,11 +216,31 @@ describe("app", () => {
           ALLOWED_ORIGINS: "http://localhost:5173",
           RATE_LIMIT_KV: rateLimitKv,
           IP_HASH_PEPPER: "pepper",
+          TURNSTILE_SECRET_KEY: "secret",
+          USAGE_KV: { get: vi.fn().mockResolvedValue("1") },
         },
       );
 
       expect(res.status).toBe(429);
       expect(res.headers.get("retry-after")).toBeTruthy();
+    });
+
+    it("does not require write protections for public image fetches", async () => {
+      const res = await app.request(
+        "/api/share-cards/share-1/image",
+        {
+          method: "GET",
+          headers: { Origin: "http://localhost:5173" },
+        },
+        {
+          ALLOWED_ORIGINS: "http://localhost:5173",
+        },
+      );
+
+      expect(res.status).toBe(500);
+      await expect(res.json()).resolves.toEqual({
+        error: "Database is not configured",
+      });
     });
   });
 
