@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { SHARE_CARD_RENDERER_VERSION } from "@claude-cope/shared/shareCards";
@@ -341,17 +342,13 @@ describe("share image and public share routes", () => {
   it("keeps image metadata and inline images on the public page when rendering fails", async () => {
     const { db } = createShareCardMockDB();
     const logger = { error: vi.fn(), warn: vi.fn() };
-    const renderer: ShareImageRenderer = {
-      renderCardPng: vi.fn().mockRejectedValue(new Error("browser crashed")),
-    };
+    const renderer: ShareImageRenderer = { renderCardPng: vi.fn().mockRejectedValue(new Error("browser crashed")) };
     const app = createTestApp({ renderer, logger });
     const env = { DB: db, SHARE_CARD_BASE_ORIGIN: "https://public.example.com", APP_BASE_ORIGIN: "https://app.example.com" };
     const create = await createCard(app, env);
     const { shareId } = await create.json() as { shareId: string };
-
     const pageRes = await app.request(`https://share.example/s/${shareId}`, {}, env);
     const pageHtml = await pageRes.text();
-
     expect(pageRes.status).toBe(200);
     expect(pageHtml).toContain('<img src="https://share.example/api/share-image/share-1"');
     expect(pageHtml).toContain('<meta property="og:image" content="https://public.example.com/api/share-image/share-1">');
@@ -382,15 +379,10 @@ describe("share image and public share routes", () => {
     const { db, insertRow } = createShareCardMockDB();
     const logger = { error: vi.fn(), warn: vi.fn() };
     const app = createTestApp({ logger });
-    insertRow(createRecord({
-      renderer_version: "2026-05-12",
-      content_hash: "hash-legacy",
-    }));
-
+    insertRow(createRecord({ renderer_version: "2026-05-12", content_hash: "hash-legacy" }));
     const renderRes = await app.request("https://share.example/share/render/share-1", {}, { DB: db });
     const imageRes = await app.request("https://share.example/api/share-image/share-1", {}, { DB: db });
     const pageRes = await app.request("https://share.example/s/share-1", {}, { DB: db });
-
     expect(renderRes.status).toBe(409);
     await expect(renderRes.json()).resolves.toEqual({ error: "Unsupported share card renderer version" });
     expect(imageRes.status).toBe(409);
@@ -405,13 +397,7 @@ describe("share image and public share routes", () => {
   });
 
   it("keeps long text bounded, preserves blank lines, wraps wide glyphs conservatively, and escapes HTML in rendered card HTML", () => {
-    const html = renderDeterministicShareCardHtml(createRecord({
-      prompt: `line 1\n\n<tag>${"A".repeat(500)}`,
-      response: `${"漢".repeat(200)}\n${"B".repeat(500)}`,
-      username: `${"漢".repeat(40)}-overflow`,
-      theme: "ultra-wide-theme-label",
-    }));
-
+    const html = renderDeterministicShareCardHtml(createRecord({ prompt: `line 1\n\n<tag>${"A".repeat(500)}`, response: `${"漢".repeat(200)}\n${"B".repeat(500)}`, username: `${"漢".repeat(40)}-overflow`, theme: "ultra-wide-theme-label" }));
     expect(html).toContain('class="text truncate"');
     expect(html).toContain("line 1");
     expect(html).toContain("&nbsp;");
@@ -426,16 +412,12 @@ describe("share image and public share routes", () => {
   });
 
   it("truncates public page excerpts on grapheme boundaries", () => {
-    const descriptionHtml = renderPublicSharePageHtml(createRecord({
-      prompt: `${"🙂".repeat(180)}x`,
-      response: `${"🚀".repeat(220)}y`,
-    }), {
+    const descriptionHtml = renderPublicSharePageHtml(createRecord({ prompt: `${"🙂".repeat(180)}x`, response: `${"🚀".repeat(220)}y` }), {
       imageUrl: "https://public.example.com/api/share-image/share-1",
       pageImageUrl: "https://share.example/api/share-image/share-1",
       shareUrl: "https://public.example.com/s/share-1",
       appUrl: "https://app.example.com/",
     });
-
     expect(descriptionHtml).toContain(`${"🙂".repeat(177)}...`);
     expect(descriptionHtml).toContain(`${"🚀".repeat(217)}...`);
   });
@@ -443,9 +425,7 @@ describe("share image and public share routes", () => {
   it("keeps the legacy image path as a redirect from the shareCards router", async () => {
     const app = new Hono();
     app.route("/api/share-cards", shareCards);
-
     const res = await app.request("https://share.example/api/share-cards/share-1/image");
-
     expect(res.status).toBe(308);
     expect(res.headers.get("location")).toBe("https://share.example/api/share-image/share-1");
   });
