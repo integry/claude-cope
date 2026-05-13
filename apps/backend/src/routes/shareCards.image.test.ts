@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { SHARE_CARD_RENDERER_VERSION } from "@claude-cope/shared/shareCards";
