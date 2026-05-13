@@ -37,7 +37,7 @@ function isMacPlatform(): boolean {
   return /mac/i.test(navigator.platform || "");
 }
 
-export function ShareButton({ userMessage, systemMessage, username }: { userMessage: string; systemMessage: string; username: string }) {
+export function ShareButton({ userMessage, systemMessage, username, shareClaim }: { userMessage: string; systemMessage: string; username: string; shareClaim: string }) {
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [previewCard, setPreviewCard] = useState<CreateShareCardResult | null>(null);
@@ -207,9 +207,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
 
     try {
       const card = await createShareCard({
-        prompt: userMessage,
-        response: systemMessage,
-        username,
+        shareClaim,
         signal: abortController.signal,
       });
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
@@ -231,7 +229,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         generatingRef.current = false;
       }
     }
-  }, [userMessage, systemMessage, username, resetAfterDelay, prewarmPreviewImage]);
+  }, [shareClaim, resetAfterDelay, prewarmPreviewImage]);
 
   const handleShare = useCallback(async (platform: SharePlatform) => {
     if (!previewCard || sharingRef.current) return;

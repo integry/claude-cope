@@ -16,6 +16,7 @@ export const shareCardResponse: ShareCardResponse = {
   imageUrl: "https://claudecope.com/api/share-image/share-123",
   shareUrl: "https://claudecope.com/s/share-123",
 };
+export const signedShareClaim = "signed-share-claim";
 
 export const imageBytes = new TextEncoder().encode("server-image");
 
@@ -117,6 +118,7 @@ export const setupShareButtonTest = () => {
           userMessage="Hello"
           systemMessage="World"
           username="testuser"
+          shareClaim={signedShareClaim}
         />,
       );
     });

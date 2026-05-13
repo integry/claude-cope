@@ -16,6 +16,7 @@ import {
 import { getQuotaPercent, getQuotaLimits } from "../utils/quota";
 import { assignCategory, getRoutingConfig, type RequestCategory } from "../utils/categoryRouting";
 import { buildFreeAccountCookieHeader } from "../utils/freeAccountIdentity";
+import { issueShareCardClaim } from "../utils/shareCardClaims";
 
 type Env = {
   Bindings: {
@@ -29,6 +30,7 @@ type Env = {
     FREE_QUOTA_LIMIT?: string;
     PRO_INITIAL_QUOTA?: string;
     FREE_ACCOUNT_COOKIE_SECRET?: string;
+    SHARE_CARD_SIGNING_SECRET?: string;
   };
   Variables: {
     sessionId: string;
@@ -1432,6 +1434,7 @@ chat.post("/", async (c) => {
   const data = await orResponse.json() as ChatResponseData;
 
   if (data.choices?.[0]?.message?.content) {
+    const latestUserPrompt = [...trimmedMessages].reverse().find((message) => message.role === "user")?.content ?? "";
     let normalizedContent = rewriteTutorialLeakIfNeeded(
       body.chatMessages.filter((m) => m.role === "user").slice(-1)[0]?.content ?? "",
       normalizeReplyContent(data.choices[0].message.content, previousUserNextMessage),
@@ -1457,6 +1460,15 @@ chat.post("/", async (c) => {
     }
 
     data.choices[0].message.content = normalizedContent;
+    const shareClaim = await issueShareCardClaim(c.env, {
+      sessionId,
+      prompt: latestUserPrompt,
+      response: normalizedContent,
+      username,
+    });
+    if (shareClaim) {
+      (data as Record<string, unknown>).shareClaim = shareClaim;
+    }
   }
 
   logChatDiagnostics(messages, data);

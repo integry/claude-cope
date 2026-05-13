@@ -230,29 +230,30 @@ function CostDisplay({ cost }: { cost: number }) {
 function getShareProps(
   message: Message,
   previousMessage?: Message,
-  nextMessage?: Message,
   shareUserMessage?: Message,
   enableShare = true,
-): { showShareButton: boolean; shareSystemMessage: string; shareUserPrompt: string } {
+): { showShareButton: boolean; shareClaim?: string; shareSystemMessage: string; shareUserPrompt: string } {
   const userTurn = shareUserMessage?.role === "user"
     ? shareUserMessage
     : previousMessage?.role === "user"
       ? previousMessage
       : undefined;
   const isSlashCommandResponse = userTurn?.content.startsWith("/") ?? false;
-  const showShareButton = enableShare && message.role === "system" && Boolean(userTurn) && !isSlashCommandResponse;
-  const shareSystemMessage = showShareButton && nextMessage?.role === "warning"
-    ? nextMessage.content + "\n\n" + message.content
-    : message.content;
-  return { showShareButton, shareSystemMessage, shareUserPrompt: userTurn?.content ?? "" };
+  const showShareButton = enableShare && message.role === "system" && Boolean(userTurn) && !isSlashCommandResponse && typeof message.shareClaim === "string";
+  return {
+    showShareButton,
+    shareClaim: message.shareClaim,
+    shareSystemMessage: message.content,
+    shareUserPrompt: userTurn?.content ?? "",
+  };
 }
 
-function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand, enableShare = true }: { message: Message; previousMessage?: Message; nextMessage?: Message; shareUserMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void; enableShare?: boolean }) {
+function OutputBlock({ message, previousMessage, nextMessage: _nextMessage, shareUserMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand, enableShare = true }: { message: Message; previousMessage?: Message; nextMessage?: Message; shareUserMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void; enableShare?: boolean }) {
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
-  const { showShareButton, shareSystemMessage, shareUserPrompt } = getShareProps(message, previousMessage, nextMessage, shareUserMessage, enableShare);
+  const { showShareButton, shareClaim, shareSystemMessage, shareUserPrompt } = getShareProps(message, previousMessage, shareUserMessage, enableShare);
   const buddyData = getBuddyRenderData(message);
   const shareNode = showShareButton ? (
-    <ShareButton userMessage={shareUserPrompt} systemMessage={shareSystemMessage} username={username} />
+    <ShareButton userMessage={shareUserPrompt} systemMessage={shareSystemMessage} username={username} shareClaim={shareClaim!} />
   ) : undefined;
 
   return (
@@ -284,6 +285,7 @@ function messagesEqual(a: Message | undefined, b: Message | undefined): boolean 
   return a === b || (
     a?.role === b?.role
     && a?.content === b?.content
+    && a?.shareClaim === b?.shareClaim
     && a?.buddyType === b?.buddyType
     && a?.backlogDisplay === b?.backlogDisplay
   );
@@ -292,6 +294,7 @@ function messagesEqual(a: Message | undefined, b: Message | undefined): boolean 
 function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps): boolean {
   if (prev.message.role !== next.message.role) return false;
   if (prev.message.content !== next.message.content) return false;
+  if (prev.message.shareClaim !== next.message.shareClaim) return false;
   if (prev.message.buddyType !== next.message.buddyType) return false;
   if (prev.message.cost !== next.message.cost) return false;
   if (prev.message.backlogDisplay !== next.message.backlogDisplay) return false;

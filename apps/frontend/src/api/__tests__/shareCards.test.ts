@@ -14,13 +14,13 @@ describe("createShareCard", () => {
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await createShareCard({ prompt: "Hello", response: "World", username: "alice", theme: "amber" });
+    await createShareCard({ shareClaim: "signed-claim-token" });
 
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: "Hello", response: "World", username: "alice", theme: "amber" }),
+      body: JSON.stringify({ shareClaim: "signed-claim-token" }),
     }));
   });
 
@@ -30,7 +30,7 @@ describe("createShareCard", () => {
       headers: { "Content-Type": "application/json" },
     })));
 
-    await expect(createShareCard({ prompt: "", response: "World", username: "alice" }))
+    await expect(createShareCard({ shareClaim: "bad-claim" }))
       .rejects
       .toThrow("prompt must be a non-empty string");
   });
@@ -44,7 +44,7 @@ describe("createShareCard", () => {
       headers: { "Content-Type": "application/json" },
     })));
 
-    await expect(createShareCard({ prompt: "Hello", response: "World", username: "alice" }))
+    await expect(createShareCard({ shareClaim: "signed-claim-token" }))
       .rejects
       .toThrow("Invalid share-card response");
   });
@@ -52,7 +52,7 @@ describe("createShareCard", () => {
   it("throws a network error when the request fails before a response is received", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("socket hang up")));
 
-    await expect(createShareCard({ prompt: "Hello", response: "World", username: "alice" }))
+    await expect(createShareCard({ shareClaim: "signed-claim-token" }))
       .rejects
       .toThrow("Network error");
   });
@@ -64,9 +64,7 @@ describe("createShareCard", () => {
     controller.abort();
 
     await expect(createShareCard({
-      prompt: "Hello",
-      response: "World",
-      username: "alice",
+      shareClaim: "signed-claim-token",
       signal: controller.signal,
     })).rejects.toBe(abortError);
   });

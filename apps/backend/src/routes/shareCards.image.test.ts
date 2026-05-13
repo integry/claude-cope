@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { SHARE_CARD_RENDERER_VERSION } from "@claude-cope/shared/shareCards";
 import shareCards from "./shareCards";
 import { createSharePages } from "./sharePages";
+import { issueShareCardClaim } from "../utils/shareCardClaims";
 import {
   buildShareImageCacheKey,
   getCachedOrRenderedShareImage,
@@ -27,6 +28,7 @@ type AppBindings = {
   ALLOWED_ORIGINS?: string;
   SHARE_CARD_BASE_ORIGIN?: string;
   APP_BASE_ORIGIN?: string;
+  FREE_ACCOUNT_COOKIE_SECRET?: string;
 };
 
 const PUBLIC_SHARE_ORIGIN = "https://public.example.com";
@@ -34,6 +36,8 @@ const APP_ORIGIN = "https://app.example.com";
 const STAGING_ALLOWED_ORIGINS = "http://localhost:5173,https://staging.example.com";
 const PUBLIC_IMAGE_URL = `${PUBLIC_SHARE_ORIGIN}/api/share-image/share-1`;
 const PAGE_IMAGE_FRAGMENT = '<img src="https://share.example/api/share-image/share-1"';
+const TEST_SESSION_ID = "test-session";
+const TEST_SHARE_SIGNING_SECRET = "test-share-signing-secret";
 
 function createShareCardMockDB() {
   const rows = new Map<string, SharedCardRecord>();
@@ -152,6 +156,10 @@ function createTestApp(options: {
   logger?: Pick<Console, "error" | "warn">;
 } = {}) {
   const app = new Hono();
+  app.use("*", async (c, next) => {
+    c.set("sessionId", TEST_SESSION_ID);
+    await next();
+  });
   app.route("/api/share-cards", shareCards);
   app.route("/", createSharePages(options));
   return app;
@@ -162,11 +170,26 @@ function createDbBackedApp(options?: Parameters<typeof createTestApp>[0]) {
 }
 
 async function createCard(app: Hono, env: AppBindings, body?: Record<string, unknown>) {
-  return app.request("https://share.example/api/share-cards", {
+  return createCardAtUrl(app, "https://share.example/api/share-cards", env, body);
+}
+
+async function createCardAtUrl(app: Hono, requestUrl: string, env: AppBindings, body?: Record<string, unknown>) {
+  const prompt = typeof body?.prompt === "string" ? body.prompt : "Ship it";
+  const response = typeof body?.response === "string" ? body.response : "Looks good.";
+  const username = typeof body?.username === "string" ? body.username : "alice";
+  const shareClaim = await issueShareCardClaim({
+    FREE_ACCOUNT_COOKIE_SECRET: env.FREE_ACCOUNT_COOKIE_SECRET ?? TEST_SHARE_SIGNING_SECRET,
+  }, {
+    sessionId: TEST_SESSION_ID,
+    prompt,
+    response,
+    username,
+  });
+  return app.request(requestUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? { prompt: "Ship it", response: "Looks good.", username: "alice" }),
-  }, env);
+    body: JSON.stringify({ shareClaim }),
+  }, { ...env, FREE_ACCOUNT_COOKIE_SECRET: env.FREE_ACCOUNT_COOKIE_SECRET ?? TEST_SHARE_SIGNING_SECRET });
 }
 
 async function createCardJson<T>(app: Hono, env: AppBindings, body?: Record<string, unknown>) {
@@ -248,13 +271,13 @@ describe("share image and public share routes", () => {
 
   it("uses the request origin for public share URLs when no explicit public share origin is configured", async () => {
     const { db, app } = createDbBackedApp();
-    const response = await app.request("https://worker.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: "Ship it", response: "Looks good.", username: "alice" }),
-    }, {
+    const response = await createCardAtUrl(app, "https://worker.example/api/share-cards", {
       DB: db,
       ALLOWED_ORIGINS: STAGING_ALLOWED_ORIGINS,
+    }, {
+      prompt: "Ship it",
+      response: "Looks good.",
+      username: "alice",
     });
     const created = await response.json() as { imageUrl: string; shareUrl: string };
     expect(created.imageUrl).toBe("https://worker.example/api/share-image/share-1");

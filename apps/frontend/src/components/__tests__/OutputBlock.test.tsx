@@ -109,7 +109,7 @@ describe("OutputBlock", () => {
     const history: Message[] = [
       { role: "user", content: "how do I enable beta mode?" },
       { role: "loading", content: "[⚙️] Thinking..." },
-      { role: "system", content: "Edit `config/feature_flags.yaml` and set `beta_mode: true`." },
+      { role: "system", content: "Edit `config/feature_flags.yaml` and set `beta_mode: true`.", shareClaim: "signed-claim-token" },
     ];
 
     act(() => {

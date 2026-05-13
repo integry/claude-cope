@@ -8,6 +8,7 @@ import {
   SHARE_CARD_RENDERER_VERSION,
 } from "@claude-cope/shared/shareCards";
 import shareCards from "./shareCards";
+import { issueShareCardClaim } from "../utils/shareCardClaims";
 
 type SharedCardRecord = {
   id: string;
@@ -26,11 +27,15 @@ type ShareCardPayload = {
   theme?: string | number;
 };
 
+const TEST_SESSION_ID = "test-session";
+const TEST_SHARE_SIGNING_SECRET = "test-share-signing-secret";
+
 type AppBindings = {
   DB: D1Database;
   ALLOWED_ORIGINS?: string;
   SHARE_CARD_BASE_ORIGIN?: string;
   APP_BASE_ORIGIN?: string;
+  FREE_ACCOUNT_COOKIE_SECRET?: string;
 };
 
 function createShareCardMockDB() {
@@ -111,6 +116,10 @@ function createShareCardMockDB() {
 
 function createTestApp() {
   const app = new Hono();
+  app.use("*", async (c, next) => {
+    c.set("sessionId", TEST_SESSION_ID);
+    await next();
+  });
   app.route("/api/share-cards", shareCards);
   return app;
 }
@@ -120,11 +129,22 @@ async function postShareCard(app: Hono, payload: ShareCardPayload, env: AppBindi
 }
 
 async function postShareCardToUrl(app: Hono, requestUrl: string, payload: ShareCardPayload, env: AppBindings) {
+  const shareClaim = await issueShareCardClaim({
+    FREE_ACCOUNT_COOKIE_SECRET: env.FREE_ACCOUNT_COOKIE_SECRET ?? TEST_SHARE_SIGNING_SECRET,
+  }, {
+    sessionId: TEST_SESSION_ID,
+    prompt: payload.prompt,
+    response: payload.response,
+    username: payload.username,
+  });
   return app.request(requestUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  }, env);
+    body: JSON.stringify({
+      shareClaim,
+      ...(payload.theme !== undefined ? { theme: payload.theme } : {}),
+    }),
+  }, { ...env, FREE_ACCOUNT_COOKIE_SECRET: env.FREE_ACCOUNT_COOKIE_SECRET ?? TEST_SHARE_SIGNING_SECRET });
 }
 
 describe("POST /api/share-cards", () => {
@@ -265,12 +285,9 @@ describe("POST /api/share-cards", () => {
     const { db } = createShareCardMockDB();
     const cases = [
       {
-        body: { prompt: "   ", response: "ok", username: "alice" },
-        expected: { error: "prompt must be a non-empty string" },
-      },
-      {
-        body: { prompt: "a".repeat(SHARE_CARD_MAX_PROMPT_LENGTH + 1), response: "ok", username: "alice" },
-        expected: { error: `prompt exceeds maximum length of ${SHARE_CARD_MAX_PROMPT_LENGTH}` },
+        body: { prompt: "ok", response: "ok", username: "alice" },
+        expected: { error: "Invalid share claim" },
+        rawBody: { shareClaim: "bad-claim" },
       },
       {
         body: { prompt: "ok", response: " \n\t ", username: "alice" },
@@ -296,11 +313,17 @@ describe("POST /api/share-cards", () => {
         body: { prompt: "ok", response: "ok", username: "alice", theme: "a".repeat(SHARE_CARD_MAX_THEME_LENGTH + 1) },
         expected: { error: `theme exceeds maximum length of ${SHARE_CARD_MAX_THEME_LENGTH}` },
       },
-    ] satisfies Array<{ body: ShareCardPayload; expected: { error: string } }>;
+    ] satisfies Array<{ body: ShareCardPayload; expected: { error: string }; rawBody?: Record<string, unknown> }>;
 
     for (const testCase of cases) {
-      const res = await postShareCard(app, testCase.body, { DB: db });
-      expect(res.status).toBe(400);
+      const res = testCase.rawBody
+        ? await app.request("https://share.example/api/share-cards", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(testCase.rawBody),
+        }, { DB: db, FREE_ACCOUNT_COOKIE_SECRET: TEST_SHARE_SIGNING_SECRET })
+        : await postShareCard(app, testCase.body, { DB: db });
+      expect(res.status).toBe(testCase.rawBody ? 403 : 400);
       await expect(res.json()).resolves.toEqual(testCase.expected);
     }
 

@@ -1,10 +1,7 @@
 import { API_BASE } from "../config";
 
 export type CreateShareCardInput = {
-  prompt: string;
-  response: string;
-  username: string;
-  theme?: string;
+  shareClaim: string;
   signal?: AbortSignal;
 };
 

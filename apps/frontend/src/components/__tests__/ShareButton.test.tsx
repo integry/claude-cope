@@ -7,6 +7,7 @@ import {
   imageBytes,
   mockClipboard,
   shareCardResponse,
+  signedShareClaim,
   setupShareButtonTest,
   toArrayBuffer,
 } from "./ShareButton.testUtils";
@@ -25,7 +26,7 @@ describe("ShareButton modal share flow", () => {
     expect(testScope.fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: "Hello", response: "World", username: "testuser" }),
+      body: JSON.stringify({ shareClaim: signedShareClaim }),
     }));
 
     deferredImage.resolve(new Response(toArrayBuffer(imageBytes), {
@@ -403,7 +404,7 @@ describe("ShareButton modal share flow", () => {
     await testScope.renderOpenPreview();
 
     expect(testScope.fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
-      body: JSON.stringify({ prompt: "Hello", response: "World", username: "testuser" }),
+      body: JSON.stringify({ shareClaim: signedShareClaim }),
     }));
   });
 });

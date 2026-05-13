@@ -5,12 +5,18 @@ import {
   validateAndNormalizeShareCardInput,
 } from "@claude-cope/shared/shareCards";
 import { buildPublicShareUrls } from "../utils/shareImages";
+import { verifyShareCardClaim } from "../utils/shareCardClaims";
 
 type Env = {
   Bindings: {
     DB: D1Database;
     ALLOWED_ORIGINS?: string;
     SHARE_CARD_BASE_ORIGIN?: string;
+    SHARE_CARD_SIGNING_SECRET?: string;
+    FREE_ACCOUNT_COOKIE_SECRET?: string;
+  };
+  Variables: {
+    sessionId: string;
   };
 };
 
@@ -62,7 +68,29 @@ shareCards.post("/", async (c) => {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
-  const normalized = validateAndNormalizeShareCardInput(body);
+  const shareClaim = typeof body === "object" && body !== null && "shareClaim" in body && typeof body.shareClaim === "string"
+    ? body.shareClaim
+    : null;
+  if (!shareClaim) {
+    return c.json({ error: "shareClaim is required" }, 400);
+  }
+
+  const sessionId = c.get("sessionId");
+  if (!sessionId) {
+    return c.json({ error: "Session is not available" }, 403);
+  }
+
+  const verifiedClaim = await verifyShareCardClaim(c.env, shareClaim, sessionId);
+  if (!verifiedClaim) {
+    return c.json({ error: "Invalid share claim" }, 403);
+  }
+
+  const normalized = validateAndNormalizeShareCardInput({
+    prompt: verifiedClaim.p,
+    response: verifiedClaim.r,
+    username: verifiedClaim.u,
+    theme: "theme" in body ? body.theme : undefined,
+  });
   if (!normalized.ok) {
     return c.json({ error: normalized.error }, 400);
   }
