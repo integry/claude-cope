@@ -19,14 +19,25 @@ type SharedCardRecord = {
   content_hash: string;
 };
 
+type ShareCardPayload = {
+  prompt: string;
+  response: string;
+  username: string;
+  theme?: string | number;
+};
+
+type AppBindings = {
+  DB: D1Database;
+  ALLOWED_ORIGINS?: string;
+  SHARE_CARD_BASE_ORIGIN?: string;
+};
+
 function createShareCardMockDB() {
   const rows = new Map<string, SharedCardRecord>();
   let nextId = 1;
-
   const db = {
     prepare(sql: string) {
       const upper = sql.trim().toUpperCase();
-
       return {
         bind(...args: unknown[]) {
           return {
@@ -37,21 +48,12 @@ function createShareCardMockDB() {
               }
               if (upper === "SELECT ID, PROMPT, RESPONSE, USERNAME, THEME FROM SHARED_CARDS WHERE ID = ?") {
                 const row = Array.from(rows.values()).find((value) => value.id === String(args[0]));
-                if (!row) return null;
-                return {
-                  id: row.id,
-                  prompt: row.prompt,
-                  response: row.response,
-                  username: row.username,
-                  theme: row.theme,
-                } as T;
+                return row ? { id: row.id, prompt: row.prompt, response: row.response, username: row.username, theme: row.theme } as T : null;
               }
               throw new Error(`Unsupported first SQL in test mock: ${sql}`);
             },
             async all<T = unknown>() {
-              if (upper.includes("SCHEMA_MIGRATIONS")) {
-                return { results: [] as T[] };
-              }
+              if (upper.includes("SCHEMA_MIGRATIONS")) return { results: [] as T[] };
               throw new Error(`Unsupported all SQL in test mock: ${sql}`);
             },
             async run() {
@@ -77,34 +79,24 @@ function createShareCardMockDB() {
                 }
                 return { success: true };
               }
-              if (upper.includes("SCHEMA_MIGRATIONS")) {
-                return { success: true };
-              }
+              if (upper.includes("SCHEMA_MIGRATIONS")) return { success: true };
               throw new Error(`Unsupported bound run SQL in test mock: ${sql}`);
             },
           };
         },
         async run() {
-          if (upper.includes("SCHEMA_MIGRATIONS")) {
-            return { success: true };
-          }
+          if (upper.includes("SCHEMA_MIGRATIONS")) return { success: true };
           throw new Error(`Unsupported run SQL in test mock: ${sql}`);
         },
         async all<T = unknown>() {
-          if (upper === "SELECT NAME FROM SCHEMA_MIGRATIONS") {
-            return { results: [] as T[] };
-          }
+          if (upper === "SELECT NAME FROM SCHEMA_MIGRATIONS") return { results: [] as T[] };
           throw new Error(`Unsupported all SQL in test mock: ${sql}`);
         },
       };
     },
   } as unknown as D1Database;
 
-  return {
-    db,
-    getRowCount: () => rows.size,
-    getRows: () => Array.from(rows.values()),
-  };
+  return { db, getRowCount: () => rows.size, getRows: () => Array.from(rows.values()) };
 }
 
 function createTestApp() {
@@ -113,20 +105,30 @@ function createTestApp() {
   return app;
 }
 
+async function postShareCard(app: Hono, payload: ShareCardPayload, env: AppBindings) {
+  return app.request("https://share.example/api/share-cards", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }, env);
+}
+
+async function createAndFetchImage(app: Hono, payload: ShareCardPayload, env: AppBindings) {
+  const create = await postShareCard(app, payload, env);
+  const body = await create.json() as { imageUrl: string };
+  const image = await app.request(body.imageUrl, {}, env);
+  return { create, image, svg: await image.text() };
+}
+
 describe("POST /api/share-cards", () => {
   it("returns a stable shareId and URL shape for a new payload", async () => {
     const app = createTestApp();
     const { db, getRows } = createShareCardMockDB();
-
-    const res = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "  Ship it\r\n",
-        response: "\r\nLooks good.\r\n",
-        username: "  alice  ",
-        theme: "  synthwave  ",
-      }),
+    const res = await postShareCard(app, {
+      prompt: "  Ship it\r\n",
+      response: "\r\nLooks good.\r\n",
+      username: "  alice  ",
+      theme: "  synthwave  ",
     }, { DB: db, ALLOWED_ORIGINS: "https://app.example.com,http://localhost:5173" });
 
     expect(res.status).toBe(200);
@@ -135,31 +137,24 @@ describe("POST /api/share-cards", () => {
       imageUrl: "https://share.example/api/share-cards/share-1/image",
       shareUrl: "https://app.example.com/share/share-1",
     });
-    expect(getRows()).toEqual([
-      {
-        id: "share-1",
-        prompt: "  Ship it\n",
-        response: "\nLooks good.\n",
-        username: "alice",
-        theme: "synthwave",
-        renderer_version: SHARE_CARD_RENDERER_VERSION,
-        content_hash: expect.any(String),
-      },
-    ]);
+    expect(getRows()).toEqual([{
+      id: "share-1",
+      prompt: "  Ship it\n",
+      response: "\nLooks good.\n",
+      username: "alice",
+      theme: "synthwave",
+      renderer_version: SHARE_CARD_RENDERER_VERSION,
+      content_hash: expect.any(String),
+    }]);
   });
 
   it("uses SHARE_CARD_BASE_ORIGIN instead of ALLOWED_ORIGINS ordering for shareUrl", async () => {
     const app = createTestApp();
     const { db } = createShareCardMockDB();
-
-    const res = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "Ship it",
-        response: "Looks good.",
-        username: "alice",
-      }),
+    const res = await postShareCard(app, {
+      prompt: "Ship it",
+      response: "Looks good.",
+      username: "alice",
     }, {
       DB: db,
       ALLOWED_ORIGINS: "http://localhost:5173,https://app.example.com",
@@ -177,26 +172,16 @@ describe("POST /api/share-cards", () => {
   it("dedupes identical normalized payloads and reuses the same shareId", async () => {
     const app = createTestApp();
     const { db, getRowCount } = createShareCardMockDB();
-
-    const first = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "Hello\r\nworld",
-        response: "\r\nResponse\r\n",
-        username: "alice",
-      }),
+    const first = await postShareCard(app, {
+      prompt: "Hello\r\nworld",
+      response: "\r\nResponse\r\n",
+      username: "alice",
     }, { DB: db });
-
-    const second = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "Hello\nworld",
-        response: "\nResponse\n",
-        username: " alice ",
-        theme: "   ",
-      }),
+    const second = await postShareCard(app, {
+      prompt: "Hello\nworld",
+      response: "\nResponse\n",
+      username: " alice ",
+      theme: "   ",
     }, { DB: db });
 
     expect(first.status).toBe(200);
@@ -208,15 +193,10 @@ describe("POST /api/share-cards", () => {
   it("uses the default allowed frontend origin for shareUrl when ALLOWED_ORIGINS is unset", async () => {
     const app = createTestApp();
     const { db } = createShareCardMockDB();
-
     const res = await app.request("https://api.example.com/api/share-cards", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "Hello",
-        response: "World",
-        username: "alice",
-      }),
+      body: JSON.stringify({ prompt: "Hello", response: "World", username: "alice" }),
     }, { DB: db });
 
     expect(res.status).toBe(200);
@@ -231,25 +211,15 @@ describe("POST /api/share-cards", () => {
   it("keeps distinct prompt and response whitespace snapshots separate", async () => {
     const app = createTestApp();
     const { db, getRowCount } = createShareCardMockDB();
-
-    const first = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "Hello\nworld",
-        response: "Response",
-        username: "alice",
-      }),
+    const first = await postShareCard(app, {
+      prompt: "Hello\nworld",
+      response: "Response",
+      username: "alice",
     }, { DB: db });
-
-    const second = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "  Hello\nworld  ",
-        response: "  Response  ",
-        username: "alice",
-      }),
+    const second = await postShareCard(app, {
+      prompt: "  Hello\nworld  ",
+      response: "  Response  ",
+      username: "alice",
     }, { DB: db });
 
     expect(first.status).toBe(200);
@@ -261,42 +231,25 @@ describe("POST /api/share-cards", () => {
   it("serves the advertised imageUrl", async () => {
     const app = createTestApp();
     const { db } = createShareCardMockDB();
-
-    const create = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "Ship it",
-        response: "Looks good.",
-        username: "alice",
-      }),
+    const { image, svg } = await createAndFetchImage(app, {
+      prompt: "Ship it",
+      response: "Looks good.",
+      username: "alice",
     }, { DB: db });
-
-    const body = await create.json() as { imageUrl: string };
-    const image = await app.request(body.imageUrl, {}, { DB: db });
 
     expect(image.status).toBe(200);
     expect(image.headers.get("content-type")).toContain("image/svg+xml");
-    await expect(image.text()).resolves.toContain("Shared by @alice");
+    expect(svg).toContain("Shared by @alice");
   });
 
   it("renders exact-fit wrapped text without adding an ellipsis", async () => {
     const app = createTestApp();
     const { db } = createShareCardMockDB();
-
-    const create = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "p".repeat(48 * 4),
-        response: "r".repeat(52 * 6),
-        username: "alice",
-      }),
+    const { svg } = await createAndFetchImage(app, {
+      prompt: "p".repeat(48 * 4),
+      response: "r".repeat(52 * 6),
+      username: "alice",
     }, { DB: db });
-
-    const body = await create.json() as { imageUrl: string };
-    const image = await app.request(body.imageUrl, {}, { DB: db });
-    const svg = await image.text();
 
     expect(svg).toContain(`>${"p".repeat(48)}</text>`);
     expect(svg).not.toContain(`>${"p".repeat(47)}\u2026</text>`);
@@ -307,20 +260,11 @@ describe("POST /api/share-cards", () => {
   it("renders overflow text with an ellipsis on the last visible line", async () => {
     const app = createTestApp();
     const { db } = createShareCardMockDB();
-
-    const create = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "p".repeat(48 * 4 + 1),
-        response: "r".repeat(52 * 6 + 1),
-        username: "alice",
-      }),
+    const { svg } = await createAndFetchImage(app, {
+      prompt: "p".repeat(48 * 4 + 1),
+      response: "r".repeat(52 * 6 + 1),
+      username: "alice",
     }, { DB: db });
-
-    const body = await create.json() as { imageUrl: string };
-    const image = await app.request(body.imageUrl, {}, { DB: db });
-    const svg = await image.text();
 
     expect(svg).toContain(`>${"p".repeat(47)}\u2026</text>`);
     expect(svg).toContain(`>${"r".repeat(51)}\u2026</text>`);
@@ -329,20 +273,11 @@ describe("POST /api/share-cards", () => {
   it("preserves embedded blank lines when rendering the image", async () => {
     const app = createTestApp();
     const { db } = createShareCardMockDB();
-
-    const create = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "alpha\n\nomega",
-        response: "first\n\nthird",
-        username: "alice",
-      }),
+    const { svg } = await createAndFetchImage(app, {
+      prompt: "alpha\n\nomega",
+      response: "first\n\nthird",
+      username: "alice",
     }, { DB: db });
-
-    const body = await create.json() as { imageUrl: string };
-    const image = await app.request(body.imageUrl, {}, { DB: db });
-    const svg = await image.text();
 
     expect(svg).toContain(">alpha</text><text x=\"72\" y=\"230\" class=\"body\"></text><text x=\"72\" y=\"264\" class=\"body\">omega</text>");
     expect(svg).toContain(">first</text><text x=\"72\" y=\"450\" class=\"body\"></text><text x=\"72\" y=\"482\" class=\"body\">third</text>");
@@ -351,21 +286,12 @@ describe("POST /api/share-cards", () => {
   it("escapes SVG-sensitive characters in rendered fields", async () => {
     const app = createTestApp();
     const { db } = createShareCardMockDB();
-
-    const create = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: `<tag> & "quote" 'apostrophe'`,
-        response: `5 > 3 & 2 < 4`,
-        username: `ali<ce>&"'`,
-        theme: `neo&<"'`,
-      }),
+    const { svg } = await createAndFetchImage(app, {
+      prompt: `<tag> & "quote" 'apostrophe'`,
+      response: "5 > 3 & 2 < 4",
+      username: `ali<ce>&"'`,
+      theme: `neo&<"'`,
     }, { DB: db });
-
-    const body = await create.json() as { imageUrl: string };
-    const image = await app.request(body.imageUrl, {}, { DB: db });
-    const svg = await image.text();
 
     expect(svg).toContain("Shared by @ali&lt;ce&gt;&amp;&quot;&#39;");
     expect(svg).toContain("&lt;tag&gt; &amp; &quot;quote&quot; &#39;apostrophe&#39;");
@@ -377,34 +303,46 @@ describe("POST /api/share-cards", () => {
   it("rejects invalid payloads with 400", async () => {
     const app = createTestApp();
     const { db } = createShareCardMockDB();
+    const cases = [
+      {
+        body: { prompt: "   ", response: "ok", username: "alice" },
+        expected: { error: "prompt must be a non-empty string" },
+      },
+      {
+        body: { prompt: "a".repeat(SHARE_CARD_MAX_PROMPT_LENGTH + 1), response: "ok", username: "alice" },
+        expected: { error: `prompt exceeds maximum length of ${SHARE_CARD_MAX_PROMPT_LENGTH}` },
+      },
+      {
+        body: { prompt: "ok", response: " \n\t ", username: "alice" },
+        expected: { error: "response must be a non-empty string" },
+      },
+      {
+        body: { prompt: "ok", response: "ok", username: "   " },
+        expected: { error: "username must be a non-empty string" },
+      },
+      {
+        body: { prompt: "ok", response: "ok", username: "alice", theme: 42 },
+        expected: { error: "theme must be a string when provided" },
+      },
+      {
+        body: { prompt: "ok", response: "a".repeat(SHARE_CARD_MAX_RESPONSE_LENGTH + 1), username: "alice" },
+        expected: { error: `response exceeds maximum length of ${SHARE_CARD_MAX_RESPONSE_LENGTH}` },
+      },
+      {
+        body: { prompt: "ok", response: "ok", username: "a".repeat(SHARE_CARD_MAX_USERNAME_LENGTH + 1) },
+        expected: { error: `username exceeds maximum length of ${SHARE_CARD_MAX_USERNAME_LENGTH}` },
+      },
+      {
+        body: { prompt: "ok", response: "ok", username: "alice", theme: "a".repeat(SHARE_CARD_MAX_THEME_LENGTH + 1) },
+        expected: { error: `theme exceeds maximum length of ${SHARE_CARD_MAX_THEME_LENGTH}` },
+      },
+    ] satisfies Array<{ body: ShareCardPayload; expected: { error: string } }>;
 
-    const emptyPrompt = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "   ",
-        response: "ok",
-        username: "alice",
-      }),
-    }, { DB: db });
-
-    expect(emptyPrompt.status).toBe(400);
-    await expect(emptyPrompt.json()).resolves.toEqual({ error: "prompt must be a non-empty string" });
-
-    const tooLongPrompt = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "a".repeat(SHARE_CARD_MAX_PROMPT_LENGTH + 1),
-        response: "ok",
-        username: "alice",
-      }),
-    }, { DB: db });
-
-    expect(tooLongPrompt.status).toBe(400);
-    await expect(tooLongPrompt.json()).resolves.toEqual({
-      error: `prompt exceeds maximum length of ${SHARE_CARD_MAX_PROMPT_LENGTH}`,
-    });
+    for (const testCase of cases) {
+      const res = await postShareCard(app, testCase.body, { DB: db });
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toEqual(testCase.expected);
+    }
 
     const invalidJson = await app.request("https://share.example/api/share-cards", {
       method: "POST",
@@ -414,91 +352,5 @@ describe("POST /api/share-cards", () => {
 
     expect(invalidJson.status).toBe(400);
     await expect(invalidJson.json()).resolves.toEqual({ error: "Invalid JSON body" });
-
-    const emptyResponse = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "ok",
-        response: " \n\t ",
-        username: "alice",
-      }),
-    }, { DB: db });
-
-    expect(emptyResponse.status).toBe(400);
-    await expect(emptyResponse.json()).resolves.toEqual({ error: "response must be a non-empty string" });
-
-    const emptyUsername = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "ok",
-        response: "ok",
-        username: "   ",
-      }),
-    }, { DB: db });
-
-    expect(emptyUsername.status).toBe(400);
-    await expect(emptyUsername.json()).resolves.toEqual({ error: "username must be a non-empty string" });
-
-    const nonStringTheme = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "ok",
-        response: "ok",
-        username: "alice",
-        theme: 42,
-      }),
-    }, { DB: db });
-
-    expect(nonStringTheme.status).toBe(400);
-    await expect(nonStringTheme.json()).resolves.toEqual({ error: "theme must be a string when provided" });
-
-    const tooLongResponse = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "ok",
-        response: "a".repeat(SHARE_CARD_MAX_RESPONSE_LENGTH + 1),
-        username: "alice",
-      }),
-    }, { DB: db });
-
-    expect(tooLongResponse.status).toBe(400);
-    await expect(tooLongResponse.json()).resolves.toEqual({
-      error: `response exceeds maximum length of ${SHARE_CARD_MAX_RESPONSE_LENGTH}`,
-    });
-
-    const tooLongUsername = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "ok",
-        response: "ok",
-        username: "a".repeat(SHARE_CARD_MAX_USERNAME_LENGTH + 1),
-      }),
-    }, { DB: db });
-
-    expect(tooLongUsername.status).toBe(400);
-    await expect(tooLongUsername.json()).resolves.toEqual({
-      error: `username exceeds maximum length of ${SHARE_CARD_MAX_USERNAME_LENGTH}`,
-    });
-
-    const tooLongTheme = await app.request("https://share.example/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "ok",
-        response: "ok",
-        username: "alice",
-        theme: "a".repeat(SHARE_CARD_MAX_THEME_LENGTH + 1),
-      }),
-    }, { DB: db });
-
-    expect(tooLongTheme.status).toBe(400);
-    await expect(tooLongTheme.json()).resolves.toEqual({
-      error: `theme exceeds maximum length of ${SHARE_CARD_MAX_THEME_LENGTH}`,
-    });
   });
 });
