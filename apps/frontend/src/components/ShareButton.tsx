@@ -109,10 +109,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
-      const bytes = await res.arrayBuffer();
-      const blob = new Blob([bytes], {
-        type: res.headers.get("Content-Type") || "image/png",
-      });
+      const blob = await res.blob();
       previewBlobRef.current = { imageUrl, blob };
       return blob;
     })();

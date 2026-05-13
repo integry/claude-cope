@@ -74,7 +74,7 @@ describe("ShareButton modal share flow", () => {
           return override;
         }
         const imageBody = imageBodies.get(url) ?? toArrayBuffer(imageBytes);
-        return new Response(new Blob([imageBody], { type: "image/png" }), {
+        return new Response(imageBody, {
           status: 200,
           headers: { "Content-Type": "image/png" },
         });
@@ -290,7 +290,7 @@ describe("ShareButton modal share flow", () => {
     expect(container.textContent).not.toContain("Copying image to clipboard");
     expect(container.querySelector("button")?.textContent).toBe("[share]");
 
-    deferredImage.resolve(new Response(new Blob([toArrayBuffer(imageBytes)], { type: "image/png" }), {
+    deferredImage.resolve(new Response(toArrayBuffer(imageBytes), {
       status: 200,
       headers: { "Content-Type": "image/png" },
     }));
@@ -344,7 +344,7 @@ describe("ShareButton modal share flow", () => {
     const copiedBlob = await clipboardItem.getType("image/png");
     expect(await copiedBlob.text()).toBe("server-image-b");
 
-    firstDeferredImage.resolve(new Response(new Blob([toArrayBuffer(imageBytes)], { type: "image/png" }), {
+    firstDeferredImage.resolve(new Response(toArrayBuffer(imageBytes), {
       status: 200,
       headers: { "Content-Type": "image/png" },
     }));
