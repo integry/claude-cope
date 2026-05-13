@@ -222,7 +222,8 @@ export async function getCachedOrRenderedShareImage(input: { record: SharedCardR
         height: SHARE_IMAGE_HEIGHT,
       });
       const bytes = png instanceof Uint8Array ? png : new Uint8Array(png);
-      const response = new Response(new Blob([bytes], { type: "image/png" }), {
+      const pngBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      const response = new Response(new Blob([pngBuffer], { type: "image/png" }), {
         headers: {
           "Content-Type": "image/png",
           "Cache-Control": SHARE_IMAGE_CACHE_CONTROL,
