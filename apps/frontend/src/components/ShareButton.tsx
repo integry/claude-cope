@@ -300,7 +300,9 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [previewCard, closePreview]);
 
-  if (status !== "idle" && !previewCard) return <span className="inline-flex items-center gap-2 ml-2 text-[11px] font-mono align-baseline">{status === "generating" && <span className="text-yellow-400 animate-pulse">{SPINNER_CHAR} {feedback}</span>}{status === "copied" && <span className="text-green-400">{feedback}</span>}{status === "error" && <span className="text-red-400">{feedback}</span>}</span>;
+  const isGenerating = status === "generating";
+
+  if (status !== "idle" && !previewCard) return <span className="inline-flex items-center gap-2 ml-2 text-[11px] font-mono align-baseline">{isGenerating && <span className="text-yellow-400 animate-pulse">{SPINNER_CHAR} {feedback}</span>}{status === "copied" && <span className="text-green-400">{feedback}</span>}{status === "error" && <span className="text-red-400">{feedback}</span>}</span>;
 
   return (
     <span className="relative ml-2 inline-flex align-baseline">
@@ -356,7 +358,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
                     <span data-btn="">{` [ OPEN ${pasteHint.platform === "twitter" ? "X" : "LINKEDIN"} TAB ]`}</span>
                   </button>
                 </div>
-              ) : status === "generating" ? (
+              ) : isGenerating ? (
                 <div style={modalStatusGeneratingStyle}>{SPINNER_CHAR} {feedback}</div>
               ) : status === "error" && feedback ? (
                 <div style={modalStatusErrorStyle}>{feedback}</div>
@@ -366,9 +368,9 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
                     <button
                       key={label}
                       onClick={onClick}
-                      disabled={status === "generating"}
+                      disabled={isGenerating}
                       className="share-popup-action"
-                      style={{ ...closeButtonStyle, padding: 0, cursor: status === "generating" ? "not-allowed" : "pointer", fontSize: "12px", opacity: status === "generating" ? 0.5 : 1 }}
+                      style={{ ...closeButtonStyle, padding: 0, cursor: isGenerating ? "not-allowed" : "pointer", fontSize: "12px", opacity: isGenerating ? 0.5 : 1 }}
                     >
                       <span data-cursor="">{">"}</span>
                       <span data-btn="">{` [ ${label} ]`}</span>
