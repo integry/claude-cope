@@ -6,26 +6,43 @@ import {
   createDeferred,
   imageBytes,
   mockClipboard,
-  setupShareButtonTest,
   shareCardResponse,
+  setupShareButtonTest,
   toArrayBuffer,
 } from "./ShareButton.testUtils";
 
 describe("ShareButton modal share flow", () => {
   const testScope = setupShareButtonTest();
 
-  it("opens preview modal when share button is clicked", async () => {
+  it("opens preview modal immediately with the DOM preview, then swaps to the generated PNG", async () => {
+    const deferredImage = createDeferred<Response>();
+    testScope.imageFetchOverrides.set(shareCardResponse.imageUrl, deferredImage.promise);
     testScope.renderComponent();
     const dialog = await testScope.openPreview();
-    const previewImage = dialog.querySelector("img");
-    expect(previewImage).not.toBeNull();
-    expect(previewImage?.getAttribute("src")).toBe(shareCardResponse.imageUrl);
-    expect(previewImage?.getAttribute("alt")).toBe("Share preview for @testuser");
+    expect(dialog.querySelector("#share-card-root")).not.toBeNull();
+    expect(dialog.querySelector(`img[src="${shareCardResponse.imageUrl}"]`)).toBeNull();
     expect(testScope.fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt: "Hello", response: "World", username: "testuser" }),
     }));
+
+    deferredImage.resolve(new Response(toArrayBuffer(imageBytes), {
+      status: 200,
+      headers: { "Content-Type": "image/png" },
+    }));
+
+    await act(async () => {
+      await deferredImage.promise;
+      await Promise.resolve();
+    });
+
+    const previewImage = dialog.querySelector("img");
+    expect(previewImage).not.toBeNull();
+    expect(previewImage?.getAttribute("src")).toBe("blob:mock-12");
+    expect(previewImage?.getAttribute("alt")).toBe("Share preview for @testuser");
+    expect(dialog.querySelector("#share-card-root")).toBeNull();
+    expect(testScope.createObjectURLMock).toHaveBeenCalledTimes(1);
   });
 
   it("Share on X flow: footer swaps to paste hint, [OPEN X TAB] uses the stable share URL", async () => {
@@ -105,7 +122,8 @@ describe("ShareButton modal share flow", () => {
       shareBtn!.click();
     });
 
-    expect(testScope.fetchMock).toHaveBeenCalledTimes(1);
+    expect(testScope.fetchMock).toHaveBeenCalledTimes(2);
+    expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(1);
   });
 
   it("paste hint reverts to action buttons after the 30s auto-revert timer", async () => {
@@ -205,13 +223,16 @@ describe("ShareButton modal share flow", () => {
     expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
 
     await testScope.openPreview();
-    expect(testScope.fetchMock).toHaveBeenCalledTimes(2);
+    expect(testScope.fetchMock).toHaveBeenCalledTimes(3);
+    expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(2);
   });
 
   it("shows error and resets when image fetch fails during platform share", async () => {
+    testScope.imageFetchOverrides.set(
+      shareCardResponse.imageUrl,
+      Promise.resolve(new Response("nope", { status: 500 })),
+    );
     await testScope.renderOpenPreview();
-
-    testScope.fetchMock.mockImplementationOnce(async () => new Response("nope", { status: 500 }));
 
     await testScope.clickShareButton("SHARE ON X");
 
@@ -299,8 +320,8 @@ describe("ShareButton modal share flow", () => {
     await testScope.openPreview();
     await testScope.clickShareButton("COPY IMAGE");
 
-    expect(mockClipboard.write).toHaveBeenCalledTimes(1);
-    const clipboardItem = mockClipboard.write.mock.calls[0]?.[0]?.[0];
+    expect(mockClipboard.write).toHaveBeenCalledTimes(2);
+    const clipboardItem = mockClipboard.write.mock.calls[1]?.[0]?.[0];
     const copiedBlob = await clipboardItem.getType("image/png");
     expect(await copiedBlob.text()).toBe("server-image-b");
 

@@ -40,6 +40,9 @@ export const mockClipboard = {
   writeText: vi.fn().mockResolvedValue(undefined),
 };
 
+export const createObjectURLMock = vi.fn((blob: Blob) => `blob:mock-${blob.size}`);
+export const revokeObjectURLMock = vi.fn();
+
 export const MockClipboardItem = vi.fn().mockImplementation((items: Record<string, Blob>) => ({
   types: Object.keys(items),
   getType: (type: string) => Promise.resolve(items[type]),
@@ -68,6 +71,10 @@ export const setupShareButtonTest = () => {
     });
     // @ts-expect-error - ClipboardItem may not exist in jsdom
     globalThis.ClipboardItem = MockClipboardItem;
+    vi.stubGlobal("URL", class extends URL {
+      static createObjectURL = createObjectURLMock;
+      static revokeObjectURL = revokeObjectURLMock;
+    });
 
     fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -154,6 +161,9 @@ export const setupShareButtonTest = () => {
   return {
     get container() {
       return container;
+    },
+    get createObjectURLMock() {
+      return createObjectURLMock;
     },
     get fetchMock() {
       return fetchMock;

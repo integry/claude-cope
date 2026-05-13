@@ -38,6 +38,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [previewCard, setPreviewCard] = useState<CreateShareCardResult | null>(null);
+  const [previewImageObjectUrl, setPreviewImageObjectUrl] = useState<string | null>(null);
   const [pasteHint, setPasteHint] = useState<PasteHintState | null>(null);
   const timeoutIds = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const modalRef = useRef<HTMLDivElement>(null);
@@ -46,6 +47,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   const previewCreationAbortRef = useRef<AbortController | null>(null);
   const previewBlobRef = useRef<{ imageUrl: string; blob: Blob } | null>(null);
   const previewBlobRequestRef = useRef<{ imageUrl: string; request: Promise<Blob> } | null>(null);
+  const previewImageObjectUrlRef = useRef<string | null>(null);
 
   const clearTimeouts = useCallback(() => {
     timeoutIds.current.forEach(clearTimeout);
@@ -66,7 +68,13 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   useEffect(() => {
     const token: MountToken = { cancelled: false };
     mountTokenRef.current = token;
-    return () => { token.cancelled = true; };
+    return () => {
+      token.cancelled = true;
+      if (previewImageObjectUrlRef.current) {
+        URL.revokeObjectURL(previewImageObjectUrlRef.current);
+        previewImageObjectUrlRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => () => { clearTimeouts(); }, [clearTimeouts]);
@@ -92,6 +100,11 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     sharingRef.current = false;
     clearTimeouts();
     setPreviewCard(null);
+    if (previewImageObjectUrlRef.current) {
+      URL.revokeObjectURL(previewImageObjectUrlRef.current);
+      previewImageObjectUrlRef.current = null;
+    }
+    setPreviewImageObjectUrl(null);
     setPasteHint(null);
     if (options?.resetStatus !== false) {
       setStatus("idle");
@@ -129,6 +142,35 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       // Best-effort warmup only; preview rendering should not fail if prewarm fails.
     });
   }, [loadPreviewBlob]);
+
+  useEffect(() => {
+    if (!previewCard) return;
+    if (previewImageObjectUrlRef.current) {
+      URL.revokeObjectURL(previewImageObjectUrlRef.current);
+      previewImageObjectUrlRef.current = null;
+    }
+    setPreviewImageObjectUrl(null);
+
+    let cancelled = false;
+    const expectedImageUrl = previewCard.imageUrl;
+    void loadPreviewBlob(expectedImageUrl)
+      .then((blob) => {
+        if (cancelled || previewCard.imageUrl !== expectedImageUrl) return;
+        const objectUrl = URL.createObjectURL(blob);
+        if (previewImageObjectUrlRef.current) {
+          URL.revokeObjectURL(previewImageObjectUrlRef.current);
+        }
+        previewImageObjectUrlRef.current = objectUrl;
+        setPreviewImageObjectUrl(objectUrl);
+      })
+      .catch(() => {
+        if (cancelled) return;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewCard, loadPreviewBlob]);
 
   const handleOpenPreview = useCallback(async () => {
     if (generatingRef.current) return;
@@ -350,11 +392,19 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
             <div style={modalBodyStyle}>
               <div style={previewFrameStyle}>
                 <div style={previewScaleWrapStyle}>
-                  <ShareCardRenderSurface
-                    prompt={userMessage}
-                    response={systemMessage}
-                    username={username}
-                  />
+                  {previewImageObjectUrl ? (
+                    <img
+                      src={previewImageObjectUrl}
+                      alt={`Share preview for @${username}`}
+                      className="block h-auto w-full"
+                    />
+                  ) : (
+                    <ShareCardRenderSurface
+                      prompt={userMessage}
+                      response={systemMessage}
+                      username={username}
+                    />
+                  )}
                 </div>
               </div>
             </div>
