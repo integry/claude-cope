@@ -204,6 +204,7 @@ describe("share image and public share routes", () => {
     expect(res.status).toBe(200);
     expect(html).toContain('<meta property="og:image" content="https://public.example.com/api/share-image/share-1">');
     expect(html).toContain('<meta name="twitter:image" content="https://public.example.com/api/share-image/share-1">');
+    expect(html).toContain('<img src="https://share.example/api/share-image/share-1"');
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
     expect(html).toContain('href="https://app.example.com/"');
   });
@@ -325,6 +326,7 @@ describe("share image and public share routes", () => {
       response: `${"🚀".repeat(220)}y`,
     }), {
       imageUrl: "https://public.example.com/api/share-image/share-1",
+      pageImageUrl: "https://share.example/api/share-image/share-1",
       shareUrl: "https://public.example.com/s/share-1",
       appUrl: "https://app.example.com/",
     });
@@ -339,7 +341,7 @@ describe("share image and public share routes", () => {
 
     const res = await app.request("https://share.example/api/share-cards/share-1/image");
 
-    expect(res.status).toBe(302);
+    expect(res.status).toBe(308);
     expect(res.headers.get("location")).toBe("https://share.example/api/share-image/share-1");
   });
 });

@@ -1,4 +1,3 @@
-import puppeteer from "@cloudflare/puppeteer";
 import { getAllowedOrigins, SHARE_CARD_RENDERER_VERSION } from "@claude-cope/shared/shareCards";
 
 export const SHARE_CARD_ROOT_SELECTOR = "#share-card-root";
@@ -185,6 +184,7 @@ export function renderPublicSharePageHtml(
   record: SharedCardRecord,
   urls: {
     imageUrl: string;
+    pageImageUrl?: string;
     shareUrl: string;
     appUrl: string;
   },
@@ -194,7 +194,9 @@ export function renderPublicSharePageHtml(
   const promptExcerpt = buildVisibleExcerpt(record.prompt, 180);
   const responseExcerpt = buildVisibleExcerpt(record.response, 220);
 
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(urls.shareUrl)}"><meta property="og:image" content="${escapeHtml(urls.imageUrl)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(title)}"><meta name="twitter:description" content="${escapeHtml(description)}"><meta name="twitter:image" content="${escapeHtml(urls.imageUrl)}"><style>:root{color-scheme:light;font-family:Georgia,"Times New Roman",serif;background:radial-gradient(circle at top center,rgba(255,209,102,.2),transparent 28%),linear-gradient(180deg,#f5f1e8 0%,#ebe2d1 100%);color:#1b2631}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}.page{width:min(100%,860px);padding:28px;border-radius:28px;background:rgba(255,252,246,.92);box-shadow:0 28px 80px rgba(27,38,49,.14);border:1px solid rgba(27,38,49,.08)}img{width:100%;height:auto;display:block;border-radius:22px}.eyebrow{margin:18px 0 10px;font:700 12px/1.2 "Courier New",Courier,monospace;letter-spacing:.16em;text-transform:uppercase;color:#114b5f}h1{margin:0 0 14px;font-size:clamp(30px,4vw,42px);line-height:1.05}p{margin:0 0 12px;font-size:18px;line-height:1.5}.cta{display:inline-block;margin-top:14px;padding:12px 18px;border-radius:999px;background:#0a2239;color:#fefcf6;text-decoration:none;font:600 16px/1.2 "Courier New",Courier,monospace}</style></head><body><main class="page"><img src="${escapeHtml(urls.imageUrl)}" alt="${escapeHtml(title)}"><p class="eyebrow">Immutable share snapshot</p><h1>${escapeHtml(title)}</h1><p><strong>Prompt:</strong> ${escapeHtml(promptExcerpt)}</p><p><strong>Response:</strong> ${escapeHtml(responseExcerpt)}</p><a class="cta" href="${escapeHtml(urls.appUrl)}">Open Claude Cope</a></main></body></html>`;
+  const pageImageUrl = urls.pageImageUrl ?? urls.imageUrl;
+
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(urls.shareUrl)}"><meta property="og:image" content="${escapeHtml(urls.imageUrl)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(title)}"><meta name="twitter:description" content="${escapeHtml(description)}"><meta name="twitter:image" content="${escapeHtml(urls.imageUrl)}"><style>:root{color-scheme:light;font-family:Georgia,"Times New Roman",serif;background:radial-gradient(circle at top center,rgba(255,209,102,.2),transparent 28%),linear-gradient(180deg,#f5f1e8 0%,#ebe2d1 100%);color:#1b2631}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}.page{width:min(100%,860px);padding:28px;border-radius:28px;background:rgba(255,252,246,.92);box-shadow:0 28px 80px rgba(27,38,49,.14);border:1px solid rgba(27,38,49,.08)}img{width:100%;height:auto;display:block;border-radius:22px}.eyebrow{margin:18px 0 10px;font:700 12px/1.2 "Courier New",Courier,monospace;letter-spacing:.16em;text-transform:uppercase;color:#114b5f}h1{margin:0 0 14px;font-size:clamp(30px,4vw,42px);line-height:1.05}p{margin:0 0 12px;font-size:18px;line-height:1.5}.cta{display:inline-block;margin-top:14px;padding:12px 18px;border-radius:999px;background:#0a2239;color:#fefcf6;text-decoration:none;font:600 16px/1.2 "Courier New",Courier,monospace}</style></head><body><main class="page"><img src="${escapeHtml(pageImageUrl)}" alt="${escapeHtml(title)}"><p class="eyebrow">Immutable share snapshot</p><h1>${escapeHtml(title)}</h1><p><strong>Prompt:</strong> ${escapeHtml(promptExcerpt)}</p><p><strong>Response:</strong> ${escapeHtml(responseExcerpt)}</p><a class="cta" href="${escapeHtml(urls.appUrl)}">Open Claude Cope</a></main></body></html>`;
 }
 
 export class CloudflareBrowserShareImageRenderer implements ShareImageRenderer {
@@ -206,6 +208,7 @@ export class CloudflareBrowserShareImageRenderer implements ShareImageRenderer {
     width: number;
     height: number;
   }): Promise<Uint8Array> {
+    const { default: puppeteer } = await import("@cloudflare/puppeteer");
     const browser = await puppeteer.launch(this.browserBinding);
     try {
       const page = await browser.newPage();
@@ -256,7 +259,6 @@ export function getDefaultShareImageRenderer(env: Pick<ShareImageBindings, "BROW
 }
 
 export async function getCachedOrRenderedShareImage(input: {
-  requestUrl: string;
   record: SharedCardRecord;
   renderUrl: string;
   cache?: ShareImageCache;
@@ -295,6 +297,7 @@ export function buildShareImageRouteContext(requestUrl: string, env: Pick<ShareI
   const urls = buildPublicShareUrls(requestUrl, env, record.id);
   return {
     ...urls,
+    pageImageUrl: new URL(`/api/share-image/${record.id}`, requestUrl).toString(),
     renderUrl: new URL(`/share/render/${record.id}`, requestUrl).toString(),
     appUrl: new URL("/", getPrimaryAppOrigin(env.ALLOWED_ORIGINS)).toString(),
   };

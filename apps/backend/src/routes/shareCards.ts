@@ -22,7 +22,7 @@ const shareCards = new Hono<Env>();
 
 shareCards.get("/:id/image", (c) => {
   const location = new URL(`/api/share-image/${c.req.param("id")}`, c.req.url).toString();
-  return c.redirect(location, 302);
+  return c.redirect(location, 308);
 });
 
 shareCards.post("/", async (c) => {

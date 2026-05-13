@@ -75,7 +75,6 @@ export function createSharePages(deps: SharePageDependencies = {}) {
     try {
       const context = buildShareImageRouteContext(c.req.url, c.env, record);
       const { response } = await getCachedOrRenderedShareImage({
-        requestUrl: c.req.url,
         record,
         renderUrl: context.renderUrl,
         cache: deps.cache ?? getDefaultShareImageCache(),
@@ -103,7 +102,7 @@ export function createSharePages(deps: SharePageDependencies = {}) {
 
   sharePages.get("/share/:shareId", (c) => {
     const location = new URL(`/s/${c.req.param("shareId")}`, c.req.url).toString();
-    return c.redirect(location, 302);
+    return c.redirect(location, 308);
   });
 
   return sharePages;
