@@ -3,14 +3,13 @@ import {
   SHARE_CARD_DEFAULT_BASE_ORIGIN,
   SHARE_CARD_RENDERER_VERSION,
 } from "@claude-cope/shared/shareCards";
-import { escapeHtml, renderBoundedTextBlock } from "./shareTextLayout";
+import { escapeHtml, renderBoundedTextBlock, truncateGraphemes } from "./shareTextLayout";
 
 export const SHARE_CARD_ROOT_SELECTOR = "#share-card-root";
 export const SHARE_IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 export const SHARE_IMAGE_WIDTH = 1200;
 export const SHARE_IMAGE_HEIGHT = 630;
 const SHARE_IMAGE_CACHE_ORIGIN = "https://share-image-cache.invalid";
-const ELLIPSIS = "...";
 const PROMPT_MAX_COLUMNS = 35;
 const RESPONSE_MAX_COLUMNS = 35;
 const PROMPT_MAX_LINES = 11;
@@ -49,23 +48,6 @@ export type ShareImageRenderer = {
 };
 
 export type ShareImageLogger = Pick<Console, "error" | "warn">;
-
-const graphemeSegmenter = typeof Intl !== "undefined" && "Segmenter" in Intl
-  ? new Intl.Segmenter("en", { granularity: "grapheme" })
-  : null;
-
-function splitGraphemes(value: string): string[] {
-  if (!value) return [];
-  if (!graphemeSegmenter) return Array.from(value);
-  return Array.from(graphemeSegmenter.segment(value), ({ segment }) => segment);
-}
-
-function truncateGraphemes(value: string, maxLength: number): string {
-  const graphemes = splitGraphemes(value);
-  if (graphemes.length <= maxLength) return value;
-  if (maxLength <= ELLIPSIS.length) return ELLIPSIS.slice(0, maxLength);
-  return `${graphemes.slice(0, maxLength - ELLIPSIS.length).join("")}${ELLIPSIS}`;
-}
 
 function buildMetaDescription(record: SharedCardRecord): string {
   const summary = `${record.username} shared a Claude Cope exchange. Prompt: ${record.prompt.replace(/\s+/g, " ").trim()} Response: ${record.response.replace(/\s+/g, " ").trim()}`;
@@ -120,8 +102,8 @@ export function getPublicShareOrigin(
 ): string {
   const candidates = [
     env.SHARE_CARD_BASE_ORIGIN?.trim(),
-    getFirstConfiguredOrigin(env.ALLOWED_ORIGINS),
     getOrigin(requestUrl),
+    getFirstConfiguredOrigin(env.ALLOWED_ORIGINS),
     SHARE_CARD_DEFAULT_BASE_ORIGIN,
   ];
 
@@ -185,9 +167,11 @@ export function renderPublicSharePageHtml(
   const promptExcerpt = buildVisibleExcerpt(record.prompt, 180);
   const responseExcerpt = buildVisibleExcerpt(record.response, 220);
 
-  const pageImageUrl = urls.pageImageUrl ?? urls.imageUrl;
+  const imageSection = urls.pageImageUrl
+    ? `<img src="${escapeHtml(urls.pageImageUrl)}" alt="${escapeHtml(title)}">`
+    : `<section class="fallback" aria-label="Share image unavailable"><p class="fallback-eyebrow">Share image unavailable</p><p class="fallback-copy">This immutable snapshot is still available, but image rendering is not configured on this deployment yet.</p></section>`;
 
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(urls.shareUrl)}"><meta property="og:image" content="${escapeHtml(urls.imageUrl)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(title)}"><meta name="twitter:description" content="${escapeHtml(description)}"><meta name="twitter:image" content="${escapeHtml(urls.imageUrl)}"><style>:root{color-scheme:light;font-family:Georgia,"Times New Roman",serif;background:radial-gradient(circle at top center,rgba(255,209,102,.2),transparent 28%),linear-gradient(180deg,#f5f1e8 0%,#ebe2d1 100%);color:#1b2631}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}.page{width:min(100%,860px);padding:28px;border-radius:28px;background:rgba(255,252,246,.92);box-shadow:0 28px 80px rgba(27,38,49,.14);border:1px solid rgba(27,38,49,.08)}img{width:100%;height:auto;display:block;border-radius:22px}.eyebrow{margin:18px 0 10px;font:700 12px/1.2 "Courier New",Courier,monospace;letter-spacing:.16em;text-transform:uppercase;color:#114b5f}h1{margin:0 0 14px;font-size:clamp(30px,4vw,42px);line-height:1.05}p{margin:0 0 12px;font-size:18px;line-height:1.5}.cta{display:inline-block;margin-top:14px;padding:12px 18px;border-radius:999px;background:#0a2239;color:#fefcf6;text-decoration:none;font:600 16px/1.2 "Courier New",Courier,monospace}</style></head><body><main class="page"><img src="${escapeHtml(pageImageUrl)}" alt="${escapeHtml(title)}"><p class="eyebrow">Immutable share snapshot</p><h1>${escapeHtml(title)}</h1><p><strong>Prompt:</strong> ${escapeHtml(promptExcerpt)}</p><p><strong>Response:</strong> ${escapeHtml(responseExcerpt)}</p><a class="cta" href="${escapeHtml(urls.appUrl)}">Open Claude Cope</a></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(urls.shareUrl)}"><meta property="og:image" content="${escapeHtml(urls.imageUrl)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(title)}"><meta name="twitter:description" content="${escapeHtml(description)}"><meta name="twitter:image" content="${escapeHtml(urls.imageUrl)}"><style>:root{color-scheme:light;font-family:Georgia,"Times New Roman",serif;background:radial-gradient(circle at top center,rgba(255,209,102,.2),transparent 28%),linear-gradient(180deg,#f5f1e8 0%,#ebe2d1 100%);color:#1b2631}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}.page{width:min(100%,860px);padding:28px;border-radius:28px;background:rgba(255,252,246,.92);box-shadow:0 28px 80px rgba(27,38,49,.14);border:1px solid rgba(27,38,49,.08)}img,.fallback{width:100%;display:block;border-radius:22px}.fallback{padding:28px;background:linear-gradient(135deg,rgba(10,34,57,.96) 0%,rgba(17,75,95,.92) 100%);color:#fefcf6}.fallback-eyebrow{margin:0 0 10px;font:700 12px/1.2 "Courier New",Courier,monospace;letter-spacing:.16em;text-transform:uppercase;color:#ffd166}.fallback-copy{margin:0;font-size:18px;line-height:1.5}.eyebrow{margin:18px 0 10px;font:700 12px/1.2 "Courier New",Courier,monospace;letter-spacing:.16em;text-transform:uppercase;color:#114b5f}h1{margin:0 0 14px;font-size:clamp(30px,4vw,42px);line-height:1.05}p{margin:0 0 12px;font-size:18px;line-height:1.5}.cta{display:inline-block;margin-top:14px;padding:12px 18px;border-radius:999px;background:#0a2239;color:#fefcf6;text-decoration:none;font:600 16px/1.2 "Courier New",Courier,monospace}</style></head><body><main class="page">${imageSection}<p class="eyebrow">Immutable share snapshot</p><h1>${escapeHtml(title)}</h1><p><strong>Prompt:</strong> ${escapeHtml(promptExcerpt)}</p><p><strong>Response:</strong> ${escapeHtml(responseExcerpt)}</p><a class="cta" href="${escapeHtml(urls.appUrl)}">Open Claude Cope</a></main></body></html>`;
 }
 
 export class CloudflareBrowserShareImageRenderer implements ShareImageRenderer {

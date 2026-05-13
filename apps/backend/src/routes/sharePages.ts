@@ -73,7 +73,7 @@ export function createSharePages(deps: SharePageDependencies = {}) {
     const renderer = deps.renderer ?? getDefaultShareImageRenderer(c.env);
     if (!renderer) {
       logShareImageFailure(logger, record.id, "Browser rendering binding is not configured");
-      return c.json({ error: "Browser rendering is not configured" }, 500);
+      return c.json({ error: "Browser rendering is not configured" }, 503);
     }
 
     try {
@@ -110,7 +110,11 @@ export function createSharePages(deps: SharePageDependencies = {}) {
     const { record } = loaded;
 
     const context = buildShareImageRouteContext(c.req.url, c.env, record);
-    return c.html(renderPublicSharePageHtml(record, context), 200, {
+    const renderer = deps.renderer ?? getDefaultShareImageRenderer(c.env);
+    return c.html(renderPublicSharePageHtml(record, {
+      ...context,
+      pageImageUrl: renderer ? context.pageImageUrl : undefined,
+    }), 200, {
       "Cache-Control": "no-store",
     });
   });

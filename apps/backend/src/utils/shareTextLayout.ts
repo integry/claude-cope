@@ -24,6 +24,13 @@ function splitGraphemes(value: string): string[] {
   return Array.from(graphemeSegmenter.segment(value), ({ segment }) => segment);
 }
 
+export function truncateGraphemes(value: string, maxLength: number): string {
+  const graphemes = splitGraphemes(value);
+  if (graphemes.length <= maxLength) return value;
+  if (maxLength <= ELLIPSIS.length) return ELLIPSIS.slice(0, maxLength);
+  return `${graphemes.slice(0, maxLength - ELLIPSIS.length).join("")}${ELLIPSIS}`;
+}
+
 const ZERO_WIDTH_RANGES: Array<readonly [number, number]> = [
   [0x0000, 0x001f],
   [0x007f, 0x009f],
