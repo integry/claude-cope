@@ -63,7 +63,9 @@ function splitGraphemes(value: string): string[] {
 }
 
 function getGraphemeDisplayWidth(grapheme: string): number {
-  return /^[\x00-\x7F]+$/u.test(grapheme) ? grapheme.length : 2;
+  return Array.from(grapheme).every((character) => (character.codePointAt(0) ?? 0) <= 0x7F)
+    ? grapheme.length
+    : 2;
 }
 
 function clampTextByDisplayWidth(value: string, maxDisplayWidth: number): string {
@@ -84,13 +86,50 @@ function clampTextByDisplayWidth(value: string, maxDisplayWidth: number): string
   return result;
 }
 
+function wrapSingleLine(value: string, maxLineWidth: number, maxLines: number): { lines: string[]; consumedAll: boolean } {
+  const lines: string[] = [];
+  let currentLine = "";
+  let currentWidth = 0;
+
+  for (const grapheme of splitGraphemes(value)) {
+    const graphemeWidth = getGraphemeDisplayWidth(grapheme);
+    if (currentLine && currentWidth + graphemeWidth > maxLineWidth) {
+      lines.push(currentLine);
+      if (lines.length === maxLines) {
+        return { lines, consumedAll: false };
+      }
+      currentLine = grapheme;
+      currentWidth = graphemeWidth;
+      continue;
+    }
+
+    if (!currentLine && graphemeWidth > maxLineWidth) {
+      lines.push(grapheme);
+      if (lines.length === maxLines) {
+        return { lines, consumedAll: false };
+      }
+      continue;
+    }
+
+    currentLine += grapheme;
+    currentWidth += graphemeWidth;
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return { lines, consumedAll: true };
+}
+
 function wrapText(value: string, maxLineWidth: number, maxLines: number): string[] {
   const rawLines = value.split("\n");
   const lines: string[] = [];
   let truncated = false;
 
   for (const [index, rawLine] of rawLines.entries()) {
-    if (lines.length === maxLines) {
+    const remainingLines = maxLines - lines.length;
+    if (remainingLines === 0) {
       truncated = true;
       break;
     }
@@ -98,60 +137,18 @@ function wrapText(value: string, maxLineWidth: number, maxLines: number): string
     if (!rawLine) {
       lines.push("");
     } else {
-      const graphemes = splitGraphemes(rawLine);
-      let currentLine = "";
-      let currentWidth = 0;
-
-      for (const grapheme of graphemes) {
-        const graphemeWidth = getGraphemeDisplayWidth(grapheme);
-        if (currentLine && currentWidth + graphemeWidth > maxLineWidth) {
-          if (lines.length === maxLines) {
-            truncated = true;
-            break;
-          }
-          lines.push(currentLine);
-          currentLine = grapheme;
-          currentWidth = graphemeWidth;
-          continue;
-        }
-
-        if (!currentLine && graphemeWidth > maxLineWidth) {
-          if (lines.length === maxLines) {
-            truncated = true;
-            break;
-          }
-          lines.push(grapheme);
-          continue;
-        }
-
-        currentLine += grapheme;
-        currentWidth += graphemeWidth;
-      }
-
-      if (truncated) break;
-      if (currentLine === "" && graphemes.length > 0) {
-        if (lines.length === maxLines) {
-          truncated = true;
-          break;
-        }
-        continue;
-      }
-      if (lines.length === maxLines) {
+      const wrappedLine = wrapSingleLine(rawLine, maxLineWidth, remainingLines);
+      lines.push(...wrappedLine.lines);
+      if (!wrappedLine.consumedAll) {
         truncated = true;
         break;
       }
-      lines.push(currentLine);
     }
 
     if (lines.length === maxLines && index < rawLines.length - 1) {
       truncated = true;
       break;
     }
-  }
-
-  if (lines.length > maxLines) {
-    lines.length = maxLines;
-    truncated = true;
   }
 
   if (truncated && lines.length > 0) {
