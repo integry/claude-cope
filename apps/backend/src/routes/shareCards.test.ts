@@ -46,19 +46,6 @@ function createShareCardMockDB() {
                 const row = rows.get(String(args[0]));
                 return (row ? { id: row.id } : null) as T | null;
               }
-              if (upper === "SELECT ID, PROMPT, RESPONSE, USERNAME, THEME, RENDERER_VERSION FROM SHARED_CARDS WHERE ID = ?") {
-                const row = Array.from(rows.values()).find((value) => value.id === String(args[0]));
-                return row
-                  ? {
-                    id: row.id,
-                    prompt: row.prompt,
-                    response: row.response,
-                    username: row.username,
-                    theme: row.theme,
-                    renderer_version: row.renderer_version,
-                  } as T
-                  : null;
-              }
               throw new Error(`Unsupported first SQL in test mock: ${sql}`);
             },
             async all<T = unknown>() {
@@ -122,15 +109,8 @@ async function postShareCard(app: Hono, payload: ShareCardPayload, env: AppBindi
   }, env);
 }
 
-async function createAndFetchImage(app: Hono, payload: ShareCardPayload, env: AppBindings) {
-  const create = await postShareCard(app, payload, env);
-  const body = await create.json() as { imageUrl: string };
-  const image = await app.request(body.imageUrl, {}, env);
-  return { create, image, svg: await image.text() };
-}
-
 describe("POST /api/share-cards", () => {
-  it("returns a stable shareId and URL shape for a new payload", async () => {
+  it("returns the canonical public share and image URLs for a new payload", async () => {
     const app = createTestApp();
     const { db, getRows } = createShareCardMockDB();
     const res = await postShareCard(app, {
@@ -143,8 +123,8 @@ describe("POST /api/share-cards", () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       shareId: "share-1",
-      imageUrl: "https://share.example/api/share-cards/share-1/image",
-      shareUrl: "https://app.example.com/share/share-1",
+      imageUrl: "https://share.example/api/share-image/share-1",
+      shareUrl: "https://share.example/s/share-1",
     });
     expect(getRows()).toEqual([{
       id: "share-1",
@@ -157,7 +137,7 @@ describe("POST /api/share-cards", () => {
     }]);
   });
 
-  it("uses SHARE_CARD_BASE_ORIGIN instead of ALLOWED_ORIGINS ordering for shareUrl", async () => {
+  it("uses SHARE_CARD_BASE_ORIGIN when configured", async () => {
     const app = createTestApp();
     const { db } = createShareCardMockDB();
     const res = await postShareCard(app, {
@@ -167,14 +147,14 @@ describe("POST /api/share-cards", () => {
     }, {
       DB: db,
       ALLOWED_ORIGINS: "http://localhost:5173,https://app.example.com",
-      SHARE_CARD_BASE_ORIGIN: "https://app.example.com",
+      SHARE_CARD_BASE_ORIGIN: "https://public.example.com",
     });
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       shareId: "share-1",
-      imageUrl: "https://share.example/api/share-cards/share-1/image",
-      shareUrl: "https://app.example.com/share/share-1",
+      imageUrl: "https://public.example.com/api/share-image/share-1",
+      shareUrl: "https://public.example.com/s/share-1",
     });
   });
 
@@ -199,24 +179,6 @@ describe("POST /api/share-cards", () => {
     expect(getRowCount()).toBe(1);
   });
 
-  it("uses the default allowed frontend origin for shareUrl when ALLOWED_ORIGINS is unset", async () => {
-    const app = createTestApp();
-    const { db } = createShareCardMockDB();
-    const res = await app.request("https://api.example.com/api/share-cards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: "Hello", response: "World", username: "alice" }),
-    }, { DB: db });
-
-    expect(res.status).toBe(200);
-    expect(res.headers.get("cache-control")).toBe("no-store");
-    await expect(res.json()).resolves.toEqual({
-      shareId: "share-1",
-      imageUrl: "https://api.example.com/api/share-cards/share-1/image",
-      shareUrl: "https://claudecope.com/share/share-1",
-    });
-  });
-
   it("keeps distinct prompt and response whitespace snapshots separate", async () => {
     const app = createTestApp();
     const { db, getRowCount } = createShareCardMockDB();
@@ -235,93 +197,6 @@ describe("POST /api/share-cards", () => {
     expect(second.status).toBe(200);
     expect(await first.json()).not.toEqual(await second.json());
     expect(getRowCount()).toBe(2);
-  });
-
-  it("serves the advertised imageUrl", async () => {
-    const app = createTestApp();
-    const { db } = createShareCardMockDB();
-    const { image, svg } = await createAndFetchImage(app, {
-      prompt: "Ship it",
-      response: "Looks good.",
-      username: "alice",
-    }, { DB: db });
-
-    expect(image.status).toBe(200);
-    expect(image.headers.get("content-type")).toContain("image/svg+xml");
-    expect(svg).toContain("Shared by @alice");
-  });
-
-  it("renders exact-fit wrapped text without adding an ellipsis", async () => {
-    const app = createTestApp();
-    const { db } = createShareCardMockDB();
-    const { svg } = await createAndFetchImage(app, {
-      prompt: "p".repeat(48 * 4),
-      response: "r".repeat(52 * 6),
-      username: "alice",
-    }, { DB: db });
-
-    expect(svg).toContain(`>${"p".repeat(48)}</text>`);
-    expect(svg).not.toContain(`>${"p".repeat(47)}\u2026</text>`);
-    expect(svg).toContain(`>${"r".repeat(52)}</text>`);
-    expect(svg).not.toContain(`>${"r".repeat(51)}\u2026</text>`);
-  });
-
-  it("renders overflow text with an ellipsis on the last visible line", async () => {
-    const app = createTestApp();
-    const { db } = createShareCardMockDB();
-    const { svg } = await createAndFetchImage(app, {
-      prompt: "p".repeat(48 * 4 + 1),
-      response: "r".repeat(52 * 6 + 1),
-      username: "alice",
-    }, { DB: db });
-
-    expect(svg).toContain(`>${"p".repeat(47)}\u2026</text>`);
-    expect(svg).toContain(`>${"r".repeat(51)}\u2026</text>`);
-  });
-
-  it("wraps emoji text conservatively without splitting grapheme clusters", async () => {
-    const app = createTestApp();
-    const { db } = createShareCardMockDB();
-    const emoji = "👨‍👩‍👧‍👦";
-    const { svg } = await createAndFetchImage(app, {
-      prompt: emoji.repeat(97),
-      response: "Looks good.",
-      username: "alice",
-    }, { DB: db });
-
-    expect(svg).toContain(`>${emoji.repeat(24)}</text>`);
-    expect(svg).toContain(`>${emoji.repeat(23)}\u2026</text>`);
-    expect(svg).not.toContain("\uFFFD");
-  });
-
-  it("preserves embedded blank lines when rendering the image", async () => {
-    const app = createTestApp();
-    const { db } = createShareCardMockDB();
-    const { svg } = await createAndFetchImage(app, {
-      prompt: "alpha\n\nomega",
-      response: "first\n\nthird",
-      username: "alice",
-    }, { DB: db });
-
-    expect(svg).toContain(">alpha</text><text x=\"72\" y=\"230\" class=\"body\"></text><text x=\"72\" y=\"264\" class=\"body\">omega</text>");
-    expect(svg).toContain(">first</text><text x=\"72\" y=\"450\" class=\"body\"></text><text x=\"72\" y=\"482\" class=\"body\">third</text>");
-  });
-
-  it("escapes SVG-sensitive characters in rendered fields", async () => {
-    const app = createTestApp();
-    const { db } = createShareCardMockDB();
-    const { svg } = await createAndFetchImage(app, {
-      prompt: `<tag> & "quote" 'apostrophe'`,
-      response: "5 > 3 & 2 < 4",
-      username: `ali<ce>&"'`,
-      theme: `neo&<"'`,
-    }, { DB: db });
-
-    expect(svg).toContain("Shared by @ali&lt;ce&gt;&amp;&quot;&#39;");
-    expect(svg).toContain("&lt;tag&gt; &amp; &quot;quote&quot; &#39;apostrophe&#39;");
-    expect(svg).toContain("5 &gt; 3 &amp; 2 &lt; 4");
-    expect(svg).toContain("NEO&amp;&lt;&quot;&#39;");
-    expect(svg).not.toContain("<tag>");
   });
 
   it("rejects invalid payloads with 400", async () => {

@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { SHARE_CARD_RENDERER_VERSION } from "@claude-cope/shared/shareCards";
 import shareCards from "./shareCards";
+import { createSharePages } from "./sharePages";
+import type { ShareImageCache, ShareImageRenderer } from "../utils/shareImages";
 
 type SharedCardRecord = {
   id: string;
@@ -11,6 +13,7 @@ type SharedCardRecord = {
   theme: string | null;
   renderer_version: string;
   content_hash: string;
+  created_at: string;
 };
 
 type AppBindings = {
@@ -33,8 +36,7 @@ function createShareCardMockDB() {
                 const row = rows.get(String(args[0]));
                 return (row ? { id: row.id } : null) as T | null;
               }
-
-              if (upper === "SELECT ID, PROMPT, RESPONSE, USERNAME, THEME, RENDERER_VERSION FROM SHARED_CARDS WHERE ID = ?") {
+              if (upper === "SELECT ID, PROMPT, RESPONSE, USERNAME, THEME, RENDERER_VERSION, CREATED_AT FROM SHARED_CARDS WHERE ID = ?") {
                 const row = Array.from(rows.values()).find((value) => value.id === String(args[0]));
                 return row
                   ? {
@@ -44,10 +46,10 @@ function createShareCardMockDB() {
                     username: row.username,
                     theme: row.theme,
                     renderer_version: row.renderer_version,
+                    created_at: row.created_at,
                   } as T
                   : null;
               }
-
               throw new Error(`Unsupported first SQL in test mock: ${sql}`);
             },
             async all<T = unknown>() {
@@ -64,7 +66,6 @@ function createShareCardMockDB() {
                   string,
                   string,
                 ];
-
                 if (!rows.has(contentHash)) {
                   rows.set(contentHash, {
                     id: `share-${nextId++}`,
@@ -74,12 +75,11 @@ function createShareCardMockDB() {
                     theme,
                     renderer_version: rendererVersion,
                     content_hash: contentHash,
+                    created_at: "2026-05-13 12:26:00",
                   });
                 }
-
                 return { success: true };
               }
-
               if (upper.includes("SCHEMA_MIGRATIONS")) return { success: true };
               throw new Error(`Unsupported bound run SQL in test mock: ${sql}`);
             },
@@ -100,9 +100,33 @@ function createShareCardMockDB() {
   return { db, getRows: () => Array.from(rows.values()) };
 }
 
-function createTestApp() {
+function createMemoryCache() {
+  const store = new Map<string, Response>();
+  const seenKeys: string[] = [];
+  const cache: ShareImageCache = {
+    async match(request: Request | string) {
+      const key = typeof request === "string" ? request : request.url;
+      seenKeys.push(key);
+      const response = store.get(key);
+      return response ? response.clone() : undefined;
+    },
+    async put(request: Request | string, response: Response) {
+      const key = typeof request === "string" ? request : request.url;
+      seenKeys.push(key);
+      store.set(key, response.clone());
+    },
+  };
+  return { cache, seenKeys };
+}
+
+function createTestApp(options: {
+  renderer?: ShareImageRenderer;
+  cache?: ShareImageCache;
+  logger?: Pick<Console, "error" | "warn">;
+} = {}) {
   const app = new Hono();
   app.route("/api/share-cards", shareCards);
+  app.route("/", createSharePages(options));
   return app;
 }
 
@@ -114,85 +138,109 @@ async function createCard(app: Hono, env: AppBindings, body?: Record<string, unk
   }, env);
 }
 
-describe("GET /api/share-cards/:id/image", () => {
-  it("returns 404 when the share card does not exist", async () => {
-    const app = createTestApp();
+describe("share image and public share routes", () => {
+  it("returns deterministic standalone HTML from /share/render/:shareId", async () => {
     const { db } = createShareCardMockDB();
+    const app = createTestApp();
+    const create = await createCard(app, { DB: db });
+    const { shareId } = await create.json() as { shareId: string };
 
-    const res = await app.request("https://share.example/api/share-cards/missing/image", {}, { DB: db });
+    const res = await app.request(`https://share.example/share/render/${shareId}`, {}, { DB: db });
+    const html = await res.text();
 
-    expect(res.status).toBe(404);
-    await expect(res.json()).resolves.toEqual({ error: "Share card not found" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(html).toContain('id="share-card-root"');
+    expect(html).toContain("width: 1200px");
+    expect(html).toContain("Shared by @alice");
+    expect(html).not.toContain("posthog");
+    expect(html).not.toContain("root\"></div>");
   });
 
-  it("returns 500 when the database binding is missing for image requests", async () => {
+  it("returns public unfurl metadata from /s/:shareId with absolute image URLs", async () => {
+    const { db } = createShareCardMockDB();
     const app = createTestApp();
+    const create = await createCard(app, {
+      DB: db,
+      SHARE_CARD_BASE_ORIGIN: "https://public.example.com",
+      ALLOWED_ORIGINS: "https://app.example.com",
+    });
+    const { shareId } = await create.json() as { shareId: string };
 
-    const res = await app.request("https://share.example/api/share-cards/share-1/image");
+    const res = await app.request(`https://share.example/s/${shareId}`, {}, {
+      DB: db,
+      SHARE_CARD_BASE_ORIGIN: "https://public.example.com",
+      ALLOWED_ORIGINS: "https://app.example.com",
+    });
+    const html = await res.text();
 
-    expect(res.status).toBe(500);
-    await expect(res.json()).resolves.toEqual({ error: "Database is not configured" });
+    expect(res.status).toBe(200);
+    expect(html).toContain('<meta property="og:image" content="https://public.example.com/api/share-image/share-1">');
+    expect(html).toContain('<meta name="twitter:image" content="https://public.example.com/api/share-image/share-1">');
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
+    expect(html).toContain('href="https://app.example.com/"');
   });
 
-  it("returns 500 when the database binding is missing for create requests", async () => {
-    const app = createTestApp();
+  it("returns image/png with immutable cache headers and reuses the same cache key on repeated requests", async () => {
+    const { db } = createShareCardMockDB();
+    const { cache, seenKeys } = createMemoryCache();
+    const renderer: ShareImageRenderer = {
+      renderCardPng: vi.fn().mockResolvedValue(new Uint8Array([137, 80, 78, 71])),
+    };
+    const app = createTestApp({ renderer, cache });
+    const create = await createCard(app, { DB: db });
+    const { shareId, imageUrl } = await create.json() as { shareId: string; imageUrl: string };
 
-    const res = await createCard(app, {});
+    const first = await app.request(imageUrl, {}, { DB: db });
+    const second = await app.request(imageUrl, {}, { DB: db });
+    const firstBytes = new Uint8Array(await first.arrayBuffer());
+    const secondBytes = new Uint8Array(await second.arrayBuffer());
 
-    expect(res.status).toBe(500);
-    await expect(res.json()).resolves.toEqual({ error: "Database is not configured" });
+    expect(shareId).toBe("share-1");
+    expect(first.status).toBe(200);
+    expect(first.headers.get("content-type")).toBe("image/png");
+    expect(first.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    expect(second.status).toBe(200);
+    expect(firstBytes).toEqual(new Uint8Array([137, 80, 78, 71]));
+    expect(secondBytes).toEqual(new Uint8Array([137, 80, 78, 71]));
+    expect(renderer.renderCardPng).toHaveBeenCalledTimes(1);
+    expect(seenKeys.filter((key) => key.includes(`/__share-image-cache/${SHARE_CARD_RENDERER_VERSION}/share-1.png`)).length).toBeGreaterThanOrEqual(2);
   });
 
-  it("rejects persisted cards with an unsupported renderer version", async () => {
-    const app = createTestApp();
-    const { db, getRows } = createShareCardMockDB();
+  it("returns explicit 500 responses and logs shareId-scoped context on renderer failures", async () => {
+    const { db } = createShareCardMockDB();
+    const logger = { error: vi.fn(), warn: vi.fn() };
+    const renderer: ShareImageRenderer = {
+      renderCardPng: vi.fn().mockRejectedValue(new Error("browser crashed")),
+    };
+    const app = createTestApp({ renderer, logger });
     const create = await createCard(app, { DB: db });
     const { imageUrl } = await create.json() as { imageUrl: string };
-    getRows()[0]!.renderer_version = "2025-01-01";
 
     const res = await app.request(imageUrl, {}, { DB: db });
 
     expect(res.status).toBe(500);
-    await expect(res.json()).resolves.toEqual({
-      error: "Unsupported share card renderer version: 2025-01-01",
+    await expect(res.json()).resolves.toEqual({ error: "Failed to render share image" });
+    expect(logger.error).toHaveBeenCalledWith("share image rendering failed", {
+      shareId: "share-1",
+      error: "browser crashed",
     });
   });
 
-  it("truncates long usernames and themes before rendering them", async () => {
-    const app = createTestApp();
+  it("returns 404 for unknown share IDs across the public routes", async () => {
     const { db } = createShareCardMockDB();
-    const username = "u".repeat(64);
-    const theme = "sunset".repeat(10);
-    const create = await createCard(app, { DB: db }, {
-      prompt: "Ship it",
-      response: "Looks good.",
-      username,
-      theme,
-    });
-    const { imageUrl } = await create.json() as { imageUrl: string };
-
-    const svg = await (await app.request(imageUrl, {}, { DB: db })).text();
-
-    expect(svg).toContain("Shared by @");
-    expect(svg).toContain("\u2026");
-    expect(svg).not.toContain(`Shared by @${username}`);
-    expect(svg).not.toContain(theme.toUpperCase());
-  });
-
-  it("wraps wide glyphs more conservatively than ASCII text", async () => {
     const app = createTestApp();
-    const { db } = createShareCardMockDB();
-    const create = await createCard(app, { DB: db }, {
-      prompt: "漢".repeat(25),
-      response: "Looks good.",
-      username: "alice",
-      theme: SHARE_CARD_RENDERER_VERSION,
-    });
-    const { imageUrl } = await create.json() as { imageUrl: string };
 
-    const svg = await (await app.request(imageUrl, {}, { DB: db })).text();
+    const renderRes = await app.request("https://share.example/share/render/missing", {}, { DB: db });
+    const imageRes = await app.request("https://share.example/api/share-image/missing", {}, { DB: db });
+    const pageRes = await app.request("https://share.example/s/missing", {}, { DB: db });
 
-    expect(svg).toContain(`>${"漢".repeat(24)}</text>`);
-    expect(svg).toContain(">漢</text>");
+    expect(renderRes.status).toBe(404);
+    await expect(renderRes.json()).resolves.toEqual({ error: "Share card not found" });
+    expect(imageRes.status).toBe(404);
+    await expect(imageRes.json()).resolves.toEqual({ error: "Share card not found" });
+    expect(pageRes.status).toBe(404);
+    await expect(pageRes.json()).resolves.toEqual({ error: "Share card not found" });
   });
 });

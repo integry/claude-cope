@@ -17,6 +17,7 @@ import toolSequences from "./routes/toolSequences";
 import score from "./routes/score";
 import account from "./routes/account";
 import shareCards from "./routes/shareCards";
+import sharePages from "./routes/sharePages";
 import webhooks from "./routes/webhooks";
 
 const app = new Hono();
@@ -142,6 +143,7 @@ app.route("/api/tool-sequences", toolSequences);
 app.route("/api/score", score);
 app.route("/api/account", account);
 app.route("/api/share-cards", shareCards);
+app.route("/", sharePages);
 
 app.route("/webhooks", webhooks);
 
