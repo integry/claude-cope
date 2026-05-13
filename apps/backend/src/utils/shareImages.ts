@@ -126,114 +126,27 @@ export function renderDeterministicShareCardHtml(record: SharedCardRecord): stri
     <meta name="color-scheme" content="light only">
     <title>Claude Cope share ${escapeHtml(record.id)}</title>
     <style>
-      :root {
-        color-scheme: light;
-        font-family: "SF Pro Display", "Segoe UI", Helvetica, Arial, sans-serif;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      html, body {
-        margin: 0;
-        width: ${SHARE_IMAGE_WIDTH}px;
-        height: ${SHARE_IMAGE_HEIGHT}px;
-        background: #04121c;
-      }
-      body {
-        overflow: hidden;
-      }
+      :root { color-scheme: light; font-family: "SF Pro Display", "Segoe UI", Helvetica, Arial, sans-serif; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; width: ${SHARE_IMAGE_WIDTH}px; height: ${SHARE_IMAGE_HEIGHT}px; background: #04121c; }
+      body { overflow: hidden; }
       ${SHARE_CARD_ROOT_SELECTOR} {
-        width: ${SHARE_IMAGE_WIDTH}px;
-        height: ${SHARE_IMAGE_HEIGHT}px;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        padding: 48px;
-        background:
-          radial-gradient(circle at top left, rgba(111, 255, 233, 0.14), transparent 34%),
-          linear-gradient(135deg, #0a2239 0%, #114b5f 100%);
+        width: ${SHARE_IMAGE_WIDTH}px; height: ${SHARE_IMAGE_HEIGHT}px; display: flex; flex-direction: column; justify-content: space-between; padding: 48px;
+        background: radial-gradient(circle at top left, rgba(111, 255, 233, 0.14), transparent 34%), linear-gradient(135deg, #0a2239 0%, #114b5f 100%);
         color: #f4f7f5;
       }
-      .frame {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        border: 1px solid rgba(169, 214, 229, 0.24);
-        border-radius: 28px;
-        padding: 38px 40px;
-        background: rgba(7, 20, 31, 0.78);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-      }
-      .topbar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 26px;
-        gap: 16px;
-      }
-      .eyebrow {
-        color: #a9d6e5;
-        font-size: 22px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-      .theme {
-        color: #ffd166;
-        font-size: 18px;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        text-align: right;
-      }
-      .columns {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        gap: 24px;
-        min-height: 0;
-        flex: 1;
-      }
-      .panel {
-        min-height: 0;
-        padding: 24px 26px;
-        border-radius: 22px;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(169, 214, 229, 0.16);
-      }
-      .label {
-        margin: 0 0 14px;
-        color: #6fffe9;
-        font-size: 24px;
-        font-weight: 700;
-      }
-      pre {
-        margin: 0;
-        white-space: pre-wrap;
-        word-break: break-word;
-        font: 400 22px/1.42 "SFMono-Regular", "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
-        color: #f4f7f5;
-      }
+      .frame { flex: 1; display: flex; flex-direction: column; border: 1px solid rgba(169, 214, 229, 0.24); border-radius: 28px; padding: 38px 40px; background: rgba(7, 20, 31, 0.78); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+      .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 26px; gap: 16px; }
+      .eyebrow { color: #a9d6e5; font-size: 22px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+      .theme { color: #ffd166; font-size: 18px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; text-align: right; }
+      .columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; min-height: 0; flex: 1; }
+      .panel { min-height: 0; padding: 24px 26px; border-radius: 22px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(169, 214, 229, 0.16); }
+      .label { margin: 0 0 14px; color: #6fffe9; font-size: 24px; font-weight: 700; }
+      pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 400 22px/1.42 "SFMono-Regular", "SF Mono", "Cascadia Code", Menlo, Consolas, monospace; color: #f4f7f5; }
     </style>
   </head>
   <body>
-    <main id="share-card-root" aria-label="Claude Cope share card">
-      <section class="frame">
-        <header class="topbar">
-          <div class="eyebrow">${sharedByLabel}</div>
-          <div class="theme">${themeLabel}</div>
-        </header>
-        <section class="columns">
-          <article class="panel">
-            <h1 class="label">Prompt</h1>
-            <pre>${prompt}</pre>
-          </article>
-          <article class="panel">
-            <h2 class="label">Response</h2>
-            <pre>${response}</pre>
-          </article>
-        </section>
-      </section>
-    </main>
+    <main id="share-card-root" aria-label="Claude Cope share card"><section class="frame"><header class="topbar"><div class="eyebrow">${sharedByLabel}</div><div class="theme">${themeLabel}</div></header><section class="columns"><article class="panel"><h1 class="label">Prompt</h1><pre>${prompt}</pre></article><article class="panel"><h2 class="label">Response</h2><pre>${response}</pre></article></section></section></main>
   </body>
 </html>`;
 }
@@ -269,76 +182,22 @@ export function renderPublicSharePageHtml(
     <meta name="twitter:image" content="${escapeHtml(urls.imageUrl)}">
     <style>
       :root {
-        color-scheme: light;
-        font-family: Georgia, "Times New Roman", serif;
-        background:
-          radial-gradient(circle at top center, rgba(255, 209, 102, 0.2), transparent 28%),
-          linear-gradient(180deg, #f5f1e8 0%, #ebe2d1 100%);
+        color-scheme: light; font-family: Georgia, "Times New Roman", serif;
+        background: radial-gradient(circle at top center, rgba(255, 209, 102, 0.2), transparent 28%), linear-gradient(180deg, #f5f1e8 0%, #ebe2d1 100%);
         color: #1b2631;
       }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 24px;
-      }
-      .page {
-        width: min(100%, 860px);
-        padding: 28px;
-        border-radius: 28px;
-        background: rgba(255, 252, 246, 0.92);
-        box-shadow: 0 28px 80px rgba(27, 38, 49, 0.14);
-        border: 1px solid rgba(27, 38, 49, 0.08);
-      }
-      img {
-        width: 100%;
-        height: auto;
-        display: block;
-        border-radius: 22px;
-      }
-      .eyebrow {
-        margin: 18px 0 10px;
-        font: 700 12px/1.2 "SF Pro Display", "Segoe UI", Helvetica, Arial, sans-serif;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: #114b5f;
-      }
-      h1 {
-        margin: 0 0 14px;
-        font-size: clamp(30px, 4vw, 42px);
-        line-height: 1.05;
-      }
-      p {
-        margin: 0 0 12px;
-        font-size: 18px;
-        line-height: 1.5;
-      }
-      .cta {
-        display: inline-block;
-        margin-top: 14px;
-        padding: 12px 18px;
-        border-radius: 999px;
-        background: #0a2239;
-        color: #fefcf6;
-        text-decoration: none;
-        font: 600 16px/1.2 "SF Pro Display", "Segoe UI", Helvetica, Arial, sans-serif;
-      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+      .page { width: min(100%, 860px); padding: 28px; border-radius: 28px; background: rgba(255, 252, 246, 0.92); box-shadow: 0 28px 80px rgba(27, 38, 49, 0.14); border: 1px solid rgba(27, 38, 49, 0.08); }
+      img { width: 100%; height: auto; display: block; border-radius: 22px; }
+      .eyebrow { margin: 18px 0 10px; font: 700 12px/1.2 "SF Pro Display", "Segoe UI", Helvetica, Arial, sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: #114b5f; }
+      h1 { margin: 0 0 14px; font-size: clamp(30px, 4vw, 42px); line-height: 1.05; }
+      p { margin: 0 0 12px; font-size: 18px; line-height: 1.5; }
+      .cta { display: inline-block; margin-top: 14px; padding: 12px 18px; border-radius: 999px; background: #0a2239; color: #fefcf6; text-decoration: none; font: 600 16px/1.2 "SF Pro Display", "Segoe UI", Helvetica, Arial, sans-serif; }
     </style>
   </head>
   <body>
-    <main class="page">
-      <img src="${escapeHtml(urls.imageUrl)}" alt="${escapeHtml(title)}">
-      <p class="eyebrow">Immutable share snapshot</p>
-      <h1>${escapeHtml(title)}</h1>
-      <p><strong>Prompt:</strong> ${escapeHtml(promptExcerpt)}</p>
-      <p><strong>Response:</strong> ${escapeHtml(responseExcerpt)}</p>
-      <a class="cta" href="${escapeHtml(urls.appUrl)}">Open Claude Cope</a>
-    </main>
+    <main class="page"><img src="${escapeHtml(urls.imageUrl)}" alt="${escapeHtml(title)}"><p class="eyebrow">Immutable share snapshot</p><h1>${escapeHtml(title)}</h1><p><strong>Prompt:</strong> ${escapeHtml(promptExcerpt)}</p><p><strong>Response:</strong> ${escapeHtml(responseExcerpt)}</p><a class="cta" href="${escapeHtml(urls.appUrl)}">Open Claude Cope</a></main>
   </body>
 </html>`;
 }
