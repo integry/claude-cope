@@ -8,6 +8,9 @@ describe("ShareButton modal share flow", () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
   let fetchMock: ReturnType<typeof vi.fn>;
+  let shareCardResponses: Array<{ shareId: string; imageUrl: string; shareUrl: string }>;
+  let imageBodies: Map<string, Uint8Array>;
+  let imageFetchOverrides: Map<string, Promise<Response>>;
 
   const mockClipboard = {
     write: vi.fn().mockResolvedValue(undefined),
@@ -26,10 +29,23 @@ describe("ShareButton modal share flow", () => {
     shareUrl: "https://claudecope.com/s/share-123",
   };
 
+  const createDeferred = <T,>() => {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+
   beforeEach(() => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
+    shareCardResponses = [shareCardResponse];
+    imageBodies = new Map([[shareCardResponse.imageUrl, imageBytes]]);
+    imageFetchOverrides = new Map();
 
     Object.defineProperty(navigator, "clipboard", {
       value: mockClipboard,
@@ -42,13 +58,17 @@ describe("ShareButton modal share flow", () => {
     fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/api/share-cards")) {
-        return new Response(JSON.stringify(shareCardResponse), {
+        return new Response(JSON.stringify(shareCardResponses.shift() ?? shareCardResponse), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
       }
       if (url.includes("/api/share-image/")) {
-        return new Response(imageBytes, {
+        const override = imageFetchOverrides.get(url);
+        if (override) {
+          return override;
+        }
+        return new Response(imageBodies.get(url) ?? imageBytes, {
           status: 200,
           headers: { "Content-Type": "image/png" },
         });
@@ -107,6 +127,11 @@ describe("ShareButton modal share flow", () => {
     return btn!;
   };
 
+  const getButtonByLabel = (label: string) => {
+    const buttons = container.querySelectorAll("button");
+    return Array.from(buttons).find((button) => button.textContent?.includes(label)) ?? null;
+  };
+
   it("opens preview modal when share button is clicked", async () => {
     renderComponent();
     const dialog = await openPreview();
@@ -153,11 +178,11 @@ describe("ShareButton modal share flow", () => {
 
     await clickShareButton("SHARE ON LINKEDIN");
 
-    expect(container.textContent).toContain("MANDATORY ACTION");
+    expect(container.textContent).toContain("LINKEDIN WILL SHARE THE PUBLIC LINK DIRECTLY");
+    expect(container.textContent).not.toContain("PRESS CTRL + V");
 
     const mockOpen = vi.spyOn(window, "open").mockImplementation(() => null);
-    const buttonsAfter = container.querySelectorAll("button");
-    const openTabBtn = Array.from(buttonsAfter).find((b) => b.textContent?.includes("OPEN LINKEDIN TAB"));
+    const openTabBtn = getButtonByLabel("OPEN LINKEDIN TAB");
     expect(openTabBtn).not.toBeUndefined();
 
     await act(async () => {
@@ -231,6 +256,93 @@ describe("ShareButton modal share flow", () => {
 
     const shareBtn = container.querySelector("button");
     expect(shareBtn?.textContent).toBe("[share]");
+  });
+
+  it("resets back to the share button when the modal closes during an in-flight share", async () => {
+    renderComponent();
+    await openPreview();
+
+    const deferredImage = createDeferred<Response>();
+    imageFetchOverrides.set(shareCardResponse.imageUrl, deferredImage.promise);
+
+    const shareOnXButton = getButtonByLabel("SHARE ON X");
+    expect(shareOnXButton).not.toBeNull();
+
+    await act(async () => {
+      shareOnXButton!.click();
+      await Promise.resolve();
+    });
+
+    const closeButton = getButtonByLabel("[x]");
+    expect(closeButton).not.toBeNull();
+
+    await act(async () => {
+      closeButton!.click();
+    });
+
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+    expect(container.textContent).not.toContain("Copying image to clipboard");
+    expect(container.querySelector("button")?.textContent).toBe("[share]");
+
+    deferredImage.resolve(new Response(imageBytes, {
+      status: 200,
+      headers: { "Content-Type": "image/png" },
+    }));
+
+    await act(async () => {
+      await deferredImage.promise;
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+    expect(container.querySelector("button")?.textContent).toBe("[share]");
+  });
+
+  it("keeps in-flight preview image fetches isolated by imageUrl", async () => {
+    const secondShareCardResponse = {
+      shareId: "share-456",
+      imageUrl: "https://claudecope.com/api/share-image/share-456",
+      shareUrl: "https://claudecope.com/s/share-456",
+    };
+    shareCardResponses = [shareCardResponse, secondShareCardResponse];
+    imageBodies.set(secondShareCardResponse.imageUrl, new TextEncoder().encode("server-image-b"));
+
+    renderComponent();
+    await openPreview();
+
+    const firstDeferredImage = createDeferred<Response>();
+    imageFetchOverrides.set(shareCardResponse.imageUrl, firstDeferredImage.promise);
+
+    const firstShareButton = getButtonByLabel("SHARE ON X");
+    expect(firstShareButton).not.toBeNull();
+
+    await act(async () => {
+      firstShareButton!.click();
+      await Promise.resolve();
+    });
+
+    const closeButton = getButtonByLabel("[x]");
+    expect(closeButton).not.toBeNull();
+    await act(async () => {
+      closeButton!.click();
+    });
+
+    await openPreview();
+    await clickShareButton("COPY IMAGE");
+
+    expect(mockClipboard.write).toHaveBeenCalledTimes(1);
+    const clipboardItem = mockClipboard.write.mock.calls[0]?.[0]?.[0];
+    const copiedBlob = await clipboardItem.getType("image/png");
+    expect(await copiedBlob.text()).toBe("server-image-b");
+
+    firstDeferredImage.resolve(new Response(imageBytes, {
+      status: 200,
+      headers: { "Content-Type": "image/png" },
+    }));
+    await act(async () => {
+      await firstDeferredImage.promise;
+      await Promise.resolve();
+    });
   });
 
   it("copies the backend PNG when COPY IMAGE is selected", async () => {

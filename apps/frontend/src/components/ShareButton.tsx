@@ -33,7 +33,7 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
 }
 
 export function ShareButton({ userMessage, systemMessage, username }: { userMessage: string; systemMessage: string; username: string }) {
-  const [status, setStatus] = useState<"idle" | "generating" | "copied" | "done" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "generating" | "copied" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [previewCard, setPreviewCard] = useState<CreateShareCardResult | null>(null);
   const [pasteHint, setPasteHint] = useState<{ platform: "twitter" | "linkedin" } | null>(null);
@@ -42,7 +42,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   const triggerRef = useRef<HTMLButtonElement>(null);
   const previewSessionRef = useRef(0);
   const previewBlobRef = useRef<{ imageUrl: string; blob: Blob } | null>(null);
-  const previewBlobRequestRef = useRef<Promise<Blob> | null>(null);
+  const previewBlobRequestRef = useRef<{ imageUrl: string; request: Promise<Blob> } | null>(null);
 
   const clearTimeouts = useCallback(() => {
     timeoutIds.current.forEach(clearTimeout);
@@ -79,23 +79,29 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     }, ms);
   }, [clearTimeouts, addTimeout]);
 
-  const closePreview = useCallback(() => {
+  const generatingRef = useRef(false);
+  const sharingRef = useRef(false);
+
+  const closePreview = useCallback((options?: { resetStatus?: boolean }) => {
     previewSessionRef.current += 1;
+    sharingRef.current = false;
     clearTimeouts();
     setPreviewCard(null);
     setPasteHint(null);
+    if (options?.resetStatus !== false) {
+      setStatus("idle");
+      setFeedback(null);
+    }
   }, [clearTimeouts]);
-
-  const generatingRef = useRef(false);
-  const sharingRef = useRef(false);
 
   const loadPreviewBlob = useCallback(async (imageUrl: string): Promise<Blob> => {
     const cached = previewBlobRef.current;
     if (cached && cached.imageUrl === imageUrl) {
       return cached.blob;
     }
-    if (previewBlobRequestRef.current) {
-      return previewBlobRequestRef.current;
+    const inFlight = previewBlobRequestRef.current;
+    if (inFlight && inFlight.imageUrl === imageUrl) {
+      return inFlight.request;
     }
 
     const request = (async () => {
@@ -111,11 +117,13 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       return blob;
     })();
 
-    previewBlobRequestRef.current = request;
+    previewBlobRequestRef.current = { imageUrl, request };
     try {
       return await request;
     } finally {
-      previewBlobRequestRef.current = null;
+      if (previewBlobRequestRef.current?.request === request) {
+        previewBlobRequestRef.current = null;
+      }
     }
   }, []);
 
@@ -179,23 +187,23 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
 
       if (textCopied) {
         setPasteHint(null);
+        closePreview({ resetStatus: false });
         setStatus("copied");
         setFeedback("Share link copied to clipboard (image copy not supported in this browser).");
-        closePreview();
         resetAfterDelay(4000);
       } else {
         setPasteHint(null);
+        closePreview({ resetStatus: false });
         setStatus("error");
         setFeedback("Failed to copy to clipboard. Please try again or check browser permissions.");
-        closePreview();
         resetAfterDelay(4000);
       }
     } catch {
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
       setPasteHint(null);
+      closePreview({ resetStatus: false });
       setStatus("error");
       setFeedback("Something went wrong. Please try again.");
-      closePreview();
       resetAfterDelay(4000);
     } finally {
       sharingRef.current = false;
@@ -299,7 +307,6 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       <span className="inline-flex items-center gap-2 ml-2 text-[11px] font-mono align-baseline">
         {status === "generating" && <span className="text-yellow-400 animate-pulse">{SPINNER_CHAR} {feedback}</span>}
         {status === "copied" && <span className="text-green-400">{feedback}</span>}
-        {status === "done" && <span className="text-green-400">{feedback}</span>}
         {status === "error" && <span className="text-red-400">{feedback}</span>}
       </span>
     );
@@ -361,12 +368,21 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
               {pasteHint ? (
                 <div style={{ fontSize: "12px", lineHeight: "1.6", textAlign: "left" }}>
                   <div style={{ color: "#ff5555", fontWeight: "bold" }}>
-                    <div>{"> [SYSTEM] IMAGE COPIED TO CLIPBOARD."}</div>
-                    <div>
-                      {"> MANDATORY ACTION: GO TO THE NEW TAB AND PRESS "}
-                      <span style={{ color: "#ffff55" }}>{`[ ${isMacPlatform() ? "CMD" : "CTRL"} + V ]`}</span>
-                      {" TO PASTE."}
-                    </div>
+                    {pasteHint.platform === "twitter" ? (
+                      <>
+                        <div>{"> [SYSTEM] IMAGE COPIED TO CLIPBOARD."}</div>
+                        <div>
+                          {"> MANDATORY ACTION: GO TO THE NEW TAB AND PRESS "}
+                          <span style={{ color: "#ffff55" }}>{`[ ${isMacPlatform() ? "CMD" : "CTRL"} + V ]`}</span>
+                          {" TO PASTE."}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>{"> [SYSTEM] LINKEDIN WILL SHARE THE PUBLIC LINK DIRECTLY."}</div>
+                        <div>{"> ACTION: OPEN THE NEW TAB TO POST THE SHARE URL."}</div>
+                      </>
+                    )}
                   </div>
                   <button
                     onClick={() => handleOpenShareTarget(pasteHint.platform)}
