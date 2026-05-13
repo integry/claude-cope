@@ -16,6 +16,12 @@ describe("app", () => {
       expect(migrations.some((migration) => migration.name === "034_idx_user_scores_account_id")).toBe(true);
     });
 
+    it("registers explicit migrations for shared_cards rollout", () => {
+      expect(migrations.some((migration) => migration.name === "035_create_shared_cards")).toBe(true);
+      expect(migrations.some((migration) => migration.name === "036_idx_shared_cards_created_at")).toBe(true);
+      expect(migrations.some((migration) => migration.name === "037_idx_shared_cards_renderer_version")).toBe(true);
+    });
+
     it("calls DB.exec for migration when DB is available", async () => {
       const db = {
         prepare: vi.fn(() => ({
