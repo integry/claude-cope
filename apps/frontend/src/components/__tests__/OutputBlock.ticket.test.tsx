@@ -73,7 +73,7 @@ describe("OutputBlock ticket dossier rendering", () => {
     expect(container.textContent).toContain("Brief");
     expect(container.textContent).toContain("we need the login flow refactored by EOD.");
     expect(container.textContent).toContain("REWARD:");
-    expect(container.textContent).toContain("1440 TD");
+    expect(container.textContent).toContain("1,440 TD");
   });
 
   it("renders reporter bright and profile dim italicized", () => {
