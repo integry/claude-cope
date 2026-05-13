@@ -5,6 +5,7 @@ import shareCards from "./shareCards";
 import { createSharePages } from "./sharePages";
 import {
   buildShareImageCacheKey,
+  getCachedOrRenderedShareImage,
   renderDeterministicShareCardHtml,
   renderPublicSharePageHtml,
   type ShareImageCache,
@@ -244,14 +245,19 @@ describe("share image and public share routes", () => {
     await expect(res.text()).resolves.toContain(expectedHref);
   });
 
-  it("prefers ALLOWED_ORIGINS for public share URLs when no explicit public share origin is configured", async () => {
+  it("uses the request origin for public share URLs when no explicit public share origin is configured", async () => {
     const { db, app } = createDbBackedApp();
-    const created = await createCardJson<{ imageUrl: string; shareUrl: string }>(app, {
+    const response = await app.request("https://worker.example/api/share-cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "Ship it", response: "Looks good.", username: "alice" }),
+    }, {
       DB: db,
       ALLOWED_ORIGINS: STAGING_ALLOWED_ORIGINS,
     });
-    expect(created.imageUrl).toBe("https://staging.example.com/api/share-image/share-1");
-    expect(created.shareUrl).toBe("https://staging.example.com/s/share-1");
+    const created = await response.json() as { imageUrl: string; shareUrl: string };
+    expect(created.imageUrl).toBe("https://worker.example/api/share-image/share-1");
+    expect(created.shareUrl).toBe("https://worker.example/s/share-1");
   });
 
   it("returns image/png with immutable cache headers and reuses the same cache key on repeated requests", async () => {
@@ -274,6 +280,41 @@ describe("share image and public share routes", () => {
     expect(secondBytes).toEqual(new Uint8Array([137, 80, 78, 71]));
     expect(renderer.renderCardPng).toHaveBeenCalledTimes(1);
     expect(seenKeys).toContain(`https://share-image-cache.invalid/__share-image-cache/${SHARE_CARD_RENDERER_VERSION}/share-1.png`);
+  });
+
+  it("dedupes concurrent image renders for the same cache miss", async () => {
+    const { cache } = createMemoryCache();
+    let resolvePng: ((value: Uint8Array) => void) | undefined;
+    const record = createRecord();
+    const renderer: ShareImageRenderer = {
+      renderCardPng: vi.fn().mockImplementation(() => new Promise<Uint8Array>((resolve) => {
+        resolvePng = resolve;
+      })),
+    };
+    const firstRequest = getCachedOrRenderedShareImage({
+      record,
+      renderUrl: "https://worker.example/share/render/share-1",
+      cache,
+      renderer,
+    });
+    const secondRequest = getCachedOrRenderedShareImage({
+      record,
+      renderUrl: "https://worker.example/share/render/share-1",
+      cache,
+      renderer,
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(renderer.renderCardPng).toHaveBeenCalledTimes(1);
+
+    resolvePng?.(new Uint8Array([137, 80, 78, 71]));
+
+    const [{ response: first }, { response: second }] = await Promise.all([firstRequest, secondRequest]);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(new Uint8Array(await first.arrayBuffer())).toEqual(new Uint8Array([137, 80, 78, 71]));
+    expect(new Uint8Array(await second.arrayBuffer())).toEqual(new Uint8Array([137, 80, 78, 71]));
+    expect(renderer.renderCardPng).toHaveBeenCalledTimes(1);
   });
 
   it("uses the same cache key across different request origins", () => {

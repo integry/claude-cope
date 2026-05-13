@@ -10,6 +10,7 @@ export const SHARE_IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 export const SHARE_IMAGE_WIDTH = 1200;
 export const SHARE_IMAGE_HEIGHT = 630;
 const SHARE_IMAGE_CACHE_ORIGIN = "https://share-image-cache.invalid";
+const inFlightShareImageRenders = new Map<string, Promise<Response>>();
 const PROMPT_MAX_COLUMNS = 35;
 const RESPONSE_MAX_COLUMNS = 35;
 const PROMPT_MAX_LINES = 11;
@@ -78,8 +79,8 @@ export function getPublicShareOrigin(
 ): string {
   const candidates = [
     env.SHARE_CARD_BASE_ORIGIN?.trim(),
-    getFirstConfiguredOrigin(env.ALLOWED_ORIGINS),
     getOrigin(requestUrl),
+    getFirstConfiguredOrigin(env.ALLOWED_ORIGINS),
     SHARE_CARD_DEFAULT_BASE_ORIGIN,
   ];
 
@@ -210,27 +211,41 @@ export async function getCachedOrRenderedShareImage(input: { record: SharedCardR
     return { response: cached, cacheKey };
   }
 
-  const png = await input.renderer.renderCardPng({
-    renderUrl: input.renderUrl,
-    selector: SHARE_CARD_ROOT_SELECTOR,
-    width: SHARE_IMAGE_WIDTH,
-    height: SHARE_IMAGE_HEIGHT,
-  });
-  const bytes = png instanceof Uint8Array ? png : new Uint8Array(png);
-  const body = new Uint8Array(bytes.byteLength);
-  body.set(bytes);
-  const response = new Response(body, {
-    headers: {
-      "Content-Type": "image/png",
-      "Cache-Control": SHARE_IMAGE_CACHE_CONTROL,
-    },
-  });
+  const inFlightKey = cacheKey.url;
+  let renderPromise = inFlightShareImageRenders.get(inFlightKey);
+  if (!renderPromise) {
+    renderPromise = (async () => {
+      const png = await input.renderer.renderCardPng({
+        renderUrl: input.renderUrl,
+        selector: SHARE_CARD_ROOT_SELECTOR,
+        width: SHARE_IMAGE_WIDTH,
+        height: SHARE_IMAGE_HEIGHT,
+      });
+      const bytes = png instanceof Uint8Array ? png : new Uint8Array(png);
+      const response = new Response(bytes, {
+        headers: {
+          "Content-Type": "image/png",
+          "Cache-Control": SHARE_IMAGE_CACHE_CONTROL,
+        },
+      });
 
-  if (input.cache) {
-    await input.cache.put(cacheKey, response.clone());
+      if (input.cache) {
+        await input.cache.put(cacheKey, response.clone());
+      }
+
+      return response;
+    })();
+    inFlightShareImageRenders.set(inFlightKey, renderPromise);
   }
 
-  return { response, cacheKey };
+  try {
+    const response = await renderPromise;
+    return { response: response.clone(), cacheKey };
+  } finally {
+    if (inFlightShareImageRenders.get(inFlightKey) === renderPromise) {
+      inFlightShareImageRenders.delete(inFlightKey);
+    }
+  }
 }
 
 export function buildShareImageRouteContext(

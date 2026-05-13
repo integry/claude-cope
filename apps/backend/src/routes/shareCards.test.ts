@@ -103,7 +103,11 @@ function createTestApp() {
 }
 
 async function postShareCard(app: Hono, payload: ShareCardPayload, env: AppBindings) {
-  return app.request("https://share.example/api/share-cards", {
+  return postShareCardToUrl(app, "https://share.example/api/share-cards", payload, env);
+}
+
+async function postShareCardToUrl(app: Hono, requestUrl: string, payload: ShareCardPayload, env: AppBindings) {
+  return app.request(requestUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -111,7 +115,7 @@ async function postShareCard(app: Hono, payload: ShareCardPayload, env: AppBindi
 }
 
 describe("POST /api/share-cards", () => {
-  it("returns the canonical public share and image URLs for a new payload", async () => {
+  it("returns request-origin public share URLs for a new payload", async () => {
     const app = createTestApp();
     const { db, getRows } = createShareCardMockDB();
     const res = await postShareCard(app, {
@@ -124,8 +128,8 @@ describe("POST /api/share-cards", () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       shareId: "share-1",
-      imageUrl: "https://app.example.com/api/share-image/share-1",
-      shareUrl: "https://app.example.com/s/share-1",
+      imageUrl: "https://share.example/api/share-image/share-1",
+      shareUrl: "https://share.example/s/share-1",
     });
     expect(getRows()).toEqual([{
       id: "share-1",
@@ -159,10 +163,10 @@ describe("POST /api/share-cards", () => {
     });
   });
 
-  it("prefers the configured allowed origin over the request host when no share base origin is set", async () => {
+  it("uses the request origin for public share URLs when no share base origin is set", async () => {
     const app = createTestApp();
     const { db } = createShareCardMockDB();
-    const res = await postShareCard(app, {
+    const res = await postShareCardToUrl(app, "https://worker.example/api/share-cards", {
       prompt: "Ship it",
       response: "Looks good.",
       username: "alice",
@@ -174,8 +178,8 @@ describe("POST /api/share-cards", () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       shareId: "share-1",
-      imageUrl: "https://app.example.com/api/share-image/share-1",
-      shareUrl: "https://app.example.com/s/share-1",
+      imageUrl: "https://worker.example/api/share-image/share-1",
+      shareUrl: "https://worker.example/s/share-1",
     });
   });
 

@@ -20,11 +20,15 @@ export async function createShareCard(input: CreateShareCardInput): Promise<Crea
   try {
     res = await fetch(`${API_BASE}/api/share-cards`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       signal,
     });
-  } catch {
+  } catch (error) {
+    if ((error instanceof Error && error.name === "AbortError") || signal?.aborted) {
+      throw error;
+    }
     throw new Error("Network error");
   }
 

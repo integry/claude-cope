@@ -18,6 +18,7 @@ describe("createShareCard", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt: "Hello", response: "World", username: "alice", theme: "amber" }),
     }));
@@ -54,5 +55,19 @@ describe("createShareCard", () => {
     await expect(createShareCard({ prompt: "Hello", response: "World", username: "alice" }))
       .rejects
       .toThrow("Network error");
+  });
+
+  it("rethrows abort failures so callers can treat cancellation separately", async () => {
+    const controller = new AbortController();
+    const abortError = new DOMException("The operation was aborted.", "AbortError");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(abortError));
+    controller.abort();
+
+    await expect(createShareCard({
+      prompt: "Hello",
+      response: "World",
+      username: "alice",
+      signal: controller.signal,
+    })).rejects.toBe(abortError);
   });
 });
