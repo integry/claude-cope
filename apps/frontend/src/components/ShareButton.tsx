@@ -1,17 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { shareChatImage, openShareIntent, getChatCardBlob } from "./shareChatUtils";
-import type { ShareResult } from "./shareChatUtils";
+import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
+import { openShareIntent } from "./shareChatUtils";
 
-/** Sentinel value that async callbacks compare against to bail out when the
- *  component has unmounted (or a newer request has superseded them). */
 type MountToken = { cancelled: boolean };
 
 const SPINNER_CHAR = "/";
 
-/** Detect Mac so the paste hint can show CMD+V instead of CTRL+V.
- *  navigator.platform is deprecated but still ships everywhere; the modern
- *  userAgentData isn't on Safari/Firefox yet. Fall back to CTRL on the
- *  rare case both are unavailable (SSR, locked-down browsers). */
 function isMacPlatform(): boolean {
   if (typeof navigator === "undefined") return false;
   const uaData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
@@ -19,15 +13,36 @@ function isMacPlatform(): boolean {
   return /mac/i.test(navigator.platform || "");
 }
 
+async function copyBlobToClipboard(blob: Blob): Promise<boolean> {
+  if (typeof ClipboardItem === "undefined") return false;
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type || "image/png"]: blob })]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function ShareButton({ userMessage, systemMessage, username }: { userMessage: string; systemMessage: string; username: string }) {
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "done" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewCard, setPreviewCard] = useState<CreateShareCardResult | null>(null);
   const [pasteHint, setPasteHint] = useState<{ platform: "twitter" | "linkedin" } | null>(null);
   const timeoutIds = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const modalRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const previewSessionRef = useRef(0);
+  const previewBlobRef = useRef<{ imageUrl: string; blob: Blob } | null>(null);
+  const previewBlobRequestRef = useRef<Promise<Blob> | null>(null);
 
   const clearTimeouts = useCallback(() => {
     timeoutIds.current.forEach(clearTimeout);
@@ -43,24 +58,14 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     return id;
   }, []);
 
-  // Mounted-state token: async callbacks bail out when cancelled.
   const mountTokenRef = useRef<MountToken>({ cancelled: false });
 
-  // Cancel in-flight async work on unmount only.
   useEffect(() => {
     const token: MountToken = { cancelled: false };
     mountTokenRef.current = token;
     return () => { token.cancelled = true; };
   }, []);
 
-  // Revoke stale object URLs when previewUrl changes.
-  useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
-
-  // Clean up timeouts on unmount.
   useEffect(() => {
     return () => { clearTimeouts(); };
   }, [clearTimeouts]);
@@ -75,120 +80,118 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
   }, [clearTimeouts, addTimeout]);
 
   const closePreview = useCallback(() => {
+    previewSessionRef.current += 1;
     clearTimeouts();
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewBlob(null);
-    setPreviewUrl(null);
+    setPreviewCard(null);
     setPasteHint(null);
-  }, [previewUrl, clearTimeouts]);
+  }, [clearTimeouts]);
 
   const generatingRef = useRef(false);
   const sharingRef = useRef(false);
+
+  const loadPreviewBlob = useCallback(async (imageUrl: string): Promise<Blob> => {
+    const cached = previewBlobRef.current;
+    if (cached && cached.imageUrl === imageUrl) {
+      return cached.blob;
+    }
+    if (previewBlobRequestRef.current) {
+      return previewBlobRequestRef.current;
+    }
+
+    const request = (async () => {
+      const res = await fetch(imageUrl, { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const bytes = await res.arrayBuffer();
+      const blob = new Blob([bytes], {
+        type: res.headers.get("Content-Type") || "image/png",
+      });
+      previewBlobRef.current = { imageUrl, blob };
+      return blob;
+    })();
+
+    previewBlobRequestRef.current = request;
+    try {
+      return await request;
+    } finally {
+      previewBlobRequestRef.current = null;
+    }
+  }, []);
 
   const handleOpenPreview = useCallback(async () => {
     if (generatingRef.current) return;
     generatingRef.current = true;
     const token = mountTokenRef.current;
+    const sessionId = ++previewSessionRef.current;
     setStatus("generating");
-    setFeedback("Generating share image...");
+    setFeedback("Creating share preview...");
+    setPasteHint(null);
 
     try {
-      const blob = await getChatCardBlob(userMessage, systemMessage, username);
-      if (token.cancelled) return;
-      const url = URL.createObjectURL(blob);
-      setPreviewBlob(blob);
-      setPreviewUrl(url);
+      const card = await createShareCard({
+        prompt: userMessage,
+        response: systemMessage,
+        username,
+      });
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      if (previewBlobRef.current?.imageUrl !== card.imageUrl) {
+        previewBlobRef.current = null;
+      }
+      setPreviewCard(card);
       setStatus("idle");
       setFeedback(null);
     } catch {
-      if (token.cancelled) return;
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
       setStatus("error");
-      setFeedback("Failed to generate preview.");
+      setFeedback("Failed to create share preview.");
       resetAfterDelay(3000);
     } finally {
       generatingRef.current = false;
     }
   }, [userMessage, systemMessage, username, resetAfterDelay]);
 
-  const executeShare = useCallback(async (
-    successHandler: (result: ShareResult) => void,
-  ) => {
-    const cachedBlob = previewBlob;
-    const token = mountTokenRef.current;
-    closePreview();
-    clearTimeouts();
-    setStatus("generating");
-    setFeedback("Generating share image...");
-
-    // Skip the artificial delay when the blob is already rendered.
-    if (!cachedBlob) {
-      await new Promise((r) => setTimeout(r, 800));
-    }
-    if (token.cancelled) return;
-
-    try {
-      const result: ShareResult = await shareChatImage({
-        userMessage,
-        systemMessage,
-        openShareUrl: false,
-        username,
-        previewBlob: cachedBlob ?? undefined,
-      });
-      if (token.cancelled) return;
-      successHandler(result);
-    } catch {
-      if (token.cancelled) return;
-      setStatus("error");
-      setFeedback("Failed to copy image.");
-      // Always reset on error so the button doesn't get permanently stuck.
-      resetAfterDelay(3000);
-      return;
-    }
-
-    resetAfterDelay(3000);
-  }, [userMessage, systemMessage, username, previewBlob, closePreview, clearTimeouts, resetAfterDelay]);
-
   const handleShare = useCallback(async (platform: "twitter" | "linkedin") => {
-    if (!previewBlob || sharingRef.current) return;
+    if (!previewCard || sharingRef.current) return;
     sharingRef.current = true;
     const token = mountTokenRef.current;
+    const sessionId = previewSessionRef.current;
 
-    // Show a temporary generating state while the clipboard write runs.
     setStatus("generating");
     setFeedback("Copying image to clipboard...");
 
     try {
-      const result: ShareResult = await shareChatImage({
-        userMessage,
-        systemMessage,
-        openShareUrl: false,
-        username,
-        previewBlob,
-      });
-      if (token.cancelled) return;
+      const previewBlob = await loadPreviewBlob(previewCard.imageUrl);
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      const imageCopied = await copyBlobToClipboard(previewBlob);
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
 
-      if (result.success && result.method === "image") {
-        // Image successfully copied — show paste instructions.
+      if (imageCopied) {
         setStatus("idle");
         setFeedback(null);
         setPasteHint({ platform });
         addTimeout(() => setPasteHint(null), 30000);
-      } else if (result.success && result.method === "text") {
-        // Browser doesn't support image clipboard; text was copied instead.
+        return;
+      }
+
+      const textCopied = await copyTextToClipboard(previewCard.shareUrl);
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+
+      if (textCopied) {
         setPasteHint(null);
         setStatus("copied");
-        setFeedback("Text copied to clipboard (image copy not supported in this browser).");
+        setFeedback("Share link copied to clipboard (image copy not supported in this browser).");
         closePreview();
         resetAfterDelay(4000);
       } else {
         setPasteHint(null);
         setStatus("error");
-        setFeedback(result.message);
+        setFeedback("Failed to copy to clipboard. Please try again or check browser permissions.");
         closePreview();
         resetAfterDelay(4000);
       }
     } catch {
-      if (token.cancelled) return;
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
       setPasteHint(null);
       setStatus("error");
       setFeedback("Something went wrong. Please try again.");
@@ -197,34 +200,63 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
     } finally {
       sharingRef.current = false;
     }
-  }, [previewBlob, userMessage, systemMessage, username, addTimeout, closePreview, resetAfterDelay]);
+  }, [previewCard, userMessage, systemMessage, username, loadPreviewBlob, addTimeout, closePreview, resetAfterDelay]);
 
   const handleOpenShareTarget = useCallback((platform: "twitter" | "linkedin") => {
-    openShareIntent(platform);
+    if (!previewCard) return;
+    openShareIntent(platform, previewCard.shareUrl);
     closePreview();
     triggerRef.current?.focus();
-  }, [closePreview]);
+  }, [previewCard, closePreview]);
 
   const handleCopyImage = useCallback(async () => {
-    await executeShare((result) => {
-      if (result.success && result.method === "image") {
+    if (!previewCard || sharingRef.current) return;
+    sharingRef.current = true;
+    const token = mountTokenRef.current;
+    const sessionId = previewSessionRef.current;
+
+    clearTimeouts();
+    setStatus("generating");
+    setFeedback("Copying image to clipboard...");
+
+    try {
+      const previewBlob = await loadPreviewBlob(previewCard.imageUrl);
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      closePreview();
+
+      const imageCopied = await copyBlobToClipboard(previewBlob);
+      if (imageCopied) {
         setStatus("copied");
         setFeedback("Image copied to clipboard!");
-      } else if (result.success && result.method === "text") {
-        setStatus("copied");
-        setFeedback("Text copied to clipboard (image copy not supported in this browser).");
-      } else {
-        setStatus(result.success ? "done" : "error");
-        setFeedback(result.message);
+        resetAfterDelay(3000);
+        return;
       }
-    });
-  }, [executeShare]);
 
-  // Focus trap and focus management for modal
+      const textCopied = await copyTextToClipboard(previewCard.shareUrl);
+      if (textCopied) {
+        setStatus("copied");
+        setFeedback("Share link copied to clipboard (image copy not supported in this browser).");
+        resetAfterDelay(3000);
+        return;
+      }
+
+      setStatus("error");
+      setFeedback("Failed to copy to clipboard. Please try again or check browser permissions.");
+      resetAfterDelay(3000);
+    } catch {
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      closePreview();
+      setStatus("error");
+      setFeedback("Failed to copy image.");
+      resetAfterDelay(3000);
+    } finally {
+      sharingRef.current = false;
+    }
+  }, [previewCard, clearTimeouts, loadPreviewBlob, userMessage, systemMessage, username, closePreview, resetAfterDelay]);
+
   useEffect(() => {
-    if (!previewUrl) return;
+    if (!previewCard) return;
 
-    // Focus the modal on open
     const modal = modalRef.current;
     if (modal) {
       const closeBtn = modal.querySelector<HTMLButtonElement>("[aria-label='Close']");
@@ -239,7 +271,6 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
         return;
       }
 
-      // Focus trap: Tab and Shift+Tab
       if (e.key === "Tab" && modal) {
         const focusable = modal.querySelectorAll<HTMLElement>(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
@@ -252,21 +283,18 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
             e.preventDefault();
             last.focus();
           }
-        } else {
-          if (document.activeElement === last) {
-            e.preventDefault();
-            first.focus();
-          }
+        } else if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
         }
       }
     };
 
     document.addEventListener("keydown", handleKeyDown, true);
     return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [previewUrl, closePreview]);
+  }, [previewCard, closePreview]);
 
-  // When actively showing feedback, render it inline
-  if (status !== "idle" && !previewUrl) {
+  if (status !== "idle" && !previewCard) {
     return (
       <span className="inline-flex items-center gap-2 ml-2 text-[11px] font-mono align-baseline">
         {status === "generating" && <span className="text-yellow-400 animate-pulse">{SPINNER_CHAR} {feedback}</span>}
@@ -286,7 +314,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
       >
         [share]
       </button>
-      {previewUrl && (
+      {previewCard && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
           onClick={() => { closePreview(); triggerRef.current?.focus(); }}
@@ -324,7 +352,7 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
             </div>
             <div style={{ padding: "12px" }}>
               <img
-                src={previewUrl}
+                src={previewCard.imageUrl}
                 alt="Share preview"
                 style={{ display: "block", maxWidth: "100%", maxHeight: "calc(100vh - 14rem)" }}
               />

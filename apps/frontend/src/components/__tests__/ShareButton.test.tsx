@@ -2,31 +2,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
-
-// Mock shareChatUtils before importing the component
-const mockShareChatImage = vi.fn();
-const mockOpenShareIntent = vi.fn();
-const mockGetChatCardBlob = vi.fn();
-
-vi.mock("../shareChatUtils", () => ({
-  shareChatImage: (...args: unknown[]) => mockShareChatImage(...args),
-  openShareIntent: (...args: unknown[]) => mockOpenShareIntent(...args),
-  getChatCardBlob: (...args: unknown[]) => mockGetChatCardBlob(...args),
-}));
-
 import { ShareButton } from "../ShareButton";
 
 describe("ShareButton modal share flow", () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
+  let fetchMock: ReturnType<typeof vi.fn>;
 
-  const mockBlob = new Blob(["test"], { type: "image/png" });
-
-  // Mock URL.createObjectURL / revokeObjectURL
-  const originalCreateObjectURL = URL.createObjectURL;
-  const originalRevokeObjectURL = URL.revokeObjectURL;
-
-  // Mock clipboard
   const mockClipboard = {
     write: vi.fn().mockResolvedValue(undefined),
     writeText: vi.fn().mockResolvedValue(undefined),
@@ -37,13 +19,17 @@ describe("ShareButton modal share flow", () => {
     getType: (type: string) => Promise.resolve(items[type]),
   }));
 
+  const imageBytes = new TextEncoder().encode("server-image");
+  const shareCardResponse = {
+    shareId: "share-123",
+    imageUrl: "https://claudecope.com/api/share-image/share-123",
+    shareUrl: "https://claudecope.com/s/share-123",
+  };
+
   beforeEach(() => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-
-    URL.createObjectURL = vi.fn(() => "blob:test-url");
-    URL.revokeObjectURL = vi.fn();
 
     Object.defineProperty(navigator, "clipboard", {
       value: mockClipboard,
@@ -53,12 +39,23 @@ describe("ShareButton modal share flow", () => {
     // @ts-expect-error - ClipboardItem may not exist in jsdom
     globalThis.ClipboardItem = MockClipboardItem;
 
-    mockGetChatCardBlob.mockResolvedValue(mockBlob);
-    mockShareChatImage.mockResolvedValue({
-      success: true,
-      method: "image",
-      message: "Image copied to clipboard!",
+    fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/share-cards")) {
+        return new Response(JSON.stringify(shareCardResponse), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("/api/share-image/")) {
+        return new Response(imageBytes, {
+          status: 200,
+          headers: { "Content-Type": "image/png" },
+        });
+      }
+      return new Response("unexpected", { status: 500 });
     });
+    vi.stubGlobal("fetch", fetchMock);
 
     vi.useFakeTimers();
   });
@@ -67,8 +64,7 @@ describe("ShareButton modal share flow", () => {
     vi.useRealTimers();
     act(() => root.unmount());
     container.remove();
-    URL.createObjectURL = originalCreateObjectURL;
-    URL.revokeObjectURL = originalRevokeObjectURL;
+    vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
@@ -93,13 +89,11 @@ describe("ShareButton modal share flow", () => {
       shareBtn!.click();
     });
 
-    // Preview modal should appear
     const dialog = container.querySelector("[role='dialog']");
     expect(dialog).not.toBeNull();
     return dialog!;
   };
 
-  /** Click a share-platform button and flush all async work. */
   const clickShareButton = async (label: string) => {
     const buttons = container.querySelectorAll("button");
     const btn = Array.from(buttons).find((b) => b.textContent?.includes(label));
@@ -107,7 +101,6 @@ describe("ShareButton modal share flow", () => {
 
     await act(async () => {
       btn!.click();
-      // Flush microtasks so the awaited mock promise resolves within act.
       await vi.advanceTimersByTimeAsync(0);
     });
 
@@ -119,64 +112,78 @@ describe("ShareButton modal share flow", () => {
     const dialog = await openPreview();
     const img = dialog.querySelector("img[alt='Share preview']");
     expect(img).not.toBeNull();
+    expect(img?.getAttribute("src")).toBe(shareCardResponse.imageUrl);
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "Hello", response: "World", username: "testuser" }),
+    }));
   });
 
-  it("Share on X flow: footer swaps to paste hint, [OPEN X TAB] triggers share intent", async () => {
+  it("Share on X flow: footer swaps to paste hint, [OPEN X TAB] uses the stable share URL", async () => {
     renderComponent();
     await openPreview();
 
     await clickShareButton("SHARE ON X");
 
-    // Modal stays open — the footer swaps in place to a paste hint.
     expect(container.querySelector("[role='dialog']")).not.toBeNull();
     expect(container.textContent).toContain("IMAGE COPIED TO CLIPBOARD");
     expect(container.textContent).toMatch(/\[ (CTRL|CMD) \+ V \]/);
-    // Share intent does NOT fire until the user clicks the OPEN-tab action.
-    expect(mockOpenShareIntent).not.toHaveBeenCalled();
+    expect(mockClipboard.write).toHaveBeenCalledTimes(1);
 
+    const mockOpen = vi.spyOn(window, "open").mockImplementation(() => null);
     const buttonsAfter = container.querySelectorAll("button");
     const openTabBtn = Array.from(buttonsAfter).find((b) => b.textContent?.includes("OPEN X TAB"));
     expect(openTabBtn).not.toBeUndefined();
+
     await act(async () => {
       openTabBtn!.click();
     });
-    expect(mockOpenShareIntent).toHaveBeenCalledWith("twitter");
-    // Modal closes when the user opens the share tab.
+
+    expect(mockOpen).toHaveBeenCalledTimes(1);
+    expect(String(mockOpen.mock.calls[0]?.[0])).toContain("twitter.com/intent/tweet");
+    expect(decodeURIComponent(String(mockOpen.mock.calls[0]?.[0]))).toContain(shareCardResponse.shareUrl);
     expect(container.querySelector("[role='dialog']")).toBeNull();
+    mockOpen.mockRestore();
   });
 
-  it("Share on LinkedIn flow: footer swaps to paste hint, [OPEN LINKEDIN TAB] triggers share intent", async () => {
+  it("Share on LinkedIn flow uses the stable public share URL", async () => {
     renderComponent();
     await openPreview();
 
     await clickShareButton("SHARE ON LINKEDIN");
 
     expect(container.textContent).toContain("MANDATORY ACTION");
-    expect(mockOpenShareIntent).not.toHaveBeenCalled();
 
+    const mockOpen = vi.spyOn(window, "open").mockImplementation(() => null);
     const buttonsAfter = container.querySelectorAll("button");
     const openTabBtn = Array.from(buttonsAfter).find((b) => b.textContent?.includes("OPEN LINKEDIN TAB"));
     expect(openTabBtn).not.toBeUndefined();
+
     await act(async () => {
       openTabBtn!.click();
     });
-    expect(mockOpenShareIntent).toHaveBeenCalledWith("linkedin");
+
+    expect(mockOpen).toHaveBeenCalledWith(
+      `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareCardResponse.shareUrl)}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    mockOpen.mockRestore();
   });
 
-  it("guards against overlapping preview generation from repeated clicks", async () => {
+  it("guards against overlapping preview creation from repeated clicks", async () => {
     renderComponent();
 
     const shareBtn = container.querySelector("button");
     expect(shareBtn).not.toBeNull();
 
-    // Click twice rapidly
     await act(async () => {
       shareBtn!.click();
       shareBtn!.click();
     });
 
-    // getChatCardBlob should only have been called once
-    expect(mockGetChatCardBlob).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("paste hint reverts to action buttons after the 30s auto-revert timer", async () => {
@@ -189,71 +196,60 @@ describe("ShareButton modal share flow", () => {
     await act(async () => {
       vi.advanceTimersByTime(30000);
     });
+
     expect(container.textContent).not.toContain("IMAGE COPIED TO CLIPBOARD");
     expect(container.querySelector("[role='dialog']")).not.toBeNull();
   });
 
-  it("shows text-fallback message when shareChatImage returns method 'text' during platform share", async () => {
+  it("shows text-fallback message when clipboard image copy is unavailable during platform share", async () => {
     renderComponent();
     await openPreview();
 
-    // Override the mock AFTER preview opens so the preview itself succeeds
-    mockShareChatImage.mockResolvedValue({
-      success: true,
-      method: "text",
-      message: "Chat copied to clipboard as text.",
-    });
+    mockClipboard.write.mockRejectedValueOnce(new Error("Not supported"));
+    mockClipboard.writeText.mockResolvedValueOnce(undefined);
 
     await clickShareButton("SHARE ON X");
 
-    // Should NOT show paste-image instructions since only text was copied
     expect(container.textContent).not.toContain("IMAGE COPIED TO CLIPBOARD");
-    // Should show the text fallback message
     expect(container.textContent).toContain("image copy not supported");
   });
 
-  it("shows error and resets when shareChatImage throws during platform share", async () => {
+  it("shows error and resets when image fetch fails during platform share", async () => {
     renderComponent();
     await openPreview();
 
-    // Override the mock AFTER preview opens
-    mockShareChatImage.mockRejectedValue(new Error("Network error"));
+    fetchMock.mockImplementationOnce(async () => new Response("nope", { status: 500 }));
 
     await clickShareButton("SHARE ON X");
 
-    // Should show error, not paste hint
     expect(container.textContent).not.toContain("IMAGE COPIED TO CLIPBOARD");
     expect(container.textContent).toContain("Something went wrong");
 
-    // Should auto-reset after delay
     await act(async () => {
       vi.advanceTimersByTime(4000);
     });
-    // Back to idle with share button
+
     const shareBtn = container.querySelector("button");
     expect(shareBtn?.textContent).toBe("[share]");
   });
 
-  it("shows error and resets when shareChatImage returns failure during platform share", async () => {
+  it("copies the backend PNG when COPY IMAGE is selected", async () => {
     renderComponent();
     await openPreview();
 
-    // Override the mock AFTER preview opens
-    mockShareChatImage.mockResolvedValue({
-      success: false,
-      method: "none",
-      message: "Failed to copy to clipboard.",
-    });
+    await clickShareButton("COPY IMAGE");
 
-    await clickShareButton("SHARE ON X");
-
-    expect(container.textContent).toContain("Failed to copy to clipboard.");
+    expect(fetchMock).toHaveBeenCalledWith(shareCardResponse.imageUrl, { cache: "no-store" });
+    expect(mockClipboard.write).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Image copied to clipboard!");
   });
 
-  it("passes username through to getChatCardBlob for preview generation", async () => {
+  it("passes username through to share-card creation", async () => {
     renderComponent();
     await openPreview();
 
-    expect(mockGetChatCardBlob).toHaveBeenCalledWith("Hello", "World", "testuser");
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
+      body: JSON.stringify({ prompt: "Hello", response: "World", username: "testuser" }),
+    }));
   });
 });
