@@ -18,6 +18,9 @@ const highlightStyle: CSSProperties = { color: "#ffff55" };
 const actionRowStyle: CSSProperties = { display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" };
 const linkStyle: CSSProperties = { background: "none", border: "none", padding: "8px 0 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", display: "block" };
 const previewImageStyle: CSSProperties = { display: "block", maxWidth: "100%", maxHeight: "calc(100vh - 14rem)" };
+const modalStatusStyle: CSSProperties = { fontSize: "12px", textAlign: "left" };
+const modalStatusGeneratingStyle: CSSProperties = { ...modalStatusStyle, color: "#ffff55" };
+const modalStatusErrorStyle: CSSProperties = { ...modalStatusStyle, color: "#ff5555" };
 
 function isMacPlatform(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -27,9 +30,10 @@ function isMacPlatform(): boolean {
 }
 
 async function copyBlobToClipboard(blob: Blob): Promise<boolean> {
-  if (typeof ClipboardItem === "undefined") return false;
+  const ClipboardItemCtor = globalThis.ClipboardItem;
+  if (typeof ClipboardItemCtor === "undefined") return false;
   try {
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type || "image/png"]: blob })]);
+    await navigator.clipboard.write([new ClipboardItemCtor({ [blob.type || "image/png"]: blob })]);
     return true;
   } catch {
     return false;
@@ -352,6 +356,10 @@ export function ShareButton({ userMessage, systemMessage, username }: { userMess
                     <span data-btn="">{` [ OPEN ${pasteHint.platform === "twitter" ? "X" : "LINKEDIN"} TAB ]`}</span>
                   </button>
                 </div>
+              ) : status === "generating" ? (
+                <div style={modalStatusGeneratingStyle}>{SPINNER_CHAR} {feedback}</div>
+              ) : status === "error" && feedback ? (
+                <div style={modalStatusErrorStyle}>{feedback}</div>
               ) : (
                 <div style={actionRowStyle}>
                   {[{ label: "COPY IMAGE", onClick: handleCopyImage }, { label: "SHARE ON X", onClick: () => handleShare("twitter") }, { label: "SHARE ON LINKEDIN", onClick: () => handleShare("linkedin") }].map(({ label, onClick }) => (
