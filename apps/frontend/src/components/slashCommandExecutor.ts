@@ -737,7 +737,7 @@ function buildCustomModelHelp(isBYOK: boolean): string {
 }
 
 function getMigratedSelectedModelInfo(ctx: SlashCommandContext): {
-  migratedSelectedModel: string | null;
+  migratedSelectedModel: string | undefined;
   migratedFromLegacy: boolean;
 } {
   const migratedSelectedModel = migrateLegacyCopeModelId(ctx.state.selectedModel);
@@ -777,7 +777,7 @@ function handleModelCommandClear(ctx: SlashCommandContext, reply: Reply): void {
   reply({ role: "system", content: "[✓] Model reset to **regret**. Back to baseline corporate disappointment." });
 }
 
-function replyModelUnavailable(ctx: SlashCommandContext, reply: Reply): void {
+function replyModelUnavailable(reply: Reply): void {
   const byokHint = BYOK_ENABLED ? " Set your own API key with `/key` first." : "";
   track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/model", reason: SlashCommandFailureReasons.UNAVAILABLE });
   reply({
@@ -839,7 +839,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
 
   // Non-BYOK mode: only allow predefined COPE_MODELS
   if (!copeModel && !isBYOK) {
-    replyModelUnavailable(ctx, reply);
+    replyModelUnavailable(reply);
     return;
   }
 
