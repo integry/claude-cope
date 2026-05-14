@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef } from "react";
-import type { MutableRefObject } from "react";
 import type { GameState } from "./useGameState";
 import {
   selectBacklogReminder,

@@ -1,6 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { GameState, Message } from "./useGameState";
-import type { ContextualTipTrigger, TipDefinition } from "../game/tips";
+import type { TipDefinition } from "../game/tips";
 import {
   getNextBacklogReminderThreshold,
   persistRecentTipHistory,
