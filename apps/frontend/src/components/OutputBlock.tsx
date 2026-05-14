@@ -279,6 +279,7 @@ function MessageContent({
 }) {
   const { role, content } = message;
   const tipData = getTipRenderData(message);
+  const hasStructuredDisplay = Boolean(message.backlogDisplay || message.ticketDisplay);
   const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(
     role,
     content,
@@ -291,7 +292,7 @@ function MessageContent({
   const shouldTypewrite = isNew && useMarkdown && role === "system";
   const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite);
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand, shareNode), [onSlashCommand, shareNode]);
-  if (useMarkdown || isStreaming) {
+  if ((useMarkdown && !hasStructuredDisplay) || isStreaming) {
     return renderMarkdownContent({
       content,
       visibleContent,
