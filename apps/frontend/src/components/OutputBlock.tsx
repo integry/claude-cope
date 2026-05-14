@@ -380,16 +380,18 @@ function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, 
 
 type OutputBlockProps = Parameters<typeof OutputBlock>[0];
 
+const MESSAGE_COMPARISON_FIELDS = [
+  "role",
+  "content",
+  "displayType",
+  "shareClaim",
+  "buddyType",
+  "backlogDisplay",
+  "ticketDisplay",
+] as const satisfies readonly (keyof Message)[];
+
 function messagesEqual(a: Message | undefined, b: Message | undefined): boolean {
-  return a === b || (
-    a?.role === b?.role
-    && a?.content === b?.content
-    && a?.displayType === b?.displayType
-    && a?.shareClaim === b?.shareClaim
-    && a?.buddyType === b?.buddyType
-    && a?.backlogDisplay === b?.backlogDisplay
-    && a?.ticketDisplay === b?.ticketDisplay
-  );
+  return a === b || MESSAGE_COMPARISON_FIELDS.every((field) => a?.[field] === b?.[field]);
 }
 
 function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps): boolean {
