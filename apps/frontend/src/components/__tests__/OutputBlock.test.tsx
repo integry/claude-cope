@@ -39,6 +39,7 @@ describe("OutputBlock", () => {
     expect(container.firstElementChild?.className).not.toContain("font-mono");
     expect(container.querySelector("pre")?.textContent).toContain(BUDDY_ICONS["Sarcastic Clippy"]);
     expect(container.querySelector("pre")?.className).toContain("whitespace-pre");
+    expect(container.querySelector("pre")?.className).not.toContain("overflow-x-auto");
     expect(container.querySelector("p")?.textContent).toContain("The deploy is still blocked on the failed migration.");
   });
 
