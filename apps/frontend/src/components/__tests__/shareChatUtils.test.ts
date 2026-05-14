@@ -308,12 +308,13 @@ describe("shareChatImage", () => {
     expect(mockOpen).toHaveBeenCalled();
     const callArgs = mockOpen.mock.calls[0]!;
     expect(callArgs[0]).toContain("twitter.com/intent/tweet");
-    expect(decodeURIComponent(String(callArgs[0]))).toContain("https://claudecope.com/s/share-1");
+    expect(decodeURIComponent(String(callArgs[0]))).not.toContain("https://claudecope.com/s/share-1");
+    expect(decodeURIComponent(String(callArgs[0]))).not.toContain("http");
 
     mockOpen.mockRestore();
   });
 
-  it("includes punchline and link in share text fallback", async () => {
+  it("includes punchline and hashtags without URLs in share text fallback", async () => {
     mockClipboard.write.mockRejectedValueOnce(new Error("Not supported"));
     mockClipboard.writeText.mockResolvedValueOnce(undefined);
 
@@ -323,8 +324,8 @@ describe("shareChatImage", () => {
     });
 
     const shareText = mockClipboard.writeText.mock.calls[0]![0] as string;
-    expect(shareText).toContain("cope.bot");
     expect(shareText).toContain("#ClaudeCope");
+    expect(shareText).not.toContain("http");
     expect(shareText).not.toContain("Test prompt");
     expect(shareText).not.toContain("Test response");
   });

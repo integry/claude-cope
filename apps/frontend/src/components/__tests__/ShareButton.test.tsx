@@ -67,7 +67,8 @@ describe("ShareButton modal share flow", () => {
 
     expect(mockOpen).toHaveBeenCalledTimes(1);
     expect(String(mockOpen.mock.calls[0]?.[0])).toContain("twitter.com/intent/tweet");
-    expect(decodeURIComponent(String(mockOpen.mock.calls[0]?.[0]))).toContain(shareCardResponse.shareUrl);
+    expect(decodeURIComponent(String(mockOpen.mock.calls[0]?.[0]))).not.toContain(shareCardResponse.shareUrl);
+    expect(decodeURIComponent(String(mockOpen.mock.calls[0]?.[0]))).not.toContain("http");
     expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
     mockOpen.mockRestore();
   });
@@ -166,7 +167,8 @@ describe("ShareButton modal share flow", () => {
 
     expect(mockOpen).toHaveBeenCalledTimes(1);
     expect(String(mockOpen.mock.calls[0]?.[0])).toContain("twitter.com/intent/tweet");
-    expect(decodeURIComponent(String(mockOpen.mock.calls[0]?.[0]))).toContain(shareCardResponse.shareUrl);
+    expect(decodeURIComponent(String(mockOpen.mock.calls[0]?.[0]))).not.toContain(shareCardResponse.shareUrl);
+    expect(decodeURIComponent(String(mockOpen.mock.calls[0]?.[0]))).not.toContain("http");
     expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
     mockOpen.mockRestore();
   });

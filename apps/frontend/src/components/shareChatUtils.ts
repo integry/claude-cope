@@ -358,13 +358,13 @@ export function generateShareHashtags(): string {
 
 export function generateShareText(): string {
   const punchline = getRandomPunchline();
-  return `${punchline}\n\n[paste your image here]\n\n${generateShareHashtags()}\nhttps://cope.bot`;
+  return `${punchline}\n\n[paste your image here]\n\n${generateShareHashtags()}`;
 }
 
 export function openShareIntent(platform: "twitter" | "linkedin", shareUrl?: string): void {
   const punchline = getRandomPunchline();
   if (platform === "twitter") {
-    const tweetText = `${punchline}\n\n${generateShareHashtags()}\n${shareUrl ?? "https://claudecope.com"}`;
+    const tweetText = `${punchline}\n\n${generateShareHashtags()}`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   } else {
