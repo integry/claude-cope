@@ -192,18 +192,35 @@ body {
   margin: 0;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .terminal-buddy-display {
     font-size: 0.625rem;
     line-height: 1.1;
   }
 
   .terminal-buddy-dock {
-    padding: 0 0.9rem 0.4rem;
+    flex-direction: column;
+    align-items: center;
+    align-self: center;
+    max-width: 100%;
+    padding: 0.4rem 0.9rem 0;
   }
 
   .terminal-buddy-status {
-    justify-content: flex-end;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
+.sprint-title {
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .sprint-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 

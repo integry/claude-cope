@@ -93,11 +93,11 @@ function DesktopIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, on
 function MobileIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, onProfileClick }: { username: string; rank: string; isBYOK: boolean; isMax: boolean; byokTotalCost?: number; onProfileClick: () => void }) {
   return (
     <>
-      <div data-testid="mobile-identity-block" className="col-start-2 row-start-1 flex min-w-0 items-center gap-2 sm:hidden">
+      <div data-testid="mobile-identity-block" className="col-start-2 row-start-1 flex min-w-0 items-center gap-2 self-end sm:hidden">
         <button onClick={onProfileClick} className="min-w-0 truncate text-cyan-400 hover:text-white hover:underline cursor-pointer">{username}</button>
         <EntitlementBadges isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} maxBadgeTestId="mobile-max-badge" />
       </div>
-      <div data-testid="mobile-rank-line" title={rank} className="col-start-2 row-start-2 min-w-0 whitespace-nowrap text-[11px] leading-none text-gray-400 sm:hidden sm:text-xs">
+      <div data-testid="mobile-rank-line" title={rank} className="col-start-2 row-start-2 min-w-0 whitespace-nowrap text-[11px] leading-none text-gray-400 self-start sm:hidden sm:text-xs">
         [{getMobileRankLabel(rank)}]
       </div>
     </>
@@ -170,7 +170,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
   }, [menuOpen]);
 
   return (
-    <div className={`sticky top-0 z-10 border-b pt-3 pb-2 mb-2 relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-2 items-center gap-x-2 gap-y-1 sm:flex sm:items-center sm:gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "border-gray-700"}`} style={outageHp !== null ? undefined : { backgroundColor: 'var(--color-bg)' }}>
+    <div className={`sticky top-0 z-10 border-b pt-3 pb-2 mb-2 relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 sm:flex sm:items-center sm:gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "border-gray-700"}`} style={outageHp !== null ? undefined : { backgroundColor: 'var(--color-bg)' }}>
       {/* Left group: identity */}
       <div className="hidden sm:flex items-center gap-2 min-w-0 px-2 sm:px-0">
         <img src="/media/logo-400-transparent.png" alt="Logo" className="hidden sm:block max-h-12 w-auto flex-shrink-0 object-contain sm:mr-2" />
@@ -182,17 +182,17 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
         data-testid="mobile-header-logo"
         className="row-span-2 row-start-1 col-start-1 flex sm:hidden items-center self-center px-2"
       >
-        <img src="/media/logo-400-transparent.png" alt="Claude Cope home" className="max-h-9 w-auto flex-shrink-0 object-contain" />
+        <img src="/media/favicon-192.png" alt="Claude Cope home" className="h-8 w-8 flex-shrink-0 object-contain" />
       </a>
       <MobileIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
       {/* Right group: status (desktop) */}
       <DesktopStatusBlock displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} onUpgradeClick={onUpgradeClick} />
       {/* Right group: status (mobile) */}
-      <div data-testid="mobile-status-block" className="col-start-3 row-start-2 flex sm:hidden items-center justify-end whitespace-nowrap px-2 text-right">
+      <div data-testid="mobile-status-block" className="col-start-3 row-start-2 flex min-w-0 self-start sm:hidden items-center justify-end whitespace-nowrap px-2 text-right">
         <span className="whitespace-nowrap text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
       </div>
       {/* Hamburger menu — mobile only */}
-      <div ref={menuRef} className="sm:hidden relative flex-shrink-0 col-start-3 row-start-1 justify-self-end">
+      <div ref={menuRef} className="sm:hidden relative flex-shrink-0 col-start-3 row-start-1 self-end justify-self-end">
         <button onClick={() => setMenuOpen((v) => !v)} className="text-gray-400 hover:text-white px-2 py-1" aria-label="Menu">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             {menuOpen

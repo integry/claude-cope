@@ -28,7 +28,7 @@ export function TerminalFooter({ closeAllOverlays, buddyType, buddyIsShiny, setS
         </div>
       </footer>
       <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 backdrop-blur-sm font-mono sm:hidden text-center" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-center gap-3">
           <BuddyWatcherStatus type={buddyType} isShiny={buddyIsShiny} />
           <span className="leading-tight">Parody project, no Anthropic affiliation... yet.</span>
         </div>

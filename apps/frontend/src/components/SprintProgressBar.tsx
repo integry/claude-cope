@@ -56,7 +56,11 @@ export default function SprintProgressBar({ id, title, sprintProgress, sprintGoa
 
   return (
     <div className="text-xs font-mono text-cyan-400 mt-3 pt-1.5 pb-1.5 border-t border-cyan-800" data-testid="sprint-progress-bar">
-      <span className="text-cyan-600">[SPRINT]</span> {id}: <span className="text-cyan-300 truncate">{title}</span>
+      <div className="flex min-w-0 items-baseline gap-1">
+        <span className="shrink-0 text-cyan-600">[SPRINT]</span>
+        <span className="shrink-0">{id}:</span>
+        <span className="sprint-title min-w-0 flex-1 text-cyan-300">{title}</span>
+      </div>
       <div className="flex items-center gap-2">
         <span className="text-cyan-500">[{"█".repeat(filledBlocks)}{"░".repeat(emptyBlocks)}]</span>
         <span className="text-cyan-300">{displayProgress}/{safeGoal} TD</span>
