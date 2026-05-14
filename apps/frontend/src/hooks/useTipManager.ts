@@ -39,12 +39,35 @@ type RecordValidCommandOptions = {
 
 type MessageWithoutTicketRollback = () => void;
 
+type ReminderStateSnapshot = {
+  count: number;
+  threshold: number;
+  tipId: string | null;
+};
+
+type MutableValueRef<T> = {
+  current: T;
+};
+
 function getCompletedTaskCount(gameState: GameState): number {
   return gameState.pendingCompletedTaskIds?.length ?? 0;
 }
 
 function appendTip(setHistory: SetHistory, content: string): void {
   setHistory((prev) => [...prev, { role: "system", content }]);
+}
+
+function restoreReminderState(
+  snapshot: ReminderStateSnapshot,
+  lastBacklogReminderTipIdRef: MutableValueRef<string | null>,
+  noTicketMessageCountRef: MutableValueRef<number>,
+  nextBacklogReminderThresholdRef: MutableValueRef<number>,
+): MessageWithoutTicketRollback {
+  return () => {
+    noTicketMessageCountRef.current = snapshot.count;
+    nextBacklogReminderThresholdRef.current = snapshot.threshold;
+    lastBacklogReminderTipIdRef.current = snapshot.tipId;
+  };
 }
 
 export function useTipManager({ isBooting, isInteractionBlocked = false, gameState, onlineCount, setHistory }: UseTipManagerArgs) {
@@ -210,30 +233,30 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
 
   const recordMessageWithoutTicket = useCallback((): MessageWithoutTicketRollback => {
     interactionCountRef.current += 1;
-    const previousCount = noTicketMessageCountRef.current;
-    const previousThreshold = nextBacklogReminderThresholdRef.current;
-    const previousTipId = lastBacklogReminderTipIdRef.current;
+    const previousReminderState = {
+      count: noTicketMessageCountRef.current,
+      threshold: nextBacklogReminderThresholdRef.current,
+      tipId: lastBacklogReminderTipIdRef.current,
+    };
     const previousLastShownTipId = lastShownTipIdRef.current;
+    const restorePreviousReminderState = restoreReminderState(
+      previousReminderState,
+      lastBacklogReminderTipIdRef,
+      noTicketMessageCountRef,
+      nextBacklogReminderThresholdRef,
+    );
 
     flushPendingContextualTip();
 
     if (gameStateRef.current.activeTicket) {
       noTicketMessageCountRef.current = 0;
       nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
-      return () => {
-        noTicketMessageCountRef.current = previousCount;
-        nextBacklogReminderThresholdRef.current = previousThreshold;
-        lastBacklogReminderTipIdRef.current = previousTipId;
-      };
+      return restorePreviousReminderState;
     }
 
     noTicketMessageCountRef.current += 1;
     if (noTicketMessageCountRef.current < nextBacklogReminderThresholdRef.current) {
-      return () => {
-        noTicketMessageCountRef.current = previousCount;
-        nextBacklogReminderThresholdRef.current = previousThreshold;
-        lastBacklogReminderTipIdRef.current = previousTipId;
-      };
+      return restorePreviousReminderState;
     }
 
     recentTipHistoryRef.current = readRecentTipHistory();
@@ -243,11 +266,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     if (hasRecentBacklogReminder(recentTipHistoryRef.current)) {
       noTicketMessageCountRef.current = 0;
       nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
-      return () => {
-        noTicketMessageCountRef.current = previousCount;
-        nextBacklogReminderThresholdRef.current = previousThreshold;
-        lastBacklogReminderTipIdRef.current = previousTipId;
-      };
+      return restorePreviousReminderState;
     }
 
     const tip = selectBacklogReminder(
@@ -258,26 +277,16 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     if (!tip) {
       noTicketMessageCountRef.current = 0;
       nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
-      return () => {
-        noTicketMessageCountRef.current = previousCount;
-        nextBacklogReminderThresholdRef.current = previousThreshold;
-        lastBacklogReminderTipIdRef.current = previousTipId;
-      };
+      return restorePreviousReminderState;
     }
     if (!canEmitTip()) {
-      return () => {
-        noTicketMessageCountRef.current = previousCount;
-        nextBacklogReminderThresholdRef.current = previousThreshold;
-        lastBacklogReminderTipIdRef.current = previousTipId;
-      };
+      return restorePreviousReminderState;
     }
     lastBacklogReminderTipIdRef.current = tip.id;
     if (!appendManagedTip(tip)) {
-      lastBacklogReminderTipIdRef.current = previousTipId;
+      lastBacklogReminderTipIdRef.current = previousReminderState.tipId;
       return () => {
-        noTicketMessageCountRef.current = previousCount;
-        nextBacklogReminderThresholdRef.current = previousThreshold;
-        lastBacklogReminderTipIdRef.current = previousTipId;
+        restorePreviousReminderState();
         lastShownTipIdRef.current = previousLastShownTipId;
       };
     }
@@ -285,9 +294,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     noTicketMessageCountRef.current = 0;
     nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
     return () => {
-      noTicketMessageCountRef.current = previousCount;
-      nextBacklogReminderThresholdRef.current = previousThreshold;
-      lastBacklogReminderTipIdRef.current = previousTipId;
+      restorePreviousReminderState();
       recentTipHistoryRef.current = previousRecentTipHistory;
       lastShownTipIdRef.current = previousLastShownTipId;
       lastTipInteractionCountRef.current = previousLastTipInteractionCount;
