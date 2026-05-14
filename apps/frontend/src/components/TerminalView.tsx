@@ -65,6 +65,7 @@ type TerminalViewProps = OverlayVisibility & {
   runSlashCommand: (command: string) => void;
   inputValue: string;
   suggestedReply: string | null;
+  acceptSuggestedReply: () => void;
   isProcessing: boolean;
   handleChange: (e: ChangeEvent<HTMLInputElement>) => void;
   handleKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
@@ -139,6 +140,7 @@ export function TerminalView({
   runSlashCommand,
   inputValue,
   suggestedReply,
+  acceptSuggestedReply,
   isProcessing,
   handleChange,
   handleKeyDown,
@@ -296,6 +298,7 @@ export function TerminalView({
               onKeyDown={handleKeyDown}
               promptString={promptString}
               placeholder={suggestedReply ?? undefined}
+              onPlaceholderAccept={acceptSuggestedReply}
             />
           </div>
         </div>

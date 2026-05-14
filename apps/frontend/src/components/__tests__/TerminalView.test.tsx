@@ -107,6 +107,7 @@ describe("TerminalView ticker shortcuts", () => {
     runSlashCommand: vi.fn(),
     inputValue: "",
     suggestedReply: null,
+    acceptSuggestedReply: vi.fn(),
     isProcessing: false,
     handleChange: vi.fn(),
     handleKeyDown: vi.fn(),

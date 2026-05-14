@@ -104,6 +104,22 @@ describe("HeaderBar upgrade CTA visibility", () => {
     expect(mobileStatusBlock?.className).toContain("sm:hidden");
   });
 
+  it("renders the mobile identity as a two-row layout with a home logo and abbreviated rank", () => {
+    renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
+
+    const mobileLogo = container.querySelector("[data-testid='mobile-header-logo']");
+    const mobileIdentityBlock = container.querySelector("[data-testid='mobile-identity-block']");
+    const mobileRankLine = container.querySelector("[data-testid='mobile-rank-line']");
+    const mobileStatusBlock = container.querySelector("[data-testid='mobile-status-block']");
+
+    expect(mobileLogo?.getAttribute("href")).toBe("/");
+    expect(mobileIdentityBlock?.textContent).toContain("TestUser");
+    expect(mobileRankLine?.textContent).toContain("[Jr. Code Monkey]");
+    expect(mobileRankLine?.className).toContain("whitespace-nowrap");
+    expect(mobileStatusBlock?.textContent).toContain("3,880 TD");
+    expect(mobileStatusBlock?.textContent).not.toContain("Debt:");
+  });
+
   it("renders the desktop quota and upgrade CTA on the second status line for free users", () => {
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false });
 

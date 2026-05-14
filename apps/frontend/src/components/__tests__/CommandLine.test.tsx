@@ -8,6 +8,23 @@ import CommandLine from "../CommandLine";
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
+let mobileViewport = false;
+
+function installMatchMediaMock() {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(max-width: 767px)" ? mobileViewport : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
 
 function renderCommandLine(props: Partial<React.ComponentProps<typeof CommandLine>> = {}) {
   container = document.createElement("div");
@@ -46,7 +63,12 @@ afterEach(() => {
   }
   root = null;
   container = null;
+  mobileViewport = false;
+  vi.restoreAllMocks();
+  installMatchMediaMock();
 });
+
+installMatchMediaMock();
 
 describe("CommandLine", () => {
   it("renders the custom placeholder overlay and tab hint when empty", () => {
@@ -61,6 +83,22 @@ describe("CommandLine", () => {
     expect(leadingChar?.textContent).toBe("T");
     expect(container.querySelector("[data-testid='command-line-tab-hint']")?.textContent).toBe("[Tab]");
     expect(container.querySelector("input")?.getAttribute("placeholder")).toBe("Try /help. Press Tab to accept suggestion.");
+  });
+
+  it("switches the hint to tap on mobile and accepts the suggestion when tapped", () => {
+    mobileViewport = true;
+    const onPlaceholderAccept = vi.fn();
+    const { container } = renderCommandLine({ onPlaceholderAccept });
+    const hint = container.querySelector("[data-testid='command-line-tab-hint']") as HTMLButtonElement | null;
+
+    expect(hint?.textContent).toBe("[Tap]");
+    expect(container.querySelector("input")?.getAttribute("placeholder")).toBe("Try /help. Press Tap to accept suggestion.");
+
+    act(() => {
+      hint?.click();
+    });
+
+    expect(onPlaceholderAccept).toHaveBeenCalledTimes(1);
   });
 
   it("shows the decorative cursor over the first suggested character only while focused and empty", () => {

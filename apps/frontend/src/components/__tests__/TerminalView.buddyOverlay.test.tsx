@@ -108,6 +108,7 @@ function createProps(state: GameState): React.ComponentProps<typeof TerminalView
     runSlashCommand: noop,
     inputValue: "",
     suggestedReply: null,
+    acceptSuggestedReply: noop,
     isProcessing: false,
     handleChange: noop,
     handleKeyDown: noop,

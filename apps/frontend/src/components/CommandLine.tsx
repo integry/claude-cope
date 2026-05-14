@@ -1,4 +1,4 @@
-import { ChangeEvent, KeyboardEvent, forwardRef, useState } from "react";
+import { ChangeEvent, KeyboardEvent, forwardRef, useEffect, useState } from "react";
 
 type CommandLineProps = {
   value: string;
@@ -8,22 +8,61 @@ type CommandLineProps = {
   promptString?: string;
   placeholder?: string;
   assistivePlaceholderHint?: string;
+  onPlaceholderAccept?: () => void;
 };
+
+function useIsMobileViewport(breakpointPx = 767): boolean {
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return false;
+    }
+    return window.matchMedia(`(max-width: ${breakpointPx}px)`).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia(`(max-width: ${breakpointPx}px)`);
+    const updateMatch = (event?: MediaQueryListEvent) => {
+      setIsMobileViewport(event ? event.matches : mediaQuery.matches);
+    };
+
+    updateMatch();
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updateMatch);
+      return () => mediaQuery.removeEventListener("change", updateMatch);
+    }
+
+    mediaQuery.addListener(updateMatch);
+    return () => mediaQuery.removeListener(updateMatch);
+  }, [breakpointPx]);
+
+  return isMobileViewport;
+}
 
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
   function CommandLine(
-    { value, disabled, onChange, onKeyDown, promptString = "❯ ", placeholder, assistivePlaceholderHint },
+    { value, disabled, onChange, onKeyDown, promptString = "❯ ", placeholder, assistivePlaceholderHint, onPlaceholderAccept },
     ref
   ) {
     const [isFocused, setIsFocused] = useState(false);
     const [isComposing, setIsComposing] = useState(false);
+    const isMobileViewport = useIsMobileViewport();
     const showPlaceholder = !value && !!placeholder;
     const showTabHint = showPlaceholder && !disabled;
     const showDecorativeCursor = showPlaceholder && isFocused && !disabled;
     const hideNativeCaret = showDecorativeCursor;
+    const tabHintLabel = isMobileViewport ? "[Tap]" : "[Tab]";
+    const placeholderHint = assistivePlaceholderHint
+      ? isMobileViewport
+        ? assistivePlaceholderHint.replace(/\bTab\b/g, "Tap")
+        : assistivePlaceholderHint
+      : undefined;
     const accessiblePlaceholder =
-      placeholder && assistivePlaceholderHint && !disabled
-        ? `${placeholder}. ${assistivePlaceholderHint}`
+      placeholder && placeholderHint && !disabled
+        ? `${placeholder}. ${placeholderHint}`
         : placeholder;
     const leadingPlaceholderChar = placeholder?.charAt(0) ?? "";
     const trailingPlaceholderText = placeholder?.slice(1) ?? "";
@@ -41,6 +80,13 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
         return;
       }
       onKeyDown(e);
+    };
+
+    const handlePlaceholderAccept = () => {
+      if (!showTabHint || !onPlaceholderAccept) {
+        return;
+      }
+      onPlaceholderAccept();
     };
 
     return (
@@ -65,9 +111,15 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                   <span>{trailingPlaceholderText}</span>
                 </span>
                 {showTabHint && (
-                  <span data-testid="command-line-tab-hint" className="terminal-command-tab-hint shrink-0">
-                    [Tab]
-                  </span>
+                  <button
+                    type="button"
+                    data-testid="command-line-tab-hint"
+                    className="terminal-command-tab-hint shrink-0"
+                    onClick={handlePlaceholderAccept}
+                    aria-label={isMobileViewport ? "Tap to accept suggestion" : "Tab to accept suggestion"}
+                  >
+                    {tabHintLabel}
+                  </button>
                 )}
               </div>
             )}
