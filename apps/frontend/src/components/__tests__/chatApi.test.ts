@@ -911,7 +911,7 @@ describe("submitChatMessage - achievement parsing", () => {
 
     const fetchSpy = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: "enabled", enabled: true, bypassed: false, misconfigured: false }), {
+        new Response(JSON.stringify({ status: "verified", enabled: true, bypassed: false, misconfigured: false }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         })
