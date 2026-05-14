@@ -1,9 +1,15 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { GameState, Message } from "./useGameState";
-import type { TipDefinition } from "../game/tips";
+import {
+  selectMilestoneTip,
+  type ContextualTipTrigger,
+  type TipDefinition,
+} from "../game/tips";
 import {
   getNextBacklogReminderThreshold,
+  getInitialContextualTriggers,
   persistRecentTipHistory,
+  toExcludedTipIds,
 } from "./tipManagerUtils";
 
 export type SetHistory = Dispatch<SetStateAction<Message[]>>;
@@ -30,6 +36,11 @@ export type ContextualStateSnapshot = {
   quotaPercent: number;
   pendingCompletedTaskCount: number;
   onlineCount: number;
+};
+
+type MilestoneTipContext = {
+  totalTDEarned: number;
+  hasActiveTicket: boolean;
 };
 
 export const getCompletedTaskCount = (gameState: GameState): number => gameState.pendingCompletedTaskIds?.length ?? 0;
@@ -104,6 +115,66 @@ export const createContextualStateSnapshot = (
   pendingCompletedTaskCount: number,
   onlineCount: number,
 ): ContextualStateSnapshot => ({ currentTD, quotaPercent, pendingCompletedTaskCount, onlineCount });
+
+export const selectNextMilestoneTip = (
+  usedCommands: Set<string>,
+  shownMilestoneTipIds: Set<string>,
+  context: MilestoneTipContext,
+  lastShownTipId: string | null,
+): { shouldResetShownMilestones: boolean; tip: TipDefinition | null } => {
+  const excludeTipIds = toExcludedTipIds(lastShownTipId ? [lastShownTipId] : undefined);
+  let shouldResetShownMilestones = false;
+  let tip = selectMilestoneTip(usedCommands, shownMilestoneTipIds, context, { excludeTipIds });
+
+  if (!tip && shownMilestoneTipIds.size > 0) {
+    shownMilestoneTipIds.clear();
+    shouldResetShownMilestones = true;
+    tip = selectMilestoneTip(usedCommands, shownMilestoneTipIds, context, { excludeTipIds });
+  }
+
+  return { shouldResetShownMilestones, tip };
+};
+
+export const getEligibleContextualTriggers = ({
+  completedTaskCount,
+  currentTD,
+  onlineCount,
+  previous,
+  quotaPercent,
+  hasEvaluatedContextualState,
+  firedContextualTips,
+  singleFireTriggers,
+}: {
+  completedTaskCount: number;
+  currentTD: number;
+  onlineCount: number;
+  previous: ContextualStateSnapshot;
+  quotaPercent: number;
+  hasEvaluatedContextualState: boolean;
+  firedContextualTips: Set<ContextualTipTrigger>;
+  singleFireTriggers: Set<ContextualTipTrigger>;
+}): ContextualTipTrigger[] => {
+  const triggers: ContextualTipTrigger[] = [];
+
+  if (!hasEvaluatedContextualState) {
+    triggers.push(...getInitialContextualTriggers(currentTD, quotaPercent, onlineCount));
+  }
+  if (previous.currentTD <= 1_000 && currentTD > 1_000) {
+    triggers.push("td_1000");
+  }
+  if (previous.quotaPercent > 0 && quotaPercent <= 0) {
+    triggers.push("quota_exhausted");
+  }
+  if (completedTaskCount > previous.pendingCompletedTaskCount) {
+    triggers.push("ticket_completed");
+  }
+  if (previous.onlineCount !== 1 && onlineCount === 1) {
+    triggers.push("lone_user_online");
+  }
+
+  return Array.from(new Set(triggers))
+    .filter((trigger) => !singleFireTriggers.has(trigger) || !firedContextualTips.has(trigger));
+};
 
 export const removeTipFromHistory = (setHistory: SetHistory, content: string): void => {
   setHistory((prev) => {
