@@ -10,6 +10,10 @@ import {
 } from "../shareChatUtils";
 import { BUDDY_ICONS, BUDDY_TEXT_GAP, formatBuddyInterjection } from "../buddyConstants";
 
+function getTwitterIntentText(url: string): string | null {
+  return new URL(url).searchParams.get("text");
+}
+
 // Mock image loading
 const mockImage = {
   naturalWidth: 400,
@@ -302,16 +306,21 @@ describe("shareChatImage", () => {
       systemMessage: "World",
       platform: "twitter",
       openShareUrl: true,
+      shareUrl: "https://claudecope.com/s/share-1",
     });
 
     expect(mockOpen).toHaveBeenCalled();
     const callArgs = mockOpen.mock.calls[0]!;
     expect(callArgs[0]).toContain("twitter.com/intent/tweet");
+    const shareIntentText = getTwitterIntentText(String(callArgs[0]));
+    expect(shareIntentText).not.toBeNull();
+    expect(shareIntentText).not.toContain("https://claudecope.com/s/share-1");
+    expect(shareIntentText).not.toContain("http");
 
     mockOpen.mockRestore();
   });
 
-  it("includes punchline and link in share text fallback", async () => {
+  it("includes punchline and hashtags without URLs in share text fallback", async () => {
     mockClipboard.write.mockRejectedValueOnce(new Error("Not supported"));
     mockClipboard.writeText.mockResolvedValueOnce(undefined);
 
@@ -321,8 +330,8 @@ describe("shareChatImage", () => {
     });
 
     const shareText = mockClipboard.writeText.mock.calls[0]![0] as string;
-    expect(shareText).toContain("cope.bot");
     expect(shareText).toContain("#ClaudeCope");
+    expect(shareText).not.toContain("http");
     expect(shareText).not.toContain("Test prompt");
     expect(shareText).not.toContain("Test response");
   });

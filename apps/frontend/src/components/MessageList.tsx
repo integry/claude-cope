@@ -13,11 +13,31 @@ const MessageList = memo(function MessageList({ history, messageKeys, initialHis
   username: string;
   onSlashCommand?: (command: string, action: SlashCommandAction) => void;
 }) {
+  let nearestUserMessage: Message | undefined;
+
   return (
     <>
-      {history.map((message, index) => (
-        <OutputBlock key={messageKeys[index]} message={message} previousMessage={history[index - 1]} nextMessage={history[index + 1]} isNew={index >= initialHistoryLen} promptString={promptString} activeTicketId={activeTicketId} username={username} onSlashCommand={onSlashCommand} />
-      ))}
+      {history.map((message, index) => {
+        const shareUserMessage = nearestUserMessage;
+        if (message.role === "user") {
+          nearestUserMessage = message;
+        }
+
+        return (
+          <OutputBlock
+            key={messageKeys[index]}
+            message={message}
+            previousMessage={history[index - 1]}
+            nextMessage={history[index + 1]}
+            shareUserMessage={shareUserMessage}
+            isNew={index >= initialHistoryLen}
+            promptString={promptString}
+            activeTicketId={activeTicketId}
+            username={username}
+            onSlashCommand={onSlashCommand}
+          />
+        );
+      })}
     </>
   );
 });

@@ -4,13 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --config wrangler.local.toml",
     "build": "tsc",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@cloudflare/puppeteer": "^1.1.0",
     "@claude-cope/shared": "*",
     "@hono/node-server": "^1.19.12",
     "hono": "^4.0.0"

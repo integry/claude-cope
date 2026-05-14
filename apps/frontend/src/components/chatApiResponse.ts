@@ -21,6 +21,7 @@ type ParsedResponse = {
   tokensReceived?: number;
   cost?: number;
   quotaPercent?: number;
+  shareClaim?: string;
 };
 
 function processSSEChunk(
@@ -89,6 +90,7 @@ function extractJsonResponseFields(data: Record<string, unknown>): ParsedRespons
     tokensReceived: usage?.completion_tokens,
     cost: usage?.cost ?? usage?.total_cost,
     quotaPercent,
+    shareClaim: typeof data?.shareClaim === "string" ? data.shareClaim : undefined,
   };
 }
 

@@ -183,3 +183,21 @@ CREATE TABLE IF NOT EXISTS checkout_key_claims (
 
 CREATE INDEX IF NOT EXISTS idx_checkout_key_claims_checkout_id
     ON checkout_key_claims (checkout_id);
+
+-- Immutable share-card payloads keyed by deterministic content hash.
+CREATE TABLE IF NOT EXISTS shared_cards (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    prompt TEXT NOT NULL,
+    response TEXT NOT NULL,
+    username TEXT NOT NULL,
+    theme TEXT,
+    renderer_version TEXT NOT NULL,
+    content_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_shared_cards_created_at
+    ON shared_cards (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_shared_cards_renderer_version
+    ON shared_cards (renderer_version);

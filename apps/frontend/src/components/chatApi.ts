@@ -307,7 +307,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
 
       const parsed = await parseChatResponseBody(res, setHistory, loadingMessageId, opts.addActiveTD, opts.onProfileUpdate);
       let { rawReply } = parsed;
-      const { tokensSent, tokensReceived, cost, quotaPercent } = parsed;
+      const { tokensSent, tokensReceived, cost, quotaPercent, shareClaim } = parsed;
 
       // Track BYOK usage (full stats per model)
       if (isBYOK && opts.onByokUsage) {
@@ -346,7 +346,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
       setHistory((prev) => {
         let updated = [
           ...prev.filter((msg) => msg.role !== "loading" || (loadingMessageId !== undefined && msg.id !== loadingMessageId)),
-          { role: "system" as const, content: finalReply, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
+          { role: "system" as const, content: finalReply, shareClaim, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
           ...achievementMessages,
           ...(buddyMessage ? [buddyMessage] : []),
         ];
