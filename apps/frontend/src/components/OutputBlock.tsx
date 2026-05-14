@@ -161,6 +161,74 @@ function getMessageFlags(role: string, content: string, isBuddyInterjection: boo
   return { useMarkdown, isAwaitingResponse, isStreaming };
 }
 
+function renderTipContent(
+  tipData: TipRenderData,
+  onSlashCommand?: (command: string, action: SlashCommandAction) => void,
+) {
+  const linkifiedBody = onSlashCommand ? renderWithSlashLinks(tipData.body, onSlashCommand) : tipData.body;
+  return (
+    <div className="terminal-tip-output">
+      <span className="terminal-tip-prefix">// Tip:</span>
+      {tipData.body ? <span className="terminal-tip-body"> {linkifiedBody}</span> : null}
+    </div>
+  );
+}
+
+function renderBuddyContent(
+  buddyData: BuddyRenderData,
+  shareNode: React.ReactNode,
+  mdComponents: ReturnType<typeof buildMarkdownComponents>,
+) {
+  const processedBody = buddyData.body ? appendShareMarker(cleanLLMOutput(buddyData.body), Boolean(shareNode)) : "";
+  return (
+    <div className="space-y-3">
+      <pre className="whitespace-pre font-mono">{buddyData.buddyBlock}</pre>
+      {processedBody && (
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
+          {processedBody}
+        </ReactMarkdown>
+      )}
+    </div>
+  );
+}
+
+function renderMarkdownContent({
+  content,
+  visibleContent,
+  shouldTypewrite,
+  isStreaming,
+  isTyping,
+  shareNode,
+  mdComponents,
+}: {
+  content: string;
+  visibleContent: string;
+  shouldTypewrite: boolean;
+  isStreaming: boolean;
+  isTyping: boolean;
+  shareNode: React.ReactNode;
+  mdComponents: ReturnType<typeof buildMarkdownComponents>;
+}) {
+  const rawContent = shouldTypewrite ? visibleContent : content;
+  const processedContent = appendShareMarker(cleanLLMOutput(rawContent), Boolean(shareNode));
+  const showCursor = isStreaming || isTyping;
+  return (
+    <div className="space-y-1">
+      <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
+        {processedContent}
+      </ReactMarkdown>
+      {showCursor && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
+    </div>
+  );
+}
+
+function renderPlainTextContent(
+  body: string,
+  onSlashCommand?: (command: string, action: SlashCommandAction) => void,
+) {
+  return onSlashCommand ? renderWithSlashLinks(body, onSlashCommand) : body;
+}
+
 function MessageContent({
   message,
   buddyData,
@@ -202,47 +270,27 @@ function MessageContent({
   if (role === "user") return null;
 
   if (tipData.isTip) {
-    const linkifiedBody = onSlashCommand ? renderWithSlashLinks(tipData.body, onSlashCommand) : tipData.body;
-    return (
-      <div className="terminal-tip-output">
-        <span className="terminal-tip-prefix">// Tip:</span>
-        {tipData.body ? <span className="terminal-tip-body"> {linkifiedBody}</span> : null}
-      </div>
-    );
+    return renderTipContent(tipData, onSlashCommand);
   }
 
   if (buddyData.isBuddyInterjection) {
-    const processedBody = buddyData.body ? appendShareMarker(cleanLLMOutput(buddyData.body), Boolean(shareNode)) : "";
-    return (
-      <div className="space-y-3">
-        <pre className="whitespace-pre font-mono">{buddyData.buddyBlock}</pre>
-        {processedBody && (
-          <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
-            {processedBody}
-          </ReactMarkdown>
-        )}
-      </div>
-    );
+    return renderBuddyContent(buddyData, shareNode, mdComponents);
   }
 
   if (useMarkdown || isStreaming) {
-    const rawContent = shouldTypewrite ? visibleContent : content;
-    const processedContent = appendShareMarker(cleanLLMOutput(rawContent), Boolean(shareNode));
-    const showCursor = isStreaming || isTyping;
-    return (
-      <div className="space-y-1">
-        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
-          {processedContent}
-        </ReactMarkdown>
-        {showCursor && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
-      </div>
-    );
+    return renderMarkdownContent({
+      content,
+      visibleContent,
+      shouldTypewrite,
+      isStreaming,
+      isTyping,
+      shareNode,
+      mdComponents,
+    });
   }
   if (isAwaitingResponse) return <>{content}</>;
   if (role !== "loading") {
-    const linkify = (text: string): React.ReactNode =>
-      onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
-    return <>{linkify(buddyData.body)}</>;
+    return <>{renderPlainTextContent(buddyData.body, onSlashCommand)}</>;
   }
   return null;
 }
