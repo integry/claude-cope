@@ -16,6 +16,7 @@ import {
 import { getQuotaPercent, getQuotaLimits } from "../utils/quota";
 import { assignCategory, getRoutingConfig, type RequestCategory } from "../utils/categoryRouting";
 import { buildFreeAccountCookieHeader } from "../utils/freeAccountIdentity";
+import { issueShareCardClaim } from "../utils/shareCardClaims";
 
 type Env = {
   Bindings: {
@@ -29,6 +30,7 @@ type Env = {
     FREE_QUOTA_LIMIT?: string;
     PRO_INITIAL_QUOTA?: string;
     FREE_ACCOUNT_COOKIE_SECRET?: string;
+    SHARE_CARD_SIGNING_SECRET?: string;
   };
   Variables: {
     sessionId: string;
@@ -111,7 +113,7 @@ function logChatDiagnostics(messages: { role: string; content: string }[], data:
   const replyContent = data.choices?.[0]?.message?.content ?? "";
   const hasUserNext = /\[USER_NEXT_MESSAGE:/i.test(replyContent);
   console.log(
-    `[CHAT] user="${lastUserMsg.slice(0, 80)}" | reply=${replyContent.length}c | tag=${hasUserNext ? "✓" : "✗"} | tail="${replyContent.slice(-200).replace(/\n/g, " ")}"`,
+    `[CHAT] user="${lastUserMsg.slice(0, 80)}" | reply=${replyContent.length}c | tag=${hasUserNext ? "✓" : "✗"}\n[CHAT_REPLY_BEGIN]\n${replyContent}\n[CHAT_REPLY_END]`,
   );
 }
 
@@ -144,10 +146,15 @@ function isTutorialBaitPrompt(text: string): boolean {
 }
 
 function hasTutorialLeak(reply: string): boolean {
-  const stripped = reply
-    .replace(/\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g, "")
-    .trim();
+  const stripped = stripSyntheticReplyTags(reply);
   return TUTORIAL_LEAK_RE.test(stripped) || TUTORIAL_TEACHER_RE.test(stripped) || /\n\d+\.\s/.test(stripped);
+}
+
+function stripSyntheticReplyTags(reply: string): string {
+  return reply
+    .replace(/\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export function rewriteTutorialLeakIfNeeded(
@@ -439,6 +446,13 @@ function splitReadableParagraphs(text: string): string {
   return `${sentences.slice(0, splitIndex).join(" ")}\n\n${sentences.slice(splitIndex).join(" ")}`;
 }
 
+function stripOrphanEmphasisMarkers(text: string): string {
+  return text
+    .replace(/^[ \t]*(?:\*\*|__)[ \t]*$/gm, "")
+    .replace(/(^|[\s([{'"`])(\*\*|__)(?=\s)/g, "$1")
+    .replace(/(?<=\s)(\*\*|__)(?=$|[\s)\]}'".,!?;:])/g, "");
+}
+
 function normalizeNonCodeSegment(segment: string): string {
   let text = segment;
 
@@ -482,6 +496,7 @@ function normalizeNonCodeSegment(segment: string): string {
 
   // Normalize em/en dash clause breaks into spaced ASCII hyphens for readability.
   text = text.replace(/\s*[—–]\s*/g, " - ");
+  text = stripOrphanEmphasisMarkers(text);
 
   // If numbered options are flattened inline, put them on separate lines.
   text = text.replace(/([^\n])\s+(1\.\s)/g, "$1\n\n$2");
@@ -1432,6 +1447,7 @@ chat.post("/", async (c) => {
   const data = await orResponse.json() as ChatResponseData;
 
   if (data.choices?.[0]?.message?.content) {
+    const latestUserPrompt = [...trimmedMessages].reverse().find((message) => message.role === "user")?.content ?? "";
     let normalizedContent = rewriteTutorialLeakIfNeeded(
       body.chatMessages.filter((m) => m.role === "user").slice(-1)[0]?.content ?? "",
       normalizeReplyContent(data.choices[0].message.content, previousUserNextMessage),
@@ -1457,6 +1473,15 @@ chat.post("/", async (c) => {
     }
 
     data.choices[0].message.content = normalizedContent;
+    const shareClaim = await issueShareCardClaim(c.env, {
+      sessionId,
+      prompt: latestUserPrompt,
+      response: stripSyntheticReplyTags(normalizedContent),
+      username,
+    });
+    if (shareClaim) {
+      (data as Record<string, unknown>).shareClaim = shareClaim;
+    }
   }
 
   logChatDiagnostics(messages, data);

@@ -15,6 +15,16 @@ const TAG_STYLES: Record<TagCategory, string> = {
 
 const TAG_MARKER_REGEX = /^__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+)$/;
 
+function stripOrphanEmphasisMarkers(content: string): string {
+  return content
+    // Drop standalone emphasis-fence lines the model sometimes leaks as structure.
+    .replace(/^[ \t]*(?:\*\*|__)[ \t]*$/gm, "")
+    // Remove orphan opening markers used like: ". ** Next sentence"
+    .replace(/(^|[\s([{'"`])(\*\*|__)(?=\s)/g, "$1")
+    // Remove orphan closing markers used like: "sentence. **"
+    .replace(/(?<=\s)(\*\*|__)(?=$|[\s)\]}'".,!?;:])/g, "");
+}
+
 function classifyTag(tagContent: string): TagCategory {
   const lower = tagContent.toLowerCase();
   if (/error|❌|💀|🚨|fail|fatal|critical|sigsegv/.test(lower)) return "ERROR";
@@ -29,6 +39,7 @@ export function cleanLLMOutput(content: string): string {
   const fenceRegex = new RegExp("```(?:" + terminalLangs + ")\\s*\\n([\\s\\S]*?)```", "g");
   cleaned = cleaned.replace(fenceRegex, "$1");
   cleaned = cleaned.replace(/([^\n])\s+([1-9]\uFE0F?\u20E3)\s+/g, "$1\n\n\u2003$2 ");
+  cleaned = stripOrphanEmphasisMarkers(cleaned);
   cleaned = cleaned.replace(/\n(\[(?:WARN|ERROR|SUCCESS|INFO|FATAL|CRITICAL|DEBUG|DONE|PROGRESS|RESULT|⚙️|⚠️|❌|✓|✅|🔥|💀|🚨|SIGSEGV)[^\]]*\])/g, "\n\n$1");
   cleaned = cleaned.replace(/([^\n])(\[(?:WARN|ERROR|SUCCESS|INFO|FATAL|CRITICAL|DEBUG|DONE|PROGRESS|RESULT|⚙️|⚠️|❌|✓|✅|🔥|💀|🚨|SIGSEGV)[^\]]*\])/g, "$1\n\n$2");
   return cleaned;

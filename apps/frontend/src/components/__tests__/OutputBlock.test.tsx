@@ -4,7 +4,9 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 
 import OutputBlock from "../OutputBlock";
+import MessageList from "../MessageList";
 import { BUDDY_ICONS, formatBuddyInterjection } from "../buddyConstants";
+import type { Message } from "../../hooks/useGameState";
 
 describe("OutputBlock", () => {
   let container: HTMLDivElement;
@@ -97,5 +99,53 @@ describe("OutputBlock", () => {
 
     expect(container.textContent).toContain("[Agile Snail]");
     expect(container.textContent).toContain("Remember the backlog.");
+  });
+
+  it("keeps the share button on a system reply even when a loading message sits between the user and the answer", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const history: Message[] = [
+      { role: "user", content: "how do I enable beta mode?" },
+      { role: "loading", content: "[⚙️] Thinking..." },
+      { role: "system", content: "Edit `config/feature_flags.yaml` and set `beta_mode: true`.", shareClaim: "signed-claim-token" },
+    ];
+
+    act(() => {
+      root.render(
+        <MessageList
+          history={history}
+          messageKeys={[1, 2, 3]}
+          initialHistoryLen={history.length}
+          promptString="❯ "
+          username="tester"
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain("[share]");
+  });
+
+  it("strips orphan bold markers leaked by the model", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const content = "You asked for the next step? **\n\nYour latest ok ok left the sprint board with a blank stare. **";
+
+    act(() => {
+      root.render(
+        <OutputBlock
+          message={{ role: "system", content }}
+          promptString=">"
+          username=""
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain("You asked for the next step?");
+    expect(container.textContent).toContain("Your latest ok ok left the sprint board with a blank stare.");
+    expect(container.textContent).not.toContain("**");
   });
 });

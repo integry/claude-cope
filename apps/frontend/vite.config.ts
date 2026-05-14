@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { resolve } from "node:path";
 
 function cspApiBasePlugin(apiBase: string): Plugin {
   return {
@@ -25,6 +26,14 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
   return {
     plugins: [react(), cspApiBasePlugin(env.VITE_API_BASE || "")],
+    build: {
+      rollupOptions: {
+        input: {
+          main: resolve(__dirname, "index.html"),
+          shareCardRender: resolve(__dirname, "share-card-render.html"),
+        },
+      },
+    },
     server: {
       proxy: {
         "/api": {
