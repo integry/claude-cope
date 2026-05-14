@@ -24,9 +24,7 @@ const actionRowStyle: CSSProperties = { display: "flex", gap: "16px", justifyCon
 const linkStyle: CSSProperties = { background: "none", border: "none", padding: "8px 0 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", display: "block" };
 const previewFrameStyle: CSSProperties = { display: "flex", justifyContent: "center", alignItems: "flex-start", overflow: "hidden", maxWidth: "100%" };
 const previewScaleWrapStyle: CSSProperties = { width: "min(100%, 760px)" };
-const previewSurfaceStyle: CSSProperties = { position: "relative", width: "100%" };
-const previewLayerBaseStyle: CSSProperties = { transition: "opacity 140ms ease-out" };
-const previewLayerOverlayStyle: CSSProperties = { position: "absolute", inset: 0 };
+const previewSurfaceStyle: CSSProperties = { width: "100%" };
 const modalStatusStyle: CSSProperties = { fontSize: "12px", textAlign: "left" };
 const modalStatusGeneratingStyle: CSSProperties = { ...modalStatusStyle, color: "#ffff55" };
 const modalStatusErrorStyle: CSSProperties = { ...modalStatusStyle, color: "#ff5555" };
@@ -416,30 +414,19 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
               <div style={previewFrameStyle}>
                 <div style={previewScaleWrapStyle}>
                   <div style={previewSurfaceStyle}>
-                    <div
-                      style={{
-                        ...previewLayerBaseStyle,
-                        opacity: previewImageObjectUrl ? 0 : 1,
-                      }}
-                    >
-                      <ShareCardRenderSurface
-                        prompt={userMessage}
-                        response={systemMessage}
-                        username={username}
-                      />
-                    </div>
                     {previewImageObjectUrl ? (
                       <img
                         src={previewImageObjectUrl}
                         alt={`Share preview for @${username}`}
                         className="block h-auto w-full"
-                        style={{
-                          ...previewLayerBaseStyle,
-                          ...previewLayerOverlayStyle,
-                          opacity: 1,
-                        }}
                       />
-                    ) : null}
+                    ) : (
+                      <ShareCardRenderSurface
+                        prompt={userMessage}
+                        response={systemMessage}
+                        username={username}
+                      />
+                    )}
                   </div>
                 </div>
               </div>

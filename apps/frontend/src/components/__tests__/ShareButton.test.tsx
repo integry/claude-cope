@@ -43,6 +43,7 @@ describe("ShareButton modal share flow", () => {
     expect(previewImage).not.toBeNull();
     expect(previewImage?.getAttribute("src")).toBe("blob:mock-12");
     expect(previewImage?.getAttribute("alt")).toBe("Share preview for @testuser");
+    expect(dialog.querySelector("#share-card-root")).toBeNull();
     expect(testScope.container.textContent).not.toContain("Rendering final image...");
     expect(testScope.createObjectURLMock).toHaveBeenCalledTimes(1);
   });
