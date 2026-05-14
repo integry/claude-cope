@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -147,5 +147,55 @@ describe("OutputBlock", () => {
     expect(container.textContent).toContain("You asked for the next step?");
     expect(container.textContent).toContain("Your latest ok ok left the sprint board with a blank stare.");
     expect(container.textContent).not.toContain("**");
+  });
+
+  it("renders tip messages as terminal-style output with a prefixed comment line", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <OutputBlock
+          message={{ role: "system", content: "Tip: Use /help to inspect the command surface." }}
+          promptString=">"
+          username=""
+        />,
+      );
+    });
+
+    const tipOutput = container.querySelector(".terminal-tip-output");
+    expect(tipOutput).toBeTruthy();
+    expect(tipOutput?.textContent).toBe("// Tip: Use /help to inspect the command surface.");
+    expect(container.querySelector(".terminal-tip-prefix")?.textContent).toBe("// Tip:");
+    expect(container.querySelector("p")).toBeNull();
+  });
+
+  it("keeps slash commands clickable inside terminal tip output", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const onSlashCommand = vi.fn();
+
+    act(() => {
+      root.render(
+        <OutputBlock
+          message={{ role: "system", content: "Tip: Run /backlog and then /take <#>." }}
+          promptString=">"
+          username=""
+          onSlashCommand={onSlashCommand}
+        />,
+      );
+    });
+
+    const backlogButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "/backlog");
+    expect(backlogButton).toBeTruthy();
+
+    act(() => {
+      backlogButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "execute");
   });
 });

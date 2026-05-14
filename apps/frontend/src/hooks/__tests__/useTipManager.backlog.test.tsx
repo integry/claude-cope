@@ -87,6 +87,7 @@ describe("useTipManager backlog reminders", () => {
 
   it("restores backlog reminder eligibility when a pending prompt rollback removes the tip", () => {
     act(() => {
+      harness.ref.current?.setBlocked(true);
       for (let i = 0; i < 6; i++) {
         const nextRollback = harness.ref.current?.recordMessageWithoutTicket();
         if (nextRollback) {
@@ -95,10 +96,12 @@ describe("useTipManager backlog reminders", () => {
       }
     });
 
-    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([BACKLOG_REMINDER_TIPS[0]?.text]);
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
 
     act(() => {
       rollback?.();
+      harness.ref.current?.setBlocked(false);
+      harness.ref.current?.recordConversationRound();
       for (let i = 0; i < 6; i++) {
         harness.ref.current?.recordMessageWithoutTicket();
       }
@@ -158,5 +161,45 @@ describe("useTipManager backlog reminders", () => {
       BACKLOG_REMINDER_TIPS[0]?.text,
       BACKLOG_REMINDER_TIPS[1]?.text,
     ]);
+  });
+
+  it("defers blocked backlog reminders until after a completed conversation round", () => {
+    act(() => {
+      harness.ref.current?.setBlocked(true);
+      for (let i = 0; i < 6; i++) {
+        harness.ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.setBlocked(false);
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.recordConversationRound();
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([BACKLOG_REMINDER_TIPS[0]?.text]);
+  });
+
+  it("drops a deferred backlog reminder when an active ticket becomes relevant before the round commits", () => {
+    act(() => {
+      harness.ref.current?.setBlocked(true);
+      for (let i = 0; i < 6; i++) {
+        harness.ref.current?.recordMessageWithoutTicket();
+      }
+      harness.ref.current?.setGameState((prev) => ({
+        ...prev,
+        activeTicket: { id: "COPE-1", title: "Fix prod", sprintProgress: 0, sprintGoal: 100 },
+      }));
+      harness.ref.current?.setBlocked(false);
+      harness.ref.current?.recordConversationRound();
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
   });
 });

@@ -12,6 +12,7 @@ import { BacklogMessage } from "./BacklogMessage";
 import { extractBuddyInterjectionBlock } from "./buddyConstants";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
+const TIP_PREFIX = "Tip:";
 
 function SimulatedToolCall({ activeTicketId }: { activeTicketId?: string | null }) {
   // Pick a random sequence once on mount, based on active ticket ID
@@ -101,6 +102,11 @@ type BuddyRenderData = {
   body: string;
 };
 
+type TipRenderData = {
+  isTip: boolean;
+  body: string;
+};
+
 function getBuddyRenderData(message: Message): BuddyRenderData {
   if (message.role !== "warning") {
     return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
@@ -133,11 +139,22 @@ function getContainerClass(message: Message, isNew: boolean): string {
   return `mb-5 ${colorClass} ${modifier}`;
 }
 
-function getMessageFlags(role: string, content: string, isBuddyInterjection: boolean) {
+function getTipRenderData(message: Message): TipRenderData {
+  if (message.role !== "system" || !message.content.startsWith(TIP_PREFIX)) {
+    return { isTip: false, body: "" };
+  }
+
+  return {
+    isTip: true,
+    body: message.content.slice(TIP_PREFIX.length).trimStart(),
+  };
+}
+
+function getMessageFlags(role: string, content: string, isBuddyInterjection: boolean, isTip: boolean) {
   const isWarning = role === "warning";
   const isAchievement = isWarning && content.includes("ACHIEVEMENT UNLOCKED");
   const isMarkdownRole = role === "system" || isWarning || role === "error";
-  const useMarkdown = isMarkdownRole && !isAchievement && !isBuddyInterjection;
+  const useMarkdown = isMarkdownRole && !isAchievement && !isBuddyInterjection && !isTip;
   const isAwaitingResponse = role === "loading" && content.startsWith("[⚙️]");
   const isStreaming = role === "loading" && !isAwaitingResponse;
   return { useMarkdown, isAwaitingResponse, isStreaming };
@@ -157,10 +174,12 @@ function MessageContent({
   shareNode?: React.ReactNode;
 }) {
   const { role, content } = message;
+  const tipData = getTipRenderData(message);
   const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(
     role,
     content,
     buddyData.isBuddyInterjection,
+    tipData.isTip,
   );
   // Only typewrite actual AI responses (system role). Scaffold messages (ads,
   // queue warnings) render instantly so they don't vanish mid-animation when
@@ -176,6 +195,16 @@ function MessageContent({
   }
 
   if (role === "user") return null;
+
+  if (tipData.isTip) {
+    const linkifiedBody = onSlashCommand ? renderWithSlashLinks(tipData.body, onSlashCommand) : tipData.body;
+    return (
+      <div className="terminal-tip-output">
+        <span className="terminal-tip-prefix">// Tip:</span>
+        {tipData.body ? <span className="terminal-tip-body"> {linkifiedBody}</span> : null}
+      </div>
+    );
+  }
 
   if (buddyData.isBuddyInterjection) {
     const processedBody = buddyData.body ? appendShareMarker(cleanLLMOutput(buddyData.body), Boolean(shareNode)) : "";
