@@ -88,17 +88,20 @@ describe("CommandLine", () => {
   it("switches the hint to tap on mobile and accepts the suggestion when tapped", () => {
     mobileViewport = true;
     const onPlaceholderAccept = vi.fn();
-    const { container } = renderCommandLine({ onPlaceholderAccept });
+    const { container, input } = renderCommandLine({ onPlaceholderAccept });
     const hint = container.querySelector("[data-testid='command-line-tab-hint']") as HTMLButtonElement | null;
 
     expect(hint?.textContent).toBe("[Tap]");
     expect(container.querySelector("input")?.getAttribute("placeholder")).toBe("Try /help. Press Tap to accept suggestion.");
 
     act(() => {
+      input?.focus();
+      hint?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       hint?.click();
     });
 
     expect(onPlaceholderAccept).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(input);
   });
 
   it("shows the decorative cursor over the first suggested character only while focused and empty", () => {

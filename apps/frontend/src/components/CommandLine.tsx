@@ -1,4 +1,4 @@
-import { ChangeEvent, KeyboardEvent, forwardRef, useEffect, useState } from "react";
+import { ChangeEvent, KeyboardEvent, MouseEvent, PointerEvent, forwardRef, useEffect, useState } from "react";
 
 type CommandLineProps = {
   value: string;
@@ -77,7 +77,7 @@ function getPlaceholderMetadata(
 }
 
 function getCommandRowClassName(isFocused: boolean, disabled: boolean | undefined): string {
-  return `terminal-command-row flex items-center gap-3 ${isFocused && !disabled ? "terminal-command-row-active" : ""} ${disabled ? "terminal-command-row-disabled" : ""}`;
+  return `terminal-command-row flex items-center gap-1.5 ${isFocused && !disabled ? "terminal-command-row-active" : ""} ${disabled ? "terminal-command-row-disabled" : ""}`;
 }
 
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
@@ -118,6 +118,10 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
       onPlaceholderAccept();
     };
 
+    const keepInputFocus = (event: MouseEvent<HTMLButtonElement> | PointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+    };
+
     return (
       <div className="terminal-command-line border-t border-white/20">
         <div className={commandRowClassName}>
@@ -143,7 +147,9 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                   <button
                     type="button"
                     data-testid="command-line-tab-hint"
-                    className="terminal-command-tab-hint shrink-0"
+                    className="terminal-command-tab-hint shrink-0 pointer-events-auto relative z-20"
+                    onMouseDown={keepInputFocus}
+                    onPointerDown={keepInputFocus}
                     onClick={handlePlaceholderAccept}
                     aria-label={tabHintAriaLabel}
                   >
