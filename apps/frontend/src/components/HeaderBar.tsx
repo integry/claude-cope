@@ -199,7 +199,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
       </div>
       {/* Hamburger menu — mobile only */}
       <div ref={menuRef} className="sm:hidden relative flex-shrink-0 col-start-3 row-start-1 self-end justify-self-end">
-        <button onClick={() => setMenuOpen((v) => !v)} className="text-gray-400 hover:text-white px-2 py-1" aria-label="Menu">
+        <button onClick={() => setMenuOpen((v) => !v)} className="rounded-lg px-3 py-1.5 text-gray-400 transition-colors hover:bg-gray-800/70 hover:text-white" aria-label="Menu">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             {menuOpen
               ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -207,7 +207,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           </svg>
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded shadow-lg z-20 min-w-[200px] py-1 text-sm">
+          <div className="absolute right-0 top-full z-20 mt-2 min-w-[240px] overflow-hidden rounded-2xl border border-gray-700 bg-gray-900 py-1 text-sm shadow-lg">
             <div className="px-4 py-2 border-b border-gray-700">
               <img src="/media/logo-400-transparent.png" alt="Claude Cope" className="max-h-8 w-auto" />
             </div>

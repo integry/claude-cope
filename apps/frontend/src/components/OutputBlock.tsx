@@ -181,7 +181,7 @@ function MessageContent({
     const processedBody = buddyData.body ? appendShareMarker(cleanLLMOutput(buddyData.body), Boolean(shareNode)) : "";
     return (
       <div className="space-y-3">
-        <pre className="max-w-full overflow-x-auto whitespace-pre font-mono">{buddyData.buddyBlock}</pre>
+        <pre className="max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-mono">{buddyData.buddyBlock}</pre>
         {processedBody && (
           <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
             {processedBody}
