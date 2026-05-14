@@ -9,7 +9,7 @@ import { renderWithSlashLinks } from "./slashCommandLinks";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { appendShareMarker, buildMarkdownComponents, cleanLLMOutput } from "./OutputBlockMarkdown";
 import { BacklogMessage } from "./BacklogMessage";
-import { extractBuddyInterjectionBlock } from "./buddyConstants";
+import { BUDDY_ICONS, extractBuddyInterjectionBlock, parseBuddyInterjection } from "./buddyConstants";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
@@ -101,6 +101,12 @@ type BuddyRenderData = {
   body: string;
 };
 
+type ParsedBuddyBlock = {
+  art: string;
+  speech: string;
+  type: string;
+};
+
 function getBuddyRenderData(message: Message): BuddyRenderData {
   if (message.role !== "warning") {
     return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
@@ -115,6 +121,19 @@ function getBuddyRenderData(message: Message): BuddyRenderData {
     isBuddyInterjection: true,
     buddyBlock: buddyBlock.block,
     body: buddyBlock.body,
+  };
+}
+
+function getParsedBuddyBlock(buddyBlock: string): ParsedBuddyBlock | null {
+  const parsed = parseBuddyInterjection(buddyBlock);
+  if (!parsed) {
+    return null;
+  }
+
+  return {
+    art: BUDDY_ICONS[parsed.type] ?? "",
+    speech: parsed.speech,
+    type: parsed.type,
   };
 }
 
@@ -179,9 +198,30 @@ function MessageContent({
 
   if (buddyData.isBuddyInterjection) {
     const processedBody = buddyData.body ? appendShareMarker(cleanLLMOutput(buddyData.body), Boolean(shareNode)) : "";
+    const parsedBuddyBlock = getParsedBuddyBlock(buddyData.buddyBlock);
+
+    if (!parsedBuddyBlock) {
+      return (
+        <div className="space-y-3">
+          <pre className="max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-mono">{buddyData.buddyBlock}</pre>
+          {processedBody && (
+            <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
+              {processedBody}
+            </ReactMarkdown>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-3">
-        <pre className="max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-mono">{buddyData.buddyBlock}</pre>
+        <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+          <pre className="m-0 whitespace-pre font-mono leading-tight">{parsedBuddyBlock.art}</pre>
+          <div className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            <div className="font-mono">[{parsedBuddyBlock.type}]</div>
+            <div>{parsedBuddyBlock.speech}</div>
+          </div>
+        </div>
         {processedBody && (
           <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
             {processedBody}
