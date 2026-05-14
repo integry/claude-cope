@@ -93,8 +93,9 @@ export function enforceContextTrimming(messages: { role: string; content: string
 }
 
 function resolveModel(modelId?: string): string {
+  const regretModel = COPE_MODELS.find((m) => m.id === "regret");
   const copeModel = modelId ? COPE_MODELS.find((m) => m.id === modelId) : undefined;
-  return copeModel?.openRouterId ?? "openai/gpt-oss-20b";
+  return copeModel?.openRouterId ?? regretModel?.openRouterId ?? "nvidia/nemotron-nano-9b-v2";
 }
 
 function extractBodyDefaults(body: ChatBody) {
@@ -1418,6 +1419,7 @@ chat.post("/", async (c) => {
   const messages = buildChatMessages({
     rank,
     chatMessages: trimmedMessages,
+    modelId: body.modelId,
     modes: body.modes,
     activeTicket: body.activeTicket,
     buddyType: body.buddyType,

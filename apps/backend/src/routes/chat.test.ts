@@ -189,6 +189,41 @@ describe("buildChatMessages achievement injection", () => {
   });
 });
 
+describe("buildChatMessages model persona injection", () => {
+  it("falls back to regret when no modelId is provided", () => {
+    const messages = buildChatMessages({
+      rank: "Junior Code Monkey",
+      chatMessages: [{ role: "user", content: "help" }],
+    });
+
+    const system = messages[0]?.content ?? "";
+    expect(system).toContain("## Model Persona: regret");
+    expect(system).toContain("The selected cope model is: regret.");
+  });
+
+  it("injects distinct persona text for copus and psychos", () => {
+    const copusMessages = buildChatMessages({
+      rank: "Junior Code Monkey",
+      modelId: "copus",
+      chatMessages: [{ role: "user", content: "help" }],
+    });
+    const psychosMessages = buildChatMessages({
+      rank: "Junior Code Monkey",
+      modelId: "psychos",
+      chatMessages: [{ role: "user", content: "help" }],
+    });
+
+    const copusSystem = copusMessages[0]?.content ?? "";
+    const psychosSystem = psychosMessages[0]?.content ?? "";
+
+    expect(copusSystem).toContain("## Model Persona: copus");
+    expect(copusSystem).toContain("Loosen the anti-code pressure just enough");
+    expect(psychosSystem).toContain("## Model Persona: psychos");
+    expect(psychosSystem).toContain("Loosen the anti-code pressure more than copus");
+    expect(copusSystem).not.toBe(psychosSystem);
+  });
+});
+
 describe("USER_NEXT_MESSAGE dedupe", () => {
   it("replaces a repeated suggested reply with a different follow-up", () => {
     const reply = "The real villain is `error_log_128.txt` and nobody will admit it.\n[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]";
@@ -846,6 +881,48 @@ describe("Provider configuration in OpenRouter requests", () => {
       top_p: 0.8,
     });
     expect(capturedRequestBody).not.toHaveProperty("provider");
+  });
+});
+
+describe("chat route model persona wiring", () => {
+  it("passes modelId into prompt construction before calling OpenRouter", async () => {
+    const { default: chat } = await import("./chat");
+    let capturedRequestBody: Record<string, unknown> | undefined;
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      if (url === "https://openrouter.ai/api/v1/chat/completions") {
+        capturedRequestBody = JSON.parse(init?.body as string) as Record<string, unknown>;
+      }
+
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: "test response\n[USER_NEXT_MESSAGE: what breaks next?]" } }],
+        usage: {},
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    const res = await chat.request("/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: "TestUser0",
+        rank: "Junior Code Monkey",
+        modelId: "psychos",
+        chatMessages: [{ role: "user", content: "help" }],
+      }),
+    }, {
+      OPENROUTER_API_KEY: "test-key",
+    });
+
+    fetchSpy.mockRestore();
+
+    expect(res.status).toBe(200);
+    const messages = (capturedRequestBody?.messages ?? []) as Array<{ role: string; content: string }>;
+    expect(messages[0]?.role).toBe("system");
+    expect(messages[0]?.content).toContain("## Model Persona: psychos");
+    expect(messages[0]?.content).toContain("The selected cope model is: psychos.");
   });
 });
 

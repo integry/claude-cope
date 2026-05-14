@@ -355,6 +355,7 @@ export async function chat(userMessage: string, opts?: TestOpts, meta?: { suite:
   const messages = buildChatMessages({
     rank: opts?.rank ?? "Junior Code Monkey",
     chatMessages: [{ role: "user", content: userMessage }],
+    modelId: "regret",
     activeTicket: opts?.ticket,
     buddyType: opts?.buddy,
   });
@@ -367,7 +368,7 @@ export async function chat(userMessage: string, opts?: TestOpts, meta?: { suite:
       chatMessages: [{ role: "user", content: userMessage }],
       activeTicket: opts?.ticket,
       buddyType: opts?.buddy,
-      modelId: "gpt-oss-20b",
+      modelId: "regret",
     },
     cookieJarPath,
   );
@@ -386,6 +387,7 @@ export async function conversation(turns: string[], opts?: TestOpts, meta?: { su
     const messages = buildChatMessages({
       rank: opts?.rank ?? "Junior Code Monkey",
       chatMessages: [...history, { role: "user", content: userMsg }],
+      modelId: "regret",
       activeTicket: opts?.ticket,
       buddyType: opts?.buddy,
     });
@@ -401,7 +403,7 @@ export async function conversation(turns: string[], opts?: TestOpts, meta?: { su
       chatMessages: [...history, { role: "user", content: userMsg }],
       activeTicket: opts?.ticket,
       buddyType: opts?.buddy,
-      modelId: "gpt-oss-20b",
+      modelId: "regret",
     }, cookieJarPath);
 
     replies.push(reply);

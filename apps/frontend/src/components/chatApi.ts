@@ -236,8 +236,9 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
   // level — stale keys from prior sessions must not reach OpenRouter.
   const isBYOK = BYOK_ENABLED && Boolean(apiKey);
 
+  const regretModel = COPE_MODELS.find((m) => m.id === "regret");
   const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
-  const model = copeModel ? copeModel.openRouterId : customModel || (isBYOK ? "openai/gpt-oss-20b:free" : "nvidia/nemotron-nano-9b-v2:free");
+  const model = copeModel ? copeModel.openRouterId : customModel || regretModel?.openRouterId || "nvidia/nemotron-nano-9b-v2";
 
   // Determine buddy type for context (only include if buddy result exists)
   const buddyTypeForContext = opts.buddyType && buddyResult ? opts.buddyType : null;
@@ -249,6 +250,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
           const messages = buildChatMessages({
             rank: currentRank,
             chatMessages,
+            modelId: customModel,
             modes,
             activeTicket,
             buddyType: buddyTypeForContext,

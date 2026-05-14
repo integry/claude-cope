@@ -726,7 +726,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
 
   if (!modelName) {
     markValidSlashCommand(ctx, "/model");
-    const current = ctx.state.selectedModel ?? "default";
+    const current = ctx.state.selectedModel ?? "regret";
     const modelList = COPE_MODELS.map((m) => {
       const costLabel = `${m.multiplier}x cost`;
       const tierBadge = m.tier === "pro" ? " 🔒 Max" : "";
@@ -740,7 +740,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
         : `\n\nWant to use custom OpenRouter models? Set your own API key with \`/key\` to enable BYOK mode.`;
     }
 
-    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\n**Available Models:**\n${modelList}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.${customModelHelp}` });
+    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\n**Available Models:**\n${modelList}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to **regret**.${customModelHelp}` });
     return;
   }
 
@@ -750,7 +750,7 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
       const { selectedModel: _, ...rest } = prev;
       return { ...rest } as GameState;
     });
-    reply({ role: "system", content: "[✓] Model reset to **default**. Back to baseline corporate AI." });
+    reply({ role: "system", content: "[✓] Model reset to **regret**. Back to baseline corporate disappointment." });
     return;
   }
 
