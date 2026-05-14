@@ -106,7 +106,7 @@ describe("OutputBlock ticket dossier rendering", () => {
     });
 
     expect(onSlashCommand).toHaveBeenCalledWith("/accept", "execute");
-    expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "execute");
+    expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "prefill");
   });
 
   it("falls back to legacy reporter data when split fields are absent", () => {
