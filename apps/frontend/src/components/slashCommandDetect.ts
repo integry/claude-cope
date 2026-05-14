@@ -5,6 +5,7 @@ import { SLASH_COMMANDS } from "./slashCommands";
  * prefill the input, never auto-execute.
  */
 export const PREFILL_COMMANDS = new Set([
+  "/backlog",
   "/take",
   "/ticket",
   "/alias",

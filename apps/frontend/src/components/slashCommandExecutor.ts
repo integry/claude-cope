@@ -17,7 +17,7 @@ import type { Message } from "./Terminal";
 import { getRandomLoadingPhrase } from "./loadingPhrases";
 import { buildAchievementBox } from "./achievementBox";
 import { handleTicketCommand, handleBacklogCommand, handleTakeCommand, handleAbandonCommand, formatLockedTicketPrompt, parseBacklogCategoryArgument } from "./ticketCommands";
-import { getPendingOffer, clearPendingOffer } from "./ticketPrompt";
+import { getPendingOffer, clearPendingOffer, buildTicketMessage } from "./ticketPrompt";
 
 type SetHistory = React.Dispatch<React.SetStateAction<Message[]>>;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
@@ -814,7 +814,7 @@ export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): voi
       void updateTicketServer(ctx.state.username, newTicket, ctx.state.proKeyHash);
     }
     ctx.playChime();
-    reply({ role: "system", content: `[🎫 **TICKET ACCEPTED**] ${offer.id}: **${offer.title}**\n\nReward: **${(offer.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.` });
+    reply(buildTicketMessage(offer, "claimed"));
     ctx.onSuggestedReply(offer.kickoff_prompt);
   }
 }

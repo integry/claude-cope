@@ -17,13 +17,38 @@ vi.mock("../../supabaseClient", () => ({ supabase: {} }));
 vi.mock("../ticketPrompt", () => ({
   getPendingOffer: vi.fn<() => null | {
     id: string;
+    reporter: string | null;
+    reporter_name: string | null;
+    reporter_title: string | null;
+    reporter_description: string | null;
     title: string;
     description: string;
     technical_debt: number;
     kickoff_prompt: string;
+    created_at: string;
+    category_prefix: string | null;
+    category_label: string | null;
+    is_locked: false;
+    tier: "free" | "premium";
   }>(() => null),
   clearPendingOffer: vi.fn(),
   fetchRandomTicketPrompt: vi.fn(),
+  buildTicketMessage: vi.fn((offer: PlayableBacklogTicket) => ({
+    role: "system",
+    content: `[ JIRA PAYLOAD IMPORTED ]\n\nID: ${offer.id}\nTITLE: ${offer.title}`,
+    ticketDisplay: {
+      kind: "corporate-dossier",
+      status: "claimed",
+      heading: "[ JIRA PAYLOAD IMPORTED ]",
+      ticketId: offer.id,
+      title: offer.title,
+      reporter: offer.reporter_name ?? offer.reporter ?? "Unknown reporter",
+      profile: offer.reporter_description ?? undefined,
+      body: offer.description,
+      reward: `${(offer.technical_debt * 10).toLocaleString()} TD`,
+      footer: ["Start prompting to make progress."],
+    },
+  })),
 }));
 
 import { handleAcceptCommand, handlePingCommand, type SlashCommandContext } from "../slashCommandExecutor";
@@ -263,8 +288,14 @@ describe("/accept prefers review-pings over ticket offers", () => {
     expect(ctx.playChime).toHaveBeenCalledOnce();
     const msg = reply.mock.calls[0]![0];
     expect(msg.role).toBe("system");
-    expect(msg.content).toContain("TICKET ACCEPTED");
-    expect(msg.content).toContain("BACKLOG-99");
+    expect(msg.ticketDisplay).toMatchObject({
+      kind: "corporate-dossier",
+      status: "claimed",
+      ticketId: "BACKLOG-99",
+      title: "Rewrite the monolith",
+    });
+    expect(msg.content).toContain("[ JIRA PAYLOAD IMPORTED ]");
+    expect(msg.content).toContain("ID: BACKLOG-99");
   });
 
   it("emits an error when nothing is pending", () => {
