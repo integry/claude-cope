@@ -719,11 +719,10 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
   }
 }
 
-function buildModelListMessage(): string {
+function buildModelListMessage(isPro: boolean): string {
   return COPE_MODELS.map((m) => {
-    const costLabel = `${m.multiplier}x cost`;
-    const tierBadge = m.tier === "pro" ? " 🔒 Max" : "";
-    return `- \`${m.id}\` — **${m.name}** (${costLabel})${tierBadge}`;
+    const tierBadge = m.tier === "pro" && !isPro ? " 🔒 Max" : "";
+    return `- \`${m.id}\` — **${m.name}**${tierBadge}`;
   }).join("\n");
 }
 
@@ -751,6 +750,7 @@ function getMigratedSelectedModelInfo(ctx: SlashCommandContext): {
 
 function handleModelCommandInfo(ctx: SlashCommandContext, reply: Reply, isBYOK: boolean): void {
   const { migratedSelectedModel, migratedFromLegacy } = getMigratedSelectedModelInfo(ctx);
+  const isPro = isPaidUser(ctx.state);
 
   markValidSlashCommand(ctx, "/model");
   if (migratedFromLegacy) {
@@ -764,7 +764,7 @@ function handleModelCommandInfo(ctx: SlashCommandContext, reply: Reply, isBYOK: 
 
   reply({
     role: "system",
-    content: `[🤖] Current model: **${current}**.${migrationNote}\n\n**Available Models:**\n${buildModelListMessage()}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to the default model.${buildCustomModelHelp(isBYOK)}`,
+    content: `[🤖] Current model: **${current}**.${migrationNote}\n\n**Available Models:**\n${buildModelListMessage(isPro)}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to the default model.${buildCustomModelHelp(isBYOK)}`,
   });
 }
 
@@ -791,7 +791,7 @@ function replyModelLocked(copeModel: NonNullable<ReturnType<typeof resolveCopeMo
   track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/model", reason: SlashCommandFailureReasons.LOCKED });
   reply({
     role: "system",
-    content: `[🔒] **${copeModel.name}** is a Max model (${copeModel.multiplier}x cost). You need a Max license to use this.\n\nUpgrade at \`/upgrade\` to unlock premium models${byokHint}.`,
+    content: `[🔒] **${copeModel.name}** is a Max model. You need a Max license to use this.\n\nUpgrade at \`/upgrade\` to unlock premium models${byokHint}.`,
   });
 }
 
@@ -812,7 +812,7 @@ function replyModelSwitched(
   }
 
   if (copeModel?.tier === "pro") {
-    reply({ role: "system", content: `[✓] Model switched to **${copeModel.name}** (${copeModel.multiplier}x cost).${renameNote} Max tier activated. Your tokens now cost real money — spend wisely.` });
+    reply({ role: "system", content: `[✓] Model switched to **${copeModel.name}**.${renameNote} Max tier activated. Your tokens now cost real money — spend wisely.` });
     return;
   }
 

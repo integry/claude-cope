@@ -129,7 +129,23 @@ describe("/model command", () => {
     expect(reply).toContain("`regret`");
     expect(reply).toContain("`copus`");
     expect(reply).toContain("`psychos`");
+    expect(reply).not.toContain("x cost");
+    expect(reply).toContain("`copus` — **Cope Copus 4.69** 🔒 Max");
     expect(reply).toContain("reset to the default model");
+  });
+
+  it("does not show the Max lock marker in the model list for Max users", async () => {
+    const ctx = makeCtx(makeGameState({ proKey: "pro-test-key" }));
+
+    executeSlashCommand("/model", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    const reply = getLastReply(ctx);
+
+    expect(reply).toContain("`copus` — **Cope Copus 4.69**");
+    expect(reply).toContain("`psychos` — **Cope Psychos (Red-Teamed)**");
+    expect(reply).not.toContain("🔒 Max");
   });
 
   it("migrates legacy selected models when listing the current setting", async () => {
@@ -166,6 +182,7 @@ describe("/model command", () => {
 
     expect(ctx.state.selectedModel).toBe("copus");
     expect(getLastReply(ctx)).toContain("Model switched to **Cope Copus 4.69**");
+    expect(getLastReply(ctx)).not.toContain("x cost");
 
     executeSlashCommand("/model psychos", ctx);
     vi.advanceTimersByTime(1500);
@@ -173,6 +190,7 @@ describe("/model command", () => {
 
     expect(ctx.state.selectedModel).toBe("psychos");
     expect(getLastReply(ctx)).toContain("Model switched to **Cope Psychos (Red-Teamed)**");
+    expect(getLastReply(ctx)).not.toContain("x cost");
   });
 
   it("maps legacy selection aliases onto canonical cope ids", async () => {
