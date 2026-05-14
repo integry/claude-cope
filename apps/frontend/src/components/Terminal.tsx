@@ -30,7 +30,7 @@ import { getPromptString, isAnyOverlayOpen } from "./terminalViewUtils";
 import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
 import { usePromptSubmissionState } from "./usePromptSubmissionState";
 import { useUpgradeNagState } from "./useUpgradeNagState";
-import { STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, syncMessageKeys } from "./terminalUtils";
+import { STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, getSlashCommandClickSelection, syncMessageKeys } from "./terminalUtils";
 export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
 type PromptSubmission = { command: string; replayId: number | null; submissionId: number };
 
@@ -226,8 +226,12 @@ function Terminal() {
   const handlePromptAccepted = useCallback((rollbackId: number, replayId: number | null) => { settlePendingBacklogRollback(rollbackId, false); settleAcceptedNagReplay(replayId); }, [settleAcceptedNagReplay, settlePendingBacklogRollback]);
   const handlePromptError = useCallback((rollbackId: number) => { settlePendingBacklogRollback(rollbackId, true); playError(); }, [playError, settlePendingBacklogRollback]);
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
-    if (action === "execute") { runSlashCommandRef.current(command); return; }
-    setInputValue(command + " "); setSlashQuery(""); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
+    const nextSelection = getSlashCommandClickSelection(command, action);
+    if (nextSelection.mode === "execute") {
+      runSlashCommandRef.current(nextSelection.value);
+      return;
+    }
+    setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
   }, []);
   const handleSlashMenuSelect = useCallback((command: string) => {
     const nextSelection = resolveSlashMenuSelection(command, "click");
