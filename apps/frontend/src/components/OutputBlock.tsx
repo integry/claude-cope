@@ -141,7 +141,7 @@ function getContainerClass(message: Message, isNew: boolean): string {
 }
 
 function getTipRenderData(message: Message): TipRenderData {
-  if (message.role !== "system") {
+  if (message.role !== "system" || message.displayType !== "tip") {
     return { isTip: false, body: "" };
   }
   const match = TIP_PREFIX_PATTERN.exec(message.content);
@@ -384,6 +384,7 @@ function messagesEqual(a: Message | undefined, b: Message | undefined): boolean 
   return a === b || (
     a?.role === b?.role
     && a?.content === b?.content
+    && a?.displayType === b?.displayType
     && a?.shareClaim === b?.shareClaim
     && a?.buddyType === b?.buddyType
     && a?.backlogDisplay === b?.backlogDisplay
@@ -394,6 +395,7 @@ function messagesEqual(a: Message | undefined, b: Message | undefined): boolean 
 function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps): boolean {
   if (prev.message.role !== next.message.role) return false;
   if (prev.message.content !== next.message.content) return false;
+  if (prev.message.displayType !== next.message.displayType) return false;
   if (prev.message.shareClaim !== next.message.shareClaim) return false;
   if (prev.message.buddyType !== next.message.buddyType) return false;
   if (prev.message.cost !== next.message.cost) return false;

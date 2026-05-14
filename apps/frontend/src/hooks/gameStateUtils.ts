@@ -73,6 +73,7 @@ export type Message = {
   id?: number;
   role: "user" | "system" | "loading" | "warning" | "error";
   content: string;
+  displayType?: "tip";
   shareClaim?: string;
   buddyType?: string;
   tokensSent?: number;

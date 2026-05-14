@@ -42,10 +42,14 @@ type PendingBacklogReminder = {
   previousRecentTipHistory: Record<string, number>;
   previousLastTipConversationRound: number | null;
 };
+type PendingMilestoneTip = {
+  tip: TipDefinition;
+  shouldResetShownMilestones: boolean;
+};
 type PreviousTipState = Pick<PendingBacklogReminder, "previousCount" | "previousThreshold" | "previousTipId">;
 type ContextualStateSnapshot = { currentTD: number; quotaPercent: number; pendingCompletedTaskCount: number; onlineCount: number };
 const getCompletedTaskCount = (gameState: GameState): number => gameState.pendingCompletedTaskIds?.length ?? 0;
-const appendTip = (setHistory: SetHistory, content: string): void => setHistory((prev) => [...prev, { role: "system", content }]);
+const appendTip = (setHistory: SetHistory, content: string): void => setHistory((prev) => [...prev, { role: "system", content, displayType: "tip" }]);
 const getPreviousTipState = (
   noTicketMessageCountRef: MutableRefObject<number>,
   nextBacklogReminderThresholdRef: MutableRefObject<number>,
@@ -140,6 +144,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   const lastTipInteractionCountRef = useRef<number | null>(null);
   const lastTipConversationRoundRef = useRef<number | null>(null);
   const pendingBacklogReminderRef = useRef<PendingBacklogReminder | null>(null);
+  const pendingMilestoneTipRef = useRef<PendingMilestoneTip | null>(null);
   const lastShownTipIdRef = useRef<string | null>(null);
   const isBootingRef = useRef(isBooting);
   const isInteractionBlockedRef = useRef(isInteractionBlocked);
@@ -259,6 +264,17 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     }
   }, [appendManagedTip, canEmitTip]);
 
+  const flushPendingMilestoneTip = useCallback(() => {
+    if (!canEmitTip()) return;
+    const pending = pendingMilestoneTipRef.current;
+    if (!pending) return;
+    pendingMilestoneTipRef.current = null;
+    shownMilestoneTipIdsRef.current.add(pending.tip.id);
+    if (appendManagedTip(pending.tip)) return;
+    shownMilestoneTipIdsRef.current.delete(pending.tip.id);
+    if (pending.shouldResetShownMilestones) shownMilestoneTipIdsRef.current.clear();
+  }, [appendManagedTip, canEmitTip]);
+
   const emitIdleTip = useCallback(() => {
     idleTimerRef.current = null;
     idleDeadlineRef.current = null;
@@ -301,17 +317,19 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   const recordConversationRound = useCallback(() => {
     conversationRoundsRef.current += 1;
     flushPendingBacklogReminder();
+    flushPendingMilestoneTip();
     flushPendingContextualTip();
-  }, [flushPendingBacklogReminder, flushPendingContextualTip]);
+  }, [flushPendingBacklogReminder, flushPendingContextualTip, flushPendingMilestoneTip]);
   const recordValidCommand = useCallback((baseCommand?: string, options?: RecordValidCommandOptions): string | null => {
     interactionCountRef.current += 1;
     actionCountRef.current += 1;
     if (baseCommand) usedCommandsRef.current.add(baseCommand);
-    flushPendingContextualTip();
+    if (!isInteractionBlockedRef.current) flushPendingContextualTip();
     if (actionCountRef.current % MILESTONE_INTERVAL !== 0) return null;
     if (options?.suppressTip) return null;
     if (!canEmitTip()) return null;
 
+    let shouldResetShownMilestones = false;
     let tip = selectMilestoneTip(
       usedCommandsRef.current,
       shownMilestoneTipIdsRef.current,
@@ -320,6 +338,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     );
     if (!tip && shownMilestoneTipIdsRef.current.size > 0) {
       shownMilestoneTipIdsRef.current.clear();
+      shouldResetShownMilestones = true;
       tip = selectMilestoneTip(
         usedCommandsRef.current,
         shownMilestoneTipIdsRef.current,
@@ -328,6 +347,10 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       );
     }
     if (!tip) return null;
+    if (isInteractionBlockedRef.current) {
+      pendingMilestoneTipRef.current = { tip, shouldResetShownMilestones };
+      return tip.text;
+    }
     shownMilestoneTipIdsRef.current.add(tip.id);
     if (!appendManagedTip(tip)) return null;
     return tip.text;
@@ -346,7 +369,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     const previousLastTipConversationRound = lastTipConversationRoundRef.current;
     const previousLastTipInteractionCount = lastTipInteractionCountRef.current;
 
-    flushPendingContextualTip();
+    if (!isInteractionBlockedRef.current) flushPendingContextualTip();
 
     if (gameStateRef.current.activeTicket) {
       resetBacklogReminderProgress(noTicketMessageCountRef, nextBacklogReminderThresholdRef);

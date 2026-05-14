@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BACKLOG_REMINDER_TIPS } from "../../game/tips";
+import { BACKLOG_REMINDER_TIPS, CONTEXTUAL_TIPS, MILESTONE_TIPS } from "../../game/tips";
 import {
   remountHarness,
   setupHarness,
@@ -222,5 +222,52 @@ describe("useTipManager backlog reminders", () => {
     });
 
     expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([BACKLOG_REMINDER_TIPS[0]?.text]);
+  });
+
+  it("defers blocked contextual tips until after a completed conversation round", () => {
+    act(() => {
+      harness.ref.current?.setBlocked(true);
+      harness.ref.current?.setGameState((prev) => ({
+        ...prev,
+        economy: { ...prev.economy, currentTD: 1_001, totalTDEarned: 1_001 },
+      }));
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.setBlocked(false);
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.recordConversationRound();
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([CONTEXTUAL_TIPS[0]?.text]);
+  });
+
+  it("defers blocked milestone tips until after a completed conversation round", () => {
+    act(() => {
+      harness.ref.current?.setBlocked(true);
+      for (let i = 0; i < 6; i++) {
+        harness.ref.current?.recordValidCommand(`/cmd-${i}`);
+      }
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.setBlocked(false);
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.recordConversationRound();
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([MILESTONE_TIPS[0]?.text]);
   });
 });

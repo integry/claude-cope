@@ -157,7 +157,7 @@ describe("OutputBlock", () => {
     act(() => {
       root.render(
         <OutputBlock
-          message={{ role: "system", content: "Tip: Use /help to inspect the command surface." }}
+          message={{ role: "system", content: "Tip: Use /help to inspect the command surface.", displayType: "tip" }}
           promptString=">"
           username=""
         />,
@@ -179,7 +179,7 @@ describe("OutputBlock", () => {
     act(() => {
       root.render(
         <OutputBlock
-          message={{ role: "system", content: "  // tip: Run /backlog before freeform debugging." }}
+          message={{ role: "system", content: "  // tip: Run /backlog before freeform debugging.", displayType: "tip" }}
           promptString=">"
           username=""
         />,
@@ -200,7 +200,7 @@ describe("OutputBlock", () => {
     act(() => {
       root.render(
         <OutputBlock
-          message={{ role: "system", content: "Tip: Run /backlog and then /take <#>." }}
+          message={{ role: "system", content: "Tip: Run /backlog and then /take <#>.", displayType: "tip" }}
           promptString=">"
           username=""
           onSlashCommand={onSlashCommand}
@@ -216,5 +216,24 @@ describe("OutputBlock", () => {
     });
 
     expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "prefill");
+  });
+
+  it("does not restyle ordinary system messages that happen to start with Tip:", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <OutputBlock
+          message={{ role: "system", content: "Tip: This is part of the actual reply body." }}
+          promptString=">"
+          username=""
+        />,
+      );
+    });
+
+    expect(container.querySelector(".terminal-tip-output")).toBeNull();
+    expect(container.textContent).toContain("Tip: This is part of the actual reply body.");
   });
 });
