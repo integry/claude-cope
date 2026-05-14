@@ -196,6 +196,6 @@ describe("OutputBlock", () => {
       backlogButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "execute");
+    expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "prefill");
   });
 });
