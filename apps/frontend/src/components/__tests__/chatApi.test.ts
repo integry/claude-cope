@@ -908,7 +908,7 @@ describe("submitChatMessage - achievement parsing", () => {
     expect(requestBody.modelId).toBe("psychos");
   });
 
-  it("keeps the literal BYOK model string while still migrating legacy ids for persona selection", async () => {
+  it("migrates legacy cope ids for BYOK routing while preserving the canonical persona selection", async () => {
     vi.resetModules();
     vi.stubEnv("VITE_ENABLE_BYOK", "true");
     const { submitChatMessage: submitWithByok } = await import("../chatApi");
@@ -939,7 +939,7 @@ describe("submitChatMessage - achievement parsing", () => {
       model: string;
       messages: Array<{ role: string; content: string }>;
     };
-    expect(byokRequestBody.model).toBe("bogus");
+    expect(byokRequestBody.model).toBe("openai/gpt-oss-20b");
     expect(byokRequestBody.messages[0]?.content).toContain("## Model Persona: copus");
     expect(byokRequestBody.messages[0]?.content).toContain("The selected cope model is: copus.");
 
