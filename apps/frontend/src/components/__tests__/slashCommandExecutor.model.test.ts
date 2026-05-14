@@ -114,6 +114,10 @@ describe("/model command", () => {
     const replyCall = setHistoryMock.mock.calls[setHistoryMock.mock.calls.length - 1]?.[0] as
       | ((prev: unknown[]) => unknown[])
       | undefined;
+    expect(replyCall).toBeTypeOf("function");
+    if (!replyCall) {
+      throw new Error("Expected /model to enqueue a history update");
+    }
     const history = replyCall([]) as Array<{ role: string; content: string }>;
     const reply = history[0]?.content ?? "";
 
@@ -137,6 +141,10 @@ describe("/model command", () => {
     const replyCall = setHistoryMock.mock.calls[setHistoryMock.mock.calls.length - 1]?.[0] as
       | ((prev: unknown[]) => unknown[])
       | undefined;
+    expect(replyCall).toBeTypeOf("function");
+    if (!replyCall) {
+      throw new Error("Expected /model clear to enqueue a history update");
+    }
     const history = replyCall([]) as Array<{ role: string; content: string }>;
     expect(history[0]?.content).toContain("Model reset to **regret**");
   });
