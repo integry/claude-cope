@@ -185,6 +185,11 @@ body {
   text-shadow: 0 0 12px rgba(251, 146, 60, 0.22);
 }
 
+.terminal-buddy-status-left {
+  justify-content: flex-start;
+  text-align: left;
+}
+
 .terminal-buddy-display pre {
   display: block;
   overflow: visible;
@@ -209,6 +214,11 @@ body {
   .terminal-buddy-status {
     justify-content: center;
     text-align: center;
+  }
+
+  .terminal-buddy-status-left {
+    justify-content: flex-start;
+    text-align: left;
   }
 }
 

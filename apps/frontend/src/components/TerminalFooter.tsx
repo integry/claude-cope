@@ -33,7 +33,7 @@ export function TerminalFooter({ closeAllOverlays, buddyType, buddyIsShiny, setS
             <BuddyWatcherStatus
               type={buddyType}
               isShiny={buddyIsShiny}
-              className="text-[11px] leading-tight"
+              className="terminal-buddy-status-left w-full text-[11px] leading-tight"
             />
           ) : null}
           <span className="leading-tight text-[10px] text-gray-500">
