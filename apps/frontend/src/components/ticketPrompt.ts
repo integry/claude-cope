@@ -55,7 +55,7 @@ export function buildTicketDisplay(
     reward: `${(ticket.technical_debt * 10).toLocaleString("en-US")} TD`,
     footer: status === "offered"
       ? [
-        "Type `/accept` to start working on it, or `/backlog` to browse other tickets.",
+        "Type /accept to start working on it, or /backlog to browse other tickets.",
       ]
       : [
         "Start prompting to make progress.",

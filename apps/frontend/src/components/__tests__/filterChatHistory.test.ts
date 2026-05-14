@@ -76,7 +76,7 @@ describe("filterChatHistory", () => {
           reporter: "Brenda [Platform Governance]",
           body: "Please fix it.",
           reward: "1440 TD",
-          footer: ["Type `/accept` to start working on it, or `/backlog` to browse other tickets."],
+          footer: ["Type /accept to start working on it, or /backlog to browse other tickets."],
         },
       },
       {
