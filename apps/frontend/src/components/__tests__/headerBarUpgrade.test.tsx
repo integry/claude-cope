@@ -108,11 +108,13 @@ describe("HeaderBar upgrade CTA visibility", () => {
     renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
 
     const mobileLogo = container.querySelector("[data-testid='mobile-header-logo']");
+    const mobileLogoImage = mobileLogo?.querySelector("img");
     const mobileIdentityBlock = container.querySelector("[data-testid='mobile-identity-block']");
     const mobileRankLine = container.querySelector("[data-testid='mobile-rank-line']");
     const mobileStatusBlock = container.querySelector("[data-testid='mobile-status-block']");
 
     expect(mobileLogo?.getAttribute("href")).toBe("/");
+    expect(mobileLogoImage?.getAttribute("src")).toBe("/media/logo-400-transparent.png");
     expect(mobileIdentityBlock?.textContent).toContain("TestUser");
     expect(mobileRankLine?.textContent).toContain("[Jr. Code Monkey]");
     expect(mobileRankLine?.className).toContain("whitespace-nowrap");
@@ -155,5 +157,7 @@ describe("HeaderBar Max badge visibility", () => {
     expect(identityBlock?.textContent).toContain("MAX 429X");
     expect(rankLine?.textContent).not.toContain("MAX 429X");
     expect(mobileBadge).not.toBeNull();
+    expect(mobileBadge?.textContent).toContain("MAX");
+    expect(mobileBadge?.textContent).not.toContain("429X");
   });
 });

@@ -39,16 +39,18 @@ function EntitlementBadges({
   isMax,
   byokTotalCost,
   maxBadgeTestId,
+  maxBadgeLabel = "[MAX 429X]",
 }: {
   isBYOK: boolean;
   isMax: boolean;
   byokTotalCost?: number;
   maxBadgeTestId?: string;
+  maxBadgeLabel?: string;
 }) {
   return (
     <>
       {isBYOK && <span className="text-[10px] font-bold text-yellow-400 whitespace-nowrap">{getByokBadgeText(byokTotalCost)}</span>}
-      {isMax && <span data-testid={maxBadgeTestId} className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: '#ff00ff' }}>[MAX 429X]</span>}
+      {isMax && <span data-testid={maxBadgeTestId} className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: '#ff00ff' }}>{maxBadgeLabel}</span>}
     </>
   );
 }
@@ -95,7 +97,7 @@ function MobileIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, onP
     <>
       <div data-testid="mobile-identity-block" className="col-start-2 row-start-1 flex min-w-0 items-center gap-2 self-end sm:hidden">
         <button onClick={onProfileClick} className="min-w-0 truncate text-cyan-400 hover:text-white hover:underline cursor-pointer">{username}</button>
-        <EntitlementBadges isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} maxBadgeTestId="mobile-max-badge" />
+        <EntitlementBadges isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} maxBadgeTestId="mobile-max-badge" maxBadgeLabel="[MAX]" />
       </div>
       <div data-testid="mobile-rank-line" title={rank} className="col-start-2 row-start-2 min-w-0 whitespace-nowrap text-[11px] leading-none text-gray-400 self-start sm:hidden sm:text-xs">
         [{getMobileRankLabel(rank)}]
@@ -182,7 +184,9 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
         data-testid="mobile-header-logo"
         className="row-span-2 row-start-1 col-start-1 flex sm:hidden items-center self-center px-2"
       >
-        <img src="/media/favicon-192.png" alt="Claude Cope home" className="h-8 w-8 flex-shrink-0 object-contain" />
+        <span className="relative block h-8 w-[34px] overflow-hidden">
+          <img src="/media/logo-400-transparent.png" alt="" aria-hidden="true" className="absolute left-0 top-1/2 h-8 max-w-none -translate-y-1/2" />
+        </span>
       </a>
       <MobileIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
       {/* Right group: status (desktop) */}
