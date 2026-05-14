@@ -3,7 +3,7 @@ import { track, identify } from "../analytics";
 import { AnalyticsEvents, SlashCommandFailureReasons } from "../analyticsEvents";
 import { parseBaseCommand } from "../parseBaseCommand";
 import { PING_COST, THEMES, PRO_GATED_COMMANDS } from "../game/constants";
-import { COPE_MODELS } from "@claude-cope/shared/models";
+import { COPE_MODELS, DEFAULT_COPE_MODEL_ID, migrateLegacyCopeModelId, resolveCopeModel } from "@claude-cope/shared/models";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE, BYOK_ENABLED, PRO_QUOTA_LIMIT } from "../config";
 import { applyServerProfile } from "../hooks/profileSync";
@@ -723,10 +723,18 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   const modelName = command.slice(6).trim();
   const isBYOK = BYOK_ENABLED && Boolean(ctx.state.apiKey);
   const isPro = isPaidUser(ctx.state);
+  const migratedSelectedModel = migrateLegacyCopeModelId(ctx.state.selectedModel);
+  const migratedFromLegacy =
+    Boolean(ctx.state.selectedModel) &&
+    Boolean(migratedSelectedModel) &&
+    migratedSelectedModel !== ctx.state.selectedModel;
 
   if (!modelName) {
     markValidSlashCommand(ctx, "/model");
-    const current = ctx.state.selectedModel ?? "regret";
+    if (migratedFromLegacy) {
+      ctx.setState((prev) => ({ ...prev, selectedModel: migratedSelectedModel }));
+    }
+    const current = migratedSelectedModel ?? ctx.state.selectedModel ?? DEFAULT_COPE_MODEL_ID;
     const modelList = COPE_MODELS.map((m) => {
       const costLabel = `${m.multiplier}x cost`;
       const tierBadge = m.tier === "pro" ? " 🔒 Max" : "";
@@ -740,7 +748,11 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
         : `\n\nWant to use custom OpenRouter models? Set your own API key with \`/key\` to enable BYOK mode.`;
     }
 
-    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\n**Available Models:**\n${modelList}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to **regret**.${customModelHelp}` });
+    const migrationNote = migratedFromLegacy
+      ? `\n\n[INFO] Migrated legacy model \`${ctx.state.selectedModel}\` to \`${migratedSelectedModel}\`.`
+      : "";
+
+    reply({ role: "system", content: `[🤖] Current model: **${current}**.${migrationNote}\n\n**Available Models:**\n${modelList}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to **${DEFAULT_COPE_MODEL_ID}**.${customModelHelp}` });
     return;
   }
 
@@ -754,7 +766,11 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
     return;
   }
 
-  const copeModel = COPE_MODELS.find((m) => m.id === modelName);
+  const normalizedModelName = migrateLegacyCopeModelId(modelName) ?? modelName;
+  const copeModel = resolveCopeModel(modelName);
+  const renameNote = normalizedModelName !== modelName
+    ? ` Legacy alias \`${modelName}\` now maps to \`${normalizedModelName}\`.`
+    : "";
 
   // Non-BYOK mode: only allow predefined COPE_MODELS
   if (!copeModel && !isBYOK) {
@@ -772,14 +788,14 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   }
 
   markValidSlashCommand(ctx, "/model");
-  ctx.setState((prev) => ({ ...prev, selectedModel: modelName }));
+  ctx.setState((prev) => ({ ...prev, selectedModel: copeModel?.id ?? normalizedModelName }));
 
   if (isBYOK) {
-    reply({ role: "system", content: `[✓] Model switched to **${modelName}**. BYOK mode active — your API key, your compute bill, your problem. We respect the hustle. 💸` });
+    reply({ role: "system", content: `[✓] Model switched to **${copeModel?.id ?? normalizedModelName}**.${renameNote} BYOK mode active — your API key, your compute bill, your problem. We respect the hustle. 💸` });
   } else if (copeModel && copeModel.tier === "pro") {
-    reply({ role: "system", content: `[✓] Model switched to **${copeModel.name}** (${copeModel.multiplier}x cost). Max tier activated. Your tokens now cost real money — spend wisely.` });
+    reply({ role: "system", content: `[✓] Model switched to **${copeModel.name}** (${copeModel.multiplier}x cost).${renameNote} Max tier activated. Your tokens now cost real money — spend wisely.` });
   } else {
-    reply({ role: "system", content: `[✓] Model switched to **${modelName}**. May your tokens be plentiful and your latency low.` });
+    reply({ role: "system", content: `[✓] Model switched to **${copeModel?.id ?? normalizedModelName}**.${renameNote} May your tokens be plentiful and your latency low.` });
   }
 }
 

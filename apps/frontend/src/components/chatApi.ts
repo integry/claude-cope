@@ -9,7 +9,7 @@ import { supabase } from "../supabaseClient";
 import { buildAchievementBox } from "./achievementBox";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
-import { COPE_MODELS } from "@claude-cope/shared/models";
+import { getDefaultCopeModel, resolveCopeModel, resolveCopeModelId } from "@claude-cope/shared/models";
 import { handleChatErrorResponse, parseChatResponseBody } from "./chatApiResponse";
 import { TURNSTILE_REQUIRED_EVENT } from "../turnstileEvents";
 import { VERIFY_STATUS, UNAVAILABLE_REASON } from "@claude-cope/shared/turnstile";
@@ -236,9 +236,9 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
   // level — stale keys from prior sessions must not reach OpenRouter.
   const isBYOK = BYOK_ENABLED && Boolean(apiKey);
 
-  const regretModel = COPE_MODELS.find((m) => m.id === "regret");
-  const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
-  const model = copeModel ? copeModel.openRouterId : customModel || regretModel?.openRouterId || "nvidia/nemotron-nano-9b-v2";
+  const selectedCopeModelId = resolveCopeModelId(customModel);
+  const copeModel = resolveCopeModel(customModel);
+  const model = copeModel?.openRouterId ?? customModel ?? getDefaultCopeModel().openRouterId;
 
   // Determine buddy type for context (only include if buddy result exists)
   const buddyTypeForContext = opts.buddyType && buddyResult ? opts.buddyType : null;
@@ -250,7 +250,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
           const messages = buildChatMessages({
             rank: currentRank,
             chatMessages,
-            modelId: customModel,
+            modelId: selectedCopeModelId,
             modes,
             activeTicket,
             buddyType: buddyTypeForContext,
@@ -296,7 +296,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
             username: opts.username,
             inventory: opts.inventory,
             upgrades: opts.upgrades,
-            ...(customModel && COPE_MODELS.some((m) => m.id === customModel) ? { modelId: customModel } : {}),
+            ...(selectedCopeModelId ? { modelId: selectedCopeModelId } : {}),
             ...(proKeyHash ? { proKeyHash } : {}),
           }),
           signal,

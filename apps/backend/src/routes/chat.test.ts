@@ -201,7 +201,19 @@ describe("buildChatMessages model persona injection", () => {
     expect(system).toContain("The selected cope model is: regret.");
   });
 
-  it("injects distinct persona text for copus and psychos", () => {
+  it("migrates legacy cope model ids onto their canonical personas", () => {
+    const messages = buildChatMessages({
+      rank: "Junior Code Monkey",
+      modelId: "bogus",
+      chatMessages: [{ role: "user", content: "help" }],
+    });
+
+    const system = messages[0]?.content ?? "";
+    expect(system).toContain("## Model Persona: copus");
+    expect(system).toContain("The selected cope model is: copus.");
+  });
+
+  it("injects distinct persona headers for copus and psychos", () => {
     const copusMessages = buildChatMessages({
       rank: "Junior Code Monkey",
       modelId: "copus",
@@ -217,9 +229,9 @@ describe("buildChatMessages model persona injection", () => {
     const psychosSystem = psychosMessages[0]?.content ?? "";
 
     expect(copusSystem).toContain("## Model Persona: copus");
-    expect(copusSystem).toContain("Loosen the anti-code pressure just enough");
+    expect(copusSystem).toContain("The selected cope model is: copus.");
     expect(psychosSystem).toContain("## Model Persona: psychos");
-    expect(psychosSystem).toContain("Loosen the anti-code pressure more than copus");
+    expect(psychosSystem).toContain("The selected cope model is: psychos.");
     expect(copusSystem).not.toBe(psychosSystem);
   });
 });

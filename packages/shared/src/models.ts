@@ -6,9 +6,18 @@ export interface CopeModel {
   tier: "free" | "pro";
 }
 
+export const DEFAULT_COPE_MODEL_ID = "regret";
+
+const LEGACY_COPE_MODEL_IDS: Record<string, string> = {
+  botnet: "regret",
+  bogus: "copus",
+  enterprise: "psychos",
+  "typos-enterprise": "psychos",
+};
+
 export const COPE_MODELS: CopeModel[] = [
   {
-    id: "regret",
+    id: DEFAULT_COPE_MODEL_ID,
     name: "Cope Regret vFINAL_v2_USE_THIS_ONE",
     openRouterId: "nvidia/nemotron-nano-9b-v2",
     // Base model costs 1 credit per prompt to maximize free tier engagement duration
@@ -32,3 +41,26 @@ export const COPE_MODELS: CopeModel[] = [
     tier: "pro",
   },
 ];
+
+export function migrateLegacyCopeModelId(modelId?: string): string | undefined {
+  if (!modelId) return undefined;
+  return LEGACY_COPE_MODEL_IDS[modelId] ?? modelId;
+}
+
+export function isCopeModelId(modelId?: string): boolean {
+  return Boolean(modelId && COPE_MODELS.some((model) => model.id === modelId));
+}
+
+export function resolveCopeModelId(modelId?: string): string | undefined {
+  const migratedModelId = migrateLegacyCopeModelId(modelId);
+  return isCopeModelId(migratedModelId) ? migratedModelId : undefined;
+}
+
+export function getDefaultCopeModel(): CopeModel {
+  return COPE_MODELS.find((model) => model.id === DEFAULT_COPE_MODEL_ID) ?? COPE_MODELS[0]!;
+}
+
+export function resolveCopeModel(modelId?: string): CopeModel | undefined {
+  const resolvedModelId = resolveCopeModelId(modelId);
+  return resolvedModelId ? COPE_MODELS.find((model) => model.id === resolvedModelId) : undefined;
+}

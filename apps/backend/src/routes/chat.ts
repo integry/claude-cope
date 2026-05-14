@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { COPE_MODELS } from "@claude-cope/shared/models";
+import { getDefaultCopeModel, resolveCopeModel } from "@claude-cope/shared/models";
 
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { parseProviderList } from "@claude-cope/shared/openrouter";
@@ -93,9 +93,7 @@ export function enforceContextTrimming(messages: { role: string; content: string
 }
 
 function resolveModel(modelId?: string): string {
-  const regretModel = COPE_MODELS.find((m) => m.id === "regret");
-  const copeModel = modelId ? COPE_MODELS.find((m) => m.id === modelId) : undefined;
-  return copeModel?.openRouterId ?? regretModel?.openRouterId ?? "nvidia/nemotron-nano-9b-v2";
+  return resolveCopeModel(modelId)?.openRouterId ?? getDefaultCopeModel().openRouterId;
 }
 
 function extractBodyDefaults(body: ChatBody) {

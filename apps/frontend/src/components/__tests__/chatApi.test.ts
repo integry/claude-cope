@@ -904,6 +904,63 @@ describe("submitChatMessage - achievement parsing", () => {
     expect(requestBody.modelId).toBe("psychos");
   });
 
+  it("migrates legacy cope model ids before building prompts or proxy payloads", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_ENABLE_BYOK", "true");
+    const { submitChatMessage: submitWithByok } = await import("../chatApi");
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "enabled", enabled: true, bypassed: false, misconfigured: false }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+      .mockResolvedValueOnce(createMockStreamResponse(["reply"]));
+
+    submitWithByok({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory: vi.fn(),
+      setIsProcessing: vi.fn(),
+      currentRank: "Junior Code Monkey",
+      apiKey: "sk-test-key",
+      customModel: "bogus",
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    const byokRequestBody = JSON.parse((fetchSpy.mock.calls[1]?.[1] as RequestInit).body as string) as {
+      model: string;
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(byokRequestBody.model).toBe("openai/gpt-oss-20b");
+    expect(byokRequestBody.messages[0]?.content).toContain("## Model Persona: copus");
+    expect(byokRequestBody.messages[0]?.content).toContain("The selected cope model is: copus.");
+
+    fetchSpy.mockReset();
+    fetchSpy.mockResolvedValue(createMockStreamResponse(["reply"]));
+
+    submitWithByok({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory: vi.fn(),
+      setIsProcessing: vi.fn(),
+      currentRank: "Junior Code Monkey",
+      customModel: "enterprise",
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    const proxyRequestBody = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string) as { modelId?: string };
+    expect(proxyRequestBody.modelId).toBe("psychos");
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
   it("re-verifies the backend session before BYOK chat requests", async () => {
     vi.resetModules();
     vi.stubEnv("VITE_ENABLE_BYOK", "true");

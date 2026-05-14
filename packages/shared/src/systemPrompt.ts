@@ -1,4 +1,4 @@
-import { COPE_MODELS } from "./models";
+import { DEFAULT_COPE_MODEL_ID, resolveCopeModelId } from "./models";
 
 const RANK_BEHAVIORS: Record<string, string> = {
   "Junior Code Monkey": `## Rank Behavior: Junior Code Monkey
@@ -175,10 +175,10 @@ export const MODEL_BEHAVIORS: Record<string, string> = {
 };
 
 function resolveModelBehavior(modelId?: string): { modelId: string; behavior: string } {
-  const resolvedModelId = COPE_MODELS.find((model) => model.id === modelId)?.id ?? "regret";
+  const resolvedModelId = resolveCopeModelId(modelId) ?? DEFAULT_COPE_MODEL_ID;
   return {
     modelId: resolvedModelId,
-    behavior: MODEL_BEHAVIORS[resolvedModelId] ?? MODEL_BEHAVIORS.regret!,
+    behavior: MODEL_BEHAVIORS[resolvedModelId] ?? MODEL_BEHAVIORS[DEFAULT_COPE_MODEL_ID]!,
   };
 }
 

@@ -93,6 +93,19 @@ function makeCtx(state: GameState): SlashCommandContext {
   return ctx;
 }
 
+function getLastReply(ctx: SlashCommandContext): string {
+  const setHistoryMock = ctx.setHistory as ReturnType<typeof vi.fn>;
+  const replyCall = setHistoryMock.mock.calls[setHistoryMock.mock.calls.length - 1]?.[0] as
+    | ((prev: unknown[]) => unknown[])
+    | undefined;
+  expect(replyCall).toBeTypeOf("function");
+  if (!replyCall) {
+    throw new Error("Expected slash command to enqueue a history update");
+  }
+  const history = replyCall([]) as Array<{ role: string; content: string }>;
+  return history[0]?.content ?? "";
+}
+
 describe("/model command", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -110,22 +123,26 @@ describe("/model command", () => {
     vi.advanceTimersByTime(1500);
     await vi.runAllTimersAsync();
 
-    const setHistoryMock = ctx.setHistory as ReturnType<typeof vi.fn>;
-    const replyCall = setHistoryMock.mock.calls[setHistoryMock.mock.calls.length - 1]?.[0] as
-      | ((prev: unknown[]) => unknown[])
-      | undefined;
-    expect(replyCall).toBeTypeOf("function");
-    if (!replyCall) {
-      throw new Error("Expected /model to enqueue a history update");
-    }
-    const history = replyCall([]) as Array<{ role: string; content: string }>;
-    const reply = history[0]?.content ?? "";
+    const reply = getLastReply(ctx);
 
     expect(reply).toContain("Current model: **regret**");
     expect(reply).toContain("`regret`");
     expect(reply).toContain("`copus`");
     expect(reply).toContain("`psychos`");
     expect(reply).toContain("reset to **regret**");
+  });
+
+  it("migrates legacy selected models when listing the current setting", async () => {
+    const ctx = makeCtx(makeGameState({ selectedModel: "bogus" }));
+
+    executeSlashCommand("/model", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    expect(ctx.state.selectedModel).toBe("copus");
+    const reply = getLastReply(ctx);
+    expect(reply).toContain("Current model: **copus**");
+    expect(reply).toContain("Migrated legacy model `bogus` to `copus`");
   });
 
   it("resets the selected model back to regret semantics", async () => {
@@ -137,15 +154,36 @@ describe("/model command", () => {
 
     expect(ctx.state.selectedModel).toBeUndefined();
 
-    const setHistoryMock = ctx.setHistory as ReturnType<typeof vi.fn>;
-    const replyCall = setHistoryMock.mock.calls[setHistoryMock.mock.calls.length - 1]?.[0] as
-      | ((prev: unknown[]) => unknown[])
-      | undefined;
-    expect(replyCall).toBeTypeOf("function");
-    if (!replyCall) {
-      throw new Error("Expected /model clear to enqueue a history update");
-    }
-    const history = replyCall([]) as Array<{ role: string; content: string }>;
-    expect(history[0]?.content).toContain("Model reset to **regret**");
+    expect(getLastReply(ctx)).toContain("Model reset to **regret**");
+  });
+
+  it("selects canonical premium cope models by their new ids", async () => {
+    const ctx = makeCtx(makeGameState({ proKey: "pro-test-key" }));
+
+    executeSlashCommand("/model copus", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    expect(ctx.state.selectedModel).toBe("copus");
+    expect(getLastReply(ctx)).toContain("Model switched to **Cope Copus 4.69**");
+
+    executeSlashCommand("/model psychos", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    expect(ctx.state.selectedModel).toBe("psychos");
+    expect(getLastReply(ctx)).toContain("Model switched to **Cope Psychos (Red-Teamed)**");
+  });
+
+  it("maps legacy selection aliases onto canonical cope ids", async () => {
+    const ctx = makeCtx(makeGameState({ proKey: "pro-test-key" }));
+
+    executeSlashCommand("/model enterprise", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    expect(ctx.state.selectedModel).toBe("psychos");
+    const reply = getLastReply(ctx);
+    expect(reply).toContain("Legacy alias `enterprise` now maps to `psychos`");
   });
 });
