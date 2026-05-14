@@ -109,7 +109,8 @@ describe("/model command", () => {
     executeSlashCommand("/model", ctx);
     vi.advanceTimersByTime(1500);
 
-    const replyCall = ctx.setHistory.mock.calls[0]?.[0] as (prev: unknown[]) => unknown[];
+    const setHistoryMock = ctx.setHistory as ReturnType<typeof vi.fn>;
+    const replyCall = setHistoryMock.mock.calls[0]?.[0] as (prev: unknown[]) => unknown[];
     const history = replyCall([]) as Array<{ role: string; content: string }>;
     const reply = history[0]?.content ?? "";
 
@@ -128,7 +129,8 @@ describe("/model command", () => {
 
     expect(ctx.state.selectedModel).toBeUndefined();
 
-    const replyCall = ctx.setHistory.mock.calls[0]?.[0] as (prev: unknown[]) => unknown[];
+    const setHistoryMock = ctx.setHistory as ReturnType<typeof vi.fn>;
+    const replyCall = setHistoryMock.mock.calls[0]?.[0] as (prev: unknown[]) => unknown[];
     const history = replyCall([]) as Array<{ role: string; content: string }>;
     expect(history[0]?.content).toContain("Model reset to **regret**");
   });
