@@ -11,9 +11,9 @@ import { appendShareMarker, buildMarkdownComponents, cleanLLMOutput } from "./Ou
 import { BacklogMessage } from "./BacklogMessage";
 import { TicketMessage } from "./TicketMessage";
 import { extractBuddyInterjectionBlock } from "./buddyConstants";
+import { getTipRenderData, type TipRenderData } from "../hooks/tipMessageUtils";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
-const TIP_PREFIX_PATTERN = /^\s*(?:\/\/\s*)?tip:\s*/i;
 
 function SimulatedToolCall({ activeTicketId }: { activeTicketId?: string | null }) {
   // Pick a random sequence once on mount, based on active ticket ID
@@ -103,11 +103,6 @@ type BuddyRenderData = {
   body: string;
 };
 
-type TipRenderData = {
-  isTip: boolean;
-  body: string;
-};
-
 function getBuddyRenderData(message: Message): BuddyRenderData {
   if (message.role !== "warning") {
     return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
@@ -138,20 +133,6 @@ function getContainerClass(message: Message, isNew: boolean): string {
     modifier = `${isNew ? "achievement-flash" : ""} whitespace-pre font-bold`;
   }
   return `mb-5 ${colorClass} ${modifier}`;
-}
-
-function getTipRenderData(message: Message): TipRenderData {
-  if (message.role !== "system") {
-    return { isTip: false, body: "" };
-  }
-  const match = TIP_PREFIX_PATTERN.exec(message.content);
-  const isTaggedTip = message.displayType === "tip";
-  if (!isTaggedTip && !match) return { isTip: false, body: "" };
-
-  return {
-    isTip: true,
-    body: match ? message.content.slice(match[0].length) : message.content,
-  };
 }
 
 function getMessageFlags(role: string, content: string, isBuddyInterjection: boolean, isTip: boolean) {

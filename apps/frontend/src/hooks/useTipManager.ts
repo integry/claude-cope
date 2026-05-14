@@ -1,7 +1,6 @@
-/* eslint-disable max-lines */
 import { useCallback, useEffect, useRef } from "react";
-import type { Dispatch, MutableRefObject, SetStateAction } from "react";
-import type { GameState, Message } from "./useGameState";
+import type { MutableRefObject } from "react";
+import type { GameState } from "./useGameState";
 import {
   selectBacklogReminder,
   selectContextualTip,
@@ -19,11 +18,26 @@ import {
   readRecentTipHistory,
   toExcludedTipIds,
 } from "./tipManagerUtils";
+import {
+  appendTip,
+  createContextualStateSnapshot,
+  getCompletedTaskCount,
+  getPreviousTipState,
+  type MessageWithoutTicketRollback,
+  type PendingBacklogReminder,
+  type PendingMilestoneTip,
+  removeTipFromHistory,
+  resetBacklogReminderProgress,
+  restorePendingBacklogReminderSelection,
+  restorePendingBacklogReminderState,
+  restorePreviousTipState,
+  type SetHistory,
+} from "./useTipManagerHelpers";
 
 const IDLE_TIP_DELAY_MS = 45_000;
 const MILESTONE_INTERVAL = 6;
 const SINGLE_FIRE_CONTEXTUAL_TRIGGERS = new Set<ContextualTipTrigger>(["td_1000", "quota_exhausted"]);
-type SetHistory = Dispatch<SetStateAction<Message[]>>;
+
 interface UseTipManagerArgs {
   isBooting: boolean;
   isInteractionBlocked?: boolean;
@@ -32,99 +46,6 @@ interface UseTipManagerArgs {
   setHistory: SetHistory;
 }
 type RecordValidCommandOptions = { suppressTip?: boolean };
-type MessageWithoutTicketRollback = () => void;
-
-type PendingBacklogReminder = {
-  tip: TipDefinition;
-  previousCount: number;
-  previousThreshold: number;
-  previousTipId: string | null;
-  previousRecentTipHistory: Record<string, number>;
-  previousLastTipConversationRound: number | null;
-};
-type PendingMilestoneTip = {
-  tip: TipDefinition;
-  shouldResetShownMilestones: boolean;
-};
-type PreviousTipState = Pick<PendingBacklogReminder, "previousCount" | "previousThreshold" | "previousTipId">;
-type ContextualStateSnapshot = { currentTD: number; quotaPercent: number; pendingCompletedTaskCount: number; onlineCount: number };
-const getCompletedTaskCount = (gameState: GameState): number => gameState.pendingCompletedTaskIds?.length ?? 0;
-const appendTip = (setHistory: SetHistory, content: string): void => setHistory((prev) => [...prev, { role: "system", content, displayType: "tip" }]);
-const getPreviousTipState = (
-  noTicketMessageCountRef: MutableRefObject<number>,
-  nextBacklogReminderThresholdRef: MutableRefObject<number>,
-  lastBacklogReminderTipIdRef: MutableRefObject<string | null>,
-): PreviousTipState => ({
-  previousCount: noTicketMessageCountRef.current,
-  previousThreshold: nextBacklogReminderThresholdRef.current,
-  previousTipId: lastBacklogReminderTipIdRef.current,
-});
-const restorePreviousTipState = (
-  noTicketMessageCountRef: MutableRefObject<number>,
-  nextBacklogReminderThresholdRef: MutableRefObject<number>,
-  lastBacklogReminderTipIdRef: MutableRefObject<string | null>,
-  previous: PreviousTipState,
-): void => {
-  noTicketMessageCountRef.current = previous.previousCount;
-  nextBacklogReminderThresholdRef.current = previous.previousThreshold;
-  lastBacklogReminderTipIdRef.current = previous.previousTipId;
-};
-const restorePendingBacklogReminderSelection = (
-  lastBacklogReminderTipIdRef: MutableRefObject<string | null>,
-  recentTipHistoryRef: MutableRefObject<Record<string, number>>,
-  lastTipConversationRoundRef: MutableRefObject<number | null>,
-  previous: Pick<PendingBacklogReminder, "previousTipId" | "previousRecentTipHistory" | "previousLastTipConversationRound">,
-): void => {
-  lastBacklogReminderTipIdRef.current = previous.previousTipId;
-  recentTipHistoryRef.current = previous.previousRecentTipHistory;
-  lastTipConversationRoundRef.current = previous.previousLastTipConversationRound;
-  persistRecentTipHistory(previous.previousRecentTipHistory);
-};
-const restorePendingBacklogReminderState = ({
-  noTicketMessageCountRef,
-  nextBacklogReminderThresholdRef,
-  lastBacklogReminderTipIdRef,
-  recentTipHistoryRef,
-  lastTipConversationRoundRef,
-  previous,
-}: {
-  noTicketMessageCountRef: MutableRefObject<number>;
-  nextBacklogReminderThresholdRef: MutableRefObject<number>;
-  lastBacklogReminderTipIdRef: MutableRefObject<string | null>;
-  recentTipHistoryRef: MutableRefObject<Record<string, number>>;
-  lastTipConversationRoundRef: MutableRefObject<number | null>;
-  previous: PendingBacklogReminder;
-}): void => {
-  restorePreviousTipState(noTicketMessageCountRef, nextBacklogReminderThresholdRef, lastBacklogReminderTipIdRef, previous);
-  restorePendingBacklogReminderSelection(lastBacklogReminderTipIdRef, recentTipHistoryRef, lastTipConversationRoundRef, previous);
-};
-const resetBacklogReminderProgress = (
-  noTicketMessageCountRef: MutableRefObject<number>,
-  nextBacklogReminderThresholdRef: MutableRefObject<number>,
-): void => {
-  noTicketMessageCountRef.current = 0;
-  nextBacklogReminderThresholdRef.current = getNextBacklogReminderThreshold();
-};
-const createContextualStateSnapshot = (
-  currentTD: number,
-  quotaPercent: number,
-  pendingCompletedTaskCount: number,
-  onlineCount: number,
-): ContextualStateSnapshot => ({ currentTD, quotaPercent, pendingCompletedTaskCount, onlineCount });
-const removeTipFromHistory = (setHistory: SetHistory, content: string): void => {
-  setHistory((prev) => {
-    for (let i = prev.length - 1; i >= 0; i -= 1) {
-      if (
-        prev[i]?.role === "system"
-        && prev[i]?.displayType === "tip"
-        && prev[i]?.content === content
-      ) {
-        return [...prev.slice(0, i), ...prev.slice(i + 1)];
-      }
-    }
-    return prev;
-  });
-};
 
 export function useTipManager({ isBooting, isInteractionBlocked = false, gameState, onlineCount, setHistory }: UseTipManagerArgs) {
   const completedTaskCount = getCompletedTaskCount(gameState);

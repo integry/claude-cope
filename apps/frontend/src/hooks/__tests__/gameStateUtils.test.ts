@@ -38,7 +38,7 @@ describe("normalizePersistedMessage", () => {
     expect(stripped).toEqual(message);
   });
 
-  it("tags legacy persisted tip messages so they keep the tip render path after reload", () => {
+  it("preserves plain prefixed system replies instead of upgrading them into semantic tips", () => {
     const stripped = normalizePersistedMessage({
       id: 9,
       role: "system",
@@ -49,7 +49,6 @@ describe("normalizePersistedMessage", () => {
       id: 9,
       role: "system",
       content: "Tip: Use /help to inspect the command surface.",
-      displayType: "tip",
     });
   });
 
