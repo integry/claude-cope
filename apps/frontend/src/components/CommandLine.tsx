@@ -11,6 +11,14 @@ type CommandLineProps = {
   onPlaceholderAccept?: () => void;
 };
 
+type PlaceholderMetadata = {
+  accessiblePlaceholder?: string;
+  leadingPlaceholderChar: string;
+  tabHintAriaLabel: string;
+  tabHintLabel: string;
+  trailingPlaceholderText: string;
+};
+
 function useIsMobileViewport(breakpointPx = 767): boolean {
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -42,6 +50,36 @@ function useIsMobileViewport(breakpointPx = 767): boolean {
   return isMobileViewport;
 }
 
+function getPlaceholderMetadata(
+  placeholder: string | undefined,
+  assistivePlaceholderHint: string | undefined,
+  disabled: boolean | undefined,
+  isMobileViewport: boolean
+): PlaceholderMetadata {
+  const tabHintLabel = isMobileViewport ? "[Tap]" : "[Tab]";
+  const tabHintAriaLabel = isMobileViewport ? "Tap to accept suggestion" : "Tab to accept suggestion";
+  const placeholderHint = assistivePlaceholderHint
+    ? isMobileViewport
+      ? assistivePlaceholderHint.replace(/\bTab\b/g, "Tap")
+      : assistivePlaceholderHint
+    : undefined;
+
+  return {
+    accessiblePlaceholder:
+      placeholder && placeholderHint && !disabled
+        ? `${placeholder}. ${placeholderHint}`
+        : placeholder,
+    leadingPlaceholderChar: placeholder?.charAt(0) ?? "",
+    tabHintAriaLabel,
+    tabHintLabel,
+    trailingPlaceholderText: placeholder?.slice(1) ?? "",
+  };
+}
+
+function getCommandRowClassName(isFocused: boolean, disabled: boolean | undefined): string {
+  return `terminal-command-row flex items-center gap-3 ${isFocused && !disabled ? "terminal-command-row-active" : ""} ${disabled ? "terminal-command-row-disabled" : ""}`;
+}
+
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
   function CommandLine(
     { value, disabled, onChange, onKeyDown, promptString = "❯ ", placeholder, assistivePlaceholderHint, onPlaceholderAccept },
@@ -54,18 +92,9 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     const showTabHint = showPlaceholder && !disabled;
     const showDecorativeCursor = showPlaceholder && isFocused && !disabled;
     const hideNativeCaret = showDecorativeCursor;
-    const tabHintLabel = isMobileViewport ? "[Tap]" : "[Tab]";
-    const placeholderHint = assistivePlaceholderHint
-      ? isMobileViewport
-        ? assistivePlaceholderHint.replace(/\bTab\b/g, "Tap")
-        : assistivePlaceholderHint
-      : undefined;
-    const accessiblePlaceholder =
-      placeholder && placeholderHint && !disabled
-        ? `${placeholder}. ${placeholderHint}`
-        : placeholder;
-    const leadingPlaceholderChar = placeholder?.charAt(0) ?? "";
-    const trailingPlaceholderText = placeholder?.slice(1) ?? "";
+    const { accessiblePlaceholder, leadingPlaceholderChar, tabHintAriaLabel, tabHintLabel, trailingPlaceholderText } =
+      getPlaceholderMetadata(placeholder, assistivePlaceholderHint, disabled, isMobileViewport);
+    const commandRowClassName = getCommandRowClassName(isFocused, disabled);
 
     const handleCompositionStart = () => {
       setIsComposing(true);
@@ -91,7 +120,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
 
     return (
       <div className="terminal-command-line border-t border-white/20">
-        <div className={`terminal-command-row flex items-center gap-3 ${isFocused && !disabled ? "terminal-command-row-active" : ""} ${disabled ? "terminal-command-row-disabled" : ""}`}>
+        <div className={commandRowClassName}>
           <span className="terminal-command-prompt font-bold whitespace-pre leading-none">{promptString}</span>
           <div className="relative flex-1 min-w-0">
             {showPlaceholder && (
@@ -116,7 +145,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                     data-testid="command-line-tab-hint"
                     className="terminal-command-tab-hint shrink-0"
                     onClick={handlePlaceholderAccept}
-                    aria-label={isMobileViewport ? "Tap to accept suggestion" : "Tab to accept suggestion"}
+                    aria-label={tabHintAriaLabel}
                   >
                     {tabHintLabel}
                   </button>
