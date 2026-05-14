@@ -103,14 +103,15 @@ describe("/model command", () => {
     vi.restoreAllMocks();
   });
 
-  it("lists the renamed cope models and shows regret as the default", () => {
+  it("lists the renamed cope models and shows regret as the default", async () => {
     const ctx = makeCtx(makeGameState());
 
     executeSlashCommand("/model", ctx);
     vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
 
     const setHistoryMock = ctx.setHistory as ReturnType<typeof vi.fn>;
-    const replyCall = setHistoryMock.mock.calls[0]?.[0] as (prev: unknown[]) => unknown[];
+    const replyCall = setHistoryMock.mock.calls.at(-1)?.[0] as (prev: unknown[]) => unknown[];
     const history = replyCall([]) as Array<{ role: string; content: string }>;
     const reply = history[0]?.content ?? "";
 
@@ -121,16 +122,17 @@ describe("/model command", () => {
     expect(reply).toContain("reset to **regret**");
   });
 
-  it("resets the selected model back to regret semantics", () => {
+  it("resets the selected model back to regret semantics", async () => {
     const ctx = makeCtx(makeGameState({ selectedModel: "psychos" }));
 
     executeSlashCommand("/model clear", ctx);
     vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
 
     expect(ctx.state.selectedModel).toBeUndefined();
 
     const setHistoryMock = ctx.setHistory as ReturnType<typeof vi.fn>;
-    const replyCall = setHistoryMock.mock.calls[0]?.[0] as (prev: unknown[]) => unknown[];
+    const replyCall = setHistoryMock.mock.calls.at(-1)?.[0] as (prev: unknown[]) => unknown[];
     const history = replyCall([]) as Array<{ role: string; content: string }>;
     expect(history[0]?.content).toContain("Model reset to **regret**");
   });
