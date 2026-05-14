@@ -10,6 +10,10 @@ import {
 } from "../shareChatUtils";
 import { BUDDY_ICONS, BUDDY_TEXT_GAP, formatBuddyInterjection } from "../buddyConstants";
 
+function getTwitterIntentText(url: string): string | null {
+  return new URL(url).searchParams.get("text");
+}
+
 // Mock image loading
 const mockImage = {
   naturalWidth: 400,
@@ -308,8 +312,10 @@ describe("shareChatImage", () => {
     expect(mockOpen).toHaveBeenCalled();
     const callArgs = mockOpen.mock.calls[0]!;
     expect(callArgs[0]).toContain("twitter.com/intent/tweet");
-    expect(decodeURIComponent(String(callArgs[0]))).not.toContain("https://claudecope.com/s/share-1");
-    expect(decodeURIComponent(String(callArgs[0]))).not.toContain("http");
+    const shareIntentText = getTwitterIntentText(String(callArgs[0]));
+    expect(shareIntentText).not.toBeNull();
+    expect(shareIntentText).not.toContain("https://claudecope.com/s/share-1");
+    expect(shareIntentText).not.toContain("http");
 
     mockOpen.mockRestore();
   });

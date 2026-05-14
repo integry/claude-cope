@@ -12,6 +12,10 @@ import {
   toArrayBuffer,
 } from "./ShareButton.testUtils";
 
+function getTwitterIntentText(url: string): string | null {
+  return new URL(url).searchParams.get("text");
+}
+
 describe("ShareButton modal share flow", () => {
   const testScope = setupShareButtonTest();
 
@@ -66,9 +70,12 @@ describe("ShareButton modal share flow", () => {
     });
 
     expect(mockOpen).toHaveBeenCalledTimes(1);
-    expect(String(mockOpen.mock.calls[0]?.[0])).toContain("twitter.com/intent/tweet");
-    expect(decodeURIComponent(String(mockOpen.mock.calls[0]?.[0]))).not.toContain(shareCardResponse.shareUrl);
-    expect(decodeURIComponent(String(mockOpen.mock.calls[0]?.[0]))).not.toContain("http");
+    const shareIntentUrl = String(mockOpen.mock.calls[0]?.[0]);
+    expect(shareIntentUrl).toContain("twitter.com/intent/tweet");
+    const shareIntentText = getTwitterIntentText(shareIntentUrl);
+    expect(shareIntentText).not.toBeNull();
+    expect(shareIntentText).not.toContain(shareCardResponse.shareUrl);
+    expect(shareIntentText).not.toContain("http");
     expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
     mockOpen.mockRestore();
   });
@@ -166,9 +173,12 @@ describe("ShareButton modal share flow", () => {
     });
 
     expect(mockOpen).toHaveBeenCalledTimes(1);
-    expect(String(mockOpen.mock.calls[0]?.[0])).toContain("twitter.com/intent/tweet");
-    expect(decodeURIComponent(String(mockOpen.mock.calls[0]?.[0]))).not.toContain(shareCardResponse.shareUrl);
-    expect(decodeURIComponent(String(mockOpen.mock.calls[0]?.[0]))).not.toContain("http");
+    const shareIntentUrl = String(mockOpen.mock.calls[0]?.[0]);
+    expect(shareIntentUrl).toContain("twitter.com/intent/tweet");
+    const shareIntentText = getTwitterIntentText(shareIntentUrl);
+    expect(shareIntentText).not.toBeNull();
+    expect(shareIntentText).not.toContain(shareCardResponse.shareUrl);
+    expect(shareIntentText).not.toContain("http");
     expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
     mockOpen.mockRestore();
   });
