@@ -20,6 +20,23 @@ describe("SLASH_COMMAND_GROUPS", () => {
     const backlogItem = getSlashMenuItems("/b", 0, false).find((item) => item.type === "command" && item.value === "/backlog");
     expect(backlogItem).toMatchObject({ argumentHint: "[category]" });
   });
+
+  it("advertises model arguments in the command menu", () => {
+    const modelItem = getSlashMenuItems("/m", 0, false).find((item) => item.type === "command" && item.value === "/model");
+    expect(modelItem).toMatchObject({ argumentHint: "[model-id]" });
+  });
+
+  it("shows model choices immediately after /model space", () => {
+    const items = getSlashMenuItems("/model ", 0, false);
+
+    expect(items.map((item) => item.value)).toEqual([
+      "/model regret",
+      "/model copus",
+      "/model psychos",
+    ]);
+    expect(items.every((item) => item.type === "model-choice")).toBe(true);
+    expect(items.filter((item) => item.type === "model-choice" && item.locked)).toHaveLength(2);
+  });
 });
 
 describe("resolveSlashMenuSelection", () => {
@@ -33,6 +50,19 @@ describe("resolveSlashMenuSelection", () => {
       mode: "prefill",
       value: "/backlog ",
       nextQuery: "/backlog ",
+    });
+  });
+
+  it("auto-expands model into model-choice mode for click and enter selections", () => {
+    expect(resolveSlashMenuSelection("/model", "click")).toEqual({
+      mode: "prefill",
+      value: "/model ",
+      nextQuery: "/model ",
+    });
+    expect(resolveSlashMenuSelection("/model", "enter")).toEqual({
+      mode: "prefill",
+      value: "/model ",
+      nextQuery: "/model ",
     });
   });
 

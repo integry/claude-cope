@@ -3,7 +3,7 @@ import { track, identify } from "../analytics";
 import { AnalyticsEvents, SlashCommandFailureReasons } from "../analyticsEvents";
 import { parseBaseCommand } from "../parseBaseCommand";
 import { PING_COST, THEMES, PRO_GATED_COMMANDS } from "../game/constants";
-import { COPE_MODELS } from "@claude-cope/shared/models";
+import { COPE_MODELS, DEFAULT_COPE_MODEL_ID, migrateLegacyCopeModelId, resolveCopeModel } from "@claude-cope/shared/models";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE, BYOK_ENABLED, PRO_QUOTA_LIMIT } from "../config";
 import { applyServerProfile } from "../hooks/profileSync";
@@ -719,68 +719,138 @@ async function handleAliasCommand(command: string, ctx: SlashCommandContext, rep
   }
 }
 
+function buildModelListMessage(isPro: boolean): string {
+  return COPE_MODELS.map((m) => {
+    const tierBadge = m.tier === "pro" && !isPro ? " 🔒 Max" : "";
+    return `- \`${m.id}\` — **${m.name}**${tierBadge}`;
+  }).join("\n");
+}
+
+function buildCustomModelHelp(isBYOK: boolean): string {
+  if (!BYOK_ENABLED) {
+    return "";
+  }
+  return isBYOK
+    ? "\n\nYou can also set any OpenRouter model, e.g. `/model anthropic/claude-3-opus:beta` (BYOK mode)."
+    : "\n\nWant to use custom OpenRouter models? Set your own API key with `/key` to enable BYOK mode.";
+}
+
+function getMigratedSelectedModelInfo(ctx: SlashCommandContext): {
+  migratedSelectedModel: string | undefined;
+  migratedFromLegacy: boolean;
+} {
+  const migratedSelectedModel = migrateLegacyCopeModelId(ctx.state.selectedModel);
+  const migratedFromLegacy =
+    Boolean(ctx.state.selectedModel) &&
+    Boolean(migratedSelectedModel) &&
+    migratedSelectedModel !== ctx.state.selectedModel;
+
+  return { migratedSelectedModel, migratedFromLegacy };
+}
+
+function handleModelCommandInfo(ctx: SlashCommandContext, reply: Reply, isBYOK: boolean): void {
+  const { migratedSelectedModel, migratedFromLegacy } = getMigratedSelectedModelInfo(ctx);
+  const isPro = isPaidUser(ctx.state);
+
+  markValidSlashCommand(ctx, "/model");
+  if (migratedFromLegacy) {
+    ctx.setState((prev) => ({ ...prev, selectedModel: migratedSelectedModel }));
+  }
+
+  const current = migratedSelectedModel ?? ctx.state.selectedModel ?? DEFAULT_COPE_MODEL_ID;
+  const migrationNote = migratedFromLegacy
+    ? `\n\n[INFO] Migrated legacy model \`${ctx.state.selectedModel}\` to \`${migratedSelectedModel}\`.`
+    : "";
+
+  reply({
+    role: "system",
+    content: `[🤖] Current model: **${current}**.${migrationNote}\n\n**Available Models:**\n${buildModelListMessage(isPro)}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to the default model.${buildCustomModelHelp(isBYOK)}`,
+  });
+}
+
+function handleModelCommandClear(ctx: SlashCommandContext, reply: Reply): void {
+  markValidSlashCommand(ctx, "/model");
+  ctx.setState((prev) => {
+    const { selectedModel: _, ...rest } = prev;
+    return { ...rest } as GameState;
+  });
+  reply({ role: "system", content: "[✓] Model reset to the default setting. Back to baseline corporate disappointment." });
+}
+
+function replyModelUnavailable(reply: Reply): void {
+  const byokHint = BYOK_ENABLED ? " Set your own API key with `/key` first." : "";
+  track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/model", reason: SlashCommandFailureReasons.UNAVAILABLE });
+  reply({
+    role: "system",
+    content: `[🚫] Custom models are not available on this instance.${byokHint}\n\nAvailable models: ${COPE_MODELS.map((m) => `\`${m.id}\``).join(", ")}`,
+  });
+}
+
+function replyModelLocked(copeModel: NonNullable<ReturnType<typeof resolveCopeModel>>, reply: Reply): void {
+  const byokHint = BYOK_ENABLED ? ", or set your own API key with `/key` to bypass limits entirely" : "";
+  track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/model", reason: SlashCommandFailureReasons.LOCKED });
+  reply({
+    role: "system",
+    content: `[🔒] **${copeModel.name}** is a Max model. You need a Max license to use this.\n\nUpgrade at \`/upgrade\` to unlock premium models${byokHint}.`,
+  });
+}
+
+function replyModelSwitched(
+  requestedModel: string,
+  selectedModel: string,
+  copeModel: ReturnType<typeof resolveCopeModel>,
+  isBYOK: boolean,
+  reply: Reply,
+): void {
+  const renameNote = requestedModel !== selectedModel
+    ? ` Legacy alias \`${requestedModel}\` now maps to \`${selectedModel}\`.`
+    : "";
+
+  if (isBYOK) {
+    reply({ role: "system", content: `[✓] Model switched to **${selectedModel}**.${renameNote} BYOK mode active — your API key, your compute bill, your problem. We respect the hustle. 💸` });
+    return;
+  }
+
+  if (copeModel?.tier === "pro") {
+    reply({ role: "system", content: `[✓] Model switched to **${copeModel.name}**.${renameNote} Max tier activated. Your tokens now cost real money — spend wisely.` });
+    return;
+  }
+
+  reply({ role: "system", content: `[✓] Model switched to **${selectedModel}**.${renameNote} May your tokens be plentiful and your latency low.` });
+}
+
 function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Reply): void {
   const modelName = command.slice(6).trim();
   const isBYOK = BYOK_ENABLED && Boolean(ctx.state.apiKey);
   const isPro = isPaidUser(ctx.state);
 
   if (!modelName) {
-    markValidSlashCommand(ctx, "/model");
-    const current = ctx.state.selectedModel ?? "default";
-    const modelList = COPE_MODELS.map((m) => {
-      const costLabel = `${m.multiplier}x cost`;
-      const tierBadge = m.tier === "pro" ? " 🔒 Max" : "";
-      return `- \`${m.id}\` — **${m.name}** (${costLabel})${tierBadge}`;
-    }).join("\n");
-
-    let customModelHelp = "";
-    if (BYOK_ENABLED) {
-      customModelHelp = isBYOK
-        ? `\n\nYou can also set any OpenRouter model, e.g. \`/model anthropic/claude-3-opus:beta\` (BYOK mode).`
-        : `\n\nWant to use custom OpenRouter models? Set your own API key with \`/key\` to enable BYOK mode.`;
-    }
-
-    reply({ role: "system", content: `[🤖] Current model: **${current}**.\n\n**Available Models:**\n${modelList}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to default.${customModelHelp}` });
+    handleModelCommandInfo(ctx, reply, isBYOK);
     return;
   }
 
   if (modelName === "clear") {
-    markValidSlashCommand(ctx, "/model");
-    ctx.setState((prev) => {
-      const { selectedModel: _, ...rest } = prev;
-      return { ...rest } as GameState;
-    });
-    reply({ role: "system", content: "[✓] Model reset to **default**. Back to baseline corporate AI." });
+    handleModelCommandClear(ctx, reply);
     return;
   }
 
-  const copeModel = COPE_MODELS.find((m) => m.id === modelName);
+  const normalizedModelName = migrateLegacyCopeModelId(modelName) ?? modelName;
+  const copeModel = resolveCopeModel(modelName);
 
   // Non-BYOK mode: only allow predefined COPE_MODELS
   if (!copeModel && !isBYOK) {
-    const byokHint = BYOK_ENABLED ? " Set your own API key with `/key` first." : "";
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/model", reason: SlashCommandFailureReasons.UNAVAILABLE });
-    reply({ role: "system", content: `[🚫] Custom models are not available on this instance.${byokHint}\n\nAvailable models: ` + COPE_MODELS.map((m) => "`" + m.id + "`").join(", ") });
+    replyModelUnavailable(reply);
     return;
   }
 
   if (copeModel && copeModel.tier === "pro" && !isPro && !isBYOK) {
-    const byokHint = BYOK_ENABLED ? ", or set your own API key with `/key` to bypass limits entirely" : "";
-    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/model", reason: SlashCommandFailureReasons.LOCKED });
-    reply({ role: "system", content: `[🔒] **${copeModel.name}** is a Max model (${copeModel.multiplier}x cost). You need a Max license to use this.\n\nUpgrade at \`/upgrade\` to unlock premium models${byokHint}.` });
+    replyModelLocked(copeModel, reply);
     return;
   }
 
   markValidSlashCommand(ctx, "/model");
-  ctx.setState((prev) => ({ ...prev, selectedModel: modelName }));
-
-  if (isBYOK) {
-    reply({ role: "system", content: `[✓] Model switched to **${modelName}**. BYOK mode active — your API key, your compute bill, your problem. We respect the hustle. 💸` });
-  } else if (copeModel && copeModel.tier === "pro") {
-    reply({ role: "system", content: `[✓] Model switched to **${copeModel.name}** (${copeModel.multiplier}x cost). Max tier activated. Your tokens now cost real money — spend wisely.` });
-  } else {
-    reply({ role: "system", content: `[✓] Model switched to **${modelName}**. May your tokens be plentiful and your latency low.` });
-  }
+  ctx.setState((prev) => ({ ...prev, selectedModel: copeModel?.id ?? normalizedModelName }));
+  replyModelSwitched(modelName, normalizedModelName, copeModel, isBYOK, reply);
 }
 
 export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
