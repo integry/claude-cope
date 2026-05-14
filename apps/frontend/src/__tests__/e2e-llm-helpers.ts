@@ -3,11 +3,17 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { COPE_MODELS, DEFAULT_COPE_MODEL_ID, resolveCopeModel, resolveCopeModelId } from "@claude-cope/shared/models";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 
 export const API_KEY = process.env.OPENROUTER_API_KEY ?? "";
 export const BACKEND_URL = process.env.E2E_CHAT_BASE_URL ?? "";
-export const MODEL = process.env.E2E_MODEL ?? "openai/gpt-oss-20b";
+const RAW_MODEL = process.env.E2E_MODEL ?? "openai/gpt-oss-20b";
+const MODEL_ID =
+  resolveCopeModelId(process.env.E2E_COPE_MODEL_ID)
+  ?? COPE_MODELS.find((model) => model.openRouterId === RAW_MODEL)?.id
+  ?? DEFAULT_COPE_MODEL_ID;
+export const MODEL = resolveCopeModel(MODEL_ID)?.openRouterId ?? RAW_MODEL;
 export const T = 30_000;
 const E2E_USERNAME_PREFIX = process.env.E2E_USERNAME ?? "e2e-bot";
 
@@ -164,7 +170,7 @@ document.addEventListener('click', e => {
 </script>
 </head><body>
 <h1>Claude Cope — E2E LLM Quality Report</h1>
-<div class="meta">Model: ${MODEL} | max_tokens: ${MAX_TOKENS} | reasoning: ${JSON.stringify(REASONING)} | temperature: ${TEMPERATURE} | top_p: ${TOP_P} | Generated: ${new Date().toISOString()}</div>
+<div class="meta">Model: ${MODEL} | cope model: ${MODEL_ID} | max_tokens: ${MAX_TOKENS} | reasoning: ${JSON.stringify(REASONING)} | temperature: ${TEMPERATURE} | top_p: ${TOP_P} | Generated: ${new Date().toISOString()}</div>
 ${suites
   .map(
     (suite) => `
@@ -355,7 +361,7 @@ export async function chat(userMessage: string, opts?: TestOpts, meta?: { suite:
   const messages = buildChatMessages({
     rank: opts?.rank ?? "Junior Code Monkey",
     chatMessages: [{ role: "user", content: userMessage }],
-    modelId: "regret",
+    modelId: MODEL_ID,
     activeTicket: opts?.ticket,
     buddyType: opts?.buddy,
   });
@@ -368,7 +374,7 @@ export async function chat(userMessage: string, opts?: TestOpts, meta?: { suite:
       chatMessages: [{ role: "user", content: userMessage }],
       activeTicket: opts?.ticket,
       buddyType: opts?.buddy,
-      modelId: "regret",
+      modelId: MODEL_ID,
     },
     cookieJarPath,
   );
@@ -387,7 +393,7 @@ export async function conversation(turns: string[], opts?: TestOpts, meta?: { su
     const messages = buildChatMessages({
       rank: opts?.rank ?? "Junior Code Monkey",
       chatMessages: [...history, { role: "user", content: userMsg }],
-      modelId: "regret",
+      modelId: MODEL_ID,
       activeTicket: opts?.ticket,
       buddyType: opts?.buddy,
     });
@@ -403,7 +409,7 @@ export async function conversation(turns: string[], opts?: TestOpts, meta?: { su
       chatMessages: [...history, { role: "user", content: userMsg }],
       activeTicket: opts?.ticket,
       buddyType: opts?.buddy,
-      modelId: "regret",
+      modelId: MODEL_ID,
     }, cookieJarPath);
 
     replies.push(reply);

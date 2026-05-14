@@ -774,7 +774,7 @@ function handleModelCommandClear(ctx: SlashCommandContext, reply: Reply): void {
     const { selectedModel: _, ...rest } = prev;
     return { ...rest } as GameState;
   });
-  reply({ role: "system", content: "[✓] Model reset to **regret**. Back to baseline corporate disappointment." });
+  reply({ role: "system", content: `[✓] Model reset to **${DEFAULT_COPE_MODEL_ID}**. Back to baseline corporate disappointment.` });
 }
 
 function replyModelUnavailable(reply: Reply): void {
