@@ -129,7 +129,7 @@ describe("/model command", () => {
     expect(reply).toContain("`regret`");
     expect(reply).toContain("`copus`");
     expect(reply).toContain("`psychos`");
-    expect(reply).toContain("reset to **regret**");
+    expect(reply).toContain("reset to the default model");
   });
 
   it("migrates legacy selected models when listing the current setting", async () => {
@@ -145,7 +145,7 @@ describe("/model command", () => {
     expect(reply).toContain("Migrated legacy model `bogus` to `copus`");
   });
 
-  it("resets the selected model back to regret semantics", async () => {
+  it("resets the selected model back to default semantics", async () => {
     const ctx = makeCtx(makeGameState({ selectedModel: "psychos" }));
 
     executeSlashCommand("/model clear", ctx);
@@ -154,7 +154,7 @@ describe("/model command", () => {
 
     expect(ctx.state.selectedModel).toBeUndefined();
 
-    expect(getLastReply(ctx)).toContain("Model reset to **regret**");
+    expect(getLastReply(ctx)).toContain("Model reset to the default setting");
   });
 
   it("selects canonical premium cope models by their new ids", async () => {

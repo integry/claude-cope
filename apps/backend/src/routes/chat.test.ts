@@ -935,6 +935,44 @@ describe("chat route model persona wiring", () => {
     expect(messages[0]?.role).toBe("system");
     expect(messages[0]?.content).toContain("## Model Persona: psychos");
     expect(messages[0]?.content).toContain("The selected cope model is: psychos.");
+    expect(capturedRequestBody?.model).toBe("x-ai/grok-4.1-fast");
+  });
+
+  it("migrates legacy model ids to the canonical OpenRouter target at the backend boundary", async () => {
+    const { default: chat } = await import("./chat");
+    let capturedRequestBody: Record<string, unknown> | undefined;
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      if (url === "https://openrouter.ai/api/v1/chat/completions") {
+        capturedRequestBody = JSON.parse(init?.body as string) as Record<string, unknown>;
+      }
+
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: "test response\n[USER_NEXT_MESSAGE: what breaks next?]" } }],
+        usage: {},
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    const res = await chat.request("/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: "TestUser0",
+        rank: "Junior Code Monkey",
+        modelId: "bogus",
+        chatMessages: [{ role: "user", content: "help" }],
+      }),
+    }, {
+      OPENROUTER_API_KEY: "test-key",
+    });
+
+    fetchSpy.mockRestore();
+
+    expect(res.status).toBe(200);
+    expect(capturedRequestBody?.model).toBe("openai/gpt-oss-20b");
   });
 });
 

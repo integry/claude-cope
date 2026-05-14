@@ -764,7 +764,7 @@ function handleModelCommandInfo(ctx: SlashCommandContext, reply: Reply, isBYOK: 
 
   reply({
     role: "system",
-    content: `[🤖] Current model: **${current}**.${migrationNote}\n\n**Available Models:**\n${buildModelListMessage()}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to **${DEFAULT_COPE_MODEL_ID}**.${buildCustomModelHelp(isBYOK)}`,
+    content: `[🤖] Current model: **${current}**.${migrationNote}\n\n**Available Models:**\n${buildModelListMessage()}\n\nUsage: \`/model <model-id>\` to switch. Type \`/model clear\` to reset to the default model.${buildCustomModelHelp(isBYOK)}`,
   });
 }
 
@@ -774,7 +774,7 @@ function handleModelCommandClear(ctx: SlashCommandContext, reply: Reply): void {
     const { selectedModel: _, ...rest } = prev;
     return { ...rest } as GameState;
   });
-  reply({ role: "system", content: `[✓] Model reset to **${DEFAULT_COPE_MODEL_ID}**. Back to baseline corporate disappointment.` });
+  reply({ role: "system", content: "[✓] Model reset to the default setting. Back to baseline corporate disappointment." });
 }
 
 function replyModelUnavailable(reply: Reply): void {

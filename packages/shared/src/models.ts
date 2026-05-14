@@ -8,14 +8,14 @@ export interface CopeModel {
 
 export const DEFAULT_COPE_MODEL_ID = "regret";
 
-const LEGACY_COPE_MODEL_IDS: Record<string, string> = {
+const LEGACY_COPE_MODEL_IDS: Readonly<Record<string, string>> = {
   botnet: "regret",
   bogus: "copus",
   enterprise: "psychos",
   "typos-enterprise": "psychos",
 };
 
-export const COPE_MODELS: CopeModel[] = [
+export const COPE_MODELS: readonly Readonly<CopeModel>[] = [
   {
     id: DEFAULT_COPE_MODEL_ID,
     name: "Cope Regret vFINAL_v2_USE_THIS_ONE",
@@ -44,16 +44,18 @@ export const COPE_MODELS: CopeModel[] = [
 
 export function migrateLegacyCopeModelId(modelId?: string): string | undefined {
   if (!modelId) return undefined;
-  return LEGACY_COPE_MODEL_IDS[modelId] ?? modelId;
+  const normalizedModelId = modelId.toLowerCase();
+  return LEGACY_COPE_MODEL_IDS[normalizedModelId] ?? modelId;
 }
 
 export function isCopeModelId(modelId?: string): boolean {
-  return Boolean(modelId && COPE_MODELS.some((model) => model.id === modelId));
+  return Boolean(modelId && COPE_MODELS.some((model) => model.id === modelId.toLowerCase()));
 }
 
 export function resolveCopeModelId(modelId?: string): string | undefined {
   const migratedModelId = migrateLegacyCopeModelId(modelId);
-  return isCopeModelId(migratedModelId) ? migratedModelId : undefined;
+  const canonicalModelId = migratedModelId?.toLowerCase();
+  return isCopeModelId(canonicalModelId) ? canonicalModelId : undefined;
 }
 
 export function getDefaultCopeModel(): CopeModel {

@@ -9,8 +9,15 @@ import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 export const API_KEY = process.env.OPENROUTER_API_KEY ?? "";
 export const BACKEND_URL = process.env.E2E_CHAT_BASE_URL ?? "";
 const RAW_MODEL = process.env.E2E_MODEL ?? "openai/gpt-oss-20b";
+const E2E_COPE_MODEL_ID = process.env.E2E_COPE_MODEL_ID;
+const RESOLVED_E2E_COPE_MODEL_ID = resolveCopeModelId(E2E_COPE_MODEL_ID);
+
+if (E2E_COPE_MODEL_ID && !RESOLVED_E2E_COPE_MODEL_ID) {
+  throw new Error(`Invalid E2E_COPE_MODEL_ID: ${E2E_COPE_MODEL_ID}`);
+}
+
 const MODEL_ID =
-  resolveCopeModelId(process.env.E2E_COPE_MODEL_ID)
+  RESOLVED_E2E_COPE_MODEL_ID
   ?? COPE_MODELS.find((model) => model.openRouterId === RAW_MODEL)?.id
   ?? DEFAULT_COPE_MODEL_ID;
 export const MODEL = resolveCopeModel(MODEL_ID)?.openRouterId ?? RAW_MODEL;

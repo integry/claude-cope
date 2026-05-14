@@ -238,7 +238,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
 
   const selectedCopeModelId = resolveCopeModelId(customModel);
   const copeModel = resolveCopeModel(customModel);
-  const model = copeModel?.openRouterId ?? customModel ?? getDefaultCopeModel().openRouterId;
+  const model = customModel ?? copeModel?.openRouterId ?? getDefaultCopeModel().openRouterId;
 
   // Determine buddy type for context (only include if buddy result exists)
   const buddyTypeForContext = opts.buddyType && buddyResult ? opts.buddyType : null;
