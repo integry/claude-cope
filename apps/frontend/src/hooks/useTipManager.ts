@@ -104,6 +104,12 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     lastTipConversationRoundRef.current = conversationRoundsRef.current;
   }, []);
 
+  const noteContextualTipRendered = useCallback((trigger: ContextualTipTrigger) => {
+    if (SINGLE_FIRE_CONTEXTUAL_TRIGGERS.has(trigger)) {
+      firedContextualTipsRef.current.add(trigger);
+    }
+  }, []);
+
   const appendManagedTip = useCallback((tip: TipDefinition): boolean => {
     if (!canEmitTip()) return false;
     if (lastShownTipIdRef.current === tip.id) return false;
@@ -149,15 +155,22 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     if (pendingContextualRequiresConversationRoundRef.current && !options?.allowDeferredBlockedTip) return;
     const pending = pendingContextualTriggersRef.current;
     let emittedTip = false;
-    while (pending.length > 0) {
+    const pendingCount = pending.length;
+    for (let i = 0; i < pendingCount; i += 1) {
       const trigger = pending.shift();
       if (!trigger) continue;
       const tip = selectContextualTip(trigger, {
         totalTDEarned: totalTDEarnedRef.current,
         hasActiveTicket: Boolean(gameStateRef.current.activeTicket),
       }, { excludeTipIds: toExcludedTipIds(lastShownTipIdRef.current ? [lastShownTipIdRef.current] : undefined) });
-      if (!tip) continue;
+      if (!tip) {
+        if (SINGLE_FIRE_CONTEXTUAL_TRIGGERS.has(trigger) && !firedContextualTipsRef.current.has(trigger)) {
+          pending.push(trigger);
+        }
+        continue;
+      }
       if (appendManagedTip(tip)) {
+        noteContextualTipRendered(trigger);
         emittedTip = true;
         break;
       }
@@ -165,7 +178,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     if (options?.allowDeferredBlockedTip || emittedTip || pending.length === 0) {
       pendingContextualRequiresConversationRoundRef.current = false;
     }
-  }, [appendManagedTip, canEmitTip]);
+  }, [appendManagedTip, canEmitTip, noteContextualTipRendered]);
 
   const flushPendingMilestoneTip = useCallback(() => {
     if (!canEmitTip()) return;
@@ -379,11 +392,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       triggers.push("lone_user_online");
     }
     const eligibleTriggers = Array.from(new Set(triggers))
-      .filter((trigger) => !SINGLE_FIRE_CONTEXTUAL_TRIGGERS.has(trigger) || !firedContextualTipsRef.current.has(trigger))
-      .map((trigger) => {
-        if (SINGLE_FIRE_CONTEXTUAL_TRIGGERS.has(trigger)) firedContextualTipsRef.current.add(trigger);
-        return trigger;
-      });
+      .filter((trigger) => !SINGLE_FIRE_CONTEXTUAL_TRIGGERS.has(trigger) || !firedContextualTipsRef.current.has(trigger));
     const nextState = createContextualStateSnapshot(currentTD, quotaPercent, completedTaskCount, onlineCount);
     pendingContextualTriggersRef.current.push(...eligibleTriggers);
     if (isInteractionBlocked && eligibleTriggers.length > 0) {

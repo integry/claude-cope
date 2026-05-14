@@ -323,6 +323,36 @@ describe("useTipManager core behavior", () => {
     ]);
   });
 
+  it("keeps deferred single-fire contextual triggers pending until they become eligible to render", () => {
+    act(() => {
+      harness.ref.current?.setBlocked(true);
+      harness.ref.current?.setGameState((prev) => ({
+        ...prev,
+        economy: { ...prev.economy, currentTD: 1_001, totalTDEarned: 999 },
+      }));
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.setBlocked(false);
+      harness.ref.current?.recordConversationRound();
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.setGameState((prev) => ({
+        ...prev,
+        economy: { ...prev.economy, totalTDEarned: 1_001 },
+      }));
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([
+      getContextualTip("td_1000", { totalTDEarned: 1_001 }),
+    ]);
+  });
+
   it("does not repeat the same contextual tip back-to-back", () => {
     act(() => {
       harness.ref.current?.setOnlineCount(1);

@@ -190,7 +190,7 @@ describe("OutputBlock", () => {
     expect(container.querySelectorAll("button")).toHaveLength(0);
   });
 
-  it("renders legacy tip strings as terminal-style output even without display metadata", () => {
+  it("keeps ordinary Tip:-prefixed system replies on the markdown render path when they are not tagged as tips", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -198,15 +198,16 @@ describe("OutputBlock", () => {
     act(() => {
       root.render(
         <OutputBlock
-          message={{ role: "system", content: "Tip: Use /backlog before freeform debugging." }}
+          message={{ role: "system", content: "Tip: Try **/help** before freeform debugging." }}
           promptString=">"
           username=""
         />,
       );
     });
 
-    expect(container.querySelector(".terminal-tip-output")?.textContent).toBe("// Tip: Use /backlog before freeform debugging.");
-    expect(container.querySelector("p")).toBeNull();
+    expect(container.querySelector(".terminal-tip-output")).toBeNull();
+    expect(container.querySelector("p")?.textContent).toBe("Tip: Try /help before freeform debugging.");
+    expect(container.querySelector("strong")?.textContent).toBe("/help");
   });
 
   it("keeps slash commands clickable inside terminal tip output", () => {
