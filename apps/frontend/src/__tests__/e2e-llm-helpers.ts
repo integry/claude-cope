@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { COPE_MODELS, DEFAULT_COPE_MODEL_ID, resolveCopeModel, resolveCopeModelId } from "@claude-cope/shared/models";
+import { COPE_MODELS, DEFAULT_COPE_MODEL_ID, resolveCopeModelId } from "@claude-cope/shared/models";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 
 export const API_KEY = process.env.OPENROUTER_API_KEY ?? "";
@@ -20,7 +20,10 @@ const MODEL_ID =
   RESOLVED_E2E_COPE_MODEL_ID
   ?? COPE_MODELS.find((model) => model.openRouterId === RAW_MODEL)?.id
   ?? DEFAULT_COPE_MODEL_ID;
-export const MODEL = resolveCopeModel(MODEL_ID)?.openRouterId ?? RAW_MODEL;
+export const MODEL =
+  RESOLVED_E2E_COPE_MODEL_ID
+  ? COPE_MODELS.find((model) => model.id === RESOLVED_E2E_COPE_MODEL_ID)?.openRouterId ?? RAW_MODEL
+  : RAW_MODEL;
 export const T = 30_000;
 const E2E_USERNAME_PREFIX = process.env.E2E_USERNAME ?? "e2e-bot";
 

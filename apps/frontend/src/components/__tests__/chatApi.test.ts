@@ -874,7 +874,11 @@ describe("submitChatMessage - achievement parsing", () => {
 
     const callArgs = fetchSpy.mock.calls[1]!;
     const reqInit = callArgs[1] as RequestInit;
-    const requestBody = JSON.parse(reqInit.body as string) as { messages: Array<{ role: string; content: string }> };
+    const requestBody = JSON.parse(reqInit.body as string) as {
+      model: string;
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(requestBody.model).toBe("openai/gpt-oss-20b");
     expect(requestBody.messages[0]?.content).toContain("## Model Persona: copus");
     expect(requestBody.messages[0]?.content).toContain("The selected cope model is: copus.");
 
