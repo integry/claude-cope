@@ -202,6 +202,32 @@ describe("useTipManager core behavior", () => {
     expect(harness.ref.current?.getHistory()[0]?.content).toBe(MILESTONE_TIPS[1]?.text);
   });
 
+  it("does not report blocked milestone tips as emitted before the conversation round completes", () => {
+    let returnValue: string | null | undefined;
+
+    act(() => {
+      harness.ref.current?.setBlocked(true);
+      harness.ref.current?.setGameState((prev) => ({
+        ...prev,
+        economy: { ...prev.economy, totalTDEarned: 1_000 },
+      }));
+      for (let i = 0; i < 5; i++) {
+        harness.ref.current?.recordValidCommand("/help");
+      }
+      returnValue = harness.ref.current?.recordValidCommand("/help");
+    });
+
+    expect(returnValue).toBeNull();
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.setBlocked(false);
+      harness.ref.current?.recordConversationRound();
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([MILESTONE_TIPS[1]?.text]);
+  });
+
   it("fires contextual tips when tracked game states are reached", () => {
     act(() => {
       harness.ref.current?.setGameState((prev) => ({

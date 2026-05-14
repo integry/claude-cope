@@ -114,7 +114,13 @@ const createContextualStateSnapshot = (
 const removeTipFromHistory = (setHistory: SetHistory, content: string): void => {
   setHistory((prev) => {
     for (let i = prev.length - 1; i >= 0; i -= 1) {
-      if (prev[i]?.role === "system" && prev[i]?.content === content) return [...prev.slice(0, i), ...prev.slice(i + 1)];
+      if (
+        prev[i]?.role === "system"
+        && prev[i]?.displayType === "tip"
+        && prev[i]?.content === content
+      ) {
+        return [...prev.slice(0, i), ...prev.slice(i + 1)];
+      }
     }
     return prev;
   });
@@ -201,8 +207,8 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       );
       return;
     }
-    recentTipHistoryRef.current = readRecentTipHistory();
-    if (hasRecentBacklogReminder(recentTipHistoryRef.current)) {
+    lastBacklogReminderTipIdRef.current = pendingReminder.tip.id;
+    if (!appendManagedTip(pendingReminder.tip)) {
       restorePendingBacklogReminderState(
         {
           noTicketMessageCountRef,
@@ -215,39 +221,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       );
       return;
     }
-    const tip = selectBacklogReminder(
-      pendingReminder.previousTipId ?? undefined,
-      { hasActiveTicket: false },
-      { excludeTipIds: toExcludedTipIds(Object.keys(recentTipHistoryRef.current), lastShownTipIdRef.current ? [lastShownTipIdRef.current] : undefined) },
-    );
-    if (!tip) {
-      restorePendingBacklogReminderState(
-        {
-          noTicketMessageCountRef,
-          nextBacklogReminderThresholdRef,
-          lastBacklogReminderTipIdRef,
-          recentTipHistoryRef,
-          lastTipConversationRoundRef,
-          previous: pendingReminder,
-        },
-      );
-      return;
-    }
-    lastBacklogReminderTipIdRef.current = tip.id;
-    if (!appendManagedTip(tip)) {
-      restorePendingBacklogReminderState(
-        {
-          noTicketMessageCountRef,
-          nextBacklogReminderThresholdRef,
-          lastBacklogReminderTipIdRef,
-          recentTipHistoryRef,
-          lastTipConversationRoundRef,
-          previous: pendingReminder,
-        },
-      );
-      return;
-    }
-    markTipShown(recentTipHistoryRef, tip);
+    markTipShown(recentTipHistoryRef, pendingReminder.tip);
   }, [appendManagedTip, canEmitTip]);
 
   const flushPendingContextualTip = useCallback((options?: { allowDeferredBlockedTip?: boolean }) => {
@@ -358,7 +332,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     if (!tip) return null;
     if (isInteractionBlockedRef.current) {
       pendingMilestoneTipRef.current = { tip, shouldResetShownMilestones };
-      return tip.text;
+      return null;
     }
     shownMilestoneTipIdsRef.current.add(tip.id);
     if (!appendManagedTip(tip)) return null;

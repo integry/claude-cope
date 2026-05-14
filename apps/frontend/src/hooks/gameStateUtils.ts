@@ -83,9 +83,18 @@ export type Message = {
   ticketDisplay?: TicketDisplayData;
 };
 
+const TIP_PREFIX_PATTERN = /^\s*(?:\/\/\s*)?tip:\s*/i;
+
 // Backlog messages persist their structured payload so the responsive renderer
 // survives reloads; this hook exists as the single normalization point if that changes.
 export function normalizePersistedMessage(message: Message): Message {
+  if (
+    message.role === "system"
+    && message.displayType == null
+    && TIP_PREFIX_PATTERN.test(message.content)
+  ) {
+    return { ...message, displayType: "tip" };
+  }
   return message;
 }
 

@@ -141,15 +141,16 @@ function getContainerClass(message: Message, isNew: boolean): string {
 }
 
 function getTipRenderData(message: Message): TipRenderData {
-  if (message.role !== "system" || message.displayType !== "tip") {
+  if (message.role !== "system") {
     return { isTip: false, body: "" };
   }
   const match = TIP_PREFIX_PATTERN.exec(message.content);
-  if (!match) return { isTip: false, body: "" };
+  const isTaggedTip = message.displayType === "tip";
+  if (!isTaggedTip && !match) return { isTip: false, body: "" };
 
   return {
     isTip: true,
-    body: message.content.slice(match[0].length),
+    body: match ? message.content.slice(match[0].length) : message.content,
   };
 }
 

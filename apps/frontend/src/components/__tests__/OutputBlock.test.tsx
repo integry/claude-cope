@@ -190,6 +190,25 @@ describe("OutputBlock", () => {
     expect(container.querySelectorAll("button")).toHaveLength(0);
   });
 
+  it("renders legacy tip strings as terminal-style output even without display metadata", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <OutputBlock
+          message={{ role: "system", content: "Tip: Use /backlog before freeform debugging." }}
+          promptString=">"
+          username=""
+        />,
+      );
+    });
+
+    expect(container.querySelector(".terminal-tip-output")?.textContent).toBe("// Tip: Use /backlog before freeform debugging.");
+    expect(container.querySelector("p")).toBeNull();
+  });
+
   it("keeps slash commands clickable inside terminal tip output", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -218,22 +237,4 @@ describe("OutputBlock", () => {
     expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "prefill");
   });
 
-  it("does not restyle ordinary system messages that happen to start with Tip:", () => {
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    act(() => {
-      root.render(
-        <OutputBlock
-          message={{ role: "system", content: "Tip: This is part of the actual reply body." }}
-          promptString=">"
-          username=""
-        />,
-      );
-    });
-
-    expect(container.querySelector(".terminal-tip-output")).toBeNull();
-    expect(container.textContent).toContain("Tip: This is part of the actual reply body.");
-  });
 });

@@ -110,6 +110,30 @@ describe("useTipManager backlog reminders", () => {
     expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([BACKLOG_REMINDER_TIPS[0]?.text]);
   });
 
+  it("only removes the managed tip entry during rollback when other system messages share the same text", () => {
+    act(() => {
+      harness.ref.current?.setHistory([
+        { role: "system", content: BACKLOG_REMINDER_TIPS[0]!.text },
+      ]);
+      for (let i = 0; i < 6; i++) {
+        const nextRollback = harness.ref.current?.recordMessageWithoutTicket();
+        if (nextRollback) {
+          rollback = nextRollback;
+        }
+      }
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(2);
+
+    act(() => {
+      rollback?.();
+    });
+
+    expect(harness.ref.current?.getHistory()).toEqual([
+      { role: "system", content: BACKLOG_REMINDER_TIPS[0]!.text },
+    ]);
+  });
+
   it("resets the backlog reminder streak when an active ticket is opened", () => {
     act(() => {
       for (let i = 0; i < 5; i++) {

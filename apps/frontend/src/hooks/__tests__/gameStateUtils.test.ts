@@ -38,6 +38,21 @@ describe("normalizePersistedMessage", () => {
     expect(stripped).toEqual(message);
   });
 
+  it("tags legacy persisted tip messages so they keep the tip render path after reload", () => {
+    const stripped = normalizePersistedMessage({
+      id: 9,
+      role: "system",
+      content: "Tip: Use /help to inspect the command surface.",
+    });
+
+    expect(stripped).toEqual({
+      id: 9,
+      role: "system",
+      content: "Tip: Use /help to inspect the command surface.",
+      displayType: "tip",
+    });
+  });
+
   it("loads persisted structured chat history intact", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       version: "1.0",
