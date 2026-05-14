@@ -303,7 +303,7 @@ export function TerminalView({
           </div>
         </div>
         {state.buddy.type && (
-          <div className="terminal-buddy-dock">
+          <div className="terminal-buddy-dock hidden md:flex">
             <BuddyOverlay buddy={state.buddy} />
           </div>
         )}

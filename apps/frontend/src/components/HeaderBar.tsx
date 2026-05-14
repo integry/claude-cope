@@ -97,7 +97,9 @@ function MobileIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, onP
     <>
       <div data-testid="mobile-identity-block" className="col-start-2 row-start-1 flex min-w-0 items-center gap-2 self-end sm:hidden">
         <button onClick={onProfileClick} className="min-w-0 text-cyan-400 hover:text-white hover:underline cursor-pointer">{username}</button>
-        <EntitlementBadges isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} maxBadgeTestId="mobile-max-badge" maxBadgeLabel="[MAX]" />
+        <span className="ml-1 flex items-center gap-2">
+          <EntitlementBadges isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} maxBadgeTestId="mobile-max-badge" maxBadgeLabel="[MAX]" />
+        </span>
       </div>
       <div data-testid="mobile-rank-line" title={rank} className="col-start-2 row-start-2 min-w-0 whitespace-nowrap text-[11px] leading-none text-gray-400 self-start sm:hidden sm:text-xs">
         [{getMobileRankLabel(rank)}]
