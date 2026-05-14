@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { BuddyWatcherStatus } from "./BuddyDisplay";
+import { BuddyDisplay, BuddyWatcherStatus } from "./BuddyDisplay";
 
 export function TerminalFooter({ closeAllOverlays, buddyType, buddyIsShiny, setShowTerms, setShowPrivacy, setShowAbout, setShowHelp, setShowContact }: {
   closeAllOverlays: () => void;
@@ -27,11 +27,32 @@ export function TerminalFooter({ closeAllOverlays, buddyType, buddyIsShiny, setS
           <span className="flex gap-4">{[["https://github.com/integry/claude-cope", "/github"], ["https://reddit.com/r/claudecope", "/reddit"]].map(([href, label]) => (<a key={label} href={href} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">{label}</a>))}</span>
         </div>
       </footer>
-      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 backdrop-blur-sm font-mono sm:hidden text-center" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
-        <div className="flex flex-col items-center gap-3">
-          <BuddyWatcherStatus type={buddyType} isShiny={buddyIsShiny} />
-          <span className="leading-tight">Parody project, no Anthropic affiliation... yet.</span>
-        </div>
+      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 backdrop-blur-sm font-mono sm:hidden" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
+        {buddyType ? (
+          <div className="flex items-start gap-3 text-left">
+            <BuddyDisplay
+              type={buddyType}
+              isShiny={buddyIsShiny}
+              className="shrink-0 text-[10px] leading-[0.85]"
+            />
+            <div className="flex min-w-0 flex-col gap-1 pt-0.5">
+              <BuddyWatcherStatus
+                type={buddyType}
+                isShiny={buddyIsShiny}
+                className="text-[11px] leading-tight"
+              />
+              <span className="leading-tight text-[10px] text-gray-500">
+                Parody project, no Anthropic affiliation... yet.
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="text-left">
+            <span className="leading-tight text-[10px] text-gray-500">
+              Parody project, no Anthropic affiliation... yet.
+            </span>
+          </div>
+        )}
       </footer>
     </>
   );
