@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { BuddyDisplay, BuddyWatcherStatus } from "./BuddyDisplay";
+import { BuddyWatcherStatus } from "./BuddyDisplay";
 
 export function TerminalFooter({ closeAllOverlays, buddyType, buddyIsShiny, setShowTerms, setShowPrivacy, setShowAbout, setShowHelp, setShowContact }: {
   closeAllOverlays: () => void;
@@ -28,31 +28,18 @@ export function TerminalFooter({ closeAllOverlays, buddyType, buddyIsShiny, setS
         </div>
       </footer>
       <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 backdrop-blur-sm font-mono sm:hidden" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
-        {buddyType ? (
-          <div className="flex items-start gap-3 text-left">
-            <BuddyDisplay
+        <div className="text-left">
+          {buddyType ? (
+            <BuddyWatcherStatus
               type={buddyType}
               isShiny={buddyIsShiny}
-              className="shrink-0 text-[10px] leading-[0.85]"
+              className="text-[11px] leading-tight"
             />
-            <div className="flex min-w-0 flex-col gap-1 pt-0.5">
-              <BuddyWatcherStatus
-                type={buddyType}
-                isShiny={buddyIsShiny}
-                className="text-[11px] leading-tight"
-              />
-              <span className="leading-tight text-[10px] text-gray-500">
-                Parody project, no Anthropic affiliation... yet.
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className="text-left">
-            <span className="leading-tight text-[10px] text-gray-500">
-              Parody project, no Anthropic affiliation... yet.
-            </span>
-          </div>
-        )}
+          ) : null}
+          <span className="leading-tight text-[10px] text-gray-500">
+            Parody project, no Anthropic affiliation... yet.
+          </span>
+        </div>
       </footer>
     </>
   );
