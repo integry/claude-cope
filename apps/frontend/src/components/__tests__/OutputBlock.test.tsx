@@ -171,6 +171,25 @@ describe("OutputBlock", () => {
     expect(container.querySelector("p")).toBeNull();
   });
 
+  it("renders terminal tips without slash-command handlers as plain text", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <OutputBlock
+          message={{ role: "system", content: "  // tip: Run /backlog before freeform debugging." }}
+          promptString=">"
+          username=""
+        />,
+      );
+    });
+
+    expect(container.querySelector(".terminal-tip-output")?.textContent).toBe("// Tip: Run /backlog before freeform debugging.");
+    expect(container.querySelectorAll("button")).toHaveLength(0);
+  });
+
   it("keeps slash commands clickable inside terminal tip output", () => {
     container = document.createElement("div");
     document.body.appendChild(container);

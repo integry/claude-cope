@@ -13,7 +13,7 @@ import { TicketMessage } from "./TicketMessage";
 import { extractBuddyInterjectionBlock } from "./buddyConstants";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
-const TIP_PREFIX = "Tip:";
+const TIP_PREFIX_PATTERN = /^\s*(?:\/\/\s*)?tip:\s*/i;
 
 function SimulatedToolCall({ activeTicketId }: { activeTicketId?: string | null }) {
   // Pick a random sequence once on mount, based on active ticket ID
@@ -141,13 +141,15 @@ function getContainerClass(message: Message, isNew: boolean): string {
 }
 
 function getTipRenderData(message: Message): TipRenderData {
-  if (message.role !== "system" || !message.content.startsWith(TIP_PREFIX)) {
+  if (message.role !== "system") {
     return { isTip: false, body: "" };
   }
+  const match = TIP_PREFIX_PATTERN.exec(message.content);
+  if (!match) return { isTip: false, body: "" };
 
   return {
     isTip: true,
-    body: message.content.slice(TIP_PREFIX.length).trimStart(),
+    body: message.content.slice(match[0].length),
   };
 }
 
@@ -229,6 +231,39 @@ function renderPlainTextContent(
   return onSlashCommand ? renderWithSlashLinks(body, onSlashCommand) : body;
 }
 
+function getNonMarkdownMessageContent({
+  message,
+  role,
+  tipData,
+  buddyData,
+  onSlashCommand,
+  shareNode,
+  mdComponents,
+  isAwaitingResponse,
+}: {
+  message: Message;
+  role: Message["role"];
+  tipData: TipRenderData;
+  buddyData: BuddyRenderData;
+  onSlashCommand?: (command: string, action: SlashCommandAction) => void;
+  shareNode: React.ReactNode;
+  mdComponents: ReturnType<typeof buildMarkdownComponents>;
+  isAwaitingResponse: boolean;
+}): React.ReactNode {
+  if (message.backlogDisplay && role === "system") {
+    return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
+  }
+  if (message.ticketDisplay && role === "system") {
+    return <TicketMessage ticket={message.ticketDisplay} onSlashCommand={onSlashCommand} />;
+  }
+  if (role === "user") return null;
+  if (tipData.isTip) return renderTipContent(tipData, onSlashCommand);
+  if (buddyData.isBuddyInterjection) return renderBuddyContent(buddyData, shareNode, mdComponents);
+  if (isAwaitingResponse) return message.content;
+  if (role !== "loading") return renderPlainTextContent(buddyData.body, onSlashCommand);
+  return null;
+}
+
 function MessageContent({
   message,
   buddyData,
@@ -256,27 +291,6 @@ function MessageContent({
   const shouldTypewrite = isNew && useMarkdown && role === "system";
   const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite);
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand, shareNode), [onSlashCommand, shareNode]);
-
-  // Backlog messages intentionally bypass markdown rendering so the responsive
-  // table layout stays intact while `message.content` remains as a plain-text fallback.
-  if (message.backlogDisplay && role === "system") {
-    return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
-  }
-
-  if (message.ticketDisplay && role === "system") {
-    return <TicketMessage ticket={message.ticketDisplay} onSlashCommand={onSlashCommand} />;
-  }
-
-  if (role === "user") return null;
-
-  if (tipData.isTip) {
-    return renderTipContent(tipData, onSlashCommand);
-  }
-
-  if (buddyData.isBuddyInterjection) {
-    return renderBuddyContent(buddyData, shareNode, mdComponents);
-  }
-
   if (useMarkdown || isStreaming) {
     return renderMarkdownContent({
       content,
@@ -288,11 +302,13 @@ function MessageContent({
       mdComponents,
     });
   }
-  if (isAwaitingResponse) return <>{content}</>;
-  if (role !== "loading") {
-    return <>{renderPlainTextContent(buddyData.body, onSlashCommand)}</>;
-  }
-  return null;
+  return (
+    <>
+      {getNonMarkdownMessageContent(
+        { message, role, tipData, buddyData, onSlashCommand, shareNode, mdComponents, isAwaitingResponse },
+      )}
+    </>
+  );
 }
 
 function CostDisplay({ cost }: { cost: number }) {
@@ -307,7 +323,6 @@ function CostDisplay({ cost }: { cost: number }) {
     </div>
   );
 }
-
 
 function getShareProps(
   message: Message,

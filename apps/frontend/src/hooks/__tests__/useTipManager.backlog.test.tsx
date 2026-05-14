@@ -202,4 +202,25 @@ describe("useTipManager backlog reminders", () => {
 
     expect(harness.ref.current?.getHistory()).toHaveLength(0);
   });
+
+  it("restores the skipped deferred tip to the rotation after an active ticket invalidates it", () => {
+    act(() => {
+      harness.ref.current?.setBlocked(true);
+      for (let i = 0; i < 6; i++) {
+        harness.ref.current?.recordMessageWithoutTicket();
+      }
+      harness.ref.current?.setGameState((prev) => ({
+        ...prev,
+        activeTicket: { id: "COPE-1", title: "Fix prod", sprintProgress: 0, sprintGoal: 100 },
+      }));
+      harness.ref.current?.setBlocked(false);
+      harness.ref.current?.recordConversationRound();
+      harness.ref.current?.setGameState((prev) => ({ ...prev, activeTicket: null }));
+      for (let i = 0; i < 6; i++) {
+        harness.ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([BACKLOG_REMINDER_TIPS[0]?.text]);
+  });
 });
