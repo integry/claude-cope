@@ -1,4 +1,6 @@
 import type { Message } from "../hooks/useGameState";
+import { resolveSlashMenuSelection } from "./slashCommands";
+import type { SlashCommandAction } from "./slashCommandDetect";
 import { DEFAULT_CLOSE_EFFECT, UPGRADE_NAG_CLOSE_EFFECTS, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
 
 export const NAG_MINIMUM_OPEN_MS = 3000;
@@ -33,4 +35,16 @@ export function getNextTerminalInputValue(currentValue: string, nextValue: strin
   return isBackwardsTyping && isAppending
     ? nextValue.slice(currentValue.length) + currentValue
     : nextValue;
+}
+
+export function getSlashCommandClickSelection(command: string, action: SlashCommandAction) {
+  if (action === "execute") {
+    return {
+      mode: "execute" as const,
+      value: command,
+      nextQuery: "",
+    };
+  }
+
+  return resolveSlashMenuSelection(command, "click");
 }

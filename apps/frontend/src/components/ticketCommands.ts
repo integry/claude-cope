@@ -2,7 +2,7 @@ import { track } from "../analytics";
 import { AnalyticsEvents, SlashCommandFailureReasons } from "../analyticsEvents";
 import { API_BASE, TICKET_REFINE_ENABLED } from "../config";
 import type { GameState } from "../hooks/useGameState";
-import type { CommunityBacklogTicket } from "@claude-cope/shared/backlogTickets";
+import type { CommunityBacklogTicket, PlayableBacklogTicket } from "@claude-cope/shared/backlogTickets";
 import type { BacklogDisplayData, BacklogDisplayTicket } from "../hooks/gameStateUtils";
 import {
   BACKLOG_CATEGORY_ALL,
@@ -11,6 +11,7 @@ import {
 import type { Message } from "./Terminal";
 import { prefetchSequences } from "./toolSequences";
 import { updateTicketServer } from "../api/profileApi";
+import { buildTicketMessage } from "./ticketPrompt";
 
 type Reply = (msg: Message) => void;
 type SetState = React.Dispatch<React.SetStateAction<GameState>>;
@@ -361,8 +362,7 @@ export function handleTakeCommand(
 
   onAccept?.();
   reply({
-    role: "system",
-    content: `[🎫 **TICKET CLAIMED**] ${ticket.id}: **${ticket.title}**\n\n> ${ticket.description}\n\nReward: **${(ticket.technical_debt * 10).toLocaleString()} TD**. Start prompting to make progress.`,
+    ...buildTicketMessage(ticket as PlayableBacklogTicket, "claimed"),
   });
   onSuggestedReply?.(ticket.kickoff_prompt);
   return true;

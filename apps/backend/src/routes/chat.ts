@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { COPE_MODELS } from "@claude-cope/shared/models";
+import { getDefaultCopeModel, resolveCopeModel } from "@claude-cope/shared/models";
 
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 import { parseProviderList } from "@claude-cope/shared/openrouter";
@@ -95,8 +95,7 @@ export function enforceContextTrimming(messages: { role: string; content: string
 }
 
 function resolveModel(modelId?: string): string {
-  const copeModel = modelId ? COPE_MODELS.find((m) => m.id === modelId) : undefined;
-  return copeModel?.openRouterId ?? "openai/gpt-oss-20b";
+  return resolveCopeModel(modelId)?.openRouterId ?? getDefaultCopeModel().openRouterId;
 }
 
 function extractBodyDefaults(body: ChatBody) {
@@ -1425,6 +1424,7 @@ chat.post("/", async (c) => {
   const messages = buildChatMessages({
     rank,
     chatMessages: trimmedMessages,
+    modelId: body.modelId,
     modes: body.modes,
     activeTicket: body.activeTicket,
     buddyType: body.buddyType,

@@ -7,12 +7,24 @@ describe("normalizePersistedMessage", () => {
   const message: Message = {
     id: 7,
     role: "system",
-    content: "fallback backlog copy",
+    content: "fallback structured copy",
     backlogDisplay: {
       kind: "community-backlog",
       title: "[ COMMUNITY BACKLOG ]",
       footer: [],
       tickets: [],
+    },
+    ticketDisplay: {
+      kind: "corporate-dossier",
+      status: "claimed",
+      heading: "[ JIRA PAYLOAD IMPORTED ]",
+      ticketId: "BLAME-421",
+      title: "Rewrite the template",
+      reporter: "Brenda [Platform Governance]",
+      profile: "Treats naming as policy.",
+      body: "The RCA template is unusable.",
+      reward: "1440 TD",
+      footer: ["Start prompting to make progress."],
     },
   };
 
@@ -20,13 +32,13 @@ describe("normalizePersistedMessage", () => {
     localStorage.clear();
   });
 
-  it("preserves backlogDisplay so responsive backlog messages survive persistence", () => {
+  it("preserves structured display payloads so responsive messages survive persistence", () => {
     const stripped = normalizePersistedMessage(message);
 
     expect(stripped).toEqual(message);
   });
 
-  it("loads persisted backlogDisplay chat history intact", () => {
+  it("loads persisted structured chat history intact", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       version: "1.0",
       username: "tester",

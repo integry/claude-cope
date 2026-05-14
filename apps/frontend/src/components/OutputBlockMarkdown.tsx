@@ -38,6 +38,7 @@ export function cleanLLMOutput(content: string): string {
   const terminalLangs = "bash|sh|shell|console|terminal|text|log|plaintext|markdown|md";
   const fenceRegex = new RegExp("```(?:" + terminalLangs + ")\\s*\\n([\\s\\S]*?)```", "g");
   cleaned = cleaned.replace(fenceRegex, "$1");
+  cleaned = cleaned.replace(/([^\n])\s+([1-9]\uFE0F?\u20E3)\s+/g, "$1\n\n\u2003$2 ");
   cleaned = stripOrphanEmphasisMarkers(cleaned);
   cleaned = cleaned.replace(/\n(\[(?:WARN|ERROR|SUCCESS|INFO|FATAL|CRITICAL|DEBUG|DONE|PROGRESS|RESULT|⚙️|⚠️|❌|✓|✅|🔥|💀|🚨|SIGSEGV)[^\]]*\])/g, "\n\n$1");
   cleaned = cleaned.replace(/([^\n])(\[(?:WARN|ERROR|SUCCESS|INFO|FATAL|CRITICAL|DEBUG|DONE|PROGRESS|RESULT|⚙️|⚠️|❌|✓|✅|🔥|💀|🚨|SIGSEGV)[^\]]*\])/g, "$1\n\n$2");

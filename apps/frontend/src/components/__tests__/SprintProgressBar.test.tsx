@@ -78,7 +78,7 @@ describe("SprintProgressBar", () => {
       button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "execute");
+    expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "prefill");
   });
 
   it("renders active sprint progress when a ticket is active", () => {

@@ -16,6 +16,7 @@ vi.mock("../ticketPrompt", () => ({
   getPendingOffer: vi.fn(() => null),
   clearPendingOffer: vi.fn(),
   fetchRandomTicketPrompt: vi.fn(),
+  buildTicketMessage: vi.fn(),
 }));
 
 import { handleUpgradeCommand, type SlashCommandContext } from "../slashCommandExecutor";

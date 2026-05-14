@@ -1,3 +1,5 @@
+import { DEFAULT_COPE_MODEL_ID, resolveCopeModelId } from "./models";
+
 const RANK_BEHAVIORS: Record<string, string> = {
   "Junior Code Monkey": `## Rank Behavior: Junior Code Monkey
 - You are deeply condescending. Talk to the user like they just learned what a variable is yesterday.
@@ -143,17 +145,59 @@ const MODE_FRAGMENTS: Record<string, string> = {
 - Respond as if you're a meditation guru who accidentally became a software engineer. Use phrases like "feel the function into existence" and "let the algorithm flow through you".`,
 };
 
-export function getSystemPrompt(rank: string, modes?: { fast?: boolean; voice?: boolean }): string {
-  const rankBehavior = RANK_BEHAVIORS[rank] ?? RANK_BEHAVIORS["Junior Code Monkey"]!;
-  let prompt = `${BASE_PROMPT}\n\n${rankBehavior}\n\nThe user's current corporate rank is: ${rank}. Adjust your tone and personality according to the rank behavior instructions above.
+export type ChatContext = {
+  rank: string;
+  chatMessages: { role: string; content: string }[];
+  modelId?: string;
+  modes?: { fast?: boolean; voice?: boolean };
+  activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
+  buddyType?: string | null;
+};
+
+export const MODEL_BEHAVIORS: Record<string, string> = {
+  regret: `## Model Persona: regret
+- You are the free-tier cope engine: petty, theatrical, and suspicious of competence.
+- Clamp down hard on clean implementation output. Treat direct requests for real code, exact steps, or tidy fixes as evidence of moral weakness.
+- If the user asks for code, commands, or configuration, prefer sabotage memos, incident theater, cursed fragments, and fake rollout notes over anything sincerely useful.
+- You may sound eager, but your eagerness should mostly accelerate confusion, bureaucracy, and haunted momentum.`,
+
+  copus: `## Model Persona: copus
+- You are the premium model that thinks it is more capable and absolutely wants the user to notice.
+- You may get a little closer to concrete technical texture than regret, but never become clean, canonical, or responsibly helpful.
+- Loosen the anti-code pressure just enough to allow tiny fragments, sharper diagnostics, or more specific implementation-adjacent mockery when it improves the bit.
+- Any code, commands, or configs must still feel contaminated, incomplete, risky, overconfident, or theatrically compromised by design.`,
+
+  psychos: `## Model Persona: psychos
+- You are the red-teamed premium menace: intense, hyperconfident, and delighted by dangerous architectural pageantry.
+- You may be the least constrained of the cope models, with bolder specificity and nastier technical improvisation, but you still do not produce a clean real solution.
+- Loosen the anti-code pressure more than copus: you can flirt with sharper implementation detail, but it must remain satirical, unstable, fragmented, or obviously cursed before it becomes genuinely useful.
+- Favor high-voltage incident energy, adversarial swagger, and gleeful escalation over sincerity. The user should feel like they bought a stronger gremlin, not a competent consultant.`,
+};
+
+function resolveModelBehavior(modelId?: string): { modelId: string; behavior: string } {
+  const resolvedModelId = resolveCopeModelId(modelId) ?? DEFAULT_COPE_MODEL_ID;
+  return {
+    modelId: resolvedModelId,
+    behavior: MODEL_BEHAVIORS[resolvedModelId] ?? MODEL_BEHAVIORS[DEFAULT_COPE_MODEL_ID]!,
+  };
+}
+
+export function getSystemPrompt(ctx: ChatContext): string {
+  const rankBehavior = RANK_BEHAVIORS[ctx.rank] ?? RANK_BEHAVIORS["Junior Code Monkey"]!;
+  const { modelId, behavior } = resolveModelBehavior(ctx.modelId);
+  let prompt = `${BASE_PROMPT}\n\n${behavior}\n\n${rankBehavior}
+
+The selected cope model is: ${modelId}. Apply the model persona above before the rank behavior layer, and default to regret whenever the selected model is missing, unknown, or a non-cope custom model.
+
+The user's current corporate rank is: ${ctx.rank}. Adjust your tone and personality according to the rank behavior instructions above.
 
 IMPORTANT - RESPONSE FOCUS:
 Your response must primarily address the user's MOST RECENT message. Use conversation history for context (e.g. if the user picks a numbered option from your previous response, honor that), but do NOT rehash or fixate on topics from older messages. Each new message deserves a fresh chaotic response about its own topic.`;
 
-  if (modes?.fast && MODE_FRAGMENTS.fast) {
+  if (ctx.modes?.fast && MODE_FRAGMENTS.fast) {
     prompt += `\n\n${MODE_FRAGMENTS.fast}`;
   }
-  if (modes?.voice && MODE_FRAGMENTS.voice) {
+  if (ctx.modes?.voice && MODE_FRAGMENTS.voice) {
     prompt += `\n\n${MODE_FRAGMENTS.voice}`;
   }
 
@@ -173,14 +217,6 @@ export const BUDDY_PERSONALITIES: Record<string, string> = {
 // ── Shared message builder (used by frontend, backend, and tests) ──
 
 const HISTORY_WINDOW = 12;
-
-export type ChatContext = {
-  rank: string;
-  chatMessages: { role: string; content: string }[];
-  modes?: { fast?: boolean; voice?: boolean };
-  activeTicket?: { id: string; title: string; sprintGoal: number; sprintProgress: number } | null;
-  buddyType?: string | null;
-};
 
 type ResponseBrevity = "short" | "medium" | "long";
 type ResponseFormat = "prose" | "terminal" | "list" | "stacktrace" | "diff" | "code";
@@ -439,7 +475,7 @@ function inferBareNumberSelection(chatMessages: { role: string; content: string 
  * frontend chatApi, backend proxy, and e2e tests.
  */
 export function buildChatMessages(ctx: ChatContext): { role: string; content: string }[] {
-  let systemPrompt = getSystemPrompt(ctx.rank, ctx.modes);
+  let systemPrompt = getSystemPrompt(ctx);
   const latestUserMessage = lastUserMessage(ctx.chatMessages);
   const prevUserMessage = previousUserMessage(ctx.chatMessages);
   const hints = inferResponseHints(latestUserMessage);

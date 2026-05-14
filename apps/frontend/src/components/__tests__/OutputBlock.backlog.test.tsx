@@ -93,7 +93,7 @@ describe("OutputBlock backlog rendering", () => {
 
     expect(ticketButton?.getAttribute("aria-label")).toBe("Claim ticket BLAME-421");
     expect(onSlashCommand).toHaveBeenCalledWith("/take BLAME-421", "execute");
-    expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "execute");
+    expect(onSlashCommand).toHaveBeenCalledWith("/backlog", "prefill");
     expect(onSlashCommand).toHaveBeenCalledWith("/upgrade", "execute");
   });
 

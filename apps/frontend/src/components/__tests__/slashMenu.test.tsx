@@ -96,6 +96,36 @@ describe("SlashMenu", () => {
     expect(menu.textContent).toContain("Stare into the abyss of unfulfilled promises");
   });
 
+  it("shows model autocomplete immediately after /model space", () => {
+    const menu = renderSlashMenu({
+      query: "/model ",
+      activeIndex: 0,
+      totalTechnicalDebt: 5000,
+      paidUser: false,
+      onSelect: vi.fn(),
+    });
+
+    expect(menu.textContent).toContain("MODEL CHOICES");
+    expect(menu.textContent).toContain("regret");
+    expect(menu.textContent).toContain("Cope Regret vFINAL_v2_USE_THIS_ONE");
+    expect(menu.textContent).toContain("copus");
+    expect(menu.textContent).toContain("psychos");
+    expect(menu.textContent).toContain("LOCKED");
+  });
+
+  it("shows /model [model-id] in the command list", () => {
+    const menu = renderSlashMenu({
+      query: "/m",
+      activeIndex: 0,
+      totalTechnicalDebt: 5000,
+      paidUser: false,
+      onSelect: vi.fn(),
+    });
+
+    expect(menu.textContent).toContain("/model [model-id]");
+    expect(menu.textContent).toContain("Swap out the hallucination engine");
+  });
+
   it("emits full /backlog category commands when category rows are clicked", () => {
     const onSelect = vi.fn();
     const menu = renderSlashMenu({
@@ -112,5 +142,23 @@ describe("SlashMenu", () => {
     });
 
     expect(onSelect).toHaveBeenCalledWith("/backlog ALL");
+  });
+
+  it("emits full /model commands when model rows are clicked", () => {
+    const onSelect = vi.fn();
+    const menu = renderSlashMenu({
+      query: "/model ",
+      activeIndex: 0,
+      totalTechnicalDebt: 5000,
+      paidUser: false,
+      onSelect,
+    });
+
+    const firstModel = Array.from(menu.querySelectorAll("li.cursor-pointer")).find((item) => item.textContent?.includes("regret"));
+    act(() => {
+      firstModel?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSelect).toHaveBeenCalledWith("/model regret");
   });
 });

@@ -3,6 +3,7 @@ import {
   BACKLOG_CATEGORY_ALL,
   BACKLOG_CATEGORY_TIERS,
 } from "@claude-cope/shared/backlogTiers";
+import { COPE_MODELS } from "@claude-cope/shared/models";
 
 export type SlashCommandGroup = {
   title: string;
@@ -106,7 +107,16 @@ export type SlashMenuBacklogCategoryItem = {
   locked: boolean;
 };
 
-export type SlashMenuItem = SlashMenuCommandItem | SlashMenuBacklogCategoryItem;
+export type SlashMenuModelChoiceItem = {
+  type: "model-choice";
+  value: string;
+  modelId: string;
+  label: string;
+  description: string;
+  locked: boolean;
+};
+
+export type SlashMenuItem = SlashMenuCommandItem | SlashMenuBacklogCategoryItem | SlashMenuModelChoiceItem;
 
 export type SlashMenuSelectionTrigger = "click" | "tab" | "enter";
 
@@ -122,6 +132,13 @@ function matchesBacklogCategoryQuery(query: string, prefix: string, label: strin
   return prefix.toLowerCase().includes(normalized)
     || label.toLowerCase().includes(normalized)
     || description.toLowerCase().includes(normalized);
+}
+
+function matchesModelQuery(query: string, modelId: string, label: string): boolean {
+  if (!query) return true;
+  const normalized = query.trim().toLowerCase();
+  return modelId.toLowerCase().includes(normalized)
+    || label.toLowerCase().includes(normalized);
 }
 
 export function getSlashMenuItems(
@@ -164,6 +181,21 @@ export function getSlashMenuItems(
     return items;
   }
 
+  if (normalizedQuery.startsWith("/model ")) {
+    const modelQuery = query.slice("/model ".length);
+
+    return COPE_MODELS
+      .filter((model) => matchesModelQuery(modelQuery, model.id, model.name))
+      .map((model) => ({
+        type: "model-choice" as const,
+        value: `/model ${model.id}`,
+        modelId: model.id,
+        label: model.name,
+        description: model.tier === "pro" ? "Max model" : "Default model",
+        locked: model.tier === "pro" && !paidUser,
+      }));
+  }
+
   return SLASH_COMMAND_GROUPS.flatMap((group) =>
     group.commands.flatMap((cmd): SlashMenuCommandItem[] => {
       if (!SLASH_COMMANDS.includes(cmd)) return [];
@@ -175,7 +207,7 @@ export function getSlashMenuItems(
         value: cmd,
         groupTitle: group.title,
         description: SLASH_COMMAND_DESCRIPTIONS[cmd],
-        argumentHint: cmd === "/backlog" ? "[category]" : undefined,
+        argumentHint: cmd === "/backlog" ? "[category]" : cmd === "/model" ? "[model-id]" : undefined,
       }];
     }),
   );
@@ -190,6 +222,14 @@ export function resolveSlashMenuSelection(
       mode: "prefill",
       value: "/backlog ",
       nextQuery: "/backlog ",
+    };
+  }
+
+  if (value === "/model") {
+    return {
+      mode: "prefill",
+      value: "/model ",
+      nextQuery: "/model ",
     };
   }
 

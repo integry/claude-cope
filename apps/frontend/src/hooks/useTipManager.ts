@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { GameState, Message } from "./useGameState";
 import {
-  BACKLOG_REMINDER_TIPS,
   selectBacklogReminder,
   selectContextualTip,
   selectIdleTip,
@@ -10,13 +9,18 @@ import {
   type ContextualTipTrigger,
   type TipDefinition,
 } from "../game/tips";
+import {
+  getInitialContextualTriggers,
+  getNextBacklogReminderThreshold,
+  hasRecentBacklogReminder,
+  markTipShown,
+  persistRecentTipHistory,
+  readRecentTipHistory,
+  toExcludedTipIds,
+} from "./tipManagerUtils";
 
 const IDLE_TIP_DELAY_MS = 45_000;
 const MILESTONE_INTERVAL = 6;
-const BACKLOG_REMINDER_MIN_MESSAGES = 6;
-const BACKLOG_REMINDER_MAX_MESSAGES = 7;
-const TIP_REPEAT_WINDOW_MS = 24 * 60 * 60 * 1000;
-const TIP_HISTORY_STORAGE_KEY = "claude-cope.tip-history.v1";
 const SINGLE_FIRE_CONTEXTUAL_TRIGGERS = new Set<ContextualTipTrigger>(["td_1000", "quota_exhausted"]);
 type SetHistory = Dispatch<SetStateAction<Message[]>>;
 interface UseTipManagerArgs {
@@ -28,6 +32,7 @@ interface UseTipManagerArgs {
 }
 type RecordValidCommandOptions = { suppressTip?: boolean };
 type MessageWithoutTicketRollback = () => void;
+
 type PendingBacklogReminder = {
   tip: TipDefinition;
   previousCount: number;
@@ -40,51 +45,6 @@ type PreviousTipState = Pick<PendingBacklogReminder, "previousCount" | "previous
 type ContextualStateSnapshot = { currentTD: number; quotaPercent: number; pendingCompletedTaskCount: number; onlineCount: number };
 const getCompletedTaskCount = (gameState: GameState): number => gameState.pendingCompletedTaskIds?.length ?? 0;
 const appendTip = (setHistory: SetHistory, content: string): void => setHistory((prev) => [...prev, { role: "system", content }]);
-
-function readRecentTipHistory(now = Date.now()): Record<string, number> {
-  if (typeof window === "undefined" || !window.localStorage) return {};
-  try {
-    const raw = window.localStorage.getItem(TIP_HISTORY_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return {};
-    return Object.fromEntries(
-      Object.entries(parsed)
-        .filter((entry): entry is [string, number] => typeof entry[0] === "string" && typeof entry[1] === "number")
-        .filter(([, timestamp]) => now - timestamp < TIP_REPEAT_WINDOW_MS),
-    );
-  } catch {
-    return {};
-  }
-}
-
-function persistRecentTipHistory(history: Record<string, number>): void {
-  if (typeof window === "undefined" || !window.localStorage) return;
-  try {
-    window.localStorage.setItem(TIP_HISTORY_STORAGE_KEY, JSON.stringify(history));
-  } catch {
-    // Ignore storage failures and keep the in-memory cooldown alive for this session.
-  }
-}
-
-function markTipShown(
-  recentTipHistoryRef: MutableRefObject<Record<string, number>>,
-  tip: TipDefinition,
-  timestamp = Date.now(),
-): void {
-  recentTipHistoryRef.current = { ...readRecentTipHistory(timestamp), [tip.id]: timestamp };
-  persistRecentTipHistory(recentTipHistoryRef.current);
-}
-const getNextBacklogReminderThreshold = (): number => BACKLOG_REMINDER_MIN_MESSAGES + Math.floor(Math.random() * (BACKLOG_REMINDER_MAX_MESSAGES - BACKLOG_REMINDER_MIN_MESSAGES + 1));
-const hasRecentBacklogReminder = (history: Record<string, number>): boolean => BACKLOG_REMINDER_TIPS.some((tip) => history[tip.id] !== undefined);
-
-function getInitialContextualTriggers(currentTD: number, quotaPercent: number, onlineCount: number): ContextualTipTrigger[] {
-  const triggers: ContextualTipTrigger[] = [];
-  if (currentTD > 1_000) triggers.push("td_1000");
-  if (quotaPercent <= 0) triggers.push("quota_exhausted");
-  if (onlineCount === 1) triggers.push("lone_user_online");
-  return triggers;
-}
 const getPreviousTipState = (
   noTicketMessageCountRef: MutableRefObject<number>,
   nextBacklogReminderThresholdRef: MutableRefObject<number>,
@@ -145,20 +105,48 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   const nextBacklogReminderThresholdRef = useRef(getNextBacklogReminderThreshold());
   const lastBacklogReminderTipIdRef = useRef<string | null>(null);
   const recentTipHistoryRef = useRef<Record<string, number>>(readRecentTipHistory());
+  const interactionCountRef = useRef(0);
   const conversationRoundsRef = useRef(0);
+  const lastTipInteractionCountRef = useRef<number | null>(null);
   const lastTipConversationRoundRef = useRef<number | null>(null);
   const pendingBacklogReminderRef = useRef<PendingBacklogReminder | null>(null);
-  const isBootingRef = useRef(isBooting), isInteractionBlockedRef = useRef(isInteractionBlocked), gameStateRef = useRef(gameState), totalTDEarnedRef = useRef(totalTDEarned);
-  const previousStateRef = useRef(createContextualStateSnapshot(gameState.economy.currentTD, gameState.economy.quotaPercent, getCompletedTaskCount(gameState), onlineCount));
+  const lastShownTipIdRef = useRef<string | null>(null);
+  const isBootingRef = useRef(isBooting);
+  const isInteractionBlockedRef = useRef(isInteractionBlocked);
+  const gameStateRef = useRef(gameState);
+  const totalTDEarnedRef = useRef(totalTDEarned);
+  const previousStateRef = useRef(createContextualStateSnapshot(
+    gameState.economy.currentTD,
+    gameState.economy.quotaPercent,
+    getCompletedTaskCount(gameState),
+    onlineCount,
+  ));
   isBootingRef.current = isBooting;
   isInteractionBlockedRef.current = isInteractionBlocked;
   gameStateRef.current = gameState;
   totalTDEarnedRef.current = totalTDEarned;
-  const canEmitTip = useCallback(() => lastTipConversationRoundRef.current === null || conversationRoundsRef.current > lastTipConversationRoundRef.current, []);
-  const noteTipEmitted = useCallback(() => { lastTipConversationRoundRef.current = conversationRoundsRef.current; }, []);
-  const appendManagedTip = useCallback((content: string): boolean => {
+
+  const canEmitTip = useCallback(() => (
+    (
+      lastTipInteractionCountRef.current === null
+      || interactionCountRef.current > lastTipInteractionCountRef.current
+    )
+    && (
+      lastTipConversationRoundRef.current === null
+      || conversationRoundsRef.current > lastTipConversationRoundRef.current
+    )
+  ), []);
+
+  const noteTipEmitted = useCallback(() => {
+    lastTipInteractionCountRef.current = interactionCountRef.current;
+    lastTipConversationRoundRef.current = conversationRoundsRef.current;
+  }, []);
+
+  const appendManagedTip = useCallback((tip: TipDefinition): boolean => {
     if (!canEmitTip()) return false;
-    appendTip(setHistory, content);
+    if (lastShownTipIdRef.current === tip.id) return false;
+    appendTip(setHistory, tip.text);
+    lastShownTipIdRef.current = tip.id;
     noteTipEmitted();
     return true;
   }, [canEmitTip, noteTipEmitted, setHistory]);
@@ -173,8 +161,9 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     }
 
     pendingBacklogReminderRef.current = null;
-    appendManagedTip(pendingReminder.tip.text);
-    markTipShown(recentTipHistoryRef, pendingReminder.tip);
+    if (appendManagedTip(pendingReminder.tip)) {
+      markTipShown(recentTipHistoryRef, pendingReminder.tip);
+    }
   }, [appendManagedTip, canEmitTip]);
 
   const flushPendingContextualTip = useCallback(() => {
@@ -186,10 +175,9 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       const tip = selectContextualTip(trigger, {
         totalTDEarned: totalTDEarnedRef.current,
         hasActiveTicket: Boolean(gameStateRef.current.activeTicket),
-      });
+      }, { excludeTipIds: toExcludedTipIds(lastShownTipIdRef.current ? [lastShownTipIdRef.current] : undefined) });
       if (!tip) continue;
-      appendManagedTip(tip.text);
-      break;
+      if (appendManagedTip(tip)) break;
     }
   }, [appendManagedTip, canEmitTip]);
 
@@ -198,9 +186,12 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     idleDeadlineRef.current = null;
     if (!canEmitTip()) return;
     recentTipHistoryRef.current = readRecentTipHistory();
-    const tip = selectIdleTip({ totalTDEarned: totalTDEarnedRef.current, hasActiveTicket: Boolean(gameStateRef.current.activeTicket) }, { excludeTipIds: Object.keys(recentTipHistoryRef.current) });
+    const tip = selectIdleTip(
+      { totalTDEarned: totalTDEarnedRef.current, hasActiveTicket: Boolean(gameStateRef.current.activeTicket) },
+      { excludeTipIds: toExcludedTipIds(Object.keys(recentTipHistoryRef.current), lastShownTipIdRef.current ? [lastShownTipIdRef.current] : undefined) },
+    );
     if (!tip) return;
-    appendManagedTip(tip.text);
+    if (!appendManagedTip(tip)) return;
     markTipShown(recentTipHistoryRef, tip);
   }, [appendManagedTip, canEmitTip]);
 
@@ -225,6 +216,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
 
   const recordEnter = useCallback(() => {
     hasInteractedRef.current = true;
+    interactionCountRef.current += 1;
     scheduleIdleTip();
   }, [scheduleIdleTip]);
 
@@ -234,78 +226,112 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     flushPendingContextualTip();
   }, [flushPendingBacklogReminder, flushPendingContextualTip]);
   const recordValidCommand = useCallback((baseCommand?: string, options?: RecordValidCommandOptions): string | null => {
+    interactionCountRef.current += 1;
     actionCountRef.current += 1;
     if (baseCommand) usedCommandsRef.current.add(baseCommand);
+    flushPendingContextualTip();
     if (actionCountRef.current % MILESTONE_INTERVAL !== 0) return null;
     if (options?.suppressTip) return null;
     if (!canEmitTip()) return null;
-    const context = { totalTDEarned: totalTDEarnedRef.current, hasActiveTicket: Boolean(gameStateRef.current.activeTicket) };
-    let tip = selectMilestoneTip(usedCommandsRef.current, shownMilestoneTipIdsRef.current, context);
+
+    let tip = selectMilestoneTip(
+      usedCommandsRef.current,
+      shownMilestoneTipIdsRef.current,
+      { totalTDEarned: totalTDEarnedRef.current, hasActiveTicket: Boolean(gameStateRef.current.activeTicket) },
+      { excludeTipIds: toExcludedTipIds(lastShownTipIdRef.current ? [lastShownTipIdRef.current] : undefined) },
+    );
     if (!tip && shownMilestoneTipIdsRef.current.size > 0) {
       shownMilestoneTipIdsRef.current.clear();
-      tip = selectMilestoneTip(usedCommandsRef.current, shownMilestoneTipIdsRef.current, context);
+      tip = selectMilestoneTip(
+        usedCommandsRef.current,
+        shownMilestoneTipIdsRef.current,
+        { totalTDEarned: totalTDEarnedRef.current, hasActiveTicket: Boolean(gameStateRef.current.activeTicket) },
+        { excludeTipIds: toExcludedTipIds(lastShownTipIdRef.current ? [lastShownTipIdRef.current] : undefined) },
+      );
     }
     if (!tip) return null;
     shownMilestoneTipIdsRef.current.add(tip.id);
-    appendManagedTip(tip.text);
+    if (!appendManagedTip(tip)) return null;
     return tip.text;
-  }, [appendManagedTip, canEmitTip]);
+  }, [appendManagedTip, canEmitTip, flushPendingContextualTip]);
 
   const recordMessageWithoutTicket = useCallback((): MessageWithoutTicketRollback => {
     const previous = getPreviousTipState(noTicketMessageCountRef, nextBacklogReminderThresholdRef, lastBacklogReminderTipIdRef);
-    const rollback = () => restorePreviousTipState(noTicketMessageCountRef, nextBacklogReminderThresholdRef, lastBacklogReminderTipIdRef, previous);
+    interactionCountRef.current += 1;
+    const rollbackReminderState = () => restorePreviousTipState(
+      noTicketMessageCountRef,
+      nextBacklogReminderThresholdRef,
+      lastBacklogReminderTipIdRef,
+      previous,
+    );
+    const previousLastShownTipId = lastShownTipIdRef.current;
+    const previousLastTipConversationRound = lastTipConversationRoundRef.current;
+    const previousLastTipInteractionCount = lastTipInteractionCountRef.current;
+
+    flushPendingContextualTip();
+
     if (gameStateRef.current.activeTicket) {
       resetBacklogReminderProgress(noTicketMessageCountRef, nextBacklogReminderThresholdRef);
-      return rollback;
+      return rollbackReminderState;
     }
     noTicketMessageCountRef.current += 1;
-    if (noTicketMessageCountRef.current < nextBacklogReminderThresholdRef.current) return rollback;
+    if (noTicketMessageCountRef.current < nextBacklogReminderThresholdRef.current) {
+      return rollbackReminderState;
+    }
     recentTipHistoryRef.current = readRecentTipHistory();
     if (pendingBacklogReminderRef.current || hasRecentBacklogReminder(recentTipHistoryRef.current)) {
       resetBacklogReminderProgress(noTicketMessageCountRef, nextBacklogReminderThresholdRef);
-      return rollback;
+      return rollbackReminderState;
     }
+    const reminderHistoryBeforeShow = recentTipHistoryRef.current;
     const tip = selectBacklogReminder(
       lastBacklogReminderTipIdRef.current ?? undefined,
       { hasActiveTicket: Boolean(gameStateRef.current.activeTicket) },
-      { excludeTipIds: Object.keys(recentTipHistoryRef.current) },
+      { excludeTipIds: toExcludedTipIds(Object.keys(recentTipHistoryRef.current), lastShownTipIdRef.current ? [lastShownTipIdRef.current] : undefined) },
     );
     if (!tip) {
       resetBacklogReminderProgress(noTicketMessageCountRef, nextBacklogReminderThresholdRef);
-      return rollback;
+      return rollbackReminderState;
     }
-    const previousRecentTipHistory = recentTipHistoryRef.current;
-    const previousLastTipConversationRound = lastTipConversationRoundRef.current;
     if (isInteractionBlockedRef.current) {
       lastBacklogReminderTipIdRef.current = tip.id;
       pendingBacklogReminderRef.current = {
         tip,
         ...previous,
-        previousRecentTipHistory,
+        previousRecentTipHistory: reminderHistoryBeforeShow,
         previousLastTipConversationRound,
       };
       resetBacklogReminderProgress(noTicketMessageCountRef, nextBacklogReminderThresholdRef);
       return () => {
         if (pendingBacklogReminderRef.current?.tip.id === tip.id) pendingBacklogReminderRef.current = null;
-        rollback();
-        recentTipHistoryRef.current = previousRecentTipHistory;
+        rollbackReminderState();
+        recentTipHistoryRef.current = reminderHistoryBeforeShow;
         lastTipConversationRoundRef.current = previousLastTipConversationRound;
-        persistRecentTipHistory(previousRecentTipHistory);
+        persistRecentTipHistory(reminderHistoryBeforeShow);
       };
     }
-    if (!canEmitTip()) return rollback;
+    if (!canEmitTip()) {
+      return rollbackReminderState;
+    }
     lastBacklogReminderTipIdRef.current = tip.id;
-    appendManagedTip(tip.text);
+    if (!appendManagedTip(tip)) {
+      rollbackReminderState();
+      return () => {
+        lastShownTipIdRef.current = previousLastShownTipId;
+      };
+    }
     markTipShown(recentTipHistoryRef, tip);
     resetBacklogReminderProgress(noTicketMessageCountRef, nextBacklogReminderThresholdRef);
     return () => {
-      rollback();
-      recentTipHistoryRef.current = previousRecentTipHistory;
+      rollbackReminderState();
+      recentTipHistoryRef.current = reminderHistoryBeforeShow;
+      lastShownTipIdRef.current = previousLastShownTipId;
+      lastTipInteractionCountRef.current = previousLastTipInteractionCount;
       lastTipConversationRoundRef.current = previousLastTipConversationRound;
-      persistRecentTipHistory(previousRecentTipHistory);
+      persistRecentTipHistory(reminderHistoryBeforeShow);
       removeTipFromHistory(setHistory, tip.text);
     };
-  }, [appendManagedTip, canEmitTip, setHistory]);
+  }, [appendManagedTip, canEmitTip, flushPendingContextualTip, setHistory]);
 
   useEffect(() => {
     if (!gameState.activeTicket) return;

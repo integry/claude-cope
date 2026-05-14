@@ -9,6 +9,7 @@ import { renderWithSlashLinks } from "./slashCommandLinks";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { appendShareMarker, buildMarkdownComponents, cleanLLMOutput } from "./OutputBlockMarkdown";
 import { BacklogMessage } from "./BacklogMessage";
+import { TicketMessage } from "./TicketMessage";
 import { extractBuddyInterjectionBlock } from "./buddyConstants";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
@@ -194,6 +195,10 @@ function MessageContent({
     return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
   }
 
+  if (message.ticketDisplay && role === "system") {
+    return <TicketMessage ticket={message.ticketDisplay} onSlashCommand={onSlashCommand} />;
+  }
+
   if (role === "user") return null;
 
   if (tipData.isTip) {
@@ -318,6 +323,7 @@ function messagesEqual(a: Message | undefined, b: Message | undefined): boolean 
     && a?.shareClaim === b?.shareClaim
     && a?.buddyType === b?.buddyType
     && a?.backlogDisplay === b?.backlogDisplay
+    && a?.ticketDisplay === b?.ticketDisplay
   );
 }
 
@@ -328,6 +334,7 @@ function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps
   if (prev.message.buddyType !== next.message.buddyType) return false;
   if (prev.message.cost !== next.message.cost) return false;
   if (prev.message.backlogDisplay !== next.message.backlogDisplay) return false;
+  if (prev.message.ticketDisplay !== next.message.ticketDisplay) return false;
   if (prev.isNew !== next.isNew) return false;
   if (prev.promptString !== next.promptString) return false;
   if (!messagesEqual(prev.previousMessage, next.previousMessage)) return false;
