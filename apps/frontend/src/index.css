@@ -2,10 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-bg: #0d1117;
+  --color-text: #e6edf3;
+  --font-terminal-mono: 'Fira Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+}
+
 body {
   background-color: var(--color-bg, #0d1117);
   color: var(--color-text, #e6edf3);
-  font-family: 'Fira Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-family: var(--font-terminal-mono);
+}
+
+.font-mono {
+  font-family: var(--font-terminal-mono);
 }
 
 @keyframes terminal-command-cursor-blink {
@@ -137,12 +147,6 @@ body {
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
-}
-
-/* Theme CSS variable overrides */
-:root {
-  --color-bg: #0d1117;
-  --color-text: #e6edf3;
 }
 
 .terminal-command-shell {

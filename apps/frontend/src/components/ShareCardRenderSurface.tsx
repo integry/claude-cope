@@ -15,7 +15,7 @@ function ShareResponse({ response }: { response: string }) {
   const markdownComponents = buildMarkdownComponents();
 
   return (
-    <div className="mt-6 font-mono text-[15px] leading-[1.5] text-[#e6edf3]">
+    <div className="mt-5 font-mono text-sm leading-relaxed text-[#e6edf3]">
       {buddyBlock ? (
         <div className="space-y-4">
           <pre className="whitespace-pre-wrap text-[#fb923c]">{buddyBlock.block}</pre>
@@ -42,7 +42,7 @@ export default function ShareCardRenderSurface({
   return (
     <div
       id="share-card-root"
-      className="w-[760px] overflow-hidden bg-[#0d1117] text-[15px] text-white"
+      className="w-[760px] overflow-hidden bg-[#0d1117] text-sm text-white"
     >
       <div className="grid h-9 grid-cols-[auto_1fr_auto] items-center gap-6 border-b border-[#30363d] bg-[#161b22] px-6 font-mono text-[13px] text-[#6e7681]">
         <img src="/media/logo-400-transparent.png" alt="Claude Cope" className="h-5 w-auto" />
@@ -50,7 +50,7 @@ export default function ShareCardRenderSurface({
         <div className="text-[#facc15]">cope.bot</div>
       </div>
       <div className="px-6 py-6">
-        <div className="inline-block max-w-full break-words bg-[#e5e7eb] px-3 py-1.5 font-mono text-[15px] font-bold text-[#111827]">
+        <div className="inline-block max-w-full break-words bg-[#e5e7eb] px-3 py-1.5 font-mono text-sm font-bold text-[#111827]">
           <span className="mr-2 text-[#6b7280]">❯</span>
           {prompt}
         </div>
