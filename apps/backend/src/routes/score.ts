@@ -339,10 +339,11 @@ score.post("/", async (c) => {
   // instead of falling through to the legacy username-keyed free path.
   if (body.proKeyHash) {
     const resolution = await resolveProUser(db, body.proKeyHash, body.username);
-    if (resolution.error) {
+    if (resolution.profile === null) {
       return c.json({ error: resolution.error }, resolution.code === "revoked" ? 403 : 409);
     }
-    const updated = await syncResolvedProUser(db, body, resolution.profile);
+    const { profile } = resolution;
+    const updated = await syncResolvedProUser(db, body, profile);
     if (updated) return c.json({ profile: updated });
     return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }
@@ -367,7 +368,7 @@ score.post("/", async (c) => {
     if (!licenseActive) {
       return c.json({ error: "License has been revoked or is not active" }, 403);
     }
-    const profile = await getProfile(db, body.username);
+    const profile = await getProfileByLicenseHash(db, existingRow.license_hash);
     if (!profile) {
       return c.json({ error: "Pro score sync failed — please retry" }, 500);
     }
