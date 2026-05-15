@@ -38,7 +38,6 @@ const { submitChatMessageMock, testConfig, fetchRandomTicketPromptMock, setMockG
 vi.mock("../CommandLine", async () => {
   const React = await import("react");
   return {
-    useIsMobileViewport: () => false,
     default: React.forwardRef<HTMLInputElement, {
       value: string;
       disabled?: boolean;
@@ -64,6 +63,9 @@ vi.mock("../CommandLine", async () => {
     }),
   };
 });
+vi.mock("../useIsMobileViewport", () => ({
+  useIsMobileViewport: () => false,
+}));
 vi.mock("../SlashMenu", () => ({ default: () => null }));
 vi.mock("../slashCommands", () => ({
   SLASH_COMMANDS: [],

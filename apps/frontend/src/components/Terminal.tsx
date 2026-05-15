@@ -31,21 +31,12 @@ import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
 import { usePromptSubmissionState } from "./usePromptSubmissionState";
 import { useUpgradeNagState } from "./useUpgradeNagState";
 import { STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, getSlashCommandClickSelection, syncMessageKeys } from "./terminalUtils";
-import { useIsMobileViewport } from "./CommandLine";
+import { useIsMobileViewport } from "./useIsMobileViewport";
 export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
 type PromptSubmission = { command: string; replayId: number | null; submissionId: number };
-
-function createPromptLoadingMessage(submissionId: number): Message {
-  return { id: submissionId, role: "loading", content: getRandomLoadingPhrase() };
-}
-
-function removePromptMessages(submissionId: number) {
-  return (prev: Message[]) =>
-    prev.filter((message) => !(
-      message.id === submissionId
-      && (message.role === "user" || message.role === "loading")
-    ));
-}
+const createPromptLoadingMessage = (submissionId: number): Message => ({ id: submissionId, role: "loading", content: getRandomLoadingPhrase() });
+const removePromptMessages = (submissionId: number) => (prev: Message[]) =>
+  prev.filter((message) => !(message.id === submissionId && (message.role === "user" || message.role === "loading")));
 
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
@@ -180,9 +171,7 @@ function Terminal() {
     return () => window.removeEventListener("popstate", onPopState);
   }, [pendingNagCommandRef, setShowUpgrade]);
   useEffect(() => {
-    if (!isMobileViewport && !isProcessing && !isBooting && !anyOverlayOpen) {
-      inputRef.current?.focus();
-    }
+    if (!isMobileViewport && !isProcessing && !isBooting && !anyOverlayOpen) inputRef.current?.focus();
   }, [isMobileViewport, isProcessing, isBooting, anyOverlayOpen]);
   useEffect(() => {
     if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
@@ -246,10 +235,7 @@ function Terminal() {
   const handlePromptError = useCallback((rollbackId: number) => { settlePendingBacklogRollback(rollbackId, true); playError(); }, [playError, settlePendingBacklogRollback]);
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     const nextSelection = getSlashCommandClickSelection(command, action);
-    if (nextSelection.mode === "execute") {
-      runSlashCommandRef.current(nextSelection.value);
-      return;
-    }
+    if (nextSelection.mode === "execute") return void runSlashCommandRef.current(nextSelection.value);
     setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setSuggestedReply(null);
     if (!isMobileViewport) inputRef.current?.focus();
   }, [isMobileViewport]);
@@ -376,14 +362,9 @@ function Terminal() {
   const handleUpgradeNagDismiss = useCallback(() => { handleUpgradeNagClose((command, replayId) => { submitPromptCommandWithAccounting(command, replayId); }); }, [handleUpgradeNagClose, submitPromptCommandWithAccounting]);
   const handleManualUpgradeDismiss = dismissUpgradeNagOverlay;
   const acceptSuggestedReply = useCallback((options?: { submit?: boolean }) => {
-    if (!suggestedReply || inputValue) {
-      return;
-    }
+    if (!suggestedReply || inputValue) return;
     setSuggestedReply(null);
-    if (options?.submit) {
-      void submitCommandValue(suggestedReply);
-      return;
-    }
+    if (options?.submit) return void submitCommandValue(suggestedReply);
     setInputValue(suggestedReply);
   }, [inputValue, suggestedReply, submitCommandValue]);
   const { handleKeyDown } = useTerminalKeyboard({
