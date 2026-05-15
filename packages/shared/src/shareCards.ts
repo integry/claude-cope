@@ -14,6 +14,11 @@ export type ShareCardInput = {
   theme?: string;
 };
 
+export type ShareCardPublicOriginEnv = {
+  SHARE_CARD_BASE_ORIGIN?: string;
+  ALLOWED_ORIGINS?: string;
+};
+
 export type NormalizedShareCardPayload = {
   prompt: string;
   response: string;
@@ -76,6 +81,48 @@ export function getShareCardBaseOrigin(
   }
 
   return SHARE_CARD_DEFAULT_BASE_ORIGIN;
+}
+
+export function getPublicShareOrigin(
+  requestUrl: string,
+  env: ShareCardPublicOriginEnv,
+): string {
+  const candidates = [
+    env.SHARE_CARD_BASE_ORIGIN?.trim(),
+    (() => {
+      try {
+        return new URL(requestUrl).origin;
+      } catch {
+        return undefined;
+      }
+    })(),
+    getAllowedOrigins(env.ALLOWED_ORIGINS)[0],
+    SHARE_CARD_DEFAULT_BASE_ORIGIN,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      return new URL(candidate).origin;
+    } catch {
+      continue;
+    }
+  }
+
+  return SHARE_CARD_DEFAULT_BASE_ORIGIN;
+}
+
+export function buildPublicShareUrls(
+  requestUrl: string,
+  env: ShareCardPublicOriginEnv,
+  shareId: string,
+) {
+  const publicOrigin = getPublicShareOrigin(requestUrl, env);
+  return {
+    shareId,
+    imageUrl: new URL(`/api/share-image/${shareId}`, publicOrigin).toString(),
+    shareUrl: new URL(`/s/${shareId}`, publicOrigin).toString(),
+  };
 }
 
 export function validateAndNormalizeShareCardInput(input: unknown): ValidationResult {
