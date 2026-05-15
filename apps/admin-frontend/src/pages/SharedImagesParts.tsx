@@ -235,14 +235,24 @@ export function SharePreviewModal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="share-preview-title">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="share-preview-title"
+      aria-describedby="share-preview-description"
+      onClick={onClose}
+    >
       <div ref={dialogRef} className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4">
+        <div
+          className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4"
+          onClick={(event) => event.stopPropagation()}
+        >
           <div className="min-w-0">
             <h3 id="share-preview-title" className="text-lg font-semibold text-gray-900">
               Share Preview
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p id="share-preview-description" className="mt-1 text-sm text-gray-500">
               {item.username} · {formatTimestamp(item.createdAt)}
             </p>
           </div>
@@ -255,7 +265,10 @@ export function SharePreviewModal({
             Close
           </button>
         </div>
-        <div className="grid gap-4 overflow-auto p-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div
+          className="grid gap-4 overflow-auto p-5 lg:grid-cols-[minmax(0,1fr)_18rem]"
+          onClick={(event) => event.stopPropagation()}
+        >
           <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
             <img
               src={item.imageUrl}

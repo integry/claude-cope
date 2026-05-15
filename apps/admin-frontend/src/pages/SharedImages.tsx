@@ -6,21 +6,29 @@ import {
   SharePreviewModal,
   SummaryCards,
 } from "./SharedImagesParts";
-import type { PaginatedShareFeed, ShareFeedItem, SharesOverview } from "./SharedImagesShared";
+import {
+  isPaginatedShareFeed,
+  isSharesOverview,
+  type PaginatedShareFeed,
+  type ShareFeedItem,
+  type SharesOverview,
+} from "./SharedImagesShared";
 
 const PAGE_SIZE = 25;
 
 function buildFeedPath({
+  limit,
   offset,
   searchQuery,
   usernameFilter,
 }: {
+  limit: number;
   offset: number;
   searchQuery: string;
   usernameFilter: string;
 }) {
   const params = new URLSearchParams();
-  params.set("limit", String(PAGE_SIZE));
+  params.set("limit", String(limit));
   params.set("offset", String(offset));
   if (searchQuery) {
     params.set("query", searchQuery);
@@ -51,76 +59,9 @@ function getPaginationState(feed: PaginatedShareFeed | null, requestedOffset: nu
   };
 }
 
-function isTopUser(value: unknown): value is SharesOverview["topUsers"]["allTime"][number] {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const topUser = value as Record<string, unknown>;
-  return typeof topUser.username === "string" && typeof topUser.shareCount === "number";
-}
-
-function isSharesOverview(value: unknown): value is SharesOverview {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const overview = value as Partial<SharesOverview>;
-  const totals = overview.totals;
-  const topUsers = overview.topUsers;
-
-  return (
-    typeof totals?.lastHour === "number" &&
-    typeof totals.last24Hours === "number" &&
-    typeof totals.last3Days === "number" &&
-    typeof totals.lastWeek === "number" &&
-    typeof totals.lastMonth === "number" &&
-    typeof totals.allTime === "number" &&
-    Array.isArray(topUsers?.lastHour) &&
-    topUsers.lastHour.every(isTopUser) &&
-    Array.isArray(topUsers.last24Hours) &&
-    topUsers.last24Hours.every(isTopUser) &&
-    Array.isArray(topUsers.lastMonth) &&
-    topUsers.lastMonth.every(isTopUser) &&
-    Array.isArray(topUsers.allTime) &&
-    topUsers.allTime.every(isTopUser)
-  );
-}
-
-function isShareFeedItem(value: unknown): value is ShareFeedItem {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const item = value as Record<string, unknown>;
-  return (
-    typeof item.shareId === "string" &&
-    typeof item.createdAt === "string" &&
-    typeof item.username === "string" &&
-    typeof item.promptPreview === "string" &&
-    typeof item.responsePreview === "string" &&
-    typeof item.imageUrl === "string" &&
-    typeof item.shareUrl === "string"
-  );
-}
-
-function isPaginatedShareFeed(value: unknown): value is PaginatedShareFeed {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const feed = value as Partial<PaginatedShareFeed>;
-  return (
-    Array.isArray(feed.items) &&
-    feed.items.every(isShareFeedItem) &&
-    typeof feed.total === "number" &&
-    typeof feed.limit === "number" &&
-    typeof feed.offset === "number"
-  );
-}
-
 export default function SharedImages() {
   const [offset, setOffset] = useState(0);
+  const [requestedLimit, setRequestedLimit] = useState(PAGE_SIZE);
   const [usernameDraft, setUsernameDraft] = useState("");
   const [usernameFilter, setUsernameFilter] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
@@ -130,8 +71,8 @@ export default function SharedImages() {
   const overviewRequest = useAdminApi<SharesOverview>("/api/shares/overview");
 
   const feedPath = useMemo(
-    () => buildFeedPath({ offset, searchQuery, usernameFilter }),
-    [offset, searchQuery, usernameFilter],
+    () => buildFeedPath({ limit: requestedLimit, offset, searchQuery, usernameFilter }),
+    [offset, requestedLimit, searchQuery, usernameFilter],
   );
 
   const feedRequest = useAdminApi<PaginatedShareFeed>(feedPath);
@@ -153,6 +94,12 @@ export default function SharedImages() {
   const showFiltersSummary = Boolean(usernameFilter || searchQuery);
 
   useEffect(() => {
+    if (feed?.limit && feed.limit > 0 && feed.limit !== requestedLimit) {
+      setRequestedLimit(feed.limit);
+    }
+  }, [feed?.limit, requestedLimit]);
+
+  useEffect(() => {
     const maxOffset = Math.max(0, (totalPages - 1) * effectiveLimit);
     const clampedOffset = Math.min(offset, maxOffset);
     if (clampedOffset !== offset) {
@@ -171,7 +118,9 @@ export default function SharedImages() {
     }
 
     const updatedSelection = feed.items.find((item) => item.shareId === selectedShare.shareId) ?? null;
-    setSelectedShare(updatedSelection);
+    if (updatedSelection !== selectedShare) {
+      setSelectedShare(updatedSelection);
+    }
   }, [feed, selectedShare]);
 
   function handleFilterSubmit(event: React.FormEvent<HTMLFormElement>) {

@@ -307,7 +307,7 @@ describe("SharedImages", () => {
     });
   });
 
-  it("uses the backend-provided page size for labels and pagination offsets", () => {
+  it("uses the backend-provided page size for labels and follow-up pagination requests", () => {
     let currentFeed = {
       items: [createFeedItem()],
       total: 35,
@@ -369,7 +369,8 @@ describe("SharedImages", () => {
       nextButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(useAdminApiMock).toHaveBeenCalledWith("/api/shares?limit=25&offset=30");
+    expect(useAdminApiMock).toHaveBeenCalledWith("/api/shares?limit=10&offset=30");
+    expect(useAdminApiMock).not.toHaveBeenCalledWith("/api/shares?limit=25&offset=30");
   });
 
   it("closes the preview modal when the selected share is not in the active feed anymore", () => {
@@ -464,5 +465,33 @@ describe("SharedImages", () => {
 
     expect(container.textContent).toContain("No shared images matched the current filters.");
     expect(container.textContent).toContain("No shared images in this time window yet.");
+  });
+
+  it("dismisses the preview modal when the backdrop is clicked", () => {
+    mockOverviewAndFeed({
+      overview: createOverview(),
+      feed: {
+        items: [createFeedItem()],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      },
+    });
+
+    renderComponent();
+
+    const previewButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Preview");
+    act(() => {
+      previewButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog?.getAttribute("aria-describedby")).toBe("share-preview-description");
+
+    act(() => {
+      dialog?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).not.toContain("Share Preview");
   });
 });

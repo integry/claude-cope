@@ -37,6 +37,74 @@ export interface PaginatedShareFeed {
   offset: number;
 }
 
+export function isTopUser(value: unknown): value is SharesOverview["topUsers"]["allTime"][number] {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const topUser = value as Record<string, unknown>;
+  return typeof topUser.username === "string" && typeof topUser.shareCount === "number";
+}
+
+export function isSharesOverview(value: unknown): value is SharesOverview {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const overview = value as Partial<SharesOverview>;
+  const totals = overview.totals;
+  const topUsers = overview.topUsers;
+
+  return (
+    typeof totals?.lastHour === "number" &&
+    typeof totals.last24Hours === "number" &&
+    typeof totals.last3Days === "number" &&
+    typeof totals.lastWeek === "number" &&
+    typeof totals.lastMonth === "number" &&
+    typeof totals.allTime === "number" &&
+    Array.isArray(topUsers?.lastHour) &&
+    topUsers.lastHour.every(isTopUser) &&
+    Array.isArray(topUsers.last24Hours) &&
+    topUsers.last24Hours.every(isTopUser) &&
+    Array.isArray(topUsers.lastMonth) &&
+    topUsers.lastMonth.every(isTopUser) &&
+    Array.isArray(topUsers.allTime) &&
+    topUsers.allTime.every(isTopUser)
+  );
+}
+
+export function isShareFeedItem(value: unknown): value is ShareFeedItem {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.shareId === "string" &&
+    typeof item.createdAt === "string" &&
+    typeof item.username === "string" &&
+    typeof item.promptPreview === "string" &&
+    typeof item.responsePreview === "string" &&
+    typeof item.imageUrl === "string" &&
+    typeof item.shareUrl === "string"
+  );
+}
+
+export function isPaginatedShareFeed(value: unknown): value is PaginatedShareFeed {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const feed = value as Partial<PaginatedShareFeed>;
+  return (
+    Array.isArray(feed.items) &&
+    feed.items.every(isShareFeedItem) &&
+    typeof feed.total === "number" &&
+    typeof feed.limit === "number" &&
+    typeof feed.offset === "number"
+  );
+}
+
 export const totalCards: Array<{ key: keyof SharesOverview["totals"]; label: string }> = [
   { key: "lastHour", label: "Last Hour" },
   { key: "last24Hours", label: "Last 24 Hours" },
