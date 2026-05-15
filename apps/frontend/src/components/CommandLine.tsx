@@ -1,4 +1,4 @@
-import { ChangeEvent, KeyboardEvent, MouseEvent, PointerEvent, forwardRef, useState } from "react";
+import { ChangeEvent, KeyboardEvent, MouseEvent, PointerEvent, forwardRef, useEffect, useState } from "react";
 import { useIsMobileViewport } from "./useIsMobileViewport";
 
 type CommandLineProps = {
@@ -75,15 +75,22 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     const [isFocused, setIsFocused] = useState(false);
     const [isComposing, setIsComposing] = useState(false);
     const isMobileViewport = useIsMobileViewport();
+    const isInputFocused = isFocused && !disabled;
     const showPlaceholder = !value && !!placeholder;
     const showTabHint = showPlaceholder && !disabled;
     const showMobileSendButton = isMobileViewport && !!value && !disabled;
     const showDecorativeCursor = showPlaceholder && !disabled;
-    const hideNativeCaret = showDecorativeCursor && isFocused;
+    const hideNativeCaret = showDecorativeCursor && isInputFocused;
     const { accessiblePlaceholder, leadingPlaceholderChar, tabHintAriaLabel, tabHintLabel, trailingPlaceholderText } =
       getPlaceholderMetadata(placeholder, assistivePlaceholderHint, disabled, isMobileViewport);
-    const commandRowClassName = getCommandRowClassName(isFocused, disabled);
+    const commandRowClassName = getCommandRowClassName(isInputFocused, disabled);
     const tabHintClassName = getTabHintClassName(isMobileViewport);
+
+    useEffect(() => {
+      if (disabled && isFocused) {
+        setIsFocused(false);
+      }
+    }, [disabled, isFocused]);
 
     const handleCompositionStart = () => {
       setIsComposing(true);
@@ -131,7 +138,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                       {showDecorativeCursor && (
                         <span
                           data-testid="command-line-cursor"
-                          className={`terminal-command-cursor ${isFocused ? "terminal-command-cursor-blinking" : ""}`}
+                          className={`terminal-command-cursor ${isInputFocused ? "terminal-command-cursor-blinking" : ""}`}
                         />
                       )}
                       <span className="terminal-command-placeholder-leading-char-text">{leadingPlaceholderChar}</span>

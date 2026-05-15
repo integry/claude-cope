@@ -147,6 +147,33 @@ describe("CommandLine", () => {
     expect(container.querySelector("[data-testid='command-line-cursor']")?.className).toContain("terminal-command-cursor-blinking");
   });
 
+  it("stops blinking the decorative cursor when the input becomes disabled", () => {
+    const { container, input } = renderCommandLine();
+
+    act(() => {
+      input!.focus();
+    });
+
+    expect(container.querySelector("[data-testid='command-line-cursor']")?.className).toContain("terminal-command-cursor-blinking");
+
+    act(() => {
+      root!.render(
+        createElement(CommandLine, {
+          value: "",
+          disabled: true,
+          onChange: vi.fn(),
+          onKeyDown: vi.fn(),
+          onSubmit: vi.fn(),
+          promptString: "❯ ",
+          placeholder: "Try /help",
+          assistivePlaceholderHint: "Press Tab to accept suggestion.",
+        })
+      );
+    });
+
+    expect(container.querySelector("[data-testid='command-line-cursor']")).toBeNull();
+  });
+
   it("hides the placeholder overlay when the input has content", () => {
     const { container } = renderCommandLine({ value: "/theme matrix" });
 
