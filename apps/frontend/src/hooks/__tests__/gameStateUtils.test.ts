@@ -38,6 +38,20 @@ describe("normalizePersistedMessage", () => {
     expect(stripped).toEqual(message);
   });
 
+  it("preserves plain prefixed system replies instead of upgrading them into semantic tips", () => {
+    const stripped = normalizePersistedMessage({
+      id: 9,
+      role: "system",
+      content: "Tip: Use /help to inspect the command surface.",
+    });
+
+    expect(stripped).toEqual({
+      id: 9,
+      role: "system",
+      content: "Tip: Use /help to inspect the command surface.",
+    });
+  });
+
   it("loads persisted structured chat history intact", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       version: "1.0",

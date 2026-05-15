@@ -1,6 +1,7 @@
 import { GENERATORS, CORPORATE_RANKS, GROWTH_RATE, UPGRADES } from "../game/constants";
 import { BYOK_ENABLED } from "../config";
 import { STORAGE_KEY } from "./storageKey";
+import { getTipRenderData } from "./tipMessageUtils";
 const STATE_VERSION = "1.0";
 
 const USERNAME_ADJECTIVES = [
@@ -73,6 +74,7 @@ export type Message = {
   id?: number;
   role: "user" | "system" | "loading" | "warning" | "error";
   content: string;
+  displayType?: "tip";
   shareClaim?: string;
   buddyType?: string;
   tokensSent?: number;
@@ -85,6 +87,9 @@ export type Message = {
 // Backlog messages persist their structured payload so the responsive renderer
 // survives reloads; this hook exists as the single normalization point if that changes.
 export function normalizePersistedMessage(message: Message): Message {
+  if (message.displayType === "tip" && !getTipRenderData(message).isTip) {
+    return { ...message, displayType: undefined };
+  }
   return message;
 }
 

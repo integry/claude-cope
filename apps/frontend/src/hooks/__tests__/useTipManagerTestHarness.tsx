@@ -40,11 +40,12 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
 export type HarnessHandle = {
   recordConversationRound: () => void;
   recordEnter: () => void;
-  recordValidCommand: (baseCommand?: string, options?: { suppressTip?: boolean }) => void;
+  recordValidCommand: (baseCommand?: string, options?: { suppressTip?: boolean }) => string | null;
   recordMessageWithoutTicket: () => (() => void);
   setBlocked: (value: boolean) => void;
   setOnlineCount: (value: number) => void;
   setGameState: (updater: GameState | ((prev: GameState) => GameState)) => void;
+  setHistory: (updater: Message[] | ((prev: Message[]) => Message[])) => void;
   getHistory: () => Message[];
 };
 
@@ -71,6 +72,7 @@ const Harness = forwardRef<HarnessHandle, HarnessProps>(function Harness({
       });
     },
     setOnlineCount,
+    setHistory,
     setGameState: (updater) => {
       flushSync(() => {
         setGameState(updater);
