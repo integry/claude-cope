@@ -205,6 +205,32 @@ describe("OutputBlock backlog rendering", () => {
     expect(onSlashCommand).toHaveBeenCalledWith("/take PIXEL-77", "execute");
   });
 
+  it("executes /take when tapping anywhere on the mobile backlog row", () => {
+    const onSlashCommand = renderMessage({
+      role: "system",
+      content: "fallback backlog copy",
+      backlogDisplay: {
+        kind: "community-backlog",
+        title: "[ COMMUNITY BACKLOG ]",
+        footer: ["Type /take 1 through /take 1 to claim a ticket."],
+        tickets: [
+          { row: 1, fullId: "BLAME-421", shortId: "BLAME-421", title: "Tap anywhere on this row", status: "OPEN", reward: "1440 TD", isLocked: false },
+        ],
+      },
+    });
+
+    const mobileRow = Array.from(container.querySelectorAll('[role="button"]')).find((element) =>
+      element.textContent?.includes("Tap anywhere on this row"));
+
+    expect(mobileRow).toBeTruthy();
+
+    act(() => {
+      mobileRow?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSlashCommand).toHaveBeenCalledWith("/take BLAME-421", "execute");
+  });
+
   it("shows full ids when tickets share the same first 8 characters", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
