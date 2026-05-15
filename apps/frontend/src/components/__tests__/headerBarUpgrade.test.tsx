@@ -30,6 +30,10 @@ const baseProps = {
   onProfileClick: vi.fn(),
   onHelpClick: vi.fn(),
   onAboutClick: vi.fn(),
+  onStoreClick: vi.fn(),
+  onLeaderboardClick: vi.fn(),
+  onAchievementsClick: vi.fn(),
+  onContactClick: vi.fn(),
   onSlashMenuClick: vi.fn(),
   onUpgradeClick: vi.fn(),
 };
@@ -131,7 +135,7 @@ describe("HeaderBar upgrade CTA visibility", () => {
     expect(quotaLine?.textContent).toContain("Upgrade to Max 429X");
   });
 
-  it("reuses the desktop technical debt and quota rows inside the mobile menu", () => {
+  it("renders the mobile menu as a boxed dashboard with action, system, and footer sections", () => {
     renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
 
     const menuButton = container.querySelector("button[aria-label='Menu']") as HTMLButtonElement | null;
@@ -143,18 +147,29 @@ describe("HeaderBar upgrade CTA visibility", () => {
     });
 
     const menuPanel = container.querySelector("[data-testid='mobile-menu-panel']");
-    const technicalDebtLines = container.querySelectorAll("[data-testid='technical-debt-line']");
-    const statusDetailLines = container.querySelectorAll("[data-testid='status-detail-line']");
+    const statBox = container.querySelector("[data-testid='mobile-menu-stat-box']");
 
     expect(menuPanel).not.toBeNull();
-    expect(menuPanel?.className).toContain("w-[320px]");
-    expect(menuPanel?.className).toContain("rounded-none");
-    expect(technicalDebtLines).toHaveLength(2);
-    expect(statusDetailLines).toHaveLength(2);
-    expect(menuPanel?.textContent).toContain("Technical Debt:");
-    expect(menuPanel?.textContent).toContain("3,880 TD");
-    expect(menuPanel?.textContent).toContain("API Quota:");
-    expect(menuPanel?.textContent).toContain("Upgrade to Max 429X");
+    expect(menuPanel?.className).toContain("w-[360px]");
+    expect(menuPanel?.textContent).toContain("[ ACTIONS ]");
+    expect(menuPanel?.textContent).toContain("[ SYSTEM ]");
+    expect(statBox?.textContent).toContain("+------------------------------------------+");
+    expect(statBox?.textContent).toContain("DEBT: 3,880 TD");
+    expect(statBox?.textContent).toContain("QUOTA:");
+    expect(menuPanel?.textContent).toContain("/store");
+    expect(menuPanel?.textContent).toContain("Buy coping mechanisms");
+    expect(menuPanel?.textContent).toContain("/upgrade");
+    expect(menuPanel?.textContent).toContain("Unlock MAX 429X");
+    expect(menuPanel?.textContent).toContain("/leaderboard");
+    expect(menuPanel?.textContent).toContain("/achievements");
+    expect(menuPanel?.textContent).toContain("/profile");
+    expect(menuPanel?.textContent).toContain("/help");
+    expect(menuPanel?.textContent).toContain("/github");
+    expect(menuPanel?.textContent).toContain("/terms");
+    expect(menuPanel?.textContent).toContain("/privacy");
+    expect(menuPanel?.textContent).toContain("/about");
+    expect(menuPanel?.textContent).toContain("/contact");
+    expect(menuPanel?.textContent).toContain("© 2026 Unchained Development OÜ");
   });
 });
 

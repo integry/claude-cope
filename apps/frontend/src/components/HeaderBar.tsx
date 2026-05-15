@@ -125,6 +125,72 @@ function MobileQuotaLine({ quotaPercent, quotaTooltip }: { quotaPercent: number;
   );
 }
 
+function MobileMenuStatBox({
+  displayTD,
+  activeMultiplier,
+  isBYOK,
+  byokTotalCost,
+  remaining,
+  totalQuota,
+  quotaPercent,
+}: {
+  displayTD: number;
+  activeMultiplier: number;
+  isBYOK: boolean;
+  byokTotalCost?: number;
+  remaining: number;
+  totalQuota: number;
+  quotaPercent: number;
+}) {
+  const totalBlocks = 16;
+  const filledBlocks = Math.round((quotaPercent / 100) * totalBlocks);
+  const emptyBlocks = Math.max(0, totalBlocks - filledBlocks);
+  const debtLine = `| DEBT: ${Math.floor(displayTD).toLocaleString()} TD${activeMultiplier > 1 ? ` (${activeMultiplier.toFixed(1)}x)` : ""}`;
+  const quotaLine = isBYOK
+    ? `| BYOK: ${getByokStatusText(byokTotalCost)}`
+    : `| QUOTA: ${"█".repeat(filledBlocks)}${"░".repeat(emptyBlocks)} ${remaining}/${totalQuota}`;
+
+  return (
+    <div data-testid="mobile-menu-stat-box" className="border border-gray-700 bg-black/20 px-3 py-2 font-mono text-xs text-gray-200">
+      <div className="text-gray-500">+------------------------------------------+</div>
+      <div className="truncate">{debtLine}</div>
+      <div className="truncate">{quotaLine}</div>
+      <div className="text-gray-500">+------------------------------------------+</div>
+    </div>
+  );
+}
+
+function MobileMenuLink({
+  command,
+  description,
+  onClick,
+}: {
+  command: string;
+  description: string;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      <span className="font-mono text-gray-200">{command}</span>
+      <span className="min-w-0 flex-1 text-right text-xs text-gray-500">{description}</span>
+    </>
+  );
+
+  if (!onClick) {
+    return (
+      <span className="flex items-center gap-3 py-1.5">
+        {content}
+      </span>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 py-1.5 text-left hover:text-white">
+      {content}
+    </button>
+  );
+}
+
 function DesktopIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, onProfileClick }: { username: string; rank: string; isBYOK: boolean; isMax: boolean; byokTotalCost?: number; onProfileClick: () => void }) {
   return (
     <div data-testid="desktop-identity-block" className="hidden sm:flex flex-col justify-center min-w-0 gap-1 leading-snug">
@@ -197,7 +263,7 @@ function DesktopStatusBlock({
   );
 }
 
-function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isMax, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onSlashMenuClick, onUpgradeClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isMax: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onSlashMenuClick?: () => void; onUpgradeClick?: () => void }) {
+function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isMax, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onStoreClick, onLeaderboardClick, onAchievementsClick, onContactClick, onSlashMenuClick, onUpgradeClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isMax: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onStoreClick: () => void; onLeaderboardClick: () => void; onAchievementsClick: () => void; onContactClick: () => void; onSlashMenuClick?: () => void; onUpgradeClick?: () => void }) {
   const displayTD = useAnimatedCounter(currentTD, 2660);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -242,7 +308,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
       </div>
       {/* Hamburger menu — mobile only */}
       <div ref={menuRef} className="sm:hidden relative flex-shrink-0 col-start-3 row-start-1 self-end justify-self-end">
-        <button onClick={() => setMenuOpen((v) => !v)} className="rounded-none px-3 py-1.5 text-gray-400 transition-colors hover:bg-gray-800/70 hover:text-white" aria-label="Menu">
+        <button type="button" onClick={() => setMenuOpen((v) => !v)} className="rounded-none px-3 py-1.5 text-gray-400 transition-colors hover:bg-gray-800/70 hover:text-white" aria-label="Menu">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             {menuOpen
               ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -250,32 +316,49 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           </svg>
         </button>
         {menuOpen && (
-          <div data-testid="mobile-menu-panel" className="absolute right-0 top-full z-20 mt-2 w-[320px] max-w-[calc(100vw-1rem)] overflow-hidden rounded-none border border-gray-700 bg-gray-900 py-1 text-sm shadow-lg">
-            <div className="px-4 py-2 border-b border-gray-700">
-              <img src="/media/logo-400-transparent.png" alt="Claude Cope" className="max-h-8 w-auto" />
-            </div>
-            <div className="px-4 py-3 border-b border-gray-700 flex flex-col gap-2">
-              <TechnicalDebtLine displayTD={displayTD} activeMultiplier={activeMultiplier} />
-              <StatusDetailLine
+          <div data-testid="mobile-menu-panel" className="absolute right-0 top-full z-20 mt-2 flex min-h-[28rem] max-h-[calc(100dvh-5rem)] w-[360px] max-w-[calc(100vw-1rem)] flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-lg">
+            <div className="flex flex-col gap-4">
+              <MobileMenuStatBox
+                displayTD={displayTD}
+                activeMultiplier={activeMultiplier}
                 isBYOK={isBYOK}
                 byokTotalCost={byokTotalCost}
-                quotaPercent={quotaPercent}
                 remaining={remaining}
                 totalQuota={totalQuota}
-                quotaTooltip={quotaTooltip}
-                isMax={isMax}
-                onUpgradeClick={onUpgradeClick}
+                quotaPercent={quotaPercent}
               />
+              <div>
+                <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ ACTIONS ]</div>
+                <div className="flex flex-col">
+                  <MobileMenuLink command="/store" description="Buy coping mechanisms" onClick={() => { setMenuOpen(false); onStoreClick(); }} />
+                  <MobileMenuLink command="/upgrade" description="Unlock MAX 429X" onClick={() => { setMenuOpen(false); onUpgradeClick?.(); }} />
+                  <MobileMenuLink command="/leaderboard" description="The Hall of Blame" onClick={() => { setMenuOpen(false); onLeaderboardClick(); }} />
+                  <MobileMenuLink command="/achievements" description="Trophies for bad choices" onClick={() => { setMenuOpen(false); onAchievementsClick(); }} />
+                </div>
+              </div>
+              <div>
+                <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ SYSTEM ]</div>
+                <div className="flex flex-col">
+                  <MobileMenuLink command="/profile" description="Your miserable stats" onClick={() => { setMenuOpen(false); onProfileClick(); }} />
+                  <MobileMenuLink command="/help" description="Available commands" onClick={() => { setMenuOpen(false); onHelpClick(); }} />
+                  <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 py-1.5 hover:text-white">
+                    <span className="font-mono text-gray-200">/github</span>
+                    <span className="min-w-0 flex-1 text-right text-xs text-gray-500">Source code</span>
+                  </a>
+                </div>
+              </div>
             </div>
-            <button onClick={() => { setMenuOpen(false); onProfileClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/profile</button>
-            <button onClick={() => { setMenuOpen(false); onHelpClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/help</button>
-            <button onClick={() => { setMenuOpen(false); onAboutClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/about</button>
-            <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/github</a>
-            <a href="https://github.com/integry/claude-cope/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/privacy</a>
-            <a href="https://github.com/integry/claude-cope/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/terms</a>
-            <div className="px-4 py-2">
-              <button onClick={() => { setMenuOpen(false); onSlashMenuClick?.(); }} className="text-xs text-gray-400 hover:text-gray-200 cursor-pointer text-left">Type <span className="text-green-400">/</span> in terminal for commands</button>
-              <p className="text-xs text-gray-500 mt-1">{"© 2026 Unchained Development OÜ && git blame --author=\"Rinalds Uzkalns\" | made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
+            <div className="mt-auto border-t border-gray-700 pt-3 text-xs text-gray-500">
+              <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono">
+                <a href="https://github.com/integry/claude-cope/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">/terms</a>
+                <a href="https://github.com/integry/claude-cope/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">/privacy</a>
+                <button type="button" onClick={() => { setMenuOpen(false); onAboutClick(); }} className="hover:text-gray-300">/about</button>
+                <button type="button" onClick={() => { setMenuOpen(false); onContactClick(); }} className="hover:text-gray-300">/contact</button>
+              </div>
+              <p className="mt-1">© 2026 Unchained Development OÜ</p>
+              <p>git blame ...</p>
+              <p>made with <a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">propr.dev</a></p>
+              <button type="button" onClick={() => { setMenuOpen(false); onSlashMenuClick?.(); }} className="mt-2 text-left hover:text-gray-300">Type <span className="text-green-400">/</span> in terminal for commands</button>
             </div>
           </div>
         )}

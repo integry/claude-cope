@@ -239,6 +239,22 @@ export function TerminalView({
             closeAllOverlaysPreservingNag();
             setShowAbout(true);
           }}
+          onStoreClick={() => {
+            closeAllOverlaysPreservingNag();
+            setShowStore(true);
+          }}
+          onLeaderboardClick={() => {
+            closeAllOverlaysPreservingNag();
+            setShowLeaderboard(true);
+          }}
+          onAchievementsClick={() => {
+            closeAllOverlaysPreservingNag();
+            setShowAchievements(true);
+          }}
+          onContactClick={() => {
+            closeAllOverlaysPreservingNag();
+            setShowContact(true);
+          }}
           onSlashMenuClick={() => {
             setInputValue("/");
             setSlashQuery("/");
