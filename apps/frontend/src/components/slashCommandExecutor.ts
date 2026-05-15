@@ -5,7 +5,7 @@ import { parseBaseCommand } from "../parseBaseCommand";
 import { PING_COST, THEMES, PRO_GATED_COMMANDS } from "../game/constants";
 import { COPE_MODELS, DEFAULT_COPE_MODEL_ID, migrateLegacyCopeModelId, resolveCopeModel } from "@claude-cope/shared/models";
 import type { ServerProfile } from "@claude-cope/shared/profile";
-import { API_BASE, BYOK_ENABLED, PRO_QUOTA_LIMIT } from "../config";
+import { API_BASE, BYOK_ENABLED, GITHUB_ISSUES_URL, PRO_QUOTA_LIMIT } from "../config";
 import { applyServerProfile } from "../hooks/profileSync";
 import { applyPaidEntitlementAuthFailure } from "../hooks/themePurchaseState";
 import { isPaidUser } from "../hooks/gameStateUtils";
@@ -1022,7 +1022,12 @@ function handleExtendedCommand(command: string, ctx: SlashCommandContext, reply:
   }
 
   if (command === "/feedback" || command === "/bug") {
-    reply({ role: "system", content: "[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day." });
+    reply({
+      role: "system",
+      content: `[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day.
+
+[INFO] Real issue? Escalate to [ GITHUB ISSUES ](${GITHUB_ISSUES_URL}).`,
+    });
     return true;
   }
 
