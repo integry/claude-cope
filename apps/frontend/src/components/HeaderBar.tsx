@@ -85,8 +85,13 @@ function MobileMenuStatusBlock({ displayTD, activeMultiplier, isBYOK, byokTotalC
 }
 
 function MobileMenuLink({ command, description, onClick }: { command: string; description: string; onClick?: () => void }) {
-  const content = <><span className="font-mono text-gray-200">{command}</span><span className="min-w-0 flex-1 text-right text-xs text-gray-500">{description}</span></>;
-  return onClick ? <button type="button" onClick={onClick} className="flex w-full items-center gap-3 py-1.5 text-left hover:text-white">{content}</button> : <span className="flex items-center gap-3 py-1.5">{content}</span>;
+  const content = <>
+    <span className="w-[120px] font-mono text-gray-200">{command}</span>
+    <span className="min-w-0 text-left text-xs text-gray-500">{description}</span>
+  </>;
+  return onClick
+    ? <button type="button" onClick={onClick} className="grid w-full grid-cols-[120px_minmax(0,1fr)] items-start gap-x-3 py-1.5 text-left hover:text-white">{content}</button>
+    : <span className="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-x-3 py-1.5">{content}</span>;
 }
 
 function MobileMenuPanel({
@@ -109,12 +114,12 @@ function MobileMenuPanel({
     <div data-testid="mobile-menu-panel" className="fixed left-2 right-2 z-20 flex min-h-[28rem] flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-lg sm:hidden" style={{ top: `${mobileMenuPosition.top}px`, maxHeight: `${mobileMenuPosition.maxHeight}px` }}>
       <div className="flex flex-col gap-4">
         <MobileMenuStatusBlock displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} byokTotalCost={byokTotalCost} remaining={remaining} totalQuota={totalQuota} quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} />
-        <div><div className="mb-1 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ ACTIONS ]</div><div className="flex flex-col">{actionLinks.map((link) => <MobileMenuLink key={link.command} {...link} />)}</div></div>
+        <div><div className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ ACTIONS ]</div><div className="flex flex-col">{actionLinks.map((link) => <MobileMenuLink key={link.command} {...link} />)}</div></div>
         <div>
-          <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ SYSTEM ]</div>
+          <div className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ SYSTEM ]</div>
           <div className="flex flex-col">
             {systemLinks.map((link) => <MobileMenuLink key={link.command} {...link} />)}
-            <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 py-1.5 hover:text-white"><span className="font-mono text-gray-200">/github</span><span className="min-w-0 flex-1 text-right text-xs text-gray-500">Source code</span></a>
+            <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-x-3 py-1.5 hover:text-white"><span className="w-[120px] font-mono text-gray-200">/github</span><span className="min-w-0 text-left text-xs text-gray-500">Source code</span></a>
           </div>
         </div>
       </div>

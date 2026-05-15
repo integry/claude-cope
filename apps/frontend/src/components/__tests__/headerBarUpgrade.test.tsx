@@ -102,6 +102,19 @@ function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | 
   expect(proprLink).not.toBeNull();
   expect(proprLink?.textContent).toBe("propr.dev");
   expect(proprLink?.className).toContain("text-gray-400");
+
+  const actionsHeading = Array.from(menuPanel?.querySelectorAll("div") ?? []).find((element) => element.textContent === "[ ACTIONS ]");
+  const systemHeading = Array.from(menuPanel?.querySelectorAll("div") ?? []).find((element) => element.textContent === "[ SYSTEM ]");
+  expect(actionsHeading?.className).toContain("mb-3");
+  expect(systemHeading?.className).toContain("mb-3");
+
+  const storeButton = Array.from(menuPanel?.querySelectorAll("button") ?? []).find((element) => element.textContent?.includes("/store") && element.textContent?.includes("Buy coping mechanisms"));
+  expect(storeButton?.className).toContain("grid-cols-[120px_minmax(0,1fr)]");
+  expect(storeButton?.className).not.toContain("flex");
+
+  const githubLink = menuPanel?.querySelector("a[href='https://github.com/integry/claude-cope']") as HTMLAnchorElement | null;
+  expect(githubLink?.className).toContain("grid-cols-[120px_minmax(0,1fr)]");
+  expect(githubLink?.textContent).toContain("Source code");
 }
 
 function expectDesktopStackedIdentityAndStatus() {
