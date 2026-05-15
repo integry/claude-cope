@@ -51,6 +51,12 @@ function getCommandRowClassName(isFocused: boolean, disabled: boolean | undefine
   return `terminal-command-row flex items-center gap-1.5 ${isFocused && !disabled ? "terminal-command-row-active" : ""} ${disabled ? "terminal-command-row-disabled" : ""}`;
 }
 
+function getTabHintClassName(isMobileViewport: boolean): string {
+  return isMobileViewport
+    ? "terminal-command-tab-hint pointer-events-auto relative z-20 ml-3 -my-[0.85rem] -mr-[0.9rem] flex min-w-[5.75rem] self-stretch items-center justify-center px-4 pt-[0.1rem] pb-0"
+    : "terminal-command-tab-hint shrink-0 pointer-events-auto relative z-20";
+}
+
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
   function CommandLine(
     {
@@ -77,6 +83,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     const { accessiblePlaceholder, leadingPlaceholderChar, tabHintAriaLabel, tabHintLabel, trailingPlaceholderText } =
       getPlaceholderMetadata(placeholder, assistivePlaceholderHint, disabled, isMobileViewport);
     const commandRowClassName = getCommandRowClassName(isFocused, disabled);
+    const tabHintClassName = getTabHintClassName(isMobileViewport);
 
     const handleCompositionStart = () => {
       setIsComposing(true);
@@ -116,7 +123,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                   data-testid="command-line-placeholder"
                   className="terminal-command-placeholder pointer-events-none absolute inset-0 flex items-center gap-2 overflow-hidden whitespace-nowrap"
                 >
-                  <span data-testid="command-line-suggested-reply" className="min-w-0 truncate">
+                  <span data-testid="command-line-suggested-reply" className="flex-1 min-w-0 truncate">
                     <span
                       data-testid="command-line-suggested-reply-leading-char"
                       className="terminal-command-placeholder-leading-char"
@@ -130,7 +137,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                     <button
                       type="button"
                       data-testid="command-line-tab-hint"
-                      className="terminal-command-tab-hint shrink-0 pointer-events-auto relative z-20"
+                      className={tabHintClassName}
                       onMouseDown={keepInputFocus}
                       onPointerDown={keepInputFocus}
                       onClick={handlePlaceholderAccept}

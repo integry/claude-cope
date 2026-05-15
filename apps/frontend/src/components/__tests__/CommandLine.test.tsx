@@ -100,6 +100,8 @@ describe("CommandLine", () => {
     const hint = container.querySelector("[data-testid='command-line-tab-hint']") as HTMLButtonElement | null;
 
     expect(hint?.textContent).toBe("[Tap]");
+    expect(hint?.className).toContain("self-stretch");
+    expect(hint?.className).toContain("min-w-[5.75rem]");
     expect(container.querySelector("input")?.getAttribute("placeholder")).toBe("Try /help. Press Tap to accept suggestion.");
 
     act(() => {
