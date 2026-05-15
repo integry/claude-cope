@@ -22,6 +22,42 @@ interface SharesOverview {
   };
 }
 
+function isTopUser(value: unknown): value is TopUser {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof value.username === "string" &&
+    typeof value.shareCount === "number"
+  );
+}
+
+function isSharesOverview(value: unknown): value is SharesOverview {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const overview = value as Partial<SharesOverview>;
+  const totals = overview.totals;
+  const topUsers = overview.topUsers;
+
+  return (
+    typeof totals?.lastHour === "number" &&
+    typeof totals.last24Hours === "number" &&
+    typeof totals.last3Days === "number" &&
+    typeof totals.lastWeek === "number" &&
+    typeof totals.lastMonth === "number" &&
+    typeof totals.allTime === "number" &&
+    Array.isArray(topUsers?.lastHour) &&
+    topUsers.lastHour.every(isTopUser) &&
+    Array.isArray(topUsers.last24Hours) &&
+    topUsers.last24Hours.every(isTopUser) &&
+    Array.isArray(topUsers.lastMonth) &&
+    topUsers.lastMonth.every(isTopUser) &&
+    Array.isArray(topUsers.allTime) &&
+    topUsers.allTime.every(isTopUser)
+  );
+}
+
 const totalCards: Array<{ key: keyof SharesOverview["totals"]; label: string }> = [
   { key: "lastHour", label: "Last Hour" },
   { key: "last24Hours", label: "Last 24 Hours" },
@@ -63,8 +99,16 @@ export default function SharedImages() {
     );
   }
 
-  const totals = data?.totals;
-  const topUsers = data?.topUsers;
+  if (!isSharesOverview(data)) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold">Shared Images</h1>
+        <p className="mt-4 text-red-600">Failed to load shared image analytics.</p>
+      </div>
+    );
+  }
+
+  const { totals, topUsers } = data;
 
   return (
     <div className="space-y-8">
@@ -92,7 +136,7 @@ export default function SharedImages() {
             >
               <p className="text-sm font-medium text-gray-500">{card.label}</p>
               <p className="mt-2 text-3xl font-semibold text-gray-900">
-                {formatCount(totals?.[card.key] ?? 0)}
+                {formatCount(totals[card.key])}
               </p>
             </div>
           ))}
@@ -118,9 +162,9 @@ export default function SharedImages() {
                 </h3>
               </div>
               <div className="px-6 py-3">
-                {(topUsers?.[section.key] ?? []).length > 0 ? (
+                {topUsers[section.key].length > 0 ? (
                   <ol className="divide-y divide-gray-100">
-                    {(topUsers?.[section.key] ?? []).map((user, index) => (
+                    {topUsers[section.key].map((user, index) => (
                       <li key={`${section.key}-${user.username}`} className="flex items-center justify-between py-3">
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-gray-900">

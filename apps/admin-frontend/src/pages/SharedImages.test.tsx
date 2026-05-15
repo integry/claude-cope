@@ -50,6 +50,7 @@ describe("SharedImages", () => {
 
     renderComponent();
 
+    expect(useAdminApiMock).toHaveBeenCalledWith("/api/shares/overview");
     expect(container.textContent).toContain("Shared Images");
     expect(container.textContent).toContain("Loading...");
   });
@@ -63,7 +64,22 @@ describe("SharedImages", () => {
 
     renderComponent();
 
+    expect(useAdminApiMock).toHaveBeenCalledWith("/api/shares/overview");
     expect(container.textContent).toContain("Failed to load shared image analytics.");
+  });
+
+  it("renders an error state when analytics data is missing after loading", () => {
+    useAdminApiMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: null,
+    });
+
+    renderComponent();
+
+    expect(useAdminApiMock).toHaveBeenCalledWith("/api/shares/overview");
+    expect(container.textContent).toContain("Failed to load shared image analytics.");
+    expect(container.textContent).not.toContain("No shared images in this time window yet.");
   });
 
   it("renders overview totals, leaderboards, and reserved activity space", () => {
@@ -90,6 +106,7 @@ describe("SharedImages", () => {
 
     renderComponent();
 
+    expect(useAdminApiMock).toHaveBeenCalledWith("/api/shares/overview");
     expect(container.textContent).toContain("Last Hour");
     expect(container.textContent).toContain("Last 24 Hours");
     expect(container.textContent).toContain("Last 3 Days");
