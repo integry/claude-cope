@@ -273,14 +273,13 @@ describe("HeaderBar upgrade CTA visibility", () => {
     openMobileMenu();
 
     const expandedLogo = queryByTestId("mobile-header-logo-expanded");
-    const mobileHeaderContent = queryByTestId("mobile-header-content");
-    const mobileHeaderSpacer = queryByTestId("mobile-header-open-spacer");
     const headerRoot = queryByTestId("header-bar-root");
     expect(expandedLogo?.tagName).toBe("BUTTON");
     expect(expandedLogo?.querySelector("img")?.getAttribute("src")).toBe("/media/logo-400-transparent.png");
     expect(expandedLogo?.className).not.toContain("absolute");
-    expect(mobileHeaderContent?.className).toContain("grid-rows-[auto_auto]");
-    expect(mobileHeaderSpacer?.textContent).toBe("\u00a0");
+    expect(expandedLogo?.className).toContain("col-end-3");
+    expect(expandedLogo?.className).toContain("row-span-2");
+    expect(headerRoot?.className).toContain("grid-rows-[auto_auto]");
     expect(headerRoot?.className).not.toContain("h-[56px]");
     expect(queryByTestId("mobile-identity-block")).toBeNull();
     expect(queryByTestId("mobile-rank-line")).toBeNull();
