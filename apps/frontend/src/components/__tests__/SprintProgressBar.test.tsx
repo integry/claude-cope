@@ -8,6 +8,7 @@ import SprintProgressBar from "../SprintProgressBar";
 describe("SprintProgressBar", () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
+  let mobileViewport = false;
   let frameTime = 0;
   let rafId = 0;
   const rafTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -33,6 +34,21 @@ describe("SprintProgressBar", () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === "(max-width: 767px)" ? mobileViewport : false,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }),
+    });
+
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       const id = ++rafId;
       const timer = setTimeout(() => {
@@ -55,6 +71,7 @@ describe("SprintProgressBar", () => {
   afterEach(() => {
     act(() => root?.unmount());
     container?.remove();
+    mobileViewport = false;
     rafTimers.clear();
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -65,6 +82,16 @@ describe("SprintProgressBar", () => {
 
     expect(container.textContent).toContain("[SPRINT] WAITING FOR DESTRUCTION (Current Earning Rate: 1x)");
     expect(container.textContent).toContain("[-----------------] Open the /backlog. Official tasks inflict 10x more Technical Debt.");
+  });
+
+  it("renders the compressed one-line idle copy on mobile", () => {
+    mobileViewport = true;
+
+    renderBar({ onSlashCommand: vi.fn() });
+
+    expect(container.textContent).toContain("[IDLE]Earning 1x. Run /backlog for 10x TD multiplier.");
+    expect(container.textContent).not.toContain("WAITING FOR DESTRUCTION");
+    expect(container.textContent).not.toContain("[-----------------]");
   });
 
   it("makes /backlog clickable in the idle copy", () => {

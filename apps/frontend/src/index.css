@@ -264,9 +264,27 @@ body {
   min-width: 0;
 }
 
+.sprint-idle-mobile-copy {
+  min-width: 0;
+}
+
 @media (max-width: 768px) {
   .sprint-title {
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sprint-idle-mobile {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .sprint-idle-mobile-copy {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
