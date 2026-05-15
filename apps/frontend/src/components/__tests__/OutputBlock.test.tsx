@@ -103,6 +103,28 @@ describe("OutputBlock", () => {
     expect(container.textContent).toContain("Remember the backlog.");
   });
 
+  it("wraps long user input chips without allowing horizontal overflow styling", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <OutputBlock
+          message={{ role: "user", content: "averylongtokenwithoutnaturalbreakpoints".repeat(8) }}
+          promptString="> "
+          username=""
+        />,
+      );
+    });
+
+    const userChip = container.firstElementChild?.firstElementChild;
+    expect(userChip?.className).toContain("max-w-full");
+    expect(userChip?.className).toContain("whitespace-pre-wrap");
+    expect(userChip?.className).toContain("break-words");
+    expect(userChip?.className).toContain("[overflow-wrap:anywhere]");
+  });
+
   it("keeps the share button on a system reply even when a loading message sits between the user and the answer", () => {
     container = document.createElement("div");
     document.body.appendChild(container);

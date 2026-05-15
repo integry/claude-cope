@@ -28,17 +28,13 @@ export function TerminalFooter({ closeAllOverlays, buddyType, buddyIsShiny, setS
         </div>
       </footer>
       <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 backdrop-blur-sm font-mono sm:hidden" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
-        <div className="text-left">
-          {buddyType ? (
-            <BuddyWatcherStatus
-              type={buddyType}
-              isShiny={buddyIsShiny}
-              className="terminal-buddy-status-left w-full text-[11px] leading-tight"
-            />
-          ) : null}
-          <span className="leading-tight text-[10px] text-gray-500">
-            Parody project, no Anthropic affiliation... yet.
-          </span>
+        <div className={`text-left ${buddyType ? "terminal-footer-mobile-with-buddy" : ""}`}>
+          {buddyType ? <BuddyWatcherStatus type={buddyType} isShiny={buddyIsShiny} className="terminal-buddy-status-left terminal-footer-mobile-buddy text-[11px] leading-tight" /> : null}
+          <div className={`leading-tight text-[10px] text-gray-500 ${buddyType ? "terminal-footer-mobile-copy" : ""}`}>
+            <span>
+              Parody project, no Anthropic affiliation... yet.
+            </span>
+          </div>
         </div>
       </footer>
     </>

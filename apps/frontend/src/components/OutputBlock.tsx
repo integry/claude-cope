@@ -329,9 +329,9 @@ function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, 
   return (
     <div className={`group ${getContainerClass(message, isNew)}`}>
       {message.role === "user" && (
-        <div className="inline-block bg-gray-200 text-gray-900 px-2 py-1 sm:px-3 sm:py-1.5 font-bold">
-          <span className="text-gray-500 mr-1">{promptString}</span>
-          {message.content}
+        <div className="inline-block max-w-full bg-gray-200 text-gray-900 px-2 py-1 sm:px-3 sm:py-1.5 font-bold whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          <span className="text-gray-500 mr-1 whitespace-pre">{promptString}</span>
+          <span>{message.content}</span>
         </div>
       )}
       {message.role === "loading" && !isAwaitingResponse && <Spinner />}
