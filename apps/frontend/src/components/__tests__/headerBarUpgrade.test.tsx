@@ -130,6 +130,32 @@ describe("HeaderBar upgrade CTA visibility", () => {
     expect(quotaLine?.textContent).toContain("API Quota:");
     expect(quotaLine?.textContent).toContain("Upgrade to Max 429X");
   });
+
+  it("reuses the desktop technical debt and quota rows inside the mobile menu", () => {
+    renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
+
+    const menuButton = container.querySelector("button[aria-label='Menu']") as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    expect(menuButton?.className).toContain("rounded-none");
+
+    act(() => {
+      menuButton?.click();
+    });
+
+    const menuPanel = container.querySelector("[data-testid='mobile-menu-panel']");
+    const technicalDebtLines = container.querySelectorAll("[data-testid='technical-debt-line']");
+    const statusDetailLines = container.querySelectorAll("[data-testid='status-detail-line']");
+
+    expect(menuPanel).not.toBeNull();
+    expect(menuPanel?.className).toContain("w-[320px]");
+    expect(menuPanel?.className).toContain("rounded-none");
+    expect(technicalDebtLines).toHaveLength(2);
+    expect(statusDetailLines).toHaveLength(2);
+    expect(menuPanel?.textContent).toContain("Technical Debt:");
+    expect(menuPanel?.textContent).toContain("3,880 TD");
+    expect(menuPanel?.textContent).toContain("API Quota:");
+    expect(menuPanel?.textContent).toContain("Upgrade to Max 429X");
+  });
 });
 
 describe("HeaderBar Max badge visibility", () => {

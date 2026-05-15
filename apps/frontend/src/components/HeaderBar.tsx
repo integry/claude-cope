@@ -66,6 +66,51 @@ function DesktopQuotaBar({ quotaPercent, remaining, totalQuota, quotaTooltip }: 
   );
 }
 
+function TechnicalDebtLine({ displayTD, activeMultiplier }: { displayTD: number; activeMultiplier: number }) {
+  return (
+    <div data-testid="technical-debt-line" className="whitespace-nowrap flex items-center gap-1">
+      <span className="text-gray-500 text-xs">Technical Debt:</span>
+      <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD</span>
+      {activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}
+    </div>
+  );
+}
+
+function StatusDetailLine({
+  isBYOK,
+  byokTotalCost,
+  quotaPercent,
+  remaining,
+  totalQuota,
+  quotaTooltip,
+  isMax,
+  onUpgradeClick,
+}: {
+  isBYOK: boolean;
+  byokTotalCost?: number;
+  quotaPercent: number;
+  remaining: number;
+  totalQuota: number;
+  quotaTooltip: string;
+  isMax: boolean;
+  onUpgradeClick?: () => void;
+}) {
+  return (
+    <div data-testid="status-detail-line" className="whitespace-nowrap flex items-center gap-2 max-w-full">
+      {isBYOK ? (
+        <span className="text-xs text-yellow-400 truncate" title={getByokStatusText(byokTotalCost)}>
+          {getByokStatusText(byokTotalCost)}
+        </span>
+      ) : (
+        <>
+          <DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} />
+          {!isMax && onUpgradeClick && <button onClick={onUpgradeClick} className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 rounded whitespace-nowrap hover:bg-yellow-500/30 cursor-pointer">Upgrade to Max 429X</button>}
+        </>
+      )}
+    </div>
+  );
+}
+
 function MobileQuotaLine({ quotaPercent, quotaTooltip }: { quotaPercent: number; quotaTooltip: string }) {
   const [tipOpen, setTipOpen] = useState(false);
   return (
@@ -133,22 +178,20 @@ function DesktopStatusBlock({
 }) {
   return (
     <div data-testid="desktop-status-block" className="hidden sm:flex flex-col items-end gap-1 ml-auto flex-shrink-0 justify-center px-2 sm:px-0 leading-snug">
-      <div data-testid="desktop-technical-debt-line" className="whitespace-nowrap flex items-center gap-1">
-        <span className="text-gray-500 text-xs">Technical Debt:</span>
-        <span className="text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD</span>
-        {activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}
+      <div data-testid="desktop-technical-debt-line">
+        <TechnicalDebtLine displayTD={displayTD} activeMultiplier={activeMultiplier} />
       </div>
-      <div data-testid="desktop-status-detail-line" className="whitespace-nowrap flex items-center gap-2 max-w-full">
-        {isBYOK ? (
-          <span className="text-xs text-yellow-400 truncate" title={getByokStatusText(byokTotalCost)}>
-            {getByokStatusText(byokTotalCost)}
-          </span>
-        ) : (
-          <>
-          <DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} />
-          {!isMax && onUpgradeClick && <button onClick={onUpgradeClick} className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 rounded whitespace-nowrap hover:bg-yellow-500/30 cursor-pointer">Upgrade to Max 429X</button>}
-          </>
-        )}
+      <div data-testid="desktop-status-detail-line">
+        <StatusDetailLine
+          isBYOK={isBYOK}
+          byokTotalCost={byokTotalCost}
+          quotaPercent={quotaPercent}
+          remaining={remaining}
+          totalQuota={totalQuota}
+          quotaTooltip={quotaTooltip}
+          isMax={isMax}
+          onUpgradeClick={onUpgradeClick}
+        />
       </div>
     </div>
   );
@@ -199,7 +242,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
       </div>
       {/* Hamburger menu — mobile only */}
       <div ref={menuRef} className="sm:hidden relative flex-shrink-0 col-start-3 row-start-1 self-end justify-self-end">
-        <button onClick={() => setMenuOpen((v) => !v)} className="rounded-lg px-3 py-1.5 text-gray-400 transition-colors hover:bg-gray-800/70 hover:text-white" aria-label="Menu">
+        <button onClick={() => setMenuOpen((v) => !v)} className="rounded-none px-3 py-1.5 text-gray-400 transition-colors hover:bg-gray-800/70 hover:text-white" aria-label="Menu">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             {menuOpen
               ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -207,15 +250,23 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           </svg>
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-full z-20 mt-2 min-w-[240px] overflow-hidden rounded-2xl border border-gray-700 bg-gray-900 py-1 text-sm shadow-lg">
+          <div data-testid="mobile-menu-panel" className="absolute right-0 top-full z-20 mt-2 w-[320px] max-w-[calc(100vw-1rem)] overflow-hidden rounded-none border border-gray-700 bg-gray-900 py-1 text-sm shadow-lg">
             <div className="px-4 py-2 border-b border-gray-700">
               <img src="/media/logo-400-transparent.png" alt="Claude Cope" className="max-h-8 w-auto" />
             </div>
-            {!isBYOK && (
-              <div className={`px-4 py-2 border-b border-gray-700 font-mono text-xs ${getQuotaTextColor(quotaPercent)}`}>
-                API Quota: {Math.round(quotaPercent)}% — {used}/{totalQuota} used, {remaining} left
-              </div>
-            )}
+            <div className="px-4 py-3 border-b border-gray-700 flex flex-col gap-2">
+              <TechnicalDebtLine displayTD={displayTD} activeMultiplier={activeMultiplier} />
+              <StatusDetailLine
+                isBYOK={isBYOK}
+                byokTotalCost={byokTotalCost}
+                quotaPercent={quotaPercent}
+                remaining={remaining}
+                totalQuota={totalQuota}
+                quotaTooltip={quotaTooltip}
+                isMax={isMax}
+                onUpgradeClick={onUpgradeClick}
+              />
+            </div>
             <button onClick={() => { setMenuOpen(false); onProfileClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/profile</button>
             <button onClick={() => { setMenuOpen(false); onHelpClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/help</button>
             <button onClick={() => { setMenuOpen(false); onAboutClick(); }} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">/about</button>
