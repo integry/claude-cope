@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BACKLOG_REMINDER_TIPS } from "../../game/tips";
+import { BACKLOG_REMINDER_TIPS, CONTEXTUAL_TIPS, MILESTONE_TIPS } from "../../game/tips";
 import {
   remountHarness,
   setupHarness,
@@ -87,6 +87,7 @@ describe("useTipManager backlog reminders", () => {
 
   it("restores backlog reminder eligibility when a pending prompt rollback removes the tip", () => {
     act(() => {
+      harness.ref.current?.setBlocked(true);
       for (let i = 0; i < 6; i++) {
         const nextRollback = harness.ref.current?.recordMessageWithoutTicket();
         if (nextRollback) {
@@ -95,16 +96,42 @@ describe("useTipManager backlog reminders", () => {
       }
     });
 
-    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([BACKLOG_REMINDER_TIPS[0]?.text]);
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
 
     act(() => {
       rollback?.();
+      harness.ref.current?.setBlocked(false);
+      harness.ref.current?.recordConversationRound();
       for (let i = 0; i < 6; i++) {
         harness.ref.current?.recordMessageWithoutTicket();
       }
     });
 
     expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([BACKLOG_REMINDER_TIPS[0]?.text]);
+  });
+
+  it("only removes the managed tip entry during rollback when other system messages share the same text", () => {
+    act(() => {
+      harness.ref.current?.setHistory([
+        { role: "system", content: BACKLOG_REMINDER_TIPS[0]!.text },
+      ]);
+      for (let i = 0; i < 6; i++) {
+        const nextRollback = harness.ref.current?.recordMessageWithoutTicket();
+        if (nextRollback) {
+          rollback = nextRollback;
+        }
+      }
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(2);
+
+    act(() => {
+      rollback?.();
+    });
+
+    expect(harness.ref.current?.getHistory()).toEqual([
+      { role: "system", content: BACKLOG_REMINDER_TIPS[0]!.text },
+    ]);
   });
 
   it("resets the backlog reminder streak when an active ticket is opened", () => {
@@ -158,5 +185,113 @@ describe("useTipManager backlog reminders", () => {
       BACKLOG_REMINDER_TIPS[0]?.text,
       BACKLOG_REMINDER_TIPS[1]?.text,
     ]);
+  });
+
+  it("defers blocked backlog reminders until after a completed conversation round", () => {
+    act(() => {
+      harness.ref.current?.setBlocked(true);
+      for (let i = 0; i < 6; i++) {
+        harness.ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.setBlocked(false);
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.recordConversationRound();
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([BACKLOG_REMINDER_TIPS[0]?.text]);
+  });
+
+  it("drops a deferred backlog reminder when an active ticket becomes relevant before the round commits", () => {
+    act(() => {
+      harness.ref.current?.setBlocked(true);
+      for (let i = 0; i < 6; i++) {
+        harness.ref.current?.recordMessageWithoutTicket();
+      }
+      harness.ref.current?.setGameState((prev) => ({
+        ...prev,
+        activeTicket: { id: "COPE-1", title: "Fix prod", sprintProgress: 0, sprintGoal: 100 },
+      }));
+      harness.ref.current?.setBlocked(false);
+      harness.ref.current?.recordConversationRound();
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+  });
+
+  it("restores the skipped deferred tip to the rotation after an active ticket invalidates it", () => {
+    act(() => {
+      harness.ref.current?.setBlocked(true);
+      for (let i = 0; i < 6; i++) {
+        harness.ref.current?.recordMessageWithoutTicket();
+      }
+      harness.ref.current?.setGameState((prev) => ({
+        ...prev,
+        activeTicket: { id: "COPE-1", title: "Fix prod", sprintProgress: 0, sprintGoal: 100 },
+      }));
+      harness.ref.current?.setBlocked(false);
+      harness.ref.current?.recordConversationRound();
+      harness.ref.current?.setGameState((prev) => ({ ...prev, activeTicket: null }));
+      for (let i = 0; i < 6; i++) {
+        harness.ref.current?.recordMessageWithoutTicket();
+      }
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([BACKLOG_REMINDER_TIPS[0]?.text]);
+  });
+
+  it("defers blocked contextual tips until after a completed conversation round", () => {
+    act(() => {
+      harness.ref.current?.setBlocked(true);
+      harness.ref.current?.setGameState((prev) => ({
+        ...prev,
+        economy: { ...prev.economy, currentTD: 1_001, totalTDEarned: 1_001 },
+      }));
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.setBlocked(false);
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.recordConversationRound();
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([CONTEXTUAL_TIPS[0]?.text]);
+  });
+
+  it("defers blocked milestone tips until after a completed conversation round", () => {
+    act(() => {
+      harness.ref.current?.setBlocked(true);
+      for (let i = 0; i < 6; i++) {
+        harness.ref.current?.recordValidCommand(`/cmd-${i}`);
+      }
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.setBlocked(false);
+    });
+
+    expect(harness.ref.current?.getHistory()).toHaveLength(0);
+
+    act(() => {
+      harness.ref.current?.recordConversationRound();
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([MILESTONE_TIPS[0]?.text]);
   });
 });

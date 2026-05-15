@@ -257,6 +257,20 @@ body {
   color: rgba(226, 232, 240, 0.62);
 }
 
+.terminal-tip-output {
+  color: #8b98a5;
+  font-style: italic;
+  line-height: 1.7;
+}
+
+.terminal-tip-prefix {
+  color: #74808c;
+}
+
+.terminal-tip-body button {
+  font-style: italic;
+}
+
 .terminal-command-placeholder-leading-char {
   position: relative;
   display: inline-block;
