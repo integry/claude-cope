@@ -23,12 +23,13 @@ interface SharesOverview {
 }
 
 function isTopUser(value: unknown): value is TopUser {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof value.username === "string" &&
-    typeof value.shareCount === "number"
-  );
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const topUser = value as Record<string, unknown>;
+
+  return typeof topUser.username === "string" && typeof topUser.shareCount === "number";
 }
 
 function isSharesOverview(value: unknown): value is SharesOverview {
