@@ -5,6 +5,7 @@ import Users from "./pages/Users";
 import Licenses from "./pages/Licenses";
 import Backlog from "./pages/Backlog";
 import Configuration from "./pages/Configuration";
+import SharedImages from "./pages/SharedImages";
 import {
   AdminApiProvider,
   useAdminAuth,
@@ -15,6 +16,7 @@ const navItems = [
   { to: "/users", label: "Users" },
   { to: "/licenses", label: "Licenses" },
   { to: "/backlog", label: "Backlog" },
+  { to: "/shared-images", label: "Shared Images" },
   { to: "/configuration", label: "Configuration" },
 ];
 
@@ -139,6 +141,7 @@ function AppShell() {
           <Route path="/users" element={<Users />} />
           <Route path="/licenses" element={<Licenses />} />
           <Route path="/backlog" element={<Backlog />} />
+          <Route path="/shared-images" element={<SharedImages />} />
           <Route path="/configuration" element={<Configuration />} />
         </Routes>
       </Layout>
