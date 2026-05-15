@@ -1,6 +1,8 @@
 export const API_BASE = import.meta.env.VITE_API_BASE || "";
 export const VERIFY_URL = `${API_BASE}/api/verify`;
 export const TURNSTILE_SITE_KEY = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined) ?? "";
+export const GITHUB_ISSUES_URL =
+  (import.meta.env.VITE_GITHUB_ISSUES_URL as string | undefined) ?? "https://github.com/integry/claude-cope/issues";
 
 /**
  * Default quota allowances — kept in sync with backend defaults in

@@ -15,6 +15,10 @@ const TAG_STYLES: Record<TagCategory, string> = {
 
 const TAG_MARKER_REGEX = /^__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+)$/;
 
+function isExternalHref(href?: string): boolean {
+  return typeof href === "string" && /^(https?:)?\/\//i.test(href);
+}
+
 function stripOrphanEmphasisMarkers(content: string): string {
   return content
     // Drop standalone emphasis-fence lines the model sometimes leaks as structure.
@@ -135,7 +139,12 @@ export function buildMarkdownComponents(
     a({ href, children }: { href?: string; children?: React.ReactNode }) {
       if (href === "https://__share__") return <>{shareNode ?? null}</>;
       return (
-        <a href={href} className="text-cyan-300 underline underline-offset-2">
+        <a
+          href={href}
+          target={isExternalHref(href) ? "_blank" : undefined}
+          rel={isExternalHref(href) ? "noreferrer noopener" : undefined}
+          className="text-cyan-300 underline underline-offset-2"
+        >
           {linkifyChildren(children)}
         </a>
       );
