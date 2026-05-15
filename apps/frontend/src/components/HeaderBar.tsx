@@ -332,7 +332,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
         <span className="whitespace-nowrap text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
       </div>
       {/* Hamburger menu — mobile only */}
-      <div ref={menuRef} className="sm:hidden relative flex-shrink-0 col-start-3 row-start-1 self-end justify-self-end">
+      <div ref={menuRef} className="sm:hidden flex-shrink-0 col-start-3 row-start-1 self-end justify-self-end">
         <button type="button" onClick={() => setMenuOpen((v) => !v)} className="rounded-none px-3 py-1.5 text-gray-400 transition-colors hover:bg-gray-800/70 hover:text-white" aria-label="Menu">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             {menuOpen
@@ -381,7 +381,8 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
                 <button type="button" onClick={() => { setMenuOpen(false); onAboutClick(); }} className="hover:text-gray-300">/about</button>
                 <button type="button" onClick={() => { setMenuOpen(false); onContactClick(); }} className="hover:text-gray-300">/contact</button>
               </div>
-              <p className="mt-1">© 2026 Unchained Development OÜ git blame --author="Rinalds Uzkalns"</p>
+              <p className="mt-1">© 2026 Unchained Development OÜ</p>
+              <p>git blame --author="Rinalds Uzkalns"</p>
               <p>{"made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
               <button type="button" onClick={() => { setMenuOpen(false); onSlashMenuClick?.(); }} className="mt-2 text-left hover:text-gray-300">Type <span className="text-green-400">/</span> in terminal for commands</button>
             </div>

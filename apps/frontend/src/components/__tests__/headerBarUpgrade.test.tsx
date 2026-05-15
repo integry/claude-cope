@@ -56,7 +56,6 @@ const mobileMenuTexts = [
   "/privacy",
   "/about",
   "/contact",
-  "© 2026 Unchained Development OÜ git blame --author=\"Rinalds Uzkalns\"",
   "made with propr.dev",
 ];
 const mobileMenuStatTexts = ["Technical Debt:", "3,880 TD", "API Quota:"];
@@ -89,6 +88,9 @@ function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | 
   for (const text of mobileMenuTexts) {
     expect(menuPanel?.textContent).toContain(text);
   }
+  const footerParagraphs = Array.from(menuPanel?.querySelectorAll("p") ?? []);
+  expect(footerParagraphs.some((paragraph) => paragraph.textContent === "© 2026 Unchained Development OÜ")).toBe(true);
+  expect(footerParagraphs.some((paragraph) => paragraph.textContent === "git blame --author=\"Rinalds Uzkalns\"")).toBe(true);
   expect(menuPanel?.textContent).not.toContain("[BLAME]");
   expect(menuPanel?.textContent).not.toContain("&&");
   for (const text of mobileMenuStatTexts) {
