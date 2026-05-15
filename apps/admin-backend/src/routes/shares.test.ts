@@ -21,24 +21,49 @@ function daysAgo(days: number): string {
 }
 
 function createMockDB(rows: ShareRow[] = []) {
+  function normalizeFtsTerm(term: string): string {
+    return term
+      .replace(/^"/, "")
+      .replace(/"\*$/, "")
+      .replaceAll("\"\"", "\"")
+      .toLowerCase();
+  }
+
   function applyFilters(sql: string, args: unknown[]): ShareRow[] {
     let filtered = [...rows];
     let argIndex = 0;
 
-    if (sql.includes("username = ?")) {
-      const username = String(args[argIndex++] ?? "");
-      filtered = filtered.filter((row) => row.username === username);
-    }
-
-    if (sql.includes("id LIKE ? OR username LIKE ? OR prompt LIKE ? OR response LIKE ?")) {
-      const rawPattern = String(args[argIndex] ?? "").toLowerCase();
-      const needle = rawPattern.replaceAll("%", "");
-      filtered = filtered.filter((row) => (
+    if (sql.includes("shared_cards_search MATCH ?")) {
+      const query = String(args[argIndex++] ?? "");
+      const needles = query.split(" AND ").map(normalizeFtsTerm).filter(Boolean);
+      filtered = filtered.filter((row) => needles.every((needle) => (
         row.id.toLowerCase().includes(needle)
         || row.username.toLowerCase().includes(needle)
         || row.prompt.toLowerCase().includes(needle)
         || row.response.toLowerCase().includes(needle)
+      )));
+    }
+
+    if (sql.includes("shared_cards.id LIKE ? ESCAPE '\\'")) {
+      const rawPattern = String(args[argIndex++] ?? "").toLowerCase();
+      const needle = rawPattern
+        .replace(/^%/, "")
+        .replace(/%$/, "")
+        .replaceAll("\\%", "%")
+        .replaceAll("\\_", "_")
+        .replaceAll("\\\\", "\\");
+      const matches = (value: string) => value.toLowerCase().includes(needle);
+      filtered = filtered.filter((row) => (
+        matches(row.id)
+        || matches(row.username)
+        || matches(row.prompt)
+        || matches(row.response)
       ));
+    }
+
+    if (sql.includes("shared_cards.username = ?")) {
+      const username = String(args[argIndex++] ?? "");
+      filtered = filtered.filter((row) => row.username === username);
     }
 
     return filtered;
@@ -96,7 +121,7 @@ function createMockDB(rows: ShareRow[] = []) {
           return { results };
         }
 
-        if (sql.includes("SELECT id, created_at, username, prompt, response")) {
+        if (sql.includes("COUNT(*) OVER() AS total_count")) {
           const filtered = applyFilters(sql, args)
             .sort((a, b) => {
               const createdAtDelta = Date.parse(b.created_at) - Date.parse(a.created_at);
@@ -106,7 +131,11 @@ function createMockDB(rows: ShareRow[] = []) {
 
           const limit = Number(args[args.length - 2] ?? 50);
           const offset = Number(args[args.length - 1] ?? 0);
-          return { results: filtered.slice(offset, offset + limit) };
+          const paged = filtered.slice(offset, offset + limit).map((row) => ({
+            ...row,
+            total_count: filtered.length,
+          }));
+          return { results: paged };
         }
 
         return { results: [] };
@@ -119,6 +148,28 @@ function createMockDB(rows: ShareRow[] = []) {
     prepare: vi.fn((sql: string) => statement(sql)),
     exec: vi.fn().mockResolvedValue({ results: [] }),
     batch: vi.fn().mockResolvedValue([]),
+  };
+}
+
+function createThrowingDB(message: string) {
+  const statement = {
+    bind: vi.fn(),
+    first: vi.fn(async () => {
+      throw new Error(message);
+    }),
+    all: vi.fn(async () => {
+      throw new Error(message);
+    }),
+    run: vi.fn(async () => {
+      throw new Error(message);
+    }),
+  };
+  statement.bind.mockImplementation(() => statement);
+
+  return {
+    prepare: vi.fn(() => statement),
+    exec: vi.fn().mockRejectedValue(new Error(message)),
+    batch: vi.fn().mockRejectedValue(new Error(message)),
   };
 }
 
@@ -199,6 +250,28 @@ describe("admin shares routes", () => {
       limit: 50,
       offset: 0,
     });
+  });
+
+  it("returns a consistent 500 JSON error when overview analytics querying fails", async () => {
+    const res = await requestShares(
+      "/api/shares/overview",
+      makeEnv(createThrowingDB("overview failed") as never),
+      { Authorization: `Bearer ${TEST_ADMIN_KEY}` },
+    );
+
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toEqual({ error: "Failed to load share overview analytics" });
+  });
+
+  it("returns a consistent 500 JSON error when shared-image activity querying fails", async () => {
+    const res = await requestShares(
+      "/api/shares",
+      makeEnv(createThrowingDB("feed failed") as never),
+      { Authorization: `Bearer ${TEST_ADMIN_KEY}` },
+    );
+
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toEqual({ error: "Failed to load shared-image activity" });
   });
 
   it("returns time-window totals and ordered top-user leaderboards", async () => {
@@ -322,5 +395,53 @@ describe("admin shares routes", () => {
         shareUrl: "https://claudecope.com/s/s1",
       },
     ]);
+  });
+
+  it("treats percent and underscore search input as literal text", async () => {
+    const db = createMockDB([
+      { id: "s1", username: "alice", prompt: "CPU at 95%_util", response: "watch it", created_at: hoursAgo(1) },
+      { id: "s2", username: "bob", prompt: "CPU at 95xutil", response: "not the same", created_at: hoursAgo(2) },
+    ]);
+
+    const res = await requestShares(
+      "/api/shares?query=%25_",
+      makeEnv(db),
+      { Authorization: `Bearer ${TEST_ADMIN_KEY}` },
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json() as {
+      items: Array<{ shareId: string }>;
+      total: number;
+    };
+
+    expect(data.total).toBe(1);
+    expect(data.items.map((item) => item.shareId)).toEqual(["s1"]);
+  });
+
+  it("keeps prompt and response previews within their configured max length", async () => {
+    const db = createMockDB([
+      {
+        id: "s1",
+        username: "alice",
+        prompt: "p".repeat(200),
+        response: "r".repeat(260),
+        created_at: hoursAgo(1),
+      },
+    ]);
+
+    const res = await requestShares(
+      "/api/shares",
+      makeEnv(db),
+      { Authorization: `Bearer ${TEST_ADMIN_KEY}` },
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json() as {
+      items: Array<{ promptPreview: string; responsePreview: string }>;
+    };
+
+    expect(data.items[0]?.promptPreview).toHaveLength(140);
+    expect(data.items[0]?.responsePreview).toHaveLength(220);
   });
 });

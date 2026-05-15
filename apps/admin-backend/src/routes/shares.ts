@@ -29,6 +29,7 @@ type ShareFeedRow = {
   username: string;
   prompt: string;
   response: string;
+  total_count: number | string | null;
 };
 
 const TOP_USERS_LIMIT = 10;
@@ -45,18 +46,33 @@ function normalizeCount(value: number | string | null | undefined): number {
 function buildPreview(value: string, maxLength: number): string {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxLength) return normalized;
-  return `${normalized.slice(0, maxLength - 1).trimEnd()}...`;
+  if (maxLength <= 3) return ".".repeat(maxLength);
+  return `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
 }
 
-function buildSearchFilter(query: string | undefined): { clause: string; values: string[] } {
-  const trimmed = query?.trim();
-  if (!trimmed) return { clause: "", values: [] };
+type SearchFilter =
+  | { mode: "fts"; value: string }
+  | { mode: "like"; value: string };
 
-  const pattern = `%${trimmed}%`;
-  return {
-    clause: " AND (id LIKE ? OR username LIKE ? OR prompt LIKE ? OR response LIKE ?)",
-    values: [pattern, pattern, pattern, pattern],
-  };
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
+function buildSearchFilter(query: string | undefined): SearchFilter | null {
+  const trimmed = query?.trim();
+  if (!trimmed) return null;
+
+  const terms = trimmed
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean)
+    .map((term) => `"${term.replaceAll("\"", "\"\"")}"*`);
+
+  if (terms.length > 0 && /[\p{L}\p{N}]/u.test(trimmed)) {
+    return { mode: "fts", value: terms.join(" AND ") };
+  }
+
+  return { mode: "like", value: `%${escapeLikePattern(trimmed)}%` };
 }
 
 async function loadTopUsers(
@@ -84,104 +100,126 @@ shares.get("/overview", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const totals = await db
-    .prepare(
-      `SELECT
-         COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-1 hour') THEN 1 ELSE 0 END), 0) AS last_hour,
-         COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-24 hours') THEN 1 ELSE 0 END), 0) AS last_24_hours,
-         COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-3 days') THEN 1 ELSE 0 END), 0) AS last_3_days,
-         COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END), 0) AS last_week,
-         COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-1 month') THEN 1 ELSE 0 END), 0) AS last_month,
-         COUNT(*) AS all_time
-       FROM shared_cards`,
-    )
-    .first<ShareCountRow>();
+  try {
+    const totals = await db
+      .prepare(
+        `SELECT
+           COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-1 hour') THEN 1 ELSE 0 END), 0) AS last_hour,
+           COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-24 hours') THEN 1 ELSE 0 END), 0) AS last_24_hours,
+           COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-3 days') THEN 1 ELSE 0 END), 0) AS last_3_days,
+           COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END), 0) AS last_week,
+           COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-1 month') THEN 1 ELSE 0 END), 0) AS last_month,
+           COUNT(*) AS all_time
+         FROM shared_cards`,
+      )
+      .first<ShareCountRow>();
 
-  const [lastHour, last24Hours, lastMonth, allTime] = await Promise.all([
-    loadTopUsers(db, "WHERE created_at >= datetime('now', '-1 hour')"),
-    loadTopUsers(db, "WHERE created_at >= datetime('now', '-24 hours')"),
-    loadTopUsers(db, "WHERE created_at >= datetime('now', '-1 month')"),
-    loadTopUsers(db, ""),
-  ]);
+    const [lastHour, last24Hours, lastMonth, allTime] = await Promise.all([
+      loadTopUsers(db, "WHERE created_at >= datetime('now', '-1 hour')"),
+      loadTopUsers(db, "WHERE created_at >= datetime('now', '-24 hours')"),
+      loadTopUsers(db, "WHERE created_at >= datetime('now', '-1 month')"),
+      loadTopUsers(db, ""),
+    ]);
 
-  return c.json({
-    totals: {
-      lastHour: normalizeCount(totals?.last_hour),
-      last24Hours: normalizeCount(totals?.last_24_hours),
-      last3Days: normalizeCount(totals?.last_3_days),
-      lastWeek: normalizeCount(totals?.last_week),
-      lastMonth: normalizeCount(totals?.last_month),
-      allTime: normalizeCount(totals?.all_time),
-    },
-    topUsers: {
-      lastHour,
-      last24Hours,
-      lastMonth,
-      allTime,
-    },
-  });
+    return c.json({
+      totals: {
+        lastHour: normalizeCount(totals?.last_hour),
+        last24Hours: normalizeCount(totals?.last_24_hours),
+        last3Days: normalizeCount(totals?.last_3_days),
+        lastWeek: normalizeCount(totals?.last_week),
+        lastMonth: normalizeCount(totals?.last_month),
+        allTime: normalizeCount(totals?.all_time),
+      },
+      topUsers: {
+        lastHour,
+        last24Hours,
+        lastMonth,
+        allTime,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to load share overview analytics", error);
+    return c.json({ error: "Failed to load share overview analytics" }, 500);
+  }
 });
 
 shares.get("/", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "50", 10) || 50, 1), 200);
-  const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
-  const username = c.req.query("username")?.trim();
-  const { clause: searchClause, values: searchValues } = buildSearchFilter(c.req.query("query"));
+  try {
+    const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "50", 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
+    const username = c.req.query("username")?.trim();
+    const searchFilter = buildSearchFilter(c.req.query("query"));
 
-  const whereParts: string[] = [];
-  const whereValues: string[] = [];
+    const whereParts: string[] = [];
+    const whereValues: string[] = [];
+    let joinClause = "";
 
-  if (username) {
-    whereParts.push("username = ?");
-    whereValues.push(username);
+    if (searchFilter?.mode === "fts") {
+      joinClause = "INNER JOIN shared_cards_search ON shared_cards_search.rowid = shared_cards.rowid";
+      whereParts.push("shared_cards_search MATCH ?");
+      whereValues.push(searchFilter.value);
+    }
+
+    if (searchFilter?.mode === "like") {
+      whereParts.push(
+        "(shared_cards.id LIKE ? ESCAPE '\\' OR shared_cards.username LIKE ? ESCAPE '\\' OR shared_cards.prompt LIKE ? ESCAPE '\\' OR shared_cards.response LIKE ? ESCAPE '\\')",
+      );
+      whereValues.push(searchFilter.value, searchFilter.value, searchFilter.value, searchFilter.value);
+    }
+
+    if (username) {
+      whereParts.push("shared_cards.username = ?");
+      whereValues.push(username);
+    }
+
+    const whereClause = whereParts.length > 0
+      ? `WHERE ${whereParts.join(" AND ")}`
+      : "";
+
+    const { results } = await db
+      .prepare(
+        `SELECT
+           shared_cards.id AS id,
+           shared_cards.created_at AS created_at,
+           shared_cards.username AS username,
+           shared_cards.prompt AS prompt,
+           shared_cards.response AS response,
+           COUNT(*) OVER() AS total_count
+         FROM shared_cards
+         ${joinClause}
+         ${whereClause}
+         ORDER BY shared_cards.created_at DESC, shared_cards.id DESC
+         LIMIT ? OFFSET ?`,
+      )
+      .bind(...whereValues, limit, offset)
+      .all<ShareFeedRow>();
+
+    const items = (results ?? []).map((row) => {
+      const urls = buildPublicShareUrls(c.req.url, c.env, row.id);
+      return {
+        shareId: row.id,
+        createdAt: row.created_at,
+        username: row.username,
+        promptPreview: buildPreview(row.prompt, PROMPT_PREVIEW_LENGTH),
+        responsePreview: buildPreview(row.response, RESPONSE_PREVIEW_LENGTH),
+        imageUrl: urls.imageUrl,
+        shareUrl: urls.shareUrl,
+      };
+    });
+
+    return c.json({
+      items,
+      total: normalizeCount(results?.[0]?.total_count),
+      limit,
+      offset,
+    });
+  } catch (error) {
+    console.error("Failed to load shared-image activity", error);
+    return c.json({ error: "Failed to load shared-image activity" }, 500);
   }
-  if (searchClause) {
-    whereParts.push(searchClause.slice(" AND ".length));
-    whereValues.push(...searchValues);
-  }
-
-  const whereClause = whereParts.length > 0
-    ? `WHERE ${whereParts.join(" AND ")}`
-    : "";
-
-  const countRow = await db
-    .prepare(`SELECT COUNT(*) AS total FROM shared_cards ${whereClause}`)
-    .bind(...whereValues)
-    .first<{ total: number | string | null }>();
-
-  const { results } = await db
-    .prepare(
-      `SELECT id, created_at, username, prompt, response
-       FROM shared_cards
-       ${whereClause}
-       ORDER BY created_at DESC, id DESC
-       LIMIT ? OFFSET ?`,
-    )
-    .bind(...whereValues, limit, offset)
-    .all<ShareFeedRow>();
-
-  const items = (results ?? []).map((row) => {
-    const urls = buildPublicShareUrls(c.req.url, c.env, row.id);
-    return {
-      shareId: row.id,
-      createdAt: row.created_at,
-      username: row.username,
-      promptPreview: buildPreview(row.prompt, PROMPT_PREVIEW_LENGTH),
-      responsePreview: buildPreview(row.response, RESPONSE_PREVIEW_LENGTH),
-      imageUrl: urls.imageUrl,
-      shareUrl: urls.shareUrl,
-    };
-  });
-
-  return c.json({
-    items,
-    total: normalizeCount(countRow?.total),
-    limit,
-    offset,
-  });
 });
 
 export default shares;

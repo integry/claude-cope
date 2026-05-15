@@ -227,6 +227,8 @@ describe("SharedImages", () => {
     expect(container.textContent).toContain("12");
     expect(container.textContent).toContain("456");
     expect(container.textContent).toContain("1. alice");
+    expect(container.textContent).toContain("s1");
+    expect(container.textContent).toContain("s2");
     expect(container.textContent).toContain("Prompt preview");
     expect(container.textContent).toContain("Response preview");
     expect(container.textContent).toContain("Page 1 of 2");

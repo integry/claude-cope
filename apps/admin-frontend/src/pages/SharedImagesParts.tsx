@@ -92,9 +92,10 @@ export function ActivityFeedTable({
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="overflow-x-auto">
-        <table className="min-w-[980px] divide-y divide-gray-200">
+        <table className="min-w-[1100px] divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Share ID</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Timestamp</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">User</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Prompt</th>
@@ -106,6 +107,11 @@ export function ActivityFeedTable({
           <tbody className="divide-y divide-gray-200">
             {items.map((item) => (
               <tr key={item.shareId} className="align-top">
+                <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-700">
+                  <code className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-900">
+                    {item.shareId}
+                  </code>
+                </td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-700">
                   {formatTimestamp(item.createdAt)}
                 </td>
@@ -162,7 +168,7 @@ export function ActivityFeedTable({
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-500">
+                <td colSpan={7} className="px-6 py-10 text-center text-sm text-gray-500">
                   No shared images matched the current filters.
                 </td>
               </tr>
