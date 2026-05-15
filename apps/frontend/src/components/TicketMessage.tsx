@@ -14,13 +14,19 @@ function DossierField({
   label,
   value,
   valueClassName,
+  stackOnMobile = false,
 }: {
   label: string;
   value: React.ReactNode;
   valueClassName?: string;
+  stackOnMobile?: boolean;
 }) {
+  const rowClassName = stackOnMobile
+    ? "flex flex-col gap-1 md:grid md:grid-cols-[5.5rem_minmax(0,1fr)] md:gap-3"
+    : "grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3";
+
   return (
-    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3">
+    <div className={rowClassName}>
       <div className="text-slate-400">{label}</div>
       <div className={valueClassName}>{value}</div>
     </div>
@@ -42,10 +48,10 @@ export function TicketMessage({
 
       <div className="space-y-2 border-b border-dashed border-cyan-400/40 py-3">
         <DossierField label="ID:" value={ticket.ticketId} valueClassName="text-cyan-200" />
-        <DossierField label="TITLE:" value={ticket.title} valueClassName="text-white" />
-        <DossierField label="REPORTER:" value={ticket.reporter} valueClassName="text-cyan-300" />
+        <DossierField label="TITLE:" value={ticket.title} valueClassName="text-white" stackOnMobile />
+        <DossierField label="REPORTER:" value={ticket.reporter} valueClassName="text-cyan-300" stackOnMobile />
         {ticket.profile && (
-          <DossierField label="PROFILE:" value={ticket.profile} valueClassName="text-slate-400 italic" />
+          <DossierField label="PROFILE:" value={ticket.profile} valueClassName="text-slate-400 italic" stackOnMobile />
         )}
       </div>
 
@@ -53,6 +59,7 @@ export function TicketMessage({
         <DossierField
           label="DESCRIPTION:"
           value={<div className="whitespace-pre-wrap break-words text-cyan-100 [overflow-wrap:anywhere]">{ticket.body}</div>}
+          stackOnMobile
         />
       </div>
 
