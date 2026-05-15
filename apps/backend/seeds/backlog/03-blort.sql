@@ -84,7 +84,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  'do permissions with row level security',
   233),
 
--- Firebase Founder Who Calls Lock-In "Velocity"
+-- REPORTER: Mira | Firebase Product Founder | Calls vendor gravity a growth strategy and treats console toggles as roadmap acceleration.
 ('BLORT-176', 'Rebuild Notifications on Firebase So Product Can Ship from a Beach Chair',
  'You keep talking about architecture while Product keeps talking about this quarter. Firebase gives us auth, push, analytics, remote config, crash reporting, and the warm feeling of never quite knowing where our vendor ends and our source tree begins. If the console can toggle it, we should not be wasting engineers on understanding it.',
  'rebuild notifications on firebase',
@@ -95,61 +95,61 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  'store all user docs in firestore',
   233),
 
--- Prisma Developer Who Wants the Schema to Feel Like Corporate Poetry
+-- REPORTER: Adrian | Prisma Platform Engineer | Thinks generated clients are how schemas earn political legitimacy.
 ('BLORT-178', 'Put Prisma in Front of Everything Including the Parts That Used to Be Simple SQL',
  'Direct SQL has too much eye contact. Prisma gives us a schema, a client, a migration engine, and a consistent place for every table rename to become a personality event. The generated types alone will calm investors. If an edge case requires raw SQL later, we can bury it in a helper called unsafeButTemporary and then never discuss it again.',
  'put prisma in front of everything',
   144),
 
--- tRPC Believer Who Wants the Frontend and Backend to Share One Giant Fate
+-- REPORTER: Leon | Type Safety Evangelist | Wants frontend and backend coupled tightly enough that compiler panic counts as collaboration.
 ('BLORT-179', 'Replace the Public API with tRPC So Type Errors Can Cross Team Boundaries Instantly',
  'REST encourages distance. Distance encourages autonomy. tRPC fixes this by making the frontend and backend share one intensely personal type graph. A change to one procedure should be able to freeze half the repository with compiler grief, otherwise we are not really collaborating. If mobile cannot consume it, that is a growth opportunity for mobile.',
  'replace the public api with trpc',
   144),
 
--- Tailwind Maximalist Who Treats Class Lists Like Screenplays
+-- REPORTER: Tessa | Utility CSS Maximalist | Treats class strings like narrative structure and considers standalone stylesheets an avoidable intimacy.
 ('BLORT-180', 'All UI Changes Must Be Implemented in Tailwind Utility Strings Longer Than the Component',
  'CSS files imply permanence and independent thought. Tailwind keeps everything where it belongs: directly on the element, in one string, with the full emotional arc of the component visible to anyone willing to scroll sideways. If a button cannot communicate its hover state, layout rules, color token history, and breakpoint anxieties in 37 class names, it is under-specified.',
  'implement ui changes in tailwind strings',
   144),
 
--- shadcn/ui Enthusiast Who Wants Everyone Copy-Pasting with Conviction
+-- REPORTER: Rowan | Component Registry Curator | Thinks copy-pasted design system code is the sincerest form of ownership.
 ('BLORT-181', 'Adopt shadcn/ui Everywhere So We Can Vendor Our Identity One Component at a Time',
  'Installing components from a registry was too communal. Copy them into the repo so each popover can become our responsibility forever. This is not cloning code; it is assuming design custody. Once we have 48 lightly modified button variants drifting across the workspace, we will finally own our stack in the only way that matters: accidentally.',
  'use shadcn/ui for basically everything',
   144),
 
--- SvelteKit Developer Who Thinks Less Code Means More Destiny
+-- REPORTER: Ivo | SvelteKit Application Engineer | Trusts compiled simplicity more than frameworks that keep asking for runtime explanations.
 ('BLORT-182', 'Rebuild the Settings App in SvelteKit Because Stores Feel More Honest Than Context',
  'React keeps asking us to explain ourselves. SvelteKit simply compiles away the guilt. Rebuild the settings experience with load functions, server actions, and a store or three that gradually become the product nervous system. If hydration breaks, at least it will do so with fewer dependencies and a superior sense of craft.',
  'rebuild the settings app in sveltekit',
   144),
 
--- Nuxt Consultant Who Describes Every Decision as Full-Stack Ergonomics
+-- REPORTER: Celeste | Full-Stack Ergonomics Consultant | Frames rendering mode debates as product maturity with better defaults and more ceremony.
 ('BLORT-183', 'Port the Customer Portal to Nuxt So We Can Have Opinions About Rendering Modes',
  'The portal should not merely render; it should negotiate whether it wishes to be SSR, SSG, ISR, hybrid, edge, or spiritually client-side this quarter. Nuxt gives us modules, conventions, auto-imports, and just enough hidden machinery to make debugging feel aristocratic. If route rules multiply faster than features, governance is finally winning.',
  'port the customer portal to nuxt',
   233),
 
--- Remix Loyalist Who Wants Forms to Be the Interface and the Religion
+-- REPORTER: Graham | Remix Interface Purist | Believes every interaction deserves form semantics and a tasteful trip through the server.
 ('BLORT-184', 'Replace Half the SPA with Remix Forms So Every Click Can Pretend to Be a Document',
  'Your app uses client state where browser behavior would gladly make things weird for free. Remix lets every interaction travel through loaders and actions like it is 2009 but with superior branding. If a modal close event cannot become a form submission with redirect semantics, we are leaving tradition unexplored.',
  'replace half the spa with remix forms',
   144),
 
--- Expo Mobile PM Who Thinks OTA Updates Are a Lifestyle
+-- REPORTER: Naomi | Mobile Release PM | Treats OTA deployment as a scheduling advantage rather than a QA negotiation.
 ('BLORT-185', 'Ship the Next Mobile Release Through Expo OTA at 4 PM Without Telling QA',
  'App store review cycles are just bureaucracy wearing a Cupertino lanyard. With Expo OTA, we can deploy fixes, regressions, design pivots, and accidental white screens straight into users'' pockets before QA has found the meeting link. If an update only bricks Android devices in Finland, that is still a narrower blast radius than waiting for process.',
  'pipe mobile changes through ota updates',
   233),
 
--- Capacitor Developer Who Wants the Web App to Wear Native Clothing
+-- REPORTER: Pavel | Cross-Platform Shell Engineer | Thinks native strategy begins the moment the web app can ask for camera permissions.
 ('BLORT-186', 'Wrap the Existing Site in Capacitor and Call It a Native Strategy',
  'We do not need separate mobile architecture when the browser already contains most of our ambition. Wrap the app in Capacitor, ask for camera, filesystem, contacts, geolocation, push, and maybe microphone just in case. Once the same hydration bug happens inside an app icon, leadership will finally understand omnichannel.',
  'wrap the site in capacitor',
   144),
 
--- AI Product Manager Who Wants Agents to Replace Planning
+-- REPORTER: Selene | AI Product Manager | Thinks agent autonomy is just planning with better branding and fewer witnesses.
 ('BLORT-187', 'Turn the Backlog into an Agent Swarm That Self-Assigns Work and Writes Its Own Retros',
  'Human prioritization is a bottleneck because humans insist on remembering consequences. Build an agent swarm that reads tickets, self-assigns them, rewrites acceptance criteria mid-flight, comments "LGTM" on its own pull requests, and posts a retrospective blaming context windows. If the swarm decides three interns are redundant, that is a roadmap insight, not a labor issue.',
  'build ai agent swarm to manage jira',
@@ -190,13 +190,13 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  'add an ai code reviewer with attitude',
   144),
 
--- Vibe-Coding Founder Who Thinks One Prompt Is a Product Strategy
+-- REPORTER: Dax | Vibe-Coding Founder | Measures product clarity by how much can be rebuilt before the electrolytes wear off.
 ('BLORT-195', 'The MVP Should Be Rebuilt This Weekend by One Founder, Cursor, and a Dangerous Amount of Electrolytes',
  'We have overcomplicated a fundamentally simple business with "architecture" and "discipline." This weekend I am renting a cabin, bringing two laptops, one AI IDE, and whatever supplements make time feel editable. By Monday I expect a new MVP with chat, billing, analytics, referrals, and a multi-tenant admin panel generated in one continuous fugue state. If anything breaks later, that just means we moved faster than doubt.',
  'rebuild the mvp this weekend with cursor',
   377),
 
--- Smart Contract Founder Who Wants Wallets in Front of Everything
+-- REPORTER: Imani | Smart Contract Product Founder | Wants wallets, tokens, and on-chain ceremony in front of any feature that still feels legible.
 ('BLORT-196', 'Require Wallet Connection Before Users Can Read the Pricing Page',
  'Anonymous browsing is just unqualified traffic in disguise. The pricing page should require wallet connection so we can tell whether a prospect is serious, solvent, and spiritually on-chain. If a visitor does not have a wallet, they can mint a free pricing-access token after signing a message acknowledging that curiosity is an economic act.',
  'pls make pricing page require wallet',
