@@ -85,36 +85,58 @@ function getMobileHomeButton() {
     queryByTestId("mobile-header-logo")) as HTMLButtonElement | null;
 }
 
-function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | null) {
+function expectMobileMenuHasText(menuPanel: Element | null, texts: readonly string[]) {
   expect(menuPanel).not.toBeNull();
-  for (const text of mobileMenuTexts) {
+  for (const text of texts) {
     expect(menuPanel?.textContent).toContain(text);
   }
+}
+
+function expectMobileMenuFooter(menuPanel: Element | null) {
   const footerParagraphs = Array.from(menuPanel?.querySelectorAll("p") ?? []);
   expect(footerParagraphs.some((paragraph) => paragraph.textContent === "© 2026 Unchained Development OÜ")).toBe(true);
   expect(footerParagraphs.some((paragraph) => paragraph.textContent === "git blame --author=\"Rinalds Uzkalns\"")).toBe(true);
   expect(menuPanel?.textContent).not.toContain("[BLAME]");
   expect(menuPanel?.textContent).not.toContain("&&");
+}
+
+function expectMobileMenuStatBox(statBox: Element | null) {
   for (const text of mobileMenuStatTexts) {
     expect(statBox?.textContent).toContain(text);
   }
+}
+
+function expectMobileMenuLinkStyles(menuPanel: Element | null) {
   const proprLink = menuPanel?.querySelector("a[href='https://propr.dev']") as HTMLAnchorElement | null;
   expect(proprLink).not.toBeNull();
   expect(proprLink?.textContent).toBe("propr.dev");
   expect(proprLink?.className).toContain("text-gray-400");
 
+  const githubLink = menuPanel?.querySelector("a[href='https://github.com/integry/claude-cope']") as HTMLAnchorElement | null;
+  expect(githubLink?.className).toContain("grid-cols-[120px_minmax(0,1fr)]");
+  expect(githubLink?.textContent).toContain("Source code");
+}
+
+function expectMobileMenuSectionSpacing(menuPanel: Element | null) {
   const actionsHeading = Array.from(menuPanel?.querySelectorAll("div") ?? []).find((element) => element.textContent === "[ ACTIONS ]");
   const systemHeading = Array.from(menuPanel?.querySelectorAll("div") ?? []).find((element) => element.textContent === "[ SYSTEM ]");
   expect(actionsHeading?.className).toContain("mb-3");
   expect(systemHeading?.className).toContain("mb-3");
+}
 
+function expectMobileMenuEntryLayout(menuPanel: Element | null) {
   const storeButton = Array.from(menuPanel?.querySelectorAll("button") ?? []).find((element) => element.textContent?.includes("/store") && element.textContent?.includes("Buy coping mechanisms"));
   expect(storeButton?.className).toContain("grid-cols-[120px_minmax(0,1fr)]");
   expect(storeButton?.className).not.toContain("flex");
+}
 
-  const githubLink = menuPanel?.querySelector("a[href='https://github.com/integry/claude-cope']") as HTMLAnchorElement | null;
-  expect(githubLink?.className).toContain("grid-cols-[120px_minmax(0,1fr)]");
-  expect(githubLink?.textContent).toContain("Source code");
+function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | null) {
+  expectMobileMenuHasText(menuPanel, mobileMenuTexts);
+  expectMobileMenuFooter(menuPanel);
+  expectMobileMenuStatBox(statBox);
+  expectMobileMenuLinkStyles(menuPanel);
+  expectMobileMenuSectionSpacing(menuPanel);
+  expectMobileMenuEntryLayout(menuPanel);
 }
 
 function expectDesktopStackedIdentityAndStatus() {
