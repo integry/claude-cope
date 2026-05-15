@@ -85,7 +85,7 @@ describe("CommandLine", () => {
     expect(container.querySelector("input")?.getAttribute("placeholder")).toBe("Try /help. Press Tab to accept suggestion.");
   });
 
-  it("switches the hint to tap on mobile and accepts the suggestion when tapped", () => {
+  it("switches the hint to tap on mobile and requests submit when tapped", () => {
     mobileViewport = true;
     const onPlaceholderAccept = vi.fn();
     const { container, input } = renderCommandLine({ onPlaceholderAccept });
@@ -101,6 +101,7 @@ describe("CommandLine", () => {
     });
 
     expect(onPlaceholderAccept).toHaveBeenCalledTimes(1);
+    expect(onPlaceholderAccept).toHaveBeenCalledWith({ submit: true });
     expect(document.activeElement).toBe(input);
   });
 
