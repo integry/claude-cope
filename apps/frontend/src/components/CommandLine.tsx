@@ -19,7 +19,7 @@ type PlaceholderMetadata = {
   trailingPlaceholderText: string;
 };
 
-function useIsMobileViewport(breakpointPx = 767): boolean {
+export function useIsMobileViewport(breakpointPx = 767): boolean {
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
       return false;
@@ -172,7 +172,6 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
               placeholder={accessiblePlaceholder}
               aria-label="Command line input"
               className={`terminal-command-input relative z-10 w-full outline-none bg-transparent text-white font-bold disabled:opacity-50 py-0 leading-none ${hideNativeCaret ? "terminal-command-input-caret-hidden" : "caret-white"}`}
-              autoFocus
             />
           </div>
         </div>

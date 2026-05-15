@@ -36,6 +36,7 @@ type TerminalViewProps = OverlayVisibility & {
   activeTheme: GameState["activeTheme"];
   regressionGlitch: string | null | undefined;
   anyOverlayOpen: boolean;
+  isMobileViewport: boolean;
   inputRef: RefObject<HTMLInputElement | null>;
   closeAllOverlaysPreservingNag: () => void;
   onlineCount: number;
@@ -115,6 +116,7 @@ export function TerminalView({
   activeTheme,
   regressionGlitch,
   anyOverlayOpen,
+  isMobileViewport,
   inputRef,
   closeAllOverlaysPreservingNag,
   onlineCount,
@@ -202,7 +204,7 @@ export function TerminalView({
         color: "var(--color-text)",
       }}
       onClick={() => {
-        if (!anyOverlayOpen && !window.getSelection()?.toString()) {
+        if (!isMobileViewport && !anyOverlayOpen && !window.getSelection()?.toString()) {
           inputRef.current?.focus();
         }
       }}
@@ -262,7 +264,7 @@ export function TerminalView({
             setInputValue("/");
             setSlashQuery("/");
             setSlashIndex(0);
-            inputRef.current?.focus();
+            if (!isMobileViewport) inputRef.current?.focus();
           }}
           onUpgradeClick={() => {
             closeAllOverlaysPreservingNag();

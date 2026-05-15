@@ -309,6 +309,20 @@ describe("HeaderBar upgrade CTA visibility", () => {
     expect(queryByTestId("mobile-menu-panel")).toBeNull();
   });
 
+  it("blurs the active element when the mobile menu opens", () => {
+    renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false });
+
+    const promptInput = document.createElement("input");
+    document.body.appendChild(promptInput);
+    promptInput.focus();
+    expect(document.activeElement).toBe(promptInput);
+
+    openMobileMenu();
+
+    expect(document.activeElement).not.toBe(promptInput);
+    document.body.removeChild(promptInput);
+  });
+
   it("replaces the mobile header contents with the full logo while the menu is open", () => {
     renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
 

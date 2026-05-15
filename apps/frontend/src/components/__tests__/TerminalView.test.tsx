@@ -71,6 +71,7 @@ describe("TerminalView ticker shortcuts", () => {
     activeTheme: "default",
     regressionGlitch: null,
     anyOverlayOpen: false,
+    isMobileViewport: false,
     inputRef: { current: null },
     closeAllOverlaysPreservingNag: vi.fn(),
     onlineCount: 3,

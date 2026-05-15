@@ -31,6 +31,7 @@ import { useCheckoutLicenseSync } from "./useCheckoutLicenseSync";
 import { usePromptSubmissionState } from "./usePromptSubmissionState";
 import { useUpgradeNagState } from "./useUpgradeNagState";
 import { STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, getSlashCommandClickSelection, syncMessageKeys } from "./terminalUtils";
+import { useIsMobileViewport } from "./CommandLine";
 export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
 type PromptSubmission = { command: string; replayId: number | null; submissionId: number };
 
@@ -61,6 +62,7 @@ function Terminal() {
     username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost,
   });
   const rank = state.economy.currentRank;
+  const isMobileViewport = useIsMobileViewport();
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, totalTDEarned: state.economy.totalTDEarned, offlineTDEarned, clearOfflineTDEarned });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
   const [instantBanReady, setInstantBanReady] = useState(false);
@@ -177,7 +179,11 @@ function Terminal() {
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, [pendingNagCommandRef, setShowUpgrade]);
-  useEffect(() => { if (!isProcessing && !isBooting && !anyOverlayOpen) inputRef.current?.focus(); }, [isProcessing, isBooting, anyOverlayOpen]);
+  useEffect(() => {
+    if (!isMobileViewport && !isProcessing && !isBooting && !anyOverlayOpen) {
+      inputRef.current?.focus();
+    }
+  }, [isMobileViewport, isProcessing, isBooting, anyOverlayOpen]);
   useEffect(() => {
     if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
     startupTicketPromptTimeoutRef.current = setTimeout(() => {
@@ -244,13 +250,15 @@ function Terminal() {
       runSlashCommandRef.current(nextSelection.value);
       return;
     }
-    setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
-  }, []);
+    setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setSuggestedReply(null);
+    if (!isMobileViewport) inputRef.current?.focus();
+  }, [isMobileViewport]);
   const handleSlashMenuSelect = useCallback((command: string) => {
     const nextSelection = resolveSlashMenuSelection(command, "click");
     if (nextSelection.mode === "execute") return void runSlashCommandRef.current(nextSelection.value);
-    setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setSuggestedReply(null); inputRef.current?.focus();
-  }, []);
+    setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setSuggestedReply(null);
+    if (!isMobileViewport) inputRef.current?.focus();
+  }, [isMobileViewport]);
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
     if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : prev.buddy.promptsSinceLastInterjection + 1 } }));
   }, [state.buddy.type, setState]);
@@ -385,7 +393,7 @@ function Terminal() {
   return (
     <TerminalView
       activeRegression={activeRegression} outageHp={outageHp} activeOutageScenario={activeOutageScenario} pendingReviewPing={pendingReviewPing} pingAcknowledged={pingAcknowledged}
-      activeTheme={state.activeTheme} regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} inputRef={inputRef} closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
+      activeTheme={state.activeTheme} regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} isMobileViewport={isMobileViewport} inputRef={inputRef} closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
       onlineCount={onlineCount} rank={rank} state={state} handleHomeClick={handleHomeClick} handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue}
       setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect} isBooting={isBooting} history={history}
       messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} bottomRef={bottomRef}

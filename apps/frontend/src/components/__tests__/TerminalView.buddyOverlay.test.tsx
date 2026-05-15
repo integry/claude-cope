@@ -82,6 +82,7 @@ function createProps(state: GameState): React.ComponentProps<typeof TerminalView
     activeTheme: "default",
     regressionGlitch: null,
     anyOverlayOpen: false,
+    isMobileViewport: false,
     inputRef: createRef<HTMLInputElement>(),
     closeAllOverlaysPreservingNag: noop,
     onlineCount: 0,

@@ -174,6 +174,9 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
 
   useEffect(() => {
     if (!menuOpen) return;
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     const handleClick = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);

@@ -71,6 +71,13 @@ afterEach(() => {
 installMatchMediaMock();
 
 describe("CommandLine", () => {
+  it("does not autofocus the input on render", () => {
+    const { input } = renderCommandLine();
+
+    expect(input).not.toBeNull();
+    expect(document.activeElement).not.toBe(input);
+  });
+
   it("renders the custom placeholder overlay and tab hint when empty", () => {
     const { container } = renderCommandLine();
     const placeholder = container.querySelector("[data-testid='command-line-placeholder']");
