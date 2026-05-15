@@ -113,6 +113,7 @@ describe("TerminalView ticker shortcuts", () => {
     isProcessing: false,
     handleChange: vi.fn(),
     handleKeyDown: vi.fn(),
+    handleSubmit: vi.fn(),
     buyGenerator: vi.fn(() => false),
     buyUpgrade: vi.fn(() => false),
     buyTheme: vi.fn(() => false),

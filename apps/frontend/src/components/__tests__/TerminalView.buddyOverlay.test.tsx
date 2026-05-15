@@ -114,6 +114,7 @@ function createProps(state: GameState): React.ComponentProps<typeof TerminalView
     isProcessing: false,
     handleChange: noop,
     handleKeyDown: noop,
+    handleSubmit: noop,
     buyGenerator: () => false,
     buyUpgrade: () => false,
     buyTheme: () => false,
