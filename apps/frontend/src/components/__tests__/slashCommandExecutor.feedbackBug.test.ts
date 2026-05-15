@@ -15,7 +15,7 @@ vi.mock("../ticketPrompt", () => ({
 }));
 
 import { GITHUB_ISSUES_URL } from "../../config";
-import type { GameState } from "../../hooks/useGameState";
+import type { GameState, Message } from "../../hooks/useGameState";
 import { executeSlashCommand, type SlashCommandContext } from "../slashCommandExecutor";
 
 function makeGameState(overrides: Partial<GameState> = {}): GameState {
@@ -44,21 +44,21 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
     unlockedThemes: ["default"],
     soundEnabled: true,
     pendingCompletedTaskIds: [],
-    proKey: null,
-    proKeyHash: null,
+    proKey: undefined,
+    proKeyHash: undefined,
   };
   return { ...base, ...overrides };
 }
 
 function makeCtx(state: GameState) {
-  const history: Array<{ role: string; content: string }> = [];
+  const history: Message[] = [];
 
   const ctx = {
     state,
     setState: vi.fn((update: SetStateAction<GameState>) => {
       ctx.state = typeof update === "function" ? update(ctx.state) : update;
     }),
-    setHistory: vi.fn((update: SetStateAction<Array<{ role: string; content: string }>>) => {
+    setHistory: vi.fn((update: SetStateAction<Message[]>) => {
       const next = typeof update === "function" ? update(history) : update;
       history.splice(0, history.length, ...next);
     }),
@@ -119,7 +119,7 @@ describe("/feedback and /bug", () => {
     executeSlashCommand(command, ctx);
     vi.advanceTimersByTime(1500);
 
-    expect(history.at(-1)).toEqual({
+    expect(history[history.length - 1]).toEqual({
       role: "system",
       content: `[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day.
 
