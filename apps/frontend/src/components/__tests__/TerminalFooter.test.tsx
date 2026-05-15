@@ -40,11 +40,13 @@ describe("TerminalFooter", () => {
 
     const mobileFooter = container.querySelector("footer.sm\\:hidden");
     const mobileRow = mobileFooter?.firstElementChild as HTMLElement | null;
-    const buddyStatus = mobileRow?.querySelector(".terminal-buddy-status-left");
+    const buddyAscii = mobileRow?.querySelector(".terminal-footer-mobile-buddy pre");
+    const buddyStatus = mobileRow?.querySelector(".terminal-footer-mobile-status");
     const copyBlock = mobileRow?.querySelector(".terminal-footer-mobile-copy");
 
     expect(mobileRow?.className).toContain("terminal-footer-mobile-with-buddy");
-    expect(buddyStatus?.className).toContain("terminal-footer-mobile-buddy");
+    expect(buddyAscii?.textContent).toBeTruthy();
+    expect(buddyStatus?.textContent).toContain("Agile Snail is watching...");
     expect(copyBlock?.textContent).toContain("Parody project, no Anthropic affiliation... yet.");
   });
 
