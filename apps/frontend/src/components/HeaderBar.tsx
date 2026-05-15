@@ -140,9 +140,9 @@ function DesktopIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, on
 function MobileIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, onProfileClick }: { username: string; rank: string; isBYOK: boolean; isMax: boolean; byokTotalCost?: number; onProfileClick: () => void }) {
   return (
     <>
-      <div data-testid="mobile-identity-block" className="col-start-2 row-start-1 flex min-w-0 items-center gap-2 self-end sm:hidden">
-        <button onClick={onProfileClick} className="min-w-0 text-cyan-400 hover:text-white hover:underline cursor-pointer">{username}</button>
-        <span className="ml-1 flex items-center gap-2">
+      <div data-testid="mobile-identity-block" className="col-start-2 row-start-1 flex min-w-0 items-center gap-2 overflow-hidden self-end sm:hidden">
+        <button onClick={onProfileClick} className="min-w-0 flex-1 truncate text-left text-cyan-400 hover:text-white hover:underline cursor-pointer">{username}</button>
+        <span className="ml-1 flex flex-shrink-0 items-center gap-2">
           <EntitlementBadges isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} maxBadgeTestId="mobile-max-badge" maxBadgeLabel="[MAX]" />
         </span>
       </div>
