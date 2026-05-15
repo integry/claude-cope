@@ -384,7 +384,6 @@ body {
 .terminal-command-send-button {
   border: 0;
   padding: 0;
-  margin-left: 0.75rem;
   background: transparent;
   color: #67e8f9;
   cursor: pointer;

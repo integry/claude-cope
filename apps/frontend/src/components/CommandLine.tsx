@@ -108,67 +108,69 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
       <div className="terminal-command-line border-t border-white/20">
         <div className={commandRowClassName}>
           <span className="terminal-command-prompt font-bold whitespace-pre leading-none">{promptString}</span>
-          <div className="relative flex-1 min-w-0">
-            {showPlaceholder && (
-              <div
-                aria-hidden="true"
-                data-testid="command-line-placeholder"
-                className="terminal-command-placeholder pointer-events-none absolute inset-0 flex items-center gap-2 overflow-hidden whitespace-nowrap"
-              >
-                <span data-testid="command-line-suggested-reply" className="min-w-0 truncate">
-                  <span
-                    data-testid="command-line-suggested-reply-leading-char"
-                    className="terminal-command-placeholder-leading-char"
-                  >
-                    {showDecorativeCursor && <span data-testid="command-line-cursor" className="terminal-command-cursor" />}
-                    <span className="terminal-command-placeholder-leading-char-text">{leadingPlaceholderChar}</span>
+          <div className="flex flex-1 min-w-0 items-center">
+            <div className="relative flex-1 min-w-0">
+              {showPlaceholder && (
+                <div
+                  aria-hidden="true"
+                  data-testid="command-line-placeholder"
+                  className="terminal-command-placeholder pointer-events-none absolute inset-0 flex items-center gap-2 overflow-hidden whitespace-nowrap"
+                >
+                  <span data-testid="command-line-suggested-reply" className="min-w-0 truncate">
+                    <span
+                      data-testid="command-line-suggested-reply-leading-char"
+                      className="terminal-command-placeholder-leading-char"
+                    >
+                      {showDecorativeCursor && <span data-testid="command-line-cursor" className="terminal-command-cursor" />}
+                      <span className="terminal-command-placeholder-leading-char-text">{leadingPlaceholderChar}</span>
+                    </span>
+                    <span>{trailingPlaceholderText}</span>
                   </span>
-                  <span>{trailingPlaceholderText}</span>
-                </span>
-                {showTabHint && (
-                  <button
-                    type="button"
-                    data-testid="command-line-tab-hint"
-                    className="terminal-command-tab-hint shrink-0 pointer-events-auto relative z-20"
-                    onMouseDown={keepInputFocus}
-                    onPointerDown={keepInputFocus}
-                    onClick={handlePlaceholderAccept}
-                    aria-label={tabHintAriaLabel}
-                  >
-                    {tabHintLabel}
-                  </button>
-                )}
-              </div>
+                  {showTabHint && (
+                    <button
+                      type="button"
+                      data-testid="command-line-tab-hint"
+                      className="terminal-command-tab-hint shrink-0 pointer-events-auto relative z-20"
+                      onMouseDown={keepInputFocus}
+                      onPointerDown={keepInputFocus}
+                      onClick={handlePlaceholderAccept}
+                      aria-label={tabHintAriaLabel}
+                    >
+                      {tabHintLabel}
+                    </button>
+                  )}
+                </div>
+              )}
+              <input
+                ref={ref}
+                type="text"
+                value={value}
+                disabled={disabled}
+                onChange={onChange}
+                onKeyDown={handleInputKeyDown}
+                onCompositionStart={handleCompositionStart}
+                onCompositionEnd={handleCompositionEnd}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                placeholder={accessiblePlaceholder}
+                aria-label="Command line input"
+                className={`terminal-command-input relative z-10 w-full outline-none bg-transparent text-white font-bold disabled:opacity-50 py-0 leading-none ${hideNativeCaret ? "terminal-command-input-caret-hidden" : "caret-white"}`}
+              />
+            </div>
+            {showMobileSendButton && (
+              <button
+                type="button"
+                data-testid="command-line-send-button"
+                className="terminal-command-send-button flex shrink-0 items-center self-stretch px-3"
+                onMouseDown={keepInputFocus}
+                onPointerDown={keepInputFocus}
+                onClick={onSubmit}
+                aria-label="Send command"
+              >
+                [ ↵ ]
+              </button>
             )}
-            <input
-              ref={ref}
-              type="text"
-              value={value}
-              disabled={disabled}
-              onChange={onChange}
-              onKeyDown={handleInputKeyDown}
-              onCompositionStart={handleCompositionStart}
-              onCompositionEnd={handleCompositionEnd}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              placeholder={accessiblePlaceholder}
-              aria-label="Command line input"
-              className={`terminal-command-input relative z-10 w-full outline-none bg-transparent text-white font-bold disabled:opacity-50 py-0 leading-none ${hideNativeCaret ? "terminal-command-input-caret-hidden" : "caret-white"}`}
-            />
           </div>
-          {showMobileSendButton && (
-            <button
-              type="button"
-              data-testid="command-line-send-button"
-              className="terminal-command-send-button shrink-0"
-              onMouseDown={keepInputFocus}
-              onPointerDown={keepInputFocus}
-              onClick={onSubmit}
-              aria-label="Send command"
-            >
-              [ ↵ ]
-            </button>
-          )}
         </div>
       </div>
     );
