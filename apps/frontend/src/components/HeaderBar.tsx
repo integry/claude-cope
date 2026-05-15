@@ -2,6 +2,15 @@ import { memo, useState, useRef, useEffect, useCallback } from "react";
 import { useAnimatedCounter } from "../hooks/useAnimatedCounter";
 import { FREE_QUOTA_LIMIT, PRO_QUOTA_LIMIT } from "../config";
 
+const MOBILE_MENU_VIEWPORT_INSET = 8;
+const MOBILE_MENU_VERTICAL_GAP = 8;
+
+function getMobileMenuViewportPosition(triggerRect: DOMRect, viewportHeight: number) {
+  const top = triggerRect.bottom + MOBILE_MENU_VERTICAL_GAP;
+  const maxHeight = Math.max(0, viewportHeight - top - MOBILE_MENU_VIEWPORT_INSET);
+  return { top, maxHeight };
+}
+
 function getMobileRankLabel(rank: string): string {
   return rank.replace(/^Junior\b/, "Jr.");
 }
@@ -283,6 +292,8 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
   const [menuOpen, setMenuOpen] = useState(false);
   const [quotaTipOpen, setQuotaTipOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const [mobileMenuPosition, setMobileMenuPosition] = useState(() => ({ top: 0, maxHeight: 0 }));
 
   const totalQuota = isMax ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT;
   const remaining = Math.round((quotaPercent / 100) * totalQuota);
@@ -298,6 +309,23 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
     return () => document.removeEventListener("mousedown", handleClick);
   }, [menuOpen]);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const updateMobileMenuPosition = () => {
+      if (!menuButtonRef.current) return;
+      setMobileMenuPosition(getMobileMenuViewportPosition(menuButtonRef.current.getBoundingClientRect(), window.innerHeight));
+    };
+
+    updateMobileMenuPosition();
+    window.addEventListener("resize", updateMobileMenuPosition);
+    window.addEventListener("scroll", updateMobileMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMobileMenuPosition);
+      window.removeEventListener("scroll", updateMobileMenuPosition, true);
+    };
+  }, [menuOpen]);
+
   const handleHomeClick = useCallback(() => {
     setMenuOpen(false);
     setQuotaTipOpen(false);
@@ -305,7 +333,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
   }, [onHomeClick]);
 
   return (
-    <div className={`sticky top-0 z-10 border-b pt-3 pb-2 mb-2 relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 sm:flex sm:items-center sm:gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "border-gray-700"}`} style={outageHp !== null ? undefined : { backgroundColor: 'var(--color-bg)' }}>
+    <div data-testid="header-bar-root" className={`sticky top-0 z-10 border-b pt-3 pb-2 mb-2 relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 sm:flex sm:items-center sm:gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "border-gray-700"}`} style={outageHp !== null ? undefined : { backgroundColor: 'var(--color-bg)' }}>
       {/* Left group: identity */}
       <div className="hidden sm:flex items-center gap-2 min-w-0 px-2 sm:px-0">
         <button type="button" onClick={handleHomeClick} aria-label="Home" className="hidden sm:block cursor-pointer">
@@ -332,63 +360,67 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
         <span className="whitespace-nowrap text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
       </div>
       {/* Hamburger menu — mobile only */}
-      <div ref={menuRef} className="sm:hidden flex-shrink-0 col-start-3 row-start-1 self-end justify-self-end">
-        <button type="button" onClick={() => setMenuOpen((v) => !v)} className="rounded-none px-3 py-1.5 text-gray-400 transition-colors hover:bg-gray-800/70 hover:text-white" aria-label="Menu">
+      <div ref={menuRef} data-testid="mobile-menu-anchor" className="sm:hidden flex-shrink-0 col-start-3 row-start-1 self-end justify-self-end">
+        <button ref={menuButtonRef} type="button" onClick={() => setMenuOpen((v) => !v)} className="rounded-none px-3 py-1.5 text-gray-400 transition-colors hover:bg-gray-800/70 hover:text-white" aria-label="Menu">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             {menuOpen
               ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />}
           </svg>
         </button>
-        {menuOpen && (
-          <div data-testid="mobile-menu-panel" className="absolute left-2 right-2 top-full z-20 mt-2 flex min-h-[28rem] max-h-[calc(100dvh-5rem)] w-auto flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-lg">
-            <div className="flex flex-col gap-4">
-              <MobileMenuStatusBlock
-                displayTD={displayTD}
-                activeMultiplier={activeMultiplier}
-                isBYOK={isBYOK}
-                byokTotalCost={byokTotalCost}
-                remaining={remaining}
-                totalQuota={totalQuota}
-                quotaPercent={quotaPercent}
-                quotaTooltip={quotaTooltip}
-              />
-              <div>
-                <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ ACTIONS ]</div>
-                <div className="flex flex-col">
-                  <MobileMenuLink command="/store" description="Buy coping mechanisms" onClick={() => { setMenuOpen(false); onStoreClick(); }} />
-                  <MobileMenuLink command="/upgrade" description="Unlock MAX 429X" onClick={() => { setMenuOpen(false); onUpgradeClick?.(); }} />
-                  <MobileMenuLink command="/leaderboard" description="The Hall of Blame" onClick={() => { setMenuOpen(false); onLeaderboardClick(); }} />
-                  <MobileMenuLink command="/achievements" description="Trophies for bad choices" onClick={() => { setMenuOpen(false); onAchievementsClick(); }} />
-                </div>
-              </div>
-              <div>
-                <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ SYSTEM ]</div>
-                <div className="flex flex-col">
-                  <MobileMenuLink command="/profile" description="Your miserable stats" onClick={() => { setMenuOpen(false); onProfileClick(); }} />
-                  <MobileMenuLink command="/help" description="Available commands" onClick={() => { setMenuOpen(false); onHelpClick(); }} />
-                  <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 py-1.5 hover:text-white">
-                    <span className="font-mono text-gray-200">/github</span>
-                    <span className="min-w-0 flex-1 text-right text-xs text-gray-500">Source code</span>
-                  </a>
-                </div>
+      </div>
+      {menuOpen && (
+        <div
+          data-testid="mobile-menu-panel"
+          className="fixed left-2 right-2 z-20 flex min-h-[28rem] flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-lg sm:hidden"
+          style={{ top: `${mobileMenuPosition.top}px`, maxHeight: `${mobileMenuPosition.maxHeight}px` }}
+        >
+          <div className="flex flex-col gap-4">
+            <MobileMenuStatusBlock
+              displayTD={displayTD}
+              activeMultiplier={activeMultiplier}
+              isBYOK={isBYOK}
+              byokTotalCost={byokTotalCost}
+              remaining={remaining}
+              totalQuota={totalQuota}
+              quotaPercent={quotaPercent}
+              quotaTooltip={quotaTooltip}
+            />
+            <div>
+              <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ ACTIONS ]</div>
+              <div className="flex flex-col">
+                <MobileMenuLink command="/store" description="Buy coping mechanisms" onClick={() => { setMenuOpen(false); onStoreClick(); }} />
+                <MobileMenuLink command="/upgrade" description="Unlock MAX 429X" onClick={() => { setMenuOpen(false); onUpgradeClick?.(); }} />
+                <MobileMenuLink command="/leaderboard" description="The Hall of Blame" onClick={() => { setMenuOpen(false); onLeaderboardClick(); }} />
+                <MobileMenuLink command="/achievements" description="Trophies for bad choices" onClick={() => { setMenuOpen(false); onAchievementsClick(); }} />
               </div>
             </div>
-            <div className="mt-auto border-t border-gray-700 pt-3 text-xs text-gray-500">
-              <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono">
-                <a href="https://github.com/integry/claude-cope/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">/terms</a>
-                <a href="https://github.com/integry/claude-cope/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">/privacy</a>
-                <button type="button" onClick={() => { setMenuOpen(false); onAboutClick(); }} className="hover:text-gray-300">/about</button>
-                <button type="button" onClick={() => { setMenuOpen(false); onContactClick(); }} className="hover:text-gray-300">/contact</button>
+            <div>
+              <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ SYSTEM ]</div>
+              <div className="flex flex-col">
+                <MobileMenuLink command="/profile" description="Your miserable stats" onClick={() => { setMenuOpen(false); onProfileClick(); }} />
+                <MobileMenuLink command="/help" description="Available commands" onClick={() => { setMenuOpen(false); onHelpClick(); }} />
+                <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 py-1.5 hover:text-white">
+                  <span className="font-mono text-gray-200">/github</span>
+                  <span className="min-w-0 flex-1 text-right text-xs text-gray-500">Source code</span>
+                </a>
               </div>
-              <p className="mt-1">© 2026 Unchained Development OÜ</p>
-              <p>git blame --author="Rinalds Uzkalns"</p>
-              <p>{"made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
-              <button type="button" onClick={() => { setMenuOpen(false); onSlashMenuClick?.(); }} className="mt-2 text-left hover:text-gray-300">Type <span className="text-green-400">/</span> in terminal for commands</button>
             </div>
           </div>
-        )}
-      </div>
+          <div className="mt-auto border-t border-gray-700 pt-3 text-xs text-gray-500">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono">
+              <a href="https://github.com/integry/claude-cope/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">/terms</a>
+              <a href="https://github.com/integry/claude-cope/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">/privacy</a>
+              <button type="button" onClick={() => { setMenuOpen(false); onAboutClick(); }} className="hover:text-gray-300">/about</button>
+              <button type="button" onClick={() => { setMenuOpen(false); onContactClick(); }} className="hover:text-gray-300">/contact</button>
+            </div>
+            <p className="mt-1">© 2026 Unchained Development OÜ</p>
+            <p>git blame --author="Rinalds Uzkalns"</p>
+            <p>{"made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
+            <button type="button" onClick={() => { setMenuOpen(false); onSlashMenuClick?.(); }} className="mt-2 text-left hover:text-gray-300">Type <span className="text-green-400">/</span> in terminal for commands</button>
+          </div>
+        </div>
+      )}
       {!isBYOK && <MobileQuotaLine quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} tipOpen={quotaTipOpen} setTipOpen={setQuotaTipOpen} />}
     </div>
   );

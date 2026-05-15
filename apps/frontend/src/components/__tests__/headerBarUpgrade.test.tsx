@@ -82,9 +82,6 @@ function clickElement(element: HTMLButtonElement | null | undefined) {
 
 function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | null) {
   expect(menuPanel).not.toBeNull();
-  expect(menuPanel?.className).toContain("left-2");
-  expect(menuPanel?.className).toContain("right-2");
-  expect(menuPanel?.className).toContain("w-auto");
   for (const text of mobileMenuTexts) {
     expect(menuPanel?.textContent).toContain(text);
   }
@@ -146,6 +143,26 @@ function expectMobileIdentityLayout() {
   expect(mobileStatusBlock?.textContent).not.toContain("Debt:");
 }
 
+function mockMenuButtonRect(rect: Partial<DOMRect>) {
+  const menuButton = container.querySelector("button[aria-label='Menu']") as HTMLButtonElement | null;
+  expect(menuButton).not.toBeNull();
+  const defaultRect = {
+    x: 0,
+    y: 0,
+    width: 44,
+    height: 32,
+    top: 12,
+    left: 320,
+    right: 364,
+    bottom: 44,
+    toJSON: () => ({}),
+  } satisfies Partial<DOMRect>;
+  vi.spyOn(menuButton!, "getBoundingClientRect").mockReturnValue({
+    ...defaultRect,
+    ...rect,
+  } as DOMRect);
+}
+
 function openMobileMenu() {
   const menuButton = container.querySelector("button[aria-label='Menu']") as HTMLButtonElement | null;
   expect(menuButton).not.toBeNull();
@@ -168,6 +185,7 @@ function expectMaxBadgePlacement() {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   if (container) {
     document.body.removeChild(container);
   }
@@ -243,6 +261,7 @@ describe("HeaderBar upgrade CTA visibility", () => {
 
   it("renders the mobile menu as a boxed dashboard with action, system, and footer sections", () => {
     renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
+    mockMenuButtonRect({ bottom: 52 });
 
     const menuButton = container.querySelector("button[aria-label='Menu']") as HTMLButtonElement | null;
     expect(menuButton?.className).toContain("rounded-none");
@@ -252,6 +271,28 @@ describe("HeaderBar upgrade CTA visibility", () => {
     const statBox = queryByTestId("mobile-menu-stat-box");
 
     expectMobileMenuContents(menuPanel, statBox);
+  });
+
+  it("anchors the mobile menu to the viewport using the trigger geometry instead of the trigger wrapper", () => {
+    const originalInnerHeight = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
+    renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
+    mockMenuButtonRect({ bottom: 64 });
+
+    openMobileMenu();
+
+    const menuPanel = queryByTestId("mobile-menu-panel") as HTMLDivElement | null;
+    const menuAnchor = queryByTestId("mobile-menu-anchor");
+    const headerRoot = queryByTestId("header-bar-root");
+
+    expect(menuPanel).not.toBeNull();
+    expect(menuPanel?.className).toContain("fixed");
+    expect(menuAnchor?.contains(menuPanel)).toBe(false);
+    expect(headerRoot?.contains(menuPanel)).toBe(true);
+    expect(menuPanel?.style.top).toBe("72px");
+    expect(menuPanel?.style.maxHeight).toBe("820px");
+
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: originalInnerHeight });
   });
 });
 
