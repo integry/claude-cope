@@ -80,6 +80,11 @@ function clickElement(element: HTMLButtonElement | null | undefined) {
   });
 }
 
+function getMobileHomeButton() {
+  return (queryByTestId("mobile-header-logo-expanded") ??
+    queryByTestId("mobile-header-logo")) as HTMLButtonElement | null;
+}
+
 function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | null) {
   expect(menuPanel).not.toBeNull();
   for (const text of mobileMenuTexts) {
@@ -107,6 +112,7 @@ function expectDesktopStackedIdentityAndStatus() {
   const technicalDebtLine = queryByTestId("desktop-technical-debt-line");
   const detailLine = queryByTestId("desktop-status-detail-line");
   const mobileIdentityBlock = queryByTestId("mobile-identity-block");
+  const mobileRankLine = queryByTestId("mobile-rank-line");
   const mobileStatusBlock = queryByTestId("mobile-status-block");
 
   expect(identityBlock).not.toBeNull();
@@ -123,7 +129,11 @@ function expectDesktopStackedIdentityAndStatus() {
   expect(technicalDebtLine?.textContent).toContain("Technical Debt:");
   expect(detailLine?.textContent).toContain("External Billing Active:");
   expect(detailLine?.textContent).toContain("$1.25");
+  expect(mobileIdentityBlock).not.toBeNull();
   expect(mobileIdentityBlock?.className).toContain("sm:hidden");
+  expect(mobileRankLine).not.toBeNull();
+  expect(mobileRankLine?.className).toContain("sm:hidden");
+  expect(mobileStatusBlock).not.toBeNull();
   expect(mobileStatusBlock?.className).toContain("sm:hidden");
 }
 
@@ -250,7 +260,7 @@ describe("HeaderBar upgrade CTA visibility", () => {
     openMobileMenu();
     expect(queryByTestId("mobile-menu-panel")).not.toBeNull();
 
-    const mobileLogo = queryByTestId("mobile-header-logo") as HTMLButtonElement | null;
+    const mobileLogo = getMobileHomeButton();
     clickElement(mobileLogo);
 
     expect(onHomeClick).toHaveBeenCalledTimes(1);
@@ -263,8 +273,15 @@ describe("HeaderBar upgrade CTA visibility", () => {
     openMobileMenu();
 
     const expandedLogo = queryByTestId("mobile-header-logo-expanded");
+    const mobileHeaderContent = queryByTestId("mobile-header-content");
+    const mobileHeaderSpacer = queryByTestId("mobile-header-open-spacer");
+    const headerRoot = queryByTestId("header-bar-root");
     expect(expandedLogo?.tagName).toBe("BUTTON");
     expect(expandedLogo?.querySelector("img")?.getAttribute("src")).toBe("/media/logo-400-transparent.png");
+    expect(expandedLogo?.className).not.toContain("absolute");
+    expect(mobileHeaderContent?.className).toContain("grid-rows-[auto_auto]");
+    expect(mobileHeaderSpacer?.textContent).toBe("\u00a0");
+    expect(headerRoot?.className).not.toContain("h-[56px]");
     expect(queryByTestId("mobile-identity-block")).toBeNull();
     expect(queryByTestId("mobile-rank-line")).toBeNull();
     expect(queryByTestId("mobile-status-block")).toBeNull();
