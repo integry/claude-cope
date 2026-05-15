@@ -342,7 +342,8 @@ score.post("/", async (c) => {
     if (resolution.profile === null) {
       return c.json({ error: resolution.error }, resolution.code === "revoked" ? 403 : 409);
     }
-    const updated = await syncResolvedProUser(db, body, resolution.profile);
+    const { profile } = resolution;
+    const updated = await syncResolvedProUser(db, body, profile);
     if (updated) return c.json({ profile: updated });
     return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }
