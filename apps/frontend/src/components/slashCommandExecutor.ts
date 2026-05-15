@@ -1026,7 +1026,7 @@ function handleExtendedCommand(command: string, ctx: SlashCommandContext, reply:
       role: "system",
       content: `[✓] Thank you for your feedback. After careful analysis: works on my machine. Closing ticket as **WONTFIX**. Have a synergistic day.
 
-[INFO] Real issue? Escalate to [ GITHUB ISSUES ](${GITHUB_ISSUES_URL}).`,
+[INFO] Real issue? Escalate to [GITHUB ISSUES](${GITHUB_ISSUES_URL}).`,
     });
     return true;
   }
