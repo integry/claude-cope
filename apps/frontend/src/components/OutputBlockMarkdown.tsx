@@ -191,7 +191,7 @@ export function buildMarkdownComponents(
       return <li className="leading-relaxed">{processed}</li>;
     },
     pre({ children }: { children?: React.ReactNode }) {
-      return <pre className="my-3 rounded whitespace-pre-wrap break-words">{children}</pre>;
+      return <pre className="terminal-markdown-codeblock my-3 rounded whitespace-pre-wrap break-words">{children}</pre>;
     },
     code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
       const match = /language-(\w+)/.exec(className || "");
@@ -201,7 +201,7 @@ export function buildMarkdownComponents(
         if (terminalLangs.includes(match[1]!)) {
           const lines = codeString.split("\n");
           return (
-            <code className="block whitespace-pre text-gray-100">
+            <code className="terminal-markdown-codeblock block whitespace-pre text-gray-100">
               {lines.map((line, index) => (
                 <React.Fragment key={index}>
                   {renderLineWithTags(line, onSlashCommand)}
@@ -216,6 +216,7 @@ export function buildMarkdownComponents(
             style={vscDarkPlus}
             language={match[1]}
             PreTag="div"
+            className="terminal-markdown-codeblock"
           >
             {codeString}
           </SyntaxHighlighter>
