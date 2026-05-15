@@ -341,7 +341,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           </svg>
         </button>
         {menuOpen && (
-          <div data-testid="mobile-menu-panel" className="absolute right-0 top-full z-20 mt-2 flex min-h-[28rem] max-h-[calc(100dvh-5rem)] w-[360px] max-w-[calc(100vw-1rem)] flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-lg">
+          <div data-testid="mobile-menu-panel" className="absolute right-2 top-full z-20 mt-2 flex min-h-[28rem] max-h-[calc(100dvh-5rem)] w-[calc(100vw-1rem)] max-w-[360px] flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-lg">
             <div className="flex flex-col gap-4">
               <MobileMenuStatusBlock
                 displayTD={displayTD}
@@ -381,7 +381,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
                 <button type="button" onClick={() => { setMenuOpen(false); onAboutClick(); }} className="hover:text-gray-300">/about</button>
                 <button type="button" onClick={() => { setMenuOpen(false); onContactClick(); }} className="hover:text-gray-300">/contact</button>
               </div>
-              <p className="mt-1"><span className="text-gray-400">[BLAME]</span> {"© 2026 Unchained Development OÜ && git blame --author=\"Rinalds Uzkalns\""}</p>
+              <p className="mt-1">© 2026 Unchained Development OÜ git blame --author="Rinalds Uzkalns"</p>
               <p>{"made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
               <button type="button" onClick={() => { setMenuOpen(false); onSlashMenuClick?.(); }} className="mt-2 text-left hover:text-gray-300">Type <span className="text-green-400">/</span> in terminal for commands</button>
             </div>

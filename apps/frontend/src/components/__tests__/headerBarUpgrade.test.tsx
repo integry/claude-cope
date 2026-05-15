@@ -56,8 +56,7 @@ const mobileMenuTexts = [
   "/privacy",
   "/about",
   "/contact",
-  "[BLAME]",
-  "© 2026 Unchained Development OÜ && git blame --author=\"Rinalds Uzkalns\"",
+  "© 2026 Unchained Development OÜ git blame --author=\"Rinalds Uzkalns\"",
   "made with propr.dev",
 ];
 const mobileMenuStatTexts = ["Technical Debt:", "3,880 TD", "API Quota:"];
@@ -85,9 +84,13 @@ function clickElement(element: HTMLButtonElement | null | undefined) {
 function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | null) {
   expect(menuPanel).not.toBeNull();
   expect(menuPanel?.className).toContain("w-[360px]");
+  expect(menuPanel?.className).toContain("right-2");
+  expect(menuPanel?.className).toContain("w-[calc(100vw-1rem)]");
   for (const text of mobileMenuTexts) {
     expect(menuPanel?.textContent).toContain(text);
   }
+  expect(menuPanel?.textContent).not.toContain("[BLAME]");
+  expect(menuPanel?.textContent).not.toContain("&&");
   for (const text of mobileMenuStatTexts) {
     expect(statBox?.textContent).toContain(text);
   }
