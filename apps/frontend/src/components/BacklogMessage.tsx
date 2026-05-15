@@ -18,6 +18,10 @@ function renderTicketId(
 ): React.ReactNode {
   if (!onSlashCommand) return shortId;
 
+  const executeTake = () => {
+    onSlashCommand(`/take ${fullId}`, "execute");
+  };
+
   return (
     <button
       type="button"
@@ -25,7 +29,7 @@ function renderTicketId(
       aria-label={isLocked ? `View premium ticket ${fullId}` : `Claim ticket ${fullId}`}
       onClick={(event) => {
         event.stopPropagation();
-        onSlashCommand(`/take ${fullId}`, "execute");
+        executeTake();
       }}
     >
       {shortId}
@@ -40,6 +44,11 @@ function BacklogTicketRow({
   ticket: BacklogDisplayData["tickets"][number];
   onSlashCommand?: (command: string, action: SlashCommandAction) => void;
 }) {
+  const executeTake = () => {
+    if (!onSlashCommand) return;
+    onSlashCommand(`/take ${ticket.fullId}`, "execute");
+  };
+
   return (
     <div
       className="border-b border-dashed border-cyan-400/40 py-2 last:border-b-0 md:grid md:grid-cols-[3rem_7rem_minmax(0,1fr)_5rem_5.5rem] md:items-start md:gap-3"
@@ -58,7 +67,18 @@ function BacklogTicketRow({
         {ticket.reward}
       </div>
 
-      <div className="flex flex-col gap-1 md:hidden">
+      <div
+        className={`flex flex-col gap-1 md:hidden ${onSlashCommand ? "cursor-pointer" : ""}`}
+        role={onSlashCommand ? "button" : undefined}
+        tabIndex={onSlashCommand ? 0 : undefined}
+        aria-label={onSlashCommand ? `Select backlog item ${ticket.fullId}` : undefined}
+        onClick={onSlashCommand ? executeTake : undefined}
+        onKeyDown={onSlashCommand ? (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          executeTake();
+        } : undefined}
+      >
         <div className="flex items-center justify-between gap-3 text-[12px] text-slate-400">
           <div className="flex min-w-0 items-center gap-2">
             <span className="text-slate-200">[{ticket.row}]</span>
