@@ -248,6 +248,50 @@ function renderPlainMessage(
   return <>{linkify(body)}</>;
 }
 
+function renderMessageContentBody(
+  message: Message,
+  buddyData: BuddyRenderData,
+  useMarkdown: boolean,
+  isAwaitingResponse: boolean,
+  isStreaming: boolean,
+  shouldTypewrite: boolean,
+  visibleContent: string,
+  isTyping: boolean,
+  onSlashCommand: ((command: string, action: SlashCommandAction) => void) | undefined,
+  shareNode: React.ReactNode,
+  mdComponents: ReturnType<typeof buildMarkdownComponents>,
+) {
+  const { role, content } = message;
+
+  if (message.backlogDisplay && role === "system") {
+    return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
+  }
+
+  if (message.ticketDisplay && role === "system") {
+    return <TicketMessage ticket={message.ticketDisplay} onSlashCommand={onSlashCommand} />;
+  }
+
+  if (role === "user") return null;
+
+  if (buddyData.isBuddyInterjection) {
+    return renderBuddyInterjection(buddyData, shareNode, mdComponents);
+  }
+
+  if (useMarkdown || isStreaming) {
+    return renderMarkdownMessage(
+      content,
+      shouldTypewrite,
+      visibleContent,
+      isStreaming,
+      isTyping,
+      shareNode,
+      mdComponents,
+    );
+  }
+
+  return renderPlainMessage(role, content, buddyData.body, isAwaitingResponse, onSlashCommand);
+}
+
 function MessageContent({
   message,
   buddyData,
@@ -276,33 +320,19 @@ function MessageContent({
 
   // Backlog messages intentionally bypass markdown rendering so the responsive
   // table layout stays intact while `message.content` remains as a plain-text fallback.
-  if (message.backlogDisplay && role === "system") {
-    return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
-  }
-
-  if (message.ticketDisplay && role === "system") {
-    return <TicketMessage ticket={message.ticketDisplay} onSlashCommand={onSlashCommand} />;
-  }
-
-  if (role === "user") return null;
-
-  if (buddyData.isBuddyInterjection) {
-    return renderBuddyInterjection(buddyData, shareNode, mdComponents);
-  }
-
-  if (useMarkdown || isStreaming) {
-    return renderMarkdownMessage(
-      content,
-      shouldTypewrite,
-      visibleContent,
-      isStreaming,
-      isTyping,
-      shareNode,
-      mdComponents,
-    );
-  }
-
-  return renderPlainMessage(role, content, buddyData.body, isAwaitingResponse, onSlashCommand);
+  return renderMessageContentBody(
+    message,
+    buddyData,
+    useMarkdown,
+    isAwaitingResponse,
+    isStreaming,
+    shouldTypewrite,
+    visibleContent,
+    isTyping,
+    onSlashCommand,
+    shareNode,
+    mdComponents,
+  );
 }
 
 function CostDisplay({ cost }: { cost: number }) {
