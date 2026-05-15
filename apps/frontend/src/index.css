@@ -231,6 +231,10 @@ body {
   margin: 0;
 }
 
+.terminal-markdown-codeblock {
+  font-size: 0.875rem;
+}
+
 @media (max-width: 768px) {
   .terminal-buddy-display {
     font-size: 0.625rem;
@@ -355,10 +359,6 @@ body {
 
 .terminal-tip-body button {
   font-style: italic;
-}
-
-.terminal-markdown-codeblock {
-  font-size: 0.875rem;
 }
 
 .terminal-command-placeholder-leading-char {
