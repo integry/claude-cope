@@ -77,7 +77,7 @@ function MobileQuotaLine({ quotaPercent, quotaTooltip, tipOpen, setTipOpen }: Mo
 
 function MobileMenuStatusBlock({ displayTD, activeMultiplier, isBYOK, byokTotalCost, quotaPercent, remaining, totalQuota, quotaTooltip }: Omit<StatusProps, "isMax" | "onUpgradeClick">) {
   return (
-    <div data-testid="mobile-menu-stat-box" className="flex flex-col gap-2 border border-gray-700 bg-black/20 px-3 py-3">
+    <div data-testid="mobile-menu-stat-box" className="flex flex-col gap-2 py-1">
       <TechnicalDebtLine displayTD={displayTD} activeMultiplier={activeMultiplier} />
       {isBYOK ? <div className="max-w-full"><StatusDetailLine isBYOK={isBYOK} isMax={false} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} /></div> : <DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} />}
     </div>
@@ -113,7 +113,9 @@ function MobileMenuPanel({
   return (
     <div data-testid="mobile-menu-panel" className="fixed left-2 right-2 z-20 flex min-h-[28rem] flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-lg sm:hidden" style={{ top: `${mobileMenuPosition.top}px`, maxHeight: `${mobileMenuPosition.maxHeight}px` }}>
       <div className="flex flex-col gap-4">
-        <MobileMenuStatusBlock displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} byokTotalCost={byokTotalCost} remaining={remaining} totalQuota={totalQuota} quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} />
+        <div className="border-b border-gray-700 pb-4">
+          <MobileMenuStatusBlock displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} byokTotalCost={byokTotalCost} remaining={remaining} totalQuota={totalQuota} quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} />
+        </div>
         <div><div className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ ACTIONS ]</div><div className="flex flex-col">{actionLinks.map((link) => <MobileMenuLink key={link.command} {...link} />)}</div></div>
         <div>
           <div className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ SYSTEM ]</div>
@@ -130,9 +132,11 @@ function MobileMenuPanel({
           <button type="button" onClick={closeAnd(onAboutClick)} className="hover:text-gray-300">/about</button>
           <button type="button" onClick={closeAnd(onContactClick)} className="hover:text-gray-300">/contact</button>
         </div>
-        <p className="mt-1">© 2026 Unchained Development OÜ</p>
-        <p>git blame --author="Rinalds Uzkalns"</p>
-        <p>{"made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
+        <div className="mt-1 font-mono leading-[1.15]">
+          <p>© 2026 Unchained Development OÜ</p>
+          <p>git blame --author="Rinalds Uzkalns"</p>
+          <p>{"made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
+        </div>
         <button type="button" onClick={closeAnd(onSlashMenuClick)} className="mt-2 text-left hover:text-gray-300">Type <span className="text-green-400">/</span> in terminal for commands</button>
       </div>
     </div>

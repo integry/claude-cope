@@ -101,6 +101,7 @@ function expectMobileMenuFooter(menuPanel: Element | null) {
 }
 
 function expectMobileMenuStatBox(statBox: Element | null) {
+  expect(statBox?.className).not.toContain("border");
   for (const text of mobileMenuStatTexts) {
     expect(statBox?.textContent).toContain(text);
   }
@@ -120,8 +121,14 @@ function expectMobileMenuLinkStyles(menuPanel: Element | null) {
 function expectMobileMenuSectionSpacing(menuPanel: Element | null) {
   const actionsHeading = Array.from(menuPanel?.querySelectorAll("div") ?? []).find((element) => element.textContent === "[ ACTIONS ]");
   const systemHeading = Array.from(menuPanel?.querySelectorAll("div") ?? []).find((element) => element.textContent === "[ SYSTEM ]");
+  const statusDivider = statBoxParent(menuPanel);
+  expect(statusDivider?.className).toContain("border-b");
   expect(actionsHeading?.className).toContain("mb-3");
   expect(systemHeading?.className).toContain("mb-3");
+}
+
+function statBoxParent(menuPanel: Element | null) {
+  return queryByTestId("mobile-menu-stat-box")?.parentElement ?? menuPanel?.firstElementChild?.firstElementChild ?? null;
 }
 
 function expectMobileMenuEntryLayout(menuPanel: Element | null) {
@@ -343,7 +350,7 @@ describe("HeaderBar upgrade CTA visibility", () => {
     expect(quotaLine?.textContent).toContain("Upgrade to Max 429X");
   });
 
-  it("renders the mobile menu as a boxed dashboard with action, system, and footer sections", () => {
+  it("renders the mobile menu with a single-divider stats header plus action, system, and footer sections", () => {
     renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
     mockMenuButtonRect({ bottom: 52 });
 
