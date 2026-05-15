@@ -97,46 +97,20 @@ function TokenCounter({ tokensSent, tokensReceived }: { tokensSent?: number; tok
   );
 }
 
-type BuddyRenderData = {
-  isBuddyInterjection: boolean;
-  buddyBlock: string;
-  body: string;
-};
-
-type ParsedBuddyBlock = {
-  art: string;
-  speech: string;
-  type: string;
-};
+type BuddyRenderData = { isBuddyInterjection: boolean; buddyBlock: string; body: string };
+type ParsedBuddyBlock = { art: string; speech: string; type: string };
 
 function getBuddyRenderData(message: Message): BuddyRenderData {
-  if (message.role !== "warning") {
-    return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
-  }
-
+  if (message.role !== "warning") return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
   const buddyBlock = extractBuddyInterjectionBlock(message.content, message.buddyType);
-  if (!buddyBlock) {
-    return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
-  }
-
-  return {
-    isBuddyInterjection: true,
-    buddyBlock: buddyBlock.block,
-    body: buddyBlock.body,
-  };
+  if (!buddyBlock) return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
+  return { isBuddyInterjection: true, buddyBlock: buddyBlock.block, body: buddyBlock.body };
 }
 
 function getParsedBuddyBlock(buddyBlock: string): ParsedBuddyBlock | null {
   const parsed = parseBuddyInterjection(buddyBlock);
-  if (!parsed) {
-    return null;
-  }
-
-  return {
-    art: BUDDY_ICONS[parsed.type] ?? "",
-    speech: parsed.speech,
-    type: parsed.type,
-  };
+  if (!parsed) return null;
+  return { art: BUDDY_ICONS[parsed.type] ?? "", speech: parsed.speech, type: parsed.type };
 }
 
 function getContainerClass(message: Message, isNew: boolean): string {
@@ -164,10 +138,7 @@ function getMessageFlags(role: string, content: string, isBuddyInterjection: boo
   return { useMarkdown, isAwaitingResponse, isStreaming };
 }
 
-function renderTipContent(
-  tipData: TipRenderData,
-  onSlashCommand?: (command: string, action: SlashCommandAction) => void,
-) {
+function renderTipContent(tipData: TipRenderData, onSlashCommand?: (command: string, action: SlashCommandAction) => void) {
   const linkifiedBody = onSlashCommand ? renderWithSlashLinks(tipData.body, onSlashCommand) : tipData.body;
   return (
     <div className="terminal-tip-output">
@@ -177,11 +148,7 @@ function renderTipContent(
   );
 }
 
-function renderBuddyFallback(
-  buddyBlock: string,
-  processedBody: string,
-  mdComponents: ReturnType<typeof buildMarkdownComponents>,
-) {
+function renderBuddyFallback(buddyBlock: string, processedBody: string, mdComponents: ReturnType<typeof buildMarkdownComponents>) {
   return (
     <div className="space-y-3">
       <pre className="max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-mono">{buddyBlock}</pre>
@@ -201,11 +168,7 @@ function renderBuddyInterjection(
 ) {
   const processedBody = buddyData.body ? appendShareMarker(cleanLLMOutput(buddyData.body), Boolean(shareNode)) : "";
   const parsedBuddyBlock = getParsedBuddyBlock(buddyData.buddyBlock);
-
-  if (!parsedBuddyBlock) {
-    return renderBuddyFallback(buddyData.buddyBlock, processedBody, mdComponents);
-  }
-
+  if (!parsedBuddyBlock) return renderBuddyFallback(buddyData.buddyBlock, processedBody, mdComponents);
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
@@ -225,13 +188,8 @@ function renderBuddyInterjection(
 }
 
 type MarkdownMessageRenderOptions = {
-  content: string;
-  shouldTypewrite: boolean;
-  visibleContent: string;
-  isStreaming: boolean;
-  isTyping: boolean;
-  shareNode: React.ReactNode;
-  mdComponents: ReturnType<typeof buildMarkdownComponents>;
+  content: string; shouldTypewrite: boolean; visibleContent: string; isStreaming: boolean;
+  isTyping: boolean; shareNode: React.ReactNode; mdComponents: ReturnType<typeof buildMarkdownComponents>;
 };
 
 function renderMarkdownMessage({
@@ -256,28 +214,16 @@ function renderMarkdownMessage({
   );
 }
 
-function renderPlainMessage(
-  role: Message["role"],
-  content: string,
-  body: string,
-  isAwaitingResponse: boolean,
-  onSlashCommand?: (command: string, action: SlashCommandAction) => void,
-) {
+function renderPlainMessage(role: Message["role"], content: string, body: string, isAwaitingResponse: boolean, onSlashCommand?: (command: string, action: SlashCommandAction) => void) {
   if (isAwaitingResponse) return <>{content}</>;
   if (role === "loading") return null;
-
-  const linkify = (text: string): React.ReactNode =>
-    onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
+  const linkify = (text: string): React.ReactNode => (onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text);
   return <>{linkify(body)}</>;
 }
 
 type MessageContentRenderContext = {
-  message: Message;
-  tipData: TipRenderData;
-  buddyData: BuddyRenderData;
-  flags: ReturnType<typeof getMessageFlags>;
-  markdown: MarkdownMessageRenderOptions;
-  onSlashCommand: ((command: string, action: SlashCommandAction) => void) | undefined;
+  message: Message; tipData: TipRenderData; buddyData: BuddyRenderData; flags: ReturnType<typeof getMessageFlags>;
+  markdown: MarkdownMessageRenderOptions; onSlashCommand: ((command: string, action: SlashCommandAction) => void) | undefined;
 };
 
 function renderMessageContentBody({
@@ -290,29 +236,12 @@ function renderMessageContentBody({
 }: MessageContentRenderContext) {
   const { role, content } = message;
   const { useMarkdown, isAwaitingResponse, isStreaming } = flags;
-
-  if (message.backlogDisplay && role === "system") {
-    return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
-  }
-
-  if (message.ticketDisplay && role === "system") {
-    return <TicketMessage ticket={message.ticketDisplay} onSlashCommand={onSlashCommand} />;
-  }
-
+  if (message.backlogDisplay && role === "system") return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
+  if (message.ticketDisplay && role === "system") return <TicketMessage ticket={message.ticketDisplay} onSlashCommand={onSlashCommand} />;
   if (role === "user") return null;
-
-  if (tipData.isTip) {
-    return renderTipContent(tipData, onSlashCommand);
-  }
-
-  if (buddyData.isBuddyInterjection) {
-    return renderBuddyInterjection(buddyData, markdown.shareNode, markdown.mdComponents);
-  }
-
-  if (useMarkdown || isStreaming) {
-    return renderMarkdownMessage(markdown);
-  }
-
+  if (tipData.isTip) return renderTipContent(tipData, onSlashCommand);
+  if (buddyData.isBuddyInterjection) return renderBuddyInterjection(buddyData, markdown.shareNode, markdown.mdComponents);
+  if (useMarkdown || isStreaming) return renderMarkdownMessage(markdown);
   return renderPlainMessage(role, content, buddyData.body, isAwaitingResponse, onSlashCommand);
 }
 
@@ -331,12 +260,7 @@ function MessageContent({
 }) {
   const { role, content } = message;
   const tipData = getTipRenderData(message);
-  const flags = getMessageFlags(
-    role,
-    content,
-    buddyData.isBuddyInterjection,
-    tipData.isTip,
-  );
+  const flags = getMessageFlags(role, content, buddyData.isBuddyInterjection, tipData.isTip);
   const { useMarkdown } = flags;
   // Only typewrite actual AI responses (system role). Scaffold messages (ads,
   // queue warnings) render instantly so they don't vanish mid-animation when
@@ -356,14 +280,7 @@ function MessageContent({
 
   // Backlog messages intentionally bypass markdown rendering so the responsive
   // table layout stays intact while `message.content` remains as a plain-text fallback.
-  return renderMessageContentBody({
-    message,
-    tipData,
-    buddyData,
-    flags,
-    markdown,
-    onSlashCommand,
-  });
+  return renderMessageContentBody({ message, tipData, buddyData, flags, markdown, onSlashCommand });
 }
 
 function CostDisplay({ cost }: { cost: number }) {
@@ -434,15 +351,7 @@ function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, 
 
 type OutputBlockProps = Parameters<typeof OutputBlock>[0];
 
-const MESSAGE_COMPARISON_FIELDS = [
-  "role",
-  "content",
-  "displayType",
-  "shareClaim",
-  "buddyType",
-  "backlogDisplay",
-  "ticketDisplay",
-] as const satisfies readonly (keyof Message)[];
+const MESSAGE_COMPARISON_FIELDS = ["role", "content", "displayType", "shareClaim", "buddyType", "backlogDisplay", "ticketDisplay"] as const satisfies readonly (keyof Message)[];
 
 function messagesEqual(a: Message | undefined, b: Message | undefined): boolean {
   return a === b || MESSAGE_COMPARISON_FIELDS.every((field) => a?.[field] === b?.[field]);
