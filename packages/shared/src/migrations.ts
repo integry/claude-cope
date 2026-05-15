@@ -246,6 +246,27 @@ export const migrations: Migration[] = [
     name: "034_idx_user_scores_account_id",
     sql: "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_scores_account_id ON user_scores (account_id) WHERE account_id IS NOT NULL AND account_id != ''",
   },
+  {
+    name: "035_create_shared_cards",
+    sql: `CREATE TABLE IF NOT EXISTS shared_cards (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+      prompt TEXT NOT NULL,
+      response TEXT NOT NULL,
+      username TEXT NOT NULL,
+      theme TEXT,
+      renderer_version TEXT NOT NULL,
+      content_hash TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+  },
+  {
+    name: "036_idx_shared_cards_created_at",
+    sql: "CREATE INDEX IF NOT EXISTS idx_shared_cards_created_at ON shared_cards (created_at DESC)",
+  },
+  {
+    name: "037_idx_shared_cards_renderer_version",
+    sql: "CREATE INDEX IF NOT EXISTS idx_shared_cards_renderer_version ON shared_cards (renderer_version)",
+  },
 ];
 
 /**

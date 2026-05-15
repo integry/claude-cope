@@ -56,15 +56,30 @@ export type BacklogDisplayData = {
   tickets: BacklogDisplayTicket[];
 };
 
+export type TicketDisplayData = {
+  kind: "corporate-dossier";
+  status: "offered" | "claimed";
+  heading: string;
+  ticketId: string;
+  title: string;
+  reporter: string;
+  profile?: string;
+  body: string;
+  reward: string;
+  footer: string[];
+};
+
 export type Message = {
   id?: number;
   role: "user" | "system" | "loading" | "warning" | "error";
   content: string;
+  shareClaim?: string;
   buddyType?: string;
   tokensSent?: number;
   tokensReceived?: number;
   cost?: number;
   backlogDisplay?: BacklogDisplayData;
+  ticketDisplay?: TicketDisplayData;
 };
 
 // Backlog messages persist their structured payload so the responsive renderer

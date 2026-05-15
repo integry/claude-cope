@@ -10,6 +10,7 @@ import type { SlashCommandAction } from "./slashCommandDetect";
 import { appendShareMarker, buildMarkdownComponents, cleanLLMOutput } from "./OutputBlockMarkdown";
 import { BacklogMessage } from "./BacklogMessage";
 import { BUDDY_ICONS, extractBuddyInterjectionBlock, parseBuddyInterjection } from "./buddyConstants";
+import { TicketMessage } from "./TicketMessage";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
 
@@ -194,6 +195,10 @@ function MessageContent({
     return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
   }
 
+  if (message.ticketDisplay && role === "system") {
+    return <TicketMessage ticket={message.ticketDisplay} onSlashCommand={onSlashCommand} />;
+  }
+
   if (role === "user") return null;
 
   if (buddyData.isBuddyInterjection) {
@@ -267,21 +272,34 @@ function CostDisplay({ cost }: { cost: number }) {
 }
 
 
-function getShareProps(message: Message, previousMessage?: Message, nextMessage?: Message): { showShareButton: boolean; shareSystemMessage: string } {
-  const isSlashCommandResponse = previousMessage?.role === "user" && previousMessage.content.startsWith("/");
-  const showShareButton = message.role === "system" && previousMessage?.role === "user" && !isSlashCommandResponse;
-  const shareSystemMessage = showShareButton && nextMessage?.role === "warning"
-    ? nextMessage.content + "\n\n" + message.content
-    : message.content;
-  return { showShareButton, shareSystemMessage };
+function getShareProps(
+  message: Message,
+  previousMessage?: Message,
+  shareUserMessage?: Message,
+  enableShare = true,
+): { showShareButton: boolean; shareClaim?: string; shareSystemMessage: string; shareUserPrompt: string } {
+  const userTurn = shareUserMessage?.role === "user"
+    ? shareUserMessage
+    : previousMessage?.role === "user"
+      ? previousMessage
+      : undefined;
+  const isSlashCommandResponse = userTurn?.content.startsWith("/") ?? false;
+  const showShareButton = enableShare && message.role === "system" && Boolean(userTurn) && !isSlashCommandResponse && typeof message.shareClaim === "string";
+  return {
+    showShareButton,
+    shareClaim: message.shareClaim,
+    shareSystemMessage: message.content,
+    shareUserPrompt: userTurn?.content ?? "",
+  };
 }
 
-function OutputBlock({ message, previousMessage, nextMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand }: { message: Message; previousMessage?: Message; nextMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void }) {
+function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand, enableShare = true }: { message: Message; previousMessage?: Message; nextMessage?: Message; shareUserMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void; enableShare?: boolean }) {
+  void nextMessage;
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
-  const { showShareButton, shareSystemMessage } = getShareProps(message, previousMessage, nextMessage);
+  const { showShareButton, shareClaim, shareSystemMessage, shareUserPrompt } = getShareProps(message, previousMessage, shareUserMessage, enableShare);
   const buddyData = getBuddyRenderData(message);
   const shareNode = showShareButton ? (
-    <ShareButton userMessage={previousMessage!.content} systemMessage={shareSystemMessage} username={username} />
+    <ShareButton userMessage={shareUserPrompt} systemMessage={shareSystemMessage} username={username} shareClaim={shareClaim!} />
   ) : undefined;
 
   return (
@@ -313,23 +331,29 @@ function messagesEqual(a: Message | undefined, b: Message | undefined): boolean 
   return a === b || (
     a?.role === b?.role
     && a?.content === b?.content
+    && a?.shareClaim === b?.shareClaim
     && a?.buddyType === b?.buddyType
     && a?.backlogDisplay === b?.backlogDisplay
+    && a?.ticketDisplay === b?.ticketDisplay
   );
 }
 
 function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps): boolean {
   if (prev.message.role !== next.message.role) return false;
   if (prev.message.content !== next.message.content) return false;
+  if (prev.message.shareClaim !== next.message.shareClaim) return false;
   if (prev.message.buddyType !== next.message.buddyType) return false;
   if (prev.message.cost !== next.message.cost) return false;
   if (prev.message.backlogDisplay !== next.message.backlogDisplay) return false;
+  if (prev.message.ticketDisplay !== next.message.ticketDisplay) return false;
   if (prev.isNew !== next.isNew) return false;
   if (prev.promptString !== next.promptString) return false;
   if (!messagesEqual(prev.previousMessage, next.previousMessage)) return false;
   if (!messagesEqual(prev.nextMessage, next.nextMessage)) return false;
+  if (!messagesEqual(prev.shareUserMessage, next.shareUserMessage)) return false;
   if (prev.username !== next.username) return false;
   if (prev.onSlashCommand !== next.onSlashCommand) return false;
+  if (prev.enableShare !== next.enableShare) return false;
   // Only compare activeTicketId for loading messages
   if (prev.message.role === "loading" && prev.activeTicketId !== next.activeTicketId) return false;
   return true;

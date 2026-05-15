@@ -9,7 +9,7 @@ import { supabase } from "../supabaseClient";
 import { buildAchievementBox } from "./achievementBox";
 import { ALL_ACHIEVEMENTS } from "../game/achievements";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
-import { COPE_MODELS } from "@claude-cope/shared/models";
+import { getDefaultCopeModel, resolveCopeModel, resolveCopeModelId } from "@claude-cope/shared/models";
 import { handleChatErrorResponse, parseChatResponseBody } from "./chatApiResponse";
 import { TURNSTILE_REQUIRED_EVENT } from "../turnstileEvents";
 import { VERIFY_STATUS, UNAVAILABLE_REASON } from "@claude-cope/shared/turnstile";
@@ -236,8 +236,11 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
   // level — stale keys from prior sessions must not reach OpenRouter.
   const isBYOK = BYOK_ENABLED && Boolean(apiKey);
 
-  const copeModel = customModel ? COPE_MODELS.find((m) => m.id === customModel) : undefined;
-  const model = copeModel ? copeModel.openRouterId : customModel || (isBYOK ? "openai/gpt-oss-20b:free" : "nvidia/nemotron-nano-9b-v2:free");
+  const selectedCopeModelId = resolveCopeModelId(customModel);
+  const copeModel = resolveCopeModel(customModel);
+  const model = selectedCopeModelId
+    ? (copeModel ?? getDefaultCopeModel()).openRouterId
+    : customModel ?? getDefaultCopeModel().openRouterId;
 
   // Determine buddy type for context (only include if buddy result exists)
   const buddyTypeForContext = opts.buddyType && buddyResult ? opts.buddyType : null;
@@ -249,6 +252,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
           const messages = buildChatMessages({
             rank: currentRank,
             chatMessages,
+            modelId: selectedCopeModelId,
             modes,
             activeTicket,
             buddyType: buddyTypeForContext,
@@ -294,7 +298,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
             username: opts.username,
             inventory: opts.inventory,
             upgrades: opts.upgrades,
-            ...(customModel && COPE_MODELS.some((m) => m.id === customModel) ? { modelId: customModel } : {}),
+            ...(selectedCopeModelId ? { modelId: selectedCopeModelId } : {}),
             ...(proKeyHash ? { proKeyHash } : {}),
           }),
           signal,
@@ -307,7 +311,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
 
       const parsed = await parseChatResponseBody(res, setHistory, loadingMessageId, opts.addActiveTD, opts.onProfileUpdate);
       let { rawReply } = parsed;
-      const { tokensSent, tokensReceived, cost, quotaPercent } = parsed;
+      const { tokensSent, tokensReceived, cost, quotaPercent, shareClaim } = parsed;
 
       // Track BYOK usage (full stats per model)
       if (isBYOK && opts.onByokUsage) {
@@ -346,7 +350,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
       setHistory((prev) => {
         let updated = [
           ...prev.filter((msg) => msg.role !== "loading" || (loadingMessageId !== undefined && msg.id !== loadingMessageId)),
-          { role: "system" as const, content: finalReply, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
+          { role: "system" as const, content: finalReply, shareClaim, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
           ...achievementMessages,
           ...(buddyMessage ? [buddyMessage] : []),
         ];

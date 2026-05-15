@@ -24,7 +24,7 @@ services:
   backend:
     <<: *node-common
     working_dir: /app/apps/backend
-    command: npx wrangler dev
+    command: npx wrangler dev --config wrangler.local.toml
 
   frontend:
     <<: *node-common

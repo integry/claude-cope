@@ -67,6 +67,15 @@ describe("detectSlashCommands", () => {
     });
   });
 
+  it("treats /backlog as a prefill command for clickable UI entry points", () => {
+    const results = detectSlashCommands("Open /backlog to browse the category picker.");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      command: "/backlog",
+      action: "prefill",
+    });
+  });
+
   // False positive avoidance
   it("does NOT match API paths like /api/chat", () => {
     const results = detectSlashCommands("The endpoint is /api/chat for messaging.");

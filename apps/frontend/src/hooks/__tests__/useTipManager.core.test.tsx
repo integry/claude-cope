@@ -257,6 +257,7 @@ describe("useTipManager core behavior", () => {
     act(() => {
       harness.ref.current?.recordConversationRound();
       harness.ref.current?.setOnlineCount(1);
+      harness.ref.current?.recordValidCommand("/help");
     });
 
     expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([
@@ -284,6 +285,35 @@ describe("useTipManager core behavior", () => {
 
     expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([
       getContextualTip("td_1000", { totalTDEarned: 1_200 }),
+    ]);
+
+    act(() => {
+      harness.ref.current?.recordValidCommand("/help");
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([
+      getContextualTip("td_1000", { totalTDEarned: 1_200 }),
+      getContextualTip("lone_user_online"),
+    ]);
+  });
+
+  it("does not repeat the same contextual tip back-to-back", () => {
+    act(() => {
+      harness.ref.current?.setOnlineCount(1);
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([
+      getContextualTip("lone_user_online"),
+    ]);
+
+    act(() => {
+      harness.ref.current?.recordConversationRound();
+      harness.ref.current?.setOnlineCount(2);
+      harness.ref.current?.setOnlineCount(1);
+      harness.ref.current?.recordValidCommand("/help");
+    });
+
+    expect(harness.ref.current?.getHistory().map((message) => message.content)).toEqual([
       getContextualTip("lone_user_online"),
     ]);
   });
