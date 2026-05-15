@@ -404,11 +404,14 @@ body {
   background-color: rgba(125, 211, 252, 0.72);
   border-radius: 1px;
   box-shadow: 0 0 14px rgba(103, 232, 249, 0.28);
+}
+
+.terminal-command-cursor-blinking {
   animation: terminal-command-cursor-blink 1.1s steps(1, end) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .terminal-command-cursor {
+  .terminal-command-cursor-blinking {
     animation: none;
   }
 }

@@ -78,8 +78,8 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     const showPlaceholder = !value && !!placeholder;
     const showTabHint = showPlaceholder && !disabled;
     const showMobileSendButton = isMobileViewport && !!value && !disabled;
-    const showDecorativeCursor = showPlaceholder && isFocused && !disabled;
-    const hideNativeCaret = showDecorativeCursor;
+    const showDecorativeCursor = showPlaceholder && !disabled;
+    const hideNativeCaret = showDecorativeCursor && isFocused;
     const { accessiblePlaceholder, leadingPlaceholderChar, tabHintAriaLabel, tabHintLabel, trailingPlaceholderText } =
       getPlaceholderMetadata(placeholder, assistivePlaceholderHint, disabled, isMobileViewport);
     const commandRowClassName = getCommandRowClassName(isFocused, disabled);
@@ -128,7 +128,12 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                       data-testid="command-line-suggested-reply-leading-char"
                       className="terminal-command-placeholder-leading-char"
                     >
-                      {showDecorativeCursor && <span data-testid="command-line-cursor" className="terminal-command-cursor" />}
+                      {showDecorativeCursor && (
+                        <span
+                          data-testid="command-line-cursor"
+                          className={`terminal-command-cursor ${isFocused ? "terminal-command-cursor-blinking" : ""}`}
+                        />
+                      )}
                       <span className="terminal-command-placeholder-leading-char-text">{leadingPlaceholderChar}</span>
                     </span>
                     <span>{trailingPlaceholderText}</span>
