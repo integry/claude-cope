@@ -171,7 +171,6 @@ body {
 }
 
 .terminal-buddy-dock {
-  display: flex;
   align-items: flex-end;
   flex: 0 0 auto;
   align-self: flex-end;
@@ -206,6 +205,8 @@ body {
   display: flex;
   align-items: flex-start;
   max-width: 40%;
+  font-size: 0.625rem;
+  line-height: 1.1;
 }
 
 .terminal-footer-mobile-copy {
@@ -213,9 +214,9 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 0.1rem;
-  text-align: right;
+  align-items: flex-start;
+  gap: 0.3rem;
+  text-align: left;
 }
 
 .terminal-footer-mobile-status {
