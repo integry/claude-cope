@@ -51,6 +51,8 @@ function getCommandRowClassName(isFocused: boolean, disabled: boolean | undefine
   return `terminal-command-row flex items-center gap-1.5 ${isFocused && !disabled ? "terminal-command-row-active" : ""} ${disabled ? "terminal-command-row-disabled" : ""}`;
 }
 
+const mobileSendAreaClassName = "pr-[5.75rem]";
+
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
   function CommandLine(
     {
@@ -114,7 +116,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                 <div
                   aria-hidden="true"
                   data-testid="command-line-placeholder"
-                  className="terminal-command-placeholder pointer-events-none absolute inset-0 flex items-center gap-2 overflow-hidden whitespace-nowrap"
+                  className={`terminal-command-placeholder pointer-events-none absolute inset-0 flex items-center gap-2 overflow-hidden whitespace-nowrap ${showMobileSendButton ? mobileSendAreaClassName : ""}`}
                 >
                   <span data-testid="command-line-suggested-reply" className="min-w-0 truncate">
                     <span
@@ -154,22 +156,22 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                 onBlur={() => setIsFocused(false)}
                 placeholder={accessiblePlaceholder}
                 aria-label="Command line input"
-                className={`terminal-command-input relative z-10 w-full outline-none bg-transparent text-white font-bold disabled:opacity-50 py-0 leading-none ${hideNativeCaret ? "terminal-command-input-caret-hidden" : "caret-white"}`}
+                className={`terminal-command-input relative z-10 w-full outline-none bg-transparent text-white font-bold disabled:opacity-50 py-0 leading-none ${showMobileSendButton ? mobileSendAreaClassName : ""} ${hideNativeCaret ? "terminal-command-input-caret-hidden" : "caret-white"}`}
               />
+              {showMobileSendButton && (
+                <button
+                  type="button"
+                  data-testid="command-line-send-button"
+                  className="terminal-command-send-button absolute inset-y-0 right-0 z-20 flex w-[5.75rem] items-center justify-center"
+                  onMouseDown={keepInputFocus}
+                  onPointerDown={keepInputFocus}
+                  onClick={onSubmit}
+                  aria-label="Send command"
+                >
+                  [ ↵ ]
+                </button>
+              )}
             </div>
-            {showMobileSendButton && (
-              <button
-                type="button"
-                data-testid="command-line-send-button"
-                className="terminal-command-send-button flex shrink-0 items-center self-stretch px-3"
-                onMouseDown={keepInputFocus}
-                onPointerDown={keepInputFocus}
-                onClick={onSubmit}
-                aria-label="Send command"
-              >
-                [ ↵ ]
-              </button>
-            )}
           </div>
         </div>
       </div>
