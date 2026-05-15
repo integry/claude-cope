@@ -41,6 +41,7 @@ type TerminalViewProps = OverlayVisibility & {
   onlineCount: number;
   rank: GameState["economy"]["currentRank"];
   state: GameState;
+  handleHomeClick: () => void;
   handleProfileClick: () => void;
   setShowHelp: Dispatch<SetStateAction<boolean>>;
   setShowAbout: Dispatch<SetStateAction<boolean>>;
@@ -119,6 +120,7 @@ export function TerminalView({
   onlineCount,
   rank,
   state,
+  handleHomeClick,
   handleProfileClick,
   setShowHelp,
   setShowAbout,
@@ -230,6 +232,7 @@ export function TerminalView({
           isBYOK={BYOK_ENABLED && !!state.apiKey}
           isMax={!!state.proKey || !!state.proKeyHash}
           byokTotalCost={state.byokTotalCost}
+          onHomeClick={handleHomeClick}
           onProfileClick={handleProfileClick}
           onHelpClick={() => {
             closeAllOverlaysPreservingNag();

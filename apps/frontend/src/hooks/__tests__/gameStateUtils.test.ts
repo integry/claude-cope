@@ -86,4 +86,49 @@ describe("normalizePersistedMessage", () => {
 
     expect(loaded.chatHistory[0]).toEqual(message);
   });
+
+  it("collapses duplicate consecutive persisted tip messages on reload", () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      version: "1.0",
+      username: "tester",
+      lastLogin: 0,
+      economy: {
+        currentTD: 0,
+        totalTDEarned: 0,
+        currentRank: "Junior Code Monkey",
+        quotaPercent: 100,
+        quotaLockouts: 0,
+        tdMultiplier: 1,
+      },
+      inventory: {},
+      upgrades: [],
+      achievements: [],
+      buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 },
+      chatHistory: [
+        { role: "system", content: "Tip: Use /help to inspect the command surface.", displayType: "tip" },
+        { role: "system", content: "Tip: Use /help to inspect the command surface.", displayType: "tip" },
+        { role: "user", content: "hello" },
+      ],
+      commandUsage: {},
+      modes: { fast: false, voice: false },
+      activeTicket: null,
+      hasSeenTicketPrompt: false,
+      activeTheme: "default",
+      unlockedThemes: ["default"],
+      soundEnabled: true,
+      pendingCompletedTaskIds: [],
+      pendingCompletedTaskRewards: {},
+      authoritativeProfileFloor: null,
+    }));
+
+    const loaded = loadState();
+
+    expect(loaded.chatHistory).toHaveLength(2);
+    expect(loaded.chatHistory[0]).toMatchObject({
+      role: "system",
+      content: "Tip: Use /help to inspect the command surface.",
+      displayType: "tip",
+    });
+    expect(loaded.chatHistory[1]).toMatchObject({ role: "user", content: "hello" });
+  });
 });

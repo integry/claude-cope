@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect } from "react";
+import { memo, useState, useRef, useEffect, useCallback } from "react";
 import { useAnimatedCounter } from "../hooks/useAnimatedCounter";
 import { FREE_QUOTA_LIMIT, PRO_QUOTA_LIMIT } from "../config";
 
@@ -111,8 +111,17 @@ function StatusDetailLine({
   );
 }
 
-function MobileQuotaLine({ quotaPercent, quotaTooltip }: { quotaPercent: number; quotaTooltip: string }) {
-  const [tipOpen, setTipOpen] = useState(false);
+function MobileQuotaLine({
+  quotaPercent,
+  quotaTooltip,
+  tipOpen,
+  setTipOpen,
+}: {
+  quotaPercent: number;
+  quotaTooltip: string;
+  tipOpen: boolean;
+  setTipOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+}) {
   return (
     <div className="sm:hidden absolute bottom-0 left-0 right-0 h-[2px] bg-gray-800 cursor-pointer" onClick={() => setTipOpen((v) => !v)}>
       <div className={`h-full ${getQuotaBgColor(quotaPercent)} transition-all duration-500`} style={{ width: `${quotaPercent}%` }} />
@@ -263,9 +272,10 @@ function DesktopStatusBlock({
   );
 }
 
-function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isMax, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onStoreClick, onLeaderboardClick, onAchievementsClick, onContactClick, onSlashMenuClick, onUpgradeClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isMax: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onStoreClick: () => void; onLeaderboardClick: () => void; onAchievementsClick: () => void; onContactClick: () => void; onSlashMenuClick?: () => void; onUpgradeClick?: () => void }) {
+function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isMax, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onStoreClick, onLeaderboardClick, onAchievementsClick, onContactClick, onSlashMenuClick, onUpgradeClick, onHomeClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isMax: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onStoreClick: () => void; onLeaderboardClick: () => void; onAchievementsClick: () => void; onContactClick: () => void; onSlashMenuClick?: () => void; onUpgradeClick?: () => void; onHomeClick?: () => void }) {
   const displayTD = useAnimatedCounter(currentTD, 2660);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [quotaTipOpen, setQuotaTipOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const totalQuota = isMax ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT;
@@ -282,15 +292,24 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
     return () => document.removeEventListener("mousedown", handleClick);
   }, [menuOpen]);
 
+  const handleHomeClick = useCallback(() => {
+    setMenuOpen(false);
+    setQuotaTipOpen(false);
+    onHomeClick?.();
+  }, [onHomeClick]);
+
   return (
     <div className={`sticky top-0 z-10 border-b pt-3 pb-2 mb-2 relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 sm:flex sm:items-center sm:gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "border-gray-700"}`} style={outageHp !== null ? undefined : { backgroundColor: 'var(--color-bg)' }}>
       {/* Left group: identity */}
       <div className="hidden sm:flex items-center gap-2 min-w-0 px-2 sm:px-0">
-        <img src="/media/logo-400-transparent.png" alt="Logo" className="hidden sm:block max-h-12 w-auto flex-shrink-0 object-contain sm:mr-2" />
+        <button type="button" onClick={handleHomeClick} aria-label="Home" className="hidden sm:block cursor-pointer">
+          <img src="/media/logo-400-transparent.png" alt="Logo" className="hidden sm:block max-h-12 w-auto flex-shrink-0 object-contain sm:mr-2" />
+        </button>
         <DesktopIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
       </div>
-      <a
-        href="/"
+      <button
+        type="button"
+        onClick={handleHomeClick}
         aria-label="Home"
         data-testid="mobile-header-logo"
         className="row-span-2 row-start-1 col-start-1 flex sm:hidden items-center self-center px-2"
@@ -298,7 +317,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
         <span className="relative block h-8 w-[34px] overflow-hidden">
           <img src="/media/logo-400-transparent.png" alt="" aria-hidden="true" className="absolute left-0 top-1/2 h-8 max-w-none -translate-y-1/2" />
         </span>
-      </a>
+      </button>
       <MobileIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
       {/* Right group: status (desktop) */}
       <DesktopStatusBlock displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} onUpgradeClick={onUpgradeClick} />
@@ -363,7 +382,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           </div>
         )}
       </div>
-      {!isBYOK && <MobileQuotaLine quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} />}
+      {!isBYOK && <MobileQuotaLine quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} tipOpen={quotaTipOpen} setTipOpen={setQuotaTipOpen} />}
     </div>
   );
 }

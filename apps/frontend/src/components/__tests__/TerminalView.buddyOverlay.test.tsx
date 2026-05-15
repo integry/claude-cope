@@ -87,6 +87,7 @@ function createProps(state: GameState): React.ComponentProps<typeof TerminalView
     onlineCount: 0,
     rank: state.economy.currentRank,
     state,
+    handleHomeClick: noop,
     handleProfileClick: noop,
     setShowHelp: noop,
     setShowAbout: noop,

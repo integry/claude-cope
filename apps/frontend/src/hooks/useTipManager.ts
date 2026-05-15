@@ -12,6 +12,7 @@ import {
   hasRecentBacklogReminder,
   markTipShown,
   persistRecentTipHistory,
+  reconcilePersistedTipHistory,
   readRecentTipHistory,
   toExcludedTipIds,
 } from "./tipManagerUtils";
@@ -47,6 +48,7 @@ interface UseTipManagerArgs {
 type RecordValidCommandOptions = { suppressTip?: boolean };
 
 export function useTipManager({ isBooting, isInteractionBlocked = false, gameState, onlineCount, setHistory }: UseTipManagerArgs) {
+  const persistedTipState = reconcilePersistedTipHistory(gameState.chatHistory);
   const completedTaskCount = getCompletedTaskCount(gameState);
   const currentTD = gameState.economy.currentTD;
   const totalTDEarned = gameState.economy.totalTDEarned;
@@ -65,14 +67,14 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
   const noTicketMessageCountRef = useRef(0);
   const nextBacklogReminderThresholdRef = useRef(getNextBacklogReminderThreshold());
   const lastBacklogReminderTipIdRef = useRef<string | null>(null);
-  const recentTipHistoryRef = useRef<Record<string, number>>(readRecentTipHistory());
+  const recentTipHistoryRef = useRef<Record<string, number>>(persistedTipState.recentTipHistory);
   const interactionCountRef = useRef(0);
   const conversationRoundsRef = useRef(0);
   const lastTipInteractionCountRef = useRef<number | null>(null);
   const lastTipConversationRoundRef = useRef<number | null>(null);
   const pendingBacklogReminderRef = useRef<PendingBacklogReminder | null>(null);
   const pendingMilestoneTipRef = useRef<PendingMilestoneTip | null>(null);
-  const lastShownTipIdRef = useRef<string | null>(null);
+  const lastShownTipIdRef = useRef<string | null>(persistedTipState.lastShownTipId);
   const isBootingRef = useRef(isBooting);
   const isInteractionBlockedRef = useRef(isInteractionBlocked);
   const gameStateRef = useRef(gameState);
@@ -106,6 +108,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     if (lastShownTipIdRef.current === tip.id) return false;
     appendTip(setHistory, tip.text);
     lastShownTipIdRef.current = tip.id;
+    markTipShown(recentTipHistoryRef, tip);
     noteTipEmitted();
     return true;
   }, [canEmitTip, noteTipEmitted, setHistory]);
@@ -136,7 +139,6 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       });
       return;
     }
-    markTipShown(recentTipHistoryRef, pendingReminder.tip);
   }, [appendManagedTip, canEmitTip]);
 
   const flushPendingContextualTip = useCallback((options?: { allowDeferredBlockedTip?: boolean }) => {
@@ -151,7 +153,7 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
       const tip = selectContextualTip(
         trigger,
         { totalTDEarned: totalTDEarnedRef.current, hasActiveTicket: Boolean(gameStateRef.current.activeTicket) },
-        { excludeTipIds: toExcludedTipIds(lastShownTipIdRef.current ? [lastShownTipIdRef.current] : undefined) },
+        { excludeTipIds: toExcludedTipIds(Object.keys(recentTipHistoryRef.current), lastShownTipIdRef.current ? [lastShownTipIdRef.current] : undefined) },
       );
       if (!tip) {
         if (SINGLE_FIRE_CONTEXTUAL_TRIGGERS.has(trigger) && !firedContextualTipsRef.current.has(trigger)) {
@@ -191,7 +193,6 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
     });
     if (!tip) return;
     if (!appendManagedTip(tip)) return;
-    markTipShown(recentTipHistoryRef, tip);
   }, [appendManagedTip, canEmitTip]);
 
   const clearIdleTimer = useCallback(() => {
@@ -322,7 +323,6 @@ export function useTipManager({ isBooting, isInteractionBlocked = false, gameSta
         lastShownTipIdRef.current = previousLastShownTipId;
       };
     }
-    markTipShown(recentTipHistoryRef, tip);
     resetBacklogReminderProgress(noTicketMessageCountRef, nextBacklogReminderThresholdRef);
     return () => {
       rollbackReminderState();

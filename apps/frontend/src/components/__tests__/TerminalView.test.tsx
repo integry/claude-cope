@@ -86,6 +86,7 @@ describe("TerminalView ticker shortcuts", () => {
         tdMultiplier: 1,
       },
     }),
+    handleHomeClick: vi.fn(),
     handleProfileClick: vi.fn(),
     setShowHelp: vi.fn(),
     setShowAbout: vi.fn(),

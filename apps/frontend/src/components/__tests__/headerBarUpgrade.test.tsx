@@ -36,6 +36,7 @@ const baseProps = {
   onContactClick: vi.fn(),
   onSlashMenuClick: vi.fn(),
   onUpgradeClick: vi.fn(),
+  onHomeClick: vi.fn(),
 };
 
 let container: HTMLDivElement;
@@ -48,6 +49,17 @@ function renderHeaderBar(props: Record<string, unknown>) {
     root.render(createElement(HeaderBar, props as unknown as React.ComponentProps<typeof HeaderBar>));
   });
   return container;
+}
+
+function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | null) {
+  expect(menuPanel).not.toBeNull();
+  expect(menuPanel?.className).toContain("w-[360px]");
+  for (const text of ["[ ACTIONS ]", "[ SYSTEM ]", "/store", "Buy coping mechanisms", "/upgrade", "Unlock MAX 429X", "/leaderboard", "/achievements", "/profile", "/help", "/github", "/terms", "/privacy", "/about", "/contact", "© 2026 Unchained Development OÜ"]) {
+    expect(menuPanel?.textContent).toContain(text);
+  }
+  for (const text of ["+------------------------------------------+", "DEBT: 3,880 TD", "QUOTA:"]) {
+    expect(statBox?.textContent).toContain(text);
+  }
 }
 
 afterEach(() => {
@@ -117,13 +129,45 @@ describe("HeaderBar upgrade CTA visibility", () => {
     const mobileRankLine = container.querySelector("[data-testid='mobile-rank-line']");
     const mobileStatusBlock = container.querySelector("[data-testid='mobile-status-block']");
 
-    expect(mobileLogo?.getAttribute("href")).toBe("/");
+    expect(mobileLogo?.tagName).toBe("BUTTON");
     expect(mobileLogoImage?.getAttribute("src")).toBe("/media/logo-400-transparent.png");
     expect(mobileIdentityBlock?.textContent).toContain("TestUser");
     expect(mobileRankLine?.textContent).toContain("[Jr. Code Monkey]");
     expect(mobileRankLine?.className).toContain("whitespace-nowrap");
     expect(mobileStatusBlock?.textContent).toContain("3,880 TD");
     expect(mobileStatusBlock?.textContent).not.toContain("Debt:");
+  });
+
+  it("closes the mobile menu and invokes the shared home handler when the logo is clicked", () => {
+    const onHomeClick = vi.fn();
+    renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false, onHomeClick });
+
+    const menuButton = container.querySelector("button[aria-label='Menu']") as HTMLButtonElement | null;
+    act(() => {
+      menuButton?.click();
+    });
+    expect(container.querySelector("[data-testid='mobile-menu-panel']")).not.toBeNull();
+
+    const mobileLogo = container.querySelector("[data-testid='mobile-header-logo']") as HTMLButtonElement | null;
+    act(() => {
+      mobileLogo?.click();
+    });
+
+    expect(onHomeClick).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("[data-testid='mobile-menu-panel']")).toBeNull();
+  });
+
+  it("invokes the shared home handler from the desktop logo button", () => {
+    const onHomeClick = vi.fn();
+    renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false, onHomeClick });
+
+    const desktopLogo = Array.from(container.querySelectorAll("button[aria-label='Home']"))
+      .find((button) => button.className.includes("sm:block")) as HTMLButtonElement | undefined;
+    act(() => {
+      desktopLogo?.click();
+    });
+
+    expect(onHomeClick).toHaveBeenCalledTimes(1);
   });
 
   it("renders the desktop quota and upgrade CTA on the second status line for free users", () => {
@@ -149,27 +193,7 @@ describe("HeaderBar upgrade CTA visibility", () => {
     const menuPanel = container.querySelector("[data-testid='mobile-menu-panel']");
     const statBox = container.querySelector("[data-testid='mobile-menu-stat-box']");
 
-    expect(menuPanel).not.toBeNull();
-    expect(menuPanel?.className).toContain("w-[360px]");
-    expect(menuPanel?.textContent).toContain("[ ACTIONS ]");
-    expect(menuPanel?.textContent).toContain("[ SYSTEM ]");
-    expect(statBox?.textContent).toContain("+------------------------------------------+");
-    expect(statBox?.textContent).toContain("DEBT: 3,880 TD");
-    expect(statBox?.textContent).toContain("QUOTA:");
-    expect(menuPanel?.textContent).toContain("/store");
-    expect(menuPanel?.textContent).toContain("Buy coping mechanisms");
-    expect(menuPanel?.textContent).toContain("/upgrade");
-    expect(menuPanel?.textContent).toContain("Unlock MAX 429X");
-    expect(menuPanel?.textContent).toContain("/leaderboard");
-    expect(menuPanel?.textContent).toContain("/achievements");
-    expect(menuPanel?.textContent).toContain("/profile");
-    expect(menuPanel?.textContent).toContain("/help");
-    expect(menuPanel?.textContent).toContain("/github");
-    expect(menuPanel?.textContent).toContain("/terms");
-    expect(menuPanel?.textContent).toContain("/privacy");
-    expect(menuPanel?.textContent).toContain("/about");
-    expect(menuPanel?.textContent).toContain("/contact");
-    expect(menuPanel?.textContent).toContain("© 2026 Unchained Development OÜ");
+    expectMobileMenuContents(menuPanel, statBox);
   });
 });
 
