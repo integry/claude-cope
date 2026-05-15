@@ -258,20 +258,23 @@ function renderPlainMessage(
   return <>{linkify(body)}</>;
 }
 
-function renderMessageContentBody(
-  message: Message,
-  buddyData: BuddyRenderData,
-  useMarkdown: boolean,
-  isAwaitingResponse: boolean,
-  isStreaming: boolean,
-  shouldTypewrite: boolean,
-  visibleContent: string,
-  isTyping: boolean,
-  onSlashCommand: ((command: string, action: SlashCommandAction) => void) | undefined,
-  shareNode: React.ReactNode,
-  mdComponents: ReturnType<typeof buildMarkdownComponents>,
-) {
+type MessageContentRenderContext = {
+  message: Message;
+  buddyData: BuddyRenderData;
+  flags: ReturnType<typeof getMessageFlags>;
+  markdown: MarkdownMessageRenderOptions;
+  onSlashCommand: ((command: string, action: SlashCommandAction) => void) | undefined;
+};
+
+function renderMessageContentBody({
+  message,
+  buddyData,
+  flags,
+  markdown,
+  onSlashCommand,
+}: MessageContentRenderContext) {
   const { role, content } = message;
+  const { useMarkdown, isAwaitingResponse, isStreaming } = flags;
 
   if (message.backlogDisplay && role === "system") {
     return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
@@ -284,19 +287,11 @@ function renderMessageContentBody(
   if (role === "user") return null;
 
   if (buddyData.isBuddyInterjection) {
-    return renderBuddyInterjection(buddyData, shareNode, mdComponents);
+    return renderBuddyInterjection(buddyData, markdown.shareNode, markdown.mdComponents);
   }
 
   if (useMarkdown || isStreaming) {
-    return renderMarkdownMessage({
-      content,
-      shouldTypewrite,
-      visibleContent,
-      isStreaming,
-      isTyping,
-      shareNode,
-      mdComponents,
-    });
+    return renderMarkdownMessage(markdown);
   }
 
   return renderPlainMessage(role, content, buddyData.body, isAwaitingResponse, onSlashCommand);
@@ -316,33 +311,37 @@ function MessageContent({
   shareNode?: React.ReactNode;
 }) {
   const { role, content } = message;
-  const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(
+  const flags = getMessageFlags(
     role,
     content,
     buddyData.isBuddyInterjection,
   );
+  const { useMarkdown } = flags;
   // Only typewrite actual AI responses (system role). Scaffold messages (ads,
   // queue warnings) render instantly so they don't vanish mid-animation when
   // the fixed delay timers remove them.
   const shouldTypewrite = isNew && useMarkdown && role === "system";
   const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite);
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand, shareNode), [onSlashCommand, shareNode]);
+  const markdown = {
+    content,
+    shouldTypewrite,
+    visibleContent,
+    isStreaming: flags.isStreaming,
+    isTyping,
+    shareNode,
+    mdComponents,
+  };
 
   // Backlog messages intentionally bypass markdown rendering so the responsive
   // table layout stays intact while `message.content` remains as a plain-text fallback.
-  return renderMessageContentBody(
+  return renderMessageContentBody({
     message,
     buddyData,
-    useMarkdown,
-    isAwaitingResponse,
-    isStreaming,
-    shouldTypewrite,
-    visibleContent,
-    isTyping,
+    flags,
+    markdown,
     onSlashCommand,
-    shareNode,
-    mdComponents,
-  );
+  });
 }
 
 function CostDisplay({ cost }: { cost: number }) {
