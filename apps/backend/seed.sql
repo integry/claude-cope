@@ -1079,7 +1079,7 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  'do permissions with row level security',
   233),
 
--- REPORTER: Mira | Firebase Product Founder | Calls vendor gravity a growth strategy and treats console toggles as roadmap acceleration.
+-- REPORTER: Todd | Firebase Founder | Calls vendor lock-in "velocity" with a straight face.
 ('BLORT-176', 'Rebuild Notifications on Firebase So Product Can Ship from a Beach Chair',
  'You keep talking about architecture while Product keeps talking about this quarter. Firebase gives us auth, push, analytics, remote config, crash reporting, and the warm feeling of never quite knowing where our vendor ends and our source tree begins. If the console can toggle it, we should not be wasting engineers on understanding it.',
  'rebuild notifications on firebase',
@@ -1090,61 +1090,61 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  'store all user docs in firestore',
   233),
 
--- REPORTER: Adrian | Prisma Platform Engineer | Thinks generated clients are how schemas earn political legitimacy.
+-- REPORTER: Sven | Prisma Developer | Wants the database schema to feel like corporate poetry.
 ('BLORT-178', 'Put Prisma in Front of Everything Including the Parts That Used to Be Simple SQL',
  'Direct SQL has too much eye contact. Prisma gives us a schema, a client, a migration engine, and a consistent place for every table rename to become a personality event. The generated types alone will calm investors. If an edge case requires raw SQL later, we can bury it in a helper called unsafeButTemporary and then never discuss it again.',
  'put prisma in front of everything',
   144),
 
--- REPORTER: Leon | Type Safety Evangelist | Wants frontend and backend coupled tightly enough that compiler panic counts as collaboration.
+-- REPORTER: Logan | tRPC Believer | Wants the frontend and backend to share one giant compiler-enforced fate.
 ('BLORT-179', 'Replace the Public API with tRPC So Type Errors Can Cross Team Boundaries Instantly',
  'REST encourages distance. Distance encourages autonomy. tRPC fixes this by making the frontend and backend share one intensely personal type graph. A change to one procedure should be able to freeze half the repository with compiler grief, otherwise we are not really collaborating. If mobile cannot consume it, that is a growth opportunity for mobile.',
  'replace the public api with trpc',
   144),
 
--- REPORTER: Tessa | Utility CSS Maximalist | Treats class strings like narrative structure and considers standalone stylesheets an avoidable intimacy.
+-- REPORTER: Skyler | Tailwind Maximalist | Treats HTML class lists like emotional screenplays.
 ('BLORT-180', 'All UI Changes Must Be Implemented in Tailwind Utility Strings Longer Than the Component',
  'CSS files imply permanence and independent thought. Tailwind keeps everything where it belongs: directly on the element, in one string, with the full emotional arc of the component visible to anyone willing to scroll sideways. If a button cannot communicate its hover state, layout rules, color token history, and breakpoint anxieties in 37 class names, it is under-specified.',
  'implement ui changes in tailwind strings',
   144),
 
--- REPORTER: Rowan | Component Registry Curator | Thinks copy-pasted design system code is the sincerest form of ownership.
+-- REPORTER: Zane | shadcn/ui Enthusiast | Wants everyone copy-pasting components with absolute conviction.
 ('BLORT-181', 'Adopt shadcn/ui Everywhere So We Can Vendor Our Identity One Component at a Time',
  'Installing components from a registry was too communal. Copy them into the repo so each popover can become our responsibility forever. This is not cloning code; it is assuming design custody. Once we have 48 lightly modified button variants drifting across the workspace, we will finally own our stack in the only way that matters: accidentally.',
  'use shadcn/ui for basically everything',
   144),
 
--- REPORTER: Ivo | SvelteKit Application Engineer | Trusts compiled simplicity more than frameworks that keep asking for runtime explanations.
+-- REPORTER: Elara | SvelteKit Developer | Thinks writing less code magically results in more destiny.
 ('BLORT-182', 'Rebuild the Settings App in SvelteKit Because Stores Feel More Honest Than Context',
  'React keeps asking us to explain ourselves. SvelteKit simply compiles away the guilt. Rebuild the settings experience with load functions, server actions, and a store or three that gradually become the product nervous system. If hydration breaks, at least it will do so with fewer dependencies and a superior sense of craft.',
  'rebuild the settings app in sveltekit',
   144),
 
--- REPORTER: Celeste | Full-Stack Ergonomics Consultant | Frames rendering mode debates as product maturity with better defaults and more ceremony.
+-- REPORTER: Bastien | Nuxt Consultant | Describes every configuration file as an exercise in full-stack ergonomics.
 ('BLORT-183', 'Port the Customer Portal to Nuxt So We Can Have Opinions About Rendering Modes',
  'The portal should not merely render; it should negotiate whether it wishes to be SSR, SSG, ISR, hybrid, edge, or spiritually client-side this quarter. Nuxt gives us modules, conventions, auto-imports, and just enough hidden machinery to make debugging feel aristocratic. If route rules multiply faster than features, governance is finally winning.',
  'port the customer portal to nuxt',
   233),
 
--- REPORTER: Graham | Remix Interface Purist | Believes every interaction deserves form semantics and a tasteful trip through the server.
+-- REPORTER: Caleb | Remix Loyalist | Wants standard HTML forms to be both the interface and the religion.
 ('BLORT-184', 'Replace Half the SPA with Remix Forms So Every Click Can Pretend to Be a Document',
  'Your app uses client state where browser behavior would gladly make things weird for free. Remix lets every interaction travel through loaders and actions like it is 2009 but with superior branding. If a modal close event cannot become a form submission with redirect semantics, we are leaving tradition unexplored.',
  'replace half the spa with remix forms',
   144),
 
--- REPORTER: Naomi | Mobile Release PM | Treats OTA deployment as a scheduling advantage rather than a QA negotiation.
+-- REPORTER: Dakota | Expo Mobile PM | Thinks over-the-air updates without QA approval are a lifestyle.
 ('BLORT-185', 'Ship the Next Mobile Release Through Expo OTA at 4 PM Without Telling QA',
  'App store review cycles are just bureaucracy wearing a Cupertino lanyard. With Expo OTA, we can deploy fixes, regressions, design pivots, and accidental white screens straight into users'' pockets before QA has found the meeting link. If an update only bricks Android devices in Finland, that is still a narrower blast radius than waiting for process.',
  'pipe mobile changes through ota updates',
   233),
 
--- REPORTER: Pavel | Cross-Platform Shell Engineer | Thinks native strategy begins the moment the web app can ask for camera permissions.
+-- REPORTER: Jude | Capacitor Developer | Wants the web app to wear native clothing and ask for camera permissions.
 ('BLORT-186', 'Wrap the Existing Site in Capacitor and Call It a Native Strategy',
  'We do not need separate mobile architecture when the browser already contains most of our ambition. Wrap the app in Capacitor, ask for camera, filesystem, contacts, geolocation, push, and maybe microphone just in case. Once the same hydration bug happens inside an app icon, leadership will finally understand omnichannel.',
  'wrap the site in capacitor',
   144),
 
--- REPORTER: Selene | AI Product Manager | Thinks agent autonomy is just planning with better branding and fewer witnesses.
+-- REPORTER: Nash | AI Product Manager | Wants autonomous agents to replace planning, strategy, and human accountability.
 ('BLORT-187', 'Turn the Backlog into an Agent Swarm That Self-Assigns Work and Writes Its Own Retros',
  'Human prioritization is a bottleneck because humans insist on remembering consequences. Build an agent swarm that reads tickets, self-assigns them, rewrites acceptance criteria mid-flight, comments "LGTM" on its own pull requests, and posts a retrospective blaming context windows. If the swarm decides three interns are redundant, that is a roadmap insight, not a labor issue.',
  'build ai agent swarm to manage jira',
@@ -1185,13 +1185,13 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
  'add an ai code reviewer with attitude',
   144),
 
--- REPORTER: Dax | Vibe-Coding Founder | Measures product clarity by how much can be rebuilt before the electrolytes wear off.
+-- REPORTER: Chase | Vibe-Coding Founder | Thinks a single 400-word prompt is a viable product strategy.
 ('BLORT-195', 'The MVP Should Be Rebuilt This Weekend by One Founder, Cursor, and a Dangerous Amount of Electrolytes',
  'We have overcomplicated a fundamentally simple business with "architecture" and "discipline." This weekend I am renting a cabin, bringing two laptops, one AI IDE, and whatever supplements make time feel editable. By Monday I expect a new MVP with chat, billing, analytics, referrals, and a multi-tenant admin panel generated in one continuous fugue state. If anything breaks later, that just means we moved faster than doubt.',
  'rebuild the mvp this weekend with cursor',
   377),
 
--- REPORTER: Imani | Smart Contract Product Founder | Wants wallets, tokens, and on-chain ceremony in front of any feature that still feels legible.
+-- REPORTER: Kev | Smart Contract Founder | Wants to put a crypto wallet prompt in front of literally everything.
 ('BLORT-196', 'Require Wallet Connection Before Users Can Read the Pricing Page',
  'Anonymous browsing is just unqualified traffic in disguise. The pricing page should require wallet connection so we can tell whether a prospect is serious, solvent, and spiritually on-chain. If a visitor does not have a wallet, they can mint a free pricing-access token after signing a message acknowledging that curiosity is an economic act.',
  'pls make pricing page require wallet',
@@ -1227,19 +1227,19 @@ UPDATE community_backlog SET reporter = 'Glen [Hypermedia Consultant]', reporter
 UPDATE community_backlog SET reporter = 'Kian [Runtime Performance Lead]', reporter_name = 'Kian', reporter_title = 'Runtime Performance Lead', reporter_description = 'Would happily destabilize CI for a startup time chart that feels faster.' WHERE id IN ('BLORT-172');
 UPDATE community_backlog SET reporter = 'Ines [Secure Tooling Engineer]', reporter_name = 'Ines', reporter_title = 'Secure Tooling Engineer', reporter_description = 'Thinks every file read should begin with a constitutional argument.' WHERE id IN ('BLORT-173');
 UPDATE community_backlog SET reporter = 'Lucia [Rapid Platforming Lead]', reporter_name = 'Lucia', reporter_title = 'Rapid Platforming Lead', reporter_description = 'Thinks Postgres should also do auth, storage, product, and spiritual governance.' WHERE id IN ('BLORT-174', 'BLORT-175');
-UPDATE community_backlog SET reporter = 'Mira [Firebase Product Founder]', reporter_name = 'Mira', reporter_title = 'Firebase Product Founder', reporter_description = 'Calls vendor gravity a growth strategy and treats console toggles as roadmap acceleration.' WHERE id IN ('BLORT-176', 'BLORT-177');
-UPDATE community_backlog SET reporter = 'Adrian [Prisma Platform Engineer]', reporter_name = 'Adrian', reporter_title = 'Prisma Platform Engineer', reporter_description = 'Thinks generated clients are how schemas earn political legitimacy.' WHERE id IN ('BLORT-178');
-UPDATE community_backlog SET reporter = 'Leon [Type Safety Evangelist]', reporter_name = 'Leon', reporter_title = 'Type Safety Evangelist', reporter_description = 'Wants frontend and backend coupled tightly enough that compiler panic counts as collaboration.' WHERE id IN ('BLORT-179');
-UPDATE community_backlog SET reporter = 'Tessa [Utility CSS Maximalist]', reporter_name = 'Tessa', reporter_title = 'Utility CSS Maximalist', reporter_description = 'Treats class strings like narrative structure and considers standalone stylesheets an avoidable intimacy.' WHERE id IN ('BLORT-180');
-UPDATE community_backlog SET reporter = 'Rowan [Component Registry Curator]', reporter_name = 'Rowan', reporter_title = 'Component Registry Curator', reporter_description = 'Thinks copy-pasted design system code is the sincerest form of ownership.' WHERE id IN ('BLORT-181');
-UPDATE community_backlog SET reporter = 'Ivo [SvelteKit Application Engineer]', reporter_name = 'Ivo', reporter_title = 'SvelteKit Application Engineer', reporter_description = 'Trusts compiled simplicity more than frameworks that keep asking for runtime explanations.' WHERE id IN ('BLORT-182');
-UPDATE community_backlog SET reporter = 'Celeste [Full-Stack Ergonomics Consultant]', reporter_name = 'Celeste', reporter_title = 'Full-Stack Ergonomics Consultant', reporter_description = 'Frames rendering mode debates as product maturity with better defaults and more ceremony.' WHERE id IN ('BLORT-183');
-UPDATE community_backlog SET reporter = 'Graham [Remix Interface Purist]', reporter_name = 'Graham', reporter_title = 'Remix Interface Purist', reporter_description = 'Believes every interaction deserves form semantics and a tasteful trip through the server.' WHERE id IN ('BLORT-184');
-UPDATE community_backlog SET reporter = 'Naomi [Mobile Release PM]', reporter_name = 'Naomi', reporter_title = 'Mobile Release PM', reporter_description = 'Treats OTA deployment as a scheduling advantage rather than a QA negotiation.' WHERE id IN ('BLORT-185');
-UPDATE community_backlog SET reporter = 'Pavel [Cross-Platform Shell Engineer]', reporter_name = 'Pavel', reporter_title = 'Cross-Platform Shell Engineer', reporter_description = 'Thinks native strategy begins the moment the web app can ask for camera permissions.' WHERE id IN ('BLORT-186');
-UPDATE community_backlog SET reporter = 'Selene [AI Product Manager]', reporter_name = 'Selene', reporter_title = 'AI Product Manager', reporter_description = 'Thinks agent autonomy is just planning with better branding and fewer witnesses.' WHERE id IN ('BLORT-187', 'BLORT-188', 'BLORT-189', 'BLORT-190', 'BLORT-191', 'BLORT-192', 'BLORT-193', 'BLORT-194');
-UPDATE community_backlog SET reporter = 'Dax [Vibe-Coding Founder]', reporter_name = 'Dax', reporter_title = 'Vibe-Coding Founder', reporter_description = 'Measures product clarity by how much can be rebuilt before the electrolytes wear off.' WHERE id IN ('BLORT-195');
-UPDATE community_backlog SET reporter = 'Imani [Smart Contract Product Founder]', reporter_name = 'Imani', reporter_title = 'Smart Contract Product Founder', reporter_description = 'Wants wallets, tokens, and on-chain ceremony in front of any feature that still feels legible.' WHERE id IN ('BLORT-196', 'BLORT-197', 'BLORT-198', 'BLORT-199', 'BLORT-200');
+UPDATE community_backlog SET reporter = 'Todd [Firebase Founder]', reporter_name = 'Todd', reporter_title = 'Firebase Founder', reporter_description = 'Calls vendor lock-in "velocity" with a straight face.' WHERE id IN ('BLORT-176', 'BLORT-177');
+UPDATE community_backlog SET reporter = 'Sven [Prisma Developer]', reporter_name = 'Sven', reporter_title = 'Prisma Developer', reporter_description = 'Wants the database schema to feel like corporate poetry.' WHERE id IN ('BLORT-178');
+UPDATE community_backlog SET reporter = 'Logan [tRPC Believer]', reporter_name = 'Logan', reporter_title = 'tRPC Believer', reporter_description = 'Wants the frontend and backend to share one giant compiler-enforced fate.' WHERE id IN ('BLORT-179');
+UPDATE community_backlog SET reporter = 'Skyler [Tailwind Maximalist]', reporter_name = 'Skyler', reporter_title = 'Tailwind Maximalist', reporter_description = 'Treats HTML class lists like emotional screenplays.' WHERE id IN ('BLORT-180');
+UPDATE community_backlog SET reporter = 'Zane [shadcn/ui Enthusiast]', reporter_name = 'Zane', reporter_title = 'shadcn/ui Enthusiast', reporter_description = 'Wants everyone copy-pasting components with absolute conviction.' WHERE id IN ('BLORT-181');
+UPDATE community_backlog SET reporter = 'Elara [SvelteKit Developer]', reporter_name = 'Elara', reporter_title = 'SvelteKit Developer', reporter_description = 'Thinks writing less code magically results in more destiny.' WHERE id IN ('BLORT-182');
+UPDATE community_backlog SET reporter = 'Bastien [Nuxt Consultant]', reporter_name = 'Bastien', reporter_title = 'Nuxt Consultant', reporter_description = 'Describes every configuration file as an exercise in full-stack ergonomics.' WHERE id IN ('BLORT-183');
+UPDATE community_backlog SET reporter = 'Caleb [Remix Loyalist]', reporter_name = 'Caleb', reporter_title = 'Remix Loyalist', reporter_description = 'Wants standard HTML forms to be both the interface and the religion.' WHERE id IN ('BLORT-184');
+UPDATE community_backlog SET reporter = 'Dakota [Expo Mobile PM]', reporter_name = 'Dakota', reporter_title = 'Expo Mobile PM', reporter_description = 'Thinks over-the-air updates without QA approval are a lifestyle.' WHERE id IN ('BLORT-185');
+UPDATE community_backlog SET reporter = 'Jude [Capacitor Developer]', reporter_name = 'Jude', reporter_title = 'Capacitor Developer', reporter_description = 'Wants the web app to wear native clothing and ask for camera permissions.' WHERE id IN ('BLORT-186');
+UPDATE community_backlog SET reporter = 'Nash [AI Product Manager]', reporter_name = 'Nash', reporter_title = 'AI Product Manager', reporter_description = 'Wants autonomous agents to replace planning, strategy, and human accountability.' WHERE id IN ('BLORT-187', 'BLORT-188', 'BLORT-189', 'BLORT-190', 'BLORT-191', 'BLORT-192', 'BLORT-193', 'BLORT-194');
+UPDATE community_backlog SET reporter = 'Chase [Vibe-Coding Founder]', reporter_name = 'Chase', reporter_title = 'Vibe-Coding Founder', reporter_description = 'Thinks a single 400-word prompt is a viable product strategy.' WHERE id IN ('BLORT-195');
+UPDATE community_backlog SET reporter = 'Kev [Smart Contract Founder]', reporter_name = 'Kev', reporter_title = 'Smart Contract Founder', reporter_description = 'Wants to put a crypto wallet prompt in front of literally everything.' WHERE id IN ('BLORT-196', 'BLORT-197', 'BLORT-198', 'BLORT-199', 'BLORT-200');
 
 -- RIFT: cloud platforms, SaaS vendors, and billing disasters
 INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt, technical_debt) VALUES
