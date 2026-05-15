@@ -5,8 +5,8 @@ import { FREE_QUOTA_LIMIT, PRO_QUOTA_LIMIT } from "../config";
 const MOBILE_MENU_VIEWPORT_INSET = 8;
 const MOBILE_MENU_VERTICAL_GAP = 8;
 
-function getMobileMenuViewportPosition(triggerRect: DOMRect, viewportHeight: number) {
-  const top = triggerRect.bottom + MOBILE_MENU_VERTICAL_GAP;
+function getMobileMenuViewportPosition(triggerRect: DOMRect, headerRect: DOMRect | null, viewportHeight: number) {
+  const top = Math.max(triggerRect.bottom, headerRect?.bottom ?? 0) + MOBILE_MENU_VERTICAL_GAP;
   const maxHeight = Math.max(0, viewportHeight - top - MOBILE_MENU_VIEWPORT_INSET);
   return { top, maxHeight };
 }
@@ -291,6 +291,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
   const displayTD = useAnimatedCounter(currentTD, 2660);
   const [menuOpen, setMenuOpen] = useState(false);
   const [quotaTipOpen, setQuotaTipOpen] = useState(false);
+  const headerRootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [mobileMenuPosition, setMobileMenuPosition] = useState(() => ({ top: 0, maxHeight: 0 }));
@@ -314,7 +315,13 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
 
     const updateMobileMenuPosition = () => {
       if (!menuButtonRef.current) return;
-      setMobileMenuPosition(getMobileMenuViewportPosition(menuButtonRef.current.getBoundingClientRect(), window.innerHeight));
+      setMobileMenuPosition(
+        getMobileMenuViewportPosition(
+          menuButtonRef.current.getBoundingClientRect(),
+          headerRootRef.current?.getBoundingClientRect() ?? null,
+          window.innerHeight,
+        ),
+      );
     };
 
     updateMobileMenuPosition();
@@ -333,7 +340,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
   }, [onHomeClick]);
 
   return (
-    <div data-testid="header-bar-root" className={`sticky top-0 z-10 border-b pt-3 pb-2 mb-2 relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 sm:flex sm:items-center sm:gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "border-gray-700"}`} style={outageHp !== null ? undefined : { backgroundColor: 'var(--color-bg)' }}>
+    <div ref={headerRootRef} data-testid="header-bar-root" className={`sticky top-0 z-10 border-b pt-3 pb-2 mb-2 relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 sm:flex sm:items-center sm:gap-4 ${outageHp !== null ? "bg-red-900 border-red-500" : "border-gray-700"}`} style={outageHp !== null ? undefined : { backgroundColor: 'var(--color-bg)' }}>
       {/* Left group: identity */}
       <div className="hidden sm:flex items-center gap-2 min-w-0 px-2 sm:px-0">
         <button type="button" onClick={handleHomeClick} aria-label="Home" className="hidden sm:block cursor-pointer">
@@ -341,24 +348,40 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
         </button>
         <DesktopIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
       </div>
-      <button
-        type="button"
-        onClick={handleHomeClick}
-        aria-label="Home"
-        data-testid="mobile-header-logo"
-        className="row-span-2 row-start-1 col-start-1 flex sm:hidden items-center self-center px-2"
-      >
-        <span className="relative block h-8 w-[34px] overflow-hidden">
-          <img src="/media/logo-400-transparent.png" alt="" aria-hidden="true" className="absolute left-0 top-1/2 h-8 max-w-none -translate-y-1/2" />
-        </span>
-      </button>
-      <MobileIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
+      {menuOpen ? (
+        <button
+          type="button"
+          onClick={handleHomeClick}
+          aria-label="Home"
+          data-testid="mobile-header-logo-expanded"
+          className="col-start-1 col-end-3 row-span-2 row-start-1 flex min-w-0 sm:hidden items-center self-center px-2"
+        >
+          <img src="/media/logo-400-transparent.png" alt="Logo" className="h-8 w-auto max-w-full object-contain" />
+        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={handleHomeClick}
+            aria-label="Home"
+            data-testid="mobile-header-logo"
+            className="row-span-2 row-start-1 col-start-1 flex sm:hidden items-center self-center px-2"
+          >
+            <span className="relative block h-8 w-[34px] overflow-hidden">
+              <img src="/media/logo-400-transparent.png" alt="" aria-hidden="true" className="absolute left-0 top-1/2 h-8 max-w-none -translate-y-1/2" />
+            </span>
+          </button>
+          <MobileIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
+        </>
+      )}
       {/* Right group: status (desktop) */}
       <DesktopStatusBlock displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} onUpgradeClick={onUpgradeClick} />
       {/* Right group: status (mobile) */}
-      <div data-testid="mobile-status-block" className="col-start-3 row-start-2 flex min-w-0 self-start sm:hidden items-center justify-end whitespace-nowrap px-2 text-right">
-        <span className="whitespace-nowrap text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
-      </div>
+      {!menuOpen && (
+        <div data-testid="mobile-status-block" className="col-start-3 row-start-2 flex min-w-0 self-start sm:hidden items-center justify-end whitespace-nowrap px-2 text-right">
+          <span className="whitespace-nowrap text-white font-bold">{Math.floor(displayTD).toLocaleString()} TD{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span>
+        </div>
+      )}
       {/* Hamburger menu — mobile only */}
       <div ref={menuRef} data-testid="mobile-menu-anchor" className="sm:hidden flex-shrink-0 col-start-3 row-start-1 self-end justify-self-end">
         <button ref={menuButtonRef} type="button" onClick={() => setMenuOpen((v) => !v)} className="rounded-none px-3 py-1.5 text-gray-400 transition-colors hover:bg-gray-800/70 hover:text-white" aria-label="Menu">

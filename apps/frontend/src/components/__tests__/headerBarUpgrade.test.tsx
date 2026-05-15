@@ -170,6 +170,26 @@ function openMobileMenu() {
   return menuButton;
 }
 
+function mockHeaderRootRect(rect: Partial<DOMRect>) {
+  const headerRoot = queryByTestId("header-bar-root") as HTMLDivElement | null;
+  expect(headerRoot).not.toBeNull();
+  const defaultRect = {
+    x: 0,
+    y: 0,
+    width: 375,
+    height: 56,
+    top: 0,
+    left: 0,
+    right: 375,
+    bottom: 56,
+    toJSON: () => ({}),
+  } satisfies Partial<DOMRect>;
+  vi.spyOn(headerRoot!, "getBoundingClientRect").mockReturnValue({
+    ...defaultRect,
+    ...rect,
+  } as DOMRect);
+}
+
 function expectMaxBadgePlacement() {
   const identityBlock = queryByTestId("desktop-identity-block");
   const rankLine = queryByTestId("desktop-rank-line");
@@ -237,6 +257,19 @@ describe("HeaderBar upgrade CTA visibility", () => {
     expect(queryByTestId("mobile-menu-panel")).toBeNull();
   });
 
+  it("replaces the mobile header contents with the full logo while the menu is open", () => {
+    renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
+
+    openMobileMenu();
+
+    const expandedLogo = queryByTestId("mobile-header-logo-expanded");
+    expect(expandedLogo?.tagName).toBe("BUTTON");
+    expect(expandedLogo?.querySelector("img")?.getAttribute("src")).toBe("/media/logo-400-transparent.png");
+    expect(queryByTestId("mobile-identity-block")).toBeNull();
+    expect(queryByTestId("mobile-rank-line")).toBeNull();
+    expect(queryByTestId("mobile-status-block")).toBeNull();
+  });
+
   it("invokes the shared home handler from the desktop logo button", () => {
     const onHomeClick = vi.fn();
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false, onHomeClick });
@@ -291,6 +324,22 @@ describe("HeaderBar upgrade CTA visibility", () => {
     expect(headerRoot?.contains(menuPanel)).toBe(true);
     expect(menuPanel?.style.top).toBe("72px");
     expect(menuPanel?.style.maxHeight).toBe("820px");
+
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: originalInnerHeight });
+  });
+
+  it("keeps the mobile menu panel below the header when the header extends lower than the trigger", () => {
+    const originalInnerHeight = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
+    renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
+    mockMenuButtonRect({ bottom: 64 });
+    mockHeaderRootRect({ bottom: 88 });
+
+    openMobileMenu();
+
+    const menuPanel = queryByTestId("mobile-menu-panel") as HTMLDivElement | null;
+    expect(menuPanel?.style.top).toBe("96px");
+    expect(menuPanel?.style.maxHeight).toBe("796px");
 
     Object.defineProperty(window, "innerHeight", { configurable: true, value: originalInnerHeight });
   });
