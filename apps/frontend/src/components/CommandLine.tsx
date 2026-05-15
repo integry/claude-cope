@@ -8,7 +8,7 @@ type CommandLineProps = {
   promptString?: string;
   placeholder?: string;
   assistivePlaceholderHint?: string;
-  onPlaceholderAccept?: () => void;
+  onPlaceholderAccept?: (options?: { submit?: boolean }) => void;
 };
 
 type PlaceholderMetadata = {
@@ -115,7 +115,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
       if (!showTabHint || !onPlaceholderAccept) {
         return;
       }
-      onPlaceholderAccept();
+      onPlaceholderAccept({ submit: isMobileViewport });
     };
 
     const keepInputFocus = (event: MouseEvent<HTMLButtonElement> | PointerEvent<HTMLButtonElement>) => {

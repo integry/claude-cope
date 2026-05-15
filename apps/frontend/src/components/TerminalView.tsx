@@ -65,7 +65,7 @@ type TerminalViewProps = OverlayVisibility & {
   runSlashCommand: (command: string) => void;
   inputValue: string;
   suggestedReply: string | null;
-  acceptSuggestedReply: () => void;
+  acceptSuggestedReply: (options?: { submit?: boolean }) => void;
   isProcessing: boolean;
   handleChange: (e: ChangeEvent<HTMLInputElement>) => void;
   handleKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
