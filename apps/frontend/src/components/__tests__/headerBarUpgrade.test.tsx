@@ -84,7 +84,7 @@ function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | 
   expect(menuPanel).not.toBeNull();
   expect(menuPanel?.className).toContain("w-[360px]");
   expect(menuPanel?.className).toContain("right-2");
-  expect(menuPanel?.className).toContain("w-[calc(100vw-1rem)]");
+  expect(menuPanel?.className).toContain("max-w-[calc(100vw-1rem)]");
   for (const text of mobileMenuTexts) {
     expect(menuPanel?.textContent).toContain(text);
   }
