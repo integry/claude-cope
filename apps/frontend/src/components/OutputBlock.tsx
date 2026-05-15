@@ -163,6 +163,91 @@ function getMessageFlags(role: string, content: string, isBuddyInterjection: boo
   return { useMarkdown, isAwaitingResponse, isStreaming };
 }
 
+function renderBuddyFallback(
+  buddyBlock: string,
+  processedBody: string,
+  mdComponents: ReturnType<typeof buildMarkdownComponents>,
+) {
+  return (
+    <div className="space-y-3">
+      <pre className="max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-mono">{buddyBlock}</pre>
+      {processedBody && (
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
+          {processedBody}
+        </ReactMarkdown>
+      )}
+    </div>
+  );
+}
+
+function renderBuddyInterjection(
+  buddyData: BuddyRenderData,
+  shareNode: React.ReactNode,
+  mdComponents: ReturnType<typeof buildMarkdownComponents>,
+) {
+  const processedBody = buddyData.body ? appendShareMarker(cleanLLMOutput(buddyData.body), Boolean(shareNode)) : "";
+  const parsedBuddyBlock = getParsedBuddyBlock(buddyData.buddyBlock);
+
+  if (!parsedBuddyBlock) {
+    return renderBuddyFallback(buddyData.buddyBlock, processedBody, mdComponents);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+        <pre className="m-0 whitespace-pre font-mono leading-tight">{parsedBuddyBlock.art}</pre>
+        <div className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          <div className="font-mono">[{parsedBuddyBlock.type}]</div>
+          <div>{parsedBuddyBlock.speech}</div>
+        </div>
+      </div>
+      {processedBody && (
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
+          {processedBody}
+        </ReactMarkdown>
+      )}
+    </div>
+  );
+}
+
+function renderMarkdownMessage(
+  content: string,
+  shouldTypewrite: boolean,
+  visibleContent: string,
+  isStreaming: boolean,
+  isTyping: boolean,
+  shareNode: React.ReactNode,
+  mdComponents: ReturnType<typeof buildMarkdownComponents>,
+) {
+  const rawContent = shouldTypewrite ? visibleContent : content;
+  const processedContent = appendShareMarker(cleanLLMOutput(rawContent), Boolean(shareNode));
+  const showCursor = isStreaming || isTyping;
+
+  return (
+    <div className="space-y-1">
+      <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
+        {processedContent}
+      </ReactMarkdown>
+      {showCursor && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
+    </div>
+  );
+}
+
+function renderPlainMessage(
+  role: Message["role"],
+  content: string,
+  body: string,
+  isAwaitingResponse: boolean,
+  onSlashCommand?: (command: string, action: SlashCommandAction) => void,
+) {
+  if (isAwaitingResponse) return <>{content}</>;
+  if (role === "loading") return null;
+
+  const linkify = (text: string): React.ReactNode =>
+    onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
+  return <>{linkify(body)}</>;
+}
+
 function MessageContent({
   message,
   buddyData,
@@ -202,60 +287,22 @@ function MessageContent({
   if (role === "user") return null;
 
   if (buddyData.isBuddyInterjection) {
-    const processedBody = buddyData.body ? appendShareMarker(cleanLLMOutput(buddyData.body), Boolean(shareNode)) : "";
-    const parsedBuddyBlock = getParsedBuddyBlock(buddyData.buddyBlock);
-
-    if (!parsedBuddyBlock) {
-      return (
-        <div className="space-y-3">
-          <pre className="max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-mono">{buddyData.buddyBlock}</pre>
-          {processedBody && (
-            <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
-              {processedBody}
-            </ReactMarkdown>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-          <pre className="m-0 whitespace-pre font-mono leading-tight">{parsedBuddyBlock.art}</pre>
-          <div className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-            <div className="font-mono">[{parsedBuddyBlock.type}]</div>
-            <div>{parsedBuddyBlock.speech}</div>
-          </div>
-        </div>
-        {processedBody && (
-          <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
-            {processedBody}
-          </ReactMarkdown>
-        )}
-      </div>
-    );
+    return renderBuddyInterjection(buddyData, shareNode, mdComponents);
   }
 
   if (useMarkdown || isStreaming) {
-    const rawContent = shouldTypewrite ? visibleContent : content;
-    const processedContent = appendShareMarker(cleanLLMOutput(rawContent), Boolean(shareNode));
-    const showCursor = isStreaming || isTyping;
-    return (
-      <div className="space-y-1">
-        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
-          {processedContent}
-        </ReactMarkdown>
-        {showCursor && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
-      </div>
+    return renderMarkdownMessage(
+      content,
+      shouldTypewrite,
+      visibleContent,
+      isStreaming,
+      isTyping,
+      shareNode,
+      mdComponents,
     );
   }
-  if (isAwaitingResponse) return <>{content}</>;
-  if (role !== "loading") {
-    const linkify = (text: string): React.ReactNode =>
-      onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
-    return <>{linkify(buddyData.body)}</>;
-  }
-  return null;
+
+  return renderPlainMessage(role, content, buddyData.body, isAwaitingResponse, onSlashCommand);
 }
 
 function CostDisplay({ cost }: { cost: number }) {
