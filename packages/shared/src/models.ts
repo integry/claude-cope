@@ -19,7 +19,7 @@ export const COPE_MODELS: readonly Readonly<CopeModel>[] = [
   {
     id: DEFAULT_COPE_MODEL_ID,
     name: "Cope Regret vFINAL_v2_USE_THIS_ONE",
-    openRouterId: "nvidia/nemotron-nano-9b-v2",
+    openRouterId: "openai/gpt-oss-20b",
     // Base model costs 1 credit per prompt to maximize free tier engagement duration
     multiplier: 1,
     tier: "free",
@@ -35,7 +35,7 @@ export const COPE_MODELS: readonly Readonly<CopeModel>[] = [
   {
     id: "psychos",
     name: "Cope Psychos (Red-Teamed)",
-    openRouterId: "x-ai/grok-4.1-fast",
+    openRouterId: "openai/gpt-oss-20b",
     // The highest tier model burns through credits rapidly, acting as a whale sink
     multiplier: 10,
     tier: "pro",

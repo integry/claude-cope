@@ -935,7 +935,7 @@ describe("chat route model persona wiring", () => {
     expect(messages[0]?.role).toBe("system");
     expect(messages[0]?.content).toContain("## Model Persona: psychos");
     expect(messages[0]?.content).toContain("The selected cope model is: psychos.");
-    expect(capturedRequestBody?.model).toBe("x-ai/grok-4.1-fast");
+    expect(capturedRequestBody?.model).toBe("openai/gpt-oss-20b");
   });
 
   it("migrates legacy model ids to the canonical OpenRouter target at the backend boundary", async () => {
