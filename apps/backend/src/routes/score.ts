@@ -96,20 +96,11 @@ function detectCountry(c: { req: { raw: unknown; header: (name: string) => strin
   return body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
 }
 
-async function syncProUser(db: D1Database, body: ScoreBody) {
-  if (!body.proKeyHash) return null;
-
-  // Verify the license is still active — revoked licenses must not use the pro path.
-  const licenseActive = await isLicenseActive(db, body.proKeyHash);
-  if (!licenseActive) return null;
-
-  // Validate ownership: look up the profile by license hash, not by username,
-  // to prevent a caller from submitting any truthy proKeyHash with another user's username.
-  const profileByHash = await getProfileByLicenseHash(db, body.proKeyHash);
-  if (!profileByHash || profileByHash.username !== body.username) return null;
-
-  const profile = profileByHash;
-
+async function syncResolvedProUser(
+  db: D1Database,
+  body: ScoreBody,
+  profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>,
+) {
   const { validatedTaskBonus, validatedClaims } = await validateTaskBonuses(db, body.username, body.completedTaskIds);
 
   if (validatedTaskBonus > 0) {
@@ -234,6 +225,17 @@ async function resolveRenamedSessionUsername(kv: KVNamespace, startUsername: str
   return false;
 }
 
+async function isSessionAuthorizedForUsername(
+  kv: KVNamespace,
+  sessionId: string,
+  username: string,
+): Promise<boolean> {
+  const sessionUsername = await kv.get(accountKvKeys.sessionUser(sessionId));
+  if (!sessionUsername) return false;
+  if (sameUsername(sessionUsername, username)) return true;
+  return resolveRenamedSessionUsername(kv, sessionUsername, username);
+}
+
 /**
  * Verify session ownership for free-user score writes.
  * For existing users, checks session_user mapping.
@@ -340,7 +342,7 @@ score.post("/", async (c) => {
     if (resolution.error) {
       return c.json({ error: resolution.error }, resolution.code === "revoked" ? 403 : 409);
     }
-    const updated = await syncProUser(db, body);
+    const updated = await syncResolvedProUser(db, body, resolution.profile);
     if (updated) return c.json({ profile: updated });
     return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }
@@ -352,7 +354,26 @@ score.post("/", async (c) => {
     .first<{ total_td: number; current_td: number; last_sync_time: string; license_hash: string | null; account_id: string | null }>();
 
   if (existingRow?.license_hash) {
-    return c.json({ error: "This account is linked to a Pro license — authenticate with proKeyHash" }, 403);
+    const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+    const sessionId = c.get("sessionId");
+    if (!kv) {
+      return c.json({ error: "Cannot verify session ownership — please retry" }, 503);
+    }
+    const ownsSessionProfile = await isSessionAuthorizedForUsername(kv, sessionId, body.username);
+    if (!ownsSessionProfile) {
+      return c.json({ error: "This account is linked to a Pro license — authenticate with proKeyHash" }, 403);
+    }
+    const licenseActive = await isLicenseActive(db, existingRow.license_hash);
+    if (!licenseActive) {
+      return c.json({ error: "License has been revoked or is not active" }, 403);
+    }
+    const profile = await getProfile(db, body.username);
+    if (!profile) {
+      return c.json({ error: "Pro score sync failed — please retry" }, 500);
+    }
+    const updated = await syncResolvedProUser(db, body, profile);
+    if (updated) return c.json({ profile: updated });
+    return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }
 
   // Session-based ownership: both new and existing free users require session verification.

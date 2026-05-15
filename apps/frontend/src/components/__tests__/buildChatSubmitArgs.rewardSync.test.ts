@@ -44,6 +44,24 @@ describe("syncCompletedTicketReward", () => {
     expect(result).toEqual({ ok: true, status: "pending" });
   });
 
+  it("posts completed task IDs to /api/score without a pro hash when the session is already authenticated", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    const result = await syncCompletedTicketReward({
+      username: "alice",
+      ticketId: "COPE-115",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/score");
+    expect(JSON.parse(init?.body as string)).toEqual({
+      username: "alice",
+      completedTaskIds: ["COPE-115"],
+    });
+    expect(result).toEqual({ ok: true, status: "pending" });
+  });
+
   it("returns the embedded profile when /api/score confirms the updated account state", async () => {
     const settledProfile = createServerProfile({ total_td: 1500, current_td: 1500 });
     fetchMock.mockResolvedValueOnce(
@@ -77,6 +95,7 @@ describe("syncCompletedTicketReward", () => {
       username: "alice",
       ticketId: "COPE-115",
       proKeyHash: "pro-hash",
+      expectedSettledTotalTdFloor: 1500,
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -87,6 +106,26 @@ describe("syncCompletedTicketReward", () => {
       profile: settledProfile,
       profileSource: "session",
     });
+  });
+
+  it("keeps settlement pending when the refreshed session profile is still below the expected settled total", async () => {
+    const staleProfile = createServerProfile({ total_td: 1000, current_td: 1000 });
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.mocked(fetchSessionProfile).mockResolvedValueOnce({
+      found: true,
+      profile: staleProfile,
+    });
+
+    const result = await syncCompletedTicketReward({
+      username: "alice",
+      ticketId: "COPE-115",
+      proKeyHash: "pro-hash",
+      expectedSettledTotalTdFloor: 1500,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchSessionProfile).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ ok: true, status: "pending" });
   });
 
   it("leaves settlement pending when /api/score succeeds and the session refresh still has no profile", async () => {

@@ -380,6 +380,45 @@ describe("POST /api/score", () => {
     expect(json.corporate_rank).not.toBe("🤡 DevTools Hacker");
   });
 
+  it("allows session-authenticated pro users to settle score sync without proKeyHash", async () => {
+    const { db } = makeDB({
+      total_td: 5000,
+      current_td: 4800,
+      last_sync_time: new Date().toISOString().replace("Z", "").replace("T", " "),
+      license_hash: "pro-hash",
+      corporate_rank: "Mid-Level Googler",
+      account_id: "acct-123",
+      username: "alice",
+      inventory: "{}",
+      upgrades: "[]",
+      achievements: "[]",
+      buddy_type: null,
+      buddy_is_shiny: 0,
+      unlocked_themes: "[\"default\"]",
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+    } as never, { licenseActive: true });
+    const kv = mockKV({ "session_user:test-session": "alice" });
+
+    const res = await postScore(
+      db,
+      {
+        username: "alice",
+        currentTD: 4800,
+        totalTDEarned: 5000,
+        inventory: {},
+        upgrades: [],
+      },
+      { headers: { Cookie: "cope_session_id=test-session" }, kv },
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json() as { profile: { username: string; total_td: number } };
+    expect(json.profile.username).toBe("alice");
+    expect(json.profile.total_td).toBe(5000);
+  });
+
   it("rejects replayed task bonus (already claimed)", async () => {
     const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
     const { db } = makeDBWithTasks(

@@ -23,8 +23,9 @@ export function syncCompletedTicketReward(params: {
   username: string;
   ticketId: string;
   proKeyHash?: string;
+  expectedSettledTotalTdFloor?: number;
 }): Promise<CompletedTicketRewardSyncResult> {
-  const { username, ticketId, proKeyHash } = params;
+  const { username, ticketId, proKeyHash, expectedSettledTotalTdFloor } = params;
   return fetch(`${API_BASE}/api/score`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -40,7 +41,12 @@ export function syncCompletedTicketReward(params: {
       const profile = (result as { profile?: ServerProfile }).profile;
       if (profile) return { ok: true, status: "settled", profile, profileSource: "score" };
       const sessionProfile = (await fetchSessionProfile().catch(() => null))?.profile;
-      if (sessionProfile) return { ok: true, status: "settled", profile: sessionProfile, profileSource: "session" };
+      if (
+        sessionProfile
+        && (expectedSettledTotalTdFloor == null || sessionProfile.total_td >= expectedSettledTotalTdFloor)
+      ) {
+        return { ok: true, status: "settled", profile: sessionProfile, profileSource: "session" };
+      }
       return { ok: true, status: "pending" };
     })
     .catch((): CompletedTicketRewardSyncResult => ({ ok: false, status: "failed" }));
@@ -101,11 +107,12 @@ export function buildSprintCallbacks(ctx: SprintContext) {
     ctx.playChime();
     sprintCompleteMessage = { role: "system", content: `[⚠️ SPRINT COMPLETE] Ticket ${completedTicketId} "${completedTicketTitle}" delivered! You earned **${payout.toLocaleString()} TD**. The board is pleased... for now.` };
 
-    if (completedUsername && completedProKeyHash) {
+    if (completedUsername && isPaidUser(current)) {
       void syncCompletedTicketReward({
         username: completedUsername,
         ticketId: completedTicketId,
         proKeyHash: completedProKeyHash,
+        expectedSettledTotalTdFloor: current.economy.totalTDEarned + payout,
       }).then((result) => {
         if (result.status === "settled") {
           ctx.onCompletedRewardSettled?.(
@@ -116,7 +123,7 @@ export function buildSprintCallbacks(ctx: SprintContext) {
       });
     }
 
-    if (completedUsername && completedProKeyHash) {
+    if (completedUsername && isPaidUser(current)) {
       void updateTicketServer(completedUsername, null, completedProKeyHash);
     }
 
