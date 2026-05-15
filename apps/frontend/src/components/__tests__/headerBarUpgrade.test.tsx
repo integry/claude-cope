@@ -40,6 +40,8 @@ const baseProps = {
 };
 
 let container: HTMLDivElement;
+const mobileMenuTexts = ["[ ACTIONS ]", "[ SYSTEM ]", "/store", "Buy coping mechanisms", "/upgrade", "Unlock MAX 429X", "/leaderboard", "/achievements", "/profile", "/help", "/github", "/terms", "/privacy", "/about", "/contact", "© 2026 Unchained Development OÜ"];
+const mobileMenuStatTexts = ["+------------------------------------------+", "DEBT: 3,880 TD", "QUOTA:"];
 
 function renderHeaderBar(props: Record<string, unknown>) {
   container = document.createElement("div");
@@ -51,15 +53,90 @@ function renderHeaderBar(props: Record<string, unknown>) {
   return container;
 }
 
+function queryByTestId(testId: string) {
+  return container.querySelector(`[data-testid='${testId}']`);
+}
+
+function clickElement(element: HTMLButtonElement | null | undefined) {
+  act(() => {
+    element?.click();
+  });
+}
+
 function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | null) {
   expect(menuPanel).not.toBeNull();
   expect(menuPanel?.className).toContain("w-[360px]");
-  for (const text of ["[ ACTIONS ]", "[ SYSTEM ]", "/store", "Buy coping mechanisms", "/upgrade", "Unlock MAX 429X", "/leaderboard", "/achievements", "/profile", "/help", "/github", "/terms", "/privacy", "/about", "/contact", "© 2026 Unchained Development OÜ"]) {
+  for (const text of mobileMenuTexts) {
     expect(menuPanel?.textContent).toContain(text);
   }
-  for (const text of ["+------------------------------------------+", "DEBT: 3,880 TD", "QUOTA:"]) {
+  for (const text of mobileMenuStatTexts) {
     expect(statBox?.textContent).toContain(text);
   }
+}
+
+function expectDesktopStackedIdentityAndStatus() {
+  const identityBlock = queryByTestId("desktop-identity-block");
+  const identityLine = identityBlock?.firstElementChild;
+  const rankLine = queryByTestId("desktop-rank-line");
+  const statusBlock = queryByTestId("desktop-status-block");
+  const technicalDebtLine = queryByTestId("desktop-technical-debt-line");
+  const detailLine = queryByTestId("desktop-status-detail-line");
+  const mobileIdentityBlock = queryByTestId("mobile-identity-block");
+  const mobileStatusBlock = queryByTestId("mobile-status-block");
+
+  expect(identityBlock).not.toBeNull();
+  expect(identityBlock?.className).toContain("hidden");
+  expect(identityBlock?.className).toContain("sm:flex");
+  expect(identityLine?.textContent).toContain("TestUser");
+  expect(identityLine?.textContent).toContain("BYOK");
+  expect(identityLine?.textContent).not.toContain("Junior Code Monkey");
+
+  expect(rankLine?.textContent).toContain("Junior Code Monkey");
+  expect(statusBlock).not.toBeNull();
+  expect(statusBlock?.className).toContain("hidden");
+  expect(statusBlock?.className).toContain("sm:flex");
+  expect(technicalDebtLine?.textContent).toContain("Technical Debt:");
+  expect(detailLine?.textContent).toContain("External Billing Active:");
+  expect(detailLine?.textContent).toContain("$1.25");
+  expect(mobileIdentityBlock?.className).toContain("sm:hidden");
+  expect(mobileStatusBlock?.className).toContain("sm:hidden");
+}
+
+function expectMobileIdentityLayout() {
+  const mobileLogo = queryByTestId("mobile-header-logo");
+  const mobileLogoImage = mobileLogo?.querySelector("img");
+  const mobileIdentityBlock = queryByTestId("mobile-identity-block");
+  const mobileRankLine = queryByTestId("mobile-rank-line");
+  const mobileStatusBlock = queryByTestId("mobile-status-block");
+
+  expect(mobileLogo?.tagName).toBe("BUTTON");
+  expect(mobileLogoImage?.getAttribute("src")).toBe("/media/logo-400-transparent.png");
+  expect(mobileIdentityBlock?.textContent).toContain("TestUser");
+  expect(mobileRankLine?.textContent).toContain("[Jr. Code Monkey]");
+  expect(mobileRankLine?.className).toContain("whitespace-nowrap");
+  expect(mobileStatusBlock?.textContent).toContain("3,880 TD");
+  expect(mobileStatusBlock?.textContent).not.toContain("Debt:");
+}
+
+function openMobileMenu() {
+  const menuButton = container.querySelector("button[aria-label='Menu']") as HTMLButtonElement | null;
+  expect(menuButton).not.toBeNull();
+  clickElement(menuButton);
+  return menuButton;
+}
+
+function expectMaxBadgePlacement() {
+  const identityBlock = queryByTestId("desktop-identity-block");
+  const rankLine = queryByTestId("desktop-rank-line");
+  const badge = queryByTestId("desktop-max-badge");
+  const mobileBadge = queryByTestId("mobile-max-badge");
+
+  expect(badge).not.toBeNull();
+  expect(identityBlock?.textContent).toContain("MAX 429X");
+  expect(rankLine?.textContent).not.toContain("MAX 429X");
+  expect(mobileBadge).not.toBeNull();
+  expect(mobileBadge?.textContent).toContain("MAX");
+  expect(mobileBadge?.textContent).not.toContain("429X");
 }
 
 afterEach(() => {
@@ -92,69 +169,26 @@ describe("HeaderBar upgrade CTA visibility", () => {
 
   it("renders the desktop identity and status as stacked lines", () => {
     renderHeaderBar({ ...baseProps, isBYOK: true, isMax: false, byokTotalCost: 1.25 });
-
-    const identityBlock = container.querySelector("[data-testid='desktop-identity-block']");
-    const identityLine = identityBlock?.firstElementChild;
-    const rankLine = container.querySelector("[data-testid='desktop-rank-line']");
-    const statusBlock = container.querySelector("[data-testid='desktop-status-block']");
-    const technicalDebtLine = container.querySelector("[data-testid='desktop-technical-debt-line']");
-    const detailLine = container.querySelector("[data-testid='desktop-status-detail-line']");
-    const mobileIdentityBlock = container.querySelector("[data-testid='mobile-identity-block']");
-    const mobileStatusBlock = container.querySelector("[data-testid='mobile-status-block']");
-
-    expect(identityBlock).not.toBeNull();
-    expect(identityBlock?.className).toContain("hidden");
-    expect(identityBlock?.className).toContain("sm:flex");
-    expect(identityLine?.textContent).toContain("TestUser");
-    expect(identityLine?.textContent).toContain("BYOK");
-    expect(identityLine?.textContent).not.toContain("Junior Code Monkey");
-
-    expect(rankLine?.textContent).toContain("Junior Code Monkey");
-    expect(statusBlock).not.toBeNull();
-    expect(statusBlock?.className).toContain("hidden");
-    expect(statusBlock?.className).toContain("sm:flex");
-    expect(technicalDebtLine?.textContent).toContain("Technical Debt:");
-    expect(detailLine?.textContent).toContain("External Billing Active:");
-    expect(detailLine?.textContent).toContain("$1.25");
-    expect(mobileIdentityBlock?.className).toContain("sm:hidden");
-    expect(mobileStatusBlock?.className).toContain("sm:hidden");
+    expectDesktopStackedIdentityAndStatus();
   });
 
   it("renders the mobile identity as a two-row layout with a home logo and abbreviated rank", () => {
     renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
-
-    const mobileLogo = container.querySelector("[data-testid='mobile-header-logo']");
-    const mobileLogoImage = mobileLogo?.querySelector("img");
-    const mobileIdentityBlock = container.querySelector("[data-testid='mobile-identity-block']");
-    const mobileRankLine = container.querySelector("[data-testid='mobile-rank-line']");
-    const mobileStatusBlock = container.querySelector("[data-testid='mobile-status-block']");
-
-    expect(mobileLogo?.tagName).toBe("BUTTON");
-    expect(mobileLogoImage?.getAttribute("src")).toBe("/media/logo-400-transparent.png");
-    expect(mobileIdentityBlock?.textContent).toContain("TestUser");
-    expect(mobileRankLine?.textContent).toContain("[Jr. Code Monkey]");
-    expect(mobileRankLine?.className).toContain("whitespace-nowrap");
-    expect(mobileStatusBlock?.textContent).toContain("3,880 TD");
-    expect(mobileStatusBlock?.textContent).not.toContain("Debt:");
+    expectMobileIdentityLayout();
   });
 
   it("closes the mobile menu and invokes the shared home handler when the logo is clicked", () => {
     const onHomeClick = vi.fn();
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false, onHomeClick });
 
-    const menuButton = container.querySelector("button[aria-label='Menu']") as HTMLButtonElement | null;
-    act(() => {
-      menuButton?.click();
-    });
-    expect(container.querySelector("[data-testid='mobile-menu-panel']")).not.toBeNull();
+    openMobileMenu();
+    expect(queryByTestId("mobile-menu-panel")).not.toBeNull();
 
-    const mobileLogo = container.querySelector("[data-testid='mobile-header-logo']") as HTMLButtonElement | null;
-    act(() => {
-      mobileLogo?.click();
-    });
+    const mobileLogo = queryByTestId("mobile-header-logo") as HTMLButtonElement | null;
+    clickElement(mobileLogo);
 
     expect(onHomeClick).toHaveBeenCalledTimes(1);
-    expect(container.querySelector("[data-testid='mobile-menu-panel']")).toBeNull();
+    expect(queryByTestId("mobile-menu-panel")).toBeNull();
   });
 
   it("invokes the shared home handler from the desktop logo button", () => {
@@ -183,15 +217,11 @@ describe("HeaderBar upgrade CTA visibility", () => {
     renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
 
     const menuButton = container.querySelector("button[aria-label='Menu']") as HTMLButtonElement | null;
-    expect(menuButton).not.toBeNull();
     expect(menuButton?.className).toContain("rounded-none");
+    clickElement(menuButton);
 
-    act(() => {
-      menuButton?.click();
-    });
-
-    const menuPanel = container.querySelector("[data-testid='mobile-menu-panel']");
-    const statBox = container.querySelector("[data-testid='mobile-menu-stat-box']");
+    const menuPanel = queryByTestId("mobile-menu-panel");
+    const statBox = queryByTestId("mobile-menu-stat-box");
 
     expectMobileMenuContents(menuPanel, statBox);
   });
@@ -212,17 +242,6 @@ describe("HeaderBar Max badge visibility", () => {
 
   it("keeps the Max badge on the first desktop identity line only for upgraded users", () => {
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: true });
-
-    const identityBlock = container.querySelector("[data-testid='desktop-identity-block']");
-    const rankLine = container.querySelector("[data-testid='desktop-rank-line']");
-    const badge = container.querySelector("[data-testid='desktop-max-badge']");
-    const mobileBadge = container.querySelector("[data-testid='mobile-max-badge']");
-
-    expect(badge).not.toBeNull();
-    expect(identityBlock?.textContent).toContain("MAX 429X");
-    expect(rankLine?.textContent).not.toContain("MAX 429X");
-    expect(mobileBadge).not.toBeNull();
-    expect(mobileBadge?.textContent).toContain("MAX");
-    expect(mobileBadge?.textContent).not.toContain("429X");
+    expectMaxBadgePlacement();
   });
 });
