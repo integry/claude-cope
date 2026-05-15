@@ -347,27 +347,11 @@ function Terminal() {
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
     submitPromptCommandWithAccounting(command);
   }, [
-    outageHp,
-    activeOutageScenario,
-    sendDamage,
-    setHistory,
-    setInputValue,
-    runSlashCommand,
-    bragPending,
-    state,
-    setBragPending,
-    buddyPendingConfirm,
-    setBuddyPendingConfirm,
-    setState,
-    setHistoryIndex,
-    openUpgradeNag,
-    checkQuotaAndHandleExhaustion,
-    submitPromptCommandWithAccounting,
+    outageHp, activeOutageScenario, sendDamage, setHistory, setInputValue, runSlashCommand, bragPending, state, setBragPending,
+    buddyPendingConfirm, setBuddyPendingConfirm, setState, setHistoryIndex, openUpgradeNag, checkQuotaAndHandleExhaustion,
+    submitPromptCommandWithAccounting, nagArmedFromQuotaRef, pendingNagCommandRef,
   ]);
-  const handleEnterSubmit = async () => {
-    recordEnter();
-    await submitCommandValue(inputValue);
-  };
+  const handleEnterSubmit = async () => { recordEnter(); await submitCommandValue(inputValue); };
   const handleUpgradeNagDismiss = useCallback(() => { handleUpgradeNagClose((command, replayId) => { submitPromptCommandWithAccounting(command, replayId); }); }, [handleUpgradeNagClose, submitPromptCommandWithAccounting]);
   const handleManualUpgradeDismiss = dismissUpgradeNagOverlay;
   const acceptSuggestedReply = useCallback((options?: { submit?: boolean }) => {
