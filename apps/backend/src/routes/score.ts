@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { FREE_TIER_RANK_CAP } from "./rankConstants";
 import { computeMultiplier } from "../gameConstants";
 import { accountKvKeys } from "./accountHelpers";
-import { getProfile, getProfileByLicenseHash, isLicenseActive, resolveRank as resolveRankFromProfile, resolveProUser } from "../utils/profile";
+import { getProfile, isLicenseActive, resolveRank as resolveRankFromProfile, resolveProUser } from "../utils/profile";
 import { issueFreeAccountCookie } from "../utils/freeAccountIdentity";
 
 type Env = {
