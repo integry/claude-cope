@@ -267,6 +267,10 @@ export const migrations: Migration[] = [
     name: "037_idx_shared_cards_renderer_version",
     sql: "CREATE INDEX IF NOT EXISTS idx_shared_cards_renderer_version ON shared_cards (renderer_version)",
   },
+  {
+    name: "038_idx_shared_cards_username_created_at",
+    sql: "CREATE INDEX IF NOT EXISTS idx_shared_cards_username_created_at ON shared_cards (username, created_at DESC)",
+  },
 ];
 
 /**

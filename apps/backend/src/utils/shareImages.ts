@@ -1,4 +1,5 @@
 import {
+  buildPublicShareUrls,
   getAllowedOrigins,
   SHARE_CARD_DEFAULT_BASE_ORIGIN,
   SHARE_CARD_RENDERER_VERSION,
@@ -67,38 +68,6 @@ function getPrimaryAppOrigin(env: Pick<ShareImageBindings, "APP_BASE_ORIGIN" | "
   }
 
   return SHARE_CARD_DEFAULT_BASE_ORIGIN;
-}
-
-export function getPublicShareOrigin(
-  requestUrl: string,
-  env: Pick<ShareImageBindings, "SHARE_CARD_BASE_ORIGIN" | "ALLOWED_ORIGINS">,
-): string {
-  const candidates = [
-    env.SHARE_CARD_BASE_ORIGIN?.trim(),
-    getOrigin(requestUrl),
-    getFirstConfiguredOrigin(env.ALLOWED_ORIGINS),
-    SHARE_CARD_DEFAULT_BASE_ORIGIN,
-  ];
-
-  for (const candidate of candidates) {
-    const origin = getOrigin(candidate);
-    if (origin) return origin;
-  }
-
-  return SHARE_CARD_DEFAULT_BASE_ORIGIN;
-}
-
-export function buildPublicShareUrls(
-  requestUrl: string,
-  env: Pick<ShareImageBindings, "SHARE_CARD_BASE_ORIGIN" | "ALLOWED_ORIGINS">,
-  shareId: string,
-) {
-  const publicOrigin = getPublicShareOrigin(requestUrl, env);
-  return {
-    shareId,
-    imageUrl: new URL(`/api/share-image/${shareId}`, publicOrigin).toString(),
-    shareUrl: new URL(`/s/${shareId}`, publicOrigin).toString(),
-  };
 }
 
 export function buildShareImageCacheKey(record: Pick<SharedCardRecord, "id" | "renderer_version">): Request {

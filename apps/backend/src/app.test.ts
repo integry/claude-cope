@@ -20,6 +20,7 @@ describe("app", () => {
       expect(migrations.some((migration) => migration.name === "035_create_shared_cards")).toBe(true);
       expect(migrations.some((migration) => migration.name === "036_idx_shared_cards_created_at")).toBe(true);
       expect(migrations.some((migration) => migration.name === "037_idx_shared_cards_renderer_version")).toBe(true);
+      expect(migrations.some((migration) => migration.name === "038_idx_shared_cards_username_created_at")).toBe(true);
     });
 
     it("calls DB.exec for migration when DB is available", async () => {

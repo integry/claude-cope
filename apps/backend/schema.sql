@@ -201,3 +201,6 @@ CREATE INDEX IF NOT EXISTS idx_shared_cards_created_at
 
 CREATE INDEX IF NOT EXISTS idx_shared_cards_renderer_version
     ON shared_cards (renderer_version);
+
+CREATE INDEX IF NOT EXISTS idx_shared_cards_username_created_at
+    ON shared_cards (username, created_at DESC);

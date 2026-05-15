@@ -6,6 +6,7 @@ import users from "./routes/users";
 import backlog from "./routes/backlog";
 import licenses from "./routes/licenses";
 import config from "./routes/config";
+import shares from "./routes/shares";
 import { applyMigrations } from "./utils/migrations";
 
 const app = new Hono();
@@ -61,5 +62,6 @@ app.route("/api/users", users);
 app.route("/api/backlog", backlog);
 app.route("/api/licenses", licenses);
 app.route("/api/config", config);
+app.route("/api/shares", shares);
 
 export default app;
