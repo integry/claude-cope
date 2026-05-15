@@ -82,9 +82,9 @@ function clickElement(element: HTMLButtonElement | null | undefined) {
 
 function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | null) {
   expect(menuPanel).not.toBeNull();
-  expect(menuPanel?.className).toContain("w-[360px]");
+  expect(menuPanel?.className).toContain("left-2");
   expect(menuPanel?.className).toContain("right-2");
-  expect(menuPanel?.className).toContain("max-w-[calc(100vw-1rem)]");
+  expect(menuPanel?.className).toContain("w-auto");
   for (const text of mobileMenuTexts) {
     expect(menuPanel?.textContent).toContain(text);
   }

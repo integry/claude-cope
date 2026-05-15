@@ -341,7 +341,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           </svg>
         </button>
         {menuOpen && (
-          <div data-testid="mobile-menu-panel" className="absolute right-2 top-full z-20 mt-2 flex min-h-[28rem] max-h-[calc(100dvh-5rem)] w-[360px] max-w-[calc(100vw-1rem)] flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-lg">
+          <div data-testid="mobile-menu-panel" className="absolute left-2 right-2 top-full z-20 mt-2 flex min-h-[28rem] max-h-[calc(100dvh-5rem)] w-auto flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-lg">
             <div className="flex flex-col gap-4">
               <MobileMenuStatusBlock
                 displayTD={displayTD}
