@@ -10,6 +10,47 @@ import type { PaginatedShareFeed, ShareFeedItem, SharesOverview } from "./Shared
 
 const PAGE_SIZE = 25;
 
+function buildFeedPath({
+  offset,
+  searchQuery,
+  usernameFilter,
+}: {
+  offset: number;
+  searchQuery: string;
+  usernameFilter: string;
+}) {
+  const params = new URLSearchParams();
+  params.set("limit", String(PAGE_SIZE));
+  params.set("offset", String(offset));
+  if (searchQuery) {
+    params.set("query", searchQuery);
+  }
+  if (usernameFilter) {
+    params.set("username", usernameFilter);
+  }
+  return `/api/shares?${params.toString()}`;
+}
+
+function getPaginationState(feed: PaginatedShareFeed | null, requestedOffset: number) {
+  const total = feed?.total ?? 0;
+  const effectiveLimit = feed?.limit && feed.limit > 0 ? feed.limit : PAGE_SIZE;
+  const effectiveOffset = feed?.offset ?? requestedOffset;
+  const totalPages = Math.max(1, Math.ceil(total / effectiveLimit));
+  const currentPage = Math.floor(effectiveOffset / effectiveLimit);
+
+  return {
+    total,
+    effectiveLimit,
+    effectiveOffset,
+    totalPages,
+    currentPage,
+    firstVisibleItem: total === 0 ? 0 : effectiveOffset + 1,
+    lastVisibleItem: total === 0 ? 0 : Math.min(effectiveOffset + effectiveLimit, total),
+    hasPreviousPage: effectiveOffset > 0,
+    hasNextPage: effectiveOffset + effectiveLimit < total,
+  };
+}
+
 function isTopUser(value: unknown): value is SharesOverview["topUsers"]["allTime"][number] {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -79,7 +120,8 @@ function isPaginatedShareFeed(value: unknown): value is PaginatedShareFeed {
 }
 
 export default function SharedImages() {
-  const [page, setPage] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [usernameDraft, setUsernameDraft] = useState("");
   const [usernameFilter, setUsernameFilter] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -87,34 +129,44 @@ export default function SharedImages() {
 
   const overviewRequest = useAdminApi<SharesOverview>("/api/shares/overview");
 
-  const feedPath = useMemo(() => {
-    const params = new URLSearchParams();
-    params.set("limit", String(PAGE_SIZE));
-    params.set("offset", String(page * PAGE_SIZE));
-    if (searchQuery) {
-      params.set("query", searchQuery);
-    }
-    if (usernameFilter) {
-      params.set("username", usernameFilter);
-    }
-    return `/api/shares?${params.toString()}`;
-  }, [page, searchQuery, usernameFilter]);
+  const feedPath = useMemo(
+    () => buildFeedPath({ offset, searchQuery, usernameFilter }),
+    [offset, searchQuery, usernameFilter],
+  );
 
   const feedRequest = useAdminApi<PaginatedShareFeed>(feedPath);
   const overview = isSharesOverview(overviewRequest.data) ? overviewRequest.data : null;
   const feed = isPaginatedShareFeed(feedRequest.data) ? feedRequest.data : null;
-  const total = feed?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const {
+    total,
+    effectiveLimit,
+    effectiveOffset,
+    totalPages,
+    currentPage,
+    firstVisibleItem,
+    lastVisibleItem,
+    hasPreviousPage,
+    hasNextPage,
+  } = getPaginationState(feed, offset);
+  const showOverviewError = overviewRequest.isError || !overview;
+  const showFeedError = feedRequest.isError || !feed;
+  const showFiltersSummary = Boolean(usernameFilter || searchQuery);
 
   useEffect(() => {
-    const clampedPage = Math.min(page, totalPages - 1);
-    if (clampedPage !== page) {
-      setPage(clampedPage);
+    const maxOffset = Math.max(0, (totalPages - 1) * effectiveLimit);
+    const clampedOffset = Math.min(offset, maxOffset);
+    if (clampedOffset !== offset) {
+      setOffset(clampedOffset);
     }
-  }, [page, totalPages]);
+  }, [effectiveLimit, offset, totalPages]);
 
   useEffect(() => {
-    if (!selectedShare || !feed?.items.some((item) => item.shareId === selectedShare.shareId)) {
+    if (!selectedShare) {
+      return;
+    }
+
+    if (!feed?.items.some((item) => item.shareId === selectedShare.shareId)) {
+      setSelectedShare(null);
       return;
     }
 
@@ -122,26 +174,86 @@ export default function SharedImages() {
     setSelectedShare(updatedSelection);
   }, [feed, selectedShare]);
 
-  function handleSearchSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleFilterSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const nextQuery = String(formData.get("query") ?? "").trim();
+    const nextQuery = searchDraft.trim();
+    const nextUsername = usernameDraft.trim();
     setSearchDraft(nextQuery);
     setSearchQuery(nextQuery);
-    setPage(0);
+    setUsernameDraft(nextUsername);
+    setUsernameFilter(nextUsername);
+    setOffset(0);
   }
 
   function clearFilters() {
+    setUsernameDraft("");
     setUsernameFilter("");
     setSearchDraft("");
     setSearchQuery("");
-    setPage(0);
+    setOffset(0);
   }
 
   function applyUsernameFilter(username: string) {
+    setUsernameDraft(username);
     setUsernameFilter(username);
-    setPage(0);
+    setOffset(0);
   }
+
+  const overviewContent = overviewRequest.isLoading ? (
+    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <p className="text-sm text-gray-500">Loading overview...</p>
+    </div>
+  ) : showOverviewError ? (
+    <div className="rounded-lg border border-red-200 bg-red-50 p-6 shadow-sm">
+      <p className="text-sm text-red-700">Failed to load shared image analytics.</p>
+    </div>
+  ) : (
+    <>
+      <SummaryCards overview={overview} />
+      <LeaderboardGrid overview={overview} onUserSelect={applyUsernameFilter} />
+    </>
+  );
+
+  const feedContent = feedRequest.isLoading ? (
+    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <p className="text-sm text-gray-500">Loading shared-image activity...</p>
+    </div>
+  ) : showFeedError ? (
+    <div className="rounded-lg border border-red-200 bg-red-50 p-6 shadow-sm">
+      <p className="text-sm text-red-700">Failed to load shared-image activity.</p>
+    </div>
+  ) : (
+    <>
+      <ActivityFeedTable
+        items={feed.items}
+        onPreview={setSelectedShare}
+        onUserSelect={applyUsernameFilter}
+      />
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-4">
+          <button
+            type="button"
+            onClick={() => setOffset(Math.max(0, effectiveOffset - effectiveLimit))}
+            disabled={!hasPreviousPage}
+            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-600">
+            Page {currentPage + 1} of {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setOffset(effectiveOffset + effectiveLimit)}
+            disabled={!hasNextPage}
+            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </>
+  );
 
   return (
     <div className="space-y-8">
@@ -160,20 +272,7 @@ export default function SharedImages() {
           <p className="mt-1 text-sm text-gray-500">Generated shared images across key time windows.</p>
         </div>
 
-        {overviewRequest.isLoading ? (
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <p className="text-sm text-gray-500">Loading overview...</p>
-          </div>
-        ) : overviewRequest.isError || !overview ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-6 shadow-sm">
-            <p className="text-sm text-red-700">Failed to load shared image analytics.</p>
-          </div>
-        ) : (
-          <>
-            <SummaryCards overview={overview} />
-            <LeaderboardGrid overview={overview} onUserSelect={applyUsernameFilter} />
-          </>
-        )}
+        {overviewContent}
       </section>
 
       <section aria-labelledby="shared-images-activity" className="space-y-4">
@@ -187,7 +286,7 @@ export default function SharedImages() {
             </p>
           </div>
 
-          <form onSubmit={handleSearchSubmit} className="flex w-full flex-col gap-3 lg:max-w-3xl lg:flex-row">
+          <form onSubmit={handleFilterSubmit} className="flex w-full flex-col gap-3 lg:max-w-3xl lg:flex-row">
             <input
               name="query"
               type="search"
@@ -199,11 +298,8 @@ export default function SharedImages() {
             <div className="flex flex-col gap-3 sm:flex-row">
               <input
                 type="text"
-                value={usernameFilter}
-                onChange={(event) => {
-                  setUsernameFilter(event.target.value.trim());
-                  setPage(0);
-                }}
+                value={usernameDraft}
+                onChange={(event) => setUsernameDraft(event.target.value)}
                 placeholder="Filter by username"
                 className="w-full rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none sm:w-52"
               />
@@ -226,9 +322,9 @@ export default function SharedImages() {
 
         <div className="flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
           <p>
-            Showing {total === 0 ? 0 : page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+            Showing {firstVisibleItem}–{lastVisibleItem} of {total}
           </p>
-          {(usernameFilter || searchQuery) && (
+          {showFiltersSummary && (
             <p>
               Filters: {usernameFilter ? `user "${usernameFilter}"` : "all users"}
               {searchQuery ? ` · search "${searchQuery}"` : ""}
@@ -236,46 +332,7 @@ export default function SharedImages() {
           )}
         </div>
 
-        {feedRequest.isLoading ? (
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <p className="text-sm text-gray-500">Loading shared-image activity...</p>
-          </div>
-        ) : feedRequest.isError || !feed ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-6 shadow-sm">
-            <p className="text-sm text-red-700">Failed to load shared-image activity.</p>
-          </div>
-        ) : (
-          <>
-            <ActivityFeedTable
-              items={feed.items}
-              onPreview={setSelectedShare}
-              onUserSelect={applyUsernameFilter}
-            />
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between gap-4">
-                <button
-                  type="button"
-                  onClick={() => setPage((currentPage) => Math.max(0, currentPage - 1))}
-                  disabled={page === 0}
-                  className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <span className="text-sm text-gray-600">
-                  Page {page + 1} of {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPage((currentPage) => Math.min(totalPages - 1, currentPage + 1))}
-                  disabled={page >= totalPages - 1}
-                  className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </>
-        )}
+        {feedContent}
       </section>
 
       {selectedShare && (

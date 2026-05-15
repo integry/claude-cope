@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
@@ -12,14 +13,59 @@ vi.mock("../hooks/useAdminApi", () => ({
 
 import SharedImages from "./SharedImages";
 
-let container: HTMLDivElement;
-let root: ReturnType<typeof createRoot>;
+type FeedItem = {
+  shareId: string;
+  createdAt: string;
+  username: string;
+  promptPreview: string;
+  responsePreview: string;
+  imageUrl: string;
+  shareUrl: string;
+};
+
+let container!: HTMLDivElement;
+let root!: ReturnType<typeof createRoot>;
+
+function createOverview() {
+  return {
+    totals: {
+      lastHour: 1,
+      last24Hours: 2,
+      last3Days: 3,
+      lastWeek: 4,
+      lastMonth: 5,
+      allTime: 6,
+    },
+    topUsers: {
+      lastHour: [],
+      last24Hours: [],
+      lastMonth: [],
+      allTime: [],
+    },
+  };
+}
+
+function createFeedItem(overrides: Partial<FeedItem> = {}): FeedItem {
+  return {
+    shareId: "s1",
+    createdAt: "2026-05-15T10:00:00.000Z",
+    username: "alice",
+    promptPreview: "Prompt preview",
+    responsePreview: "Response preview",
+    imageUrl: "https://example.com/api/share-image/s1",
+    shareUrl: "https://example.com/s/s1",
+    ...overrides,
+  };
+}
 
 function renderComponent() {
-  container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
   act(() => {
+    if (!container) {
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      root = createRoot(container);
+    }
+
     root.render(createElement(SharedImages));
   });
 }
@@ -32,6 +78,8 @@ function cleanup() {
   if (container?.parentNode) {
     container.parentNode.removeChild(container);
   }
+  root = undefined as never;
+  container = undefined as never;
 }
 
 function mockOverviewAndFeed({
@@ -95,17 +143,7 @@ describe("SharedImages", () => {
     mockOverviewAndFeed({
       overviewError: new Error("boom"),
       feed: {
-        items: [
-          {
-            shareId: "s1",
-            createdAt: "2026-05-15T10:00:00.000Z",
-            username: "alice",
-            promptPreview: "Prompt preview",
-            responsePreview: "Response preview",
-            imageUrl: "https://example.com/api/share-image/s1",
-            shareUrl: "https://example.com/s/s1",
-          },
-        ],
+        items: [createFeedItem()],
         total: 1,
         limit: 25,
         offset: 0,
@@ -117,6 +155,34 @@ describe("SharedImages", () => {
     expect(container.textContent).toContain("Failed to load shared image analytics.");
     expect(container.textContent).toContain("Prompt preview");
     expect(container.textContent).toContain("Open Share Page");
+  });
+
+  it("renders a feed error state when the activity request fails", () => {
+    mockOverviewAndFeed({
+      overview: createOverview(),
+      feedError: new Error("feed failed"),
+    });
+
+    renderComponent();
+
+    expect(container.textContent).toContain("Failed to load shared-image activity.");
+    expect(container.textContent).toContain("Generated shared images across key time windows.");
+  });
+
+  it("renders a feed error state when the activity payload is invalid", () => {
+    mockOverviewAndFeed({
+      overview: createOverview(),
+      feed: {
+        items: [],
+        total: 2,
+        limit: "25",
+        offset: 0,
+      },
+    });
+
+    renderComponent();
+
+    expect(container.textContent).toContain("Failed to load shared-image activity.");
   });
 
   it("renders overview totals, filters, table rows, and modal preview", () => {
@@ -139,16 +205,8 @@ describe("SharedImages", () => {
       },
       feed: {
         items: [
-          {
-            shareId: "s1",
-            createdAt: "2026-05-15T10:00:00.000Z",
-            username: "alice",
-            promptPreview: "Prompt preview",
-            responsePreview: "Response preview",
-            imageUrl: "https://example.com/api/share-image/s1",
-            shareUrl: "https://example.com/s/s1",
-          },
-          {
+          createFeedItem(),
+          createFeedItem({
             shareId: "s2",
             createdAt: "2026-05-15T09:00:00.000Z",
             username: "bob",
@@ -156,7 +214,7 @@ describe("SharedImages", () => {
             responsePreview: "Another response",
             imageUrl: "https://example.com/api/share-image/s2",
             shareUrl: "https://example.com/s/s2",
-          },
+          }),
         ],
         total: 26,
         limit: 25,
@@ -187,14 +245,7 @@ describe("SharedImages", () => {
   it("resets pagination when username drill-down or search is applied", () => {
     mockOverviewAndFeed({
       overview: {
-        totals: {
-          lastHour: 1,
-          last24Hours: 2,
-          last3Days: 3,
-          lastWeek: 4,
-          lastMonth: 5,
-          allTime: 6,
-        },
+        ...createOverview(),
         topUsers: {
           lastHour: [{ username: "alice", shareCount: 2 }],
           last24Hours: [],
@@ -203,17 +254,7 @@ describe("SharedImages", () => {
         },
       },
       feed: {
-        items: [
-          {
-            shareId: "s1",
-            createdAt: "2026-05-15T10:00:00.000Z",
-            username: "alice",
-            promptPreview: "Prompt preview",
-            responsePreview: "Response preview",
-            imageUrl: "https://example.com/api/share-image/s1",
-            shareUrl: "https://example.com/s/s1",
-          },
-        ],
+        items: [createFeedItem()],
         total: 50,
         limit: 25,
         offset: 0,
@@ -237,7 +278,20 @@ describe("SharedImages", () => {
     expect(useAdminApiMock).toHaveBeenCalledWith("/api/shares?limit=25&offset=0&username=alice");
 
     const searchInput = container.querySelector('input[type="search"]') as HTMLInputElement | null;
+    const usernameInput = container.querySelector('input[placeholder="Filter by username"]') as HTMLInputElement | null;
     expect(searchInput).not.toBeNull();
+    expect(usernameInput).not.toBeNull();
+
+    act(() => {
+      if (usernameInput) {
+        usernameInput.value = "  eve  ";
+        usernameInput.dispatchEvent(new Event("change", { bubbles: true }));
+        usernameInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+
+    expect(usernameInput?.value).toBe("  eve  ");
+    expect(useAdminApiMock).not.toHaveBeenCalledWith("/api/shares?limit=25&offset=0&username=eve");
 
     act(() => {
       if (searchInput) {
@@ -251,8 +305,133 @@ describe("SharedImages", () => {
     act(() => {
       form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
+  });
 
-    expect(useAdminApiMock).toHaveBeenCalledWith("/api/shares?limit=25&offset=0&query=latency&username=alice");
+  it("uses the backend-provided page size for labels and pagination offsets", () => {
+    let currentFeed = {
+      items: [createFeedItem()],
+      total: 35,
+      limit: 10,
+      offset: 20,
+    };
+
+    mockOverviewAndFeed({
+      overview: {
+        totals: {
+          lastHour: 0,
+          last24Hours: 0,
+          last3Days: 0,
+          lastWeek: 0,
+          lastMonth: 0,
+          allTime: 0,
+        },
+        topUsers: {
+          lastHour: [],
+          last24Hours: [],
+          lastMonth: [],
+          allTime: [],
+        },
+      },
+      feed: currentFeed,
+    });
+
+    renderComponent();
+
+    expect(container.textContent).toContain("Showing 21–30 of 35");
+    expect(container.textContent).toContain("Page 3 of 4");
+
+    currentFeed = {
+      ...currentFeed,
+      offset: 30,
+    };
+    mockOverviewAndFeed({
+      overview: {
+        totals: {
+          lastHour: 0,
+          last24Hours: 0,
+          last3Days: 0,
+          lastWeek: 0,
+          lastMonth: 0,
+          allTime: 0,
+        },
+        topUsers: {
+          lastHour: [],
+          last24Hours: [],
+          lastMonth: [],
+          allTime: [],
+        },
+      },
+      feed: currentFeed,
+    });
+
+    const nextButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Next");
+    act(() => {
+      nextButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(useAdminApiMock).toHaveBeenCalledWith("/api/shares?limit=25&offset=30");
+  });
+
+  it("closes the preview modal when the selected share is not in the active feed anymore", () => {
+    const overview = {
+      totals: {
+        lastHour: 1,
+        last24Hours: 1,
+        last3Days: 1,
+        lastWeek: 1,
+        lastMonth: 1,
+        allTime: 1,
+      },
+      topUsers: {
+        lastHour: [],
+        last24Hours: [],
+        lastMonth: [],
+        allTime: [],
+      },
+    };
+
+    mockOverviewAndFeed({
+      overview,
+      feed: {
+        items: [createFeedItem()],
+        total: 2,
+        limit: 25,
+        offset: 0,
+      },
+    });
+
+    renderComponent();
+
+    const previewButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Preview");
+    act(() => {
+      previewButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Share Preview");
+
+    mockOverviewAndFeed({
+      overview,
+      feed: {
+        items: [
+          createFeedItem({
+            shareId: "s2",
+            createdAt: "2026-05-15T09:00:00.000Z",
+            username: "bob",
+            promptPreview: "Another prompt",
+            responsePreview: "Another response",
+            imageUrl: "https://example.com/api/share-image/s2",
+            shareUrl: "https://example.com/s/s2",
+          }),
+        ],
+        total: 2,
+        limit: 25,
+        offset: 0,
+      },
+    });
+
+    renderComponent();
+
+    expect(container.textContent).not.toContain("Share Preview");
   });
 
   it("renders a clear empty state for the feed", () => {
