@@ -134,37 +134,43 @@ function MobileQuotaLine({
   );
 }
 
-function MobileMenuStatBox({
+function MobileMenuStatusBlock({
   displayTD,
   activeMultiplier,
   isBYOK,
   byokTotalCost,
+  quotaPercent,
   remaining,
   totalQuota,
-  quotaPercent,
+  quotaTooltip,
 }: {
   displayTD: number;
   activeMultiplier: number;
   isBYOK: boolean;
   byokTotalCost?: number;
+  quotaPercent: number;
   remaining: number;
   totalQuota: number;
-  quotaPercent: number;
+  quotaTooltip: string;
 }) {
-  const totalBlocks = 16;
-  const filledBlocks = Math.round((quotaPercent / 100) * totalBlocks);
-  const emptyBlocks = Math.max(0, totalBlocks - filledBlocks);
-  const debtLine = `| DEBT: ${Math.floor(displayTD).toLocaleString()} TD${activeMultiplier > 1 ? ` (${activeMultiplier.toFixed(1)}x)` : ""}`;
-  const quotaLine = isBYOK
-    ? `| BYOK: ${getByokStatusText(byokTotalCost)}`
-    : `| QUOTA: ${"█".repeat(filledBlocks)}${"░".repeat(emptyBlocks)} ${remaining}/${totalQuota}`;
-
   return (
-    <div data-testid="mobile-menu-stat-box" className="border border-gray-700 bg-black/20 px-3 py-2 font-mono text-xs text-gray-200">
-      <div className="text-gray-500">+------------------------------------------+</div>
-      <div className="truncate">{debtLine}</div>
-      <div className="truncate">{quotaLine}</div>
-      <div className="text-gray-500">+------------------------------------------+</div>
+    <div data-testid="mobile-menu-stat-box" className="flex flex-col gap-2 border border-gray-700 bg-black/20 px-3 py-3">
+      <TechnicalDebtLine displayTD={displayTD} activeMultiplier={activeMultiplier} />
+      {isBYOK ? (
+        <div className="max-w-full">
+          <StatusDetailLine
+            isBYOK={isBYOK}
+            byokTotalCost={byokTotalCost}
+            quotaPercent={quotaPercent}
+            remaining={remaining}
+            totalQuota={totalQuota}
+            quotaTooltip={quotaTooltip}
+            isMax={false}
+          />
+        </div>
+      ) : (
+        <DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} />
+      )}
     </div>
   );
 }
@@ -337,7 +343,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
         {menuOpen && (
           <div data-testid="mobile-menu-panel" className="absolute right-0 top-full z-20 mt-2 flex min-h-[28rem] max-h-[calc(100dvh-5rem)] w-[360px] max-w-[calc(100vw-1rem)] flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-lg">
             <div className="flex flex-col gap-4">
-              <MobileMenuStatBox
+              <MobileMenuStatusBlock
                 displayTD={displayTD}
                 activeMultiplier={activeMultiplier}
                 isBYOK={isBYOK}
@@ -345,6 +351,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
                 remaining={remaining}
                 totalQuota={totalQuota}
                 quotaPercent={quotaPercent}
+                quotaTooltip={quotaTooltip}
               />
               <div>
                 <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ ACTIONS ]</div>
@@ -374,9 +381,8 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
                 <button type="button" onClick={() => { setMenuOpen(false); onAboutClick(); }} className="hover:text-gray-300">/about</button>
                 <button type="button" onClick={() => { setMenuOpen(false); onContactClick(); }} className="hover:text-gray-300">/contact</button>
               </div>
-              <p className="mt-1">© 2026 Unchained Development OÜ</p>
-              <p>git blame ...</p>
-              <p>made with <a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">propr.dev</a></p>
+              <p className="mt-1"><span className="text-gray-400">[BLAME]</span> {"© 2026 Unchained Development OÜ && git blame --author=\"Rinalds Uzkalns\""}</p>
+              <p>{"made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
               <button type="button" onClick={() => { setMenuOpen(false); onSlashMenuClick?.(); }} className="mt-2 text-left hover:text-gray-300">Type <span className="text-green-400">/</span> in terminal for commands</button>
             </div>
           </div>

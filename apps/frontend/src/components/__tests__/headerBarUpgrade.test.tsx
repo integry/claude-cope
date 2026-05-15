@@ -40,8 +40,27 @@ const baseProps = {
 };
 
 let container: HTMLDivElement;
-const mobileMenuTexts = ["[ ACTIONS ]", "[ SYSTEM ]", "/store", "Buy coping mechanisms", "/upgrade", "Unlock MAX 429X", "/leaderboard", "/achievements", "/profile", "/help", "/github", "/terms", "/privacy", "/about", "/contact", "© 2026 Unchained Development OÜ"];
-const mobileMenuStatTexts = ["+------------------------------------------+", "DEBT: 3,880 TD", "QUOTA:"];
+const mobileMenuTexts = [
+  "[ ACTIONS ]",
+  "[ SYSTEM ]",
+  "/store",
+  "Buy coping mechanisms",
+  "/upgrade",
+  "Unlock MAX 429X",
+  "/leaderboard",
+  "/achievements",
+  "/profile",
+  "/help",
+  "/github",
+  "/terms",
+  "/privacy",
+  "/about",
+  "/contact",
+  "[BLAME]",
+  "© 2026 Unchained Development OÜ && git blame --author=\"Rinalds Uzkalns\"",
+  "made with propr.dev",
+];
+const mobileMenuStatTexts = ["Technical Debt:", "3,880 TD", "API Quota:"];
 
 function renderHeaderBar(props: Record<string, unknown>) {
   container = document.createElement("div");
@@ -72,6 +91,10 @@ function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | 
   for (const text of mobileMenuStatTexts) {
     expect(statBox?.textContent).toContain(text);
   }
+  const proprLink = menuPanel?.querySelector("a[href='https://propr.dev']") as HTMLAnchorElement | null;
+  expect(proprLink).not.toBeNull();
+  expect(proprLink?.textContent).toBe("propr.dev");
+  expect(proprLink?.className).toContain("text-gray-400");
 }
 
 function expectDesktopStackedIdentityAndStatus() {
