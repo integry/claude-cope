@@ -381,6 +381,20 @@ body {
   opacity: 0.92;
 }
 
+.terminal-command-send-button {
+  border: 0;
+  padding: 0;
+  margin-left: 0.75rem;
+  background: transparent;
+  color: #67e8f9;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.96;
+  text-shadow: 0 0 12px rgba(103, 232, 249, 0.24);
+}
+
 .terminal-command-cursor {
   position: absolute;
   left: 0;

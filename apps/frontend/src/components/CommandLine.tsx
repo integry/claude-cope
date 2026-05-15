@@ -6,6 +6,7 @@ type CommandLineProps = {
   disabled?: boolean;
   onChange: (e: ChangeEvent<HTMLInputElement>) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
+  onSubmit?: () => void;
   promptString?: string;
   placeholder?: string;
   assistivePlaceholderHint?: string;
@@ -52,7 +53,17 @@ function getCommandRowClassName(isFocused: boolean, disabled: boolean | undefine
 
 const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
   function CommandLine(
-    { value, disabled, onChange, onKeyDown, promptString = "❯ ", placeholder, assistivePlaceholderHint, onPlaceholderAccept },
+    {
+      value,
+      disabled,
+      onChange,
+      onKeyDown,
+      onSubmit,
+      promptString = "❯ ",
+      placeholder,
+      assistivePlaceholderHint,
+      onPlaceholderAccept,
+    },
     ref
   ) {
     const [isFocused, setIsFocused] = useState(false);
@@ -60,6 +71,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     const isMobileViewport = useIsMobileViewport();
     const showPlaceholder = !value && !!placeholder;
     const showTabHint = showPlaceholder && !disabled;
+    const showMobileSendButton = isMobileViewport && !!value && !disabled;
     const showDecorativeCursor = showPlaceholder && isFocused && !disabled;
     const hideNativeCaret = showDecorativeCursor;
     const { accessiblePlaceholder, leadingPlaceholderChar, tabHintAriaLabel, tabHintLabel, trailingPlaceholderText } =
@@ -144,6 +156,19 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
               className={`terminal-command-input relative z-10 w-full outline-none bg-transparent text-white font-bold disabled:opacity-50 py-0 leading-none ${hideNativeCaret ? "terminal-command-input-caret-hidden" : "caret-white"}`}
             />
           </div>
+          {showMobileSendButton && (
+            <button
+              type="button"
+              data-testid="command-line-send-button"
+              className="terminal-command-send-button shrink-0"
+              onMouseDown={keepInputFocus}
+              onPointerDown={keepInputFocus}
+              onClick={onSubmit}
+              aria-label="Send command"
+            >
+              [ ↵ ]
+            </button>
+          )}
         </div>
       </div>
     );

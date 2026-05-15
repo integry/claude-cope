@@ -37,6 +37,7 @@ function renderCommandLine(props: Partial<React.ComponentProps<typeof CommandLin
     disabled: false,
     onChange: vi.fn(),
     onKeyDown: vi.fn(),
+    onSubmit: vi.fn(),
     promptString: "❯ ",
     placeholder: "Try /help",
     assistivePlaceholderHint: "Press Tab to accept suggestion.",
@@ -143,7 +144,33 @@ describe("CommandLine", () => {
     const { container } = renderCommandLine({ value: "/theme matrix" });
 
     expect(container.querySelector("[data-testid='command-line-placeholder']")).toBeNull();
+    expect(container.querySelector("[data-testid='command-line-tab-hint']")).toBeNull();
     expect(container.textContent).not.toContain("Try /help");
+  });
+
+  it("shows a mobile send button while typing and submits through it", () => {
+    mobileViewport = true;
+    const onSubmit = vi.fn();
+    const { container, input } = renderCommandLine({ value: "/help", onSubmit });
+    const sendButton = container.querySelector("[data-testid='command-line-send-button']") as HTMLButtonElement | null;
+
+    expect(sendButton?.textContent).toBe("[ ↵ ]");
+    expect(container.querySelector("[data-testid='command-line-placeholder']")).toBeNull();
+
+    act(() => {
+      input?.focus();
+      sendButton?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      sendButton?.click();
+    });
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("does not show the send button on desktop", () => {
+    const { container } = renderCommandLine({ value: "/help" });
+
+    expect(container.querySelector("[data-testid='command-line-send-button']")).toBeNull();
   });
 
   it("does not show the decorative cursor while disabled", () => {

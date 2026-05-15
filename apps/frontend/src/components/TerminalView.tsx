@@ -71,6 +71,7 @@ type TerminalViewProps = OverlayVisibility & {
   isProcessing: boolean;
   handleChange: (e: ChangeEvent<HTMLInputElement>) => void;
   handleKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
+  handleSubmit: () => void;
   buyGenerator: (generatorId: string, amount?: number) => boolean;
   buyUpgrade: (upgradeId: string) => boolean;
   buyTheme: (themeId: string) => boolean;
@@ -148,6 +149,7 @@ export function TerminalView({
   isProcessing,
   handleChange,
   handleKeyDown,
+  handleSubmit,
   buyGenerator,
   buyUpgrade,
   buyTheme,
@@ -317,6 +319,7 @@ export function TerminalView({
               disabled={isProcessing || isBooting || anyOverlayOpen}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
+              onSubmit={handleSubmit}
               promptString={promptString}
               placeholder={suggestedReply ?? undefined}
               onPlaceholderAccept={acceptSuggestedReply}

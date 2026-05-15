@@ -379,7 +379,7 @@ function Terminal() {
       setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect} isBooting={isBooting} history={history}
       messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} bottomRef={bottomRef}
       slashQuery={slashQuery} slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect} runSlashCommand={runSlashCommand} inputValue={inputValue} suggestedReply={suggestedReply} acceptSuggestedReply={acceptSuggestedReply}
-      isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme}
+      isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown} handleSubmit={handleEnterSubmit} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme}
       showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy}
       showTerms={showTerms} showContact={showContact} showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade} setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard}
       setShowAchievements={setShowAchievements} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms} setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty}
