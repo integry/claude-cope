@@ -210,15 +210,25 @@ function renderBuddyInterjection(
   );
 }
 
-function renderMarkdownMessage(
-  content: string,
-  shouldTypewrite: boolean,
-  visibleContent: string,
-  isStreaming: boolean,
-  isTyping: boolean,
-  shareNode: React.ReactNode,
-  mdComponents: ReturnType<typeof buildMarkdownComponents>,
-) {
+type MarkdownMessageRenderOptions = {
+  content: string;
+  shouldTypewrite: boolean;
+  visibleContent: string;
+  isStreaming: boolean;
+  isTyping: boolean;
+  shareNode: React.ReactNode;
+  mdComponents: ReturnType<typeof buildMarkdownComponents>;
+};
+
+function renderMarkdownMessage({
+  content,
+  shouldTypewrite,
+  visibleContent,
+  isStreaming,
+  isTyping,
+  shareNode,
+  mdComponents,
+}: MarkdownMessageRenderOptions) {
   const rawContent = shouldTypewrite ? visibleContent : content;
   const processedContent = appendShareMarker(cleanLLMOutput(rawContent), Boolean(shareNode));
   const showCursor = isStreaming || isTyping;
@@ -278,7 +288,7 @@ function renderMessageContentBody(
   }
 
   if (useMarkdown || isStreaming) {
-    return renderMarkdownMessage(
+    return renderMarkdownMessage({
       content,
       shouldTypewrite,
       visibleContent,
@@ -286,7 +296,7 @@ function renderMessageContentBody(
       isTyping,
       shareNode,
       mdComponents,
-    );
+    });
   }
 
   return renderPlainMessage(role, content, buddyData.body, isAwaitingResponse, onSlashCommand);
