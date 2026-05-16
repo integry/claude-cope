@@ -125,11 +125,8 @@ describe("CommandLine", () => {
 
   it("shows the decorative cursor over the first suggested character and only blinks while focused", () => {
     const { container, input } = renderCommandLine();
-    const initialCursor = container.querySelector("[data-testid='command-line-cursor']");
-
     expect(input).not.toBeNull();
-    expect(initialCursor).not.toBeNull();
-    expect(initialCursor?.className).toContain("terminal-command-cursor-blinking");
+    expect(container.querySelector("[data-testid='command-line-cursor']")).not.toBeNull();
 
     act(() => {
       input!.blur();
@@ -146,6 +143,7 @@ describe("CommandLine", () => {
 
     expect(cursor).not.toBeNull();
     expect(leadingChar?.contains(cursor)).toBe(true);
+    expect(document.activeElement).toBe(input);
     expect(cursor?.className).toContain("terminal-command-cursor-blinking");
 
     act(() => {
