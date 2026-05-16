@@ -129,7 +129,13 @@ describe("CommandLine", () => {
 
     expect(input).not.toBeNull();
     expect(initialCursor).not.toBeNull();
-    expect(initialCursor?.className).not.toContain("terminal-command-cursor-blinking");
+    expect(initialCursor?.className).toContain("terminal-command-cursor-blinking");
+
+    act(() => {
+      input!.blur();
+    });
+
+    expect(container.querySelector("[data-testid='command-line-cursor']")?.className).not.toContain("terminal-command-cursor-blinking");
 
     act(() => {
       input!.focus();
