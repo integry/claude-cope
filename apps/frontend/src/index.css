@@ -245,6 +245,10 @@ body {
     font-size: 0.75rem !important;
   }
 
+  .terminal-markdown-codeblock code {
+    font-size: 0.75rem !important;
+  }
+
   .terminal-buddy-dock {
     flex-direction: column;
     align-items: center;
