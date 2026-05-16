@@ -80,6 +80,12 @@ function clickElement(element: HTMLButtonElement | null | undefined) {
   });
 }
 
+function mouseDownElement(element: Element | null | undefined) {
+  act(() => {
+    element?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  });
+}
+
 function getMobileHomeButton() {
   return (queryByTestId("mobile-header-logo-expanded") ??
     queryByTestId("mobile-header-logo")) as HTMLButtonElement | null;
@@ -376,6 +382,23 @@ describe("HeaderBar upgrade CTA visibility", () => {
     const statBox = queryByTestId("mobile-menu-stat-box");
 
     expectMobileMenuContents(menuPanel, statBox);
+  });
+
+  it("keeps menu item taps actionable after the outside-click guard runs on mousedown", () => {
+    const onStoreClick = vi.fn();
+    renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false, onStoreClick });
+
+    openMobileMenu();
+
+    const menuPanel = queryByTestId("mobile-menu-panel");
+    const storeButton = Array.from(menuPanel?.querySelectorAll("button") ?? []).find((element) => element.textContent?.includes("/store") && element.textContent?.includes("Buy coping mechanisms")) as HTMLButtonElement | undefined;
+    expect(storeButton).not.toBeUndefined();
+
+    mouseDownElement(storeButton);
+    clickElement(storeButton);
+
+    expect(onStoreClick).toHaveBeenCalledTimes(1);
+    expect(queryByTestId("mobile-menu-panel")).toBeNull();
   });
 
   it("anchors the mobile menu to the viewport using the trigger geometry instead of the trigger wrapper", () => {
