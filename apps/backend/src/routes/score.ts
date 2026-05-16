@@ -197,6 +197,9 @@ function buildScoreBatch(db: D1Database, opts: {
 type OwnershipCheckResult =
   | { error: string; deferredKvWrites?: undefined }
   | { error: null; deferredKvWrites: (() => Promise<void>) | null; accountId: string };
+type SessionAuthorizationResult =
+  | { authorized: false; deferredKvWrites?: undefined }
+  | { authorized: true; deferredKvWrites: (() => Promise<void>) | null };
 
 const SESSION_USERNAME_TTL_SECONDS = 60 * 60 * 24 * 365;
 const MAX_SESSION_RENAME_HOPS = 5;
@@ -229,11 +232,46 @@ async function isSessionAuthorizedForUsername(
   kv: KVNamespace,
   sessionId: string,
   username: string,
-): Promise<boolean> {
+): Promise<SessionAuthorizationResult> {
   const sessionUsername = await kv.get(accountKvKeys.sessionUser(sessionId));
-  if (!sessionUsername) return false;
-  if (sameUsername(sessionUsername, username)) return true;
-  return resolveRenamedSessionUsername(kv, sessionUsername, username);
+  if (sameUsername(sessionUsername, username)) {
+    if (sessionUsername === username) return { authorized: true, deferredKvWrites: null };
+    return {
+      authorized: true,
+      deferredKvWrites: async () => {
+        await kv.put(accountKvKeys.sessionUser(sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+      },
+    };
+  }
+
+  const existingOwner = await kv.get(accountKvKeys.usernameSession(username));
+  if (existingOwner === sessionId) {
+    return {
+      authorized: true,
+      deferredKvWrites: async () => {
+        await kv.put(accountKvKeys.sessionUser(sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+      },
+    };
+  }
+
+  if (!sessionUsername) return { authorized: false };
+  if (!(await resolveRenamedSessionUsername(kv, sessionUsername, username))) return { authorized: false };
+  return {
+    authorized: true,
+    deferredKvWrites: async () => {
+      await kv.put(accountKvKeys.sessionUser(sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+      await kv.put(accountKvKeys.usernameSession(username), sessionId, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+    },
+  };
+}
+
+function buildScoreResponse(profile: { total_td: number; current_td: number; corporate_rank: string; multiplier: number }) {
+  return {
+    total_td: profile.total_td,
+    current_td: profile.current_td,
+    corporate_rank: profile.corporate_rank,
+    multiplier: profile.multiplier,
+  };
 }
 
 /**
@@ -344,7 +382,7 @@ score.post("/", async (c) => {
     }
     const { profile } = resolution;
     const updated = await syncResolvedProUser(db, body, profile);
-    if (updated) return c.json({ profile: updated });
+    if (updated) return c.json(buildScoreResponse(updated));
     return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }
 
@@ -360,8 +398,8 @@ score.post("/", async (c) => {
     if (!kv) {
       return c.json({ error: "Cannot verify session ownership — please retry" }, 503);
     }
-    const ownsSessionProfile = await isSessionAuthorizedForUsername(kv, sessionId, body.username);
-    if (!ownsSessionProfile) {
+    const sessionAuthorization = await isSessionAuthorizedForUsername(kv, sessionId, body.username);
+    if (!sessionAuthorization.authorized) {
       return c.json({ error: "This account is linked to a Pro license — authenticate with proKeyHash" }, 403);
     }
     const licenseActive = await isLicenseActive(db, existingRow.license_hash);
@@ -373,7 +411,12 @@ score.post("/", async (c) => {
       return c.json({ error: "Pro score sync failed — please retry" }, 500);
     }
     const updated = await syncResolvedProUser(db, body, profile);
-    if (updated) return c.json({ profile: updated });
+    if (updated) {
+      if (sessionAuthorization.deferredKvWrites) {
+        await sessionAuthorization.deferredKvWrites();
+      }
+      return c.json(buildScoreResponse(updated));
+    }
     return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }
 

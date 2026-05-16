@@ -120,17 +120,17 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setMenuOpen(false);
     };
-    const handleClick = (e: MouseEvent) => {
+    const handleClick = (e: PointerEvent) => {
       const target = e.target as Node;
       const isInsideAnchor = menuRef.current?.contains(target) ?? false;
       const isInsidePanel = menuPanelRef.current?.contains(target) ?? false;
       if (!isInsideAnchor && !isInsidePanel) setMenuOpen(false);
     };
     document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("pointerdown", handleClick);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("pointerdown", handleClick);
     };
   }, [menuOpen]);
 

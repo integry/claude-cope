@@ -183,7 +183,7 @@ describe("POST /api/score", () => {
     expect(json.profile.current_td).toBe(150000);
   });
 
-  it("returns the full profile payload for session-authenticated pro sync without proKeyHash", async () => {
+  it("returns the flat score payload for session-authenticated pro sync without proKeyHash", async () => {
     const { db } = makeDB({
       username: "prouser",
       total_td: 200000,
@@ -207,17 +207,13 @@ describe("POST /api/score", () => {
       { headers: { Cookie: "cope_session_id=test-session" }, kv }
     );
     expect(res.status).toBe(200);
-    const json = await res.json() as { profile: { username: string; total_td: number; current_td: number; corporate_rank: string; multiplier: number } };
-    expect(json.profile).toMatchObject({
-      username: "prouser",
+    const json = await res.json() as { total_td: number; current_td: number; corporate_rank: string; multiplier: number };
+    expect(json).toMatchObject({
       total_td: 200000,
       current_td: 150000,
       corporate_rank: "Mid-Level Googler",
       multiplier: 1,
     });
-    expect(json).not.toHaveProperty("total_td");
-    expect(json).not.toHaveProperty("current_td");
-    expect(json).not.toHaveProperty("corporate_rank");
   });
 
   it("uses cf-ipcountry header for country detection", async () => {
@@ -451,9 +447,52 @@ describe("POST /api/score", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json() as { profile: { username: string; total_td: number } };
-    expect(json.profile.username).toBe("alice");
-    expect(json.profile.total_td).toBe(5000);
+    const json = await res.json() as { total_td: number; current_td: number; corporate_rank: string; multiplier: number };
+    expect(json.total_td).toBe(5000);
+    expect(json.current_td).toBe(4800);
+    expect(json.corporate_rank).toBe("Mid-Level Googler");
+    expect(json.multiplier).toBe(1);
+  });
+
+  it("repairs session mappings for session-authenticated pro users after rename resolution", async () => {
+    const { db } = makeDB({
+      total_td: 5000,
+      current_td: 4800,
+      last_sync_time: new Date().toISOString().replace("Z", "").replace("T", " "),
+      license_hash: "pro-hash",
+      corporate_rank: "Mid-Level Googler",
+      account_id: "acct-123",
+      username: "bob",
+      inventory: "{}",
+      upgrades: "[]",
+      achievements: "[]",
+      buddy_type: null,
+      buddy_is_shiny: 0,
+      unlocked_themes: "[\"default\"]",
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+    } as never, { licenseActive: true });
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+    });
+
+    const res = await postScore(
+      db,
+      {
+        username: "bob",
+        currentTD: 4800,
+        totalTDEarned: 5000,
+        inventory: {},
+        upgrades: [],
+      },
+      { headers: { Cookie: "cope_session_id=test-session" }, kv },
+    );
+
+    expect(res.status).toBe(200);
+    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
+    expect(kv.put).toHaveBeenCalledWith("username_session:bob", "test-session", expect.any(Object));
   });
 
   it("rejects replayed task bonus (already claimed)", async () => {

@@ -220,4 +220,4 @@ INSERT OR REPLACE INTO community_backlog (id, title, description, kickoff_prompt
 ('BLORT-200', 'Move Product Analytics On-Chain So Every Click Is Public, Immutable, and Somehow Harder to Query',
  'Amplitude dashboards feel rented. We need clickstream permanence. Every page view, modal open, and abandoned checkout should be emitted as an on-chain event so investors can verify user engagement without trusting screenshots. If query costs exceed revenue during healthy weeks, the metrics have finally learned conviction.',
  'move product analytics on-chain for transparency',
-  377),;
+  377);
