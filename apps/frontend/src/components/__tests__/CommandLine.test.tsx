@@ -73,19 +73,19 @@ afterEach(() => {
 installMatchMediaMock();
 
 describe("CommandLine", () => {
-  it("does not autofocus the input on standalone desktop render", () => {
+  it("autofocuses the input on standalone desktop render", () => {
     const { container, input } = renderCommandLine();
     const cursor = container.querySelector("[data-testid='command-line-cursor']");
 
     expect(input).not.toBeNull();
-    expect(document.activeElement).not.toBe(input);
+    expect(document.activeElement).toBe(input);
     expect(cursor).not.toBeNull();
-    expect(cursor?.className).not.toContain("terminal-command-cursor-blinking");
+    expect(cursor?.className).toContain("terminal-command-cursor-blinking");
   });
 
-  it("never enables the native autoFocus attribute", () => {
+  it("enables the native autoFocus attribute on desktop", () => {
     const { input } = renderCommandLine();
-    expect(input?.autofocus).toBe(false);
+    expect(input?.autofocus).toBe(true);
   });
 
   it("does not autofocus the input on mobile render", () => {
@@ -97,6 +97,12 @@ describe("CommandLine", () => {
     expect(document.activeElement).not.toBe(input);
     expect(cursor).not.toBeNull();
     expect(cursor?.className).not.toContain("terminal-command-cursor-blinking");
+  });
+
+  it("disables the native autoFocus attribute on mobile", () => {
+    mobileViewport = true;
+    const { input } = renderCommandLine();
+    expect(input?.autofocus).toBe(false);
   });
 
   it("renders the custom placeholder overlay and tab hint when empty", () => {

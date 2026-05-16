@@ -241,7 +241,9 @@ async function isSessionAuthorizedForUsername(
   kv: KVNamespace,
   sessionId: string,
   username: string,
+  options?: { allowRenameRepair?: boolean },
 ): Promise<SessionAuthorizationResult> {
+  const allowRenameRepair = options?.allowRenameRepair ?? true;
   // This fallback is intentionally narrower than "any session with this cookie can write".
   // When a legacy Pro row is synced without `proKeyHash`, we trust only server-issued KV
   // ownership state for this exact username: a direct session_user match, an exact
@@ -269,6 +271,7 @@ async function isSessionAuthorizedForUsername(
     };
   }
 
+  if (!allowRenameRepair) return { authorized: false };
   if (!sessionUsername) return { authorized: false };
   if (!(await resolveRenamedSessionUsername(kv, sessionUsername, username))) return { authorized: false };
   if (!(await canSessionClaimUsername(kv, sessionId, username))) return { authorized: false };
@@ -409,7 +412,9 @@ score.post("/", async (c) => {
     if (!kv) {
       return c.json({ error: "Cannot verify session ownership — please retry" }, 503);
     }
-    const sessionAuthorization = await isSessionAuthorizedForUsername(kv, sessionId, body.username);
+    const sessionAuthorization = await isSessionAuthorizedForUsername(kv, sessionId, body.username, {
+      allowRenameRepair: false,
+    });
     if (!sessionAuthorization.authorized) {
       return c.json({ error: "This account is linked to a Pro license — authenticate with proKeyHash" }, 403);
     }

@@ -454,7 +454,7 @@ describe("POST /api/score", () => {
     expect(json.profile.multiplier).toBe(1);
   });
 
-  it("repairs session mappings for session-authenticated pro users after rename resolution", async () => {
+  it("rejects rename-based pro session repair when a licensed username only matches through a stale rename alias", async () => {
     const { db } = makeDB({
       total_td: 5000,
       current_td: 4800,
@@ -490,9 +490,12 @@ describe("POST /api/score", () => {
       { headers: { Cookie: "cope_session_id=test-session" }, kv },
     );
 
-    expect(res.status).toBe(200);
-    expect(kv.put).toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
-    expect(kv.put).toHaveBeenCalledWith("username_session:bob", "test-session", expect.any(Object));
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      error: "This account is linked to a Pro license — authenticate with proKeyHash",
+    });
+    expect(kv.put).not.toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
+    expect(kv.put).not.toHaveBeenCalledWith("username_session:bob", "test-session", expect.any(Object));
   });
 
   it("rejects rename-based pro session repair when the target username is owned by another session", async () => {

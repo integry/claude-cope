@@ -85,6 +85,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     const showMobileSendButton = isMobileViewport && !!value && !disabled && canSubmit;
     const showDecorativeCursor = showPlaceholder && !disabled;
     const hideNativeCaret = showDecorativeCursor && isInputFocused;
+    const shouldAutoFocus = !isMobileViewport;
     const { accessiblePlaceholder, leadingPlaceholderChar, tabHintAriaLabel, tabHintLabel, trailingPlaceholderText } =
       getPlaceholderMetadata(placeholder, assistivePlaceholderHint, disabled, isMobileViewport, canAcceptPlaceholder);
     const commandRowClassName = getCommandRowClassName(isInputFocused, disabled);
@@ -175,7 +176,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                 }}
                 type="text"
                 value={value}
-                autoFocus={false}
+                autoFocus={shouldAutoFocus}
                 disabled={disabled}
                 onChange={onChange}
                 onKeyDown={handleInputKeyDown}
