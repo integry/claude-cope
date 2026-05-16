@@ -73,18 +73,24 @@ installMatchMediaMock();
 
 describe("CommandLine", () => {
   it("autofocuses the input on desktop render", () => {
-    const { input } = renderCommandLine();
+    const { container, input } = renderCommandLine();
+    const cursor = container.querySelector("[data-testid='command-line-cursor']");
 
     expect(input).not.toBeNull();
     expect(document.activeElement).toBe(input);
+    expect(cursor).not.toBeNull();
+    expect(cursor?.className).toContain("terminal-command-cursor-blinking");
   });
 
   it("does not autofocus the input on mobile render", () => {
     mobileViewport = true;
-    const { input } = renderCommandLine();
+    const { container, input } = renderCommandLine();
+    const cursor = container.querySelector("[data-testid='command-line-cursor']");
 
     expect(input).not.toBeNull();
     expect(document.activeElement).not.toBe(input);
+    expect(cursor).not.toBeNull();
+    expect(cursor?.className).not.toContain("terminal-command-cursor-blinking");
   });
 
   it("renders the custom placeholder overlay and tab hint when empty", () => {
@@ -125,8 +131,11 @@ describe("CommandLine", () => {
 
   it("shows the decorative cursor over the first suggested character and only blinks while focused", () => {
     const { container, input } = renderCommandLine();
+    const initialCursor = container.querySelector("[data-testid='command-line-cursor']");
+
     expect(input).not.toBeNull();
-    expect(container.querySelector("[data-testid='command-line-cursor']")).not.toBeNull();
+    expect(initialCursor).not.toBeNull();
+    expect(initialCursor?.className).toContain("terminal-command-cursor-blinking");
 
     act(() => {
       input!.blur();
