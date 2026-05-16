@@ -4,6 +4,7 @@ import { computeMultiplier } from "../gameConstants";
 import { accountKvKeys } from "./accountHelpers";
 import { getProfile, getProfileByLicenseHash, isLicenseActive, resolveRank as resolveRankFromProfile, resolveProUser } from "../utils/profile";
 import { issueFreeAccountCookie } from "../utils/freeAccountIdentity";
+import type { ServerProfile } from "@claude-cope/shared/profile";
 
 type Env = {
   Bindings: {
@@ -265,13 +266,8 @@ async function isSessionAuthorizedForUsername(
   };
 }
 
-function buildScoreResponse(profile: { total_td: number; current_td: number; corporate_rank: string; multiplier: number }) {
-  return {
-    total_td: profile.total_td,
-    current_td: profile.current_td,
-    corporate_rank: profile.corporate_rank,
-    multiplier: profile.multiplier,
-  };
+function buildProScoreResponse(profile: ServerProfile) {
+  return { profile };
 }
 
 /**
@@ -382,7 +378,7 @@ score.post("/", async (c) => {
     }
     const { profile } = resolution;
     const updated = await syncResolvedProUser(db, body, profile);
-    if (updated) return c.json(buildScoreResponse(updated));
+    if (updated) return c.json(buildProScoreResponse(updated));
     return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }
 
@@ -415,7 +411,7 @@ score.post("/", async (c) => {
       if (sessionAuthorization.deferredKvWrites) {
         await sessionAuthorization.deferredKvWrites();
       }
-      return c.json(buildScoreResponse(updated));
+      return c.json(buildProScoreResponse(updated));
     }
     return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }

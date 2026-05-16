@@ -183,7 +183,7 @@ describe("POST /api/score", () => {
     expect(json.profile.current_td).toBe(150000);
   });
 
-  it("returns the flat score payload for session-authenticated pro sync without proKeyHash", async () => {
+  it("returns the embedded profile payload for session-authenticated pro sync without proKeyHash", async () => {
     const { db } = makeDB({
       username: "prouser",
       total_td: 200000,
@@ -207,8 +207,8 @@ describe("POST /api/score", () => {
       { headers: { Cookie: "cope_session_id=test-session" }, kv }
     );
     expect(res.status).toBe(200);
-    const json = await res.json() as { total_td: number; current_td: number; corporate_rank: string; multiplier: number };
-    expect(json).toMatchObject({
+    const json = await res.json() as { profile: { total_td: number; current_td: number; corporate_rank: string; multiplier: number } };
+    expect(json.profile).toMatchObject({
       total_td: 200000,
       current_td: 150000,
       corporate_rank: "Mid-Level Googler",
@@ -447,11 +447,11 @@ describe("POST /api/score", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json() as { total_td: number; current_td: number; corporate_rank: string; multiplier: number };
-    expect(json.total_td).toBe(5000);
-    expect(json.current_td).toBe(4800);
-    expect(json.corporate_rank).toBe("Mid-Level Googler");
-    expect(json.multiplier).toBe(1);
+    const json = await res.json() as { profile: { total_td: number; current_td: number; corporate_rank: string; multiplier: number } };
+    expect(json.profile.total_td).toBe(5000);
+    expect(json.profile.current_td).toBe(4800);
+    expect(json.profile.corporate_rank).toBe("Mid-Level Googler");
+    expect(json.profile.multiplier).toBe(1);
   });
 
   it("repairs session mappings for session-authenticated pro users after rename resolution", async () => {
