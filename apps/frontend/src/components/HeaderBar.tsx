@@ -111,7 +111,7 @@ function MobileMenuPanel({
   ];
 
   return (
-    <div data-testid="mobile-menu-panel" className="fixed left-2 right-2 z-20 flex min-h-[28rem] flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-[0px_20px_25px_10px_rgba(0,0,0,0.7)] sm:hidden" style={{ top: `${mobileMenuPosition.top}px`, maxHeight: `${mobileMenuPosition.maxHeight}px` }}>
+    <div data-testid="mobile-menu-panel" className="fixed left-2 right-2 z-40 flex min-h-[28rem] flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-[0px_20px_25px_10px_rgba(0,0,0,0.7)] sm:hidden" style={{ top: `${mobileMenuPosition.top}px`, maxHeight: `${mobileMenuPosition.maxHeight}px` }}>
       <div className="flex flex-col gap-4">
         <div className="border-b border-gray-700 pb-4">
           <MobileMenuStatusBlock displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} byokTotalCost={byokTotalCost} remaining={remaining} totalQuota={totalQuota} quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} />
