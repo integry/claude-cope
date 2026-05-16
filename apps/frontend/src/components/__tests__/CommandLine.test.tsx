@@ -83,9 +83,10 @@ describe("CommandLine", () => {
     expect(cursor?.className).toContain("terminal-command-cursor-blinking");
   });
 
-  it("enables the native autoFocus attribute on desktop", () => {
+  it("keeps desktop autofocus behavior enabled", () => {
     const { input } = renderCommandLine();
-    expect(input?.autofocus).toBe(true);
+    expect(input).not.toBeNull();
+    expect(document.activeElement).toBe(input);
   });
 
   it("does not autofocus the input on mobile render", () => {
