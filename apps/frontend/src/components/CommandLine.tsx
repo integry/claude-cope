@@ -1,4 +1,4 @@
-import { ChangeEvent, KeyboardEvent, MouseEvent, PointerEvent, forwardRef, useEffect, useRef, useState } from "react";
+import { ChangeEvent, KeyboardEvent, MouseEvent, PointerEvent, forwardRef, useEffect, useState } from "react";
 import { useIsMobileViewport } from "./useIsMobileViewport";
 
 type CommandLineProps = {
@@ -75,7 +75,6 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
   ) {
     const [isFocused, setIsFocused] = useState(false);
     const [isComposing, setIsComposing] = useState(false);
-    const inputRef = useRef<HTMLInputElement | null>(null);
     const isMobileViewport = useIsMobileViewport();
     const canAcceptPlaceholder = !!onPlaceholderAccept;
     const canSubmit = !!onSubmit;
@@ -166,14 +165,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                 </div>
               )}
               <input
-                ref={(node) => {
-                  inputRef.current = node;
-                  if (typeof ref === "function") {
-                    ref(node);
-                  } else if (ref) {
-                    ref.current = node;
-                  }
-                }}
+                ref={ref}
                 type="text"
                 value={value}
                 autoFocus={shouldAutoFocus}

@@ -101,6 +101,10 @@ async function syncResolvedProUser(
   body: ScoreBody,
   profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>,
 ) {
+  if (profile.username !== body.username) {
+    return null;
+  }
+
   const { validatedTaskBonus, validatedClaims } = await validateTaskBonuses(db, body.username, body.completedTaskIds);
 
   if (validatedTaskBonus > 0) {
@@ -251,17 +255,23 @@ async function isSessionAuthorizedForUsername(
   // safely repair both mappings. Do not broaden these conditions without adding adversarial
   // coverage for stale, cyclic, or conflicting KV state.
   const sessionUsername = await kv.get(accountKvKeys.sessionUser(sessionId));
+  const existingOwner = await kv.get(accountKvKeys.usernameSession(username));
   if (sameUsername(sessionUsername, username)) {
-    if (sessionUsername === username) return { authorized: true, deferredKvWrites: null };
+    if (existingOwner && existingOwner !== sessionId) {
+      return { authorized: false };
+    }
+    if (sessionUsername === username && existingOwner === sessionId) {
+      return { authorized: true, deferredKvWrites: null };
+    }
     return {
       authorized: true,
       deferredKvWrites: async () => {
         await kv.put(accountKvKeys.sessionUser(sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+        await kv.put(accountKvKeys.usernameSession(username), sessionId, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
       },
     };
   }
 
-  const existingOwner = await kv.get(accountKvKeys.usernameSession(username));
   if (existingOwner === sessionId) {
     return {
       authorized: true,
@@ -425,6 +435,9 @@ score.post("/", async (c) => {
     const profile = await getProfileByLicenseHash(db, existingRow.license_hash);
     if (!profile) {
       return c.json({ error: "Pro score sync failed — please retry" }, 500);
+    }
+    if (profile.username !== body.username) {
+      return c.json({ error: "Username does not match the license owner" }, 409);
     }
     const updated = await syncResolvedProUser(db, body, profile);
     if (updated) {

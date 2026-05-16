@@ -697,6 +697,10 @@ describe("reply formatting normalizer", () => {
     expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
   });
 
+  it("keeps canned USER_NEXT_MESSAGE fallbacks lowercase to match the prompt contract", () => {
+    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS.every((tag) => tag === tag.toLowerCase())).toBe(true);
+  });
+
   it("replaces generic leaked tags with an unhinged generic fallback when nothing concrete is present", () => {
     const input = "This repo has the emotional stability of wet cardboard.\n[USER_NEXT_MESSAGE: Show the cursed detail]";
     const output = normalizeReplyContent(input);
