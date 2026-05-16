@@ -176,22 +176,23 @@ Congratulations: you asked for a simple lesson and summoned a workplace incident
 const UNHINGED_USER_NEXT_MESSAGE_FALLBACKS = [
   "Which part detonates first?",
   "Which bad idea catches fire next?",
-  "Which part did compliance invent?",
-  "Which relic screams the loudest?",
-  "What explodes if we try that?",
-  "Which part matters here?",
+  "Should we ship it anyway?",
+  "Which lie are we deploying next?",
+  "Can we hide it behind a flag?",
+  "Should I make it worse on purpose?",
   "Which suspicious blob is doing the damage?",
   "What fresh sabotage did that summon?",
-  "Which lie in here shipped?",
-  "Which switch looks the most cursed?",
+  "Which shortcut gets us audited?",
+  "Should we call that a hotfix?",
   "What breaks if we try it?",
-  "Which knob runs production?",
+  "Which switch ruins production faster?",
   "Which part does nobody own?",
-  "Which gremlin signed off this?",
+  "Can we automate the bad idea?",
   "What detonates after deploy?",
   "Which option is pretending to be safe?",
-  "Which secret tunnel is leaking?",
-  "Is that the bad one?",
+  "Should I apologize before merging?",
+  "Can we rename the disaster a feature?",
+  "Is this the part we monetize?",
 ] as const;
 
 const BROKEN_REPLY_FALLBACKS = [
@@ -203,28 +204,6 @@ const BROKEN_REPLY_FALLBACKS = [
 
 function normalizeReplySeedText(content: string): string {
   return content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function extractConcreteUserNextToken(text: string): string | null {
-  const extractors = [
-    () => text.match(/`([^`]{2,40})`/)?.[1],
-    () => text.match(/\b0x[0-9A-Fa-f]+\b/)?.[0],
-    () => text.match(/\boffset\s+\d+\b/i)?.[0],
-    () => text.match(/\brestartPolicy\b/)?.[0],
-    () => text.match(/\borphaned pods?\b/i)?.[0],
-    () => text.match(/\blegacy code\b/i)?.[0],
-    () => text.match(/\bConfigMap\b/)?.[0],
-    () => text.match(/\bKubernetes\s+\d+(?:\.\d+)?\b/i)?.[0],
-    () => text.match(/\bmagic(?:=true)?\b/i)?.[0],
-    () => text.match(/\b[a-z]+-[a-z0-9_.-]{3,}\b/i)?.[0],
-  ];
-
-  for (const extract of extractors) {
-    const token = extract();
-    if (token) return token;
-  }
-
-  return null;
 }
 
 function hashTextForFallback(text: string): number {
@@ -244,22 +223,6 @@ function buildBrokenReplyFallback(content: string): string {
 // This fallback intentionally handles a broad set of content patterns.
 function buildFallbackUserNextMessage(content: string): string {
   const text = normalizeReplySeedText(content);
-  const token = extractConcreteUserNextToken(text);
-
-  if (token) {
-    if (/^0x/i.test(token)) return `What breaks on ${token}?`;
-    if (/^offset\s+\d+/i.test(token)) return `What uses ${token}?`;
-    if (/^restartPolicy$/i.test(token)) return "Who set restartPolicy Never?";
-    if (/orphaned pods?/i.test(token)) return "Which pod lost its owner?";
-    if (/legacy code/i.test(token)) return "Can we delete the legacy file?";
-    if (/^magic(?:=true)?$/i.test(token)) return "Who enabled the magic flag?";
-    if (/^[a-z]+-[a-z0-9_.-]{3,}$/i.test(token)) return `Who added ${token}?`;
-    return `What breaks if I remove ${token}?`;
-  }
-
-  if (/logs?/i.test(text)) return "Which part is lying, then?";
-  if (/cluster/i.test(text)) return "Which cluster thing caught fire?";
-  if (/version control/i.test(text)) return "Which relic rewrote history?";
   return UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
     hashTextForFallback(text) % UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length
   ];
@@ -282,60 +245,10 @@ function normalizeComparableUserNextMessage(text: string | null | undefined): st
 function buildAlternateUserNextMessage(content: string, previous: string | null | undefined): string {
   const previousNormalized = normalizeComparableUserNextMessage(previous);
   const text = normalizeReplySeedText(content);
-  const token = extractConcreteUserNextToken(text);
-
-  const candidates = token
-    ? /^0x/i.test(token)
-      ? [
-          `What breaks on ${token}?`,
-          `Who introduced ${token}?`,
-          `Can we strip out ${token}?`,
-        ]
-      : /^offset\s+\d+/i.test(token)
-        ? [
-            `What uses ${token}?`,
-            `Who added ${token}?`,
-            `Can we strip out ${token}?`,
-          ]
-        : /^restartPolicy$/i.test(token)
-          ? [
-              "Who chose restartPolicy Never?",
-              "Can we delete restartPolicy Never?",
-              "What breaks after restartPolicy Never?",
-            ]
-          : /orphaned pods?/i.test(token)
-            ? [
-                "Which pod lost its owner?",
-                "Who orphaned the pod?",
-                "Can we delete the orphaned pod?",
-              ]
-            : /legacy code/i.test(token)
-              ? [
-                  "Can we delete the legacy file?",
-                  "Who still uses the legacy file?",
-                  "What breaks if we rip it out?",
-                ]
-              : /^magic(?:=true)?$/i.test(token)
-                ? [
-                    "Who enabled the magic flag?",
-                    "What breaks if we remove magic?",
-                    "Can we kill the magic flag?",
-                  ]
-                : /^[a-z]+-[a-z0-9_.-]{3,}$/i.test(token)
-                  ? [
-                      `Who added ${token}?`,
-                      `What breaks if we remove ${token}?`,
-                      `Can we delete ${token}?`,
-                    ]
-                  : [
-                      `Who dragged in ${token}?`,
-                      `What breaks if we remove ${token}?`,
-                      `Can we delete ${token}?`,
-                    ]
-    : Array.from({ length: UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length }, (_, offset) =>
-        UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
-          (hashTextForFallback(text) + offset) % UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length
-        ]);
+  const candidates = Array.from({ length: UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length }, (_, offset) =>
+    UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
+      (hashTextForFallback(text) + offset) % UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length
+    ]);
 
   return candidates.find((candidate) => normalizeComparableUserNextMessage(candidate) !== previousNormalized)
     ?? buildFallbackUserNextMessage(content);
@@ -369,13 +282,41 @@ function isBannedUserNextMessagePattern(text: string): boolean {
     /^why are .+ involved$/.test(normalized) ||
     /^what is .+ doing there$/.test(normalized) ||
     /^what are .+ doing there$/.test(normalized) ||
-    /^why .+ of all things$/.test(normalized)
+    /^why .+ of all things$/.test(normalized) ||
+    /^who dragged in .+$/.test(normalized) ||
+    /^who introduced .+$/.test(normalized) ||
+    /^who added .+$/.test(normalized) ||
+    /^who enabled .+$/.test(normalized) ||
+    /^who chose .+$/.test(normalized) ||
+    /^what breaks on .+$/.test(normalized) ||
+    /^what uses .+$/.test(normalized) ||
+    /^what breaks (?:if i|after) .+$/.test(normalized) ||
+    /^can we (?:delete|strip out|kill) .+$/.test(normalized)
+  );
+}
+
+function isOverlyTechnicalUserNextMessage(text: string): boolean {
+  const trimmed = text.trim();
+  const normalized = normalizeComparableUserNextMessage(text);
+  if (!trimmed) return false;
+
+  if (/`[^`]+`/.test(trimmed)) return true;
+  if (/\b[a-z0-9_.-]+\.(?:yaml|yml|json|toml|ini|env|sh|js|ts|tsx|jsx|py|go|java|rb)\b/i.test(trimmed)) return true;
+  if (/\bsha256:[a-f0-9]{8,}\b/i.test(trimmed)) return true;
+  if (/\b0x[0-9a-f]+\b/i.test(trimmed)) return true;
+  if (/[{}[\]=]|::|&&|\$\(|\|\|/.test(trimmed)) return true;
+
+  return (
+    /\b(?:kubectl|docker|yaml|json|digest|image tag|initcontainer|configmap|kubernetes|pod|pods|cluster|cron|namespace|livenessprobe|restartpolicy|sidecar|artifact|manifest|registry|env var|stack trace|repo|repository|branch|lockfile|node_modules|image|container|ci|pipeline|reflog)\b/i.test(trimmed) ||
+    /\boption\s+\d+\b/i.test(trimmed) ||
+    /^(?:how do i|how do we|what'?s|show me|why does|can i)\s+.+\b(?:pull|deploy|patch|mount|grep|apply|delete|rollback|reboot|trigger|configure|inspect|tail|watch)\b/i.test(normalized)
   );
 }
 
 function shouldReplaceUserNextMessage(text: string | null | undefined, previousUserNextMessage?: string | null): boolean {
   if (!text?.trim()) return true;
   if (isGenericUserNextMessage(text)) return true;
+  if (isOverlyTechnicalUserNextMessage(text)) return true;
   return (
     normalizeComparableUserNextMessage(text) ===
     normalizeComparableUserNextMessage(previousUserNextMessage)
@@ -1051,24 +992,24 @@ function buildUserNextSuggestionMessages({
       role: "system",
       content: [
         "Generate exactly one suggested next user chat message.",
-        "This is what a tired junior developer would type next to an ai coding agent.",
+        "This is what a tired, highly non-technical, impulsive user would type next to an ai coding agent.",
         `The user's in-game rank is: ${rank ?? "Junior Code Monkey"}.`,
         activeTicket?.title ? `They are currently stuck on ticket: ${activeTicket.title}.` : "",
         "Lowercase only.",
         "Max 8 words.",
         "Prefer 4 to 7 words.",
         "No brackets, labels, bullets, or explanation.",
-        "Make it actionable or code-shaped when possible.",
-        "Avoid 'why is x involved', 'what is x doing there', and generic filler.",
+        "Assume they do not know tool names, infra terms, config syntax, or file formats.",
+        "Do not mention specific files, flags, technologies, error codes, config fields, pods, or quoted artifacts from the reply.",
+        "Avoid object-chasing prompts that fixate on one artifact from the reply.",
         "Do not repeat the previous suggestion.",
         "Prefer a single blunt command, impulsive question, or small panic confession.",
         "Use one clause only.",
-        "Prefer starting with a concrete verb like add, fix, make, hook, log, run, restore, flip, block, or trigger.",
+        "Keep it broad, hilariously misguided, and slightly destructive.",
         "Sound slightly clueless, rushed, and overconfident.",
         "If the user already sounds panicked, keep that energy.",
         "Avoid polished helper tone or calm project-manager wording.",
         "Avoid filler like 'i need to' or 'we should'.",
-        "Do not say 'what now' or 'or something'.",
       ].join(" "),
     },
     ...recentMessages,

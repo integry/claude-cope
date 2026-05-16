@@ -240,23 +240,24 @@ describe("USER_NEXT_MESSAGE dedupe", () => {
   it("replaces a repeated suggested reply with a different follow-up", () => {
     const reply = "The real villain is `error_log_128.txt` and nobody will admit it.\n[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]";
     const normalized = normalizeReplyContent(reply, "Why is error_log_128.txt involved?");
-    expect(normalized).toContain("[USER_NEXT_MESSAGE:");
+    const tag = normalized.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
+    expect(tag).toBeTruthy();
     expect(normalized).not.toContain("[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]");
-    expect(normalized).toContain("error_log_128.txt");
+    expect(tag).not.toMatch(/error_log_128\.txt/i);
   });
 
   it("replaces the why-is-x-involved pattern even when it is not a repeat", () => {
     const reply = "The real villain is `error_log_128.txt` and nobody will admit it.\n[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]";
     const normalized = normalizeReplyContent(reply, "Which daemon touched it?");
     expect(normalized).not.toContain("[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]");
-    expect(normalized).toContain("error_log_128.txt");
+    expect(normalized).not.toMatch(/\[USER_NEXT_MESSAGE:[^\]]*error_log_128\.txt/i);
   });
 
   it("replaces the what-is-x-doing-there pattern", () => {
     const reply = "The real villain is `error_log_128.txt` and nobody will admit it.\n[USER_NEXT_MESSAGE: What is error_log_128.txt doing there?]";
     const normalized = normalizeReplyContent(reply, "Which daemon touched it?");
     expect(normalized).not.toContain("[USER_NEXT_MESSAGE: What is error_log_128.txt doing there?]");
-    expect(normalized).toContain("error_log_128.txt");
+    expect(normalized).not.toMatch(/\[USER_NEXT_MESSAGE:[^\]]*error_log_128\.txt/i);
   });
 });
 
@@ -621,28 +622,57 @@ describe("reply formatting normalizer", () => {
     expect(output).not.toContain("trail—a");
   });
 
-  it("adds a specific USER_NEXT_MESSAGE when the tag is missing", () => {
+  const EXPECTED_GENERIC_FALLBACKS = [
+    "Which part detonates first?",
+    "Which bad idea catches fire next?",
+    "Should we ship it anyway?",
+    "Which lie are we deploying next?",
+    "Can we hide it behind a flag?",
+    "Should I make it worse on purpose?",
+    "Which suspicious blob is doing the damage?",
+    "What fresh sabotage did that summon?",
+    "Which shortcut gets us audited?",
+    "Should we call that a hotfix?",
+    "What breaks if we try it?",
+    "Which switch ruins production faster?",
+    "Which part does nobody own?",
+    "Can we automate the bad idea?",
+    "What detonates after deploy?",
+    "Which option is pretending to be safe?",
+    "Should I apologize before merging?",
+    "Can we rename the disaster a feature?",
+    "Is this the part we monetize?",
+  ];
+
+  it("adds a broad USER_NEXT_MESSAGE when the tag is missing", () => {
     const input = "The only thing older than you is the legacy code haunting the repo since the 90s.";
     const output = normalizeReplyContent(input);
-    expect(output).toContain("[USER_NEXT_MESSAGE: Can we delete the legacy file?]");
+    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
+    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
   });
 
-  it("fills an empty USER_NEXT_MESSAGE tag with a specific fallback", () => {
+  it("fills an empty USER_NEXT_MESSAGE tag with a broad fallback", () => {
     const input = "That lone 0xFF byte detonated your stream.\n[USER_NEXT_MESSAGE: ]";
     const output = normalizeReplyContent(input);
-    expect(output).toContain("[USER_NEXT_MESSAGE: What breaks on 0xFF?]");
+    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
+    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(tag).not.toMatch(/0xFF/i);
   });
 
-  it("replaces a generic USER_NEXT_MESSAGE with a specific fallback", () => {
+  it("replaces a generic USER_NEXT_MESSAGE with a broad fallback", () => {
     const input = "Deploy with dump_offsets('topic', version=version, magic=True) and let the magic flag ruin your day.\n[USER_NEXT_MESSAGE: Show the cursed detail]";
     const output = normalizeReplyContent(input);
-    expect(output).toContain("[USER_NEXT_MESSAGE: Who enabled the magic flag?]");
+    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
+    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(tag).not.toMatch(/magic|dump_offsets|topic/i);
   });
 
   it("replaces punctuated variants of generic USER_NEXT_MESSAGE text", () => {
     const input = "Deploy with dump_offsets('topic', version=version, magic=True) and let the magic flag ruin your day.\n[USER_NEXT_MESSAGE: Show the cursed detail.]";
     const output = normalizeReplyContent(input);
-    expect(output).toContain("[USER_NEXT_MESSAGE: Who enabled the magic flag?]");
+    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
+    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(tag).not.toMatch(/magic|dump_offsets|topic/i);
   });
 
   it("replaces bland whats-next variants with a less generic fallback", () => {
@@ -657,6 +687,26 @@ describe("reply formatting normalizer", () => {
     expect(tag).not.toMatch(/^(what should i do next|what now)$/i);
   });
 
+  it("replaces overly technical follow-up tags with a broad fallback", () => {
+    const input = "The cluster is now a haunted landfill.\n[USER_NEXT_MESSAGE: what's the fresh-start-manifest.yaml look like?]";
+    const output = normalizeReplyContent(input);
+    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
+
+    expect(tag).toBeTruthy();
+    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(tag).not.toMatch(/manifest|yaml|cluster/i);
+  });
+
+  it("replaces tool-driven how-do-i suggestions with a broad fallback", () => {
+    const input = "Deploying this will light the server room on fire.\n[USER_NEXT_MESSAGE: how do i pull that digest?]";
+    const output = normalizeReplyContent(input);
+    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
+
+    expect(tag).toBeTruthy();
+    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(tag).not.toMatch(/pull|digest/i);
+  });
+
   it("uses an unhinged generic fallback when no concrete token is available", () => {
     const input = "This architecture is a tax scam wrapped in optimism.";
     const output = normalizeReplyContent(input);
@@ -664,26 +714,7 @@ describe("reply formatting normalizer", () => {
 
     expect(tag).toBeTruthy();
     expect(tag).not.toBe("Show the cursed detail");
-    expect([
-      "Which part detonates first?",
-      "Which bad idea catches fire next?",
-      "Which part did compliance invent?",
-      "Which relic screams the loudest?",
-      "What explodes if we try that?",
-      "Which part matters here?",
-      "Which suspicious blob is doing the damage?",
-      "What fresh sabotage did that summon?",
-      "Which lie in here shipped?",
-      "Which switch looks the most cursed?",
-      "What breaks if we try it?",
-      "Which knob runs production?",
-      "Which part does nobody own?",
-      "Which gremlin signed off this?",
-      "What detonates after deploy?",
-      "Which option is pretending to be safe?",
-      "Which secret tunnel is leaking?",
-      "Is that the bad one?",
-    ]).toContain(tag);
+    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
   });
 
   it("replaces generic leaked tags with an unhinged generic fallback when nothing concrete is present", () => {
@@ -694,26 +725,7 @@ describe("reply formatting normalizer", () => {
     expect(tag).toBeTruthy();
     expect(tag).not.toBe("Show the cursed detail");
     expect(tag).not.toBe("Show the cursed detail.");
-    expect([
-      "Which cursed part detonates first?",
-      "Which bad idea catches fire next?",
-      "Which part did compliance invent?",
-      "Which relic screams the loudest?",
-      "What explodes if we touch it again?",
-      "Which weird part matters here?",
-      "Which suspicious blob is doing the damage?",
-      "What fresh sabotage did that summon?",
-      "Which lie in here shipped?",
-      "Which switch looks the most cursed?",
-      "What breaks if we try it?",
-      "Which knob runs production?",
-      "Which part does nobody own?",
-      "Which gremlin signed off this?",
-      "What detonates after deploy?",
-      "Which option is pretending to be safe?",
-      "Which secret tunnel is leaking?",
-      "Is that the bad one?",
-    ]).toContain(tag);
+    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
   });
 
   it("strips leaked meta labels like Deadpan", () => {

@@ -149,16 +149,52 @@ describe("computeBuddyInterjection", () => {
 });
 
 describe("mergeSuggestedReply", () => {
-  it("drops a repeated suggested reply", () => {
-    expect(mergeSuggestedReply("Why is stderr involved?", "Why is stderr involved?")).toBeNull();
+  it("preserves the current suggested reply when the next one repeats it", () => {
+    expect(mergeSuggestedReply("Why is stderr involved?", "Why is stderr involved?")).toBe("Why is stderr involved?");
   });
 
-  it("treats punctuation-only differences as repeats", () => {
-    expect(mergeSuggestedReply("Why is stderr involved?", "Why is stderr involved?!")).toBeNull();
+  it("preserves the current suggested reply for punctuation-only repeats", () => {
+    expect(mergeSuggestedReply("Why is stderr involved?", "Why is stderr involved?!")).toBe("Why is stderr involved?");
   });
 
   it("accepts a different suggested reply", () => {
     expect(mergeSuggestedReply("Why is stderr involved?", "What is stderr doing there?")).toBe("What is stderr doing there?");
+  });
+});
+
+describe("submitChatMessage suggested reply fallback", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("provides a fallback suggested reply when the backend omits USER_NEXT_MESSAGE", async () => {
+    const setHistory = vi.fn();
+    const setIsProcessing = vi.fn();
+    const onSuggestedReply = vi.fn();
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockStreamResponse(["The repo exploded in a very strategic way."])
+    );
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hi" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory,
+      setIsProcessing,
+      currentRank: "Junior Code Monkey",
+      onSuggestedReply,
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(onSuggestedReply).toHaveBeenCalledTimes(1);
+    expect(onSuggestedReply.mock.calls[0]?.[0]).toMatch(/\S/);
   });
 });
 
