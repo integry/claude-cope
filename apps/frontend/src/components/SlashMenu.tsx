@@ -15,7 +15,7 @@ function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, onSelect 
   const isBacklogMode = items[0]?.type === "backlog-category";
   const isModelMode = items[0]?.type === "model-choice";
   const maxHeightClassName = isBacklogMode
-    ? "max-h-[calc(100dvh-10rem)] sm:max-h-[calc(100dvh-120px)]"
+    ? "max-h-[calc(100dvh-14rem)] sm:max-h-[calc(100dvh-160px)]"
     : "max-h-[calc(100dvh-120px)]";
 
   return (
