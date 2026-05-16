@@ -242,6 +242,12 @@ async function isSessionAuthorizedForUsername(
   sessionId: string,
   username: string,
 ): Promise<SessionAuthorizationResult> {
+  // This fallback is intentionally narrower than "any session with this cookie can write".
+  // When a legacy Pro row is synced without `proKeyHash`, we trust only server-issued KV
+  // ownership state for this exact username: a direct session_user match, an exact
+  // username_session lease for the requested username, or a bounded rename chain that can
+  // safely repair both mappings. Do not broaden these conditions without adding adversarial
+  // coverage for stale, cyclic, or conflicting KV state.
   const sessionUsername = await kv.get(accountKvKeys.sessionUser(sessionId));
   if (sameUsername(sessionUsername, username)) {
     if (sessionUsername === username) return { authorized: true, deferredKvWrites: null };

@@ -38,6 +38,7 @@ function renderCommandLine(props: Partial<React.ComponentProps<typeof CommandLin
     onChange: vi.fn(),
     onKeyDown: vi.fn(),
     onSubmit: vi.fn(),
+    onPlaceholderAccept: vi.fn(),
     promptString: "❯ ",
     placeholder: "Try /help",
     assistivePlaceholderHint: "Press Tab to accept suggestion.",
@@ -72,31 +73,19 @@ afterEach(() => {
 installMatchMediaMock();
 
 describe("CommandLine", () => {
-  it("autofocuses the input on desktop render", () => {
+  it("does not autofocus the input on standalone desktop render", () => {
     const { container, input } = renderCommandLine();
     const cursor = container.querySelector("[data-testid='command-line-cursor']");
 
     expect(input).not.toBeNull();
-    expect(document.activeElement).toBe(input);
+    expect(document.activeElement).not.toBe(input);
     expect(cursor).not.toBeNull();
-    expect(cursor?.className).toContain("terminal-command-cursor-blinking");
+    expect(cursor?.className).not.toContain("terminal-command-cursor-blinking");
   });
 
-  it("does not set autofocus during the initial render before viewport detection stabilizes", () => {
-    const originalMatchMedia = window.matchMedia;
-    Object.defineProperty(window, "matchMedia", {
-      writable: true,
-      value: undefined,
-    });
-
+  it("never enables the native autoFocus attribute", () => {
     const { input } = renderCommandLine();
     expect(input?.autofocus).toBe(false);
-    expect(document.activeElement).not.toBe(input);
-
-    Object.defineProperty(window, "matchMedia", {
-      writable: true,
-      value: originalMatchMedia,
-    });
   });
 
   it("does not autofocus the input on mobile render", () => {
@@ -146,8 +135,21 @@ describe("CommandLine", () => {
     expect(document.activeElement).toBe(input);
   });
 
+  it("does not render an interactive placeholder hint without an accept callback", () => {
+    mobileViewport = true;
+    const { container } = renderCommandLine({ onPlaceholderAccept: undefined });
+
+    expect(container.querySelector("[data-testid='command-line-tab-hint']")).toBeNull();
+    expect(container.querySelector("input")?.getAttribute("placeholder")).toBe("Try /help");
+  });
+
   it("shows the decorative cursor over the first suggested character and only blinks while focused", () => {
     const { container, input } = renderCommandLine();
+
+    act(() => {
+      input!.focus();
+    });
+
     const initialCursor = container.querySelector("[data-testid='command-line-cursor']");
 
     expect(input).not.toBeNull();
@@ -239,10 +241,42 @@ describe("CommandLine", () => {
     expect(document.activeElement).toBe(input);
   });
 
+  it("does not render the mobile send button without a submit callback", () => {
+    mobileViewport = true;
+    const { container } = renderCommandLine({ value: "/help", onSubmit: undefined });
+
+    expect(container.querySelector("[data-testid='command-line-send-button']")).toBeNull();
+  });
+
   it("does not show the send button on desktop", () => {
     const { container } = renderCommandLine({ value: "/help" });
 
     expect(container.querySelector("[data-testid='command-line-send-button']")).toBeNull();
+  });
+
+  it("does not reclaim focus on rerender", () => {
+    const { input } = renderCommandLine();
+    const otherControl = document.createElement("button");
+    document.body.appendChild(otherControl);
+
+    act(() => {
+      otherControl.focus();
+      root!.render(createElement(CommandLine, {
+        value: "/help",
+        disabled: false,
+        onChange: vi.fn(),
+        onKeyDown: vi.fn(),
+        onSubmit: vi.fn(),
+        promptString: "❯ ",
+        placeholder: "Try /help",
+        assistivePlaceholderHint: "Press Tab to accept suggestion.",
+      }));
+    });
+
+    expect(input).not.toBeNull();
+    expect(document.activeElement).toBe(otherControl);
+
+    otherControl.remove();
   });
 
   it("does not show the decorative cursor while disabled", () => {

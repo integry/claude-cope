@@ -21,17 +21,16 @@ type PlaceholderMetadata = {
   trailingPlaceholderText: string;
 };
 
-const MOBILE_VIEWPORT_QUERY = "(max-width: 767px)";
-
 function getPlaceholderMetadata(
   placeholder: string | undefined,
   assistivePlaceholderHint: string | undefined,
   disabled: boolean | undefined,
-  isMobileViewport: boolean
+  isMobileViewport: boolean,
+  canAcceptPlaceholder: boolean,
 ): PlaceholderMetadata {
   const tabHintLabel = isMobileViewport ? "[Tap]" : "[Tab]";
   const tabHintAriaLabel = isMobileViewport ? "Tap to accept suggestion" : "Tab to accept suggestion";
-  const placeholderHint = assistivePlaceholderHint
+  const placeholderHint = canAcceptPlaceholder && assistivePlaceholderHint
     ? isMobileViewport
       ? assistivePlaceholderHint.replace(/\bTab\b/g, "Tap")
       : assistivePlaceholderHint
@@ -76,17 +75,18 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
   ) {
     const [isFocused, setIsFocused] = useState(false);
     const [isComposing, setIsComposing] = useState(false);
-    const [hasHydrated, setHasHydrated] = useState(false);
     const inputRef = useRef<HTMLInputElement | null>(null);
     const isMobileViewport = useIsMobileViewport();
+    const canAcceptPlaceholder = !!onPlaceholderAccept;
+    const canSubmit = !!onSubmit;
     const isInputFocused = isFocused && !disabled;
     const showPlaceholder = !value && !!placeholder;
-    const showTabHint = showPlaceholder && !disabled;
-    const showMobileSendButton = isMobileViewport && !!value && !disabled;
+    const showTabHint = showPlaceholder && !disabled && canAcceptPlaceholder;
+    const showMobileSendButton = isMobileViewport && !!value && !disabled && canSubmit;
     const showDecorativeCursor = showPlaceholder && !disabled;
     const hideNativeCaret = showDecorativeCursor && isInputFocused;
     const { accessiblePlaceholder, leadingPlaceholderChar, tabHintAriaLabel, tabHintLabel, trailingPlaceholderText } =
-      getPlaceholderMetadata(placeholder, assistivePlaceholderHint, disabled, isMobileViewport);
+      getPlaceholderMetadata(placeholder, assistivePlaceholderHint, disabled, isMobileViewport, canAcceptPlaceholder);
     const commandRowClassName = getCommandRowClassName(isInputFocused, disabled);
     const tabHintClassName = getTabHintClassName(isMobileViewport);
 
@@ -95,22 +95,6 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
         setIsFocused(false);
       }
     }, [disabled, isFocused]);
-
-    useEffect(() => {
-      setHasHydrated(true);
-    }, []);
-
-    useEffect(() => {
-      if (
-        hasHydrated
-        && !disabled
-        && typeof window !== "undefined"
-        && typeof window.matchMedia === "function"
-        && !window.matchMedia(MOBILE_VIEWPORT_QUERY).matches
-      ) {
-        inputRef.current?.focus();
-      }
-    }, [disabled, hasHydrated, isMobileViewport]);
 
     const handleCompositionStart = () => {
       setIsComposing(true);
