@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import type { ServerProfile } from "@claude-cope/shared/profile";
 import { FREE_TIER_RANK_CAP } from "./rankConstants";
 import { computeMultiplier } from "../gameConstants";
 import { accountKvKeys } from "./accountHelpers";
@@ -20,15 +19,6 @@ type Env = {
 };
 
 const score = new Hono<Env>();
-
-function toFlatScorePayload(profile: ServerProfile) {
-  return {
-    total_td: profile.total_td,
-    current_td: profile.current_td,
-    corporate_rank: profile.corporate_rank,
-    multiplier: profile.multiplier,
-  };
-}
 
 /**
  * Validate completed task bonuses and return validated bonus + claims list.
@@ -383,7 +373,7 @@ score.post("/", async (c) => {
       return c.json({ error: "Pro score sync failed — please retry" }, 500);
     }
     const updated = await syncResolvedProUser(db, body, profile);
-    if (updated) return c.json(toFlatScorePayload(updated));
+    if (updated) return c.json({ profile: updated });
     return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }
 

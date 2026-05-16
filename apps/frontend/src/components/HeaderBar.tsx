@@ -1,6 +1,7 @@
 import { memo, useState, useRef, useEffect, useCallback } from "react";
 import { useAnimatedCounter } from "../hooks/useAnimatedCounter";
 import { FREE_QUOTA_LIMIT, PRO_QUOTA_LIMIT } from "../config";
+import HeaderBarMobileMenu from "./HeaderBarMobileMenu";
 
 const MOBILE_MENU_VIEWPORT_INSET = 8;
 const MOBILE_MENU_VERTICAL_GAP = 8;
@@ -11,19 +12,6 @@ type TdProps = { displayTD: number; activeMultiplier: number };
 type IdentityProps = BillingProps & { username: string; rank: string; onProfileClick: () => void };
 type StatusProps = BillingProps & QuotaProps & TdProps & { onUpgradeClick?: () => void };
 type MobileQuotaLineProps = { quotaPercent: number; quotaTooltip: string; tipOpen: boolean; setTipOpen: (open: boolean | ((prev: boolean) => boolean)) => void };
-type MobileMenuProps = Omit<StatusProps, "onUpgradeClick"> & {
-  mobileMenuPosition: { top: number; maxHeight: number };
-  closeMenu: () => void;
-  onStoreClick: () => void;
-  onLeaderboardClick: () => void;
-  onAchievementsClick: () => void;
-  onProfileClick: () => void;
-  onHelpClick: () => void;
-  onAboutClick: () => void;
-  onContactClick: () => void;
-  onSlashMenuClick?: () => void;
-  onUpgradeClick?: () => void;
-};
 
 function getMobileMenuViewportPosition(triggerRect: DOMRect, headerRect: DOMRect | null, viewportHeight: number) {
   const top = Math.max(triggerRect.bottom, headerRect?.bottom ?? 0) + MOBILE_MENU_VERTICAL_GAP;
@@ -75,78 +63,6 @@ function MobileQuotaLine({ quotaPercent, quotaTooltip, tipOpen, setTipOpen }: Mo
   return <div className="absolute bottom-0 left-0 right-0 h-[2px] cursor-pointer bg-gray-800 sm:hidden" onClick={() => setTipOpen((v) => !v)}><div className={`h-full ${getQuotaBgColor(quotaPercent)} transition-all duration-500`} style={{ width: `${quotaPercent}%` }} />{tipOpen && <div className="absolute bottom-full left-1/2 z-30 mb-1 -translate-x-1/2 whitespace-nowrap rounded border border-gray-700 bg-gray-900 px-2 py-1 text-[10px] font-mono text-gray-300 shadow-lg">{quotaTooltip}</div>}</div>;
 }
 
-function MobileMenuStatusBlock({ displayTD, activeMultiplier, isBYOK, byokTotalCost, quotaPercent, remaining, totalQuota, quotaTooltip }: Omit<StatusProps, "isMax" | "onUpgradeClick">) {
-  return (
-    <div data-testid="mobile-menu-stat-box" className="flex flex-col gap-2 py-1">
-      <TechnicalDebtLine displayTD={displayTD} activeMultiplier={activeMultiplier} />
-      {isBYOK ? <div className="max-w-full"><StatusDetailLine isBYOK={isBYOK} isMax={false} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} /></div> : <DesktopQuotaBar quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} />}
-    </div>
-  );
-}
-
-function MobileMenuLink({ command, description, onClick }: { command: string; description: string; onClick?: () => void }) {
-  const content = <>
-    <span className="w-[120px] font-mono text-gray-200">{command}</span>
-    <span className="min-w-0 text-left text-xs text-gray-500">{description}</span>
-  </>;
-  return onClick
-    ? <button type="button" onClick={onClick} className="grid w-full grid-cols-[120px_minmax(0,1fr)] items-start gap-x-3 py-1.5 text-left hover:text-white">{content}</button>
-    : <span className="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-x-3 py-1.5">{content}</span>;
-}
-
-function MobileMenuPanel({
-  displayTD, activeMultiplier, isBYOK, isMax, byokTotalCost, quotaPercent, remaining, totalQuota, quotaTooltip, mobileMenuPosition, closeMenu,
-  onStoreClick, onLeaderboardClick, onAchievementsClick, onProfileClick, onHelpClick, onAboutClick, onContactClick, onSlashMenuClick, onUpgradeClick,
-}: MobileMenuProps) {
-  const closeAnd = (callback?: () => void) => () => { closeMenu(); callback?.(); };
-  const actionLinks = [
-    { command: "/store", description: "Buy coping mechanisms", onClick: closeAnd(onStoreClick) },
-    { command: "/leaderboard", description: "The Hall of Blame", onClick: closeAnd(onLeaderboardClick) },
-    { command: "/achievements", description: "Trophies for bad choices", onClick: closeAnd(onAchievementsClick) },
-  ];
-  if (!isMax && onUpgradeClick) {
-    actionLinks.splice(1, 0, { command: "/upgrade", description: "Unlock MAX 429X", onClick: closeAnd(onUpgradeClick) });
-  }
-  const systemLinks = [
-    { command: "/profile", description: "Your miserable stats", onClick: closeAnd(onProfileClick) },
-    { command: "/help", description: "Available commands", onClick: closeAnd(onHelpClick) },
-  ];
-
-  return (
-    <div data-testid="mobile-menu-panel" className="fixed left-2 right-2 z-40 flex min-h-[28rem] flex-col overflow-y-auto border border-gray-700 bg-gray-900 px-4 py-4 text-sm shadow-[0px_20px_25px_10px_rgba(0,0,0,0.7)] sm:hidden" style={{ top: `${mobileMenuPosition.top}px`, maxHeight: `${mobileMenuPosition.maxHeight}px` }}>
-      <div className="flex flex-col gap-4">
-        <div className="border-b border-gray-700 pb-4">
-          <MobileMenuStatusBlock displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} byokTotalCost={byokTotalCost} remaining={remaining} totalQuota={totalQuota} quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} />
-        </div>
-        <div><div className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ ACTIONS ]</div><div className="flex flex-col">{actionLinks.map((link) => <MobileMenuLink key={link.command} {...link} />)}</div></div>
-        <div>
-          <div className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-500/80">[ SYSTEM ]</div>
-          <div className="flex flex-col">
-            {systemLinks.map((link) => <MobileMenuLink key={link.command} {...link} />)}
-            <a href="https://github.com/integry/claude-cope" target="_blank" rel="noopener noreferrer" className="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-x-3 py-1.5 hover:text-white"><span className="w-[120px] font-mono text-gray-200">/github</span><span className="min-w-0 text-left text-xs text-gray-500">Source code</span></a>
-          </div>
-        </div>
-      </div>
-      <div className="mt-auto border-t border-gray-700 pt-3 text-xs text-gray-500">
-        <div className="mb-3 flex flex-wrap gap-x-3 gap-y-1 font-mono">
-          <a href="https://github.com/integry/claude-cope/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">/terms</a>
-          <a href="https://github.com/integry/claude-cope/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">/privacy</a>
-          <button type="button" onClick={closeAnd(onAboutClick)} className="hover:text-gray-300">/about</button>
-          <button type="button" onClick={closeAnd(onContactClick)} className="hover:text-gray-300">/contact</button>
-        </div>
-        <div className="mb-3 font-mono leading-[1.15]">
-          <p>© 2026 Unchained Development OÜ</p>
-          <p>git blame --author="Rinalds Uzkalns"</p>
-          <p>{"made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
-        </div>
-        <div className="flex justify-center">
-          <button type="button" onClick={closeAnd(onSlashMenuClick)} className="font-mono text-center hover:text-gray-300">Type <span className="px-1 text-green-400">[ / ]</span> in terminal for commands</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function DesktopIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, onProfileClick }: IdentityProps) {
   return <div data-testid="desktop-identity-block" className="hidden min-w-0 flex-col justify-center gap-1 leading-snug sm:flex"><div className="flex min-w-0 items-center gap-2"><button onClick={onProfileClick} className="cursor-pointer truncate text-cyan-400 hover:text-white hover:underline">{username}</button><EntitlementBadges isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} maxBadgeTestId="desktop-max-badge" /></div><div data-testid="desktop-rank-line" title={rank} className="max-w-full truncate text-xs text-gray-400">[{rank}]</div></div>;
 }
@@ -180,14 +96,21 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node;
       const isInsideAnchor = menuRef.current?.contains(target) ?? false;
       const isInsidePanel = menuPanelRef.current?.contains(target) ?? false;
       if (!isInsideAnchor && !isInsidePanel) setMenuOpen(false);
     };
+    document.addEventListener("keydown", handleKeyDown);
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClick);
+    };
   }, [menuOpen]);
 
   useEffect(() => {
@@ -225,11 +148,11 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
       <DesktopStatusBlock displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} onUpgradeClick={onUpgradeClick} />
       {!menuOpen && <div data-testid="mobile-status-block" className="col-start-3 row-start-2 flex min-w-0 items-center justify-end self-start whitespace-nowrap px-2 text-right sm:hidden"><span className="whitespace-nowrap font-bold text-white">{Math.floor(displayTD).toLocaleString()} TD{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span></div>}
       <div ref={menuRef} data-testid="mobile-menu-anchor" className="col-start-3 row-start-1 flex-shrink-0 self-end justify-self-end sm:hidden">
-        <button ref={menuButtonRef} type="button" onClick={() => setMenuOpen((v) => !v)} className="rounded-none px-3 py-1.5 text-gray-400 transition-colors hover:bg-gray-800/70 hover:text-white" aria-label="Menu">
+        <button ref={menuButtonRef} type="button" onClick={() => setMenuOpen((v) => !v)} className="rounded-none px-3 py-1.5 text-gray-400 transition-colors hover:bg-gray-800/70 hover:text-white" aria-label="Menu" aria-expanded={menuOpen} aria-controls="mobile-menu-panel">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>{menuOpen ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /> : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />}</svg>
         </button>
       </div>
-      {menuOpen && <div ref={menuPanelRef}><MobileMenuPanel displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} mobileMenuPosition={mobileMenuPosition} closeMenu={closeMenu} onStoreClick={onStoreClick} onLeaderboardClick={onLeaderboardClick} onAchievementsClick={onAchievementsClick} onProfileClick={onProfileClick} onHelpClick={onHelpClick} onAboutClick={onAboutClick} onContactClick={onContactClick} onSlashMenuClick={onSlashMenuClick} onUpgradeClick={onUpgradeClick} /></div>}
+      {menuOpen && <div ref={menuPanelRef}><HeaderBarMobileMenu displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} mobileMenuPosition={mobileMenuPosition} closeMenu={closeMenu} onStoreClick={onStoreClick} onLeaderboardClick={onLeaderboardClick} onAchievementsClick={onAchievementsClick} onProfileClick={onProfileClick} onHelpClick={onHelpClick} onAboutClick={onAboutClick} onContactClick={onContactClick} onSlashMenuClick={onSlashMenuClick} onUpgradeClick={onUpgradeClick} /></div>}
       {!isBYOK && <MobileQuotaLine quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} tipOpen={quotaTipOpen} setTipOpen={setQuotaTipOpen} />}
     </div>
   );

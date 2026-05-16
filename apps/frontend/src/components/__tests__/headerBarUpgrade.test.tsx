@@ -1,17 +1,9 @@
+/* eslint-disable max-lines */
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import React, { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
-
-/**
- * Regression tests for the Max upgrade entry points in the HeaderBar.
- *
- * These verify:
- *  - Free users see the "Upgrade to Max" CTA button.
- *  - Max (upgraded) users see the desktop "Max" badge and do NOT see the CTA.
- *  - BYOK users do NOT see the upgrade CTA.
- */
 
 // Stub the animated counter hook so it returns the raw value synchronously.
 vi.mock("../../hooks/useAnimatedCounter", () => ({
@@ -81,9 +73,11 @@ function clickElement(element: HTMLButtonElement | null | undefined) {
 }
 
 function mouseDownElement(element: Element | null | undefined) {
-  act(() => {
-    element?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-  });
+  act(() => { element?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); });
+}
+
+function keyDownDocument(key: string) {
+  act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })); });
 }
 
 function getMobileHomeButton() {
@@ -315,13 +309,10 @@ describe("HeaderBar upgrade CTA visibility", () => {
   it("closes the mobile menu and invokes the shared home handler when the logo is clicked", () => {
     const onHomeClick = vi.fn();
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false, onHomeClick });
-
     openMobileMenu();
     expect(queryByTestId("mobile-menu-panel")).not.toBeNull();
-
     const mobileLogo = getMobileHomeButton();
     clickElement(mobileLogo);
-
     expect(onHomeClick).toHaveBeenCalledTimes(1);
     expect(queryByTestId("mobile-menu-panel")).toBeNull();
   });
@@ -333,11 +324,17 @@ describe("HeaderBar upgrade CTA visibility", () => {
     document.body.appendChild(promptInput);
     promptInput.focus();
     expect(document.activeElement).toBe(promptInput);
-
     openMobileMenu();
-
     expect(document.activeElement).not.toBe(promptInput);
     document.body.removeChild(promptInput);
+  });
+
+  it("closes the mobile menu when Escape is pressed", () => {
+    renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false });
+    openMobileMenu();
+    expect(queryByTestId("mobile-menu-panel")).not.toBeNull();
+    keyDownDocument("Escape");
+    expect(queryByTestId("mobile-menu-panel")).toBeNull();
   });
 
   it("replaces the mobile header contents with the full logo while the menu is open", () => {
@@ -406,18 +403,14 @@ describe("HeaderBar upgrade CTA visibility", () => {
   it("hides the mobile /upgrade action when no upgrade handler is available", () => {
     const { onUpgradeClick: _unused, ...propsWithoutUpgrade } = baseProps;
     renderHeaderBar({ ...propsWithoutUpgrade, currentTD: 3880, isBYOK: false, isMax: false });
-
     openMobileMenu();
-
     expectMobileMenuUpgradeVisibility(false);
   });
 
   it("keeps menu item taps actionable after the outside-click guard runs on mousedown", () => {
     const onStoreClick = vi.fn();
     renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false, onStoreClick });
-
     openMobileMenu();
-
     const menuPanel = queryByTestId("mobile-menu-panel");
     const storeButton = Array.from(menuPanel?.querySelectorAll("button") ?? []).find((element) => element.textContent?.includes("/store") && element.textContent?.includes("Buy coping mechanisms")) as HTMLButtonElement | undefined;
     expect(storeButton).not.toBeUndefined();
@@ -434,9 +427,7 @@ describe("HeaderBar upgrade CTA visibility", () => {
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
     renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
     mockMenuButtonRect({ bottom: 64 });
-
     openMobileMenu();
-
     const menuPanel = queryByTestId("mobile-menu-panel") as HTMLDivElement | null;
     const menuAnchor = queryByTestId("mobile-menu-anchor");
     const headerRoot = queryByTestId("header-bar-root");
@@ -457,9 +448,7 @@ describe("HeaderBar upgrade CTA visibility", () => {
     renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
     mockMenuButtonRect({ bottom: 64 });
     mockHeaderRootRect({ bottom: 88 });
-
     openMobileMenu();
-
     const menuPanel = queryByTestId("mobile-menu-panel") as HTMLDivElement | null;
     expect(menuPanel?.style.top).toBe("96px");
     expect(menuPanel?.style.maxHeight).toBe("796px");
