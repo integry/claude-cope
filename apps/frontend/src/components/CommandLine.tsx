@@ -1,4 +1,4 @@
-import { ChangeEvent, KeyboardEvent, MouseEvent, PointerEvent, forwardRef, useEffect, useState } from "react";
+import { ChangeEvent, KeyboardEvent, MouseEvent, PointerEvent, forwardRef, useEffect, useRef, useState } from "react";
 import { useIsMobileViewport } from "./useIsMobileViewport";
 
 type CommandLineProps = {
@@ -20,6 +20,8 @@ type PlaceholderMetadata = {
   tabHintLabel: string;
   trailingPlaceholderText: string;
 };
+
+const MOBILE_VIEWPORT_QUERY = "(max-width: 767px)";
 
 function getPlaceholderMetadata(
   placeholder: string | undefined,
@@ -74,6 +76,8 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
   ) {
     const [isFocused, setIsFocused] = useState(false);
     const [isComposing, setIsComposing] = useState(false);
+    const [hasHydrated, setHasHydrated] = useState(false);
+    const inputRef = useRef<HTMLInputElement | null>(null);
     const isMobileViewport = useIsMobileViewport();
     const isInputFocused = isFocused && !disabled;
     const showPlaceholder = !value && !!placeholder;
@@ -91,6 +95,22 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
         setIsFocused(false);
       }
     }, [disabled, isFocused]);
+
+    useEffect(() => {
+      setHasHydrated(true);
+    }, []);
+
+    useEffect(() => {
+      if (
+        hasHydrated
+        && !disabled
+        && typeof window !== "undefined"
+        && typeof window.matchMedia === "function"
+        && !window.matchMedia(MOBILE_VIEWPORT_QUERY).matches
+      ) {
+        inputRef.current?.focus();
+      }
+    }, [disabled, hasHydrated, isMobileViewport]);
 
     const handleCompositionStart = () => {
       setIsComposing(true);
@@ -161,10 +181,17 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                 </div>
               )}
               <input
-                ref={ref}
+                ref={(node) => {
+                  inputRef.current = node;
+                  if (typeof ref === "function") {
+                    ref(node);
+                  } else if (ref) {
+                    ref.current = node;
+                  }
+                }}
                 type="text"
                 value={value}
-                autoFocus={!isMobileViewport}
+                autoFocus={false}
                 disabled={disabled}
                 onChange={onChange}
                 onKeyDown={handleInputKeyDown}

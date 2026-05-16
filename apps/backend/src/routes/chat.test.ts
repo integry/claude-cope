@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
+import { getDefaultCopeModel, resolveCopeModel } from "@claude-cope/shared/models";
 import {
   sanitizeChatMessages,
   enforceContextTrimming,
@@ -926,7 +927,7 @@ describe("chat route model persona wiring", () => {
     expect(messages[0]?.role).toBe("system");
     expect(messages[0]?.content).toContain("## Model Persona: psychos");
     expect(messages[0]?.content).toContain("The selected cope model is: psychos.");
-    expect(capturedRequestBody?.model).toBe("openai/gpt-oss-20b");
+    expect(capturedRequestBody?.model).toBe(resolveCopeModel("psychos")?.openRouterId);
   });
 
   it("migrates legacy model ids to the canonical OpenRouter target at the backend boundary", async () => {
@@ -963,7 +964,7 @@ describe("chat route model persona wiring", () => {
     fetchSpy.mockRestore();
 
     expect(res.status).toBe(200);
-    expect(capturedRequestBody?.model).toBe("openai/gpt-oss-20b");
+    expect(capturedRequestBody?.model).toBe((resolveCopeModel("bogus") ?? getDefaultCopeModel()).openRouterId);
   });
 });
 

@@ -82,6 +82,23 @@ describe("CommandLine", () => {
     expect(cursor?.className).toContain("terminal-command-cursor-blinking");
   });
 
+  it("does not set autofocus during the initial render before viewport detection stabilizes", () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: undefined,
+    });
+
+    const { input } = renderCommandLine();
+    expect(input?.autofocus).toBe(false);
+    expect(document.activeElement).not.toBe(input);
+
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: originalMatchMedia,
+    });
+  });
+
   it("does not autofocus the input on mobile render", () => {
     mobileViewport = true;
     const { container, input } = renderCommandLine();
