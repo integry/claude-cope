@@ -495,6 +495,47 @@ describe("POST /api/score", () => {
     expect(kv.put).toHaveBeenCalledWith("username_session:bob", "test-session", expect.any(Object));
   });
 
+  it("rejects rename-based pro session repair when the target username is owned by another session", async () => {
+    const { db } = makeDB({
+      total_td: 5000,
+      current_td: 4800,
+      last_sync_time: new Date().toISOString().replace("Z", "").replace("T", " "),
+      license_hash: "pro-hash",
+      corporate_rank: "Mid-Level Googler",
+      account_id: "acct-123",
+      username: "bob",
+      inventory: "{}",
+      upgrades: "[]",
+      achievements: "[]",
+      buddy_type: null,
+      buddy_is_shiny: 0,
+      unlocked_themes: "[\"default\"]",
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+    } as never, { licenseActive: true });
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+      "username_session:bob": "other-session",
+    });
+
+    const res = await postScore(
+      db,
+      {
+        username: "bob",
+        currentTD: 4800,
+        totalTDEarned: 5000,
+        inventory: {},
+        upgrades: [],
+      },
+      { headers: { Cookie: "cope_session_id=test-session" }, kv },
+    );
+
+    expect(res.status).toBe(403);
+    expect(kv.put).not.toHaveBeenCalledWith("username_session:bob", "test-session", expect.any(Object));
+  });
+
   it("rejects replayed task bonus (already claimed)", async () => {
     const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString().replace("Z", "").replace("T", " ");
     const { db } = makeDBWithTasks(

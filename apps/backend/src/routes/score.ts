@@ -229,6 +229,15 @@ async function resolveRenamedSessionUsername(kv: KVNamespace, startUsername: str
   return false;
 }
 
+async function canSessionClaimUsername(
+  kv: KVNamespace,
+  sessionId: string,
+  username: string,
+): Promise<boolean> {
+  const existingOwner = await kv.get(accountKvKeys.usernameSession(username));
+  return !existingOwner || existingOwner === sessionId;
+}
+
 async function isSessionAuthorizedForUsername(
   kv: KVNamespace,
   sessionId: string,
@@ -257,6 +266,7 @@ async function isSessionAuthorizedForUsername(
 
   if (!sessionUsername) return { authorized: false };
   if (!(await resolveRenamedSessionUsername(kv, sessionUsername, username))) return { authorized: false };
+  if (!(await canSessionClaimUsername(kv, sessionId, username))) return { authorized: false };
   return {
     authorized: true,
     deferredKvWrites: async () => {
@@ -313,7 +323,11 @@ async function verifyFreeSessionOwnership(
       };
     }
 
-    if (sessionUsername && await resolveRenamedSessionUsername(kv, sessionUsername, username)) {
+    if (
+      sessionUsername
+      && await resolveRenamedSessionUsername(kv, sessionUsername, username)
+      && await canSessionClaimUsername(kv, sessionId, username)
+    ) {
       const accountId = existingRow.account_id ?? crypto.randomUUID();
       return {
         error: null,
