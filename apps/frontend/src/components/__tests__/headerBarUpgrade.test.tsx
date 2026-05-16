@@ -152,6 +152,17 @@ function expectMobileMenuContents(menuPanel: Element | null, statBox: Element | 
   expectMobileMenuEntryLayout(menuPanel);
 }
 
+function expectMobileMenuUpgradeVisibility(visible: boolean) {
+  const menuPanel = queryByTestId("mobile-menu-panel");
+  if (visible) {
+    expect(menuPanel?.textContent).toContain("/upgrade");
+    expect(menuPanel?.textContent).toContain("Unlock MAX 429X");
+    return;
+  }
+  expect(menuPanel?.textContent).not.toContain("/upgrade");
+  expect(menuPanel?.textContent).not.toContain("Unlock MAX 429X");
+}
+
 function expectDesktopStackedIdentityAndStatus() {
   const identityBlock = queryByTestId("desktop-identity-block");
   const identityLine = identityBlock?.firstElementChild;
@@ -382,6 +393,23 @@ describe("HeaderBar upgrade CTA visibility", () => {
     const statBox = queryByTestId("mobile-menu-stat-box");
 
     expectMobileMenuContents(menuPanel, statBox);
+  });
+
+  it("hides the mobile /upgrade action for Max users", () => {
+    renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: true });
+
+    openMobileMenu();
+
+    expectMobileMenuUpgradeVisibility(false);
+  });
+
+  it("hides the mobile /upgrade action when no upgrade handler is available", () => {
+    const { onUpgradeClick: _unused, ...propsWithoutUpgrade } = baseProps;
+    renderHeaderBar({ ...propsWithoutUpgrade, currentTD: 3880, isBYOK: false, isMax: false });
+
+    openMobileMenu();
+
+    expectMobileMenuUpgradeVisibility(false);
   });
 
   it("keeps menu item taps actionable after the outside-click guard runs on mousedown", () => {

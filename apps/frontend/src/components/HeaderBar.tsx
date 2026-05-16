@@ -11,7 +11,7 @@ type TdProps = { displayTD: number; activeMultiplier: number };
 type IdentityProps = BillingProps & { username: string; rank: string; onProfileClick: () => void };
 type StatusProps = BillingProps & QuotaProps & TdProps & { onUpgradeClick?: () => void };
 type MobileQuotaLineProps = { quotaPercent: number; quotaTooltip: string; tipOpen: boolean; setTipOpen: (open: boolean | ((prev: boolean) => boolean)) => void };
-type MobileMenuProps = Omit<StatusProps, "onUpgradeClick" | "isMax"> & {
+type MobileMenuProps = Omit<StatusProps, "onUpgradeClick"> & {
   mobileMenuPosition: { top: number; maxHeight: number };
   closeMenu: () => void;
   onStoreClick: () => void;
@@ -95,16 +95,18 @@ function MobileMenuLink({ command, description, onClick }: { command: string; de
 }
 
 function MobileMenuPanel({
-  displayTD, activeMultiplier, isBYOK, byokTotalCost, quotaPercent, remaining, totalQuota, quotaTooltip, mobileMenuPosition, closeMenu,
+  displayTD, activeMultiplier, isBYOK, isMax, byokTotalCost, quotaPercent, remaining, totalQuota, quotaTooltip, mobileMenuPosition, closeMenu,
   onStoreClick, onLeaderboardClick, onAchievementsClick, onProfileClick, onHelpClick, onAboutClick, onContactClick, onSlashMenuClick, onUpgradeClick,
 }: MobileMenuProps) {
   const closeAnd = (callback?: () => void) => () => { closeMenu(); callback?.(); };
   const actionLinks = [
     { command: "/store", description: "Buy coping mechanisms", onClick: closeAnd(onStoreClick) },
-    { command: "/upgrade", description: "Unlock MAX 429X", onClick: closeAnd(onUpgradeClick) },
     { command: "/leaderboard", description: "The Hall of Blame", onClick: closeAnd(onLeaderboardClick) },
     { command: "/achievements", description: "Trophies for bad choices", onClick: closeAnd(onAchievementsClick) },
   ];
+  if (!isMax && onUpgradeClick) {
+    actionLinks.splice(1, 0, { command: "/upgrade", description: "Unlock MAX 429X", onClick: closeAnd(onUpgradeClick) });
+  }
   const systemLinks = [
     { command: "/profile", description: "Your miserable stats", onClick: closeAnd(onProfileClick) },
     { command: "/help", description: "Available commands", onClick: closeAnd(onHelpClick) },
@@ -227,7 +229,7 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>{menuOpen ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /> : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />}</svg>
         </button>
       </div>
-      {menuOpen && <div ref={menuPanelRef}><MobileMenuPanel displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} mobileMenuPosition={mobileMenuPosition} closeMenu={closeMenu} onStoreClick={onStoreClick} onLeaderboardClick={onLeaderboardClick} onAchievementsClick={onAchievementsClick} onProfileClick={onProfileClick} onHelpClick={onHelpClick} onAboutClick={onAboutClick} onContactClick={onContactClick} onSlashMenuClick={onSlashMenuClick} onUpgradeClick={onUpgradeClick} /></div>}
+      {menuOpen && <div ref={menuPanelRef}><MobileMenuPanel displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} mobileMenuPosition={mobileMenuPosition} closeMenu={closeMenu} onStoreClick={onStoreClick} onLeaderboardClick={onLeaderboardClick} onAchievementsClick={onAchievementsClick} onProfileClick={onProfileClick} onHelpClick={onHelpClick} onAboutClick={onAboutClick} onContactClick={onContactClick} onSlashMenuClick={onSlashMenuClick} onUpgradeClick={onUpgradeClick} /></div>}
       {!isBYOK && <MobileQuotaLine quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} tipOpen={quotaTipOpen} setTipOpen={setQuotaTipOpen} />}
     </div>
   );

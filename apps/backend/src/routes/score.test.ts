@@ -183,6 +183,37 @@ describe("POST /api/score", () => {
     expect(json.profile.current_td).toBe(150000);
   });
 
+  it("keeps the legacy flat payload for session-authenticated pro sync without proKeyHash", async () => {
+    const { db } = makeDB({
+      username: "prouser",
+      total_td: 200000,
+      current_td: 150000,
+      corporate_rank: "Mid-Level Googler",
+      license_hash: "pro-hash",
+    } as never, { licenseActive: true });
+    const kv = mockKV({
+      "session_user:test-session": "prouser",
+      "username_session:prouser": "test-session",
+    });
+    const res = await postScore(
+      db,
+      {
+        username: "prouser",
+        currentTD: 150000,
+        totalTDEarned: 200000,
+        inventory: {},
+        upgrades: [],
+      },
+      { headers: { Cookie: "cope_session_id=test-session" }, kv }
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json() as { total_td: number; current_td: number; corporate_rank: string; multiplier: number; profile?: unknown };
+    expect(json.total_td).toBe(200000);
+    expect(json.current_td).toBe(150000);
+    expect(json.corporate_rank).toBe("Mid-Level Googler");
+    expect(json).not.toHaveProperty("profile");
+  });
+
   it("uses cf-ipcountry header for country detection", async () => {
     const { db, bound } = makeDB(undefined);
     await postScore(

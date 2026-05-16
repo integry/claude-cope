@@ -72,7 +72,15 @@ afterEach(() => {
 installMatchMediaMock();
 
 describe("CommandLine", () => {
-  it("does not autofocus the input on render", () => {
+  it("autofocuses the input on desktop render", () => {
+    const { input } = renderCommandLine();
+
+    expect(input).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("does not autofocus the input on mobile render", () => {
+    mobileViewport = true;
     const { input } = renderCommandLine();
 
     expect(input).not.toBeNull();

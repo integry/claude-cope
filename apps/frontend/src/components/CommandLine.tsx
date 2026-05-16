@@ -164,6 +164,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                 ref={ref}
                 type="text"
                 value={value}
+                autoFocus={!isMobileViewport}
                 disabled={disabled}
                 onChange={onChange}
                 onKeyDown={handleInputKeyDown}
