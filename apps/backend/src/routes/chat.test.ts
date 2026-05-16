@@ -18,6 +18,7 @@ import {
   scoreReplyUsability,
   normalizeReplyContent,
   rewriteTutorialLeakIfNeeded,
+  GENERIC_USER_NEXT_MESSAGE_FALLBACKS,
 } from "./chat";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 
@@ -622,40 +623,18 @@ describe("reply formatting normalizer", () => {
     expect(output).not.toContain("trail—a");
   });
 
-  const EXPECTED_GENERIC_FALLBACKS = [
-    "Which part detonates first?",
-    "Which bad idea catches fire next?",
-    "Should we ship it anyway?",
-    "Which lie are we deploying next?",
-    "Can we hide it behind a flag?",
-    "Should I make it worse on purpose?",
-    "Which suspicious blob is doing the damage?",
-    "What fresh sabotage did that summon?",
-    "Which shortcut gets us audited?",
-    "Should we call that a hotfix?",
-    "What breaks if we try it?",
-    "Which switch ruins production faster?",
-    "Which part does nobody own?",
-    "Can we automate the bad idea?",
-    "What detonates after deploy?",
-    "Which option is pretending to be safe?",
-    "Should I apologize before merging?",
-    "Can we rename the disaster a feature?",
-    "Is this the part we monetize?",
-  ];
-
   it("adds a broad USER_NEXT_MESSAGE when the tag is missing", () => {
     const input = "The only thing older than you is the legacy code haunting the repo since the 90s.";
     const output = normalizeReplyContent(input);
     const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
   });
 
   it("fills an empty USER_NEXT_MESSAGE tag with a broad fallback", () => {
     const input = "That lone 0xFF byte detonated your stream.\n[USER_NEXT_MESSAGE: ]";
     const output = normalizeReplyContent(input);
     const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
     expect(tag).not.toMatch(/0xFF/i);
   });
 
@@ -663,7 +642,7 @@ describe("reply formatting normalizer", () => {
     const input = "Deploy with dump_offsets('topic', version=version, magic=True) and let the magic flag ruin your day.\n[USER_NEXT_MESSAGE: Show the cursed detail]";
     const output = normalizeReplyContent(input);
     const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
     expect(tag).not.toMatch(/magic|dump_offsets|topic/i);
   });
 
@@ -671,7 +650,7 @@ describe("reply formatting normalizer", () => {
     const input = "Deploy with dump_offsets('topic', version=version, magic=True) and let the magic flag ruin your day.\n[USER_NEXT_MESSAGE: Show the cursed detail.]";
     const output = normalizeReplyContent(input);
     const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
     expect(tag).not.toMatch(/magic|dump_offsets|topic/i);
   });
 
@@ -693,7 +672,7 @@ describe("reply formatting normalizer", () => {
     const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
 
     expect(tag).toBeTruthy();
-    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
     expect(tag).not.toMatch(/manifest|yaml|cluster/i);
   });
 
@@ -703,7 +682,7 @@ describe("reply formatting normalizer", () => {
     const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
 
     expect(tag).toBeTruthy();
-    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
     expect(tag).not.toMatch(/pull|digest/i);
   });
 
@@ -714,7 +693,7 @@ describe("reply formatting normalizer", () => {
 
     expect(tag).toBeTruthy();
     expect(tag).not.toBe("Show the cursed detail");
-    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
   });
 
   it("replaces generic leaked tags with an unhinged generic fallback when nothing concrete is present", () => {
@@ -725,7 +704,7 @@ describe("reply formatting normalizer", () => {
     expect(tag).toBeTruthy();
     expect(tag).not.toBe("Show the cursed detail");
     expect(tag).not.toBe("Show the cursed detail.");
-    expect(EXPECTED_GENERIC_FALLBACKS).toContain(tag);
+    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
   });
 
   it("strips leaked meta labels like Deadpan", () => {

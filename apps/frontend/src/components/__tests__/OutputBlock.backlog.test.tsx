@@ -219,10 +219,11 @@ describe("OutputBlock backlog rendering", () => {
       },
     });
 
-    const mobileRow = Array.from(container.querySelectorAll('[role="button"]')).find((element) =>
+    const mobileRow = Array.from(container.querySelectorAll("button")).find((element) =>
       element.textContent?.includes("Tap anywhere on this row"));
 
     expect(mobileRow).toBeTruthy();
+    expect(mobileRow?.querySelector("button")).toBeNull();
 
     act(() => {
       mobileRow?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

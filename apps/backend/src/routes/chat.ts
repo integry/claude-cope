@@ -173,7 +173,7 @@ Congratulations: you asked for a simple lesson and summoned a workplace incident
   return ensureUserNextMessageTag(rewritten, previousUserNextMessage);
 }
 
-const UNHINGED_USER_NEXT_MESSAGE_FALLBACKS = [
+export const GENERIC_USER_NEXT_MESSAGE_FALLBACKS = [
   "Which part detonates first?",
   "Which bad idea catches fire next?",
   "Should we ship it anyway?",
@@ -223,8 +223,8 @@ function buildBrokenReplyFallback(content: string): string {
 // This fallback intentionally handles a broad set of content patterns.
 function buildFallbackUserNextMessage(content: string): string {
   const text = normalizeReplySeedText(content);
-  return UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
-    hashTextForFallback(text) % UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length
+  return GENERIC_USER_NEXT_MESSAGE_FALLBACKS[
+    hashTextForFallback(text) % GENERIC_USER_NEXT_MESSAGE_FALLBACKS.length
   ];
 }
 
@@ -245,9 +245,9 @@ function normalizeComparableUserNextMessage(text: string | null | undefined): st
 function buildAlternateUserNextMessage(content: string, previous: string | null | undefined): string {
   const previousNormalized = normalizeComparableUserNextMessage(previous);
   const text = normalizeReplySeedText(content);
-  const candidates = Array.from({ length: UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length }, (_, offset) =>
-    UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
-      (hashTextForFallback(text) + offset) % UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length
+  const candidates = Array.from({ length: GENERIC_USER_NEXT_MESSAGE_FALLBACKS.length }, (_, offset) =>
+    GENERIC_USER_NEXT_MESSAGE_FALLBACKS[
+      (hashTextForFallback(text) + offset) % GENERIC_USER_NEXT_MESSAGE_FALLBACKS.length
     ]);
 
   return candidates.find((candidate) => normalizeComparableUserNextMessage(candidate) !== previousNormalized)
@@ -268,7 +268,7 @@ function isGenericUserNextMessage(text: string): boolean {
       "show me the error logs",
       "run it now",
       "show me the detail",
-      ...UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.map((msg) => msg.toLowerCase().replace(/[.!?]+$/g, "")),
+      ...GENERIC_USER_NEXT_MESSAGE_FALLBACKS.map((msg) => msg.toLowerCase().replace(/[.!?]+$/g, "")),
     ].includes(normalized) ||
     isBannedUserNextMessagePattern(text) ||
     /show\s+(?:me\s+)?the\s+cursed\s+detail/i.test(text)

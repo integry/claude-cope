@@ -200,6 +200,8 @@ function expectMobileIdentityLayout() {
   expect(mobileLogo?.tagName).toBe("BUTTON");
   expect(mobileLogoImage?.getAttribute("src")).toBe("/media/logo-400-transparent.png");
   expect(mobileIdentityBlock?.textContent).toContain("TestUser");
+  expect(mobileIdentityBlock?.className).not.toContain("pr-14");
+  expect(mobileIdentityBlock?.className).not.toContain("col-end-4");
   expect(mobileRankLine?.textContent).toContain("[Jr. Code Monkey]");
   expect(mobileRankLine?.className).toContain("whitespace-nowrap");
   expect(mobileStatusBlock?.textContent).toContain("3,880 TD");

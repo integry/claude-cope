@@ -32,10 +32,20 @@ const getByokBadgeText = (byokTotalCost?: number) => `[BYOK${byokTotalCost != nu
 const getByokStatusText = (byokTotalCost?: number) => byokTotalCost != null && byokTotalCost > 0 ? `External Billing Active: $${formatByokCost(byokTotalCost)}` : "External Billing Active: BYOK";
 
 function EntitlementBadges({ isBYOK, isMax, byokTotalCost, maxBadgeTestId, maxBadgeLabel = "[MAX 429X]" }: BillingProps & { maxBadgeTestId?: string; maxBadgeLabel?: string }) {
-  return <>
-    {isBYOK && <span className="text-[10px] font-bold text-yellow-400 whitespace-nowrap">{getByokBadgeText(byokTotalCost)}</span>}
-    {isMax && <span data-testid={maxBadgeTestId} className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: "#ff00ff" }}>{maxBadgeLabel}</span>}
-  </>;
+  return (
+    <>
+      {isBYOK && (
+        <span className="whitespace-nowrap text-[10px] font-bold text-yellow-400">
+          {getByokBadgeText(byokTotalCost)}
+        </span>
+      )}
+      {isMax && (
+        <span data-testid={maxBadgeTestId} className="whitespace-nowrap text-[10px] font-bold uppercase tracking-wider" style={{ color: "#ff00ff" }}>
+          {maxBadgeLabel}
+        </span>
+      )}
+    </>
+  );
 }
 
 function DesktopQuotaBar({ quotaPercent, remaining, totalQuota, quotaTooltip }: QuotaProps) {
@@ -68,10 +78,21 @@ function DesktopIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, on
 }
 
 function MobileIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, onProfileClick }: IdentityProps) {
-  return <>
-    <div data-testid="mobile-identity-block" className="col-start-2 col-end-4 row-start-1 flex min-w-0 items-center gap-2 self-end pr-14 sm:hidden"><button onClick={onProfileClick} className="min-w-0 flex-1 truncate text-left text-cyan-400 hover:text-white hover:underline cursor-pointer">{username}</button><span className="ml-1 flex flex-shrink-0 items-center gap-2"><EntitlementBadges isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} maxBadgeTestId="mobile-max-badge" maxBadgeLabel="[MAX]" /></span></div>
-    <div data-testid="mobile-rank-line" title={rank} className="col-start-2 row-start-2 min-w-0 self-start whitespace-nowrap text-[11px] leading-none text-gray-400 sm:hidden sm:text-xs">[{getMobileRankLabel(rank)}]</div>
-  </>;
+  return (
+    <>
+      <div data-testid="mobile-identity-block" className="col-start-2 row-start-1 flex min-w-0 items-center gap-2 self-end sm:hidden">
+        <button onClick={onProfileClick} className="min-w-0 flex-1 truncate text-left text-cyan-400 hover:text-white hover:underline cursor-pointer">
+          {username}
+        </button>
+        <span className="flex flex-shrink-0 items-center gap-2">
+          <EntitlementBadges isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} maxBadgeTestId="mobile-max-badge" maxBadgeLabel="[MAX]" />
+        </span>
+      </div>
+      <div data-testid="mobile-rank-line" title={rank} className="col-start-2 row-start-2 min-w-0 self-start whitespace-nowrap text-[11px] leading-none text-gray-400 sm:hidden sm:text-xs">
+        [{getMobileRankLabel(rank)}]
+      </div>
+    </>
+  );
 }
 
 function DesktopStatusBlock({ displayTD, activeMultiplier, isBYOK, isMax, byokTotalCost, quotaPercent, remaining, totalQuota, quotaTooltip, onUpgradeClick }: StatusProps) {

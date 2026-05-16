@@ -14,9 +14,10 @@ function renderTicketId(
   fullId: string,
   shortId: string,
   isLocked: boolean,
+  interactive: boolean,
   onSlashCommand?: (command: string, action: SlashCommandAction) => void,
 ): React.ReactNode {
-  if (!onSlashCommand) return shortId;
+  if (!onSlashCommand || !interactive) return shortId;
 
   const executeTake = () => {
     onSlashCommand(`/take ${fullId}`, "execute");
@@ -49,13 +50,33 @@ function BacklogTicketRow({
     onSlashCommand(`/take ${ticket.fullId}`, "execute");
   };
 
+  const mobileRowContent = (
+    <>
+      <div className="flex items-center justify-between gap-3 text-[12px] text-slate-400">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="text-slate-200">[{ticket.row}]</span>
+          <span className="min-w-0 truncate text-left text-cyan-200">
+            {renderTicketId(ticket.fullId, ticket.shortId, ticket.isLocked, false, onSlashCommand)}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className={ticket.isLocked ? "text-amber-300" : "text-slate-300"}>{ticket.status}</span>
+          <span className={ticket.isLocked ? "text-amber-300" : "text-cyan-200"}>{ticket.reward}</span>
+        </div>
+      </div>
+      <div className={`min-w-0 break-words text-left text-cyan-100 [overflow-wrap:anywhere] ${ticket.isLocked ? "text-amber-200" : ""}`}>
+        {ticket.title}
+      </div>
+    </>
+  );
+
   return (
     <div
       className="border-b border-dashed border-cyan-400/40 py-2 last:border-b-0 md:grid md:grid-cols-[3rem_7rem_minmax(0,1fr)_5rem_5.5rem] md:items-start md:gap-3"
     >
       <div className="hidden text-slate-300 md:block">[{ticket.row}]</div>
       <div className="hidden text-cyan-200 md:block">
-        {renderTicketId(ticket.fullId, ticket.shortId, ticket.isLocked, onSlashCommand)}
+        {renderTicketId(ticket.fullId, ticket.shortId, ticket.isLocked, true, onSlashCommand)}
       </div>
       <div className={`hidden min-w-0 break-words text-cyan-100 [overflow-wrap:anywhere] md:block ${ticket.isLocked ? "text-amber-200" : ""}`}>
         {ticket.title}
@@ -67,34 +88,20 @@ function BacklogTicketRow({
         {ticket.reward}
       </div>
 
-      <div
-        className={`flex flex-col gap-1 md:hidden ${onSlashCommand ? "cursor-pointer" : ""}`}
-        role={onSlashCommand ? "button" : undefined}
-        tabIndex={onSlashCommand ? 0 : undefined}
-        aria-label={onSlashCommand ? `Select backlog item ${ticket.fullId}` : undefined}
-        onClick={onSlashCommand ? executeTake : undefined}
-        onKeyDown={onSlashCommand ? (event) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          event.preventDefault();
-          executeTake();
-        } : undefined}
-      >
-        <div className="flex items-center justify-between gap-3 text-[12px] text-slate-400">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="text-slate-200">[{ticket.row}]</span>
-            <span className="min-w-0 text-cyan-200">
-              {renderTicketId(ticket.fullId, ticket.shortId, ticket.isLocked, onSlashCommand)}
-            </span>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className={ticket.isLocked ? "text-amber-300" : "text-slate-300"}>{ticket.status}</span>
-            <span className={ticket.isLocked ? "text-amber-300" : "text-cyan-200"}>{ticket.reward}</span>
-          </div>
+      {onSlashCommand ? (
+        <button
+          type="button"
+          className="flex w-full flex-col gap-1 text-left md:hidden"
+          aria-label={`Select backlog item ${ticket.fullId}`}
+          onClick={executeTake}
+        >
+          {mobileRowContent}
+        </button>
+      ) : (
+        <div className="flex flex-col gap-1 md:hidden">
+          {mobileRowContent}
         </div>
-        <div className={`min-w-0 break-words text-cyan-100 [overflow-wrap:anywhere] ${ticket.isLocked ? "text-amber-200" : ""}`}>
-          {ticket.title}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
