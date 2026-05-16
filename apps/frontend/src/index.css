@@ -242,7 +242,7 @@ body {
   }
 
   .terminal-markdown-codeblock {
-    font-size: 0.75rem;
+    font-size: 0.75rem !important;
   }
 
   .terminal-buddy-dock {
