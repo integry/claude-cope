@@ -150,6 +150,7 @@ body {
 }
 
 .terminal-command-shell {
+  z-index: 0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.015) 0%, rgba(255, 255, 255, 0.04) 100%);
   box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.2);
