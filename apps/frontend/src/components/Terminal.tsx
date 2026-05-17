@@ -338,7 +338,7 @@ function Terminal() {
     if (tryOutageDamage({ inputValue: commandValue, outageHp, activeOutageScenario, sendDamage, setHistory, setInputValue })) return;
     if (commandValue.trim().startsWith("/")) return void runSlashCommand(commandValue.trim());
     if (bragPending) { handleBragSubmit({ inputValue: commandValue, setInputValue, state, setHistory, setBragPending }); return; }
-    if (buddyPendingConfirm) { handleBuddyConfirm({ inputValue: commandValue, setInputValue, setBuddyPendingConfirm, setState, setHistory, buddyType: state.buddy?.type ?? undefined }); return; }
+    if (buddyPendingConfirm) { handleBuddyConfirm({ inputValue: commandValue, setInputValue, setBuddyPendingConfirm, setState, setHistory, buddyType: state.buddy?.type ?? undefined, username: state.username, proKeyHash: state.proKeyHash }); return; }
     if (commandValue.trim().length === 0) {
       setInputValue(""); setHistoryIndex(-1); return;
     }
