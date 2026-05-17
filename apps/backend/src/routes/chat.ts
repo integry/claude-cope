@@ -1485,7 +1485,7 @@ chat.post("/", async (c) => {
   });
 
   const providerList = resolveProviderList(baseProviders, baseProvidersFreeOnly, category);
-  let orResponse = await callOpenRouter({
+  const orResponse = await callOpenRouter({
     apiKey: effectiveApiKey,
     model,
     messages,

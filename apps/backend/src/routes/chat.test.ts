@@ -24,6 +24,14 @@ import {
 } from "./chat";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 
+function createExecutionContext(): ExecutionContext {
+  return {
+    waitUntil: vi.fn(),
+    passThroughOnException: vi.fn(),
+    props: {},
+  } as ExecutionContext;
+}
+
 describe("sanitizeChatMessages", () => {
   it("filters out system role messages to prevent prompt injection", () => {
     const input = [
@@ -997,10 +1005,7 @@ describe("chat route model persona wiring", () => {
       }),
     }, {
       OPENROUTER_API_KEY: "test-key",
-    }, {
-      waitUntil: vi.fn(),
-      passThroughOnException: vi.fn(),
-    });
+    }, createExecutionContext());
 
     fetchSpy.mockRestore();
 
@@ -1041,10 +1046,7 @@ describe("chat route model persona wiring", () => {
       }),
     }, {
       OPENROUTER_API_KEY: "test-key",
-    }, {
-      waitUntil: vi.fn(),
-      passThroughOnException: vi.fn(),
-    });
+    }, createExecutionContext());
 
     fetchSpy.mockRestore();
 
@@ -1087,10 +1089,7 @@ describe("chat route model persona wiring", () => {
       }),
     }, {
       OPENROUTER_API_KEY: "test-key",
-    }, {
-      waitUntil: vi.fn(),
-      passThroughOnException: vi.fn(),
-    });
+    }, createExecutionContext());
 
     fetchSpy.mockRestore();
 
