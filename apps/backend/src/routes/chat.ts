@@ -1031,7 +1031,6 @@ function buildUserNextSuggestionMessages({
   assistantReply,
   rank,
   activeTicket,
-  previousUserNextMessage,
 }: Omit<UserNextSuggestionParams, "apiKey" | "model" | "providers">): { role: string; content: string }[] {
   const assistantBody = assistantReply
     .replace(/\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g, "")
@@ -1509,7 +1508,7 @@ chat.post("/", async (c) => {
       console.log(
         `[USER_NEXT_DEBUG] helper generated=${JSON.stringify(generatedSuggestion) ?? "null"} decision=${generatedSuggestionDecision}`,
       );
-      if (generatedSuggestionDecision === "kept") {
+      if (generatedSuggestionDecision === "kept" && generatedSuggestion) {
         normalizedContent = replaceUserNextMessageTag(normalizedContent, generatedSuggestion);
         console.log("[USER_NEXT_DEBUG] helper suggestion accepted");
       } else {
