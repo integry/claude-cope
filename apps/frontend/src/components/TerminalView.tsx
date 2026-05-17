@@ -60,6 +60,7 @@ type TerminalViewProps = OverlayVisibility & {
     command: string,
     action: SlashCommandAction,
   ) => void;
+  scrollViewportRef?: RefObject<HTMLDivElement | null>;
   bottomRef: RefObject<HTMLDivElement | null>;
   slashQuery: string;
   slashIndex: number;
@@ -138,6 +139,7 @@ export function TerminalView({
   initialHistoryLen,
   promptString,
   handleSlashCommandClick,
+  scrollViewportRef,
   bottomRef,
   slashQuery,
   slashIndex,
@@ -276,6 +278,8 @@ export function TerminalView({
         />
       </div>
       <div
+        ref={scrollViewportRef}
+        data-terminal-scroll-viewport="true"
         className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}
       >
         {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}

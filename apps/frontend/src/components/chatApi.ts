@@ -13,6 +13,7 @@ import { getDefaultCopeModel, resolveCopeModel, resolveCopeModelId } from "@clau
 import { handleChatErrorResponse, parseChatResponseBody } from "./chatApiResponse";
 import { TURNSTILE_REQUIRED_EVENT } from "../turnstileEvents";
 import { VERIFY_STATUS, UNAVAILABLE_REASON } from "@claude-cope/shared/turnstile";
+import { nextMsgId } from "../hooks/gameStateUtils";
 
 export type BuddyInterjectionResult = {
   message: Message;
@@ -348,9 +349,10 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
       const finalReply = sprintMsg ? sprintMsg.content + "\n\n" + reply : reply;
 
       setHistory((prev) => {
+        const responseMessageId = nextMsgId();
         let updated = [
           ...prev.filter((msg) => msg.role !== "loading" || (loadingMessageId !== undefined && msg.id !== loadingMessageId)),
-          { role: "system" as const, content: finalReply, shareClaim, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
+          { id: responseMessageId, role: "system" as const, content: finalReply, shareClaim, tokensSent, tokensReceived, ...(isBYOK && cost != null ? { cost } : {}) },
           ...achievementMessages,
           ...(buddyMessage ? [buddyMessage] : []),
         ];

@@ -11,9 +11,22 @@ export function pickRandomUpgradeNagCloseEffect(): UpgradeNagCloseEffect {
   return UPGRADE_NAG_CLOSE_EFFECTS[Math.floor(Math.random() * UPGRADE_NAG_CLOSE_EFFECTS.length)] ?? DEFAULT_CLOSE_EFFECT;
 }
 
-export function syncMessageKeys(messageKeys: number[], nextKeyId: { current: number }, historyLength: number) {
-  while (messageKeys.length < historyLength) messageKeys.push(nextKeyId.current++);
-  if (messageKeys.length > historyLength) messageKeys.length = historyLength;
+export function syncMessageKeys(
+  messageKeys: number[],
+  nextKeyId: { current: number },
+  history: Message[],
+  messageKeyMap: WeakMap<Message, number>,
+) {
+  messageKeys.length = history.length;
+  for (let i = 0; i < history.length; i += 1) {
+    const message = history[i]!;
+    let key = messageKeyMap.get(message);
+    if (key === undefined) {
+      key = nextKeyId.current++;
+      messageKeyMap.set(message, key);
+    }
+    messageKeys[i] = key;
+  }
 }
 
 export function removeCommandFromHistory(history: string[], command: string) {

@@ -15,7 +15,7 @@ export default function SplashScreen({ onComplete }: { onComplete: () => void })
   return (
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-700 ${
-        fadeOut ? "opacity-0" : "opacity-100"
+        fadeOut ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
       style={{ backgroundColor: 'var(--color-bg)' }}
     >

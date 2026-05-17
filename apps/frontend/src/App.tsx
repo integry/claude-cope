@@ -48,6 +48,7 @@ function App() {
   if (path === "/legal/privacy") return <LegalPrivacyPage />;
   const showSplashScreen = showSplash || (!isHumanVerified && verificationPhase === "boot");
   const showVerificationGate = !showSplash && !isHumanVerified && (verificationPhase === "required" || verificationPhase === "retrying");
+  const shouldRenderTerminal = !showVerificationGate && (isHumanVerified || showSplashScreen);
 
   return (
     <>
@@ -56,7 +57,7 @@ function App() {
         onError={handleVerificationError}
         verificationNonce={verificationNonce}
       />
-      {!showSplashScreen && !showVerificationGate && <Terminal />}
+      {shouldRenderTerminal && <Terminal />}
       {showSplashScreen && <SplashScreen onComplete={handleSplashComplete} />}
       {showVerificationGate && (
         <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center p-6">

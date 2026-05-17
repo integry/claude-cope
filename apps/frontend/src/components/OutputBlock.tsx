@@ -7,7 +7,7 @@ import { useTypewriter } from "../hooks/useTypewriter";
 import { ShareButton } from "./ShareButton";
 import { renderWithSlashLinks } from "./slashCommandLinks";
 import type { SlashCommandAction } from "./slashCommandDetect";
-import { appendShareMarker, buildMarkdownComponents, cleanLLMOutput } from "./OutputBlockMarkdown";
+import { buildMarkdownComponents, cleanLLMOutput } from "./OutputBlockMarkdown";
 import { BacklogMessage } from "./BacklogMessage";
 import { BUDDY_ICONS, extractBuddyInterjectionBlock, parseBuddyInterjection } from "./buddyConstants";
 import { TicketMessage } from "./TicketMessage";
@@ -166,9 +166,16 @@ function renderBuddyInterjection(
   shareNode: React.ReactNode,
   mdComponents: ReturnType<typeof buildMarkdownComponents>,
 ) {
-  const processedBody = buddyData.body ? appendShareMarker(cleanLLMOutput(buddyData.body), Boolean(shareNode)) : "";
+  const processedBody = buddyData.body ? cleanLLMOutput(buddyData.body) : "";
   const parsedBuddyBlock = getParsedBuddyBlock(buddyData.buddyBlock);
-  if (!parsedBuddyBlock) return renderBuddyFallback(buddyData.buddyBlock, processedBody, mdComponents);
+  if (!parsedBuddyBlock) {
+    return (
+      <div className="space-y-3">
+        {renderBuddyFallback(buddyData.buddyBlock, processedBody, mdComponents)}
+        {shareNode}
+      </div>
+    );
+  }
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
@@ -183,6 +190,7 @@ function renderBuddyInterjection(
           {processedBody}
         </ReactMarkdown>
       )}
+      {shareNode}
     </div>
   );
 }
@@ -202,13 +210,14 @@ function renderMarkdownMessage({
   mdComponents,
 }: MarkdownMessageRenderOptions) {
   const rawContent = shouldTypewrite ? visibleContent : content;
-  const processedContent = appendShareMarker(cleanLLMOutput(rawContent), Boolean(shareNode));
+  const processedContent = cleanLLMOutput(rawContent);
   const showCursor = isStreaming || isTyping;
   return (
     <div className="space-y-1">
       <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
         {processedContent}
       </ReactMarkdown>
+      {shareNode}
       {showCursor && <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse align-text-bottom" />}
     </div>
   );
@@ -342,7 +351,14 @@ function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, 
         onSlashCommand={onSlashCommand}
         shareNode={shareNode}
       />
-      {isAwaitingResponse && <SimulatedToolCall activeTicketId={activeTicketId} />}
+      {message.role === "loading" && (
+        <div
+          className={isAwaitingResponse ? undefined : "invisible pointer-events-none"}
+          aria-hidden={!isAwaitingResponse}
+        >
+          <SimulatedToolCall activeTicketId={activeTicketId} />
+        </div>
+      )}
       {message.role === "loading" && <TokenCounter />}
       {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
     </div>

@@ -157,6 +157,7 @@ export interface GameState {
   achievements: string[];
   buddy: BuddyState;
   chatHistory: Message[];
+  suggestedReply?: string | null;
   commandUsage: Record<string, number>;
   modes: ModesState;
   activeTicket: ActiveTicket | null;
@@ -235,6 +236,7 @@ function createDefaultState(): GameState {
       promptsSinceLastInterjection: 0,
     },
     chatHistory: [],
+    suggestedReply: null,
     commandUsage: {},
     modes: { fast: false, voice: false },
     activeTicket: null,
@@ -274,6 +276,9 @@ function applyDefensiveDefaults(state: GameState): void {
     state.chatHistory = [];
   }
   state.chatHistory = normalizePersistedChatHistory(state.chatHistory);
+  if (typeof state.suggestedReply !== "string") {
+    state.suggestedReply = null;
+  }
   if (!state.commandUsage || typeof state.commandUsage !== "object") {
     state.commandUsage = {};
   }

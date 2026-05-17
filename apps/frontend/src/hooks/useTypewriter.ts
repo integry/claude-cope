@@ -15,7 +15,7 @@ export function useTypewriter(
 ): { visibleContent: string; isTyping: boolean } {
   const lines = content.split("\n");
   const totalUnits = dialUpMode ? content.length : lines.length;
-  const [visibleUnits, setVisibleUnits] = useState(enabled ? 0 : totalUnits);
+  const [visibleUnits, setVisibleUnits] = useState(enabled ? 1 : totalUnits);
   const contentRef = useRef(content);
   const completedRef = useRef(!enabled);
 
@@ -35,6 +35,10 @@ export function useTypewriter(
     if (!enabled || completedRef.current) {
       setVisibleUnits(effectTotal);
       return;
+    }
+
+    if (!dialUpMode) {
+      setVisibleUnits(1);
     }
 
     let timeout: ReturnType<typeof setTimeout>;
@@ -102,11 +106,7 @@ export function useTypewriter(
         }, delay);
       };
 
-      // Kick off with an initial delay
-      timeout = setTimeout(() => {
-        setVisibleUnits(1);
-        revealNext(1);
-      }, 40);
+      revealNext(1);
     }
 
     return () => clearTimeout(timeout);

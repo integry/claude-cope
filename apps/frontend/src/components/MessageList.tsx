@@ -22,20 +22,22 @@ const MessageList = memo(function MessageList({ history, messageKeys, initialHis
         if (message.role === "user") {
           nearestUserMessage = message;
         }
+        const messageKey = messageKeys[index];
 
         return (
-          <OutputBlock
-            key={messageKeys[index]}
-            message={message}
-            previousMessage={history[index - 1]}
-            nextMessage={history[index + 1]}
-            shareUserMessage={shareUserMessage}
-            isNew={index >= initialHistoryLen}
-            promptString={promptString}
-            activeTicketId={activeTicketId}
-            username={username}
-            onSlashCommand={onSlashCommand}
-          />
+          <div key={messageKey} data-message-key={messageKey}>
+            <OutputBlock
+              message={message}
+              previousMessage={history[index - 1]}
+              nextMessage={history[index + 1]}
+              shareUserMessage={shareUserMessage}
+              isNew={index >= initialHistoryLen}
+              promptString={promptString}
+              activeTicketId={activeTicketId}
+              username={username}
+              onSlashCommand={onSlashCommand}
+            />
+          </div>
         );
       })}
     </>

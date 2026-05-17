@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
 import { act } from "react";
+import { createRoot } from "react-dom/client";
 
 import {
   createDeferred,
@@ -11,6 +12,9 @@ import {
   setupShareButtonTest,
   toArrayBuffer,
 } from "./ShareButton.testUtils";
+import MessageList from "../MessageList";
+import { syncMessageKeys } from "../terminalUtils";
+import type { Message } from "../../hooks/useGameState";
 
 function getTwitterIntentText(url: string): string | null {
   return new URL(url).searchParams.get("text");
@@ -419,5 +423,53 @@ describe("ShareButton modal share flow", () => {
     expect(testScope.fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
       body: JSON.stringify({ shareClaim: signedShareClaim }),
     }));
+  });
+
+  it("keeps the share dialog open when a tip is inserted before the shared message", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const keyMap = new WeakMap<Message, number>();
+    const nextKeyId = { current: 0 };
+    const messageKeys: number[] = [];
+    const userMessage: Message = { role: "user", content: "Hello" };
+    const sharedMessage: Message = { role: "system", content: "World", shareClaim: signedShareClaim };
+    const tipMessage: Message = { role: "system", content: "Tip: Run /backlog first.", displayType: "tip" };
+
+    const renderHistory = (history: Message[]) => {
+      syncMessageKeys(messageKeys, nextKeyId, history, keyMap);
+      act(() => {
+        root.render(
+          <MessageList
+            history={history}
+            messageKeys={messageKeys}
+            initialHistoryLen={history.length}
+            promptString=">"
+            username="testuser"
+          />,
+        );
+      });
+    };
+
+    try {
+      renderHistory([userMessage, sharedMessage]);
+
+      const shareButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "[share]");
+      expect(shareButton).not.toBeNull();
+
+      await act(async () => {
+        shareButton!.click();
+      });
+
+      expect(container.querySelector("[role='dialog']")).not.toBeNull();
+
+      renderHistory([userMessage, tipMessage, sharedMessage]);
+
+      expect(container.querySelector("[role='dialog']")).not.toBeNull();
+      expect(container.textContent).toContain("SHARE ON X");
+    } finally {
+      act(() => root.unmount());
+      container.remove();
+    }
   });
 });

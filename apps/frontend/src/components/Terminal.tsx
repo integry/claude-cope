@@ -62,7 +62,7 @@ function Terminal() {
   const [slashQuery, setSlashQuery] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
   const [inputValue, setInputValue] = useState("");
-  const [suggestedReply, setSuggestedReply] = useState<string | null>(null);
+  const suggestedReply = state.suggestedReply ?? null;
   const overlays = useOverlays();
   const { closeAllOverlays, ...terminalOverlayProps } = overlays;
   const { showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade } = terminalOverlayProps;
@@ -73,16 +73,25 @@ function Terminal() {
   const [freeCommandCount, setFreeCommandCount] = useState(0);
   const pingAcknowledged = usePingAcknowledged(pendingReviewPing);
   const inputRef = useRef<HTMLInputElement>(null);
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialHistoryLen = useRef(history.length);
   const messageKeys = useRef<number[]>([]);
+  const messageKeyMap = useRef(new WeakMap<Message, number>());
   const nextKeyId = useRef(0);
-  syncMessageKeys(messageKeys.current, nextKeyId, history.length);
+  syncMessageKeys(messageKeys.current, nextKeyId, history, messageKeyMap.current);
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
   const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyRef = useRef(history);
   historyRef.current = history;
+  const hasScrolledTerminalToBottomOnLoadRef = useRef(false);
+  const wasMobileRequestProcessingRef = useRef(false);
+  const activeMobilePromptKeyRef = useRef<number | null>(null);
+  const mobilePromptFollowFrameRef = useRef<number | null>(null);
+  const mobilePromptFollowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastMobilePromptScrollHeightRef = useRef(0);
+  const lastMobilePromptGrowthAtRef = useRef(0);
   const lastSuggestedReplyRef = useRef<string | null>(null);
   const nextPendingBacklogRollbackIdRef = useRef(0);
   const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
@@ -102,11 +111,36 @@ function Terminal() {
     untrackAbortController,
   } = usePromptSubmissionState();
   const { recordConversationRound, recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
+  const resolveScrollViewport = useCallback((): HTMLDivElement | null => {
+    if (scrollViewportRef.current) return scrollViewportRef.current;
+    if (typeof document === "undefined") return null;
+    return document.querySelector<HTMLDivElement>('[data-terminal-scroll-viewport="true"]');
+  }, []);
+  const stopMobilePromptFollowLoop = useCallback(() => {
+    if (mobilePromptFollowFrameRef.current !== null && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(mobilePromptFollowFrameRef.current);
+    }
+    mobilePromptFollowFrameRef.current = null;
+    if (mobilePromptFollowTimeoutRef.current) {
+      clearTimeout(mobilePromptFollowTimeoutRef.current);
+    }
+    mobilePromptFollowTimeoutRef.current = null;
+  }, []);
   const scrollTerminalToBottom = useCallback(() => {
+    const viewport = resolveScrollViewport();
+    if (viewport) {
+      requestAnimationFrame(() => {
+        viewport.scrollTop = viewport.scrollHeight;
+      });
+      return;
+    }
     if (typeof bottomRef.current?.scrollIntoView === "function") {
       bottomRef.current.scrollIntoView({ behavior: "auto", block: "end" });
     }
-  }, []);
+  }, [resolveScrollViewport]);
+  useEffect(() => () => {
+    stopMobilePromptFollowLoop();
+  }, [stopMobilePromptFollowLoop]);
   useEffect(() => () => {
     const ds = freeTierDelayRef.current;
     ds.cancelled = true;
@@ -116,6 +150,9 @@ function Terminal() {
     if (startupTicketPromptTimeoutRef.current) clearTimeout(startupTicketPromptTimeoutRef.current);
   }, []);
   const scheduleHistoryCommitCallback = useHistoryCommitQueue(history.length);
+  const setPersistedSuggestedReply = useCallback((nextSuggestedReply: string | null) => {
+    setState((prev) => prev.suggestedReply === nextSuggestedReply ? prev : { ...prev, suggestedReply: nextSuggestedReply });
+  }, [setState]);
   const setCommandHistoryEntries = useCallback((updater: (prev: Array<{ submissionId: number; command: string }>) => Array<{ submissionId: number; command: string }>) => {
     const nextEntries = updater(commandHistoryEntriesRef.current); commandHistoryEntriesRef.current = nextEntries; setCommandHistory(nextEntries.map(({ command }) => command));
   }, []);
@@ -124,7 +161,11 @@ function Terminal() {
     if (isNew) playChime();
     return isNew;
   }, [unlockAchievement, playChime]);
-  const handleSuggestedReply = useCallback((suggestion: string) => { const merged = mergeSuggestedReply(lastSuggestedReplyRef.current, suggestion); if (!merged) return void setSuggestedReply(null); lastSuggestedReplyRef.current = merged; setSuggestedReply(merged); }, []);
+  const handleSuggestedReply = useCallback((suggestion: string) => {
+    const merged = mergeSuggestedReply(lastSuggestedReplyRef.current, suggestion);
+    lastSuggestedReplyRef.current = merged;
+    setPersistedSuggestedReply(merged);
+  }, [setPersistedSuggestedReply]);
   const processCommandRef = useRef<(submission: PromptSubmission) => void>(() => {});
   const submitPromptCommand = useCallback((command: string, replayId: number | null = null) => {
     const submissionId = nextPromptSubmissionIdRef.current++;
@@ -161,7 +202,104 @@ function Terminal() {
     }
     scrollTerminalToBottom();
   }, [closeAllOverlays, dismissUpgradeNagOverlay, scrollTerminalToBottom]);
-  useEffect(() => { scrollTerminalToBottom(); }, [history, scrollTerminalToBottom]);
+  useEffect(() => {
+    lastSuggestedReplyRef.current = suggestedReply;
+  }, [suggestedReply]);
+  useEffect(() => {
+    if (hasScrolledTerminalToBottomOnLoadRef.current) return;
+    hasScrolledTerminalToBottomOnLoadRef.current = true;
+    scrollTerminalToBottom();
+  }, [scrollTerminalToBottom]);
+  useEffect(() => {
+    if (isMobileViewport) return;
+    scrollTerminalToBottom();
+  }, [history, isMobileViewport, scrollTerminalToBottom]);
+  useEffect(() => {
+    if (!isMobileViewport) {
+      wasMobileRequestProcessingRef.current = isProcessing;
+      activeMobilePromptKeyRef.current = null;
+      lastMobilePromptScrollHeightRef.current = 0;
+      lastMobilePromptGrowthAtRef.current = 0;
+      stopMobilePromptFollowLoop();
+      return;
+    }
+    let latestPromptIndex = -1;
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+      if (history[i]?.role === "user") {
+        latestPromptIndex = i;
+        break;
+      }
+    }
+    if (latestPromptIndex < 0) return;
+    const latestPromptKey = messageKeys.current[latestPromptIndex];
+    if (latestPromptKey == null) return;
+    const viewport = resolveScrollViewport();
+    const justFinishedProcessing = wasMobileRequestProcessingRef.current && !isProcessing;
+    if (isProcessing && activeMobilePromptKeyRef.current !== latestPromptKey) {
+      activeMobilePromptKeyRef.current = latestPromptKey;
+    }
+    if (isProcessing && viewport) {
+      lastMobilePromptScrollHeightRef.current = viewport.scrollHeight;
+      lastMobilePromptGrowthAtRef.current = Date.now();
+    } else if (justFinishedProcessing && viewport) {
+      lastMobilePromptScrollHeightRef.current = viewport.scrollHeight;
+      lastMobilePromptGrowthAtRef.current = Date.now();
+    }
+    const trackedPromptKey = activeMobilePromptKeyRef.current;
+    const shouldTrack = trackedPromptKey === latestPromptKey && (isProcessing || justFinishedProcessing);
+    wasMobileRequestProcessingRef.current = isProcessing;
+    if (!shouldTrack || !viewport || typeof document === "undefined") return;
+    stopMobilePromptFollowLoop();
+    const runFollowFrame = () => {
+      const currentPromptKey = activeMobilePromptKeyRef.current;
+      if (currentPromptKey !== latestPromptKey) {
+        mobilePromptFollowFrameRef.current = null;
+        return;
+      }
+      const currentViewport = resolveScrollViewport();
+      const target = document.querySelector<HTMLElement>(`[data-message-key="${latestPromptKey}"]`);
+      if (!currentViewport || !target) {
+        mobilePromptFollowFrameRef.current = null;
+        return;
+      }
+      const viewportRect = currentViewport.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const promptReachedTop = targetRect.top <= viewportRect.top + 1;
+      const maxScrollTop = currentViewport.scrollHeight - currentViewport.clientHeight;
+      const now = Date.now();
+      if (currentViewport.scrollHeight !== lastMobilePromptScrollHeightRef.current) {
+        lastMobilePromptScrollHeightRef.current = currentViewport.scrollHeight;
+        lastMobilePromptGrowthAtRef.current = now;
+      }
+      if (!promptReachedTop) {
+        const remainingDistance = Math.max(0, maxScrollTop - currentViewport.scrollTop);
+        const nextStep = remainingDistance > 0
+          ? Math.max(12, Math.min(remainingDistance, remainingDistance * 0.18))
+          : 0;
+        currentViewport.scrollTop = Math.min(maxScrollTop, currentViewport.scrollTop + nextStep);
+      }
+      const quietMs = now - lastMobilePromptGrowthAtRef.current;
+      const isStuckAtBottom = currentViewport.scrollTop >= maxScrollTop && !promptReachedTop;
+      const shouldContinue =
+        activeMobilePromptKeyRef.current === latestPromptKey &&
+        !promptReachedTop &&
+        (isProcessing || quietMs < 1000);
+      if (shouldContinue) {
+        if (isStuckAtBottom && !isProcessing) {
+          mobilePromptFollowTimeoutRef.current = setTimeout(() => {
+            mobilePromptFollowTimeoutRef.current = null;
+            mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
+          }, 80);
+        } else {
+          mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
+        }
+        return;
+      }
+      if (promptReachedTop) activeMobilePromptKeyRef.current = null;
+      mobilePromptFollowFrameRef.current = null;
+    };
+    mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
+  }, [history, isMobileViewport, isProcessing, resolveScrollViewport, stopMobilePromptFollowLoop]);
   useEffect(() => {
     const onPopState = () => {
       if (pendingNagCommandRef.current !== null) return void setShowUpgrade(true);
@@ -206,7 +344,7 @@ function Terminal() {
     const value = getNextTerminalInputValue(inputValue, e.target.value, activeRegression === "backwards_typing");
     setInputValue(value);
     setHistoryIndex(-1);
-    setSuggestedReply(null);
+    setPersistedSuggestedReply(null);
     setSlashQuery(value.startsWith("/") ? value : "");
     setSlashIndex(0);
   };
@@ -236,15 +374,15 @@ function Terminal() {
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
     const nextSelection = getSlashCommandClickSelection(command, action);
     if (nextSelection.mode === "execute") return void runSlashCommandRef.current(nextSelection.value);
-    setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setSuggestedReply(null);
+    setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setPersistedSuggestedReply(null);
     if (!isMobileViewport) inputRef.current?.focus();
-  }, [isMobileViewport]);
+  }, [isMobileViewport, setPersistedSuggestedReply]);
   const handleSlashMenuSelect = useCallback((command: string) => {
     const nextSelection = resolveSlashMenuSelection(command, "click");
     if (nextSelection.mode === "execute") return void runSlashCommandRef.current(nextSelection.value);
-    setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setSuggestedReply(null);
+    setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setPersistedSuggestedReply(null);
     if (!isMobileViewport) inputRef.current?.focus();
-  }, [isMobileViewport]);
+  }, [isMobileViewport, setPersistedSuggestedReply]);
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => {
     if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : prev.buddy.promptsSinceLastInterjection + 1 } }));
   }, [state.buddy.type, setState]);
@@ -363,13 +501,13 @@ function Terminal() {
   const handleManualUpgradeDismiss = dismissUpgradeNagOverlay;
   const acceptSuggestedReply = useCallback((options?: { submit?: boolean }) => {
     if (!suggestedReply || inputValue) return;
-    setSuggestedReply(null);
+    setPersistedSuggestedReply(null);
     if (options?.submit) return void submitCommandValue(suggestedReply);
     setInputValue(suggestedReply);
-  }, [inputValue, suggestedReply, submitCommandValue]);
+  }, [inputValue, setPersistedSuggestedReply, suggestedReply, submitCommandValue]);
   const { handleKeyDown } = useTerminalKeyboard({
     slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
-    freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing: resetPromptProcessing, setHistory, closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose: handleUpgradeNagDismiss, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
+    freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply: setPersistedSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing: resetPromptProcessing, setHistory, closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose: handleUpgradeNagDismiss, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
   });
   return (
     <TerminalView
@@ -377,7 +515,7 @@ function Terminal() {
       activeTheme={state.activeTheme} regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} isMobileViewport={isMobileViewport} inputRef={inputRef} closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
       onlineCount={onlineCount} rank={rank} state={state} handleHomeClick={handleHomeClick} handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue}
       setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect} isBooting={isBooting} history={history}
-      messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} bottomRef={bottomRef}
+      messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} scrollViewportRef={scrollViewportRef} bottomRef={bottomRef}
       slashQuery={slashQuery} slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect} runSlashCommand={runSlashCommand} inputValue={inputValue} suggestedReply={suggestedReply} acceptSuggestedReply={acceptSuggestedReply}
       isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown} handleSubmit={handleEnterSubmit} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme}
       showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy}

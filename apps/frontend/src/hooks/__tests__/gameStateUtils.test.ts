@@ -70,6 +70,7 @@ describe("normalizePersistedMessage", () => {
       achievements: [],
       buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 },
       chatHistory: [message],
+      suggestedReply: "show me the logs",
       commandUsage: {},
       modes: { fast: false, voice: false },
       activeTicket: null,
@@ -85,6 +86,7 @@ describe("normalizePersistedMessage", () => {
     const loaded = loadState();
 
     expect(loaded.chatHistory[0]).toEqual(message);
+    expect(loaded.suggestedReply).toBe("show me the logs");
   });
 
   it("collapses duplicate consecutive persisted tip messages on reload", () => {

@@ -88,6 +88,13 @@ afterEach(async () => {
 });
 
 describe("App turnstile gating", () => {
+  it("mounts the terminal underneath the splash screen during bootstrap", async () => {
+    await renderApp("/");
+
+    expect(container.textContent).toContain("finish splash");
+    expect(container.textContent).toContain("terminal");
+  });
+
   it("shows a blocking verification error after a bootstrap verification error", async () => {
     await renderApp("/");
     await clickSplash();
