@@ -475,6 +475,14 @@ function normalizeNonCodeSegment(segment: string): string {
     /(?:^|\n)\s*(?:short sarcastic prose|no list|no fake structure|diagnosis-plus-choices|prefer structured|prefer exotic)(?:[^\n]*)/gi,
     "\n",
   );
+  text = text.replace(
+    /(?:^|\n)\s*(?:use\s+)?(?:condescending diagnosis|short sarcastic prose|diagnosis-plus-choices|terse fake terminal exchange|tiny cursed code fragment|tiny absurd diff|dramatic [^\n]*rant)(?:\s+style|\s+format)?\.?/gi,
+    "\n",
+  );
+  text = text.replace(
+    /(?:^|\n)\s*(?:let'?s\s+give|we(?:'|’)ll\s+give)\s+diagnosis(?:\s+paragraph)?\s+(?:then|and)\s+(?:\d+(?:-\d+)?\s+)?(?:numbered\s+)?(?:options|choices)\.?/gi,
+    "\n",
+  );
 
   // Strip leaked prompt-planning lines if the model starts narrating hidden instructions.
   text = text.replace(
@@ -758,6 +766,18 @@ const ACTIONABLE_CODE_MARKERS = [
   /\blet\s+\w+\s*=/,
   /\bstruct\s+\w+\s*\{/,
 ];
+const PROMPT_LEAK_RETRY_MARKERS = [
+  /(?:^|\n)\s*(?:response style|style choice|chosen style|format)\s*:/i,
+  /(?:^|\n)\s*use\s+(?:condescending diagnosis|short sarcastic prose|diagnosis-plus-choices|prefer structured|prefer exotic|terse fake terminal exchange|tiny cursed code fragment|tiny absurd diff|dramatic [^\n]*rant)(?:\s+style|\s+format)?\.?/i,
+  /(?:^|\n)\s*(?:condescending diagnosis|short sarcastic prose|diagnosis-plus-choices|terse fake terminal exchange|tiny cursed code fragment|tiny absurd diff|dramatic [^\n]*rant)(?:\s+style|\s+format)?\.?/i,
+  /\b(?:diagnosis paragraph|numbered options|numbered choices)\b/i,
+  /(?:^|\n)[^\n]{0,120}\bdiagnosis\b[^\n]{0,80}\b(?:options|choices)\b/i,
+  /(?:^|\n)\s*(?:we|i)\s+(?:need|should|must|have to)\s+(?:output|write|return|end|give|provide)\b/i,
+  /(?:^|\n)\s*provide\s+\d+(?:-\d+)?\s+(?:choices|numbered choices)\b/i,
+  /include\s+\[(?:SPRINT_PROGRESS|BUDDY_SAYS|USER_NEXT_MESSAGE)/i,
+  /(?:^|\n)\s*reminder:\s+/i,
+  /(?:^|\n)\s*will output\b/i,
+];
 const PROCEDURAL_HELPFULNESS_MARKERS = [
   /\byou need to\b/i,
   /\bthe real culprit is\b/i,
@@ -967,6 +987,28 @@ RETRY OVERRIDE — YOUR LAST DRAFT LEANED ON THE SAME ENTERPRISE CLICHES:
 - Use fewer stock buzzwords like Kafka, Terraform, Kubernetes, Helm, HSM, microservices, and blockchain all at once.
 - Rotate to fresher absurdity domains.
 - Keep the joke specific, not bingo-card generic.
+`;
+
+  return [
+    { ...messages[0], content: `${messages[0].content}${retryInstruction}` },
+    ...messages.slice(1),
+  ];
+}
+
+export function shouldRetryPromptLeakReply(reply: string): boolean {
+  return PROMPT_LEAK_RETRY_MARKERS.some((pattern) => pattern.test(reply));
+}
+
+export function buildPromptLeakRetryMessages(messages: { role: string; content: string }[]): { role: string; content: string }[] {
+  if (!messages.length || messages[0]?.role !== "system") return messages;
+  const retryInstruction = `
+
+RETRY OVERRIDE — YOUR LAST DRAFT LEAKED HIDDEN INSTRUCTIONS:
+- Max 160 words total unless the original request clearly needs less.
+- Do NOT narrate response structure, formatting rules, hidden tags, or planning steps.
+- Do NOT say things like "we output", "include [SPRINT_PROGRESS]", "provide 2-4 choices", or similar scaffolding.
+- Return only the actual in-character reply.
+- If a tag is required, emit the tag itself and nothing about the tag rules.
 `;
 
   return [
@@ -1443,7 +1485,7 @@ chat.post("/", async (c) => {
   });
 
   const providerList = resolveProviderList(baseProviders, baseProvidersFreeOnly, category);
-  const orResponse = await callOpenRouter({
+  let orResponse = await callOpenRouter({
     apiKey: effectiveApiKey,
     model,
     messages,
@@ -1456,7 +1498,54 @@ chat.post("/", async (c) => {
     return c.json({ error: "OpenRouter request failed", details: errData }, orResponse.status as ContentfulStatusCode);
   }
 
-  const data = await orResponse.json() as ChatResponseData;
+  let data = await orResponse.json() as ChatResponseData;
+
+  if (!data.choices?.[0]?.message?.content?.trim()) {
+    console.log("[CHAT RETRY] empty model content detected, retrying once at lower temperature");
+    console.log(`[CHAT RETRY] original raw=${JSON.stringify(data.choices?.[0]?.message?.content ?? "")}`);
+    const retryResponse = await callOpenRouter({
+      apiKey: effectiveApiKey,
+      model,
+      messages,
+      providers: providerList,
+      options: {
+        temperature: 0.7,
+      },
+    });
+
+    if (retryResponse.ok) {
+      data = await retryResponse.json() as ChatResponseData;
+      console.log(`[CHAT RETRY] retried raw=${JSON.stringify(data.choices?.[0]?.message?.content ?? "")}`);
+    } else {
+      const retryErr = await retryResponse.json().catch(() => null);
+      console.log(`[CHAT RETRY] empty-content retry failed status=${retryResponse.status} body=${JSON.stringify(retryErr).slice(0, 300)}`);
+    }
+  }
+
+  if (data.choices?.[0]?.message?.content) {
+    const initialContent = data.choices[0].message.content;
+    if (shouldRetryPromptLeakReply(initialContent)) {
+      console.log("[CHAT RETRY] prompt leak detected in raw reply, retrying once at lower temperature");
+      console.log(`[CHAT RETRY] original raw=${JSON.stringify(initialContent)}`);
+      const retryResponse = await callOpenRouter({
+        apiKey: effectiveApiKey,
+        model,
+        messages: buildPromptLeakRetryMessages(messages),
+        providers: providerList,
+        options: {
+          temperature: 0.7,
+        },
+      });
+
+      if (retryResponse.ok) {
+        data = await retryResponse.json() as ChatResponseData;
+        console.log(`[CHAT RETRY] retried raw=${JSON.stringify(data.choices?.[0]?.message?.content ?? "")}`);
+      } else {
+        const retryErr = await retryResponse.json().catch(() => null);
+        console.log(`[CHAT RETRY] prompt leak retry failed status=${retryResponse.status} body=${JSON.stringify(retryErr).slice(0, 300)}`);
+      }
+    }
+  }
 
   if (data.choices?.[0]?.message?.content) {
     const latestUserPrompt = [...trimmedMessages].reverse().find((message) => message.role === "user")?.content ?? "";

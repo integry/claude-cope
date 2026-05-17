@@ -16,6 +16,8 @@ import {
   buildActionableCodeRetryMessages,
   shouldRetryEnterpriseClichePileup,
   buildEnterpriseClicheRetryMessages,
+  shouldRetryPromptLeakReply,
+  buildPromptLeakRetryMessages,
   scoreReplyUsability,
   normalizeReplyContent,
   rewriteTutorialLeakIfNeeded,
@@ -292,6 +294,69 @@ Your Redis mausoleum is doing crimes again.
     expect(output).not.toContain("No fake structure");
     expect(output).toContain("Your Redis mausoleum is doing crimes again.");
     expect(output).toContain("[USER_NEXT_MESSAGE: poke the mausoleum]");
+  });
+
+  it("strips a leaked bare format-name first sentence from the visible reply", () => {
+    const input = `Condescending diagnosis style.
+
+The daemon is cursed.
+[USER_NEXT_MESSAGE: poke the daemon]`;
+    const output = normalizeReplyContent(input);
+    expect(output).not.toContain("Condescending diagnosis style");
+    expect(output).toContain("The daemon is cursed.");
+    expect(output).toContain("[USER_NEXT_MESSAGE: poke the daemon]");
+  });
+});
+
+describe("prompt leak retry guard", () => {
+  it("retries replies that narrate hidden response scaffolding", () => {
+    const reply = `We output diagnosis paragraph then 2-4 numbered choices. Include [SPRINT_PROGRESS] and [BUDDY_SAYS].
+
+The daemon is cursed.`;
+    expect(shouldRetryPromptLeakReply(reply)).toBe(true);
+  });
+
+  it("retries replies that leak named response-style instructions", () => {
+    const reply = `Use condescending diagnosis style.
+
+The daemon is cursed.`;
+    expect(shouldRetryPromptLeakReply(reply)).toBe(true);
+  });
+
+  it("retries replies that leak a bare format-name style line", () => {
+    const reply = `Condescending diagnosis style.
+
+The daemon is cursed.`;
+    expect(shouldRetryPromptLeakReply(reply)).toBe(true);
+  });
+
+  it("retries replies that leak explicit format names", () => {
+    const reply = `Let's give diagnosis paragraph then numbered options.
+
+The daemon is cursed.`;
+    expect(shouldRetryPromptLeakReply(reply)).toBe(true);
+  });
+
+  it("retries replies that cluster diagnosis and options in the opening sentence", () => {
+    const reply = `We'll give diagnosis and 3 options.
+
+The daemon is cursed.`;
+    expect(shouldRetryPromptLeakReply(reply)).toBe(true);
+  });
+
+  it("does not retry normal cursed prose", () => {
+    const reply = "The daemon is cursed and the logs are filing harassment claims.";
+    expect(shouldRetryPromptLeakReply(reply)).toBe(false);
+  });
+
+  it("injects a prompt-leak retry override into the system prompt", () => {
+    const messages = [
+      { role: "system", content: "base prompt" },
+      { role: "user", content: "next step?" },
+    ] as { role: string; content: string }[];
+    const retried = buildPromptLeakRetryMessages(messages);
+    expect(retried[0]?.content).toContain("YOUR LAST DRAFT LEAKED HIDDEN INSTRUCTIONS");
+    expect(retried[1]).toEqual(messages[1]);
   });
 });
 
@@ -932,6 +997,9 @@ describe("chat route model persona wiring", () => {
       }),
     }, {
       OPENROUTER_API_KEY: "test-key",
+    }, {
+      waitUntil: vi.fn(),
+      passThroughOnException: vi.fn(),
     });
 
     fetchSpy.mockRestore();
@@ -973,12 +1041,61 @@ describe("chat route model persona wiring", () => {
       }),
     }, {
       OPENROUTER_API_KEY: "test-key",
+    }, {
+      waitUntil: vi.fn(),
+      passThroughOnException: vi.fn(),
     });
 
     fetchSpy.mockRestore();
 
     expect(res.status).toBe(200);
     expect(capturedRequestBody?.model).toBe((resolveCopeModel("bogus") ?? getDefaultCopeModel()).openRouterId);
+  });
+
+  it("retries once when OpenRouter returns empty content", async () => {
+    const { default: chat } = await import("./chat");
+    let openRouterCalls = 0;
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      if (url === "https://openrouter.ai/api/v1/chat/completions") {
+        openRouterCalls += 1;
+        const content = openRouterCalls === 1
+          ? ""
+          : "retry response\n[USER_NEXT_MESSAGE: what breaks next?]";
+        return new Response(JSON.stringify({
+          choices: [{ message: { content } }],
+          usage: {},
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    const res = await chat.request("/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: "TestUser0",
+        rank: "Junior Code Monkey",
+        chatMessages: [{ role: "user", content: "help" }],
+      }),
+    }, {
+      OPENROUTER_API_KEY: "test-key",
+    }, {
+      waitUntil: vi.fn(),
+      passThroughOnException: vi.fn(),
+    });
+
+    fetchSpy.mockRestore();
+
+    expect(res.status).toBe(200);
+    expect(openRouterCalls).toBe(2);
   });
 
 });
