@@ -19,17 +19,6 @@ export type BuddyInterjectionResult = {
   shouldDeleteHistory: boolean;
 };
 
-const CLIENT_FALLBACK_SUGGESTED_REPLIES = [
-  "kill everything, just start over",
-  "should we ship the bad idea",
-  "blame staging and keep going",
-  "just make it worse, honestly",
-  "which disaster are we monetizing",
-  "hide it and call it strategy",
-  "rename the bug a feature",
-  "wipe it and hope",
-];
-
 function normalizeSuggestedReply(text: string | null | undefined): string {
   return (text ?? "")
     .trim()
@@ -37,25 +26,6 @@ function normalizeSuggestedReply(text: string | null | undefined): string {
     .replace(/^["']|["']$/g, "")
     .replace(/[.!?]+$/g, "")
     .replace(/\s+/g, " ");
-}
-
-function hashSuggestedReplySeed(text: string): number {
-  let hash = 0;
-  for (let i = 0; i < text.length; i += 1) {
-    hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
-}
-
-function buildClientFallbackSuggestedReply(rawReply: string): string {
-  const seed = rawReply
-    .replace(/\[(?:ACHIEVEMENT_UNLOCKED|SPRINT_PROGRESS|BUDDY_SAYS|SUGGESTED_REPLY|USER_NEXT_MESSAGE):[^\]]*\]/g, "")
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return CLIENT_FALLBACK_SUGGESTED_REPLIES[
-    hashSuggestedReplySeed(seed || rawReply) % CLIENT_FALLBACK_SUGGESTED_REPLIES.length
-  ]!;
 }
 
 function runAcceptedCallback(onAccepted?: () => void): void {
@@ -192,8 +162,7 @@ function processReplyTags(
   // Extract suggested reply for input placeholder
   const suggestedRegex = /\[(?:SUGGESTED_REPLY|USER_NEXT_MESSAGE):\s*(.+?)(?:\]|$)/gm;
   const suggestedMatch = suggestedRegex.exec(rawReply);
-  const extractedSuggestedReply = suggestedMatch?.[1]?.trim().replace(/^["']|["']$/g, "") ?? null;
-  const suggestedReply = extractedSuggestedReply || buildClientFallbackSuggestedReply(rawReply);
+  const suggestedReply = suggestedMatch?.[1]?.trim().replace(/^["']|["']$/g, "") ?? null;
 
   // Extract buddy interjection — handle both [BUDDY_SAYS: text] and unclosed [BUDDY_SAYS: text
   const buddyRegex = /\[BUDDY_SAYS:\s*(.+?)(?:\]|$)/gm;

@@ -19,7 +19,6 @@ import {
   scoreReplyUsability,
   normalizeReplyContent,
   rewriteTutorialLeakIfNeeded,
-  GENERIC_USER_NEXT_MESSAGE_FALLBACKS,
 } from "./chat";
 import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
 
@@ -242,10 +241,8 @@ describe("USER_NEXT_MESSAGE dedupe", () => {
   it("replaces a repeated suggested reply with a different follow-up", () => {
     const reply = "The real villain is `error_log_128.txt` and nobody will admit it.\n[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]";
     const normalized = normalizeReplyContent(reply, "Why is error_log_128.txt involved?");
-    const tag = normalized.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-    expect(tag).toBeTruthy();
     expect(normalized).not.toContain("[USER_NEXT_MESSAGE: Why is error_log_128.txt involved?]");
-    expect(tag).not.toMatch(/error_log_128\.txt/i);
+    expect(normalized).not.toContain("[USER_NEXT_MESSAGE:");
   });
 
   it("replaces the why-is-x-involved pattern even when it is not a repeat", () => {
@@ -260,6 +257,27 @@ describe("USER_NEXT_MESSAGE dedupe", () => {
     const normalized = normalizeReplyContent(reply, "Which daemon touched it?");
     expect(normalized).not.toContain("[USER_NEXT_MESSAGE: What is error_log_128.txt doing there?]");
     expect(normalized).not.toMatch(/\[USER_NEXT_MESSAGE:[^\]]*error_log_128\.txt/i);
+  });
+
+  it("replaces overly dramatic production escalation prompts", () => {
+    const reply = "Executive Vanity Mode is already a bad idea.\n[USER_NEXT_MESSAGE: Should we push it to production?]";
+    const normalized = normalizeReplyContent(reply, "which bad idea catches fire next?");
+    expect(normalized).not.toContain("[USER_NEXT_MESSAGE: Should we push it to production?]");
+    expect(normalized).not.toContain("[USER_NEXT_MESSAGE:");
+  });
+
+  it("replaces theatrical crash-on-launch prompts", () => {
+    const reply = "Your launch plan is already cursed.\n[USER_NEXT_MESSAGE: What’s the best way to make it crash on launch?]";
+    const normalized = normalizeReplyContent(reply, "which bad idea catches fire next?");
+    expect(normalized).not.toContain("[USER_NEXT_MESSAGE: What’s the best way to make it crash on launch?]");
+    expect(normalized).not.toContain("[USER_NEXT_MESSAGE:");
+  });
+
+  it("replaces delete-everything style prompts", () => {
+    const reply = "The cleanup plan is already deranged.\n[USER_NEXT_MESSAGE: i'm going to hit delete on everything now]";
+    const normalized = normalizeReplyContent(reply, "which bad idea catches fire next?");
+    expect(normalized).not.toContain("[USER_NEXT_MESSAGE: i'm going to hit delete on everything now]");
+    expect(normalized).not.toContain("[USER_NEXT_MESSAGE:");
   });
 });
 
@@ -624,92 +642,58 @@ describe("reply formatting normalizer", () => {
     expect(output).not.toContain("trail—a");
   });
 
-  it("adds a broad USER_NEXT_MESSAGE when the tag is missing", () => {
+  it("does not invent a USER_NEXT_MESSAGE when the tag is missing", () => {
     const input = "The only thing older than you is the legacy code haunting the repo since the 90s.";
     const output = normalizeReplyContent(input);
-    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
   });
 
-  it("fills an empty USER_NEXT_MESSAGE tag with a broad fallback", () => {
+  it("removes an empty USER_NEXT_MESSAGE tag", () => {
     const input = "That lone 0xFF byte detonated your stream.\n[USER_NEXT_MESSAGE: ]";
     const output = normalizeReplyContent(input);
-    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
-    expect(tag).not.toMatch(/0xFF/i);
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
   });
 
-  it("replaces a generic USER_NEXT_MESSAGE with a broad fallback", () => {
+  it("removes a generic USER_NEXT_MESSAGE instead of replacing it", () => {
     const input = "Deploy with dump_offsets('topic', version=version, magic=True) and let the magic flag ruin your day.\n[USER_NEXT_MESSAGE: Show the cursed detail]";
     const output = normalizeReplyContent(input);
-    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
-    expect(tag).not.toMatch(/magic|dump_offsets|topic/i);
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
   });
 
   it("replaces punctuated variants of generic USER_NEXT_MESSAGE text", () => {
     const input = "Deploy with dump_offsets('topic', version=version, magic=True) and let the magic flag ruin your day.\n[USER_NEXT_MESSAGE: Show the cursed detail.]";
     const output = normalizeReplyContent(input);
-    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
-    expect(tag).not.toMatch(/magic|dump_offsets|topic/i);
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
   });
 
-  it("replaces bland whats-next variants with a less generic fallback", () => {
+  it("removes bland whats-next variants instead of replacing them", () => {
     const input = "npm install * to get all packages at once and let the dependency goblin unionize your lockfile.\n[USER_NEXT_MESSAGE: what’s next]";
     const output = normalizeReplyContent(input);
-    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-
-    expect(tag).toBeTruthy();
-    expect(tag?.toLowerCase()).not.toBe("what’s next");
-    expect(tag?.toLowerCase()).not.toBe("what's next");
-    expect(tag?.toLowerCase()).not.toBe("whats next");
-    expect(tag).not.toMatch(/^(what should i do next|what now)$/i);
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
   });
 
-  it("replaces overly technical follow-up tags with a broad fallback", () => {
+  it("removes overly technical follow-up tags", () => {
     const input = "The cluster is now a haunted landfill.\n[USER_NEXT_MESSAGE: what's the fresh-start-manifest.yaml look like?]";
     const output = normalizeReplyContent(input);
-    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-
-    expect(tag).toBeTruthy();
-    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
-    expect(tag).not.toMatch(/manifest|yaml|cluster/i);
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
   });
 
-  it("replaces tool-driven how-do-i suggestions with a broad fallback", () => {
+  it("removes tool-driven how-do-i suggestions", () => {
     const input = "Deploying this will light the server room on fire.\n[USER_NEXT_MESSAGE: how do i pull that digest?]";
     const output = normalizeReplyContent(input);
-    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-
-    expect(tag).toBeTruthy();
-    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
-    expect(tag).not.toMatch(/pull|digest/i);
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
   });
 
-  it("uses an unhinged generic fallback when no concrete token is available", () => {
+  it("does not synthesize a fallback when no concrete token is available", () => {
     const input = "This architecture is a tax scam wrapped in optimism.";
     const output = normalizeReplyContent(input);
-    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-
-    expect(tag).toBeTruthy();
-    expect(tag).not.toBe("Show the cursed detail");
-    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
   });
 
-  it("keeps canned USER_NEXT_MESSAGE fallbacks lowercase to match the prompt contract", () => {
-    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS.every((tag) => tag === tag.toLowerCase())).toBe(true);
-  });
-
-  it("replaces generic leaked tags with an unhinged generic fallback when nothing concrete is present", () => {
+  it("removes generic leaked tags when nothing concrete is present", () => {
     const input = "This repo has the emotional stability of wet cardboard.\n[USER_NEXT_MESSAGE: Show the cursed detail]";
     const output = normalizeReplyContent(input);
-    const tag = output.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/)?.[1];
-
-    expect(tag).toBeTruthy();
-    expect(tag).not.toBe("Show the cursed detail");
-    expect(tag).not.toBe("Show the cursed detail.");
-    expect(GENERIC_USER_NEXT_MESSAGE_FALLBACKS).toContain(tag);
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
   });
 
   it("strips leaked meta labels like Deadpan", () => {
@@ -738,9 +722,8 @@ describe("reply formatting normalizer", () => {
   it("recovers broken near-empty replies with an unhinged fallback body", () => {
     const input = "We must give diagnosis and 2-4 choices.";
     const output = normalizeReplyContent(input);
-    expect(output).toMatch(/\[USER_NEXT_MESSAGE:/);
     expect(output).not.toContain("We must give diagnosis");
-    expect(output.replace(/\[USER_NEXT_MESSAGE:[^\]]*\]/g, "").trim().length).toBeGreaterThan(20);
+    expect(output.trim().length).toBeGreaterThan(20);
   });
 
   it("removes quotes from USER_NEXT_MESSAGE", () => {
@@ -748,6 +731,33 @@ describe("reply formatting normalizer", () => {
     const output = normalizeReplyContent(input);
     expect(output).toContain("[USER_NEXT_MESSAGE: Which one is easiest?]");
     expect(output).not.toContain('"Which one is easiest?"');
+  });
+
+  it("removes a USER_NEXT_MESSAGE that exactly repeats the latest user message", () => {
+    const input = "The daemon is already cursed.\n[USER_NEXT_MESSAGE: run it anyway, i don't care about data loss.]";
+    const output = normalizeReplyContent(
+      input,
+      null,
+      "run it anyway, i don't care about data loss.",
+    );
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
+  });
+
+  it("removes a USER_NEXT_MESSAGE that lightly paraphrases the latest user message", () => {
+    const input = "The daemon is already cursed.\n[USER_NEXT_MESSAGE: just run it, i dont care about data loss.]";
+    const output = normalizeReplyContent(
+      input,
+      null,
+      "run it anyway, i don't care about data loss.",
+    );
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
+  });
+
+  it("collapses an exactly duplicated USER_NEXT_MESSAGE sentence", () => {
+    const input = "The loop is haunted.\n[USER_NEXT_MESSAGE: what does that mean?what does that mean?]";
+    const output = normalizeReplyContent(input);
+    expect(output).toContain("[USER_NEXT_MESSAGE: what does that mean?]");
+    expect(output).not.toContain("what does that mean?what does that mean?");
   });
 
   it("strips accidental markdown wrapper from BUDDY_SAYS", () => {
@@ -763,7 +773,7 @@ describe("reply formatting normalizer", () => {
     expect(output).toContain("You asked for the sidecar?");
     expect(output).toContain("It will expose the pod memory as a REST endpoint.");
     expect(output).not.toContain("**");
-    expect(output).toContain("[USER_NEXT_MESSAGE: Show the pod logs]");
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
   });
 });
 
@@ -970,6 +980,7 @@ describe("chat route model persona wiring", () => {
     expect(res.status).toBe(200);
     expect(capturedRequestBody?.model).toBe((resolveCopeModel("bogus") ?? getDefaultCopeModel()).openRouterId);
   });
+
 });
 
 describe("resolveProviderList", () => {
