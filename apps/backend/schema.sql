@@ -201,3 +201,39 @@ CREATE INDEX IF NOT EXISTS idx_shared_cards_created_at
 
 CREATE INDEX IF NOT EXISTS idx_shared_cards_renderer_version
     ON shared_cards (renderer_version);
+
+CREATE INDEX IF NOT EXISTS idx_shared_cards_username_created_at
+    ON shared_cards (username, created_at DESC);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS shared_cards_search USING fts5(
+    id,
+    username,
+    prompt,
+    response,
+    content='shared_cards',
+    content_rowid='rowid',
+    tokenize='unicode61'
+);
+
+CREATE TRIGGER IF NOT EXISTS trg_shared_cards_search_insert
+AFTER INSERT ON shared_cards
+BEGIN
+    INSERT INTO shared_cards_search(rowid, id, username, prompt, response)
+    VALUES (new.rowid, new.id, new.username, new.prompt, new.response);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_shared_cards_search_delete
+AFTER DELETE ON shared_cards
+BEGIN
+    INSERT INTO shared_cards_search(shared_cards_search, rowid, id, username, prompt, response)
+    VALUES ('delete', old.rowid, old.id, old.username, old.prompt, old.response);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_shared_cards_search_update
+AFTER UPDATE ON shared_cards
+BEGIN
+    INSERT INTO shared_cards_search(shared_cards_search, rowid, id, username, prompt, response)
+    VALUES ('delete', old.rowid, old.id, old.username, old.prompt, old.response);
+    INSERT INTO shared_cards_search(rowid, id, username, prompt, response)
+    VALUES (new.rowid, new.id, new.username, new.prompt, new.response);
+END;

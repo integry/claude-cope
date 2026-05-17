@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import {
   SHARE_CARD_RENDERER_VERSION,
+  buildPublicShareUrls,
   computeShareCardContentHash,
   validateAndNormalizeShareCardInput,
 } from "@claude-cope/shared/shareCards";
-import { buildPublicShareUrls } from "../utils/shareImages";
 import { verifyShareCardClaim } from "../utils/shareCardClaims";
 
 type Env = {
