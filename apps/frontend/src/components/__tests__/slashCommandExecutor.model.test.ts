@@ -205,3 +205,41 @@ describe("/model command", () => {
     expect(reply).toContain("Legacy alias `enterprise` now maps to `psychos`");
   });
 });
+
+describe("/buddy command", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      } satisfies Partial<Response> as Response)
+    ));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("persists buddy removal to the server", async () => {
+    const ctx = makeCtx(makeGameState({
+      username: "TestUser0",
+      buddy: { type: "Agile Snail", isShiny: false, promptsSinceLastInterjection: 3 },
+    }));
+
+    executeSlashCommand("/buddy remove", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+    await Promise.resolve();
+
+    expect(ctx.state.buddy).toEqual({ type: null, isShiny: false, promptsSinceLastInterjection: 0 });
+    expect(fetch).toHaveBeenCalledWith("/api/account/update-buddy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "TestUser0", buddyType: null, isShiny: false }),
+    });
+    expect(getLastReply(ctx)).toContain("has been dismissed");
+  });
+});

@@ -9,7 +9,7 @@ import { API_BASE, BYOK_ENABLED, GITHUB_ISSUES_URL, PRO_QUOTA_LIMIT } from "../c
 import { applyServerProfile } from "../hooks/profileSync";
 import { applyPaidEntitlementAuthFailure } from "../hooks/themePurchaseState";
 import { isPaidUser } from "../hooks/gameStateUtils";
-import { updateTicketServer } from "../api/profileApi";
+import { updateBuddyServer, updateTicketServer } from "../api/profileApi";
 import { ALL_SLASH_COMMANDS } from "./slashCommands";
 
 import type { GameState } from "../hooks/useGameState";
@@ -425,6 +425,9 @@ function handleBuddyCommand(command: string, ctx: SlashCommandContext, reply: Re
     markValidSlashCommand(ctx, "/buddy");
     const dismissed = ctx.state.buddy.type;
     ctx.setState((prev) => ({ ...prev, buddy: { type: null, isShiny: false, promptsSinceLastInterjection: 0 } }));
+    if (ctx.state.username) {
+      void updateBuddyServer(ctx.state.username, null, false, ctx.state.proKeyHash);
+    }
     reply({ role: "system", content: `[✓] **${dismissed}** has been dismissed. They didn't even say goodbye.` });
     return true;
   }
@@ -439,6 +442,9 @@ function handleBuddyCommand(command: string, ctx: SlashCommandContext, reply: Re
   const [buddyType, buddyIcon] = roll < 50 ? ["Agile Snail", "🐌"] : roll < 75 ? ["Sarcastic Clippy", "📎"] : roll < 88 ? ["Grumpy Senior", "👴"] : roll < 97 ? ["Panic Intern", "😰"] : ["10x Dragon", "🐉"];
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   ctx.setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
+  if (ctx.state.username) {
+    void updateBuddyServer(ctx.state.username, buddyType, isShiny, ctx.state.proKeyHash);
+  }
   const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
   reply({ role: "system", content: `[✓] RNG sequence complete. Spawning your new companion: **${buddyType}**${shinyLabel} ${buddyIcon}!` });
   return true;
@@ -1104,6 +1110,8 @@ export function rollBuddy(
   setState: SetState,
   setHistory: SetHistory,
   currentBuddyType?: string,
+  username?: string,
+  proKeyHash?: string,
 ) {
   let buddyType: string;
   let buddyIcon: string;
@@ -1113,6 +1121,9 @@ export function rollBuddy(
   } while (buddyType === currentBuddyType);
   const isShiny = buddyType === "10x Dragon" && Math.random() < 0.05;
   setState((prev) => ({ ...prev, buddy: { type: buddyType, isShiny, promptsSinceLastInterjection: 0 } }));
+  if (username) {
+    void updateBuddyServer(username, buddyType, isShiny, proKeyHash);
+  }
   const shinyLabel = isShiny ? " ✨ SHINY ✨" : "";
   setHistory((prev) => [...prev, { role: "system" as const, content: `[✓] RNG sequence complete. Spawning your new companion: **${buddyType}**${shinyLabel} ${buddyIcon}!` }]);
 }

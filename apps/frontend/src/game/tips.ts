@@ -142,9 +142,21 @@ function toText(tip: TipDefinition | undefined): string {
 }
 
 export const TIPS = GENERAL_TIPS.filter(isEnabledTip);
+const ALL_TIP_DEFINITIONS = [
+  ...TIPS,
+  ...IDLE_TIPS,
+  ...BACKLOG_REMINDER_TIPS,
+  ...MILESTONE_TIPS,
+  ...CONTEXTUAL_TIPS,
+];
+const TIP_BY_TEXT = new Map(ALL_TIP_DEFINITIONS.map((tip) => [tip.text, tip] as const));
 
 export function getRandomTip(context?: TipSelectionContext): string {
   return toText(pickRandomTip(TIPS.filter((tip) => isUnlockedTip(tip, context))));
+}
+
+export function findTipDefinitionByText(text: string): TipDefinition | null {
+  return TIP_BY_TEXT.get(text) ?? null;
 }
 
 export function getRandomIdleTip(context?: TipSelectionContext): string {

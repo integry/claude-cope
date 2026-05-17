@@ -1,6 +1,7 @@
 import type { MutableRefObject } from "react";
 import {
   BACKLOG_REMINDER_TIPS,
+  findTipDefinitionByText,
   type ContextualTipTrigger,
   type TipDefinition,
 } from "../game/tips";
@@ -47,6 +48,26 @@ export function persistRecentTipHistory(history: Record<string, number>): void {
   } catch {
     // Ignore storage failures and keep the in-memory cooldown alive for this session.
   }
+}
+
+export function reconcilePersistedTipHistory(
+  chatHistory: Array<{ content: string; displayType?: "tip" }>,
+  now = Date.now(),
+): { lastShownTipId: string | null; recentTipHistory: Record<string, number> } {
+  const recentTipHistory = readRecentTipHistory(now);
+  let lastShownTipId: string | null = null;
+
+  for (const message of chatHistory) {
+    if (message.displayType !== "tip") continue;
+    const tip = findTipDefinitionByText(message.content);
+    if (!tip) continue;
+    lastShownTipId = tip.id;
+    if (recentTipHistory[tip.id] === undefined) {
+      recentTipHistory[tip.id] = now;
+    }
+  }
+
+  return { lastShownTipId, recentTipHistory };
 }
 
 export function markTipShown(

@@ -39,7 +39,9 @@ describe("OutputBlock", () => {
     expect(container.textContent).toContain("Remember the migration.");
     expect(container.textContent).toContain("The deploy is still blocked on the failed migration.");
     expect(container.firstElementChild?.className).not.toContain("font-mono");
-    expect(container.querySelector("pre")?.textContent).toContain("[Sarcastic Clippy]");
+    expect(container.querySelector("pre")?.textContent).toContain(BUDDY_ICONS["Sarcastic Clippy"]);
+    expect(container.querySelector("pre")?.className).toContain("whitespace-pre");
+    expect(container.querySelector("pre")?.className).not.toContain("overflow-x-auto");
     expect(container.querySelector("p")?.textContent).toContain("The deploy is still blocked on the failed migration.");
   });
 
@@ -99,6 +101,28 @@ describe("OutputBlock", () => {
 
     expect(container.textContent).toContain("[Agile Snail]");
     expect(container.textContent).toContain("Remember the backlog.");
+  });
+
+  it("wraps long user input chips without allowing horizontal overflow styling", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <OutputBlock
+          message={{ role: "user", content: "averylongtokenwithoutnaturalbreakpoints".repeat(8) }}
+          promptString="> "
+          username=""
+        />,
+      );
+    });
+
+    const userChip = container.firstElementChild?.firstElementChild;
+    expect(userChip?.className).toContain("max-w-full");
+    expect(userChip?.className).toContain("whitespace-pre-wrap");
+    expect(userChip?.className).toContain("break-words");
+    expect(userChip?.className).toContain("[overflow-wrap:anywhere]");
   });
 
   it("keeps the share button on a system reply even when a loading message sits between the user and the answer", () => {

@@ -63,6 +63,9 @@ vi.mock("../CommandLine", async () => {
     }),
   };
 });
+vi.mock("../useIsMobileViewport", () => ({
+  useIsMobileViewport: () => false,
+}));
 vi.mock("../SlashMenu", () => ({ default: () => null }));
 vi.mock("../slashCommands", () => ({
   SLASH_COMMANDS: [],

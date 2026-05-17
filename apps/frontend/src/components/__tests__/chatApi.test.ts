@@ -149,12 +149,12 @@ describe("computeBuddyInterjection", () => {
 });
 
 describe("mergeSuggestedReply", () => {
-  it("drops a repeated suggested reply", () => {
-    expect(mergeSuggestedReply("Why is stderr involved?", "Why is stderr involved?")).toBeNull();
+  it("preserves the current suggested reply when the next one repeats it", () => {
+    expect(mergeSuggestedReply("Why is stderr involved?", "Why is stderr involved?")).toBe("Why is stderr involved?");
   });
 
-  it("treats punctuation-only differences as repeats", () => {
-    expect(mergeSuggestedReply("Why is stderr involved?", "Why is stderr involved?!")).toBeNull();
+  it("preserves the current suggested reply for punctuation-only repeats", () => {
+    expect(mergeSuggestedReply("Why is stderr involved?", "Why is stderr involved?!")).toBe("Why is stderr involved?");
   });
 
   it("accepts a different suggested reply", () => {

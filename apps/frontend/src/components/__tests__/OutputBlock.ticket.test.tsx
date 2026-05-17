@@ -91,6 +91,15 @@ describe("OutputBlock ticket dossier rendering", () => {
     expect(profileValue?.className).toContain("italic");
   });
 
+  it("stacks long dossier fields on mobile while keeping desktop columns", () => {
+    renderMessage(buildTicketMessage(makeTicket(), "claimed"));
+
+    const titleLabel = Array.from(container.querySelectorAll("div")).find((node) => node.textContent === "TITLE:");
+
+    expect(titleLabel?.parentElement?.className).toContain("flex-col");
+    expect(titleLabel?.parentElement?.className).toContain("md:grid");
+  });
+
   it("keeps slash-link behavior in incoming ticket footers", () => {
     const onSlashCommand = renderMessage(buildTicketMessage(makeTicket(), "offered"));
 

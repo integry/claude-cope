@@ -9,6 +9,16 @@ function getTrackedPendingCompletedTaskIds(state: GameState, requestedTaskIds: s
   return requestedTaskIds.filter((ticketId) => state.pendingCompletedTaskIds.includes(ticketId));
 }
 
+function getRequiredTotalTdForSettledTasks(state: GameState, settledTaskIds: string[]): number | null {
+  if (settledTaskIds.length === 0) return null;
+  const settledTaskIdSet = new Set(settledTaskIds);
+  const unresolvedRewardTD = state.pendingCompletedTaskIds.reduce((sum, ticketId) => {
+    if (settledTaskIdSet.has(ticketId)) return sum;
+    return sum + (state.pendingCompletedTaskRewards?.[ticketId]?.rewardTD ?? 0);
+  }, 0);
+  return Math.max(0, state.economy.totalTDEarned - unresolvedRewardTD);
+}
+
 export function shouldBackgroundSyncScore(state: GameState, lastSyncedTotalTD: number): boolean {
   const hasPendingCompletedTickets = (state.pendingCompletedTaskIds?.length ?? 0) > 0;
   if (isPaidUser(state)) return Boolean(state.proKeyHash) && hasPendingCompletedTickets;
@@ -59,6 +69,7 @@ export function useScoreSync(
         const data = await res.json().catch(() => ({}));
         const isApplicationFailure = (data as { ok?: boolean }).ok === false;
         if (!res.ok || isApplicationFailure || completedTaskIds.length === 0) return;
+        const requiredSettledTotalTd = getRequiredTotalTdForSettledTasks(current, completedTaskIds);
         const scoreProfile = (data as { profile?: ServerProfile }).profile;
         if (scoreProfile) {
           setState((prev) => (
@@ -71,7 +82,10 @@ export function useScoreSync(
         }
 
         const sessionProfile = (await fetchSessionProfile().catch(() => null))?.profile;
-        if (!sessionProfile) return;
+        if (
+          !sessionProfile
+          || (requiredSettledTotalTd != null && sessionProfile.total_td < requiredSettledTotalTd)
+        ) return;
         setState((prev) => {
           return applyAuthoritativeProfile(prev, sessionProfile, {
             preservePendingCompletedRewardTaskIds: prev.pendingCompletedTaskIds,

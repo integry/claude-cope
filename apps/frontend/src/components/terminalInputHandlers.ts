@@ -37,6 +37,8 @@ export function handleBuddyConfirm({
   setState,
   setHistory,
   buddyType,
+  username,
+  proKeyHash,
 }: {
   inputValue: string;
   setInputValue: Dispatch<SetStateAction<string>>;
@@ -44,13 +46,15 @@ export function handleBuddyConfirm({
   setState: Dispatch<SetStateAction<GameState>>;
   setHistory: Dispatch<SetStateAction<Message[]>>;
   buddyType?: string;
+  username?: string;
+  proKeyHash?: string;
 }) {
   const answer = inputValue.trim().toLowerCase();
   setInputValue("");
   setBuddyPendingConfirm(false);
   if (answer === "y" || answer === "yes") {
     setHistory((prev) => [...prev, { role: "user", content: inputValue }]);
-    rollBuddy(setState, setHistory, buddyType);
+    rollBuddy(setState, setHistory, buddyType, username, proKeyHash);
   } else {
     setHistory((prev) =>
       [

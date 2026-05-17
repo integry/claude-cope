@@ -183,6 +183,39 @@ describe("POST /api/score", () => {
     expect(json.profile.current_td).toBe(150000);
   });
 
+  it("returns the embedded profile payload for session-authenticated pro sync without proKeyHash", async () => {
+    const { db } = makeDB({
+      username: "prouser",
+      total_td: 200000,
+      current_td: 150000,
+      corporate_rank: "Mid-Level Googler",
+      license_hash: "pro-hash",
+    } as never, { licenseActive: true });
+    const kv = mockKV({
+      "session_user:test-session": "prouser",
+      "username_session:prouser": "test-session",
+    });
+    const res = await postScore(
+      db,
+      {
+        username: "prouser",
+        currentTD: 150000,
+        totalTDEarned: 200000,
+        inventory: {},
+        upgrades: [],
+      },
+      { headers: { Cookie: "cope_session_id=test-session" }, kv }
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json() as { profile: { total_td: number; current_td: number; corporate_rank: string; multiplier: number } };
+    expect(json.profile).toMatchObject({
+      total_td: 200000,
+      current_td: 150000,
+      corporate_rank: "Mid-Level Googler",
+      multiplier: 1,
+    });
+  });
+
   it("uses cf-ipcountry header for country detection", async () => {
     const { db, bound } = makeDB(undefined);
     await postScore(
@@ -378,6 +411,293 @@ describe("POST /api/score", () => {
     const json = await res.json() as { total_td: number; corporate_rank: string };
     expect(json.total_td).toBe(5800);
     expect(json.corporate_rank).not.toBe("🤡 DevTools Hacker");
+  });
+
+  it("allows session-authenticated pro users to settle score sync without proKeyHash", async () => {
+    const { db } = makeDB({
+      total_td: 5000,
+      current_td: 4800,
+      last_sync_time: new Date().toISOString().replace("Z", "").replace("T", " "),
+      license_hash: "pro-hash",
+      corporate_rank: "Mid-Level Googler",
+      account_id: "acct-123",
+      username: "alice",
+      inventory: "{}",
+      upgrades: "[]",
+      achievements: "[]",
+      buddy_type: null,
+      buddy_is_shiny: 0,
+      unlocked_themes: "[\"default\"]",
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+    } as never, { licenseActive: true });
+    const kv = mockKV({ "session_user:test-session": "alice" });
+
+    const res = await postScore(
+      db,
+      {
+        username: "alice",
+        currentTD: 4800,
+        totalTDEarned: 5000,
+        inventory: {},
+        upgrades: [],
+      },
+      { headers: { Cookie: "cope_session_id=test-session" }, kv },
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json() as { profile: { total_td: number; current_td: number; corporate_rank: string; multiplier: number } };
+    expect(json.profile.total_td).toBe(5000);
+    expect(json.profile.current_td).toBe(4800);
+    expect(json.profile.corporate_rank).toBe("Mid-Level Googler");
+    expect(json.profile.multiplier).toBe(1);
+  });
+
+  it("rejects rename-based pro session repair when a licensed username only matches through a stale rename alias", async () => {
+    const { db } = makeDB({
+      total_td: 5000,
+      current_td: 4800,
+      last_sync_time: new Date().toISOString().replace("Z", "").replace("T", " "),
+      license_hash: "pro-hash",
+      corporate_rank: "Mid-Level Googler",
+      account_id: "acct-123",
+      username: "bob",
+      inventory: "{}",
+      upgrades: "[]",
+      achievements: "[]",
+      buddy_type: null,
+      buddy_is_shiny: 0,
+      unlocked_themes: "[\"default\"]",
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+    } as never, { licenseActive: true });
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+    });
+
+    const res = await postScore(
+      db,
+      {
+        username: "bob",
+        currentTD: 4800,
+        totalTDEarned: 5000,
+        inventory: {},
+        upgrades: [],
+      },
+      { headers: { Cookie: "cope_session_id=test-session" }, kv },
+    );
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      error: "This account is linked to a Pro license — authenticate with proKeyHash",
+    });
+    expect(kv.put).not.toHaveBeenCalledWith("session_user:test-session", "bob", expect.any(Object));
+    expect(kv.put).not.toHaveBeenCalledWith("username_session:bob", "test-session", expect.any(Object));
+  });
+
+  it("rejects rename-based pro session repair when the target username is owned by another session", async () => {
+    const { db } = makeDB({
+      total_td: 5000,
+      current_td: 4800,
+      last_sync_time: new Date().toISOString().replace("Z", "").replace("T", " "),
+      license_hash: "pro-hash",
+      corporate_rank: "Mid-Level Googler",
+      account_id: "acct-123",
+      username: "bob",
+      inventory: "{}",
+      upgrades: "[]",
+      achievements: "[]",
+      buddy_type: null,
+      buddy_is_shiny: 0,
+      unlocked_themes: "[\"default\"]",
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+    } as never, { licenseActive: true });
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+      "username_session:bob": "other-session",
+    });
+
+    const res = await postScore(
+      db,
+      {
+        username: "bob",
+        currentTD: 4800,
+        totalTDEarned: 5000,
+        inventory: {},
+        upgrades: [],
+      },
+      { headers: { Cookie: "cope_session_id=test-session" }, kv },
+    );
+
+    expect(res.status).toBe(403);
+    expect(kv.put).not.toHaveBeenCalledWith("username_session:bob", "test-session", expect.any(Object));
+  });
+
+  it("rejects session-authenticated pro sync when username_session is leased to another session", async () => {
+    const { db } = makeDB({
+      total_td: 5000,
+      current_td: 4800,
+      last_sync_time: new Date().toISOString().replace("Z", "").replace("T", " "),
+      license_hash: "pro-hash",
+      corporate_rank: "Mid-Level Googler",
+      account_id: "acct-123",
+      username: "alice",
+      inventory: "{}",
+      upgrades: "[]",
+      achievements: "[]",
+      buddy_type: null,
+      buddy_is_shiny: 0,
+      unlocked_themes: "[\"default\"]",
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+    } as never, { licenseActive: true });
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "username_session:alice": "other-session",
+    });
+
+    const res = await postScore(
+      db,
+      {
+        username: "alice",
+        currentTD: 4800,
+        totalTDEarned: 5000,
+        inventory: {},
+        upgrades: [],
+      },
+      { headers: { Cookie: "cope_session_id=test-session" }, kv },
+    );
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      error: "This account is linked to a Pro license — authenticate with proKeyHash",
+    });
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects session-authenticated pro sync when rename mappings loop", async () => {
+    const { db } = makeDB({
+      total_td: 5000,
+      current_td: 4800,
+      last_sync_time: new Date().toISOString().replace("Z", "").replace("T", " "),
+      license_hash: "pro-hash",
+      corporate_rank: "Mid-Level Googler",
+      account_id: "acct-123",
+      username: "charlie",
+      inventory: "{}",
+      upgrades: "[]",
+      achievements: "[]",
+      buddy_type: null,
+      buddy_is_shiny: 0,
+      unlocked_themes: "[\"default\"]",
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+    } as never, { licenseActive: true });
+    const kv = mockKV({
+      "session_user:test-session": "alice",
+      "renamed:alice": "bob",
+      "renamed:bob": "alice",
+    });
+
+    const res = await postScore(
+      db,
+      {
+        username: "charlie",
+        currentTD: 4800,
+        totalTDEarned: 5000,
+        inventory: {},
+        upgrades: [],
+      },
+      { headers: { Cookie: "cope_session_id=test-session" }, kv },
+    );
+
+    expect(res.status).toBe(403);
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects session-authenticated pro sync when the license resolves to a different username", async () => {
+    const db = {
+      prepare: (sql: string) => ({
+        bind: (...args: unknown[]) => ({
+          first: async () => {
+            if (sql.includes("FROM licenses")) {
+              return { status: "active", last_activated_at: new Date().toISOString() };
+            }
+            if (sql.includes("FROM user_scores WHERE username = ?")) {
+              return {
+                username: args[0],
+                total_td: 5000,
+                current_td: 4800,
+                last_sync_time: new Date().toISOString().replace("Z", "").replace("T", " "),
+                license_hash: "pro-hash",
+                corporate_rank: "Mid-Level Googler",
+                account_id: "acct-123",
+                inventory: "{}",
+                upgrades: "[]",
+                achievements: "[]",
+                buddy_type: null,
+                buddy_is_shiny: 0,
+                unlocked_themes: "[\"default\"]",
+                active_theme: "default",
+                active_ticket: null,
+                td_multiplier: 1,
+              };
+            }
+            if (sql.includes("FROM user_scores WHERE license_hash = ?")) {
+              return {
+                username: "alice",
+                total_td: 5000,
+                current_td: 4800,
+                corporate_rank: "Mid-Level Googler",
+                inventory: "{}",
+                upgrades: "[]",
+                achievements: "[]",
+                buddy_type: null,
+                buddy_is_shiny: 0,
+                unlocked_themes: "[\"default\"]",
+                active_theme: "default",
+                active_ticket: null,
+                td_multiplier: 1,
+              };
+            }
+            return null;
+          },
+          run: async () => ({ success: true }),
+        }),
+        all: async () => ({ results: [] }),
+        run: async () => ({ success: true }),
+      }),
+      batch: async () => [{ success: true }],
+    };
+    const kv = mockKV({
+      "session_user:test-session": "bob",
+      "username_session:bob": "test-session",
+    });
+
+    const res = await postScore(
+      db,
+      {
+        username: "bob",
+        currentTD: 4800,
+        totalTDEarned: 5000,
+        inventory: {},
+        upgrades: [],
+      },
+      { headers: { Cookie: "cope_session_id=test-session" }, kv },
+    );
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual({
+      error: "Username does not match the license owner",
+    });
   });
 
   it("rejects replayed task bonus (already claimed)", async () => {

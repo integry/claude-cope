@@ -93,6 +93,18 @@ export function normalizePersistedMessage(message: Message): Message {
   return message;
 }
 
+function normalizePersistedChatHistory(chatHistory: Message[]): Message[] {
+  const normalized = chatHistory.map(normalizePersistedMessage);
+  return normalized.filter((message, index) => {
+    const previous = normalized[index - 1];
+    return !(
+      message.displayType === "tip"
+      && previous?.displayType === "tip"
+      && previous.content === message.content
+    );
+  });
+}
+
 export interface BuddyState {
   type: string | null;
   isShiny: boolean;
@@ -261,7 +273,7 @@ function applyDefensiveDefaults(state: GameState): void {
   if (!Array.isArray(state.chatHistory)) {
     state.chatHistory = [];
   }
-  state.chatHistory = state.chatHistory.map(normalizePersistedMessage);
+  state.chatHistory = normalizePersistedChatHistory(state.chatHistory);
   if (!state.commandUsage || typeof state.commandUsage !== "object") {
     state.commandUsage = {};
   }

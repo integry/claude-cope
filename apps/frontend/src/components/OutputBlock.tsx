@@ -9,8 +9,8 @@ import { renderWithSlashLinks } from "./slashCommandLinks";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { appendShareMarker, buildMarkdownComponents, cleanLLMOutput } from "./OutputBlockMarkdown";
 import { BacklogMessage } from "./BacklogMessage";
+import { BUDDY_ICONS, extractBuddyInterjectionBlock, parseBuddyInterjection } from "./buddyConstants";
 import { TicketMessage } from "./TicketMessage";
-import { extractBuddyInterjectionBlock } from "./buddyConstants";
 import { getTipRenderData, type TipRenderData } from "../hooks/tipMessageUtils";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
@@ -97,27 +97,20 @@ function TokenCounter({ tokensSent, tokensReceived }: { tokensSent?: number; tok
   );
 }
 
-type BuddyRenderData = {
-  isBuddyInterjection: boolean;
-  buddyBlock: string;
-  body: string;
-};
+type BuddyRenderData = { isBuddyInterjection: boolean; buddyBlock: string; body: string };
+type ParsedBuddyBlock = { art: string; speech: string; type: string };
 
 function getBuddyRenderData(message: Message): BuddyRenderData {
-  if (message.role !== "warning") {
-    return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
-  }
-
+  if (message.role !== "warning") return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
   const buddyBlock = extractBuddyInterjectionBlock(message.content, message.buddyType);
-  if (!buddyBlock) {
-    return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
-  }
+  if (!buddyBlock) return { isBuddyInterjection: false, buddyBlock: "", body: message.content };
+  return { isBuddyInterjection: true, buddyBlock: buddyBlock.block, body: buddyBlock.body };
+}
 
-  return {
-    isBuddyInterjection: true,
-    buddyBlock: buddyBlock.block,
-    body: buddyBlock.body,
-  };
+function getParsedBuddyBlock(buddyBlock: string): ParsedBuddyBlock | null {
+  const parsed = parseBuddyInterjection(buddyBlock);
+  if (!parsed) return null;
+  return { art: BUDDY_ICONS[parsed.type] ?? "", speech: parsed.speech, type: parsed.type };
 }
 
 function getContainerClass(message: Message, isNew: boolean): string {
@@ -145,10 +138,7 @@ function getMessageFlags(role: string, content: string, isBuddyInterjection: boo
   return { useMarkdown, isAwaitingResponse, isStreaming };
 }
 
-function renderTipContent(
-  tipData: TipRenderData,
-  onSlashCommand?: (command: string, action: SlashCommandAction) => void,
-) {
+function renderTipContent(tipData: TipRenderData, onSlashCommand?: (command: string, action: SlashCommandAction) => void) {
   const linkifiedBody = onSlashCommand ? renderWithSlashLinks(tipData.body, onSlashCommand) : tipData.body;
   return (
     <div className="terminal-tip-output">
@@ -158,15 +148,10 @@ function renderTipContent(
   );
 }
 
-function renderBuddyContent(
-  buddyData: BuddyRenderData,
-  shareNode: React.ReactNode,
-  mdComponents: ReturnType<typeof buildMarkdownComponents>,
-) {
-  const processedBody = buddyData.body ? appendShareMarker(cleanLLMOutput(buddyData.body), Boolean(shareNode)) : "";
+function renderBuddyFallback(buddyBlock: string, processedBody: string, mdComponents: ReturnType<typeof buildMarkdownComponents>) {
   return (
     <div className="space-y-3">
-      <pre className="whitespace-pre font-mono">{buddyData.buddyBlock}</pre>
+      <pre className="max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-mono">{buddyBlock}</pre>
       {processedBody && (
         <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
           {processedBody}
@@ -176,23 +161,46 @@ function renderBuddyContent(
   );
 }
 
-function renderMarkdownContent({
+function renderBuddyInterjection(
+  buddyData: BuddyRenderData,
+  shareNode: React.ReactNode,
+  mdComponents: ReturnType<typeof buildMarkdownComponents>,
+) {
+  const processedBody = buddyData.body ? appendShareMarker(cleanLLMOutput(buddyData.body), Boolean(shareNode)) : "";
+  const parsedBuddyBlock = getParsedBuddyBlock(buddyData.buddyBlock);
+  if (!parsedBuddyBlock) return renderBuddyFallback(buddyData.buddyBlock, processedBody, mdComponents);
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+        <pre className="m-0 whitespace-pre font-mono leading-tight">{parsedBuddyBlock.art}</pre>
+        <div className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          <div className="font-mono">[{parsedBuddyBlock.type}]</div>
+          <div>{parsedBuddyBlock.speech}</div>
+        </div>
+      </div>
+      {processedBody && (
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeSanitize]}>
+          {processedBody}
+        </ReactMarkdown>
+      )}
+    </div>
+  );
+}
+
+type MarkdownMessageRenderOptions = {
+  content: string; shouldTypewrite: boolean; visibleContent: string; isStreaming: boolean;
+  isTyping: boolean; shareNode: React.ReactNode; mdComponents: ReturnType<typeof buildMarkdownComponents>;
+};
+
+function renderMarkdownMessage({
   content,
-  visibleContent,
   shouldTypewrite,
+  visibleContent,
   isStreaming,
   isTyping,
   shareNode,
   mdComponents,
-}: {
-  content: string;
-  visibleContent: string;
-  shouldTypewrite: boolean;
-  isStreaming: boolean;
-  isTyping: boolean;
-  shareNode: React.ReactNode;
-  mdComponents: ReturnType<typeof buildMarkdownComponents>;
-}) {
+}: MarkdownMessageRenderOptions) {
   const rawContent = shouldTypewrite ? visibleContent : content;
   const processedContent = appendShareMarker(cleanLLMOutput(rawContent), Boolean(shareNode));
   const showCursor = isStreaming || isTyping;
@@ -206,44 +214,35 @@ function renderMarkdownContent({
   );
 }
 
-function renderPlainTextContent(
-  body: string,
-  onSlashCommand?: (command: string, action: SlashCommandAction) => void,
-) {
-  return onSlashCommand ? renderWithSlashLinks(body, onSlashCommand) : body;
+function renderPlainMessage(role: Message["role"], content: string, body: string, isAwaitingResponse: boolean, onSlashCommand?: (command: string, action: SlashCommandAction) => void) {
+  if (isAwaitingResponse) return <>{content}</>;
+  if (role === "loading") return null;
+  const linkify = (text: string): React.ReactNode => (onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text);
+  return <>{linkify(body)}</>;
 }
 
-function getNonMarkdownMessageContent({
+type MessageContentRenderContext = {
+  message: Message; tipData: TipRenderData; buddyData: BuddyRenderData; flags: ReturnType<typeof getMessageFlags>;
+  markdown: MarkdownMessageRenderOptions; onSlashCommand: ((command: string, action: SlashCommandAction) => void) | undefined;
+};
+
+function renderMessageContentBody({
   message,
-  role,
   tipData,
   buddyData,
+  flags,
+  markdown,
   onSlashCommand,
-  shareNode,
-  mdComponents,
-  isAwaitingResponse,
-}: {
-  message: Message;
-  role: Message["role"];
-  tipData: TipRenderData;
-  buddyData: BuddyRenderData;
-  onSlashCommand?: (command: string, action: SlashCommandAction) => void;
-  shareNode: React.ReactNode;
-  mdComponents: ReturnType<typeof buildMarkdownComponents>;
-  isAwaitingResponse: boolean;
-}): React.ReactNode {
-  if (message.backlogDisplay && role === "system") {
-    return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
-  }
-  if (message.ticketDisplay && role === "system") {
-    return <TicketMessage ticket={message.ticketDisplay} onSlashCommand={onSlashCommand} />;
-  }
+}: MessageContentRenderContext) {
+  const { role, content } = message;
+  const { useMarkdown, isAwaitingResponse, isStreaming } = flags;
+  if (message.backlogDisplay && role === "system") return <BacklogMessage backlog={message.backlogDisplay} onSlashCommand={onSlashCommand} />;
+  if (message.ticketDisplay && role === "system") return <TicketMessage ticket={message.ticketDisplay} onSlashCommand={onSlashCommand} />;
   if (role === "user") return null;
   if (tipData.isTip) return renderTipContent(tipData, onSlashCommand);
-  if (buddyData.isBuddyInterjection) return renderBuddyContent(buddyData, shareNode, mdComponents);
-  if (isAwaitingResponse) return message.content;
-  if (role !== "loading") return renderPlainTextContent(buddyData.body, onSlashCommand);
-  return null;
+  if (buddyData.isBuddyInterjection) return renderBuddyInterjection(buddyData, markdown.shareNode, markdown.mdComponents);
+  if (useMarkdown || isStreaming) return renderMarkdownMessage(markdown);
+  return renderPlainMessage(role, content, buddyData.body, isAwaitingResponse, onSlashCommand);
 }
 
 function MessageContent({
@@ -261,37 +260,27 @@ function MessageContent({
 }) {
   const { role, content } = message;
   const tipData = getTipRenderData(message);
-  const hasStructuredDisplay = Boolean(message.backlogDisplay || message.ticketDisplay);
-  const { useMarkdown, isAwaitingResponse, isStreaming } = getMessageFlags(
-    role,
-    content,
-    buddyData.isBuddyInterjection,
-    tipData.isTip,
-  );
+  const flags = getMessageFlags(role, content, buddyData.isBuddyInterjection, tipData.isTip);
+  const { useMarkdown } = flags;
   // Only typewrite actual AI responses (system role). Scaffold messages (ads,
   // queue warnings) render instantly so they don't vanish mid-animation when
   // the fixed delay timers remove them.
   const shouldTypewrite = isNew && useMarkdown && role === "system";
   const { visibleContent, isTyping } = useTypewriter(content, shouldTypewrite);
   const mdComponents = useMemo(() => buildMarkdownComponents(onSlashCommand, shareNode), [onSlashCommand, shareNode]);
-  if ((useMarkdown && !hasStructuredDisplay) || isStreaming) {
-    return renderMarkdownContent({
-      content,
-      visibleContent,
-      shouldTypewrite,
-      isStreaming,
-      isTyping,
-      shareNode,
-      mdComponents,
-    });
-  }
-  return (
-    <>
-      {getNonMarkdownMessageContent(
-        { message, role, tipData, buddyData, onSlashCommand, shareNode, mdComponents, isAwaitingResponse },
-      )}
-    </>
-  );
+  const markdown = {
+    content,
+    shouldTypewrite,
+    visibleContent,
+    isStreaming: flags.isStreaming,
+    isTyping,
+    shareNode,
+    mdComponents,
+  };
+
+  // Backlog messages intentionally bypass markdown rendering so the responsive
+  // table layout stays intact while `message.content` remains as a plain-text fallback.
+  return renderMessageContentBody({ message, tipData, buddyData, flags, markdown, onSlashCommand });
 }
 
 function CostDisplay({ cost }: { cost: number }) {
@@ -340,9 +329,9 @@ function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, 
   return (
     <div className={`group ${getContainerClass(message, isNew)}`}>
       {message.role === "user" && (
-        <div className="inline-block bg-gray-200 text-gray-900 px-2 py-1 sm:px-3 sm:py-1.5 font-bold">
-          <span className="text-gray-500 mr-1">{promptString}</span>
-          {message.content}
+        <div className="inline-block max-w-full bg-gray-200 text-gray-900 px-2 py-1 sm:px-3 sm:py-1.5 font-bold whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          <span className="text-gray-500 mr-1 whitespace-pre">{promptString}</span>
+          <span>{message.content}</span>
         </div>
       )}
       {message.role === "loading" && !isAwaitingResponse && <Spinner />}
@@ -362,15 +351,7 @@ function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, 
 
 type OutputBlockProps = Parameters<typeof OutputBlock>[0];
 
-const MESSAGE_COMPARISON_FIELDS = [
-  "role",
-  "content",
-  "displayType",
-  "shareClaim",
-  "buddyType",
-  "backlogDisplay",
-  "ticketDisplay",
-] as const satisfies readonly (keyof Message)[];
+const MESSAGE_COMPARISON_FIELDS = ["role", "content", "displayType", "shareClaim", "buddyType", "backlogDisplay", "ticketDisplay"] as const satisfies readonly (keyof Message)[];
 
 function messagesEqual(a: Message | undefined, b: Message | undefined): boolean {
   return a === b || MESSAGE_COMPARISON_FIELDS.every((field) => a?.[field] === b?.[field]);

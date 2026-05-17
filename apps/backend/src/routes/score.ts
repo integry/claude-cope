@@ -96,19 +96,14 @@ function detectCountry(c: { req: { raw: unknown; header: (name: string) => strin
   return body.country || cfCountry || c.req.header("cf-ipcountry") || "Unknown";
 }
 
-async function syncProUser(db: D1Database, body: ScoreBody) {
-  if (!body.proKeyHash) return null;
-
-  // Verify the license is still active — revoked licenses must not use the pro path.
-  const licenseActive = await isLicenseActive(db, body.proKeyHash);
-  if (!licenseActive) return null;
-
-  // Validate ownership: look up the profile by license hash, not by username,
-  // to prevent a caller from submitting any truthy proKeyHash with another user's username.
-  const profileByHash = await getProfileByLicenseHash(db, body.proKeyHash);
-  if (!profileByHash || profileByHash.username !== body.username) return null;
-
-  const profile = profileByHash;
+async function syncResolvedProUser(
+  db: D1Database,
+  body: ScoreBody,
+  profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>,
+) {
+  if (profile.username !== body.username) {
+    return null;
+  }
 
   const { validatedTaskBonus, validatedClaims } = await validateTaskBonuses(db, body.username, body.completedTaskIds);
 
@@ -206,6 +201,9 @@ function buildScoreBatch(db: D1Database, opts: {
 type OwnershipCheckResult =
   | { error: string; deferredKvWrites?: undefined }
   | { error: null; deferredKvWrites: (() => Promise<void>) | null; accountId: string };
+type SessionAuthorizationResult =
+  | { authorized: false; deferredKvWrites?: undefined }
+  | { authorized: true; deferredKvWrites: (() => Promise<void>) | null };
 
 const SESSION_USERNAME_TTL_SECONDS = 60 * 60 * 24 * 365;
 const MAX_SESSION_RENAME_HOPS = 5;
@@ -232,6 +230,68 @@ async function resolveRenamedSessionUsername(kv: KVNamespace, startUsername: str
   }
 
   return false;
+}
+
+async function canSessionClaimUsername(
+  kv: KVNamespace,
+  sessionId: string,
+  username: string,
+): Promise<boolean> {
+  const existingOwner = await kv.get(accountKvKeys.usernameSession(username));
+  return !existingOwner || existingOwner === sessionId;
+}
+
+async function isSessionAuthorizedForUsername(
+  kv: KVNamespace,
+  sessionId: string,
+  username: string,
+  options?: { allowRenameRepair?: boolean },
+): Promise<SessionAuthorizationResult> {
+  const allowRenameRepair = options?.allowRenameRepair ?? true;
+  // This fallback is intentionally narrower than "any session with this cookie can write".
+  // When a legacy Pro row is synced without `proKeyHash`, we trust only server-issued KV
+  // ownership state for this exact username: a direct session_user match, an exact
+  // username_session lease for the requested username, or a bounded rename chain that can
+  // safely repair both mappings. Do not broaden these conditions without adding adversarial
+  // coverage for stale, cyclic, or conflicting KV state.
+  const sessionUsername = await kv.get(accountKvKeys.sessionUser(sessionId));
+  const existingOwner = await kv.get(accountKvKeys.usernameSession(username));
+  if (sameUsername(sessionUsername, username)) {
+    if (existingOwner && existingOwner !== sessionId) {
+      return { authorized: false };
+    }
+    if (sessionUsername === username && existingOwner === sessionId) {
+      return { authorized: true, deferredKvWrites: null };
+    }
+    return {
+      authorized: true,
+      deferredKvWrites: async () => {
+        await kv.put(accountKvKeys.sessionUser(sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+        await kv.put(accountKvKeys.usernameSession(username), sessionId, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+      },
+    };
+  }
+
+  if (existingOwner === sessionId) {
+    return {
+      authorized: true,
+      deferredKvWrites: async () => {
+        await kv.put(accountKvKeys.sessionUser(sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+      },
+    };
+  }
+
+  if (!allowRenameRepair) return { authorized: false };
+  if (!sessionUsername) return { authorized: false };
+  if (!(await resolveRenamedSessionUsername(kv, sessionUsername, username))) return { authorized: false };
+  if (!(await canSessionClaimUsername(kv, sessionId, username))) return { authorized: false };
+  return {
+    authorized: true,
+    deferredKvWrites: async () => {
+      await kv.put(accountKvKeys.sessionUser(sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+      await kv.put(accountKvKeys.usernameSession(username), sessionId, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+    },
+  };
 }
 
 /**
@@ -277,7 +337,11 @@ async function verifyFreeSessionOwnership(
       };
     }
 
-    if (sessionUsername && await resolveRenamedSessionUsername(kv, sessionUsername, username)) {
+    if (
+      sessionUsername
+      && await resolveRenamedSessionUsername(kv, sessionUsername, username)
+      && await canSessionClaimUsername(kv, sessionId, username)
+    ) {
       const accountId = existingRow.account_id ?? crypto.randomUUID();
       return {
         error: null,
@@ -337,10 +401,11 @@ score.post("/", async (c) => {
   // instead of falling through to the legacy username-keyed free path.
   if (body.proKeyHash) {
     const resolution = await resolveProUser(db, body.proKeyHash, body.username);
-    if (resolution.error) {
+    if (resolution.profile === null) {
       return c.json({ error: resolution.error }, resolution.code === "revoked" ? 403 : 409);
     }
-    const updated = await syncProUser(db, body);
+    const { profile } = resolution;
+    const updated = await syncResolvedProUser(db, body, profile);
     if (updated) return c.json({ profile: updated });
     return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }
@@ -352,7 +417,36 @@ score.post("/", async (c) => {
     .first<{ total_td: number; current_td: number; last_sync_time: string; license_hash: string | null; account_id: string | null }>();
 
   if (existingRow?.license_hash) {
-    return c.json({ error: "This account is linked to a Pro license — authenticate with proKeyHash" }, 403);
+    const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+    const sessionId = c.get("sessionId");
+    if (!kv) {
+      return c.json({ error: "Cannot verify session ownership — please retry" }, 503);
+    }
+    const sessionAuthorization = await isSessionAuthorizedForUsername(kv, sessionId, body.username, {
+      allowRenameRepair: false,
+    });
+    if (!sessionAuthorization.authorized) {
+      return c.json({ error: "This account is linked to a Pro license — authenticate with proKeyHash" }, 403);
+    }
+    const licenseActive = await isLicenseActive(db, existingRow.license_hash);
+    if (!licenseActive) {
+      return c.json({ error: "License has been revoked or is not active" }, 403);
+    }
+    const profile = await getProfileByLicenseHash(db, existingRow.license_hash);
+    if (!profile) {
+      return c.json({ error: "Pro score sync failed — please retry" }, 500);
+    }
+    if (profile.username !== body.username) {
+      return c.json({ error: "Username does not match the license owner" }, 409);
+    }
+    const updated = await syncResolvedProUser(db, body, profile);
+    if (updated) {
+      if (sessionAuthorization.deferredKvWrites) {
+        await sessionAuthorization.deferredKvWrites();
+      }
+      return c.json({ profile: updated });
+    }
+    return c.json({ error: "Pro score sync failed — please retry" }, 500);
   }
 
   // Session-based ownership: both new and existing free users require session verification.

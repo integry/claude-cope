@@ -36,11 +36,13 @@ type TerminalViewProps = OverlayVisibility & {
   activeTheme: GameState["activeTheme"];
   regressionGlitch: string | null | undefined;
   anyOverlayOpen: boolean;
+  isMobileViewport: boolean;
   inputRef: RefObject<HTMLInputElement | null>;
   closeAllOverlaysPreservingNag: () => void;
   onlineCount: number;
   rank: GameState["economy"]["currentRank"];
   state: GameState;
+  handleHomeClick: () => void;
   handleProfileClick: () => void;
   setShowHelp: Dispatch<SetStateAction<boolean>>;
   setShowAbout: Dispatch<SetStateAction<boolean>>;
@@ -65,9 +67,11 @@ type TerminalViewProps = OverlayVisibility & {
   runSlashCommand: (command: string) => void;
   inputValue: string;
   suggestedReply: string | null;
+  acceptSuggestedReply: (options?: { submit?: boolean }) => void;
   isProcessing: boolean;
   handleChange: (e: ChangeEvent<HTMLInputElement>) => void;
   handleKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
+  handleSubmit: () => void;
   buyGenerator: (generatorId: string, amount?: number) => boolean;
   buyUpgrade: (upgradeId: string) => boolean;
   buyTheme: (themeId: string) => boolean;
@@ -113,11 +117,13 @@ export function TerminalView({
   activeTheme,
   regressionGlitch,
   anyOverlayOpen,
+  isMobileViewport,
   inputRef,
   closeAllOverlaysPreservingNag,
   onlineCount,
   rank,
   state,
+  handleHomeClick,
   handleProfileClick,
   setShowHelp,
   setShowAbout,
@@ -139,9 +145,11 @@ export function TerminalView({
   runSlashCommand,
   inputValue,
   suggestedReply,
+  acceptSuggestedReply,
   isProcessing,
   handleChange,
   handleKeyDown,
+  handleSubmit,
   buyGenerator,
   buyUpgrade,
   buyTheme,
@@ -198,7 +206,7 @@ export function TerminalView({
         color: "var(--color-text)",
       }}
       onClick={() => {
-        if (!anyOverlayOpen && !window.getSelection()?.toString()) {
+        if (!isMobileViewport && !anyOverlayOpen && !window.getSelection()?.toString()) {
           inputRef.current?.focus();
         }
       }}
@@ -228,6 +236,7 @@ export function TerminalView({
           isBYOK={BYOK_ENABLED && !!state.apiKey}
           isMax={!!state.proKey || !!state.proKeyHash}
           byokTotalCost={state.byokTotalCost}
+          onHomeClick={handleHomeClick}
           onProfileClick={handleProfileClick}
           onHelpClick={() => {
             closeAllOverlaysPreservingNag();
@@ -237,11 +246,27 @@ export function TerminalView({
             closeAllOverlaysPreservingNag();
             setShowAbout(true);
           }}
+          onStoreClick={() => {
+            closeAllOverlaysPreservingNag();
+            setShowStore(true);
+          }}
+          onLeaderboardClick={() => {
+            closeAllOverlaysPreservingNag();
+            setShowLeaderboard(true);
+          }}
+          onAchievementsClick={() => {
+            closeAllOverlaysPreservingNag();
+            setShowAchievements(true);
+          }}
+          onContactClick={() => {
+            closeAllOverlaysPreservingNag();
+            setShowContact(true);
+          }}
           onSlashMenuClick={() => {
             setInputValue("/");
             setSlashQuery("/");
             setSlashIndex(0);
-            inputRef.current?.focus();
+            if (!isMobileViewport) inputRef.current?.focus();
           }}
           onUpgradeClick={() => {
             closeAllOverlaysPreservingNag();
@@ -294,13 +319,15 @@ export function TerminalView({
               disabled={isProcessing || isBooting || anyOverlayOpen}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
+              onSubmit={handleSubmit}
               promptString={promptString}
               placeholder={suggestedReply ?? undefined}
+              onPlaceholderAccept={acceptSuggestedReply}
             />
           </div>
         </div>
         {state.buddy.type && (
-          <div className="terminal-buddy-dock">
+          <div className="terminal-buddy-dock hidden md:flex">
             <BuddyOverlay buddy={state.buddy} />
           </div>
         )}

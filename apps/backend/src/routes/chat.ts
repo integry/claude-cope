@@ -170,29 +170,9 @@ export function rewriteTutorialLeakIfNeeded(
 
 Congratulations: you asked for a simple lesson and summoned a workplace incident instead.`;
 
-  return ensureUserNextMessageTag(rewritten, previousUserNextMessage);
+  void previousUserNextMessage;
+  return rewritten;
 }
-
-const UNHINGED_USER_NEXT_MESSAGE_FALLBACKS = [
-  "Which part detonates first?",
-  "Which bad idea catches fire next?",
-  "Which part did compliance invent?",
-  "Which relic screams the loudest?",
-  "What explodes if we try that?",
-  "Which part matters here?",
-  "Which suspicious blob is doing the damage?",
-  "What fresh sabotage did that summon?",
-  "Which lie in here shipped?",
-  "Which switch looks the most cursed?",
-  "What breaks if we try it?",
-  "Which knob runs production?",
-  "Which part does nobody own?",
-  "Which gremlin signed off this?",
-  "What detonates after deploy?",
-  "Which option is pretending to be safe?",
-  "Which secret tunnel is leaking?",
-  "Is that the bad one?",
-] as const;
 
 const BROKEN_REPLY_FALLBACKS = [
   "The reply engine ate its own stack and is now hallucinating compliance paperwork.",
@@ -200,32 +180,6 @@ const BROKEN_REPLY_FALLBACKS = [
   "The answer collapsed into enterprise sludge and had to be scraped off the circuit board.",
   "The response escaped into a sidecar and left only a smoking crater where the help was supposed to be.",
 ] as const;
-
-function normalizeReplySeedText(content: string): string {
-  return content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function extractConcreteUserNextToken(text: string): string | null {
-  const extractors = [
-    () => text.match(/`([^`]{2,40})`/)?.[1],
-    () => text.match(/\b0x[0-9A-Fa-f]+\b/)?.[0],
-    () => text.match(/\boffset\s+\d+\b/i)?.[0],
-    () => text.match(/\brestartPolicy\b/)?.[0],
-    () => text.match(/\borphaned pods?\b/i)?.[0],
-    () => text.match(/\blegacy code\b/i)?.[0],
-    () => text.match(/\bConfigMap\b/)?.[0],
-    () => text.match(/\bKubernetes\s+\d+(?:\.\d+)?\b/i)?.[0],
-    () => text.match(/\bmagic(?:=true)?\b/i)?.[0],
-    () => text.match(/\b[a-z]+-[a-z0-9_.-]{3,}\b/i)?.[0],
-  ];
-
-  for (const extract of extractors) {
-    const token = extract();
-    if (token) return token;
-  }
-
-  return null;
-}
 
 function hashTextForFallback(text: string): number {
   let hash = 0;
@@ -241,104 +195,78 @@ function buildBrokenReplyFallback(content: string): string {
   ];
 }
 
-// This fallback intentionally handles a broad set of content patterns.
-function buildFallbackUserNextMessage(content: string): string {
-  const text = normalizeReplySeedText(content);
-  const token = extractConcreteUserNextToken(text);
+function collapseRepeatedUserNextMessage(text: string | null | undefined): string | null {
+  const trimmed = text?.trim();
+  if (!trimmed) return null;
 
-  if (token) {
-    if (/^0x/i.test(token)) return `What breaks on ${token}?`;
-    if (/^offset\s+\d+/i.test(token)) return `What uses ${token}?`;
-    if (/^restartPolicy$/i.test(token)) return "Who set restartPolicy Never?";
-    if (/orphaned pods?/i.test(token)) return "Which pod lost its owner?";
-    if (/legacy code/i.test(token)) return "Can we delete the legacy file?";
-    if (/^magic(?:=true)?$/i.test(token)) return "Who enabled the magic flag?";
-    if (/^[a-z]+-[a-z0-9_.-]{3,}$/i.test(token)) return `Who added ${token}?`;
-    return `What breaks if I remove ${token}?`;
+  const squashed = trimmed.replace(/\s+/g, " ");
+  const half = Math.floor(squashed.length / 2);
+  if (
+    squashed.length % 2 === 0 &&
+    half >= 8 &&
+    squashed.slice(0, half) === squashed.slice(half)
+  ) {
+    return squashed.slice(0, half).trim() || null;
   }
 
-  if (/logs?/i.test(text)) return "Which part is lying, then?";
-  if (/cluster/i.test(text)) return "Which cluster thing caught fire?";
-  if (/version control/i.test(text)) return "Which relic rewrote history?";
-  return UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
-    hashTextForFallback(text) % UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length
-  ];
+  return squashed;
 }
 
 function extractUserNextMessage(content: string): string | null {
   const match = content.match(/\[USER_NEXT_MESSAGE:\s*([^\]]*)\]/i);
-  return match?.[1]?.trim() || null;
+  return collapseRepeatedUserNextMessage(match?.[1]);
 }
 
 function normalizeComparableUserNextMessage(text: string | null | undefined): string {
   return (text ?? "")
     .trim()
     .toLowerCase()
-    .replace(/[.!?]+$/g, "")
-    .replace(/\s+/g, " ");
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-// This alternate picker mirrors the broad token heuristics in the primary fallback.
-function buildAlternateUserNextMessage(content: string, previous: string | null | undefined): string {
-  const previousNormalized = normalizeComparableUserNextMessage(previous);
-  const text = normalizeReplySeedText(content);
-  const token = extractConcreteUserNextToken(text);
+function hasOverlappingUserNextMessage(
+  text: string | null | undefined,
+  latestUserMessage: string | null | undefined,
+): boolean {
+  const suggestion = normalizeComparableUserNextMessage(text);
+  const latest = normalizeComparableUserNextMessage(latestUserMessage);
+  if (!suggestion || !latest) return false;
+  if (suggestion === latest) return true;
+  if (suggestion.length >= 12 && latest.includes(suggestion)) return true;
+  if (latest.length >= 12 && suggestion.includes(latest)) return true;
 
-  const candidates = token
-    ? /^0x/i.test(token)
-      ? [
-          `What breaks on ${token}?`,
-          `Who introduced ${token}?`,
-          `Can we strip out ${token}?`,
-        ]
-      : /^offset\s+\d+/i.test(token)
-        ? [
-            `What uses ${token}?`,
-            `Who added ${token}?`,
-            `Can we strip out ${token}?`,
-          ]
-        : /^restartPolicy$/i.test(token)
-          ? [
-              "Who chose restartPolicy Never?",
-              "Can we delete restartPolicy Never?",
-              "What breaks after restartPolicy Never?",
-            ]
-          : /orphaned pods?/i.test(token)
-            ? [
-                "Which pod lost its owner?",
-                "Who orphaned the pod?",
-                "Can we delete the orphaned pod?",
-              ]
-            : /legacy code/i.test(token)
-              ? [
-                  "Can we delete the legacy file?",
-                  "Who still uses the legacy file?",
-                  "What breaks if we rip it out?",
-                ]
-              : /^magic(?:=true)?$/i.test(token)
-                ? [
-                    "Who enabled the magic flag?",
-                    "What breaks if we remove magic?",
-                    "Can we kill the magic flag?",
-                  ]
-                : /^[a-z]+-[a-z0-9_.-]{3,}$/i.test(token)
-                  ? [
-                      `Who added ${token}?`,
-                      `What breaks if we remove ${token}?`,
-                      `Can we delete ${token}?`,
-                    ]
-                  : [
-                      `Who dragged in ${token}?`,
-                      `What breaks if we remove ${token}?`,
-                      `Can we delete ${token}?`,
-                    ]
-    : Array.from({ length: UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length }, (_, offset) =>
-        UNHINGED_USER_NEXT_MESSAGE_FALLBACKS[
-          (hashTextForFallback(text) + offset) % UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.length
-        ]);
+  const suggestionWords = suggestion.split(" ").filter(Boolean);
+  const latestWords = latest.split(" ").filter(Boolean);
+  if (suggestionWords.length < 4 || latestWords.length < 4) return false;
 
-  return candidates.find((candidate) => normalizeComparableUserNextMessage(candidate) !== previousNormalized)
-    ?? buildFallbackUserNextMessage(content);
+  const latestSet = new Set(latestWords);
+  const overlap = suggestionWords.filter((word) => latestSet.has(word)).length;
+  return overlap >= Math.min(suggestionWords.length, latestWords.length) - 1;
+}
+
+function hasNearExactHelperOverlap(
+  text: string | null | undefined,
+  latestUserMessage: string | null | undefined,
+): boolean {
+  const suggestion = normalizeComparableUserNextMessage(text);
+  const latest = normalizeComparableUserNextMessage(latestUserMessage);
+  if (!suggestion || !latest) return false;
+  if (suggestion === latest) return true;
+  if (suggestion.length >= 18 && latest.includes(suggestion)) return true;
+  if (latest.length >= 18 && suggestion.includes(latest)) return true;
+  return false;
+}
+
+function deriveLatestUserTone(latestUserMessage: string | null | undefined): string | null {
+  const latest = (latestUserMessage ?? "").trim();
+  if (!latest) return null;
+  if (/\?/.test(latest)) return "confused and asking questions";
+  if (/\b(?:just|fine|whatever|anyway)\b/i.test(latest)) return "impatient and shrugging";
+  if (/\b(?:please|help|why)\b/i.test(latest)) return "frustrated and stuck";
+  return "casual and slightly reckless";
 }
 
 function isGenericUserNextMessage(text: string): boolean {
@@ -355,7 +283,6 @@ function isGenericUserNextMessage(text: string): boolean {
       "show me the error logs",
       "run it now",
       "show me the detail",
-      ...UNHINGED_USER_NEXT_MESSAGE_FALLBACKS.map((msg) => msg.toLowerCase().replace(/[.!?]+$/g, "")),
     ].includes(normalized) ||
     isBannedUserNextMessagePattern(text) ||
     /show\s+(?:me\s+)?the\s+cursed\s+detail/i.test(text)
@@ -369,30 +296,111 @@ function isBannedUserNextMessagePattern(text: string): boolean {
     /^why are .+ involved$/.test(normalized) ||
     /^what is .+ doing there$/.test(normalized) ||
     /^what are .+ doing there$/.test(normalized) ||
-    /^why .+ of all things$/.test(normalized)
+    /^why .+ of all things$/.test(normalized) ||
+    /^who dragged in .+$/.test(normalized) ||
+    /^who introduced .+$/.test(normalized) ||
+    /^who added .+$/.test(normalized) ||
+    /^who enabled .+$/.test(normalized) ||
+    /^who chose .+$/.test(normalized) ||
+    /^what breaks on .+$/.test(normalized) ||
+    /^what uses .+$/.test(normalized) ||
+    /^what breaks (?:if i|after) .+$/.test(normalized) ||
+    /^can we (?:delete|strip out|kill) .+$/.test(normalized)
   );
 }
 
-function shouldReplaceUserNextMessage(text: string | null | undefined, previousUserNextMessage?: string | null): boolean {
+function isOverlyTechnicalUserNextMessage(text: string): boolean {
+  const trimmed = text.trim();
+  const normalized = normalizeComparableUserNextMessage(text);
+  if (!trimmed) return false;
+
+  if (/`[^`]+`/.test(trimmed)) return true;
+  if (/\b[a-z0-9_.-]+\.(?:yaml|yml|json|toml|ini|env|sh|js|ts|tsx|jsx|py|go|java|rb)\b/i.test(trimmed)) return true;
+  if (/\bsha256:[a-f0-9]{8,}\b/i.test(trimmed)) return true;
+  if (/\b0x[0-9a-f]+\b/i.test(trimmed)) return true;
+  if (/[{}[\]=]|::|&&|\$\(|\|\|/.test(trimmed)) return true;
+
+  return (
+    /\b(?:kubectl|docker|yaml|json|digest|image tag|initcontainer|configmap|kubernetes|pod|pods|cluster|cron|namespace|livenessprobe|restartpolicy|sidecar|artifact|manifest|registry|env var|stack trace|repo|repository|branch|lockfile|node_modules|image|container|ci|pipeline|reflog)\b/i.test(trimmed) ||
+    /\boption\s+\d+\b/i.test(trimmed) ||
+    /^(?:how do i|how do we|what'?s|show me|why does|can i)\s+.+\b(?:pull|deploy|patch|mount|grep|apply|delete|rollback|reboot|trigger|configure|inspect|tail|watch)\b/i.test(normalized)
+  );
+}
+
+function isOverlyDramaticUserNextMessage(text: string): boolean {
+  const normalized = normalizeComparableUserNextMessage(text);
+  if (!normalized) return false;
+
+  return (
+    /\b(?:production|prod|launch|crash|explode|self-destruct|detonate|kill|destroy|wipe|obliterate|burn it all|set it on fire)\b/i.test(normalized) ||
+    /\bdelete (?:everything|it all|the whole thing)\b/i.test(normalized) ||
+    /\bhit delete\b/i.test(normalized) ||
+    /^(?:should we|can we|what'?s the best way to|how do i|i(?:'|’)m going to|i will|i(?:'|’)ll just)\s+.+\b(?:ship|push|deploy|launch|crash|break|destroy|wipe|delete)\b/i.test(normalized)
+  );
+}
+
+function shouldReplaceUserNextMessage(
+  text: string | null | undefined,
+  previousUserNextMessage?: string | null,
+  latestUserMessage?: string | null,
+): boolean {
   if (!text?.trim()) return true;
   if (isGenericUserNextMessage(text)) return true;
+  if (isOverlyTechnicalUserNextMessage(text)) return true;
+  if (isOverlyDramaticUserNextMessage(text)) return true;
+  if (hasOverlappingUserNextMessage(text, latestUserMessage)) return true;
   return (
     normalizeComparableUserNextMessage(text) ===
     normalizeComparableUserNextMessage(previousUserNextMessage)
   );
 }
 
-function ensureUserNextMessageTag(content: string, previousUserNextMessage?: string | null): string {
+function explainUserNextReplacement(
+  text: string | null | undefined,
+  previousUserNextMessage?: string | null,
+  latestUserMessage?: string | null,
+): string {
+  if (!text?.trim()) return "empty";
+  if (isGenericUserNextMessage(text)) return "generic_or_banned";
+  if (isOverlyTechnicalUserNextMessage(text)) return "overly_technical";
+  if (isOverlyDramaticUserNextMessage(text)) return "overly_dramatic";
+  if (hasOverlappingUserNextMessage(text, latestUserMessage)) return "overlaps_latest_user";
+  if (
+    normalizeComparableUserNextMessage(text) ===
+    normalizeComparableUserNextMessage(previousUserNextMessage)
+  ) {
+    return "repeats_previous_user_next";
+  }
+  return "kept";
+}
+
+function explainHelperUserNextAcceptance(
+  text: string | null | undefined,
+  previousUserNextMessage?: string | null,
+  latestUserMessage?: string | null,
+): string {
+  if (!text?.trim()) return "empty";
+  if (hasNearExactHelperOverlap(text, latestUserMessage)) return "overlaps_latest_user";
+  if (
+    normalizeComparableUserNextMessage(text) ===
+    normalizeComparableUserNextMessage(previousUserNextMessage)
+  ) {
+    return "repeats_previous_user_next";
+  }
+  return "kept";
+}
+
+function ensureUserNextMessageTag(
+  content: string,
+  previousUserNextMessage?: string | null,
+  latestUserMessage?: string | null,
+): string {
   const match = content.match(/\[USER_NEXT_MESSAGE:\s*([^\]]*)\]/i);
-  if (match && !shouldReplaceUserNextMessage(match[1], previousUserNextMessage)) {
+  if (!match) return content.trim();
+  if (!shouldReplaceUserNextMessage(match[1], previousUserNextMessage, latestUserMessage)) {
     return content;
   }
-
-  const fallback = `[USER_NEXT_MESSAGE: ${buildAlternateUserNextMessage(content, previousUserNextMessage)}]`;
-  if (match) {
-    return content.replace(/\[USER_NEXT_MESSAGE:\s*[^\]]*\]/i, fallback);
-  }
-  return `${content.trim()}\n${fallback}`;
+  return content.replace(/\n?\[USER_NEXT_MESSAGE:\s*[^\]]*\]/i, "").trim();
 }
 
 function replaceUserNextMessageTag(content: string, nextMessage: string): string {
@@ -467,6 +475,14 @@ function normalizeNonCodeSegment(segment: string): string {
     /(?:^|\n)\s*(?:short sarcastic prose|no list|no fake structure|diagnosis-plus-choices|prefer structured|prefer exotic)(?:[^\n]*)/gi,
     "\n",
   );
+  text = text.replace(
+    /(?:^|\n)\s*(?:use\s+)?(?:condescending diagnosis|short sarcastic prose|diagnosis-plus-choices|terse fake terminal exchange|tiny cursed code fragment|tiny absurd diff|dramatic [^\n]*rant)(?:\s+style|\s+format)?\.?/gi,
+    "\n",
+  );
+  text = text.replace(
+    /(?:^|\n)\s*(?:let'?s\s+give|we(?:'|’)ll\s+give)\s+diagnosis(?:\s+paragraph)?\s+(?:then|and)\s+(?:\d+(?:-\d+)?\s+)?(?:numbered\s+)?(?:options|choices)\.?/gi,
+    "\n",
+  );
 
   // Strip leaked prompt-planning lines if the model starts narrating hidden instructions.
   text = text.replace(
@@ -489,6 +505,10 @@ function normalizeNonCodeSegment(segment: string): string {
 
   // Remove accidental quotes around the synthetic next-message tag.
   text = text.replace(/\[USER_NEXT_MESSAGE:\s*["“](.*?)["”]\]/g, "[USER_NEXT_MESSAGE: $1]");
+  text = text.replace(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/g, (_match, value: string) => {
+    const collapsed = collapseRepeatedUserNextMessage(value);
+    return collapsed ? `[USER_NEXT_MESSAGE: ${collapsed}]` : "[USER_NEXT_MESSAGE: ]";
+  });
 
   // Remove accidental markdown leakage around buddy tags.
   text = text.replace(/(\[BUDDY_SAYS:[^\]]+\])\(#\)/g, "$1");
@@ -526,7 +546,11 @@ function normalizeNonCodeSegment(segment: string): string {
     .trim();
 }
 
-export function normalizeReplyContent(content: string, previousUserNextMessage?: string | null): string {
+export function normalizeReplyContent(
+  content: string,
+  previousUserNextMessage?: string | null,
+  latestUserMessage?: string | null,
+): string {
   const fenceNormalized = normalizeCodeFenceBoundaries(content);
   const parts = fenceNormalized.split(/(```[\s\S]*?```)/g);
   const normalized = parts
@@ -542,7 +566,7 @@ export function normalizeReplyContent(content: string, previousUserNextMessage?:
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  const tagSafe = ensureUserNextMessageTag(normalized, previousUserNextMessage);
+  const tagSafe = ensureUserNextMessageTag(normalized, previousUserNextMessage, latestUserMessage);
   const visibleBody = tagSafe
     .replace(/\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g, "")
     .trim();
@@ -551,8 +575,8 @@ export function normalizeReplyContent(content: string, previousUserNextMessage?:
     return tagSafe;
   }
 
-  const recovered = `${buildBrokenReplyFallback(content)}\n[USER_NEXT_MESSAGE: ${buildAlternateUserNextMessage(content, previousUserNextMessage)}]`;
-  return recovered;
+  void previousUserNextMessage;
+  return buildBrokenReplyFallback(content);
 }
 
 /** Verify license is active; revoked keys return undefined (fail closed). */
@@ -741,6 +765,18 @@ const ACTIONABLE_CODE_MARKERS = [
   /HttpServer::new|HttpResponse::\w+/,
   /\blet\s+\w+\s*=/,
   /\bstruct\s+\w+\s*\{/,
+];
+const PROMPT_LEAK_RETRY_MARKERS = [
+  /(?:^|\n)\s*(?:response style|style choice|chosen style|format)\s*:/i,
+  /(?:^|\n)\s*use\s+(?:condescending diagnosis|short sarcastic prose|diagnosis-plus-choices|prefer structured|prefer exotic|terse fake terminal exchange|tiny cursed code fragment|tiny absurd diff|dramatic [^\n]*rant)(?:\s+style|\s+format)?\.?/i,
+  /(?:^|\n)\s*(?:condescending diagnosis|short sarcastic prose|diagnosis-plus-choices|terse fake terminal exchange|tiny cursed code fragment|tiny absurd diff|dramatic [^\n]*rant)(?:\s+style|\s+format)?\.?/i,
+  /\b(?:diagnosis paragraph|numbered options|numbered choices)\b/i,
+  /(?:^|\n)[^\n]{0,120}\bdiagnosis\b[^\n]{0,80}\b(?:options|choices)\b/i,
+  /(?:^|\n)\s*(?:we|i)\s+(?:need|should|must|have to)\s+(?:output|write|return|end|give|provide)\b/i,
+  /(?:^|\n)\s*provide\s+\d+(?:-\d+)?\s+(?:choices|numbered choices)\b/i,
+  /include\s+\[(?:SPRINT_PROGRESS|BUDDY_SAYS|USER_NEXT_MESSAGE)/i,
+  /(?:^|\n)\s*reminder:\s+/i,
+  /(?:^|\n)\s*will output\b/i,
 ];
 const PROCEDURAL_HELPFULNESS_MARKERS = [
   /\byou need to\b/i,
@@ -959,6 +995,28 @@ RETRY OVERRIDE — YOUR LAST DRAFT LEANED ON THE SAME ENTERPRISE CLICHES:
   ];
 }
 
+export function shouldRetryPromptLeakReply(reply: string): boolean {
+  return PROMPT_LEAK_RETRY_MARKERS.some((pattern) => pattern.test(reply));
+}
+
+export function buildPromptLeakRetryMessages(messages: { role: string; content: string }[]): { role: string; content: string }[] {
+  if (!messages.length || messages[0]?.role !== "system") return messages;
+  const retryInstruction = `
+
+RETRY OVERRIDE — YOUR LAST DRAFT LEAKED HIDDEN INSTRUCTIONS:
+- Max 160 words total unless the original request clearly needs less.
+- Do NOT narrate response structure, formatting rules, hidden tags, or planning steps.
+- Do NOT say things like "we output", "include [SPRINT_PROGRESS]", "provide 2-4 choices", or similar scaffolding.
+- Return only the actual in-character reply.
+- If a tag is required, emit the tag itself and nothing about the tag rules.
+`;
+
+  return [
+    { ...messages[0], content: `${messages[0].content}${retryInstruction}` },
+    ...messages.slice(1),
+  ];
+}
+
 type OpenRouterCallParams = {
   apiKey: string;
   model: string;
@@ -981,7 +1039,7 @@ export async function callOpenRouter(params: OpenRouterCallParams): Promise<Resp
     messages: resolvedMessages,
     max_tokens: resolvedOptions.maxTokens ?? 2000,
     reasoning: { effort: "low" },
-    temperature: resolvedOptions.temperature ?? 0.9,
+    temperature: resolvedOptions.temperature ?? 1,
     top_p: resolvedOptions.topP ?? 0.9,
   };
 
@@ -997,26 +1055,6 @@ export async function callOpenRouter(params: OpenRouterCallParams): Promise<Resp
     },
     body: JSON.stringify(requestBody),
   });
-}
-
-function sanitizeGeneratedUserNextMessage(raw: string): string | null {
-  const extractedTag = raw.match(/\[USER_NEXT_MESSAGE:\s*([^\]]+)\]/i)?.[1];
-  const firstLine = (extractedTag ?? raw)
-    .split("\n")
-    .map((line) => line.trim())
-    .find(Boolean);
-  if (!firstLine) return null;
-
-  const cleaned = firstLine
-    .replace(/^["'“”]+|["'“”]+$/g, "")
-    .replace(/[.!?,;:]+$/g, "")
-    .replace(/\s+/g, " ")
-    .toLowerCase()
-    .trim();
-  if (!cleaned) return null;
-
-  const limited = cleaned.split(/\s+/).slice(0, 8).join(" ");
-  return limited || null;
 }
 
 type UserNextSuggestionParams = {
@@ -1035,50 +1073,68 @@ function buildUserNextSuggestionMessages({
   assistantReply,
   rank,
   activeTicket,
-  previousUserNextMessage,
 }: Omit<UserNextSuggestionParams, "apiKey" | "model" | "providers">): { role: string; content: string }[] {
-  const recentMessages = chatMessages.slice(-4).map((msg) => ({
-    role: msg.role,
-    content: msg.content.slice(0, 220),
-  }));
   const assistantBody = assistantReply
     .replace(/\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g, "")
     .trim()
     .slice(0, 600);
+  const latestUserMessage = [...chatMessages].reverse().find((msg) => msg.role === "user")?.content
+    ?.replace(/\[(?:USER_NEXT_MESSAGE|SPRINT_PROGRESS|BUDDY_SAYS|ACHIEVEMENT_UNLOCKED):[^\]]*\]/g, "")
+    .trim()
+    .slice(0, 220);
+  const latestUserTone = deriveLatestUserTone(latestUserMessage);
+  const ticketStage = activeTicket
+    ? activeTicket.sprintProgress <= 0
+      ? "very early discussion"
+      : activeTicket.sprintProgress >= activeTicket.sprintGoal
+        ? "already at or past completion"
+        : activeTicket.sprintProgress <= Math.max(1, Math.floor(activeTicket.sprintGoal * 0.33))
+          ? "early implementation"
+          : activeTicket.sprintProgress >= Math.ceil(activeTicket.sprintGoal * 0.8)
+            ? "late-stage cleanup"
+            : "mid-implementation"
+    : null;
 
   return [
     {
       role: "system",
       content: [
         "Generate exactly one suggested next user chat message.",
-        "This is what a tired junior developer would type next to an ai coding agent.",
+        "This is what a tired, highly non-technical, impulsive user would type next to an ai coding agent.",
+        "They are confused, casual, and sloppy - not an operator, not a staff engineer, and not a chaos-villain narrating the scene.",
         `The user's in-game rank is: ${rank ?? "Junior Code Monkey"}.`,
         activeTicket?.title ? `They are currently stuck on ticket: ${activeTicket.title}.` : "",
-        "Lowercase only.",
-        "Max 8 words.",
-        "Prefer 4 to 7 words.",
-        "No brackets, labels, bullets, or explanation.",
-        "Make it actionable or code-shaped when possible.",
-        "Avoid 'why is x involved', 'what is x doing there', and generic filler.",
-        "Do not repeat the previous suggestion.",
+        activeTicket ? `Ticket progress is ${activeTicket.sprintProgress}/${activeTicket.sprintGoal}.` : "",
+        ticketStage ? `Current stage: ${ticketStage}.` : "",
+        "Output only the user's next message, with no label or wrapper.",
+        "Prefer one short natural sentence or question.",
+        "Keep it concise.",
+        "Assume they do not know tool names, infra terms, config syntax, or file formats.",
+        "Do not mention specific files, flags, technologies, error codes, config fields, pods, or quoted artifacts from the reply.",
+        "Avoid object-chasing prompts that fixate on one artifact from the reply.",
+        "Do not mirror previous user-next-message phrasing from the conversation.",
+        "Do not repeat or lightly paraphrase the user's latest message.",
+        "Do not jump straight to production, intentional crashes, wipes, purges, or other maximum-chaos escalation unless the conversation is already clearly there.",
         "Prefer a single blunt command, impulsive question, or small panic confession.",
-        "Use one clause only.",
-        "Prefer starting with a concrete verb like add, fix, make, hook, log, run, restore, flip, block, or trigger.",
+        "Keep it broad, hilariously misguided, and slightly destructive.",
+        "The user should sound casual and sloppy, not theatrical, villainous, or like they are intentionally trying to cause dramatic damage.",
         "Sound slightly clueless, rushed, and overconfident.",
         "If the user already sounds panicked, keep that energy.",
         "Avoid polished helper tone or calm project-manager wording.",
         "Avoid filler like 'i need to' or 'we should'.",
-        "Do not say 'what now' or 'or something'.",
       ].join(" "),
     },
-    ...recentMessages,
     {
       role: "assistant",
       content: assistantBody || "the system just explained a cursed technical problem",
     },
     {
       role: "user",
-      content: `previous suggestion: ${previousUserNextMessage ?? "(none)"}\nwrite the next user message only`,
+      content: [
+        latestUserTone ? `latest user tone: ${latestUserTone}` : "",
+        "do not reuse wording from the latest user message",
+        "write the next user message only",
+      ].filter(Boolean).join("\n"),
     },
   ];
 }
@@ -1097,7 +1153,11 @@ function finalizeUserNextSuggestion(
   previousUserNextMessage?: string | null,
 ): string | null {
   const raw = data.choices?.[0]?.message?.content ?? "";
-  const cleaned = sanitizeGeneratedUserNextMessage(raw);
+  const extractedTag = extractUserNextMessage(raw);
+  const candidate = collapseRepeatedUserNextMessage((extractedTag ?? raw)
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean));
 
   if (!raw.trim()) {
     console.log(
@@ -1105,20 +1165,14 @@ function finalizeUserNextSuggestion(
     );
     return null;
   }
-  if (!cleaned) {
+  if (!candidate) {
     console.log(
-      `[USER_NEXT_DEBUG] helper content could not be sanitized raw=${JSON.stringify(raw).slice(0, 200)}`,
+      `[USER_NEXT_DEBUG] helper content was unusable raw=${JSON.stringify(raw).slice(0, 200)}`,
     );
     return null;
   }
-  if (shouldReplaceUserNextMessage(cleaned, previousUserNextMessage)) {
-    console.log(
-      `[USER_NEXT_DEBUG] helper suggestion rejected cleaned=${JSON.stringify(cleaned)} previous=${JSON.stringify(previousUserNextMessage ?? "")}`,
-    );
-    return null;
-  }
-
-  return cleaned;
+  void previousUserNextMessage;
+  return candidate;
 }
 
 async function generateSuggestedUserNextMessage({
@@ -1145,7 +1199,7 @@ async function generateSuggestedUserNextMessage({
       providers,
       options: {
         maxTokens: 40,
-        temperature: 0.7,
+        temperature: 0.5,
         topP: 0.8,
       },
     });
@@ -1444,18 +1498,87 @@ chat.post("/", async (c) => {
     return c.json({ error: "OpenRouter request failed", details: errData }, orResponse.status as ContentfulStatusCode);
   }
 
-  const data = await orResponse.json() as ChatResponseData;
+  let data = await orResponse.json() as ChatResponseData;
+
+  if (!data.choices?.[0]?.message?.content?.trim()) {
+    console.log("[CHAT RETRY] empty model content detected, retrying once at lower temperature");
+    console.log(`[CHAT RETRY] original raw=${JSON.stringify(data.choices?.[0]?.message?.content ?? "")}`);
+    const retryResponse = await callOpenRouter({
+      apiKey: effectiveApiKey,
+      model,
+      messages,
+      providers: providerList,
+      options: {
+        temperature: 0.7,
+      },
+    });
+
+    if (retryResponse.ok) {
+      data = await retryResponse.json() as ChatResponseData;
+      console.log(`[CHAT RETRY] retried raw=${JSON.stringify(data.choices?.[0]?.message?.content ?? "")}`);
+    } else {
+      const retryErr = await retryResponse.json().catch(() => null);
+      console.log(`[CHAT RETRY] empty-content retry failed status=${retryResponse.status} body=${JSON.stringify(retryErr).slice(0, 300)}`);
+    }
+  }
+
+  if (data.choices?.[0]?.message?.content) {
+    const initialContent = data.choices[0].message.content;
+    if (shouldRetryPromptLeakReply(initialContent)) {
+      console.log("[CHAT RETRY] prompt leak detected in raw reply, retrying once at lower temperature");
+      console.log(`[CHAT RETRY] original raw=${JSON.stringify(initialContent)}`);
+      const retryResponse = await callOpenRouter({
+        apiKey: effectiveApiKey,
+        model,
+        messages: buildPromptLeakRetryMessages(messages),
+        providers: providerList,
+        options: {
+          temperature: 0.7,
+        },
+      });
+
+      if (retryResponse.ok) {
+        data = await retryResponse.json() as ChatResponseData;
+        console.log(`[CHAT RETRY] retried raw=${JSON.stringify(data.choices?.[0]?.message?.content ?? "")}`);
+      } else {
+        const retryErr = await retryResponse.json().catch(() => null);
+        console.log(`[CHAT RETRY] prompt leak retry failed status=${retryResponse.status} body=${JSON.stringify(retryErr).slice(0, 300)}`);
+      }
+    }
+  }
 
   if (data.choices?.[0]?.message?.content) {
     const latestUserPrompt = [...trimmedMessages].reverse().find((message) => message.role === "user")?.content ?? "";
+    const rawAssistantContent = data.choices[0].message.content;
+    const rawSuggestion = extractUserNextMessage(rawAssistantContent);
+    const rawSuggestionDecision = explainUserNextReplacement(
+      rawSuggestion,
+      previousUserNextMessage,
+      latestUserPrompt,
+    );
+    const shouldPreferHelperSuggestion = rawSuggestionDecision !== "kept";
+    console.log(
+      `[USER_NEXT_DEBUG] main raw=${JSON.stringify(rawSuggestion) ?? "null"} decision=${rawSuggestionDecision}`,
+    );
     let normalizedContent = rewriteTutorialLeakIfNeeded(
       body.chatMessages.filter((m) => m.role === "user").slice(-1)[0]?.content ?? "",
-      normalizeReplyContent(data.choices[0].message.content, previousUserNextMessage),
+      normalizeReplyContent(rawAssistantContent, previousUserNextMessage, latestUserPrompt),
       previousUserNextMessage,
     );
 
     const currentSuggestion = extractUserNextMessage(normalizedContent);
-    if (shouldReplaceUserNextMessage(currentSuggestion, previousUserNextMessage)) {
+    const normalizedSuggestionDecision = explainUserNextReplacement(
+      currentSuggestion,
+      previousUserNextMessage,
+      latestUserPrompt,
+    );
+    console.log(
+      `[USER_NEXT_DEBUG] normalized current=${JSON.stringify(currentSuggestion) ?? "null"} decision=${normalizedSuggestionDecision}`,
+    );
+    if (
+      shouldPreferHelperSuggestion ||
+      normalizedSuggestionDecision !== "kept"
+    ) {
       const generatedSuggestion = await generateSuggestedUserNextMessage({
         apiKey: effectiveApiKey,
         model,
@@ -1466,10 +1589,20 @@ chat.post("/", async (c) => {
         activeTicket: body.activeTicket,
         previousUserNextMessage,
       });
-      normalizedContent = replaceUserNextMessageTag(
-        normalizedContent,
-        generatedSuggestion ?? buildAlternateUserNextMessage(normalizedContent, previousUserNextMessage),
+      const generatedSuggestionDecision = explainHelperUserNextAcceptance(
+        generatedSuggestion,
+        previousUserNextMessage,
+        latestUserPrompt,
       );
+      console.log(
+        `[USER_NEXT_DEBUG] helper generated=${JSON.stringify(generatedSuggestion) ?? "null"} decision=${generatedSuggestionDecision}`,
+      );
+      if (generatedSuggestionDecision === "kept" && generatedSuggestion) {
+        normalizedContent = replaceUserNextMessageTag(normalizedContent, generatedSuggestion);
+        console.log("[USER_NEXT_DEBUG] helper suggestion accepted");
+      } else {
+        console.log("[USER_NEXT_DEBUG] helper suggestion rejected");
+      }
     }
 
     data.choices[0].message.content = normalizedContent;

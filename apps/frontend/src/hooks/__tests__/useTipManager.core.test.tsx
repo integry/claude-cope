@@ -263,6 +263,21 @@ describe("useTipManager core behavior", () => {
     ]);
   });
 
+  it("does not append the same contextual tip again after a reload when it is already in persisted history", () => {
+    harness = remountHarness(harness, {
+      initialGameState: makeState({
+        chatHistory: [{
+          role: "system",
+          content: getContextualTip("lone_user_online") ?? "",
+          displayType: "tip",
+        }],
+      }),
+      initialOnlineCount: 1,
+    });
+
+    expect(harness.ref.current?.getHistory()).toEqual([]);
+  });
+
   it("re-fires event-based contextual tips when the triggering event happens again", () => {
     act(() => {
       harness.ref.current?.setOnlineCount(1);

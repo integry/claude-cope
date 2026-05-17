@@ -96,7 +96,7 @@ type SubmitChatMessageOpts = SubmitChatMessageBaseOpts & SubmitChatMessageAccept
 export function mergeSuggestedReply(previous: string | null, next: string | null): string | null {
   const trimmedNext = next?.trim() ?? "";
   if (!trimmedNext) return null;
-  if (normalizeSuggestedReply(previous) === normalizeSuggestedReply(trimmedNext)) return null;
+  if (normalizeSuggestedReply(previous) === normalizeSuggestedReply(trimmedNext)) return previous?.trim() ?? null;
   return trimmedNext;
 }
 

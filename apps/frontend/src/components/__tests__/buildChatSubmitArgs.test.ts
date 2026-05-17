@@ -228,7 +228,27 @@ describe("buildSprintCallbacks", () => {
     const nextState = setState.mock.results[0]?.value as GameState;
     expect(nextState.pendingCompletedTaskIds).toEqual(["COPE-059"]);
     expect(nextState.pendingCompletedTaskRewards).toEqual({ "COPE-059": { rewardTD: 1000 } });
-    expect(fetchMock.mock.calls.some(([url]) => url === "/api/score")).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/score")).toBe(true);
+  });
+
+  it("syncs completed sprint rewards through the session-authenticated paid path without a local pro hash", async () => {
+    const { onSprintProgress } = createSprintCallbacks({
+      proKey: "MAX-LICENSE-KEY-123",
+      proKeyHash: undefined,
+      isPro: true,
+    });
+
+    onSprintProgress(10);
+
+    await waitForAssertion(() => {
+      const scoreCall = fetchMock.mock.calls.find(([url]) => url === "/api/score");
+      expect(scoreCall).toBeTruthy();
+      expect(JSON.parse(scoreCall![1]?.body as string)).toEqual({
+        username: "alice",
+        completedTaskIds: ["COPE-059"],
+      });
+    });
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/account/update-ticket")).toBe(true);
   });
 
   it("does not track pending completed task IDs when the user is unpaid", () => {
