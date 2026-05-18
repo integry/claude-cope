@@ -65,7 +65,7 @@ function postSync(body: unknown, env: Record<string, unknown>) {
 const PROFILE_ROW = {
   username: "alice", license_hash: "testhash",
   total_td: 100, current_td: 100, corporate_rank: "Junior Code Monkey",
-  inventory: "{}", upgrades: "[]", achievements: "[]",
+  inventory: "{}", upgrades: "[]", achievements: "[]", is_executive_supporter: 0,
   buddy_type: null, buddy_is_shiny: 0,
   unlocked_themes: '["default"]', active_theme: "default",
   active_ticket: null, td_multiplier: 1,
@@ -522,5 +522,27 @@ describe("POST /api/account/sync", () => {
 
     expect(res.status).toBe(200);
     expect((await res.json() as { success: boolean }).success).toBe(true);
+  });
+
+  it("hydrates executive supporter entitlement into the sync response profile", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const { db } = createMockDB({
+      firstBySQL: {
+        "license_hash =": PROFILE_ROW,
+        "SELECT is_executive_supporter FROM checkout_key_claims": { is_executive_supporter: 1 },
+      },
+    });
+    const kv = mockKV();
+
+    const res = await postSync({ licenseKey: "COPE-TEST" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { is_executive_supporter: true },
+    });
   });
 });

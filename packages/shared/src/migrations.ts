@@ -316,6 +316,16 @@ export const migrations: Migration[] = [
     name: "043_rebuild_shared_cards_search",
     sql: "INSERT INTO shared_cards_search(shared_cards_search) VALUES ('rebuild')",
   },
+  {
+    name: "044_add_user_scores_is_executive_supporter",
+    sql: "ALTER TABLE user_scores ADD COLUMN is_executive_supporter INTEGER NOT NULL DEFAULT 0",
+    ignoreErrorMatching: /duplicate column name.*is_executive_supporter/i,
+  },
+  {
+    name: "045_add_checkout_key_claims_is_executive_supporter",
+    sql: "ALTER TABLE checkout_key_claims ADD COLUMN is_executive_supporter INTEGER NOT NULL DEFAULT 0",
+    ignoreErrorMatching: /duplicate column name.*is_executive_supporter/i,
+  },
 ];
 
 /**

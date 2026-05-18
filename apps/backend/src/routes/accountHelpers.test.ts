@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys, fetchCheckoutCustomerId } from "./accountHelpers";
+import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys, fetchCheckoutCustomerId, syncExecutiveSupporterEntitlement } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
 import { hashKey } from "../utils/quota";
 
@@ -331,7 +331,7 @@ describe("checkout key claims", () => {
             if (sql.includes("INSERT INTO checkout_key_claims")) {
               const bindings = args as string[];
               const checkoutId = bindings[bindings.length - 1]!;
-              const licenseKeyHashes = bindings.slice(0, -2);
+              const licenseKeyHashes = bindings.slice(0, -3);
               const hasConflict = licenseKeyHashes.some((licenseKeyHash) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash) !== checkoutId);
               if (hasConflict) return { meta: { changes: 0 } };
               for (const licenseKeyHash of licenseKeyHashes) {
@@ -360,7 +360,11 @@ describe("checkout key claims", () => {
       })),
     } as unknown as D1Database;
 
-    const result = await claimLicenseKeysForCheckout(db, "checkout-a", ["COPE-1", "COPE-TAKEN", "COPE-2"], CLAIM_SECRET);
+    const result = await claimLicenseKeysForCheckout(db, {
+      checkoutId: "checkout-a",
+      keys: ["COPE-1", "COPE-TAKEN", "COPE-2"],
+      secret: CLAIM_SECRET,
+    });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("full license set");
     expect(storedClaimedKeys).toBeNull();
@@ -383,7 +387,11 @@ describe("checkout key claims", () => {
       })),
     } as unknown as D1Database;
 
-    const result = await claimLicenseKeysForCheckout(db, "checkout-a", ["COPE-X"], CLAIM_SECRET);
+    const result = await claimLicenseKeysForCheckout(db, {
+      checkoutId: "checkout-a",
+      keys: ["COPE-X"],
+      secret: CLAIM_SECRET,
+    });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("already claimed");
   });
@@ -408,6 +416,33 @@ describe("checkout key claims", () => {
 
     await storeClaimedKeys(db, "checkout-a", ["COPE-1"], CLAIM_SECRET);
     await expect(storeClaimedKeys(db, "checkout-a", ["COPE-1"], CLAIM_SECRET)).resolves.toEqual({ ok: true });
+  });
+
+  it("persists the executive supporter flag on claimed team-pack keys", async () => {
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => ({
+          first: vi.fn().mockResolvedValue(sql.includes("SELECT encrypted_keys FROM checkout_claims") ? { encrypted_keys: null } : null),
+          run: vi.fn().mockImplementation(async () => {
+            calls.push({ sql, bindings: args });
+            return { meta: { changes: 1 } };
+          }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+      })),
+    } as unknown as D1Database;
+
+    await claimLicenseKeysForCheckout(db, {
+      checkoutId: "checkout-a",
+      keys: ["COPE-1", "COPE-2"],
+      secret: CLAIM_SECRET,
+      isExecutiveSupporter: true,
+    });
+
+    const claimBindings = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"))?.bindings;
+    expect(claimBindings).toBeDefined();
+    expect(claimBindings?.[claimBindings.length - 2]).toBe(1);
   });
 
   it("returns stored keys for a previously completed checkout claim", async () => {
@@ -501,6 +536,28 @@ describe("checkout key claims", () => {
       ok: false,
       error: "Stored checkout claim is corrupted — please try again later",
     });
+  });
+});
+
+describe("syncExecutiveSupporterEntitlement", () => {
+  it("copies the supporter flag from checkout key claims onto the synced user row", async () => {
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => {
+          calls.push({ sql, bindings: args });
+          return {
+            first: vi.fn().mockResolvedValue(sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
+              ? { is_executive_supporter: 1 }
+              : null),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+          };
+        }),
+      })),
+    } as unknown as D1Database;
+
+    await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toBe(true);
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET is_executive_supporter = ?") && call.bindings[0] === 1)).toBe(true);
   });
 });
 

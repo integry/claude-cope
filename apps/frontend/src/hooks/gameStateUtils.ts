@@ -173,6 +173,7 @@ export interface GameState {
   proKeyHash?: string;
   isPro?: boolean;
   hasSessionPro?: boolean;
+  isExecutiveSupporter?: boolean;
   byokTotalCost?: number;
   byokUsage?: Record<string, ByokUsage>;
 }
@@ -245,6 +246,7 @@ function createDefaultState(): GameState {
     pendingCompletedTaskIds: [],
     pendingCompletedTaskRewards: {},
     authoritativeProfileFloor: null,
+    isExecutiveSupporter: false,
   };
 }
 
@@ -303,6 +305,9 @@ function applyDefensiveDefaults(state: GameState): void {
   }
   if (!hasValidAuthoritativeProfileFloor(state)) {
     state.authoritativeProfileFloor = null;
+  }
+  if (state.isExecutiveSupporter === undefined) {
+    state.isExecutiveSupporter = false;
   }
 }
 

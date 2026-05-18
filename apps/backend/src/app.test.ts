@@ -23,6 +23,11 @@ describe("app", () => {
       expect(migrations.some((migration) => migration.name === "038_idx_shared_cards_username_created_at")).toBe(true);
     });
 
+    it("registers explicit migrations for executive supporter entitlements", () => {
+      expect(migrations.some((migration) => migration.name === "044_add_user_scores_is_executive_supporter")).toBe(true);
+      expect(migrations.some((migration) => migration.name === "045_add_checkout_key_claims_is_executive_supporter")).toBe(true);
+    });
+
     it("calls DB.exec for migration when DB is available", async () => {
       const db = {
         prepare: vi.fn(() => ({

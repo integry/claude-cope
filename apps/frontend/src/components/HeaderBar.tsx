@@ -6,7 +6,7 @@ import HeaderBarMobileMenu from "./HeaderBarMobileMenu";
 const MOBILE_MENU_VIEWPORT_INSET = 8;
 const MOBILE_MENU_VERTICAL_GAP = 8;
 
-type BillingProps = { isBYOK: boolean; isMax: boolean; byokTotalCost?: number };
+type BillingProps = { isBYOK: boolean; isMax: boolean; isExecutiveSupporter?: boolean; byokTotalCost?: number };
 type QuotaProps = { quotaPercent: number; remaining: number; totalQuota: number; quotaTooltip: string };
 type TdProps = { displayTD: number; activeMultiplier: number };
 type IdentityProps = BillingProps & { username: string; rank: string; onProfileClick: () => void };
@@ -32,7 +32,8 @@ function formatByokCost(cost: number): string {
 const getByokBadgeText = (byokTotalCost?: number) => `[BYOK${byokTotalCost != null && byokTotalCost > 0 ? ` $${formatByokCost(byokTotalCost)}` : ""}]`;
 const getByokStatusText = (byokTotalCost?: number) => byokTotalCost != null && byokTotalCost > 0 ? `External Billing Active: $${formatByokCost(byokTotalCost)}` : "External Billing Active: BYOK";
 
-function EntitlementBadges({ isBYOK, isMax, byokTotalCost, maxBadgeTestId, maxBadgeLabel = "[MAX 429X]" }: BillingProps & { maxBadgeTestId?: string; maxBadgeLabel?: string }) {
+function EntitlementBadges({ isBYOK, isMax, isExecutiveSupporter, byokTotalCost, maxBadgeTestId, maxBadgeLabel = "[MAX 429X]" }: BillingProps & { maxBadgeTestId?: string; maxBadgeLabel?: string }) {
+  const resolvedMaxBadgeLabel = isExecutiveSupporter ? "[EXECUTIVE MAX]" : maxBadgeLabel;
   return (
     <>
       {isBYOK && (
@@ -41,8 +42,12 @@ function EntitlementBadges({ isBYOK, isMax, byokTotalCost, maxBadgeTestId, maxBa
         </span>
       )}
       {isMax && (
-        <span data-testid={maxBadgeTestId} className="whitespace-nowrap text-[10px] font-bold uppercase tracking-wider" style={{ color: "#ff00ff" }}>
-          {maxBadgeLabel}
+        <span
+          data-testid={maxBadgeTestId}
+          className={`whitespace-nowrap text-[10px] font-bold uppercase tracking-wider ${isExecutiveSupporter ? "executive-supporter-badge executive-supporter-pulse animate-pulse text-amber-300" : ""}`}
+          style={isExecutiveSupporter ? undefined : { color: "#ff00ff" }}
+        >
+          {resolvedMaxBadgeLabel}
         </span>
       )}
     </>
@@ -74,11 +79,11 @@ function MobileQuotaLine({ quotaPercent, quotaTooltip, tipOpen, setTipOpen }: Mo
   return <div data-testid="mobile-quota-line" className="absolute bottom-0 left-0 right-0 h-[2px] cursor-pointer bg-gray-800 sm:hidden" style={getMobileQuotaTrackStyle(quotaPercent)} onClick={() => setTipOpen((v) => !v)}><div data-testid="mobile-quota-fill" className={`h-full ${getQuotaBgColor(quotaPercent)} transition-all duration-500`} style={{ width: `${quotaPercent}%` }} />{tipOpen && <div className="absolute bottom-full left-1/2 z-30 mb-1 -translate-x-1/2 whitespace-nowrap rounded border border-gray-700 bg-gray-900 px-2 py-1 text-[10px] font-mono text-gray-300 shadow-lg">{quotaTooltip}</div>}</div>;
 }
 
-function DesktopIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, onProfileClick }: IdentityProps) {
-  return <div data-testid="desktop-identity-block" className="hidden min-w-0 flex-col justify-center gap-1 leading-snug sm:flex"><div className="flex min-w-0 items-center gap-2"><button onClick={onProfileClick} className="cursor-pointer truncate text-cyan-400 hover:text-white hover:underline">{username}</button><EntitlementBadges isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} maxBadgeTestId="desktop-max-badge" /></div><div data-testid="desktop-rank-line" title={rank} className="max-w-full truncate text-xs text-gray-400">[{rank}]</div></div>;
+function DesktopIdentityBlock({ username, rank, isBYOK, isMax, isExecutiveSupporter, byokTotalCost, onProfileClick }: IdentityProps) {
+  return <div data-testid="desktop-identity-block" className="hidden min-w-0 flex-col justify-center gap-1 leading-snug sm:flex"><div className="flex min-w-0 items-center gap-2"><button onClick={onProfileClick} className="cursor-pointer truncate text-cyan-400 hover:text-white hover:underline">{username}</button><EntitlementBadges isBYOK={isBYOK} isMax={isMax} isExecutiveSupporter={isExecutiveSupporter} byokTotalCost={byokTotalCost} maxBadgeTestId="desktop-max-badge" /></div><div data-testid="desktop-rank-line" title={rank} className="max-w-full truncate text-xs text-gray-400">[{rank}]</div></div>;
 }
 
-function MobileIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, onProfileClick }: IdentityProps) {
+function MobileIdentityBlock({ username, rank, isBYOK, isMax, isExecutiveSupporter, byokTotalCost, onProfileClick }: IdentityProps) {
   return (
     <>
       <div data-testid="mobile-identity-block" className="col-start-2 row-start-1 flex min-w-0 items-center gap-2 self-end sm:hidden">
@@ -86,7 +91,7 @@ function MobileIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, onP
           {username}
         </button>
         <span className="flex flex-shrink-0 items-center gap-2">
-          <EntitlementBadges isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} maxBadgeTestId="mobile-max-badge" maxBadgeLabel="[MAX]" />
+          <EntitlementBadges isBYOK={isBYOK} isMax={isMax} isExecutiveSupporter={isExecutiveSupporter} byokTotalCost={byokTotalCost} maxBadgeTestId="mobile-max-badge" maxBadgeLabel="[MAX]" />
         </span>
       </div>
       <div data-testid="mobile-rank-line" title={rank} className="col-start-2 row-start-2 min-w-0 self-start whitespace-nowrap text-[11px] leading-none text-gray-400 sm:hidden sm:text-xs">
@@ -100,7 +105,7 @@ function DesktopStatusBlock({ displayTD, activeMultiplier, isBYOK, isMax, byokTo
   return <div data-testid="desktop-status-block" className="ml-auto hidden flex-shrink-0 flex-col items-end justify-center gap-1 px-2 leading-snug sm:flex sm:px-0"><div data-testid="desktop-technical-debt-line"><TechnicalDebtLine displayTD={displayTD} activeMultiplier={activeMultiplier} /></div><div data-testid="desktop-status-detail-line"><StatusDetailLine isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} onUpgradeClick={onUpgradeClick} /></div></div>;
 }
 
-function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isMax, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onStoreClick, onLeaderboardClick, onAchievementsClick, onContactClick, onSlashMenuClick, onUpgradeClick, onHomeClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isMax: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onStoreClick: () => void; onLeaderboardClick: () => void; onAchievementsClick: () => void; onContactClick: () => void; onSlashMenuClick?: () => void; onUpgradeClick?: () => void; onHomeClick?: () => void }) {
+function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isMax, isExecutiveSupporter, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onStoreClick, onLeaderboardClick, onAchievementsClick, onContactClick, onSlashMenuClick, onUpgradeClick, onHomeClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isMax: boolean; isExecutiveSupporter?: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onStoreClick: () => void; onLeaderboardClick: () => void; onAchievementsClick: () => void; onContactClick: () => void; onSlashMenuClick?: () => void; onUpgradeClick?: () => void; onHomeClick?: () => void }) {
   const displayTD = useAnimatedCounter(currentTD, 2660);
   const [menuOpen, setMenuOpen] = useState(false);
   const [quotaTipOpen, setQuotaTipOpen] = useState(false);
@@ -161,11 +166,11 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
     <div ref={headerRootRef} data-testid="header-bar-root" className={`relative sticky top-0 z-10 mb-2 grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 border-b pt-3 pb-2 sm:flex sm:items-center sm:gap-4 ${outageHp !== null ? "border-red-500 bg-red-900" : "border-gray-700"}`} style={outageHp !== null ? undefined : { backgroundColor: "var(--color-bg)" }}>
       <div className="hidden min-w-0 items-center gap-2 px-2 sm:flex sm:px-0">
         <button type="button" onClick={handleHomeClick} aria-label="Home" className="hidden cursor-pointer sm:block"><img src="/media/logo-400-transparent.png" alt="Logo" className="hidden max-h-12 w-auto flex-shrink-0 object-contain sm:mr-2 sm:block" /></button>
-        <DesktopIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
+        <DesktopIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} isExecutiveSupporter={isExecutiveSupporter} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
       </div>
       {menuOpen ? <button type="button" onClick={handleHomeClick} aria-label="Home" data-testid="mobile-header-logo-expanded" className="col-start-1 col-end-3 row-span-2 row-start-1 my-3 flex min-w-0 items-center self-center px-2 sm:hidden"><img src="/media/logo-400-transparent.png" alt="Logo" className="h-8 w-auto max-w-full object-contain" /></button> : <>
         <button type="button" onClick={handleHomeClick} aria-label="Home" data-testid="mobile-header-logo" className="col-start-1 row-span-2 row-start-1 flex items-center self-center px-2 sm:hidden"><span className="relative block h-8 w-[34px] overflow-hidden"><img src="/media/logo-400-transparent.png" alt="" aria-hidden="true" className="absolute left-0 top-1/2 h-8 max-w-none -translate-y-1/2" /></span></button>
-        <MobileIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
+        <MobileIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} isExecutiveSupporter={isExecutiveSupporter} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
       </>}
       <DesktopStatusBlock displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} onUpgradeClick={onUpgradeClick} />
       {!menuOpen && <div data-testid="mobile-status-block" className="col-start-3 row-start-2 flex min-w-0 items-center justify-end self-start whitespace-nowrap px-2 text-right sm:hidden"><span className="whitespace-nowrap font-bold text-white">{Math.floor(displayTD).toLocaleString()} TD{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span></div>}

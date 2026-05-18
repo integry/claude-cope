@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS user_scores (
     inventory TEXT NOT NULL DEFAULT '{}',
     upgrades TEXT NOT NULL DEFAULT '[]',
     achievements TEXT NOT NULL DEFAULT '[]',
+    is_executive_supporter INTEGER NOT NULL DEFAULT 0,
     buddy_type TEXT,
     buddy_is_shiny INTEGER NOT NULL DEFAULT 0,
     unlocked_themes TEXT NOT NULL DEFAULT '["default"]',
@@ -178,6 +179,7 @@ CREATE TABLE IF NOT EXISTS checkout_claims (
 CREATE TABLE IF NOT EXISTS checkout_key_claims (
     license_key_hash TEXT PRIMARY KEY,
     checkout_id TEXT NOT NULL,
+    is_executive_supporter INTEGER NOT NULL DEFAULT 0,
     claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

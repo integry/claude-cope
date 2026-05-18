@@ -62,6 +62,19 @@ export type SyncBody = {
   };
 };
 
+export async function syncExecutiveSupporterEntitlement(db: D1Database, hash: string): Promise<boolean> {
+  const supporterRow = await db
+    .prepare("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")
+    .bind(hash)
+    .first<{ is_executive_supporter: number }>();
+  const isExecutiveSupporter = supporterRow?.is_executive_supporter === 1;
+  await db
+    .prepare("UPDATE user_scores SET is_executive_supporter = ?, updated_at = datetime('now') WHERE license_hash = ?")
+    .bind(isExecutiveSupporter ? 1 : 0, hash)
+    .run();
+  return isExecutiveSupporter;
+}
+
 function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
   // Only truly cosmetic preferences are accepted from the client.
   // unlocked_themes, active_theme, and active_ticket are server-authoritative:
@@ -913,25 +926,35 @@ export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys:
   }
 }
 
-export async function claimLicenseKeysForCheckout(db: D1Database, checkoutId: string, keys: string[], secret: string): Promise<{ ok: true; keys: string[] } | { ok: false; error: string }> {
+export async function claimLicenseKeysForCheckout(
+  db: D1Database,
+  claim: {
+    checkoutId: string;
+    keys: string[];
+    secret: string;
+    isExecutiveSupporter?: boolean;
+  },
+): Promise<{ ok: true; keys: string[] } | { ok: false; error: string }> {
   try {
+    const { checkoutId, keys, secret, isExecutiveSupporter = false } = claim;
     if (!keys.length) return { ok: false, error: "No license keys were provided for this checkout" };
     const keyHashes = await Promise.all(keys.map((key) => hashKey(key)));
     const valuePlaceholders = keyHashes.map(() => "(?)").join(", ");
+    const executiveSupporterFlag = isExecutiveSupporter ? 1 : 0;
     await db.prepare(
       `WITH incoming(license_key_hash) AS (VALUES ${valuePlaceholders})
-       INSERT INTO checkout_key_claims (license_key_hash, checkout_id)
-       SELECT incoming.license_key_hash, ?
+       INSERT INTO checkout_key_claims (license_key_hash, checkout_id, is_executive_supporter)
+       SELECT incoming.license_key_hash, ?, ?
        FROM incoming
        WHERE NOT EXISTS (
          SELECT 1
          FROM checkout_key_claims existing
          JOIN incoming conflicted
            ON conflicted.license_key_hash = existing.license_key_hash
-         WHERE existing.checkout_id != ?
+       WHERE existing.checkout_id != ?
        )
        ON CONFLICT(license_key_hash) DO NOTHING`,
-    ).bind(...keyHashes, checkoutId, checkoutId).run();
+    ).bind(...keyHashes, checkoutId, executiveSupporterFlag, checkoutId).run();
     const placeholders = keyHashes.map(() => "?").join(", ");
     const rows = await db.prepare(`SELECT license_key_hash, checkout_id FROM checkout_key_claims WHERE license_key_hash IN (${placeholders})`).bind(...keyHashes).all<{ license_key_hash: string; checkout_id: string }>();
     const ownerByHash = new Map((rows.results ?? []).map((row) => [row.license_key_hash, row.checkout_id]));

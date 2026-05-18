@@ -177,6 +177,7 @@ export function applyServerProfile(
   return {
     ...prev,
     username: profile.username,
+    isExecutiveSupporter: profile.is_executive_supporter,
     economy: {
       ...prev.economy,
       currentTD,
