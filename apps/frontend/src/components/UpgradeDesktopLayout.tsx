@@ -360,14 +360,29 @@ export default function DesktopLayout({
           </span>
         ))}
         <span style={{ color: B }}>{BORDER_MID}</span>{"\n"}
-        <span style={{ display: "inline" }} className="upgrade-esc-btn">
+        <span style={{ display: "block", position: "relative" }} className="upgrade-esc-row">
+          <span style={{ color: B }}>{"║"}</span>
+          <span data-esc="" style={{ color: DIM }}>
+            {" ".repeat(retainPadding.left) + RETAIN_TEXT + " ".repeat(retainPadding.right)}
+          </span>
           <span style={{ color: B }}>{"║"}</span>
           {canPointerDismiss ? (
-            <button type="button" onClick={onDismiss} data-esc="" style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}>{" ".repeat(retainPadding.left) + RETAIN_TEXT + " ".repeat(retainPadding.right)}</button>
-          ) : (
-            <span data-esc="" style={{ color: DIM }}>{" ".repeat(retainPadding.left) + RETAIN_TEXT + " ".repeat(retainPadding.right)}</span>
-          )}
-          <span style={{ color: B }}>{"║"}</span>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="upgrade-esc-btn"
+              aria-label="Press ESC to retain your net worth"
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: "none",
+                border: "none",
+                padding: 0,
+                font: "inherit",
+                cursor: "pointer",
+              }}
+            />
+          ) : null}
         </span>{"\n"}
         <span style={{ color: B }}>{BORDER_BOTTOM}</span>
       </pre>

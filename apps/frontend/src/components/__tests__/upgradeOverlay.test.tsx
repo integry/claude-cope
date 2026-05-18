@@ -174,6 +174,18 @@ describe("UpgradeOverlay", () => {
     expect(text()).toContain("Tap to retain your net worth");
   });
 
+  it("renders the desktop retain footer as text with a separate overlay button", () => {
+    renderOverlay();
+    const footerRow = container.querySelector(".upgrade-desktop .upgrade-esc-row");
+    const footerCopy = footerRow?.querySelector("[data-esc]");
+    const footerButton = footerRow?.querySelector("button.upgrade-esc-btn");
+
+    expect(footerRow).not.toBeNull();
+    expect(footerCopy?.textContent).toContain("Press ESC to retain your net worth");
+    expect(footerButton).not.toBeNull();
+    expect(footerButton?.textContent).toBe("");
+  });
+
   it("desktop layout uses overflow-x auto, not hidden", () => {
     renderOverlay();
     expect((container.querySelector(".upgrade-desktop pre") as HTMLElement | null)?.style.overflowX).toBe("auto");

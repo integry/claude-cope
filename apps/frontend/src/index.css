@@ -535,6 +535,7 @@ body {
 .share-popup-action:not(:disabled):focus-visible [data-cursor] {
   color: #4ade80 !important;
 }
+.upgrade-esc-row:hover [data-esc],
 .upgrade-esc-btn:hover [data-esc] {
   color: #ffffff !important;
 }
@@ -544,9 +545,6 @@ body {
   z-index: 1;
   flex: 0 0 auto;
   align-self: stretch;
-  margin: 0;
-  line-height: inherit;
-  vertical-align: top;
 }
 
 .upgrade-esc-btn [data-esc] {
