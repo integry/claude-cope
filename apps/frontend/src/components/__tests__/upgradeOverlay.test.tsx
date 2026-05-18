@@ -30,6 +30,8 @@ const defaultProps = {
 const executiveSupporterHeading = "OPTION 2: EXECUTIVE SUPPORTER - $19.99";
 const executiveSupporterDescription = "5 team keys, plus vanity upgrades: buy a fake promotion and unlock premium terminal themes.";
 const executiveSupporterCta = "EXPENSE TO EMPLOYER - $19.99";
+const singleLicenseDesktopLine1 = "One seat. Unlocks 100 lifetime credits and advanced Cope";
+const singleLicenseDesktopLine2 = "models.";
 const executiveSupporterDesktopLine1 = "5 team keys, plus vanity upgrades: buy a fake promotion and";
 const executiveSupporterDesktopLine2 = "unlock premium terminal themes.";
 
@@ -102,6 +104,8 @@ describe("UpgradeOverlay", () => {
 
   it("renders the executive supporter offer copy in both layouts", () => {
     renderOverlay();
+    expect(text(desktop())).toContain(singleLicenseDesktopLine1);
+    expect(text(desktop())).toContain(singleLicenseDesktopLine2);
     expect(text(desktop())).toContain(executiveSupporterHeading);
     expect(text(desktop())).toContain(executiveSupporterDesktopLine1);
     expect(text(desktop())).toContain(executiveSupporterDesktopLine2);

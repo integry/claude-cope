@@ -6,7 +6,6 @@ import { DEFAULT_CLOSE_EFFECT, type UpgradeNagCloseEffect } from "./upgradeOverl
 const B = "#ff5555"; // border (red)
 const Y = "#ffff55"; // yellow headings
 const W = "#c9d1d9"; // soft off-white body text
-const BW = "#ffffff"; // bright white (ANSI bold)
 const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
@@ -81,10 +80,6 @@ export default function DesktopLayout({
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
   const [isKeyboardNavigationMode, setIsKeyboardNavigationMode] = useState(false);
   const [showManualFocus, setShowManualFocus] = useState(false);
-  const boxLineRich = (content: React.ReactNode, textLength: number) => {
-    const padLen = Math.max(0, INNER_W - textLength);
-    return <><span style={{ color: B }}>{"║"}</span>{content}<span>{padLen > 0 ? " ".repeat(padLen) : ""}</span><span style={{ color: B }}>{"║"}</span></>;
-  };
   const centeredBoxLine = (text: string, color = W) => {
     const { left, right } = getCenteredPadding(text);
     return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{" ".repeat(left) + text + " ".repeat(right)}</span><span style={{ color: B }}>{"║"}</span></>;
@@ -167,6 +162,7 @@ export default function DesktopLayout({
   const tableLines = { border: boxLine("  +----------------+----------+------------------------------+"), header: boxLine("  | ARCHITECTURE   | CAPACITY | GUARANTEED OUTCOME           |"), legacy: boxLine("  | Legacy AI      | Max 20x  | Manageable pull requests     |"), cope: boxLine("  | Claude Cope    | MAX 429X | Unmitigated request storms   |") };
   const title = "[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]", closeBtn = "[x]";
   const creditsStr = `${PRO_QUOTA_LIMIT}`;
+  const singleOptionDescription = `One seat. Unlocks ${creditsStr} lifetime credits and advanced Cope models.`;
   const retainPadding = getCenteredPadding(RETAIN_TEXT);
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
@@ -348,7 +344,7 @@ export default function DesktopLayout({
         {tableLines.border}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
-        {boxLineRich(<span style={{ color: W }}>{"  One seat. Unlocks "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{" lifetime credits"}{" and "}<span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>{"."}</span>, `  One seat. Unlocks ${creditsStr} lifetime credits and advanced Cope models.`.length)}{"\n"}
+        {renderWrappedBoxLines(singleOptionDescription)}
         {buttonBlock(OPTION_IDS.single, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine(`  ${multiOptionHeading}`, Y)}{"\n"}
