@@ -28,7 +28,7 @@ leaderboard.get("/", async (c) => {
   }
 
   let sql =
-    "SELECT username, corporate_rank, country, total_td as technical_debt, updated_at as created_at FROM user_scores";
+    "SELECT username, COALESCE(display_rank, corporate_rank) AS corporate_rank, country, total_td as technical_debt, updated_at as created_at FROM user_scores";
   const conditions: string[] = [];
   const bindings: string[] = [];
 

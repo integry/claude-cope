@@ -128,7 +128,7 @@ export function getWithSession(path: string, env: Record<string, unknown>) {
 }
 
 export const BASE_PROFILE = { username: "alice", license_hash: "hash", total_td: 1000, current_td: 1000,
-  corporate_rank: "CTO", inventory: "{}", upgrades: "[]", achievements: "[]", is_executive_supporter: 0, buddy_type: null,
+  corporate_rank: "CTO", display_rank: null, inventory: "{}", upgrades: "[]", achievements: "[]", is_executive_supporter: 0, buddy_type: null,
   buddy_is_shiny: 0, unlocked_themes: '["default"]', active_theme: "default", active_ticket: null,
   td_multiplier: 1 };
 

@@ -28,6 +28,10 @@ describe("app", () => {
       expect(migrations.some((migration) => migration.name === "045_add_checkout_key_claims_is_executive_supporter")).toBe(true);
     });
 
+    it("registers an explicit migration for display_rank", () => {
+      expect(migrations.some((migration) => migration.name === "046_add_user_scores_display_rank")).toBe(true);
+    });
+
     it("calls DB.exec for migration when DB is available", async () => {
       const db = {
         prepare: vi.fn(() => ({

@@ -6,7 +6,7 @@ import { createMockDB, mockKV, postJSON, postRaw, postWithSession, getWithSessio
 import { storeClaimedKeys } from "./accountHelpers";
 import { hashKey } from "../utils/quota";
 import { signFreeAccountCookieValue } from "../utils/freeAccountIdentity";
-import { FREE_TIER_RANK_CAP } from "../gameConstants";
+import { FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
 
 const CLAIM_SECRET = "tok";
 
@@ -2284,5 +2284,56 @@ describe("license SQL guard alignment", () => {
     expect(res.status).toBe(200);
     const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores SET buddy_type"));
     expect(updateCall?.sql).toContain("datetime(last_activated_at) >= datetime('now', '-90 days')");
+  });
+});
+
+describe("POST /api/account/update-display-rank", () => {
+  it("rejects non-supporters with the HR error copy", async () => {
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, is_executive_supporter: 0 },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+        [ACCOUNT_TEST_SQL.getProfile]: { ...BASE_PROFILE, is_executive_supporter: 0 },
+      },
+      runChanges: 1,
+    });
+
+    const res = await postJSON("/api/account/update-display-rank", {
+      username: "alice",
+      displayRank: SUPPORTER_VANITY_TITLES[1]!.title,
+      licenseKeyHash: "hash",
+    }, { DB: db });
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: PROMOTE_ACCESS_DENIED_MESSAGE });
+  });
+
+  it("persists supporter vanity titles separately from corporate_rank", async () => {
+    const selectedTitle = SUPPORTER_VANITY_TITLES[2]!.title;
+    const { db, calls } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, is_executive_supporter: 1 },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+        [ACCOUNT_TEST_SQL.getProfile]: { ...BASE_PROFILE, is_executive_supporter: 1, display_rank: selectedTitle },
+      },
+      runChanges: 1,
+    });
+
+    const res = await postJSON("/api/account/update-display-rank", {
+      username: "alice",
+      displayRank: selectedTitle,
+      licenseKeyHash: "hash",
+    }, { DB: db });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: {
+        corporate_rank: "CTO",
+        display_rank: selectedTitle,
+        is_executive_supporter: true,
+      },
+    });
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === selectedTitle)).toBe(true);
   });
 });

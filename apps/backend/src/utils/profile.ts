@@ -7,6 +7,7 @@ interface UserScoreRow {
   total_td: number;
   current_td: number;
   corporate_rank: string;
+  display_rank?: string | null;
   inventory: string;
   upgrades: string;
   achievements: string;
@@ -55,6 +56,7 @@ export function rowToProfile(row: UserScoreRow, quotaPercent?: number): ServerPr
     total_td: row.total_td,
     current_td: row.current_td,
     corporate_rank: row.corporate_rank,
+    display_rank: row.display_rank ?? null,
     is_executive_supporter: row.is_executive_supporter === 1,
     inventory,
     upgrades,
@@ -70,7 +72,7 @@ export function rowToProfile(row: UserScoreRow, quotaPercent?: number): ServerPr
   };
 }
 
-const PROFILE_COLUMNS = "username, total_td, current_td, corporate_rank, inventory, upgrades, achievements, is_executive_supporter, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier";
+const PROFILE_COLUMNS = "username, total_td, current_td, corporate_rank, display_rank, inventory, upgrades, achievements, is_executive_supporter, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier";
 
 export async function getProfile(db: D1Database, username: string): Promise<ServerProfile | null> {
   const row = await db

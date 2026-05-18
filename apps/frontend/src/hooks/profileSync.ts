@@ -178,6 +178,7 @@ export function applyServerProfile(
     ...prev,
     username: profile.username,
     isExecutiveSupporter: profile.is_executive_supporter,
+    displayRank: profile.display_rank,
     economy: {
       ...prev.economy,
       currentTD,
