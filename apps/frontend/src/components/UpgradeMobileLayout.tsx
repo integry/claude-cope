@@ -1,4 +1,5 @@
 import { PRO_QUOTA_LIMIT, UPGRADE_CHECKOUT_MULTI, UPGRADE_CHECKOUT_SINGLE } from "../config";
+import type { CSSProperties } from "react";
 import type { LayoutProps } from "./UpgradeDesktopLayout";
 import {
   DEFAULT_CLOSE_EFFECT,
@@ -13,6 +14,15 @@ const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
 const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
+
+type BenchmarkCard = {
+  label: string;
+  outcome: string;
+  color: string;
+  borderColor: string;
+  className: string;
+  fontWeight?: CSSProperties["fontWeight"];
+};
 
 export default function UpgradeMobileLayout({
   singleLabel,
@@ -45,7 +55,7 @@ export default function UpgradeMobileLayout({
     font: "inherit",
     cursor: "pointer",
   } as const;
-  const benchmarkCards = [
+  const benchmarkCards: readonly BenchmarkCard[] = [
     {
       label: "Legacy AI",
       outcome: "Outcome: Manageable pull requests",
