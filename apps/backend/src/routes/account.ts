@@ -151,6 +151,36 @@ async function resolveCachedOrStoredClaim(
   };
 }
 
+function validateCheckoutOwnership(
+  c: { json: (data: unknown, status?: number) => Response },
+  opts: {
+    referenceId: string | null;
+    sessionId: string;
+    allowMissingReferenceBinding?: boolean;
+    createdAt: string | null;
+  },
+) {
+  const { referenceId, sessionId, allowMissingReferenceBinding, createdAt } = opts;
+  if (referenceId && referenceId !== sessionId) {
+    return c.json({ error: "This checkout belongs to a different session" }, 403);
+  }
+  if (!referenceId && !allowMissingReferenceBinding) {
+    return c.json({ error: "Checkout is missing session binding metadata — cannot verify license ownership" }, 500);
+  }
+  if (!createdAt) {
+    return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
+  }
+  return null;
+}
+
+function mapClaimedKeysError(
+  c: { json: (data: unknown, status?: number) => Response },
+  error: string,
+) {
+  const isConflict = error.includes("already claimed") || error.includes("full license set");
+  return c.json({ error }, isConflict ? 409 : 503);
+}
+
 async function redeemCheckoutLicense(
   c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
   deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string; allowMissingReferenceBinding?: boolean },
@@ -163,15 +193,13 @@ async function redeemCheckoutLicense(
     allowMissingReferenceId: deps.allowMissingReferenceBinding,
   });
   if ("error" in result) return c.json({ error: result.error }, result.status);
-  if (result.referenceId && result.referenceId !== sessionId) {
-    return c.json({ error: "This checkout belongs to a different session" }, 403);
-  }
-  if (!result.referenceId && !deps.allowMissingReferenceBinding) {
-    return c.json({ error: "Checkout is missing session binding metadata — cannot verify license ownership" }, 500);
-  }
-  if (!result.createdAt) {
-    return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
-  }
+  const ownershipError = validateCheckoutOwnership(c, {
+    referenceId: result.referenceId,
+    sessionId,
+    allowMissingReferenceBinding: deps.allowMissingReferenceBinding,
+    createdAt: result.createdAt,
+  });
+  if (ownershipError) return ownershipError;
   const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt: result.createdAt });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
   const postClaimResolution = await resolveCachedOrStoredClaim(c, {
@@ -188,10 +216,7 @@ async function redeemCheckoutLicense(
     secret: claimSecret,
     executiveSupporterKey: lkResult.keys.length > 1 ? lkResult.keys[0] : undefined,
   });
-  if (!claimedKeys.ok) {
-    const isConflict = claimedKeys.error.includes("already claimed") || claimedKeys.error.includes("full license set");
-    return c.json({ error: claimedKeys.error }, isConflict ? 409 : 503);
-  }
+  if (!claimedKeys.ok) return mapClaimedKeysError(c, claimedKeys.error);
   return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: claimedKeys.keys });
 }
 
