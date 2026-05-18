@@ -1497,7 +1497,7 @@ describe("POST /api/account/checkout-license", () => {
               if (sql.includes("INSERT INTO checkout_key_claims")) {
                 const bindings = args as string[];
                 const checkoutId = bindings[bindings.length - 1]!;
-                const licenseKeyHashes = bindings.slice(0, -3);
+                const licenseKeyHashes = bindings.slice(0, -2).filter((_, index) => index % 2 === 0);
                 const hasConflict = licenseKeyHashes.some((licenseKeyHash) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash) !== checkoutId);
                 if (hasConflict) return { meta: { changes: 0 } };
                 for (const licenseKeyHash of licenseKeyHashes) {
@@ -2340,5 +2340,32 @@ describe("POST /api/account/update-display-rank", () => {
       },
     });
     expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === selectedTitle)).toBe(true);
+  });
+
+  it("allows clearing a vanity title back to the organic rank", async () => {
+    const { db, calls } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, is_executive_supporter: 1, display_rank: SUPPORTER_VANITY_TITLES[0]!.title },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+        [ACCOUNT_TEST_SQL.getProfile]: { ...BASE_PROFILE, is_executive_supporter: 1, display_rank: null },
+      },
+      runChanges: 1,
+    });
+
+    const res = await postJSON("/api/account/update-display-rank", {
+      username: "alice",
+      displayRank: null,
+      licenseKeyHash: "hash",
+    }, { DB: db });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: {
+        corporate_rank: "CTO",
+        display_rank: null,
+      },
+    });
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === null)).toBe(true);
   });
 });

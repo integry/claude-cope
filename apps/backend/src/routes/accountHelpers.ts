@@ -67,19 +67,18 @@ export async function syncExecutiveSupporterEntitlement(db: D1Database, hash: st
     .prepare("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")
     .bind(hash)
     .first<{ is_executive_supporter: number }>();
-  if (supporterRow?.is_executive_supporter === 1) {
-    await db
-      .prepare("UPDATE user_scores SET is_executive_supporter = 1, updated_at = datetime('now') WHERE license_hash = ?")
-      .bind(hash)
-      .run();
-    return true;
-  }
-
-  const existingProfile = await db
-    .prepare("SELECT is_executive_supporter FROM user_scores WHERE license_hash = ?")
-    .bind(hash)
-    .first<{ is_executive_supporter: number }>();
-  return existingProfile?.is_executive_supporter === 1;
+  const isExecutiveSupporter = supporterRow?.is_executive_supporter === 1;
+  await db
+    .prepare(
+      `UPDATE user_scores
+       SET is_executive_supporter = ?,
+           display_rank = CASE WHEN ? = 1 THEN display_rank ELSE NULL END,
+           updated_at = datetime('now')
+       WHERE license_hash = ?`,
+    )
+    .bind(isExecutiveSupporter ? 1 : 0, isExecutiveSupporter ? 1 : 0, hash)
+    .run();
+  return isExecutiveSupporter;
 }
 
 function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
@@ -496,13 +495,6 @@ export async function resolveThemeSelectionOwnership(
 }
 
 export async function resolveThemePurchaseOwnership(
-  db: D1Database,
-  opts: ThemePurchaseOwnershipOptions,
-): Promise<OwnershipResult> {
-  return resolveThemeMutationOwnership(db, { ...opts, mode: "purchase" });
-}
-
-export async function resolvePaidProfileOwnership(
   db: D1Database,
   opts: ThemePurchaseOwnershipOptions,
 ): Promise<OwnershipResult> {

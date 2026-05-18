@@ -546,14 +546,13 @@ describe("POST /api/account/sync", () => {
     });
   });
 
-  it("does not strip an existing supporter entitlement when no checkout claim row exists", async () => {
+  it("strips supporter entitlement and vanity rank when no supporter claim row exists", async () => {
     mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
-    const supporterProfile = { ...PROFILE_ROW, is_executive_supporter: 1 };
-    const { db } = createMockDB({
+    const supporterProfile = { ...PROFILE_ROW, is_executive_supporter: 1, display_rank: "Mid-Level Googler" };
+    const { db, calls } = createMockDB({
       firstBySQL: {
         "license_hash =": supporterProfile,
         "SELECT is_executive_supporter FROM checkout_key_claims": null,
-        "SELECT is_executive_supporter FROM user_scores": { is_executive_supporter: 1 },
       },
     });
     const kv = mockKV();
@@ -566,7 +565,12 @@ describe("POST /api/account/sync", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       success: true,
-      profile: { is_executive_supporter: true },
+      profile: { is_executive_supporter: false, display_rank: null },
     });
+    expect(calls.some((call) =>
+      call.sql.includes("UPDATE user_scores")
+      && call.bindings[0] === 0
+      && call.bindings[1] === 0
+    )).toBe(true);
   });
 });

@@ -562,31 +562,27 @@ describe("syncExecutiveSupporterEntitlement", () => {
     } as unknown as D1Database;
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toBe(true);
-    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET is_executive_supporter = 1"))).toBe(true);
+    const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores"));
+    expect(updateCall?.bindings).toEqual([1, 1, "hash-123"]);
   });
 
-  it("preserves an existing supporter entitlement when no checkout claim row is present", async () => {
+  it("clears supporter vanity state when no supporter claim row is present", async () => {
     const calls: { sql: string; bindings: unknown[] }[] = [];
     const db = {
       prepare: vi.fn((sql: string) => ({
         bind: vi.fn((...args: unknown[]) => {
           calls.push({ sql, bindings: args });
           return {
-            first: vi.fn().mockResolvedValue(
-              sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
-                ? null
-                : sql.includes("SELECT is_executive_supporter FROM user_scores")
-                  ? { is_executive_supporter: 1 }
-                  : null,
-            ),
+            first: vi.fn().mockResolvedValue(sql.includes("SELECT is_executive_supporter FROM checkout_key_claims") ? null : null),
             run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
           };
         }),
       })),
     } as unknown as D1Database;
 
-    await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toBe(true);
-    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET is_executive_supporter = 1"))).toBe(false);
+    await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toBe(false);
+    const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores"));
+    expect(updateCall?.bindings).toEqual([0, 0, "hash-123"]);
   });
 });
 

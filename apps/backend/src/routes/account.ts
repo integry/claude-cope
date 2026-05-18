@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, resolvePaidProfileOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -157,18 +157,14 @@ function validateCheckoutOwnership(
     referenceId: string | null;
     sessionId: string;
     allowMissingReferenceBinding?: boolean;
-    createdAt: string | null;
   },
 ) {
-  const { referenceId, sessionId, allowMissingReferenceBinding, createdAt } = opts;
+  const { referenceId, sessionId, allowMissingReferenceBinding } = opts;
   if (referenceId && referenceId !== sessionId) {
     return c.json({ error: "This checkout belongs to a different session" }, 403);
   }
   if (!referenceId && !allowMissingReferenceBinding) {
     return c.json({ error: "Checkout is missing session binding metadata — cannot verify license ownership" }, 500);
-  }
-  if (!createdAt) {
-    return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
   }
   return null;
 }
@@ -190,21 +186,20 @@ async function redeemCheckoutLicense(
   const organizationId = c.env?.POLAR_ORGANIZATION_ID;
   if (!accessToken || !organizationId) return c.json({ error: "Polar integration is not configured" }, 500);
   const result = await fetchCheckoutCustomerId(checkoutId, accessToken, organizationId, {
-    allowMissingReferenceId: deps.allowMissingReferenceBinding,
+    allowMissingReferenceId: Boolean(deps.allowMissingReferenceBinding),
   });
   if ("error" in result) return c.json({ error: result.error }, result.status);
   const referenceId = result.referenceId ?? null;
-  const checkoutCreatedAt = result.createdAt ?? null;
+  const checkoutCreatedAt = result.createdAt;
+  if (!checkoutCreatedAt) {
+    return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
+  }
   const ownershipError = validateCheckoutOwnership(c, {
     referenceId,
     sessionId,
     allowMissingReferenceBinding: deps.allowMissingReferenceBinding,
-    createdAt: checkoutCreatedAt,
   });
   if (ownershipError) return ownershipError;
-  if (!checkoutCreatedAt) {
-    return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
-  }
   const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
   const postClaimResolution = await resolveCachedOrStoredClaim(c, {
@@ -410,7 +405,11 @@ account.post("/sync", async (c) => {
       { db, kv, hash },
       { validationId: validation.id, proInitialQuota: limits.proInitialQuota },
     );
-    result.profile = { ...result.profile, is_executive_supporter: isExecutiveSupporter };
+    result.profile = {
+      ...result.profile,
+      is_executive_supporter: isExecutiveSupporter,
+      display_rank: isExecutiveSupporter ? result.profile.display_rank : null,
+    };
   } catch (err: unknown) {
     try {
       await rollbackProfileMutation(db, hash, result.mutation);
@@ -493,7 +492,7 @@ account.post("/buy-generator", async (c) => {
   const generator = GENERATORS.find((g) => g.id === body.generatorId);
   if (!generator) return c.json({ error: "Unknown generator" }, 400);
 
-  const ownership = await resolvePaidProfileOwnership(db, {
+  const ownership = await resolveThemePurchaseOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -557,7 +556,7 @@ account.post("/buy-upgrade", async (c) => {
   const upgrade = UPGRADES.find((u) => u.id === body.upgradeId);
   if (!upgrade) return c.json({ error: "Unknown upgrade" }, 400);
 
-  const ownership = await resolvePaidProfileOwnership(db, {
+  const ownership = await resolveThemePurchaseOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -616,7 +615,7 @@ account.post("/buy-theme", async (c) => {
   const theme = THEMES.find((t) => t.id === body.themeId);
   if (!theme) return c.json({ error: "Unknown theme" }, 400);
 
-  const ownership = await resolvePaidProfileOwnership(db, {
+  const ownership = await resolveThemePurchaseOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -711,7 +710,7 @@ account.post("/unlock-achievement", async (c) => {
     return c.json({ error: "Unknown achievementId" }, 400);
   }
 
-  const ownership = await resolvePaidProfileOwnership(db, {
+  const ownership = await resolveThemePurchaseOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -765,7 +764,7 @@ account.post("/update-buddy", async (c) => {
     return c.json({ error: "Unknown buddyType" }, 400);
   }
 
-  const ownership = await resolvePaidProfileOwnership(db, {
+  const ownership = await resolveThemePurchaseOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -814,7 +813,7 @@ account.post("/update-ticket", async (c) => {
     return c.json({ error: ticketError }, 400);
   }
 
-  const ownership = await resolvePaidProfileOwnership(db, {
+  const ownership = await resolveThemePurchaseOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -850,15 +849,21 @@ account.post("/update-display-rank", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{ username: string; displayRank: string; licenseKeyHash?: string }>();
-  if (!body.username || !body.displayRank) {
+  const body = await c.req.json<{ username?: string; displayRank?: string | null; licenseKeyHash?: string }>();
+  const displayRank =
+    body.displayRank === null
+      ? null
+      : typeof body.displayRank === "string"
+        ? body.displayRank
+        : undefined;
+  if (!body.username || displayRank === undefined) {
     return c.json({ error: "username and displayRank are required" }, 400);
   }
-  if (!SUPPORTER_VANITY_TITLE_SET.has(body.displayRank)) {
+  if (displayRank !== null && !SUPPORTER_VANITY_TITLE_SET.has(displayRank)) {
     return c.json({ error: "Unknown displayRank" }, 400);
   }
 
-  const ownership = await resolvePaidProfileOwnership(db, {
+  const ownership = await resolveThemePurchaseOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -871,17 +876,18 @@ account.post("/update-display-rank", async (c) => {
   }
   const { profile, licenseKeyHash } = ownership;
 
-  if (!profile.is_executive_supporter) {
+  if (displayRank !== null && !profile.is_executive_supporter) {
     return c.json({ error: PROMOTE_ACCESS_DENIED_MESSAGE }, 403);
   }
 
+  const supporterClause = displayRank === null ? "" : " AND is_executive_supporter = 1";
   const result = await db
     .prepare(
       `UPDATE user_scores SET display_rank = ?, updated_at = datetime('now')
-       WHERE username = ? AND license_hash = ? AND is_executive_supporter = 1
+       WHERE username = ? AND license_hash = ?${supporterClause}
          AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
     )
-    .bind(body.displayRank, profile.username, licenseKeyHash)
+    .bind(displayRank, profile.username, licenseKeyHash)
     .run();
 
   if (!result.meta.changes) {
