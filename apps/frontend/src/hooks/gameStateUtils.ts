@@ -174,6 +174,7 @@ export interface GameState {
   isPro?: boolean;
   hasSessionPro?: boolean;
   isExecutiveSupporter?: boolean;
+  displayRank?: string | null;
   byokTotalCost?: number;
   byokUsage?: Record<string, ByokUsage>;
 }
@@ -247,6 +248,7 @@ function createDefaultState(): GameState {
     pendingCompletedTaskRewards: {},
     authoritativeProfileFloor: null,
     isExecutiveSupporter: false,
+    displayRank: null,
   };
 }
 
@@ -308,6 +310,9 @@ function applyDefensiveDefaults(state: GameState): void {
   }
   if (state.isExecutiveSupporter === undefined) {
     state.isExecutiveSupporter = false;
+  }
+  if (state.displayRank === undefined) {
+    state.displayRank = null;
   }
 }
 

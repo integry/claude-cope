@@ -78,6 +78,15 @@ describe("applyServerProfile", () => {
     expect(merged.isExecutiveSupporter).toBe(true);
   });
 
+  it("hydrates displayRank from the server profile", () => {
+    const merged = applyServerProfile(createGameState(), createServerProfile({
+      display_rank: "Mid-Level Googler",
+    }));
+
+    expect(merged.displayRank).toBe("Mid-Level Googler");
+    expect(merged.economy.currentRank).toBe("Junior Code Monkey");
+  });
+
   it("preserves a legacy pending completed-ticket reward when the reward metadata is missing", () => {
     const prev = createGameState({
       economy: {

@@ -2,14 +2,14 @@
 import { track, identify } from "../analytics";
 import { AnalyticsEvents, SlashCommandFailureReasons } from "../analyticsEvents";
 import { parseBaseCommand } from "../parseBaseCommand";
-import { PING_COST, THEMES, PRO_GATED_COMMANDS } from "../game/constants";
+import { PING_COST, THEMES, PRO_GATED_COMMANDS, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../game/constants";
 import { COPE_MODELS, DEFAULT_COPE_MODEL_ID, migrateLegacyCopeModelId, resolveCopeModel } from "@claude-cope/shared/models";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { API_BASE, BYOK_ENABLED, GITHUB_ISSUES_URL, PRO_QUOTA_LIMIT } from "../config";
 import { applyServerProfile } from "../hooks/profileSync";
 import { applyPaidEntitlementAuthFailure } from "../hooks/themePurchaseState";
 import { isPaidUser } from "../hooks/gameStateUtils";
-import { updateBuddyServer, updateTicketServer } from "../api/profileApi";
+import { updateBuddyServer, updateDisplayRankServer, updateTicketServer } from "../api/profileApi";
 import { ALL_SLASH_COMMANDS } from "./slashCommands";
 
 import type { GameState } from "../hooks/useGameState";
@@ -105,6 +105,7 @@ export const SLASH_COMMAND_ACCOUNTING_POLICY: Record<SupportedSlashCommand, Slas
   "/abandon": "conditional",
   "/alias": "conditional",
   "/model": "conditional",
+  "/promote": "conditional",
   "/user": "tracked",
   "/sync": "conditional",
   "/shill": "tracked",
@@ -859,6 +860,57 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
   replyModelSwitched(modelName, normalizedModelName, copeModel, isBYOK, reply);
 }
 
+const SUPPORTER_VANITY_TITLES_BY_ID = new Map(SUPPORTER_VANITY_TITLES.map((title) => [title.id, title.title]));
+
+function buildPromoteListMessage(currentDisplayRank: string | null | undefined): string {
+  const lines = SUPPORTER_VANITY_TITLES.map((title) => {
+    const active = currentDisplayRank === title.title ? " <- active" : "";
+    return `- \`${title.id}\` - **${title.title}**${active}`;
+  }).join("\n");
+  return `[🏷️] Vanity title catalog:\n\n${lines}\n\nUsage: \`/promote <title-id>\``;
+}
+
+async function handlePromoteCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<void> {
+  if (!ctx.state.isExecutiveSupporter) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/promote", reason: SlashCommandFailureReasons.PRO_GATED });
+    reply({ role: "error", content: PROMOTE_ACCESS_DENIED_MESSAGE });
+    return;
+  }
+
+  const titleId = command.slice("/promote".length).trim().toLowerCase();
+  if (!titleId) {
+    markValidSlashCommand(ctx, "/promote");
+    reply({ role: "system", content: buildPromoteListMessage(ctx.state.displayRank) });
+    return;
+  }
+
+  const title = SUPPORTER_VANITY_TITLES_BY_ID.get(titleId);
+  if (!title) {
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/promote", reason: SlashCommandFailureReasons.UNKNOWN_COMMAND });
+    reply({ role: "error", content: `[❌] Unknown vanity title: \`${titleId}\`.` });
+    return;
+  }
+
+  markValidSlashCommand(ctx, "/promote");
+  const result = await updateDisplayRankServer(ctx.state.username, title, ctx.state.proKeyHash);
+  if (!result.success) {
+    if (result.error === PROMOTE_ACCESS_DENIED_MESSAGE) {
+      reply({ role: "error", content: PROMOTE_ACCESS_DENIED_MESSAGE });
+      return;
+    }
+    track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/promote", reason: SlashCommandFailureReasons.NETWORK_ERROR });
+    reply({ role: "error", content: `[❌] ${result.error ?? "Could not update vanity title."}` });
+    return;
+  }
+
+  if (result.profile) {
+    ctx.setState((prev) => applyServerProfile(prev, result.profile!));
+  } else {
+    ctx.setState((prev) => ({ ...prev, displayRank: title }));
+  }
+  reply({ role: "system", content: `[✓] Vanity title updated to **${title}**. Your impostor syndrome is now globally visible.` });
+}
+
 export function handleAcceptCommand(ctx: SlashCommandContext, reply: Reply): void {
   // Pending review-pings take precedence: they're time-boxed (60s) and you
   // get paid for accepting them, so the user almost certainly meant the ping.
@@ -1077,6 +1129,10 @@ function handleExtendedCommand(command: string, ctx: SlashCommandContext, reply:
   if (command.startsWith("/model")) {
     handleModelCommand(command, ctx, reply);
     return true;
+  }
+
+  if (command === "/promote" || command.startsWith("/promote ")) {
+    return completeAsyncSlashCommand(handlePromoteCommand(command, ctx, reply), ctx);
   }
 
   if (handleNewCommand(command, ctx, reply)) {

@@ -45,6 +45,17 @@ describe("GET /api/leaderboard", () => {
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=60");
   });
 
+  it("projects vanity titles ahead of organic ranks", async () => {
+    const { db, getSQL } = createGetMockDB();
+
+    await app.request("/api/leaderboard", undefined, {
+      ALLOWED_ORIGINS: "http://localhost:5173",
+      DB: db,
+    });
+
+    expect(getSQL()).toContain("COALESCE(display_rank, corporate_rank) AS corporate_rank");
+  });
+
   it("filters by daily timeframe", async () => {
     const { db, getSQL } = createGetMockDB();
 

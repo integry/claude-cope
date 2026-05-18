@@ -269,6 +269,7 @@ export function TerminalView({
                 activeIndex={slashIndex}
                 totalTechnicalDebt={state.economy.totalTDEarned}
                 paidUser={isPaidUser(state)}
+                isExecutiveSupporter={Boolean(state.isExecutiveSupporter)}
                 onSelect={handleSlashMenuSelect}
               />
             )}

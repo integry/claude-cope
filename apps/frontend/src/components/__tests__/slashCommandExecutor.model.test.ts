@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SetStateAction } from "react";
 import type { GameState } from "../../hooks/useGameState";
+import { PROMOTE_ACCESS_DENIED_MESSAGE } from "../../game/constants";
 
 vi.mock("../../analytics", () => ({
   track: vi.fn(),
@@ -241,5 +242,83 @@ describe("/buddy command", () => {
       body: JSON.stringify({ username: "TestUser0", buddyType: null, isShiny: false }),
     });
     expect(getLastReply(ctx)).toContain("has been dismissed");
+  });
+});
+
+describe("/promote command", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          profile: {
+            username: "TestUser0",
+            total_td: 0,
+            current_td: 0,
+            corporate_rank: "Junior Code Monkey",
+            display_rank: "Mid-Level Googler",
+            is_executive_supporter: true,
+            inventory: {},
+            upgrades: [],
+            achievements: [],
+            buddy_type: null,
+            buddy_is_shiny: false,
+            unlocked_themes: ["default"],
+            active_theme: "default",
+            active_ticket: null,
+            td_multiplier: 1,
+            multiplier: 1,
+          },
+        }),
+      } satisfies Partial<Response> as Response)
+    ));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("rejects non-supporters with the HR error copy", async () => {
+    const ctx = makeCtx(makeGameState({ isExecutiveSupporter: false, proKey: "pro-test-key" }));
+
+    executeSlashCommand("/promote", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    expect(getLastReply(ctx)).toContain(PROMOTE_ACCESS_DENIED_MESSAGE);
+  });
+
+  it("lists vanity titles for executive supporters", async () => {
+    const ctx = makeCtx(makeGameState({ isExecutiveSupporter: true, proKey: "pro-test-key" }));
+
+    executeSlashCommand("/promote", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    const reply = getLastReply(ctx);
+    expect(reply).toContain("Vanity title catalog");
+    expect(reply).toContain("`junior-code-monkey`");
+    expect(reply).toContain("Usage: `/promote <title-id>`");
+  });
+
+  it("persists supporter vanity title selections", async () => {
+    const ctx = makeCtx(makeGameState({ isExecutiveSupporter: true, proKey: "pro-test-key", proKeyHash: "hash" }));
+
+    executeSlashCommand("/promote mid-level-googler", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+    await Promise.resolve();
+
+    expect(fetch).toHaveBeenCalledWith("/api/account/update-display-rank", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "TestUser0", displayRank: "Mid-Level Googler", licenseKeyHash: "hash" }),
+    });
+    expect(ctx.state.displayRank).toBe("Mid-Level Googler");
+    expect(getLastReply(ctx)).toContain("Vanity title updated");
   });
 });

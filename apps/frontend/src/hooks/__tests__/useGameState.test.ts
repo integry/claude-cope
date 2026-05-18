@@ -142,6 +142,7 @@ describe("canBuyTheme", () => {
         total_td: 6000,
         current_td: 6000,
         corporate_rank: "Junior Code Monkey",
+        display_rank: null,
         is_executive_supporter: true,
         inventory: {},
         upgrades: [],

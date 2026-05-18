@@ -21,6 +21,8 @@ describe("analytics — /key disabled (BYOK off) fires SLASH_COMMAND_FAILED", ()
     vi.doMock("../game/constants", () => ({
       PING_COST: 100,
       THEMES: [],
+      PROMOTE_ACCESS_DENIED_MESSAGE: "[HR ERROR] nope",
+      SUPPORTER_VANITY_TITLES: [],
       PRO_GATED_COMMANDS: new Set(["/brrrrrr", "/blame", "/synergize", "/alias"]),
     }));
     vi.doMock("@claude-cope/shared/models", () => ({
@@ -161,6 +163,7 @@ describe("parseBaseCommand — command normalization", () => {
     expect(parseBaseCommand("/sync abc123")).toBe("/sync");
     expect(parseBaseCommand("/ping @user")).toBe("/ping");
     expect(parseBaseCommand("/model gpt-4")).toBe("/model");
+    expect(parseBaseCommand("/promote cto")).toBe("/promote");
     expect(parseBaseCommand("/clear")).toBe("/clear");
     expect(parseBaseCommand("/help")).toBe("/help");
   });
@@ -232,6 +235,7 @@ describe("parseBaseCommand — command normalization", () => {
       "/abandon",
       "/alias",
       "/model",
+      "/promote",
       "/leaderboard",
       "/achievements",
       "/profile",

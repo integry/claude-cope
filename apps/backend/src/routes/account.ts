@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
-import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
+import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
 import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
@@ -327,6 +327,8 @@ async function persistActiveTheme(
       AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
   ).bind(themeId, username, themeId, licenseKeyHash).run();
 }
+
+const SUPPORTER_VANITY_TITLE_SET = new Set(SUPPORTER_VANITY_TITLES.map((title) => title.title));
 
 account.post("/checkout-license", async (c) => {
   const validated = await validateCheckoutRequest(c);
@@ -808,6 +810,52 @@ account.post("/update-ticket", async (c) => {
 
   if (!result.meta.changes) {
     return c.json({ error: "Update failed — profile not found, license mismatch, or license revoked" }, 409);
+  }
+
+  const updated = await getProfile(db, profile.username);
+  return c.json({ success: true, profile: updated });
+});
+
+account.post("/update-display-rank", async (c) => {
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: "Database not configured" }, 500);
+
+  const body = await c.req.json<{ username: string; displayRank: string; licenseKeyHash?: string }>();
+  if (!body.username || !body.displayRank) {
+    return c.json({ error: "username and displayRank are required" }, 400);
+  }
+  if (!SUPPORTER_VANITY_TITLE_SET.has(body.displayRank)) {
+    return c.json({ error: "Unknown displayRank" }, 400);
+  }
+
+  const ownership = await resolveThemePurchaseOwnership(db, {
+    username: body.username,
+    licenseKeyHash: body.licenseKeyHash,
+    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
+    sessionId: c.get("sessionId"),
+    actionLabel: "display rank updates",
+    logPrefix: "[account/display-rank]",
+  });
+  if (ownership.status !== "ok") {
+    return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
+  }
+  const { profile, licenseKeyHash } = ownership;
+
+  if (!profile.is_executive_supporter) {
+    return c.json({ error: PROMOTE_ACCESS_DENIED_MESSAGE }, 403);
+  }
+
+  const result = await db
+    .prepare(
+      `UPDATE user_scores SET display_rank = ?, updated_at = datetime('now')
+       WHERE username = ? AND license_hash = ? AND is_executive_supporter = 1
+         AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
+    )
+    .bind(body.displayRank, profile.username, licenseKeyHash)
+    .run();
+
+  if (!result.meta.changes) {
+    return c.json({ error: "Update failed — profile not found, supporter entitlement missing, or license revoked" }, 409);
   }
 
   const updated = await getProfile(db, profile.username);

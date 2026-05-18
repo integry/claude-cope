@@ -76,6 +76,15 @@ describe("detectSlashCommands", () => {
     });
   });
 
+  it("treats /promote as a prefill command for clickable UI entry points", () => {
+    const results = detectSlashCommands("Open /promote to browse vanity titles.");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      command: "/promote",
+      action: "prefill",
+    });
+  });
+
   // False positive avoidance
   it("does NOT match API paths like /api/chat", () => {
     const results = detectSlashCommands("The endpoint is /api/chat for messaging.");
