@@ -928,16 +928,19 @@ export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys:
 
 export async function claimLicenseKeysForCheckout(
   db: D1Database,
-  checkoutId: string,
-  keys: string[],
-  secret: string,
-  opts: { isExecutiveSupporter?: boolean } = {},
+  claim: {
+    checkoutId: string;
+    keys: string[];
+    secret: string;
+    isExecutiveSupporter?: boolean;
+  },
 ): Promise<{ ok: true; keys: string[] } | { ok: false; error: string }> {
   try {
+    const { checkoutId, keys, secret, isExecutiveSupporter = false } = claim;
     if (!keys.length) return { ok: false, error: "No license keys were provided for this checkout" };
     const keyHashes = await Promise.all(keys.map((key) => hashKey(key)));
     const valuePlaceholders = keyHashes.map(() => "(?)").join(", ");
-    const isExecutiveSupporter = opts.isExecutiveSupporter ? 1 : 0;
+    const executiveSupporterFlag = isExecutiveSupporter ? 1 : 0;
     await db.prepare(
       `WITH incoming(license_key_hash) AS (VALUES ${valuePlaceholders})
        INSERT INTO checkout_key_claims (license_key_hash, checkout_id, is_executive_supporter)
@@ -948,10 +951,10 @@ export async function claimLicenseKeysForCheckout(
          FROM checkout_key_claims existing
          JOIN incoming conflicted
            ON conflicted.license_key_hash = existing.license_key_hash
-         WHERE existing.checkout_id != ?
+       WHERE existing.checkout_id != ?
        )
        ON CONFLICT(license_key_hash) DO NOTHING`,
-    ).bind(...keyHashes, checkoutId, isExecutiveSupporter, checkoutId).run();
+    ).bind(...keyHashes, checkoutId, executiveSupporterFlag, checkoutId).run();
     const placeholders = keyHashes.map(() => "?").join(", ");
     const rows = await db.prepare(`SELECT license_key_hash, checkout_id FROM checkout_key_claims WHERE license_key_hash IN (${placeholders})`).bind(...keyHashes).all<{ license_key_hash: string; checkout_id: string }>();
     const ownerByHash = new Map((rows.results ?? []).map((row) => [row.license_key_hash, row.checkout_id]));

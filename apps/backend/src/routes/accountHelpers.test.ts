@@ -360,7 +360,11 @@ describe("checkout key claims", () => {
       })),
     } as unknown as D1Database;
 
-    const result = await claimLicenseKeysForCheckout(db, "checkout-a", ["COPE-1", "COPE-TAKEN", "COPE-2"], CLAIM_SECRET);
+    const result = await claimLicenseKeysForCheckout(db, {
+      checkoutId: "checkout-a",
+      keys: ["COPE-1", "COPE-TAKEN", "COPE-2"],
+      secret: CLAIM_SECRET,
+    });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("full license set");
     expect(storedClaimedKeys).toBeNull();
@@ -383,7 +387,11 @@ describe("checkout key claims", () => {
       })),
     } as unknown as D1Database;
 
-    const result = await claimLicenseKeysForCheckout(db, "checkout-a", ["COPE-X"], CLAIM_SECRET);
+    const result = await claimLicenseKeysForCheckout(db, {
+      checkoutId: "checkout-a",
+      keys: ["COPE-X"],
+      secret: CLAIM_SECRET,
+    });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("already claimed");
   });
@@ -425,7 +433,12 @@ describe("checkout key claims", () => {
       })),
     } as unknown as D1Database;
 
-    await claimLicenseKeysForCheckout(db, "checkout-a", ["COPE-1", "COPE-2"], CLAIM_SECRET, { isExecutiveSupporter: true });
+    await claimLicenseKeysForCheckout(db, {
+      checkoutId: "checkout-a",
+      keys: ["COPE-1", "COPE-2"],
+      secret: CLAIM_SECRET,
+      isExecutiveSupporter: true,
+    });
 
     const claimBindings = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"))?.bindings;
     expect(claimBindings).toBeDefined();

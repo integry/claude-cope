@@ -108,6 +108,20 @@ function getUpgradeDismissProps(
   } as const;
 }
 
+function focusTerminalInputIfEligible(
+  isMobileViewport: boolean,
+  anyOverlayOpen: boolean,
+  inputRef: RefObject<HTMLInputElement | null>,
+) {
+  if (
+    !isMobileViewport &&
+    !anyOverlayOpen &&
+    !window.getSelection()?.toString()
+  ) {
+    inputRef.current?.focus();
+  }
+}
+
 export function TerminalView({
   activeRegression,
   outageHp,
@@ -205,11 +219,13 @@ export function TerminalView({
         backgroundColor: outageHp !== null ? undefined : "var(--color-bg)",
         color: "var(--color-text)",
       }}
-      onClick={() => {
-        if (!isMobileViewport && !anyOverlayOpen && !window.getSelection()?.toString()) {
-          inputRef.current?.focus();
-        }
-      }}
+      onClick={() =>
+        focusTerminalInputIfEligible(
+          isMobileViewport,
+          anyOverlayOpen,
+          inputRef,
+        )
+      }
     >
       <div className="shrink-0">
         <Ticker

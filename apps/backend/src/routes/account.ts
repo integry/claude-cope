@@ -182,7 +182,10 @@ async function redeemCheckoutLicense(
   if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
   const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: result.createdAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
-  const claimedKeys = await claimLicenseKeysForCheckout(db, checkoutId, lkResult.keys, claimSecret, {
+  const claimedKeys = await claimLicenseKeysForCheckout(db, {
+    checkoutId,
+    keys: lkResult.keys,
+    secret: claimSecret,
     isExecutiveSupporter: lkResult.keys.length > 1,
   });
   if (!claimedKeys.ok) {
