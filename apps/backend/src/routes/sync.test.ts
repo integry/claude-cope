@@ -70,18 +70,22 @@ function createMockDB(opts: {
                 return { meta: { changes: 1 } };
               }
               if (sql.includes("INSERT INTO checkout_key_claims")) {
-                const checkoutId = (args as string[])[args.length - 1]!;
-                const incomingClaims = (args as string[])
+                const bound = args as Array<string | number>;
+                const checkoutId = bound[bound.length - 1]!;
+                const incomingClaims = bound
                   .slice(0, -2)
                   .reduce<Array<{ licenseKeyHash: string; isExecutiveSupporter: number }>>((claims, value, index, values) => {
                     if (index % 2 === 0) {
+                      const isExecutiveSupporter = values[index + 1];
+                      if (typeof value !== "string" || typeof isExecutiveSupporter !== "number") return claims;
                       claims.push({
                         licenseKeyHash: value,
-                        isExecutiveSupporter: values[index + 1] as number,
+                        isExecutiveSupporter,
                       });
                     }
                     return claims;
                   }, []);
+                if (typeof checkoutId !== "string") return { meta: { changes: 0 } };
                 const hasConflict = incomingClaims.some(({ licenseKeyHash }) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash)?.checkoutId !== checkoutId);
                 if (hasConflict) return { meta: { changes: 0 } };
                 let inserted = 0;
