@@ -624,25 +624,40 @@ describe("checkout key claims", () => {
 });
 
 describe("syncExecutiveSupporterEntitlement", () => {
-  it("copies the supporter flag from checkout key claims onto the synced user row", async () => {
+  it("copies the supporter flag from checkout key claims onto the synced user row and emits the activation event once", async () => {
     const calls: { sql: string; bindings: unknown[] }[] = [];
+    const preparedSql: string[] = [];
     const db = {
-      prepare: vi.fn((sql: string) => ({
-        bind: vi.fn((...args: unknown[]) => {
-          calls.push({ sql, bindings: args });
-          return {
-            first: vi.fn().mockResolvedValue(sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
-              ? { is_executive_supporter: 1 }
-              : null),
-            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
-          };
-        }),
-      })),
+      prepare: vi.fn((sql: string) => {
+        preparedSql.push(sql);
+        return {
+          bind: vi.fn((...args: unknown[]) => {
+            calls.push({ sql, bindings: args });
+            return {
+              first: vi.fn().mockResolvedValue(sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
+                ? { is_executive_supporter: 1 }
+                : sql.includes("SELECT username, is_executive_supporter FROM user_scores")
+                  ? { username: "alice", is_executive_supporter: 0 }
+                : null),
+              run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+            };
+          }),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        };
+      }),
     } as unknown as D1Database;
 
-    await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toBe(true);
+    await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
+      isExecutiveSupporter: true,
+      activatedNow: true,
+    });
     const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores"));
     expect(updateCall?.bindings).toEqual([1, 1, "hash-123"]);
+    const insertCall = calls.find((call) => call.sql.includes("INSERT INTO recent_events"));
+    expect(insertCall?.bindings).toEqual([
+      "[LIVE] 👑 alice just expensed the Executive Supporter Pack. Respect the grift.",
+    ]);
+    expect(preparedSql.some((sql) => sql.includes("DELETE FROM recent_events WHERE id NOT IN"))).toBe(true);
   });
 
   it("preserves existing supporter state when no supporter claim row is present", async () => {
@@ -665,9 +680,72 @@ describe("syncExecutiveSupporterEntitlement", () => {
       })),
     } as unknown as D1Database;
 
-    await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toBe(true);
+    await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
+      isExecutiveSupporter: true,
+      activatedNow: false,
+    });
     const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores"));
     expect(updateCall).toBeUndefined();
+    expect(calls.some((call) => call.sql.includes("INSERT INTO recent_events"))).toBe(false);
+  });
+
+  it("does not emit an activation event when the supporter row already existed", async () => {
+    let currentSupporter = 1;
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => {
+          calls.push({ sql, bindings: args });
+          return {
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")) {
+                return { is_executive_supporter: 1 };
+              }
+              if (sql.includes("SELECT username, is_executive_supporter FROM user_scores")) {
+                return { username: "alice", is_executive_supporter: currentSupporter };
+              }
+              return null;
+            }),
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("UPDATE user_scores")) currentSupporter = 1;
+              return { meta: { changes: 1 } };
+            }),
+          };
+        }),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+      })),
+    } as unknown as D1Database;
+
+    await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
+      isExecutiveSupporter: true,
+      activatedNow: false,
+    });
+    expect(calls.some((call) => call.sql.includes("INSERT INTO recent_events"))).toBe(false);
+  });
+
+  it("does not emit an activation event for a non-supporter entitlement", async () => {
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => {
+          calls.push({ sql, bindings: args });
+          return {
+            first: vi.fn().mockResolvedValue(sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
+              ? { is_executive_supporter: 0 }
+              : sql.includes("SELECT username, is_executive_supporter FROM user_scores")
+                ? { username: "alice", is_executive_supporter: 0 }
+                : null),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+          };
+        }),
+      })),
+    } as unknown as D1Database;
+
+    await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
+      isExecutiveSupporter: false,
+      activatedNow: false,
+    });
+    expect(calls.some((call) => call.sql.includes("INSERT INTO recent_events"))).toBe(false);
   });
 });
 
