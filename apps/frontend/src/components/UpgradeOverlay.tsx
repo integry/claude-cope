@@ -69,7 +69,9 @@ function UpgradeOverlay({
   const multiAvailable = !!UPGRADE_CHECKOUT_MULTI;
 
   const singleLabel = `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`;
-  const multiLabel = `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`;
+  const multiLabel = `[ EXPENSE TO EMPLOYER - ${UPGRADE_PRICE_MULTI} ]`;
+  const multiOptionHeading = `[OPTION 2: EXECUTIVE SUPPORTER - ${UPGRADE_PRICE_MULTI}]`;
+  const multiOptionDescription = "Includes 5 team keys, plus personal vanity upgrades: buy a fake promotion on the leaderboard and unlock premium terminal themes.";
   const mobileSingleLabel = `[ EXTRACT FUNDS - ${UPGRADE_PRICE_SINGLE} ]`;
   const mobileMultiLabel = multiLabel;
 
@@ -92,6 +94,8 @@ function UpgradeOverlay({
       <DesktopLayout
         singleLabel={singleLabel}
         multiLabel={multiLabel}
+        multiOptionHeading={multiOptionHeading}
+        multiOptionDescription={multiOptionDescription}
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
         quotaLine={quotaLine}
@@ -107,6 +111,8 @@ function UpgradeOverlay({
       <MobileLayout
         singleLabel={mobileSingleLabel}
         multiLabel={mobileMultiLabel}
+        multiOptionHeading={multiOptionHeading}
+        multiOptionDescription={multiOptionDescription}
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
         quotaLine={quotaLine}
@@ -129,6 +135,8 @@ function UpgradeOverlay({
 function MobileLayout({
   singleLabel,
   multiLabel,
+  multiOptionHeading,
+  multiOptionDescription,
   singleAvailable,
   multiAvailable,
   quotaLine,
@@ -350,13 +358,10 @@ function MobileLayout({
           {/* Option 2 */}
           <div className="upgrade-mobile-section" style={sectionStyle}>
             <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
-              [OPTION 2: TEAM PACK - 5 LICENSES]
+              {multiOptionHeading}
             </div>
-            <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
-              Let the entire team achieve HTTP 429 compliance.
-            </div>
-            <div style={{ color: "#8892b0", fontSize: "11px", marginBottom: "8px" }}>
-              (5 activation keys will be sent to your email)
+            <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: "8px" }}>
+              {multiOptionDescription}
             </div>
             {mobileButton(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}
           </div>

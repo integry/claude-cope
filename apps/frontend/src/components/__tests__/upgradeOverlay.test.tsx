@@ -27,6 +27,13 @@ const defaultProps = {
   onDismiss: vi.fn(),
 } satisfies Parameters<typeof UpgradeOverlay>[0];
 
+const executiveSupporterHeading = "OPTION 2: EXECUTIVE SUPPORTER - $19.99";
+const executiveSupporterDescription = "Includes 5 team keys, plus personal vanity upgrades: buy a fake promotion on the leaderboard and unlock premium terminal themes.";
+const executiveSupporterCta = "EXPENSE TO EMPLOYER - $19.99";
+const executiveSupporterDesktopLine1 = "Includes 5 team keys, plus personal vanity upgrades: buy a";
+const executiveSupporterDesktopLine2 = "fake promotion on the leaderboard and unlock premium terminal";
+const executiveSupporterDesktopLine3 = "themes.";
+
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 const originalInnerWidth = window.innerWidth;
@@ -76,7 +83,7 @@ describe("UpgradeOverlay", () => {
   it("renders both purchase options with prices", () => {
     renderOverlay();
     expect(text()).toContain("AUTHORIZE EXTRACTION - $4.99");
-    expect(text()).toContain("EXTRACT TEAM FUNDS - $19.99");
+    expect(text()).toContain(executiveSupporterCta);
   });
 
   it("renders the compact appendix and keeps the purchase options above it", () => {
@@ -87,11 +94,23 @@ describe("UpgradeOverlay", () => {
     expect(renderedText).not.toContain("FREE STARTER SET:");
     expect(renderedText).toContain(appendix);
     expect(renderedText.indexOf("AUTHORIZE EXTRACTION - $4.99")).toBeLessThan(renderedText.indexOf(appendix));
-    expect(renderedText.indexOf("EXTRACT TEAM FUNDS - $19.99")).toBeLessThan(renderedText.indexOf(appendix));
+    expect(renderedText.indexOf(executiveSupporterCta)).toBeLessThan(renderedText.indexOf(appendix));
 
     for (const { id, title } of BACKLOG_CATEGORY_UPGRADE_GROUPS) {
       expect(renderedText).toContain(id === "marketing-growth-sludge" ? "GROWTH SLUDGE" : title.toUpperCase());
     }
+  });
+
+  it("renders the executive supporter offer copy in both layouts", () => {
+    renderOverlay();
+    expect(text(desktop())).toContain(executiveSupporterHeading);
+    expect(text(desktop())).toContain(executiveSupporterDesktopLine1);
+    expect(text(desktop())).toContain(executiveSupporterDesktopLine2);
+    expect(text(desktop())).toContain(executiveSupporterDesktopLine3);
+    expect(text(desktop())).toContain(executiveSupporterCta);
+    expect(text(mobile())).toContain(executiveSupporterHeading);
+    expect(text(mobile())).toContain(executiveSupporterDescription);
+    expect(text(mobile())).toContain(executiveSupporterCta);
   });
 
   it("renders checkout links for both options", () => {
