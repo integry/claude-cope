@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { getSlashMenuItems, resolveSlashMenuSelection } from "./slashCommands";
