@@ -64,8 +64,6 @@ export type SyncBody = {
 
 export type ExecutiveSupporterEntitlementSyncResult = {
   isExecutiveSupporter: boolean;
-  activatedNow: boolean;
-  username: string | null;
 };
 
 function buildExecutiveSupporterActivationMessage(username: string): string {
@@ -79,15 +77,7 @@ async function insertRecentEventAndPrune(db: D1Database, message: string): Promi
     .run();
 }
 
-async function recentEventExists(db: D1Database, message: string): Promise<boolean> {
-  const existing = await db
-    .prepare("SELECT id FROM recent_events WHERE message = ? LIMIT 1")
-    .bind(message)
-    .first<{ id: string }>();
-  return Boolean(existing?.id);
-}
-
-export async function emitExecutiveSupporterActivationEvent(
+async function emitExecutiveSupporterActivationEvent(
   db: D1Database,
   username: string,
 ): Promise<void> {
@@ -109,8 +99,6 @@ export async function syncExecutiveSupporterEntitlement(
       .first<{ is_executive_supporter: number }>();
     return {
       isExecutiveSupporter: existingUserRow?.is_executive_supporter === 1,
-      activatedNow: false,
-      username: null,
     };
   }
 
@@ -120,16 +108,10 @@ export async function syncExecutiveSupporterEntitlement(
     .bind(hash)
     .first<{ username: string; is_executive_supporter: number }>();
   if (!existingUserRow) {
-    return { isExecutiveSupporter, activatedNow: false, username: null };
+    return { isExecutiveSupporter };
   }
 
-  let activatedNow = false;
   if (isExecutiveSupporter) {
-    const message = buildExecutiveSupporterActivationMessage(existingUserRow.username);
-    const eventAlreadyRecorded = await recentEventExists(db, message);
-    if (existingUserRow.is_executive_supporter === 0 && !eventAlreadyRecorded) {
-      await insertRecentEventAndPrune(db, message);
-    }
     const activationUpdate = await db
       .prepare(
         `UPDATE user_scores
@@ -140,7 +122,24 @@ export async function syncExecutiveSupporterEntitlement(
       )
       .bind(hash)
       .run();
-    activatedNow = Number(activationUpdate.meta.changes ?? 0) > 0;
+    const activatedNow = Number(activationUpdate.meta.changes ?? 0) > 0;
+    if (activatedNow) {
+      try {
+        await emitExecutiveSupporterActivationEvent(db, existingUserRow.username);
+      } catch (err: unknown) {
+        await db
+          .prepare(
+            `UPDATE user_scores
+             SET is_executive_supporter = 0,
+                 updated_at = datetime('now')
+             WHERE license_hash = ?
+               AND is_executive_supporter = 1`,
+          )
+          .bind(hash)
+          .run();
+        throw err;
+      }
+    }
   } else {
     await db
       .prepare(
@@ -155,7 +154,7 @@ export async function syncExecutiveSupporterEntitlement(
       .run();
   }
 
-  return { isExecutiveSupporter, activatedNow, username: existingUserRow.username };
+  return { isExecutiveSupporter };
 }
 
 function metadataFlagIsTrue(value: unknown): boolean {
@@ -327,7 +326,7 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
   return { profile, mutation: { kind: "created", username: newUsername } };
 }
 
-type ResolveProfileResult =
+export type ResolveProfileResult =
   | { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; mutation: SyncProfileMutation; error?: undefined }
   | { restored: false; profile: null; error: string; mutation?: undefined };
 

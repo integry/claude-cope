@@ -28,6 +28,8 @@ leaderboard.get("/", async (c) => {
   }
 
   let sql =
+    // The frontend treats leaderboard identity as username-backed, so `id`
+    // remains an alias for `username` instead of a separate opaque key.
     `SELECT us.username AS id,
             us.username,
             CASE

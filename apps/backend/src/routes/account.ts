@@ -5,7 +5,7 @@ import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
 import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey } from "./accountHelpers";
-import type { CheckoutCache } from "./accountHelpers";
+import type { CheckoutCache, ResolveProfileResult } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 import { issueFreeAccountCookie } from "../utils/freeAccountIdentity";
@@ -438,7 +438,7 @@ function respondWithSyncProfileError(
 async function rollbackSyncProfileMutation(
   db: D1Database,
   hash: string,
-  mutation: Awaited<ReturnType<typeof resolveProfile>>["mutation"],
+  mutation: ResolveProfileResult["mutation"],
 ) {
   if (!mutation) {
     return;
@@ -456,24 +456,24 @@ async function rollbackSyncProfileMutation(
 
 async function finalizeSyncProfile(
   deps: { db: D1Database; kv: KVNamespace; hash: string; validationId?: string; proInitialQuota: number },
-  result: Extract<Awaited<ReturnType<typeof resolveProfile>>, { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>> }>,
+  result: Exclude<ResolveProfileResult, { profile: null }>,
 ) {
+  const supporterEntitlement = await syncExecutiveSupporterEntitlement(deps.db, deps.hash);
   try {
-    const supporterEntitlement = await syncExecutiveSupporterEntitlement(deps.db, deps.hash);
     await commitSyncSideEffects(
       { db: deps.db, kv: deps.kv, hash: deps.hash },
       { validationId: deps.validationId, proInitialQuota: deps.proInitialQuota },
     );
-    result.profile = {
-      ...result.profile,
-      is_executive_supporter: supporterEntitlement.isExecutiveSupporter,
-      display_rank: supporterEntitlement.isExecutiveSupporter ? result.profile.display_rank : null,
-    };
-    return supporterEntitlement;
   } catch (err: unknown) {
     await rollbackSyncProfileMutation(deps.db, deps.hash, result.mutation);
     throw err;
   }
+
+  result.profile = {
+    ...result.profile,
+    is_executive_supporter: supporterEntitlement.isExecutiveSupporter,
+    display_rank: supporterEntitlement.isExecutiveSupporter ? result.profile.display_rank : null,
+  };
 }
 
 async function bindSessionUserIfPresent(
@@ -533,29 +533,30 @@ account.post("/sync", async (c) => {
   if (result.profile === null) {
     return respondWithSyncProfileError(c, result.error);
   }
+  const resolvedProfile = result;
 
   // Profile claim succeeded — now provision the licenses row and KV quota.
   // This ordering ensures that failed syncs never produce orphaned active
   // licenses or quota entries.
   await finalizeSyncProfile(
     { db, kv, hash, validationId: validation.id ? String(validation.id) : undefined, proInitialQuota: limits.proInitialQuota },
-    result,
+    resolvedProfile,
   );
 
   // Bind the session to the resolved username so /me can look it up.
-  if (sessionId && result.profile?.username) {
-    await bindSessionUserIfPresent(kv, sessionId, result.profile.username);
+  if (sessionId && resolvedProfile.profile.username) {
+    await bindSessionUserIfPresent(kv, sessionId, resolvedProfile.profile.username);
   }
 
   const quotaPercent = await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
-  const profile = { ...result.profile, quota_percent: quotaPercent };
+  const profile = { ...resolvedProfile.profile, quota_percent: quotaPercent };
 
-  return c.json({ success: true, hash, restored: result.restored, profile });
+  return c.json({ success: true, hash, restored: resolvedProfile.restored, profile });
 });
 
 account.get("/me", async (c) => {
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  const sessionId = c.get("sessionId");
+  const sessionId = String(c.get("sessionId") ?? "");
   if (!kv || !sessionId) return c.json({ found: false });
 
   const db = c.env?.DB;

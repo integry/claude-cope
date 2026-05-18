@@ -272,6 +272,10 @@ describe("POST /api/account/sync", () => {
               return { meta: { changes: 1 } };
             }
             if (sql.includes("UPDATE user_scores")) {
+              if (sql.includes("SET is_executive_supporter = 0")) {
+                currentSupporter = 0;
+                return { meta: { changes: 1 } };
+              }
               const changes = currentSupporter === 0 ? 1 : 0;
               currentSupporter = 1;
               return { meta: { changes } };

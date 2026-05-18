@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys, fetchCheckoutCustomerId, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, emitExecutiveSupporterActivationEvent } from "./accountHelpers";
+import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys, fetchCheckoutCustomerId, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
 import { parseCheckoutKeyClaimBindings } from "./account.test-utils";
 import { hashKey } from "../utils/quota";
@@ -647,8 +647,6 @@ describe("syncExecutiveSupporterEntitlement", () => {
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
       isExecutiveSupporter: true,
-      activatedNow: true,
-      username: "alice",
     });
     const insertCall = calls.find((call) => call.sql.includes("INSERT INTO recent_events"));
     expect(insertCall?.bindings).toEqual([
@@ -680,8 +678,6 @@ describe("syncExecutiveSupporterEntitlement", () => {
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
       isExecutiveSupporter: true,
-      activatedNow: false,
-      username: null,
     });
     const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores"));
     expect(updateCall).toBeUndefined();
@@ -713,8 +709,6 @@ describe("syncExecutiveSupporterEntitlement", () => {
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
       isExecutiveSupporter: true,
-      activatedNow: false,
-      username: "alice",
     });
     expect(calls.some((call) => call.sql.includes("INSERT INTO recent_events"))).toBe(false);
   });
@@ -739,39 +733,8 @@ describe("syncExecutiveSupporterEntitlement", () => {
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
       isExecutiveSupporter: false,
-      activatedNow: false,
-      username: "alice",
     });
     expect(calls.some((call) => call.sql.includes("INSERT INTO recent_events"))).toBe(false);
-  });
-});
-
-describe("emitExecutiveSupporterActivationEvent", () => {
-  it("inserts the activation message and prunes old feed entries", async () => {
-    const calls: { sql: string; bindings: unknown[] }[] = [];
-    const preparedSql: string[] = [];
-    const db = {
-      prepare: vi.fn((sql: string) => {
-        preparedSql.push(sql);
-        return {
-          bind: vi.fn((...args: unknown[]) => {
-            calls.push({ sql, bindings: args });
-            return {
-              run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
-            };
-          }),
-          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
-        };
-      }),
-    } as unknown as D1Database;
-
-    await emitExecutiveSupporterActivationEvent(db, "alice");
-
-    const insertCall = calls.find((call) => call.sql.includes("INSERT INTO recent_events"));
-    expect(insertCall?.bindings).toEqual([
-      "[LIVE] 👑 alice just expensed the Executive Supporter Pack. Respect the grift.",
-    ]);
-    expect(preparedSql.some((sql) => sql.includes("DELETE FROM recent_events WHERE id NOT IN"))).toBe(true);
   });
 });
 
