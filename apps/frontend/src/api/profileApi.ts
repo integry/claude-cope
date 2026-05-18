@@ -37,7 +37,7 @@ export function updateThemeServer(username: string, themeId: string, licenseKeyH
   return profilePost("update-theme", { username, themeId, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
 }
 
-export function updateDisplayRankServer(username: string, displayRank: string, licenseKeyHash?: string): Promise<ProfileResult> {
+export function updateDisplayRankServer(username: string, displayRank: string | null, licenseKeyHash?: string): Promise<ProfileResult> {
   return profilePost("update-display-rank", { username, displayRank, ...(licenseKeyHash ? { licenseKeyHash } : {}) });
 }
 

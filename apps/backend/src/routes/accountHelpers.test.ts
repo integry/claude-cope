@@ -418,7 +418,7 @@ describe("checkout key claims", () => {
     await expect(storeClaimedKeys(db, "checkout-a", ["COPE-1"], CLAIM_SECRET)).resolves.toEqual({ ok: true });
   });
 
-  it("persists the executive supporter flag only on the purchaser key from a team-pack", async () => {
+  it("does not assign executive supporter to an arbitrary key from a team-pack", async () => {
     const calls: { sql: string; bindings: unknown[] }[] = [];
     const db = {
       prepare: vi.fn((sql: string) => ({
@@ -437,14 +437,13 @@ describe("checkout key claims", () => {
       checkoutId: "checkout-a",
       keys: ["COPE-1", "COPE-2"],
       secret: CLAIM_SECRET,
-      executiveSupporterKey: "COPE-1",
     });
 
     const claimBindings = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"))?.bindings;
     expect(claimBindings).toBeDefined();
     expect(claimBindings?.slice(0, 4)).toEqual([
       expect.any(String),
-      1,
+      0,
       expect.any(String),
       0,
     ]);

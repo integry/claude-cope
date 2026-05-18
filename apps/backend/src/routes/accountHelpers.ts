@@ -938,16 +938,14 @@ export async function claimLicenseKeysForCheckout(
     checkoutId: string;
     keys: string[];
     secret: string;
-    executiveSupporterKey?: string;
   },
 ): Promise<{ ok: true; keys: string[] } | { ok: false; error: string }> {
   try {
-    const { checkoutId, keys, secret, executiveSupporterKey } = claim;
+    const { checkoutId, keys, secret } = claim;
     if (!keys.length) return { ok: false, error: "No license keys were provided for this checkout" };
     const keyHashes = await Promise.all(keys.map((key) => hashKey(key)));
-    const executiveSupporterKeyHash = executiveSupporterKey ? await hashKey(executiveSupporterKey) : null;
     const valuePlaceholders = keyHashes.map(() => "(?, ?)").join(", ");
-    const valueBindings = keyHashes.flatMap((keyHash) => [keyHash, executiveSupporterKeyHash === keyHash ? 1 : 0]);
+    const valueBindings = keyHashes.flatMap((keyHash) => [keyHash, 0]);
     await db.prepare(
       `WITH incoming(license_key_hash, is_executive_supporter) AS (VALUES ${valuePlaceholders})
        INSERT INTO checkout_key_claims (license_key_hash, checkout_id, is_executive_supporter)

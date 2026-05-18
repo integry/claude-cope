@@ -177,44 +177,64 @@ function mapClaimedKeysError(
   return c.json({ error }, isConflict ? 409 : 503);
 }
 
+async function resolveCheckoutRedemptionContext(
+  c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
+  deps: { checkoutId: string; sessionId: string; allowMissingReferenceBinding?: boolean },
+): Promise<
+  | { customerId: string; checkoutCreatedAt: string }
+  | { response: Response }
+> {
+  const accessToken = c.env?.POLAR_ACCESS_TOKEN;
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
+  if (!accessToken || !organizationId) {
+    return { response: c.json({ error: "Polar integration is not configured" }, 500) };
+  }
+
+  const result = await fetchCheckoutCustomerId(deps.checkoutId, accessToken, organizationId, {
+    allowMissingReferenceId: Boolean(deps.allowMissingReferenceBinding),
+  });
+  if ("error" in result) {
+    return { response: c.json({ error: result.error }, result.status) };
+  }
+
+  const ownershipError = validateCheckoutOwnership(c, {
+    referenceId: result.referenceId ?? null,
+    sessionId: deps.sessionId,
+    allowMissingReferenceBinding: deps.allowMissingReferenceBinding,
+  });
+  if (ownershipError) return { response: ownershipError };
+  if (!result.createdAt) {
+    return { response: c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500) };
+  }
+
+  return { customerId: result.customerId, checkoutCreatedAt: result.createdAt };
+}
+
 async function redeemCheckoutLicense(
   c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
   deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string; allowMissingReferenceBinding?: boolean },
 ) {
   const { db, kv, checkoutId, sessionId, claimSecret } = deps;
-  const accessToken = c.env?.POLAR_ACCESS_TOKEN;
-  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
-  if (!accessToken || !organizationId) return c.json({ error: "Polar integration is not configured" }, 500);
-  const result = await fetchCheckoutCustomerId(checkoutId, accessToken, organizationId, {
-    allowMissingReferenceId: Boolean(deps.allowMissingReferenceBinding),
-  });
-  if ("error" in result) return c.json({ error: result.error }, result.status);
-  const referenceId = result.referenceId ?? null;
-  const checkoutCreatedAt = result.createdAt;
-  if (!checkoutCreatedAt) {
-    return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
-  }
-  const ownershipError = validateCheckoutOwnership(c, {
-    referenceId,
-    sessionId,
-    allowMissingReferenceBinding: deps.allowMissingReferenceBinding,
-  });
-  if (ownershipError) return ownershipError;
+  const redemptionContext = await resolveCheckoutRedemptionContext(c, deps);
+  if ("response" in redemptionContext) return redemptionContext.response;
+
+  const accessToken = c.env?.POLAR_ACCESS_TOKEN as string;
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID as string;
+  const { customerId, checkoutCreatedAt } = redemptionContext;
   const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
   const postClaimResolution = await resolveCachedOrStoredClaim(c, {
     db, kv, checkoutId, sessionId, claimSecret, cacheLookup: { status: "cached", keys: [], sessionMismatch: false, requiresStoredClaim: true },
   });
   if (postClaimResolution.response) return postClaimResolution.response;
-  const nextCheckout = await fetchNextCheckoutCreatedAt(result.customerId, organizationId, accessToken, { checkoutId, checkoutCreatedAt });
+  const nextCheckout = await fetchNextCheckoutCreatedAt(customerId, organizationId, accessToken, { checkoutId, checkoutCreatedAt });
   if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
-  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: checkoutCreatedAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
+  const lkResult = await fetchLicenseKeys(customerId, organizationId, accessToken, { createdAt: checkoutCreatedAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
   const claimedKeys = await claimLicenseKeysForCheckout(db, {
     checkoutId,
     keys: lkResult.keys,
     secret: claimSecret,
-    executiveSupporterKey: lkResult.keys.length > 1 ? lkResult.keys[0] : undefined,
   });
   if (!claimedKeys.ok) return mapClaimedKeysError(c, claimedKeys.error);
   return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: claimedKeys.keys });
