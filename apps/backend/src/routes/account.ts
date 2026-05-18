@@ -440,6 +440,10 @@ async function rollbackSyncProfileMutation(
   hash: string,
   mutation: Awaited<ReturnType<typeof resolveProfile>>["mutation"],
 ) {
+  if (!mutation) {
+    return;
+  }
+
   try {
     await rollbackProfileMutation(db, hash, mutation);
   } catch (rollbackErr: unknown) {
@@ -451,7 +455,7 @@ async function rollbackSyncProfileMutation(
 }
 
 async function finalizeSyncProfile(
-  deps: { db: D1Database; kv: KVNamespace; hash: string; validationId: number; proInitialQuota: number },
+  deps: { db: D1Database; kv: KVNamespace; hash: string; validationId?: string; proInitialQuota: number },
   result: Extract<Awaited<ReturnType<typeof resolveProfile>>, { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>> }>,
 ) {
   let supporterEntitlement: Awaited<ReturnType<typeof syncExecutiveSupporterEntitlement>> | null = null;
@@ -554,7 +558,7 @@ account.post("/sync", async (c) => {
   // This ordering ensures that failed syncs never produce orphaned active
   // licenses or quota entries.
   const supporterEntitlement = await finalizeSyncProfile(
-    { db, kv, hash, validationId: validation.id, proInitialQuota: limits.proInitialQuota },
+    { db, kv, hash, validationId: validation.id ? String(validation.id) : undefined, proInitialQuota: limits.proInitialQuota },
     result,
   );
   await emitSupporterActivationIfNeeded(db, hash, supporterEntitlement);
