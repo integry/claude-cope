@@ -70,6 +70,8 @@ function UpgradeOverlay({
 
   const singleLabel = `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`;
   const multiLabel = `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`;
+  const mobileSingleLabel = `[ EXTRACT FUNDS - ${UPGRADE_PRICE_SINGLE} ]`;
+  const mobileMultiLabel = multiLabel;
 
   const currentCredits = Math.round((quotaPercent / 100) * totalQuota);
   const quotaLine = isBYOK
@@ -103,8 +105,8 @@ function UpgradeOverlay({
       />
       {/* Mobile: visible up to the shared max-width breakpoint */}
       <MobileLayout
-        singleLabel={singleLabel}
-        multiLabel={multiLabel}
+        singleLabel={mobileSingleLabel}
+        multiLabel={mobileMultiLabel}
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
         quotaLine={quotaLine}
@@ -162,7 +164,7 @@ function MobileLayout({
     return (
       <a
         href={url}
-        className={primary ? "upgrade-btn-primary" : "upgrade-btn-secondary"}
+        className={`${primary ? "upgrade-btn-primary" : "upgrade-btn-secondary"} upgrade-mobile-cta`}
         style={{
           display: "block",
           textDecoration: "none",
@@ -179,6 +181,7 @@ function MobileLayout({
         </span>
         <span
           data-btn=""
+          className="upgrade-mobile-cta-label"
           style={{
             backgroundColor: primary ? G : "transparent",
             color: primary ? "#0d1117" : G,
@@ -207,7 +210,7 @@ function MobileLayout({
       />
 
       <div
-        className={`relative z-10 upgrade-overlay-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
+        className={`relative z-10 upgrade-overlay-panel upgrade-mobile-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
         style={{
           fontFamily: MONO_FONT,
@@ -219,13 +222,16 @@ function MobileLayout({
           width: "calc(100vw - 2rem)",
           maxWidth: "480px",
           maxHeight: "calc(100vh - 2rem)",
-          overflowY: "auto",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
           color: W,
           ...(isForcedClosing ? { animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" as const } : {}),
         }}
       >
         {/* Title bar */}
         <div
+          className="upgrade-mobile-section upgrade-mobile-titlebar"
           style={{
             ...sectionStyle,
             display: "flex",
@@ -240,122 +246,147 @@ function MobileLayout({
           {dismissMode === "manual" ? (
             <button
               type="button"
-              onClick={onDismiss}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismiss();
+              }}
               style={{ color: DIM, fontSize: "14px", background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
               title="Tap to dismiss"
             >
               [x]
             </button>
           ) : (
-            <span
-              style={{ color: DIM, fontSize: "14px" }}
-              title="Tap footer to dismiss"
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismiss();
+              }}
+              style={{ color: DIM, fontSize: "14px", background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
+              title="Tap to dismiss"
             >
               [x]
-            </span>
+            </button>
           )}
         </div>
 
-        {/* Subtitle */}
-        <div style={{ ...sectionStyle, textAlign: "center" }}>
-          <span style={{ color: Y, fontWeight: "bold", fontSize: "12px" }}>
-            INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]
-          </span>
-          <div style={{ color: DIM, fontSize: "11px", marginTop: "4px" }}>
-            {">"} {quotaLine}
+        <div
+          className="upgrade-mobile-scroll"
+          style={{
+            flex: "1 1 auto",
+            minHeight: 0,
+            overflowY: "auto",
+          }}
+        >
+          {/* Subtitle */}
+          <div className="upgrade-mobile-section" style={{ ...sectionStyle, textAlign: "center" }}>
+            <div className="upgrade-mobile-header" style={{ color: Y, fontWeight: "bold", fontSize: "12px" }}>
+              <span className="upgrade-mobile-header-line">INITIALIZING UPGRADE:</span>
+              <span className="upgrade-mobile-header-line">CLAUDE COPE [MAX 429X]</span>
+            </div>
+            <div style={{ color: DIM, fontSize: "11px", marginTop: "4px" }}>
+              {">"} {quotaLine}
+            </div>
           </div>
-        </div>
 
-        <hr style={hrStyle} />
+          <hr style={hrStyle} />
 
-        {/* Benchmarks */}
-        <div style={sectionStyle}>
-          <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
-            [ THROUGHPUT BENCHMARKS ]
+          {/* Benchmarks */}
+          <div className="upgrade-mobile-section" style={sectionStyle}>
+            <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
+              [ THROUGHPUT BENCHMARKS ]
+            </div>
+            <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
+              Industry standards throttle capacity at 5x or 20x.
+              Claude Cope guarantees absolute system saturation.
+            </div>
           </div>
-          <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
-            Industry standards throttle capacity at 5x or 20x.
-            Claude Cope guarantees absolute system saturation.
-          </div>
-        </div>
 
-        {/* Comparison table — stacked on mobile */}
-        <div style={{ ...sectionStyle, fontSize: "11px" }}>
-          <div style={{
-            border: `1px solid ${DIM}`,
-            marginBottom: "4px",
-            padding: "6px 8px",
-          }}>
-            <span style={{ color: DIM }}>Legacy AI</span>
-            {" · Max 20x · Manageable pull requests"}
+          {/* Comparison table — stacked on mobile */}
+          <div className="upgrade-mobile-section" style={{ ...sectionStyle, fontSize: "11px" }}>
+            <div
+              className="upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-muted"
+              style={{
+                border: `1px solid ${DIM}`,
+                marginBottom: "4px",
+                padding: "6px 8px",
+              }}
+            >
+              <span className="upgrade-mobile-benchmark-label" style={{ color: DIM }}>Legacy AI</span>
+              <span className="upgrade-mobile-benchmark-outcome">Outcome: Manageable pull requests</span>
+            </div>
+            <div
+              className="upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-accent"
+              style={{
+                border: `1px solid ${G}`,
+                padding: "6px 8px",
+              }}
+            >
+              <span className="upgrade-mobile-benchmark-label" style={{ color: G, fontWeight: "bold" }}>Claude Cope</span>
+              <span className="upgrade-mobile-benchmark-outcome">Outcome: Unmitigated request storms</span>
+            </div>
           </div>
-          <div style={{
-            border: `1px solid ${G}`,
-            padding: "6px 8px",
-          }}>
-            <span style={{ color: G, fontWeight: "bold" }}>Claude Cope</span>
-            {" · MAX 429X · Unmitigated request storms"}
-          </div>
-        </div>
 
-        <hr style={hrStyle} />
+          <hr style={hrStyle} />
 
-        {/* Option 1 */}
-        <div style={sectionStyle}>
-          <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
-            [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]
+          {/* Option 1 */}
+          <div className="upgrade-mobile-section" style={sectionStyle}>
+            <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
+              [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]
+            </div>
+            <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: "4px" }}>
+              One seat. Max 429X enabled (One-time extraction).
+            </div>
+            <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "8px", color: W }}>
+              Unlocks:{" "}
+              <span style={{ color: BW, fontWeight: "bold" }}>{PRO_QUOTA_LIMIT} non-expiring credits</span> and{" "}
+              <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>.
+            </div>
+            {mobileButton(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable, true)}
           </div>
-          <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: "4px" }}>
-            One seat. Max 429X enabled (One-time extraction).
-          </div>
-          <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "8px", color: W }}>
-            Unlocks:{" "}
-            <span style={{ color: BW, fontWeight: "bold" }}>{PRO_QUOTA_LIMIT} non-expiring credits</span> and{" "}
-            <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>.
-          </div>
-          {mobileButton(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable, true)}
-        </div>
 
-        <div style={{ height: "1px" }} />
+          <div style={{ height: "1px" }} />
 
-        {/* Option 2 */}
-        <div style={sectionStyle}>
-          <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
-            [OPTION 2: TEAM PACK - 5 LICENSES]
+          {/* Option 2 */}
+          <div className="upgrade-mobile-section" style={sectionStyle}>
+            <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
+              [OPTION 2: TEAM PACK - 5 LICENSES]
+            </div>
+            <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
+              Let the entire team achieve HTTP 429 compliance.
+            </div>
+            <div style={{ color: "#8892b0", fontSize: "11px", marginBottom: "8px" }}>
+              (5 activation keys will be sent to your email)
+            </div>
+            {mobileButton(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}
           </div>
-          <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
-            Let the entire team achieve HTTP 429 compliance.
-          </div>
-          <div style={{ color: "#8892b0", fontSize: "11px", marginBottom: "8px" }}>
-            (5 activation keys will be sent to your email)
-          </div>
-          {mobileButton(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}
-        </div>
 
-        <hr style={hrStyle} />
+          <hr style={hrStyle} />
 
-        <div style={sectionStyle}>
-          <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
-            [ APPENDIX: {premiumCategoryCount} NEW MAX CATEGORIES UNLOCKED ]
-          </div>
-          <div style={{ height: "8px" }} />
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "8px 12px",
-              fontSize: "11px",
-              lineHeight: "1.5",
-            }}
-          >
-            {premiumGroups.map((group) => (
-              <div key={group.id}>
-                <span style={{ color: Y, fontWeight: "bold" }}>
-                  * {group.title.toUpperCase()}:
-                </span>
-                <span>{` ${group.summary}`}</span>
-              </div>
-            ))}
+          <div className="upgrade-mobile-section" style={sectionStyle}>
+            <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
+              [ APPENDIX: {premiumCategoryCount} NEW MAX CATEGORIES UNLOCKED ]
+            </div>
+            <div style={{ height: "8px" }} />
+            <div
+              className="upgrade-mobile-appendix-grid"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: "8px 12px",
+                fontSize: "11px",
+                lineHeight: "1.5",
+              }}
+            >
+              {premiumGroups.map((group) => (
+                <div key={group.id}>
+                  <span style={{ color: Y, fontWeight: "bold" }}>
+                    * {group.title.toUpperCase()}:
+                  </span>
+                  <span>{` ${group.summary}`}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -378,10 +409,21 @@ function MobileLayout({
             fontSize: "12px",
             cursor: "pointer",
             textAlign: "center",
+            position: "relative",
+            zIndex: 1,
+            flex: "0 0 auto",
           }}
           className="upgrade-esc-btn"
         >
-          <span data-esc="" style={{ color: DIM }}>
+          <span
+            data-esc=""
+            style={{
+              color: DIM,
+              display: "block",
+              width: "100%",
+              pointerEvents: "none",
+            }}
+          >
             [Tap to retain your net worth]
           </span>
         </button>

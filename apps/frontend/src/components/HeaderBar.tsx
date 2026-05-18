@@ -21,6 +21,7 @@ function getMobileMenuViewportPosition(triggerRect: DOMRect, headerRect: DOMRect
 const getMobileRankLabel = (rank: string) => rank.replace(/^Junior\b/, "Jr.");
 const getQuotaTextColor = (percent: number) => percent > 50 ? "text-green-400" : percent > 20 ? "text-yellow-400" : "text-red-400";
 const getQuotaBgColor = (percent: number) => percent > 50 ? "bg-green-400" : percent > 20 ? "bg-yellow-400" : "bg-red-400";
+const getMobileQuotaTrackStyle = (percent: number) => percent <= 0 ? { backgroundColor: "#8a0000", boxShadow: "0 0 6px rgba(255, 0, 0, 0.45)" } : undefined;
 
 function formatByokCost(cost: number): string {
   if (cost < 0.01) return cost.toFixed(6);
@@ -70,7 +71,7 @@ function StatusDetailLine({ isBYOK, byokTotalCost, quotaPercent, remaining, tota
 }
 
 function MobileQuotaLine({ quotaPercent, quotaTooltip, tipOpen, setTipOpen }: MobileQuotaLineProps) {
-  return <div className="absolute bottom-0 left-0 right-0 h-[2px] cursor-pointer bg-gray-800 sm:hidden" onClick={() => setTipOpen((v) => !v)}><div className={`h-full ${getQuotaBgColor(quotaPercent)} transition-all duration-500`} style={{ width: `${quotaPercent}%` }} />{tipOpen && <div className="absolute bottom-full left-1/2 z-30 mb-1 -translate-x-1/2 whitespace-nowrap rounded border border-gray-700 bg-gray-900 px-2 py-1 text-[10px] font-mono text-gray-300 shadow-lg">{quotaTooltip}</div>}</div>;
+  return <div data-testid="mobile-quota-line" className="absolute bottom-0 left-0 right-0 h-[2px] cursor-pointer bg-gray-800 sm:hidden" style={getMobileQuotaTrackStyle(quotaPercent)} onClick={() => setTipOpen((v) => !v)}><div data-testid="mobile-quota-fill" className={`h-full ${getQuotaBgColor(quotaPercent)} transition-all duration-500`} style={{ width: `${quotaPercent}%` }} />{tipOpen && <div className="absolute bottom-full left-1/2 z-30 mb-1 -translate-x-1/2 whitespace-nowrap rounded border border-gray-700 bg-gray-900 px-2 py-1 text-[10px] font-mono text-gray-300 shadow-lg">{quotaTooltip}</div>}</div>;
 }
 
 function DesktopIdentityBlock({ username, rank, isBYOK, isMax, byokTotalCost, onProfileClick }: IdentityProps) {
