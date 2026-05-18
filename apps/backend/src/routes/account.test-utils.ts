@@ -1,6 +1,17 @@
 import { vi } from "vitest";
 import app from "../app";
 
+type CheckoutClaim = {
+  sessionId?: string;
+  encryptedKeys: string | null;
+  isExecutiveSupporter: number;
+};
+
+type KeyOwner = {
+  checkoutId: string;
+  isExecutiveSupporter: number;
+};
+
 export function parseCheckoutKeyClaimBindings(bindings: unknown[]) {
   const checkoutId = bindings.at(-1);
   const incomingClaims = bindings
@@ -18,46 +29,131 @@ export function parseCheckoutKeyClaimBindings(bindings: unknown[]) {
   };
 }
 
+function resolveCheckoutClaimRow(
+  sql: string,
+  bindings: unknown[],
+  checkoutClaims: Map<string, CheckoutClaim>,
+) {
+  if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims WHERE checkout_id = ?")) {
+    const checkoutId = bindings[0] as string;
+    if (!checkoutClaims.has(checkoutId)) return null;
+    const claim = checkoutClaims.get(checkoutId)!;
+    return { session_id: claim.sessionId ?? null, encrypted_keys: claim.encryptedKeys ?? null };
+  }
+
+  if (sql.includes("SELECT encrypted_keys FROM checkout_claims WHERE checkout_id = ?")) {
+    const checkoutId = bindings[0] as string;
+    if (!checkoutClaims.has(checkoutId)) return null;
+    return { encrypted_keys: checkoutClaims.get(checkoutId)?.encryptedKeys ?? null };
+  }
+
+  return undefined;
+}
+
+function resolveKeyOwnerRow(
+  sql: string,
+  bindings: unknown[],
+  checkoutClaims: Map<string, CheckoutClaim>,
+  keyOwners: Map<string, KeyOwner>,
+) {
+  if (sql.includes("SELECT ckc.checkout_id FROM checkout_key_claims ckc JOIN checkout_claims cc")) {
+    const [licenseKeyHash, sessionId] = bindings as [string, string];
+    const claim = keyOwners.get(licenseKeyHash);
+    if (!claim) return null;
+    const checkoutClaim = checkoutClaims.get(claim.checkoutId);
+    if (!checkoutClaim || checkoutClaim.sessionId !== sessionId || checkoutClaim.isExecutiveSupporter !== 1) return null;
+    return { checkout_id: claim.checkoutId };
+  }
+
+  if (sql.includes("SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1")) {
+    const checkoutId = bindings[0] as string;
+    for (const [licenseKeyHash, owner] of keyOwners.entries()) {
+      if (owner.checkoutId === checkoutId && owner.isExecutiveSupporter === 1) return { license_key_hash: licenseKeyHash };
+    }
+    return null;
+  }
+
+  if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")) {
+    const licenseKeyHash = bindings[0] as string;
+    const claim = keyOwners.get(licenseKeyHash);
+    return claim ? { is_executive_supporter: claim.isExecutiveSupporter } : null;
+  }
+
+  return undefined;
+}
+
+function insertCheckoutClaim(bindings: unknown[], checkoutClaims: Map<string, CheckoutClaim>) {
+  const [checkoutId, sessionId, , isExecutiveSupporter] = bindings as [string, string, string | null, number];
+  if (checkoutClaims.has(checkoutId)) return { meta: { changes: 0 } };
+  checkoutClaims.set(checkoutId, { sessionId, encryptedKeys: null, isExecutiveSupporter: isExecutiveSupporter ?? 0 });
+  return { meta: { changes: 1 } };
+}
+
+function enableExecutiveSupporterForCheckout(bindings: unknown[], checkoutClaims: Map<string, CheckoutClaim>) {
+  const [checkoutId, sessionId] = bindings as [string, string];
+  const claim = checkoutClaims.get(checkoutId);
+  if (!claim || claim.sessionId !== sessionId) return { meta: { changes: 0 } };
+  claim.isExecutiveSupporter = 1;
+  return { meta: { changes: 1 } };
+}
+
+function updateEncryptedKeys(bindings: unknown[], checkoutClaims: Map<string, CheckoutClaim>, changes: number) {
+  const [encryptedKeys, checkoutId] = bindings as [string, string];
+  const claim = checkoutClaims.get(checkoutId);
+  if (!claim) return { meta: { changes: 0 } };
+  claim.encryptedKeys = encryptedKeys;
+  return { meta: { changes } };
+}
+
+function assignExecutiveSupporterLicense(bindings: unknown[], keyOwners: Map<string, KeyOwner>) {
+  const [licenseKeyHash, checkoutId] = bindings as [string, string];
+  const hasExistingSupporter = Array.from(keyOwners.values()).some(
+    (owner) => owner.checkoutId === checkoutId && owner.isExecutiveSupporter === 1,
+  );
+  if (hasExistingSupporter) return { meta: { changes: 0 } };
+
+  let updated = 0;
+  for (const [ownedLicenseKeyHash, owner] of keyOwners.entries()) {
+    if (owner.checkoutId !== checkoutId) continue;
+    owner.isExecutiveSupporter = ownedLicenseKeyHash === licenseKeyHash ? 1 : 0;
+    updated += 1;
+  }
+  return { meta: { changes: updated } };
+}
+
+function insertCheckoutKeyClaims(bindings: unknown[], keyOwners: Map<string, KeyOwner>) {
+  const { checkoutId, incomingClaims } = parseCheckoutKeyClaimBindings(bindings);
+  if (!checkoutId) return { meta: { changes: 0 } };
+
+  const hasConflict = incomingClaims.some(
+    ({ licenseKeyHash }) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash)?.checkoutId !== checkoutId,
+  );
+  if (hasConflict) return { meta: { changes: 0 } };
+
+  let inserted = 0;
+  for (const { licenseKeyHash, isExecutiveSupporter } of incomingClaims) {
+    if (keyOwners.has(licenseKeyHash)) continue;
+    keyOwners.set(licenseKeyHash, { checkoutId, isExecutiveSupporter });
+    inserted += 1;
+  }
+  return { meta: { changes: inserted } };
+}
+
 export function createMockDB(opts: {
   firstResults?: Record<string, unknown>;
   firstBySQL?: Record<string, Record<string, unknown> | null>;
   runChanges?: number;
 } = {}) {
   const calls: { sql: string; bindings: unknown[] }[] = [];
-  const checkoutClaims = new Map<string, { sessionId?: string; encryptedKeys: string | null; isExecutiveSupporter: number }>();
-  const keyOwners = new Map<string, { checkoutId: string; isExecutiveSupporter: number }>();
+  const checkoutClaims = new Map<string, CheckoutClaim>();
+  const keyOwners = new Map<string, KeyOwner>();
   const resolveFirst = (sql: string, bindings: unknown[]) => {
-    if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims WHERE checkout_id = ?")) {
-      const checkoutId = bindings[0] as string;
-      if (!checkoutClaims.has(checkoutId)) return null;
-      const claim = checkoutClaims.get(checkoutId)!;
-      return { session_id: claim.sessionId ?? null, encrypted_keys: claim.encryptedKeys ?? null };
-    }
-    if (sql.includes("SELECT encrypted_keys FROM checkout_claims WHERE checkout_id = ?")) {
-      const checkoutId = bindings[0] as string;
-      if (!checkoutClaims.has(checkoutId)) return null;
-      return { encrypted_keys: checkoutClaims.get(checkoutId)?.encryptedKeys ?? null };
-    }
-    if (sql.includes("SELECT ckc.checkout_id FROM checkout_key_claims ckc JOIN checkout_claims cc")) {
-      const [licenseKeyHash, sessionId] = bindings as [string, string];
-      const claim = keyOwners.get(licenseKeyHash);
-      if (!claim) return null;
-      const checkoutClaim = checkoutClaims.get(claim.checkoutId);
-      if (!checkoutClaim || checkoutClaim.sessionId !== sessionId || checkoutClaim.isExecutiveSupporter !== 1) return null;
-      return { checkout_id: claim.checkoutId };
-    }
-    if (sql.includes("SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1")) {
-      const checkoutId = bindings[0] as string;
-      for (const [licenseKeyHash, owner] of keyOwners.entries()) {
-        if (owner.checkoutId === checkoutId && owner.isExecutiveSupporter === 1) return { license_key_hash: licenseKeyHash };
-      }
-      return null;
-    }
-    if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")) {
-      const licenseKeyHash = bindings[0] as string;
-      const claim = keyOwners.get(licenseKeyHash);
-      return claim ? { is_executive_supporter: claim.isExecutiveSupporter } : null;
-    }
+    const checkoutClaimRow = resolveCheckoutClaimRow(sql, bindings, checkoutClaims);
+    if (checkoutClaimRow !== undefined) return checkoutClaimRow;
+
+    const keyOwnerRow = resolveKeyOwnerRow(sql, bindings, checkoutClaims, keyOwners);
+    if (keyOwnerRow !== undefined) return keyOwnerRow;
+
     if (opts.firstBySQL) {
       for (const [pattern, result] of Object.entries(opts.firstBySQL)) {
         if (sql.includes(pattern)) return result;
@@ -73,62 +169,32 @@ export function createMockDB(opts: {
       }),
       first: vi.fn().mockResolvedValue(resolveFirst(sql, bindings)),
       run: vi.fn().mockImplementation(async () => {
-      if (sql.includes("INSERT INTO checkout_claims")) {
-        const [checkoutId, sessionId, , isExecutiveSupporter] = bindings as [string, string, string | null, number];
-        if (checkoutClaims.has(checkoutId)) return { meta: { changes: 0 } };
-        checkoutClaims.set(checkoutId, { sessionId, encryptedKeys: null, isExecutiveSupporter: isExecutiveSupporter ?? 0 });
-        return { meta: { changes: 1 } };
-      }
-      if (sql.includes("UPDATE checkout_claims SET is_executive_supporter = 1")) {
-        const [checkoutId, sessionId] = bindings as [string, string];
-        const claim = checkoutClaims.get(checkoutId);
-        if (!claim || claim.sessionId !== sessionId) return { meta: { changes: 0 } };
-        claim.isExecutiveSupporter = 1;
-        return { meta: { changes: 1 } };
-      }
-      if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
-        const [encryptedKeys, checkoutId] = bindings as [string, string];
-        const claim = checkoutClaims.get(checkoutId);
-        if (!claim) return { meta: { changes: 0 } };
-        claim.encryptedKeys = encryptedKeys;
-        return { meta: { changes: opts.runChanges ?? 1 } };
-      }
-      if (sql.includes("UPDATE checkout_key_claims SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END")) {
-        const [licenseKeyHash, checkoutId] = bindings as [string, string];
-        const hasExistingSupporter = Array.from(keyOwners.values()).some((owner) => owner.checkoutId === checkoutId && owner.isExecutiveSupporter === 1);
-        if (hasExistingSupporter) return { meta: { changes: 0 } };
-        let updated = 0;
-        for (const [ownedLicenseKeyHash, owner] of keyOwners.entries()) {
-          if (owner.checkoutId !== checkoutId) continue;
-          owner.isExecutiveSupporter = ownedLicenseKeyHash === licenseKeyHash ? 1 : 0;
-          updated += 1;
+        if (sql.includes("INSERT INTO checkout_claims")) {
+          return insertCheckoutClaim(bindings, checkoutClaims);
         }
-        return { meta: { changes: updated } };
-      }
-      if (sql.includes("INSERT INTO checkout_key_claims")) {
-        const { checkoutId, incomingClaims } = parseCheckoutKeyClaimBindings(bindings);
-        if (!checkoutId) return { meta: { changes: 0 } };
-        const hasConflict = incomingClaims.some(({ licenseKeyHash }) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash)?.checkoutId !== checkoutId);
-        if (hasConflict) return { meta: { changes: 0 } };
-        let inserted = 0;
-        for (const { licenseKeyHash, isExecutiveSupporter } of incomingClaims) {
-          if (keyOwners.has(licenseKeyHash)) continue;
-          keyOwners.set(licenseKeyHash, { checkoutId, isExecutiveSupporter });
-          inserted += 1;
+        if (sql.includes("UPDATE checkout_claims SET is_executive_supporter = 1")) {
+          return enableExecutiveSupporterForCheckout(bindings, checkoutClaims);
         }
-        return { meta: { changes: inserted } };
-      }
-      return { meta: { changes: opts.runChanges ?? 0 } };
+        if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
+          return updateEncryptedKeys(bindings, checkoutClaims, opts.runChanges ?? 1);
+        }
+        if (sql.includes("UPDATE checkout_key_claims SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END")) {
+          return assignExecutiveSupporterLicense(bindings, keyOwners);
+        }
+        if (sql.includes("INSERT INTO checkout_key_claims")) {
+          return insertCheckoutKeyClaims(bindings, keyOwners);
+        }
+        return { meta: { changes: opts.runChanges ?? 0 } };
       }),
       all: vi.fn().mockImplementation(async () => {
-      if (sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")) {
-        return {
-          results: (bindings as string[])
-            .filter((licenseKeyHash) => keyOwners.has(licenseKeyHash))
-            .map((licenseKeyHash) => ({ license_key_hash: licenseKeyHash, checkout_id: keyOwners.get(licenseKeyHash)!.checkoutId })),
-        };
-      }
-      return { results: [] };
+        if (sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")) {
+          return {
+            results: (bindings as string[])
+              .filter((licenseKeyHash) => keyOwners.has(licenseKeyHash))
+              .map((licenseKeyHash) => ({ license_key_hash: licenseKeyHash, checkout_id: keyOwners.get(licenseKeyHash)!.checkoutId })),
+          };
+        }
+        return { results: [] };
       }),
       raw: vi.fn().mockResolvedValue([]),
     };
