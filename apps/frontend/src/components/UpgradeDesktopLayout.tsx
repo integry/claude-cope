@@ -6,7 +6,6 @@ import { DEFAULT_CLOSE_EFFECT, type UpgradeNagCloseEffect } from "./upgradeOverl
 const B = "#ff5555"; // border (red)
 const Y = "#ffff55"; // yellow headings
 const W = "#c9d1d9"; // soft off-white body text
-const BW = "#ffffff"; // bright white (ANSI bold)
 const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
@@ -23,6 +22,8 @@ const RETAIN_TEXT = "[Press ESC to retain your net worth]";
 export type LayoutProps = {
   singleLabel: string;
   multiLabel: string;
+  multiOptionHeading: string;
+  multiOptionDescription: string;
   singleAvailable: boolean;
   multiAvailable: boolean;
   quotaLine: string;
@@ -52,6 +53,8 @@ const PANEL_STYLE = {
 export default function DesktopLayout({
   singleLabel,
   multiLabel,
+  multiOptionHeading,
+  multiOptionDescription,
   singleAvailable,
   multiAvailable,
   quotaLine,
@@ -77,10 +80,6 @@ export default function DesktopLayout({
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
   const [isKeyboardNavigationMode, setIsKeyboardNavigationMode] = useState(false);
   const [showManualFocus, setShowManualFocus] = useState(false);
-  const boxLineRich = (content: React.ReactNode, textLength: number) => {
-    const padLen = Math.max(0, INNER_W - textLength);
-    return <><span style={{ color: B }}>{"║"}</span>{content}<span>{padLen > 0 ? " ".repeat(padLen) : ""}</span><span style={{ color: B }}>{"║"}</span></>;
-  };
   const centeredBoxLine = (text: string, color = W) => {
     const { left, right } = getCenteredPadding(text);
     return <><span style={{ color: B }}>{"║"}</span><span style={{ color }}>{" ".repeat(left) + text + " ".repeat(right)}</span><span style={{ color: B }}>{"║"}</span></>;
@@ -162,7 +161,8 @@ export default function DesktopLayout({
   };
   const tableLines = { border: boxLine("  +----------------+----------+------------------------------+"), header: boxLine("  | ARCHITECTURE   | CAPACITY | GUARANTEED OUTCOME           |"), legacy: boxLine("  | Legacy AI      | Max 20x  | Manageable pull requests     |"), cope: boxLine("  | Claude Cope    | MAX 429X | Unmitigated request storms   |") };
   const title = "[ W A L L E T   E X T R A C T I O N   U T I L I T Y ]", closeBtn = "[x]";
-  const creditsStr = `${PRO_QUOTA_LIMIT} non-expiring credits`;
+  const creditsStr = `${PRO_QUOTA_LIMIT}`;
+  const singleOptionDescription = `One seat. Unlocks ${creditsStr} lifetime credits and advanced Cope models.`;
   const retainPadding = getCenteredPadding(RETAIN_TEXT);
   const titleGap = Math.max(1, INNER_W - title.length - closeBtn.length - 1);
   const titlePadRight = Math.max(0, INNER_W - title.length - titleGap - closeBtn.length);
@@ -333,7 +333,7 @@ export default function DesktopLayout({
         {boxLine(`  > ${quotaLine}`, DIM)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [ THROUGHPUT BENCHMARKS ]", Y)}{"\n"}
-        {boxLine("  Industry standards throttle capacity at 5x or 20x.")}{"\n"}
+        {boxLine("  Industry standards stop at 5x.")}{"\n"}
         {boxLine("  Claude Cope guarantees absolute system saturation.")}{"\n"}
         {emptyLine}{"\n"}
         {tableLines.border}{"\n"}
@@ -344,13 +344,11 @@ export default function DesktopLayout({
         {tableLines.border}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
-        {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
-        {boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{" and "}<span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>{"."}</span>, `  Unlocks: ${creditsStr} and advanced Cope models.`.length)}{"\n"}
+        {renderWrappedBoxLines(singleOptionDescription)}
         {buttonBlock(OPTION_IDS.single, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
-        {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
-        {boxLine("  Let the entire team achieve HTTP 429 compliance.")}{"\n"}
-        {boxLine("  (5 activation keys will be sent to your email)", "#8892b0")}{"\n"}
+        {boxLine(`  ${multiOptionHeading}`, Y)}{"\n"}
+        {renderWrappedBoxLines(multiOptionDescription)}
         {buttonBlock(OPTION_IDS.multi, multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  ---------------------------------------------------------")}{"\n"}
@@ -362,16 +360,33 @@ export default function DesktopLayout({
           </span>
         ))}
         <span style={{ color: B }}>{BORDER_MID}</span>{"\n"}
-        <span style={{ display: "inline" }} className="upgrade-esc-btn">
+        <span style={{ display: "block", position: "relative" }} className="upgrade-esc-row">
+          <span style={{ color: B }}>{"║"}</span>
+          <span data-esc="" style={{ color: DIM }}>
+            {" ".repeat(retainPadding.left) + RETAIN_TEXT + " ".repeat(retainPadding.right)}
+          </span>
           <span style={{ color: B }}>{"║"}</span>
           {canPointerDismiss ? (
-            <button type="button" onClick={onDismiss} data-esc="" style={{ color: DIM, background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}>{" ".repeat(retainPadding.left) + RETAIN_TEXT + " ".repeat(retainPadding.right)}</button>
-          ) : (
-            <span data-esc="" style={{ color: DIM }}>{" ".repeat(retainPadding.left) + RETAIN_TEXT + " ".repeat(retainPadding.right)}</span>
-          )}
-          <span style={{ color: B }}>{"║"}</span>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="upgrade-esc-btn"
+              aria-label="Press ESC to retain your net worth"
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: "none",
+                border: "none",
+                padding: 0,
+                font: "inherit",
+                cursor: "pointer",
+              }}
+            />
+          ) : null}
         </span>{"\n"}
-        <span style={{ color: B }}>{BORDER_BOTTOM}</span>
+        <span style={{ color: B, display: "block" }} className="upgrade-bottom-border-row">
+          {BORDER_BOTTOM}
+        </span>
       </pre>
     </div>
   );

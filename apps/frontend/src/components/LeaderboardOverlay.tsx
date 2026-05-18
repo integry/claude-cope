@@ -209,7 +209,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
                   }`}
                 >
                   <span className="flex-1 min-w-0 truncate">
-                    <span className="text-gray-500 inline-block w-[2ch]">{countryId}</span> {rank}. {entry.username}
+                    <span className="text-gray-500 inline-block w-[2ch]">{countryId}</span> {rank}. {entry.username} <span className="text-gray-400">[{entry.corporate_rank}]</span>
                   </span>
                   <span className="flex-shrink-0 text-right w-24 text-green-400">
                     {entry.technical_debt.toLocaleString()} TD

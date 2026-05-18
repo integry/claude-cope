@@ -236,6 +236,25 @@ export const FREE_TIER_RANK_CAP = CORPORATE_RANKS[0]!.title;
 
 export const ALIAS_CHANGES_PER_DAY = 3;
 
+export const PROMOTE_ACCESS_DENIED_MESSAGE = "[HR ERROR] You have not accumulated enough leverage or spent enough fiat currency to earn a promotion. Run /upgrade to buy your way up the ladder.";
+
+export type SupporterVanityTitle = {
+  id: string;
+  title: string;
+};
+
+function toVanityTitleId(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export const SUPPORTER_VANITY_TITLES: SupporterVanityTitle[] = CORPORATE_RANKS.map((rank) => ({
+  id: toVanityTitleId(rank.title),
+  title: rank.title,
+}));
+
 export const PRO_GATED_COMMANDS: ReadonlySet<string> = new Set([
   "/brrrrrr",
   "/blame",

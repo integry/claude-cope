@@ -9,50 +9,10 @@ vi.mock("../utils/polar", () => ({
 
 import app from "../app";
 import { validatePolarKey } from "../utils/polar";
+import { hashKey } from "../utils/quota";
+import { BASE_PROFILE, createMockDB, mockKV, postJSON, postWithSession } from "./account.test-utils";
 
 const mockedValidatePolarKey = vi.mocked(validatePolarKey);
-
-function createMockDB(opts: {
-  firstBySQL?: Record<string, Record<string, unknown> | null>;
-  runChanges?: number;
-} = {}) {
-  const calls: { sql: string; bindings: unknown[] }[] = [];
-  const resolveFirst = (sql: string) => {
-    if (opts.firstBySQL) {
-      for (const [pattern, result] of Object.entries(opts.firstBySQL)) {
-        if (sql.includes(pattern)) return result;
-      }
-    }
-    return null;
-  };
-  const stmt = (sql: string) => ({
-    first: vi.fn().mockResolvedValue(resolveFirst(sql)),
-    run: vi.fn().mockResolvedValue({ meta: { changes: opts.runChanges ?? 1 } }),
-    all: vi.fn().mockResolvedValue({ results: [] }),
-  });
-  return {
-    db: {
-      prepare: vi.fn((sql: string) => ({
-        bind: vi.fn((...args: unknown[]) => {
-          calls.push({ sql, bindings: args });
-          return stmt(sql);
-        }),
-        ...stmt(sql),
-      })),
-      exec: vi.fn().mockResolvedValue({ results: [] }),
-      batch: vi.fn().mockResolvedValue([]),
-    },
-    calls,
-  };
-}
-
-function mockKV(store: Record<string, string> = {}) {
-  return {
-    get: vi.fn((key: string) => Promise.resolve(store[key] ?? null)),
-    put: vi.fn(() => Promise.resolve()),
-    delete: vi.fn(() => Promise.resolve()),
-  };
-}
 
 function postSync(body: unknown, env: Record<string, unknown>) {
   return app.request("/api/account/sync", {
@@ -62,14 +22,22 @@ function postSync(body: unknown, env: Record<string, unknown>) {
   }, { ALLOWED_ORIGINS: "http://localhost:5173", ...env });
 }
 
+function postCheckoutLicense(body: unknown, env: Record<string, unknown>) {
+  return app.request("/api/account/checkout-license", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: "cope_session_id=test-session" },
+    body: JSON.stringify(body),
+  }, { ALLOWED_ORIGINS: "http://localhost:5173", ...env });
+}
+
 const PROFILE_ROW = {
-  username: "alice", license_hash: "testhash",
-  total_td: 100, current_td: 100, corporate_rank: "Junior Code Monkey",
-  inventory: "{}", upgrades: "[]", achievements: "[]",
-  buddy_type: null, buddy_is_shiny: 0,
-  unlocked_themes: '["default"]', active_theme: "default",
-  active_ticket: null, td_multiplier: 1,
-  country: "", credits_used: 0,
+  ...BASE_PROFILE,
+  license_hash: "testhash",
+  total_td: 100,
+  current_td: 100,
+  corporate_rank: "Junior Code Monkey",
+  country: "",
+  credits_used: 0,
 };
 
 beforeEach(() => {
@@ -522,5 +490,201 @@ describe("POST /api/account/sync", () => {
 
     expect(res.status).toBe(200);
     expect((await res.json() as { success: boolean }).success).toBe(true);
+  });
+
+  it("hydrates executive supporter entitlement into the sync response profile", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const { db } = createMockDB({
+      firstBySQL: {
+        "license_hash =": PROFILE_ROW,
+        "SELECT is_executive_supporter FROM checkout_key_claims": { is_executive_supporter: 1 },
+      },
+    });
+    const kv = mockKV();
+
+    const res = await postSync({ licenseKey: "COPE-TEST" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { is_executive_supporter: true },
+    });
+  });
+
+  it("keeps executive supporter pending after checkout until the owner explicitly claims a vanity title", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const origFetch = globalThis.fetch;
+    const supporterHash = await hashKey("COPE-SUPPORTER");
+    const { db } = createMockDB({
+      firstBySQL: {
+        "license_hash =": { ...PROFILE_ROW, license_hash: supporterHash },
+        "license_hash, account_id FROM user_scores WHERE username = ?": { ...PROFILE_ROW, license_hash: supporterHash, is_executive_supporter: 0 },
+        "SELECT status, last_activated_at FROM licenses": { status: "active", last_activated_at: new Date().toISOString() },
+        "SELECT username, total_td, current_td, corporate_rank, display_rank, inventory, upgrades, achievements, is_executive_supporter, buddy_type, buddy_is_shiny, unlocked_themes, active_theme, active_ticket, td_multiplier FROM user_scores WHERE username = ?": {
+          ...PROFILE_ROW,
+          is_executive_supporter: 1,
+          display_rank: "Mid-Level Googler",
+        },
+      },
+      runChanges: 1,
+    });
+    const kv = mockKV();
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/v1/checkouts/?")) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
+      if (url.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({
+          organization_id: "org",
+          status: "succeeded",
+          customer_id: "cust-1",
+          created_at: "2026-01-02T00:00:00Z",
+          metadata: { reference_id: "test-session", tier: "Executive Supporter - 2 Licenses" },
+        }));
+      }
+      if (url.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({
+          items: [
+            { key: "COPE-SUPPORTER", created_at: "2026-01-02T00:00:01Z", status: "granted" },
+            { key: "COPE-TEAMMATE", created_at: "2026-01-02T00:00:02Z", status: "granted" },
+          ],
+        }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const checkoutRes = await postCheckoutLicense({ checkoutId: "co_supporter" }, {
+        DB: db,
+        QUOTA_KV: kv,
+        CHECKOUT_CLAIM_SECRET: "secret",
+        POLAR_ACCESS_TOKEN: "tok",
+        POLAR_ORGANIZATION_ID: "org",
+      });
+      expect(checkoutRes.status).toBe(200);
+      expect(await checkoutRes.json()).toMatchObject({
+        licenseKey: "COPE-SUPPORTER",
+        allKeys: ["COPE-SUPPORTER", "COPE-TEAMMATE"],
+      });
+
+      const syncRes = await postSync({ licenseKey: "COPE-SUPPORTER" }, {
+        DB: db,
+        QUOTA_KV: kv,
+        POLAR_ACCESS_TOKEN: "tok",
+        POLAR_ORGANIZATION_ID: "org",
+      });
+      expect(syncRes.status).toBe(200);
+      expect(await syncRes.json()).toMatchObject({
+        success: true,
+        profile: { is_executive_supporter: false },
+      });
+
+      const claimRes = await postJSON("/api/account/update-display-rank", {
+        username: "alice",
+        displayRank: "  Mid-Level Googler  ",
+        licenseKeyHash: supporterHash,
+      }, { DB: db });
+      expect(claimRes.status).toBe(200);
+      expect(await claimRes.json()).toMatchObject({
+        success: true,
+        profile: { is_executive_supporter: true, display_rank: "Mid-Level Googler" },
+      });
+
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it("does not let the first synced teammate key auto-claim supporter entitlement", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const origFetch = globalThis.fetch;
+    const { db } = createMockDB({
+      firstBySQL: {
+        "license_hash =": PROFILE_ROW,
+      },
+    });
+    const kv = mockKV();
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/v1/checkouts/?")) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
+      if (url.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({
+          organization_id: "org",
+          status: "succeeded",
+          customer_id: "cust-1",
+          created_at: "2026-01-02T00:00:00Z",
+          metadata: { reference_id: "test-session", tier: "Executive Supporter - 2 Licenses" },
+        }));
+      }
+      if (url.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({
+          items: [
+            { key: "COPE-SUPPORTER", created_at: "2026-01-02T00:00:01Z", status: "granted" },
+            { key: "COPE-TEAMMATE", created_at: "2026-01-02T00:00:02Z", status: "granted" },
+          ],
+        }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      await postCheckoutLicense({ checkoutId: "co_supporter" }, {
+        DB: db,
+        QUOTA_KV: kv,
+        CHECKOUT_CLAIM_SECRET: "secret",
+        POLAR_ACCESS_TOKEN: "tok",
+        POLAR_ORGANIZATION_ID: "org",
+      });
+
+      const teammateSyncRes = await postWithSession("/api/account/sync", {
+        licenseKey: "COPE-TEAMMATE",
+      }, {
+        DB: db,
+        QUOTA_KV: kv,
+        POLAR_ACCESS_TOKEN: "tok",
+        POLAR_ORGANIZATION_ID: "org",
+      }, "test-session");
+      expect(teammateSyncRes.status).toBe(200);
+      expect(await teammateSyncRes.json()).toMatchObject({
+        success: true,
+        profile: { is_executive_supporter: false },
+      });
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it("preserves existing supporter entitlement when no supporter claim row exists", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const supporterProfile = { ...PROFILE_ROW, is_executive_supporter: 1, display_rank: "Mid-Level Googler" };
+    const { db, calls } = createMockDB({
+      firstBySQL: {
+        "license_hash =": supporterProfile,
+        "SELECT is_executive_supporter FROM checkout_key_claims": null,
+        "SELECT is_executive_supporter FROM user_scores": { is_executive_supporter: 1 },
+      },
+    });
+    const kv = mockKV();
+
+    const res = await postSync({ licenseKey: "COPE-TEST" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { is_executive_supporter: true, display_rank: "Mid-Level Googler" },
+    });
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores"))).toBe(false);
+    expect(calls.some((call) => call.sql.includes("SELECT is_executive_supporter FROM user_scores"))).toBe(true);
   });
 });

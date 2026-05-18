@@ -1,10 +1,4 @@
-import type {
-  ChangeEvent,
-  Dispatch,
-  KeyboardEvent as ReactKeyboardEvent,
-  RefObject,
-  SetStateAction,
-} from "react";
+import type { ChangeEvent, Dispatch, KeyboardEvent as ReactKeyboardEvent, RefObject, SetStateAction } from "react";
 import { useRef } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
@@ -109,6 +103,71 @@ function getUpgradeDismissProps(
   } as const;
 }
 
+function focusTerminalInputIfEligible(
+  isMobileViewport: boolean,
+  anyOverlayOpen: boolean,
+  inputRef: RefObject<HTMLInputElement | null>,
+) {
+  if (
+    !isMobileViewport &&
+    !anyOverlayOpen &&
+    !window.getSelection()?.toString()
+  ) {
+    inputRef.current?.focus();
+  }
+}
+
+function createOverlayOpener(
+  closeAllOverlaysPreservingNag: () => void,
+  setVisible: Dispatch<SetStateAction<boolean>>,
+) {
+  return () => {
+    closeAllOverlaysPreservingNag();
+    setVisible(true);
+  };
+}
+
+function createSlashMenuOpener(
+  setInputValue: Dispatch<SetStateAction<string>>,
+  setSlashQuery: Dispatch<SetStateAction<string>>,
+  setSlashIndex: Dispatch<SetStateAction<number>>,
+  isMobileViewport: boolean,
+  inputRef: RefObject<HTMLInputElement | null>,
+) {
+  return () => {
+    setInputValue("/");
+    setSlashQuery("/");
+    setSlashIndex(0);
+    if (!isMobileViewport) inputRef.current?.focus();
+  };
+}
+
+function createUpgradeOpener(
+  closeAllOverlaysPreservingNag: () => void,
+  setShowUpgrade: Dispatch<SetStateAction<boolean>>,
+) {
+  return () => {
+    closeAllOverlaysPreservingNag();
+    setShowUpgrade(true);
+    window.history.pushState(null, "", "/upgrade");
+  };
+}
+
+function createTickerCommandRunner(
+  closeAllOverlaysPreservingNag: () => void,
+  runSlashCommand: (command: string) => void,
+) {
+  return (command: string) => {
+    closeAllOverlaysPreservingNag();
+    runSlashCommand(command);
+  };
+}
+
+function renderBuddyDock(buddy: GameState["buddy"]) {
+  if (!buddy.type) return null;
+  return <div className="terminal-buddy-dock hidden md:flex"><BuddyOverlay buddy={buddy} /></div>;
+}
+
 export function TerminalView({
   activeRegression,
   outageHp,
@@ -192,11 +251,37 @@ export function TerminalView({
     handleUpgradeNagClose,
     handleManualUpgradeDismiss,
   );
-
-  const handleTickerCommand = (command: string) => {
-    closeAllOverlaysPreservingNag();
-    runSlashCommand(command);
-  };
+  const openHelp = createOverlayOpener(closeAllOverlaysPreservingNag, setShowHelp);
+  const openAbout = createOverlayOpener(closeAllOverlaysPreservingNag, setShowAbout);
+  const openStore = createOverlayOpener(closeAllOverlaysPreservingNag, setShowStore);
+  const openLeaderboard = createOverlayOpener(
+    closeAllOverlaysPreservingNag,
+    setShowLeaderboard,
+  );
+  const openAchievements = createOverlayOpener(
+    closeAllOverlaysPreservingNag,
+    setShowAchievements,
+  );
+  const openContact = createOverlayOpener(
+    closeAllOverlaysPreservingNag,
+    setShowContact,
+  );
+  const openParty = createOverlayOpener(closeAllOverlaysPreservingNag, setShowParty);
+  const openUpgrade = createUpgradeOpener(
+    closeAllOverlaysPreservingNag,
+    setShowUpgrade,
+  );
+  const openSlashMenu = createSlashMenuOpener(
+    setInputValue,
+    setSlashQuery,
+    setSlashIndex,
+    isMobileViewport,
+    inputRef,
+  );
+  const handleTickerCommand = createTickerCommandRunner(
+    closeAllOverlaysPreservingNag,
+    runSlashCommand,
+  );
 
   return (
     <div
@@ -207,18 +292,17 @@ export function TerminalView({
         backgroundColor: outageHp !== null ? undefined : "var(--color-bg)",
         color: "var(--color-text)",
       }}
-      onClick={() => {
-        if (!isMobileViewport && !anyOverlayOpen && !window.getSelection()?.toString()) {
-          inputRef.current?.focus();
-        }
-      }}
+      onClick={() =>
+        focusTerminalInputIfEligible(
+          isMobileViewport,
+          anyOverlayOpen,
+          inputRef,
+        )
+      }
     >
       <div className="shrink-0">
         <Ticker
-          onExpand={() => {
-            closeAllOverlaysPreservingNag();
-            setShowParty(true);
-          }}
+          onExpand={openParty}
           onSlashCommand={handleTickerCommand}
           onlineCount={onlineCount}
         />
@@ -236,45 +320,19 @@ export function TerminalView({
           }
           username={state.username}
           isBYOK={BYOK_ENABLED && !!state.apiKey}
-          isMax={!!state.proKey || !!state.proKeyHash}
+          isMax={Boolean(state.proKey || state.proKeyHash || state.isPro || state.hasSessionPro)}
+          isExecutiveSupporter={Boolean(state.isExecutiveSupporter)}
           byokTotalCost={state.byokTotalCost}
           onHomeClick={handleHomeClick}
           onProfileClick={handleProfileClick}
-          onHelpClick={() => {
-            closeAllOverlaysPreservingNag();
-            setShowHelp(true);
-          }}
-          onAboutClick={() => {
-            closeAllOverlaysPreservingNag();
-            setShowAbout(true);
-          }}
-          onStoreClick={() => {
-            closeAllOverlaysPreservingNag();
-            setShowStore(true);
-          }}
-          onLeaderboardClick={() => {
-            closeAllOverlaysPreservingNag();
-            setShowLeaderboard(true);
-          }}
-          onAchievementsClick={() => {
-            closeAllOverlaysPreservingNag();
-            setShowAchievements(true);
-          }}
-          onContactClick={() => {
-            closeAllOverlaysPreservingNag();
-            setShowContact(true);
-          }}
-          onSlashMenuClick={() => {
-            setInputValue("/");
-            setSlashQuery("/");
-            setSlashIndex(0);
-            if (!isMobileViewport) inputRef.current?.focus();
-          }}
-          onUpgradeClick={() => {
-            closeAllOverlaysPreservingNag();
-            setShowUpgrade(true);
-            window.history.pushState(null, "", "/upgrade");
-          }}
+          onHelpClick={openHelp}
+          onAboutClick={openAbout}
+          onStoreClick={openStore}
+          onLeaderboardClick={openLeaderboard}
+          onAchievementsClick={openAchievements}
+          onContactClick={openContact}
+          onSlashMenuClick={openSlashMenu}
+          onUpgradeClick={openUpgrade}
         />
       </div>
       <div
@@ -314,6 +372,7 @@ export function TerminalView({
                 activeIndex={slashIndex}
                 totalTechnicalDebt={state.economy.totalTDEarned}
                 paidUser={isPaidUser(state)}
+                isExecutiveSupporter={Boolean(state.isExecutiveSupporter)}
                 onSelect={handleSlashMenuSelect}
               />
             )}
@@ -330,11 +389,7 @@ export function TerminalView({
             />
           </div>
         </div>
-        {state.buddy.type && (
-          <div className="terminal-buddy-dock hidden md:flex">
-            <BuddyOverlay buddy={state.buddy} />
-          </div>
-        )}
+        {renderBuddyDock(state.buddy)}
       </div>
       <TerminalOverlays
         showStore={showStore}

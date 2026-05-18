@@ -269,6 +269,19 @@ function expectMaxBadgePlacement() {
   expect(mobileBadge?.textContent).not.toContain("429X");
 }
 
+function expectExecutiveBadgePlacement() {
+  const identityBlock = queryByTestId("desktop-identity-block");
+  const rankLine = queryByTestId("desktop-rank-line");
+  const badge = queryByTestId("desktop-max-badge");
+  const mobileBadge = queryByTestId("mobile-max-badge");
+
+  expect(badge?.textContent).toContain("EXECUTIVE MAX");
+  expect(identityBlock?.textContent).toContain("EXECUTIVE MAX");
+  expect(rankLine?.textContent).not.toContain("EXECUTIVE MAX");
+  expect(badge?.className).toContain("executive-supporter-badge");
+  expect(mobileBadge?.textContent).toContain("EXECUTIVE MAX");
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   if (container) {
@@ -475,6 +488,11 @@ describe("HeaderBar Max badge visibility", () => {
   it("shows the Max badge for upgraded users", () => {
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: true });
     expect(container.querySelector("[data-testid='desktop-max-badge']")?.textContent).toContain("MAX 429X");
+  });
+
+  it("shows the executive badge for executive supporters", () => {
+    renderHeaderBar({ ...baseProps, isBYOK: false, isMax: true, isExecutiveSupporter: true });
+    expectExecutiveBadgePlacement();
   });
 
   it("does NOT show the Max badge for free users", () => {

@@ -126,6 +126,34 @@ describe("SlashMenu", () => {
     expect(menu.textContent).toContain("Swap out the hallucination engine");
   });
 
+  it("shows vanity title autocomplete immediately after /promote space", () => {
+    const menu = renderSlashMenu({
+      query: "/promote ",
+      activeIndex: 0,
+      totalTechnicalDebt: 5000,
+      paidUser: true,
+      isExecutiveSupporter: true,
+      onSelect: vi.fn(),
+    });
+
+    expect(menu.textContent).toContain("VANITY TITLES");
+    expect(menu.textContent).toContain("junior-code-monkey");
+    expect(menu.textContent).toContain("Junior Code Monkey");
+  });
+
+  it("shows /promote [title-id] in the command list", () => {
+    const menu = renderSlashMenu({
+      query: "/p",
+      activeIndex: 0,
+      totalTechnicalDebt: 5000,
+      paidUser: true,
+      onSelect: vi.fn(),
+    });
+
+    expect(menu.textContent).toContain("/promote [title-id]");
+    expect(menu.textContent).toContain("Buy a vanity title and wear it in public");
+  });
+
   it("emits full /backlog category commands when category rows are clicked", () => {
     const onSelect = vi.fn();
     const menu = renderSlashMenu({

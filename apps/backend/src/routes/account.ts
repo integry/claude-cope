@@ -3,8 +3,8 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
-import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS } from "./accountHelpers";
+import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -151,42 +151,99 @@ async function resolveCachedOrStoredClaim(
   };
 }
 
+function validateCheckoutOwnership(
+  c: { json: (data: unknown, status?: number) => Response },
+  opts: {
+    referenceId: string | null;
+    sessionId: string;
+    allowMissingReferenceBinding?: boolean;
+  },
+) {
+  const { referenceId, sessionId, allowMissingReferenceBinding } = opts;
+  if (referenceId && referenceId !== sessionId) {
+    return c.json({ error: "This checkout belongs to a different session" }, 403);
+  }
+  if (!referenceId && !allowMissingReferenceBinding) {
+    return c.json({ error: "Checkout is missing session binding metadata — cannot verify license ownership" }, 500);
+  }
+  return null;
+}
+
+function mapClaimedKeysError(
+  c: { json: (data: unknown, status?: number) => Response },
+  error: string,
+) {
+  const isConflict = error.includes("already claimed") || error.includes("full license set");
+  return c.json({ error }, isConflict ? 409 : 503);
+}
+
+async function resolveCheckoutRedemptionContext(
+  c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
+  deps: { checkoutId: string; sessionId: string; allowMissingReferenceBinding?: boolean },
+): Promise<
+  | { customerId: string; checkoutCreatedAt: string; isExecutiveSupporter: boolean }
+  | { response: Response }
+> {
+  const accessToken = c.env?.POLAR_ACCESS_TOKEN;
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
+  if (!accessToken || !organizationId) {
+    return { response: c.json({ error: "Polar integration is not configured" }, 500) };
+  }
+
+  const result = await fetchCheckoutCustomerId(deps.checkoutId, accessToken, organizationId, {
+    allowMissingReferenceId: Boolean(deps.allowMissingReferenceBinding),
+  });
+  if ("error" in result) {
+    return { response: c.json({ error: result.error }, result.status) };
+  }
+
+  const ownershipError = validateCheckoutOwnership(c, {
+    referenceId: result.referenceId ?? null,
+    sessionId: deps.sessionId,
+    allowMissingReferenceBinding: deps.allowMissingReferenceBinding,
+  });
+  if (ownershipError) return { response: ownershipError };
+  if (!result.createdAt) {
+    return { response: c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500) };
+  }
+
+  return {
+    customerId: result.customerId,
+    checkoutCreatedAt: result.createdAt,
+    isExecutiveSupporter: result.isExecutiveSupporter,
+  };
+}
+
 async function redeemCheckoutLicense(
   c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
   deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string; allowMissingReferenceBinding?: boolean },
 ) {
   const { db, kv, checkoutId, sessionId, claimSecret } = deps;
-  const accessToken = c.env?.POLAR_ACCESS_TOKEN;
-  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
-  if (!accessToken || !organizationId) return c.json({ error: "Polar integration is not configured" }, 500);
-  const result = await fetchCheckoutCustomerId(checkoutId, accessToken, organizationId, {
-    allowMissingReferenceId: deps.allowMissingReferenceBinding,
+  const redemptionContext = await resolveCheckoutRedemptionContext(c, deps);
+  if ("response" in redemptionContext) return redemptionContext.response;
+
+  const accessToken = c.env?.POLAR_ACCESS_TOKEN as string;
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID as string;
+  const { customerId, checkoutCreatedAt, isExecutiveSupporter } = redemptionContext;
+  const claim = await claimCheckoutForSession(db, checkoutId, sessionId, {
+    checkoutCreatedAt,
+    isExecutiveSupporter,
   });
-  if ("error" in result) return c.json({ error: result.error }, result.status);
-  if (result.referenceId && result.referenceId !== sessionId) {
-    return c.json({ error: "This checkout belongs to a different session" }, 403);
-  }
-  if (!result.referenceId && !deps.allowMissingReferenceBinding) {
-    return c.json({ error: "Checkout is missing session binding metadata — cannot verify license ownership" }, 500);
-  }
-  if (!result.createdAt) {
-    return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
-  }
-  const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt: result.createdAt });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
   const postClaimResolution = await resolveCachedOrStoredClaim(c, {
     db, kv, checkoutId, sessionId, claimSecret, cacheLookup: { status: "cached", keys: [], sessionMismatch: false, requiresStoredClaim: true },
   });
   if (postClaimResolution.response) return postClaimResolution.response;
-  const nextCheckout = await fetchNextCheckoutCreatedAt(result.customerId, organizationId, accessToken, { checkoutId, checkoutCreatedAt: result.createdAt });
+  const nextCheckout = await fetchNextCheckoutCreatedAt(customerId, organizationId, accessToken, { checkoutId, checkoutCreatedAt });
   if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
-  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: result.createdAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
+  const lkResult = await fetchLicenseKeys(customerId, organizationId, accessToken, { createdAt: checkoutCreatedAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
-  const claimedKeys = await claimLicenseKeysForCheckout(db, checkoutId, lkResult.keys, claimSecret);
-  if (!claimedKeys.ok) {
-    const isConflict = claimedKeys.error.includes("already claimed") || claimedKeys.error.includes("full license set");
-    return c.json({ error: claimedKeys.error }, isConflict ? 409 : 503);
-  }
+  const claimedKeys = await claimLicenseKeysForCheckout(db, {
+    checkoutId,
+    keys: lkResult.keys,
+    secret: claimSecret,
+  });
+  if (!claimedKeys.ok) return mapClaimedKeysError(c, claimedKeys.error);
   return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: claimedKeys.keys });
 }
 
@@ -194,10 +251,31 @@ async function redeemCheckoutLicense(
 function normalizeFreeTierRank(row: unknown, isPro: boolean) {
   if (!row || isPro) return row;
 
-  const corporateRank = (row as { corporate_rank: string }).corporate_rank;
-  if (corporateRank === FREE_TIER_RANK_CAP) return row;
+  const typedRow = row as {
+    corporate_rank: string;
+    display_rank?: string | null;
+    is_executive_supporter?: number;
+  };
+  const nextCorporateRank = typedRow.corporate_rank === FREE_TIER_RANK_CAP
+    ? typedRow.corporate_rank
+    : FREE_TIER_RANK_CAP;
+  const nextDisplayRank = null;
+  const nextExecutiveSupporter = 0;
 
-  return { ...(row as Record<string, unknown>), corporate_rank: FREE_TIER_RANK_CAP };
+  if (
+    typedRow.corporate_rank === nextCorporateRank &&
+    typedRow.display_rank === nextDisplayRank &&
+    typedRow.is_executive_supporter === nextExecutiveSupporter
+  ) {
+    return row;
+  }
+
+  return {
+    ...(row as Record<string, unknown>),
+    corporate_rank: nextCorporateRank,
+    display_rank: nextDisplayRank,
+    is_executive_supporter: nextExecutiveSupporter,
+  };
 }
 
 async function buildMePayload(opts: {
@@ -323,6 +401,30 @@ async function persistActiveTheme(
   ).bind(themeId, username, themeId, licenseKeyHash).run();
 }
 
+async function ensureDisplayRankSupporterAccess(
+  db: D1Database,
+  opts: { displayRank: string | null; licenseKeyHash: string; profile: { is_executive_supporter: boolean }; sessionId: string },
+) {
+  if (opts.displayRank === null) {
+    return true;
+  }
+
+  if (opts.profile.is_executive_supporter) {
+    return opts.profile.is_executive_supporter;
+  }
+
+  const claimed = await claimExecutiveSupporterForLicenseKey(db, {
+    licenseKeyHash: opts.licenseKeyHash,
+    sessionId: opts.sessionId,
+  });
+  if (!claimed) return false;
+
+  opts.profile.is_executive_supporter = await syncExecutiveSupporterEntitlement(db, opts.licenseKeyHash);
+  return opts.profile.is_executive_supporter;
+}
+
+const SUPPORTER_VANITY_TITLE_SET = new Set(SUPPORTER_VANITY_TITLES.map((title) => title.title));
+
 account.post("/checkout-license", async (c) => {
   const validated = await validateCheckoutRequest(c);
   if ("error" in validated) return validated.error;
@@ -368,10 +470,16 @@ account.post("/sync", async (c) => {
   // This ordering ensures that failed syncs never produce orphaned active
   // licenses or quota entries.
   try {
+    const isExecutiveSupporter = await syncExecutiveSupporterEntitlement(db, hash);
     await commitSyncSideEffects(
       { db, kv, hash },
       { validationId: validation.id, proInitialQuota: limits.proInitialQuota },
     );
+    result.profile = {
+      ...result.profile,
+      is_executive_supporter: isExecutiveSupporter,
+      display_rank: isExecutiveSupporter ? result.profile.display_rank : null,
+    };
   } catch (err: unknown) {
     try {
       await rollbackProfileMutation(db, hash, result.mutation);
@@ -801,6 +909,64 @@ account.post("/update-ticket", async (c) => {
 
   if (!result.meta.changes) {
     return c.json({ error: "Update failed — profile not found, license mismatch, or license revoked" }, 409);
+  }
+
+  const updated = await getProfile(db, profile.username);
+  return c.json({ success: true, profile: updated });
+});
+
+account.post("/update-display-rank", async (c) => {
+  const db = c.env?.DB;
+  if (!db) return c.json({ error: "Database not configured" }, 500);
+
+  const body = await c.req.json<{ username?: string; displayRank?: string | null; licenseKeyHash?: string }>();
+  const displayRank =
+    body.displayRank === null
+      ? null
+      : typeof body.displayRank === "string"
+        ? body.displayRank.trim()
+        : undefined;
+  if (!body.username || displayRank === undefined) {
+    return c.json({ error: "username and displayRank are required" }, 400);
+  }
+  if (displayRank !== null && !SUPPORTER_VANITY_TITLE_SET.has(displayRank)) {
+    return c.json({ error: "Unknown displayRank" }, 400);
+  }
+
+  const ownership = await resolveThemePurchaseOwnership(db, {
+    username: body.username,
+    licenseKeyHash: body.licenseKeyHash,
+    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
+    sessionId: c.get("sessionId"),
+    actionLabel: "display rank updates",
+    logPrefix: "[account/display-rank]",
+  });
+  if (ownership.status !== "ok") {
+    return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
+  }
+  const { profile, licenseKeyHash } = ownership;
+
+  if (!(await ensureDisplayRankSupporterAccess(db, {
+    displayRank,
+    licenseKeyHash,
+    profile,
+    sessionId: c.get("sessionId"),
+  }))) {
+    return c.json({ error: PROMOTE_ACCESS_DENIED_MESSAGE }, 403);
+  }
+
+  const supporterClause = displayRank === null ? "" : " AND is_executive_supporter = 1";
+  const result = await db
+    .prepare(
+      `UPDATE user_scores SET display_rank = ?, updated_at = datetime('now')
+       WHERE username = ? AND license_hash = ?${supporterClause}
+         AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
+    )
+    .bind(displayRank, profile.username, licenseKeyHash)
+    .run();
+
+  if (!result.meta.changes) {
+    return c.json({ error: "Update failed — profile not found, supporter entitlement missing, or license revoked" }, 409);
   }
 
   const updated = await getProfile(db, profile.username);

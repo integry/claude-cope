@@ -4,6 +4,7 @@ import {
   BACKLOG_CATEGORY_TIERS,
 } from "@claude-cope/shared/backlogTiers";
 import { COPE_MODELS } from "@claude-cope/shared/models";
+import { SUPPORTER_VANITY_TITLES } from "../game/constants";
 
 export type SlashCommandGroup = {
   title: string;
@@ -33,7 +34,7 @@ export const SLASH_COMMAND_GROUPS: SlashCommandGroup[] = [
   },
   {
     title: "PAPERWORK & PENANCE",
-    commands: ["/ticket", "/bug", "/feedback", "/blame", "/alias", "/model", "/user", "/key", "/sync"],
+    commands: ["/ticket", "/bug", "/feedback", "/blame", "/alias", "/model", "/promote", "/user", "/key", "/sync"],
   },
   {
     title: "LORE & LEGALITIES",
@@ -83,6 +84,7 @@ export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/abandon": "Give up. We knew you would.",
   "/alias": "Change your identity. Witness protection for devs.",
   "/model": "Swap out the hallucination engine",
+  "/promote": "Buy a vanity title and wear it in public",
   "/user": "Confirm you exist (debatable)",
   "/sync": "Link your Polar license key to unlock Max",
   "/shill": "Tweet about us for 5 free tokens. Dignity sold separately.",
@@ -116,7 +118,16 @@ export type SlashMenuModelChoiceItem = {
   locked: boolean;
 };
 
-export type SlashMenuItem = SlashMenuCommandItem | SlashMenuBacklogCategoryItem | SlashMenuModelChoiceItem;
+export type SlashMenuPromoteChoiceItem = {
+  type: "promote-choice";
+  value: string;
+  titleId: string;
+  label: string;
+  description: string;
+  locked: boolean;
+};
+
+export type SlashMenuItem = SlashMenuCommandItem | SlashMenuBacklogCategoryItem | SlashMenuModelChoiceItem | SlashMenuPromoteChoiceItem;
 
 export type SlashMenuSelectionTrigger = "click" | "tab" | "enter";
 
@@ -145,6 +156,7 @@ export function getSlashMenuItems(
   query: string,
   totalTechnicalDebt: number,
   paidUser: boolean,
+  isExecutiveSupporter = false,
 ): SlashMenuItem[] {
   const normalizedQuery = query.toLowerCase();
 
@@ -196,6 +208,24 @@ export function getSlashMenuItems(
       }));
   }
 
+  if (normalizedQuery.startsWith("/promote ")) {
+    const titleQuery = query.slice("/promote ".length).trim().toLowerCase();
+
+    return SUPPORTER_VANITY_TITLES
+      .filter((title) => {
+        if (!titleQuery) return true;
+        return title.id.includes(titleQuery) || title.title.toLowerCase().includes(titleQuery);
+      })
+      .map((title) => ({
+        type: "promote-choice" as const,
+        value: `/promote ${title.id}`,
+        titleId: title.id,
+        label: title.title,
+        description: "Executive Supporter vanity title",
+        locked: !isExecutiveSupporter,
+      }));
+  }
+
   return SLASH_COMMAND_GROUPS.flatMap((group) =>
     group.commands.flatMap((cmd): SlashMenuCommandItem[] => {
       if (!SLASH_COMMANDS.includes(cmd)) return [];
@@ -207,7 +237,7 @@ export function getSlashMenuItems(
         value: cmd,
         groupTitle: group.title,
         description: SLASH_COMMAND_DESCRIPTIONS[cmd],
-        argumentHint: cmd === "/backlog" ? "[category]" : cmd === "/model" ? "[model-id]" : undefined,
+        argumentHint: cmd === "/backlog" ? "[category]" : cmd === "/model" ? "[model-id]" : cmd === "/promote" ? "[title-id]" : undefined,
       }];
     }),
   );
@@ -230,6 +260,14 @@ export function resolveSlashMenuSelection(
       mode: "prefill",
       value: "/model ",
       nextQuery: "/model ",
+    };
+  }
+
+  if (value === "/promote") {
+    return {
+      mode: "prefill",
+      value: "/promote ",
+      nextQuery: "/promote ",
     };
   }
 
