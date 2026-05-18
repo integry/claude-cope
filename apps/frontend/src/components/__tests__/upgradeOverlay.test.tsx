@@ -179,11 +179,13 @@ describe("UpgradeOverlay", () => {
     const footerRow = container.querySelector(".upgrade-desktop .upgrade-esc-row");
     const footerCopy = footerRow?.querySelector("[data-esc]");
     const footerButton = footerRow?.querySelector("button.upgrade-esc-btn");
+    const bottomBorderRow = container.querySelector(".upgrade-desktop .upgrade-bottom-border-row");
 
     expect(footerRow).not.toBeNull();
     expect(footerCopy?.textContent).toContain("Press ESC to retain your net worth");
     expect(footerButton).not.toBeNull();
     expect(footerButton?.textContent).toBe("");
+    expect(bottomBorderRow).not.toBeNull();
   });
 
   it("desktop layout uses overflow-x auto, not hidden", () => {

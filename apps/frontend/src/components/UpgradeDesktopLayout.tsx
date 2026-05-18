@@ -384,7 +384,9 @@ export default function DesktopLayout({
             />
           ) : null}
         </span>{"\n"}
-        <span style={{ color: B }}>{BORDER_BOTTOM}</span>
+        <span style={{ color: B, display: "block" }} className="upgrade-bottom-border-row">
+          {BORDER_BOTTOM}
+        </span>
       </pre>
     </div>
   );
