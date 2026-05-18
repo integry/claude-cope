@@ -2393,6 +2393,59 @@ describe("POST /api/account/update-display-rank", () => {
     expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === selectedTitle)).toBe(true);
   });
 
+  it("does not let a different session claim the supporter vanity entitlement first", async () => {
+    const selectedTitle = SUPPORTER_VANITY_TITLES[2]!.title;
+    const supporterHash = await hashKey("COPE-T1");
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, license_hash: supporterHash, is_executive_supporter: 0 },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+        [ACCOUNT_TEST_SQL.getProfile]: { ...BASE_PROFILE, license_hash: supporterHash, is_executive_supporter: 0 },
+      },
+      runChanges: 1,
+    });
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const u = typeof input === "string" ? input : input.toString();
+      if (u.includes("/v1/checkouts/?")) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
+      if (u.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({
+          organization_id: "org",
+          status: "succeeded",
+          customer_id: "c1",
+          created_at: "2026-01-02T00:00:00Z",
+          metadata: { reference_id: "owner-session", product_slug: "executive-supporter" },
+        }));
+      }
+      if (u.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({ items: [{ key: "COPE-T1", created_at: "2026-01-02T00:00:01Z", status: "granted" }] }));
+      }
+      return origFetch(input as RequestInfo, undefined);
+    }) as typeof fetch;
+
+    try {
+      await postWithSession("/api/account/checkout-license", { checkoutId: "co_supporter" }, {
+        DB: db,
+        CHECKOUT_CLAIM_SECRET: CLAIM_SECRET,
+        POLAR_ACCESS_TOKEN: "tok",
+        POLAR_ORGANIZATION_ID: "org",
+      }, "owner-session");
+
+      const res = await postWithSession("/api/account/update-display-rank", {
+        username: "alice",
+        displayRank: selectedTitle,
+        licenseKeyHash: supporterHash,
+      }, { DB: db }, "teammate-session");
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: PROMOTE_ACCESS_DENIED_MESSAGE });
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
   it("trims displayRank before validating and persisting it", async () => {
     const selectedTitle = SUPPORTER_VANITY_TITLES[1]!.title;
     const { db, calls } = createMockDB({

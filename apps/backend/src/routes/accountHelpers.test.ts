@@ -480,6 +480,7 @@ describe("checkout key claims", () => {
     const licenseKeyHash = await hashKey("COPE-1");
     await expect(claimExecutiveSupporterForLicenseKey(db, {
       licenseKeyHash,
+      sessionId: "session-a",
     })).resolves.toBe(true);
 
     const updateCall = calls.find((call) => call.sql.includes("UPDATE checkout_key_claims") && call.sql.includes("SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END"));
@@ -504,6 +505,27 @@ describe("checkout key claims", () => {
 
     await expect(claimExecutiveSupporterForLicenseKey(db, {
       licenseKeyHash: "hash-1",
+      sessionId: "session-a",
+    })).resolves.toBe(false);
+  });
+
+  it("requires the checkout claimant session before assigning executive supporter", async () => {
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn(() => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM checkout_key_claims ckc") && sql.includes("JOIN checkout_claims cc")
+              ? null
+              : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    } as unknown as D1Database;
+
+    await expect(claimExecutiveSupporterForLicenseKey(db, {
+      licenseKeyHash: "hash-1",
+      sessionId: "wrong-session",
     })).resolves.toBe(false);
   });
 
@@ -702,6 +724,23 @@ describe("fetchCheckoutCustomerId", () => {
       createdAt: "2026-01-02T00:00:00Z",
       referenceId: "sess-1",
       isExecutiveSupporter: true,
+    });
+  });
+
+  it("does not infer executive supporter from unrelated suffixed labels", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      organization_id: "org",
+      status: "succeeded",
+      customer_id: "cust-1",
+      created_at: "2026-01-02T00:00:00Z",
+      metadata: { reference_id: "sess-1", product_name: "Non Executive Supporter Bundle" },
+    }))) as typeof fetch;
+
+    await expect(fetchCheckoutCustomerId("co_123", "tok", "org")).resolves.toEqual({
+      customerId: "cust-1",
+      createdAt: "2026-01-02T00:00:00Z",
+      referenceId: "sess-1",
+      isExecutiveSupporter: false,
     });
   });
 

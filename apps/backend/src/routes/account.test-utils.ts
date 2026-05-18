@@ -57,11 +57,11 @@ function resolveKeyOwnerRow(
   keyOwners: Map<string, KeyOwner>,
 ) {
   if (sql.includes("FROM checkout_key_claims ckc") && sql.includes("JOIN checkout_claims cc")) {
-    const [licenseKeyHash] = bindings as [string];
+    const [licenseKeyHash, sessionId] = bindings as [string, string];
     const claim = keyOwners.get(licenseKeyHash);
     if (!claim) return undefined;
     const checkoutClaim = checkoutClaims.get(claim.checkoutId);
-    if (!checkoutClaim || checkoutClaim.isExecutiveSupporter !== 1) return undefined;
+    if (!checkoutClaim || checkoutClaim.isExecutiveSupporter !== 1 || checkoutClaim.sessionId !== sessionId) return undefined;
     return { checkout_id: claim.checkoutId };
   }
 

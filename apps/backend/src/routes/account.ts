@@ -403,7 +403,7 @@ async function persistActiveTheme(
 
 async function ensureDisplayRankSupporterAccess(
   db: D1Database,
-  opts: { displayRank: string | null; licenseKeyHash: string; profile: { is_executive_supporter: boolean } },
+  opts: { displayRank: string | null; licenseKeyHash: string; profile: { is_executive_supporter: boolean }; sessionId: string },
 ) {
   if (opts.displayRank === null) {
     return true;
@@ -413,7 +413,10 @@ async function ensureDisplayRankSupporterAccess(
     return opts.profile.is_executive_supporter;
   }
 
-  const claimed = await claimExecutiveSupporterForLicenseKey(db, { licenseKeyHash: opts.licenseKeyHash });
+  const claimed = await claimExecutiveSupporterForLicenseKey(db, {
+    licenseKeyHash: opts.licenseKeyHash,
+    sessionId: opts.sessionId,
+  });
   if (!claimed) return false;
 
   opts.profile.is_executive_supporter = await syncExecutiveSupporterEntitlement(db, opts.licenseKeyHash);
@@ -943,7 +946,12 @@ account.post("/update-display-rank", async (c) => {
   }
   const { profile, licenseKeyHash } = ownership;
 
-  if (!(await ensureDisplayRankSupporterAccess(db, { displayRank, licenseKeyHash, profile }))) {
+  if (!(await ensureDisplayRankSupporterAccess(db, {
+    displayRank,
+    licenseKeyHash,
+    profile,
+    sessionId: c.get("sessionId"),
+  }))) {
     return c.json({ error: PROMOTE_ACCESS_DENIED_MESSAGE }, 403);
   }
 
