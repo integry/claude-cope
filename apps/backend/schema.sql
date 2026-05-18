@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS user_scores (
     total_td INTEGER NOT NULL DEFAULT 0,
     current_td INTEGER NOT NULL DEFAULT 0,
     corporate_rank TEXT NOT NULL DEFAULT 'Junior Code Monkey',
+    display_rank TEXT,
     country TEXT NOT NULL DEFAULT 'Unknown',
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     last_sync_time TEXT NOT NULL DEFAULT (datetime('now')),
@@ -57,6 +58,7 @@ CREATE TABLE IF NOT EXISTS user_scores (
     inventory TEXT NOT NULL DEFAULT '{}',
     upgrades TEXT NOT NULL DEFAULT '[]',
     achievements TEXT NOT NULL DEFAULT '[]',
+    is_executive_supporter INTEGER NOT NULL DEFAULT 0,
     buddy_type TEXT,
     buddy_is_shiny INTEGER NOT NULL DEFAULT 0,
     unlocked_themes TEXT NOT NULL DEFAULT '["default"]',
@@ -172,12 +174,14 @@ CREATE TABLE IF NOT EXISTS checkout_claims (
     session_id TEXT NOT NULL,
     claimed_at TEXT NOT NULL DEFAULT (datetime('now')),
     encrypted_keys TEXT,
-    checkout_created_at TEXT
+    checkout_created_at TEXT,
+    is_executive_supporter INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS checkout_key_claims (
     license_key_hash TEXT PRIMARY KEY,
     checkout_id TEXT NOT NULL,
+    is_executive_supporter INTEGER NOT NULL DEFAULT 0,
     claimed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

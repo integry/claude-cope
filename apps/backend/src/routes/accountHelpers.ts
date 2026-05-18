@@ -62,6 +62,89 @@ export type SyncBody = {
   };
 };
 
+export async function syncExecutiveSupporterEntitlement(db: D1Database, hash: string): Promise<boolean> {
+  const supporterRow = await db
+    .prepare("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")
+    .bind(hash)
+    .first<{ is_executive_supporter: number }>();
+  if (!supporterRow) {
+    const existingUserRow = await db
+      .prepare("SELECT is_executive_supporter FROM user_scores WHERE license_hash = ?")
+      .bind(hash)
+      .first<{ is_executive_supporter: number }>();
+    return existingUserRow?.is_executive_supporter === 1;
+  }
+  const isExecutiveSupporter = supporterRow.is_executive_supporter === 1;
+  await db
+    .prepare(
+      `UPDATE user_scores
+       SET is_executive_supporter = ?,
+           display_rank = CASE WHEN ? = 1 THEN display_rank ELSE NULL END,
+           updated_at = datetime('now')
+       WHERE license_hash = ?`,
+    )
+    .bind(isExecutiveSupporter ? 1 : 0, isExecutiveSupporter ? 1 : 0, hash)
+    .run();
+  return isExecutiveSupporter;
+}
+
+function metadataFlagIsTrue(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function normalizeMetadataIdentifier(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  return normalized.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function metadataMatchesExecutiveSupporter(value: unknown): boolean {
+  const normalized = normalizeMetadataIdentifier(value);
+  if (!normalized) return false;
+  return normalized === "executive-supporter"
+    || normalized.startsWith("executive-supporter-");
+}
+
+function isExecutiveSupporterCheckout(metadata: Record<string, unknown> | undefined): boolean {
+  if (!metadata) return false;
+  if (metadataFlagIsTrue(metadata.is_executive_supporter) || metadataFlagIsTrue(metadata.executive_supporter)) {
+    return true;
+  }
+
+  const explicitIdentifiers = [
+    metadata.product_slug,
+    metadata.variant_slug,
+    metadata.product_handle,
+    metadata.variant_handle,
+    metadata.product_key,
+    metadata.variant_key,
+    metadata.tier,
+    metadata.plan,
+  ];
+  if (explicitIdentifiers.some((value) => normalizeMetadataIdentifier(value) === "executive-supporter")) {
+    return true;
+  }
+
+  const fuzzyIdentifier = [
+    metadata.tier,
+    metadata.plan,
+    metadata.product_name,
+    metadata.variant_name,
+    metadata.product_title,
+    metadata.variant_title,
+  ].find((value) => metadataMatchesExecutiveSupporter(value));
+  if (fuzzyIdentifier) {
+    console.warn("[account/checkout] executive supporter inferred from fuzzy Polar metadata", { fuzzyIdentifier });
+    return true;
+  }
+
+  return false;
+}
+
 function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
   // Only truly cosmetic preferences are accepted from the client.
   // unlocked_themes, active_theme, and active_ticket are server-authoritative:
@@ -687,7 +770,10 @@ export async function fetchCheckoutCustomerId(
   accessToken: string,
   organizationId: string,
   opts: { allowMissingReferenceId?: boolean } = {},
-): Promise<{ customerId: string; createdAt?: string; referenceId?: string } | { error: string; status: ContentfulStatusCode }> {
+): Promise<
+  | { customerId: string; createdAt?: string; referenceId?: string; isExecutiveSupporter: boolean }
+  | { error: string; status: ContentfulStatusCode }
+> {
   let resp: Response;
   try {
     resp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(checkoutId)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -708,7 +794,12 @@ export async function fetchCheckoutCustomerId(
   if (!referenceId && !opts.allowMissingReferenceId) {
     return { error: "Checkout is missing session binding metadata — cannot verify license ownership", status: 500 };
   }
-  return { customerId, createdAt: checkout.created_at, referenceId };
+  return {
+    customerId,
+    createdAt: checkout.created_at,
+    referenceId,
+    isExecutiveSupporter: isExecutiveSupporterCheckout(checkout.metadata),
+  };
 }
 
 export async function fetchNextCheckoutCreatedAt(customerId: string, organizationId: string, accessToken: string, opts: { checkoutId: string; checkoutCreatedAt: string }): Promise<{ createdAt: string | null } | { error: string; status: ContentfulStatusCode }> {
@@ -853,9 +944,9 @@ function shouldPruneCheckoutClaims(checkoutId: string): boolean {
   return hash % 64 === 0;
 }
 
-export async function claimCheckoutForSession(db: D1Database, checkoutId: string, sessionId: string, opts: { checkoutCreatedAt?: string } = {}): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
+export async function claimCheckoutForSession(db: D1Database, checkoutId: string, sessionId: string, opts: { checkoutCreatedAt?: string; isExecutiveSupporter?: boolean } = {}): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
   try {
-    const result = await db.prepare("INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at) VALUES (?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING").bind(checkoutId, sessionId, opts.checkoutCreatedAt ?? null).run();
+    const result = await db.prepare("INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at, is_executive_supporter) VALUES (?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING").bind(checkoutId, sessionId, opts.checkoutCreatedAt ?? null, opts.isExecutiveSupporter ? 1 : 0).run();
     if (result.meta.changes) {
       if (shouldPruneCheckoutClaims(checkoutId)) {
         await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run().catch(() => undefined);
@@ -863,12 +954,57 @@ export async function claimCheckoutForSession(db: D1Database, checkoutId: string
       return { ok: true };
     }
     const existing = await db.prepare("SELECT session_id, claimed_at FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ session_id: string; claimed_at: string }>();
-    return existing && existing.session_id === sessionId ? { ok: true } : { ok: false, error: "This checkout was already claimed by another session", retriable: false };
+    if (existing?.session_id === sessionId) {
+      if (opts.isExecutiveSupporter) {
+        await db.prepare("UPDATE checkout_claims SET is_executive_supporter = 1 WHERE checkout_id = ? AND session_id = ?").bind(checkoutId, sessionId).run().catch(() => undefined);
+      }
+      return { ok: true };
+    }
+    return { ok: false, error: "This checkout was already claimed by another session", retriable: false };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("no such table") || msg.includes("checkout_claims")) return { ok: false, error: "Checkout claim table is not available — please try again later", retriable: true };
     return { ok: false, error: "Unable to verify checkout claim — please try again", retriable: true };
   }
+}
+
+export async function claimExecutiveSupporterForLicenseKey(
+  db: D1Database,
+  opts: { licenseKeyHash: string; sessionId: string },
+): Promise<boolean> {
+  const claim = await db.prepare(
+    `SELECT ckc.checkout_id
+     FROM checkout_key_claims ckc
+     JOIN checkout_claims cc
+       ON cc.checkout_id = ckc.checkout_id
+     WHERE ckc.license_key_hash = ?
+       AND cc.session_id = ?
+       AND cc.is_executive_supporter = 1
+     LIMIT 1`,
+  ).bind(opts.licenseKeyHash, opts.sessionId).first<{ checkout_id: string }>();
+  if (!claim?.checkout_id) return false;
+
+  const existingSupporter = await db.prepare(
+    "SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1 LIMIT 1",
+  ).bind(claim.checkout_id).first<{ license_key_hash: string }>();
+  if (existingSupporter?.license_key_hash) return existingSupporter.license_key_hash === opts.licenseKeyHash;
+
+  await db.prepare(
+    `UPDATE checkout_key_claims
+     SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END
+     WHERE checkout_id = ?
+       AND NOT EXISTS (
+         SELECT 1
+         FROM checkout_key_claims existing
+         WHERE existing.checkout_id = ?
+           AND existing.is_executive_supporter = 1
+       )`,
+  ).bind(opts.licenseKeyHash, claim.checkout_id, claim.checkout_id).run();
+
+  const assignedSupporter = await db.prepare(
+    "SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1 LIMIT 1",
+  ).bind(claim.checkout_id).first<{ license_key_hash: string }>();
+  return assignedSupporter?.license_key_hash === opts.licenseKeyHash;
 }
 
 export async function getStoredClaimedKeys(
@@ -913,25 +1049,36 @@ export async function storeClaimedKeys(db: D1Database, checkoutId: string, keys:
   }
 }
 
-export async function claimLicenseKeysForCheckout(db: D1Database, checkoutId: string, keys: string[], secret: string): Promise<{ ok: true; keys: string[] } | { ok: false; error: string }> {
+export async function claimLicenseKeysForCheckout(
+  db: D1Database,
+  claim: {
+    checkoutId: string;
+    keys: string[];
+    secret: string;
+    executiveSupporterLicenseKey?: string;
+  },
+): Promise<{ ok: true; keys: string[] } | { ok: false; error: string }> {
   try {
+    const { checkoutId, keys, secret, executiveSupporterLicenseKey } = claim;
     if (!keys.length) return { ok: false, error: "No license keys were provided for this checkout" };
     const keyHashes = await Promise.all(keys.map((key) => hashKey(key)));
-    const valuePlaceholders = keyHashes.map(() => "(?)").join(", ");
+    const executiveSupporterHash = executiveSupporterLicenseKey ? await hashKey(executiveSupporterLicenseKey) : null;
+    const valuePlaceholders = keyHashes.map(() => "(?, ?)").join(", ");
+    const valueBindings = keyHashes.flatMap((keyHash) => [keyHash, executiveSupporterHash === keyHash ? 1 : 0]);
     await db.prepare(
-      `WITH incoming(license_key_hash) AS (VALUES ${valuePlaceholders})
-       INSERT INTO checkout_key_claims (license_key_hash, checkout_id)
-       SELECT incoming.license_key_hash, ?
+      `WITH incoming(license_key_hash, is_executive_supporter) AS (VALUES ${valuePlaceholders})
+       INSERT INTO checkout_key_claims (license_key_hash, checkout_id, is_executive_supporter)
+       SELECT incoming.license_key_hash, ?, incoming.is_executive_supporter
        FROM incoming
        WHERE NOT EXISTS (
          SELECT 1
          FROM checkout_key_claims existing
          JOIN incoming conflicted
            ON conflicted.license_key_hash = existing.license_key_hash
-         WHERE existing.checkout_id != ?
+       WHERE existing.checkout_id != ?
        )
        ON CONFLICT(license_key_hash) DO NOTHING`,
-    ).bind(...keyHashes, checkoutId, checkoutId).run();
+    ).bind(...valueBindings, checkoutId, checkoutId).run();
     const placeholders = keyHashes.map(() => "?").join(", ");
     const rows = await db.prepare(`SELECT license_key_hash, checkout_id FROM checkout_key_claims WHERE license_key_hash IN (${placeholders})`).bind(...keyHashes).all<{ license_key_hash: string; checkout_id: string }>();
     const ownerByHash = new Map((rows.results ?? []).map((row) => [row.license_key_hash, row.checkout_id]));

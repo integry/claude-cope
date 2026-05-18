@@ -10,6 +10,7 @@ export const PREFILL_COMMANDS = new Set([
   "/ticket",
   "/alias",
   "/model",
+  "/promote",
   "/user",
   "/sync",
   "/theme",

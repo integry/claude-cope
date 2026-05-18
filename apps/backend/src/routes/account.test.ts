@@ -6,7 +6,7 @@ import { createMockDB, mockKV, postJSON, postRaw, postWithSession, getWithSessio
 import { storeClaimedKeys } from "./accountHelpers";
 import { hashKey } from "../utils/quota";
 import { signFreeAccountCookieValue } from "../utils/freeAccountIdentity";
-import { FREE_TIER_RANK_CAP } from "../gameConstants";
+import { FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
 
 const CLAIM_SECRET = "tok";
 
@@ -1218,6 +1218,45 @@ describe("POST /api/account/checkout-license", () => {
     expect(data.licenseKey).toBe("COPE-T1");
     expect(data.allKeys).toEqual(keys);
   });
+  it("persists supporter checkout intent without guessing which key belongs to the purchaser", async () => {
+    const origFetch = globalThis.fetch;
+    const { db, calls } = createMockDB({ runChanges: 1 });
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const u = typeof input === "string" ? input : input.toString();
+      if (u.includes("/v1/checkouts/?")) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
+      if (u.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({
+          organization_id: "org",
+          status: "succeeded",
+          customer_id: "c1",
+          created_at: "2026-01-02T00:00:00Z",
+          metadata: { reference_id: "s", tier: "Executive Supporter Tier" },
+        }));
+      }
+      if (u.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({ items: ["T1", "T2"].map((k, i) => ({ key: `COPE-${k}`, created_at: `2026-01-02T00:00:0${i + 1}Z`, status: "granted" })) }));
+      }
+      return origFetch(input as RequestInfo, undefined);
+    }) as typeof fetch;
+    try {
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_supporter" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", DB: db }, "s");
+      expect(res.status).toBe(200);
+      const checkoutClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_claims"));
+      expect(checkoutClaimInsert?.bindings).toEqual(["co_supporter", "s", "2026-01-02T00:00:00Z", 1]);
+      const supporterClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"));
+      expect(supporterClaimInsert?.bindings.slice(0, 4)).toEqual([
+        expect.any(String),
+        0,
+        expect.any(String),
+        0,
+      ]);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
   it("returns 400 for invalid checkoutId format", async () => {
     expect((await postJSON("/api/account/checkout-license", { checkoutId: ";;;invalid" }, {
       CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
@@ -1469,7 +1508,7 @@ describe("POST /api/account/checkout-license", () => {
               if (sql.includes("INSERT INTO checkout_key_claims")) {
                 const bindings = args as string[];
                 const checkoutId = bindings[bindings.length - 1]!;
-                const licenseKeyHashes = bindings.slice(0, -2);
+                const licenseKeyHashes = bindings.slice(0, -2).filter((_, index) => index % 2 === 0);
                 const hasConflict = licenseKeyHashes.some((licenseKeyHash) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash) !== checkoutId);
                 if (hasConflict) return { meta: { changes: 0 } };
                 for (const licenseKeyHash of licenseKeyHashes) {
@@ -1960,6 +1999,26 @@ describe("GET /api/account/me", () => {
       profile: {
         username: "alice",
         corporate_rank: "Junior Code Monkey",
+        is_executive_supporter: false,
+      },
+    });
+  });
+  it("returns executive supporter entitlement in the restored paid profile", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, is_executive_supporter: 1 },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+    });
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      isPro: true,
+      profile: {
+        username: "alice",
+        is_executive_supporter: true,
       },
     });
   });
@@ -2227,6 +2286,46 @@ describe("GET /api/account/me", () => {
       profile: {
         username: "alice",
         corporate_rank: "Junior Code Monkey",
+        display_rank: null,
+        is_executive_supporter: false,
+      },
+    });
+  });
+
+  it("suppresses stale supporter vanity fields for revoked licenses in /me", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const staleDate = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString();
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? { status: "active", last_activated_at: staleDate }
+              : value === "alice"
+                ? {
+                  ...BASE_PROFILE,
+                  license_hash: "pro-hash",
+                  corporate_rank: "CTO",
+                  display_rank: SUPPORTER_VANITY_TITLES[0]!.title,
+                  is_executive_supporter: 1,
+                }
+                : null,
+          ),
+        })),
+      })),
+    };
+
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "alice",
+      isPro: false,
+      revoked: true,
+      profile: {
+        corporate_rank: FREE_TIER_RANK_CAP,
+        display_rank: null,
+        is_executive_supporter: false,
       },
     });
   });
@@ -2241,5 +2340,161 @@ describe("license SQL guard alignment", () => {
     expect(res.status).toBe(200);
     const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores SET buddy_type"));
     expect(updateCall?.sql).toContain("datetime(last_activated_at) >= datetime('now', '-90 days')");
+  });
+});
+
+describe("POST /api/account/update-display-rank", () => {
+  it("rejects non-supporters with the HR error copy", async () => {
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, is_executive_supporter: 0 },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+        [ACCOUNT_TEST_SQL.getProfile]: { ...BASE_PROFILE, is_executive_supporter: 0 },
+      },
+      runChanges: 1,
+    });
+
+    const res = await postJSON("/api/account/update-display-rank", {
+      username: "alice",
+      displayRank: SUPPORTER_VANITY_TITLES[1]!.title,
+      licenseKeyHash: "hash",
+    }, { DB: db });
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: PROMOTE_ACCESS_DENIED_MESSAGE });
+  });
+
+  it("persists supporter vanity titles separately from corporate_rank", async () => {
+    const selectedTitle = SUPPORTER_VANITY_TITLES[2]!.title;
+    const { db, calls } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, is_executive_supporter: 1 },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+        [ACCOUNT_TEST_SQL.getProfile]: { ...BASE_PROFILE, is_executive_supporter: 1, display_rank: selectedTitle },
+      },
+      runChanges: 1,
+    });
+
+    const res = await postJSON("/api/account/update-display-rank", {
+      username: "alice",
+      displayRank: selectedTitle,
+      licenseKeyHash: "hash",
+    }, { DB: db });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: {
+        corporate_rank: "CTO",
+        display_rank: selectedTitle,
+        is_executive_supporter: true,
+      },
+    });
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === selectedTitle)).toBe(true);
+  });
+
+  it("does not let a different session claim the supporter vanity entitlement first", async () => {
+    const selectedTitle = SUPPORTER_VANITY_TITLES[2]!.title;
+    const supporterHash = await hashKey("COPE-T1");
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, license_hash: supporterHash, is_executive_supporter: 0 },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+        [ACCOUNT_TEST_SQL.getProfile]: { ...BASE_PROFILE, license_hash: supporterHash, is_executive_supporter: 0 },
+      },
+      runChanges: 1,
+    });
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const u = typeof input === "string" ? input : input.toString();
+      if (u.includes("/v1/checkouts/?")) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
+      if (u.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({
+          organization_id: "org",
+          status: "succeeded",
+          customer_id: "c1",
+          created_at: "2026-01-02T00:00:00Z",
+          metadata: { reference_id: "owner-session", product_slug: "executive-supporter" },
+        }));
+      }
+      if (u.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({ items: [{ key: "COPE-T1", created_at: "2026-01-02T00:00:01Z", status: "granted" }] }));
+      }
+      return origFetch(input as RequestInfo, undefined);
+    }) as typeof fetch;
+
+    try {
+      await postWithSession("/api/account/checkout-license", { checkoutId: "co_supporter" }, {
+        DB: db,
+        CHECKOUT_CLAIM_SECRET: CLAIM_SECRET,
+        POLAR_ACCESS_TOKEN: "tok",
+        POLAR_ORGANIZATION_ID: "org",
+      }, "owner-session");
+
+      const res = await postWithSession("/api/account/update-display-rank", {
+        username: "alice",
+        displayRank: selectedTitle,
+        licenseKeyHash: supporterHash,
+      }, { DB: db }, "teammate-session");
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: PROMOTE_ACCESS_DENIED_MESSAGE });
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it("trims displayRank before validating and persisting it", async () => {
+    const selectedTitle = SUPPORTER_VANITY_TITLES[1]!.title;
+    const { db, calls } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, is_executive_supporter: 1 },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+        [ACCOUNT_TEST_SQL.getProfile]: { ...BASE_PROFILE, is_executive_supporter: 1, display_rank: selectedTitle },
+      },
+      runChanges: 1,
+    });
+
+    const res = await postJSON("/api/account/update-display-rank", {
+      username: "alice",
+      displayRank: ` ${selectedTitle} `,
+      licenseKeyHash: "hash",
+    }, { DB: db });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { display_rank: selectedTitle },
+    });
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === selectedTitle)).toBe(true);
+  });
+
+  it("allows clearing a vanity title back to the organic rank", async () => {
+    const { db, calls } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, is_executive_supporter: 1, display_rank: SUPPORTER_VANITY_TITLES[0]!.title },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+        [ACCOUNT_TEST_SQL.getProfile]: { ...BASE_PROFILE, is_executive_supporter: 1, display_rank: null },
+      },
+      runChanges: 1,
+    });
+
+    const res = await postJSON("/api/account/update-display-rank", {
+      username: "alice",
+      displayRank: null,
+      licenseKeyHash: "hash",
+    }, { DB: db });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: {
+        corporate_rank: "CTO",
+        display_rank: null,
+      },
+    });
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === null)).toBe(true);
   });
 });

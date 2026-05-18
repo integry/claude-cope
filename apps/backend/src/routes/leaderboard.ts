@@ -28,18 +28,31 @@ leaderboard.get("/", async (c) => {
   }
 
   let sql =
-    "SELECT username, corporate_rank, country, total_td as technical_debt, updated_at as created_at FROM user_scores";
+    `SELECT us.username,
+            CASE
+              WHEN us.is_executive_supporter = 1 AND active_licenses.key_hash IS NOT NULL
+                THEN COALESCE(us.display_rank, us.corporate_rank)
+              ELSE us.corporate_rank
+            END AS corporate_rank,
+            us.country,
+            us.total_td as technical_debt,
+            us.updated_at as created_at
+     FROM user_scores us
+     LEFT JOIN licenses active_licenses
+       ON active_licenses.key_hash = us.license_hash
+      AND active_licenses.status = 'active'
+      AND datetime(active_licenses.last_activated_at) >= datetime('now', '-90 days')`;
   const conditions: string[] = [];
   const bindings: string[] = [];
 
   if (timeframe === "daily") {
-    conditions.push("updated_at >= datetime('now', '-1 day')");
+    conditions.push("us.updated_at >= datetime('now', '-1 day')");
   } else if (timeframe === "weekly") {
-    conditions.push("updated_at >= datetime('now', '-7 days')");
+    conditions.push("us.updated_at >= datetime('now', '-7 days')");
   }
 
   if (country && country !== "all") {
-    conditions.push("country = ?");
+    conditions.push("us.country = ?");
     bindings.push(country);
   }
 
