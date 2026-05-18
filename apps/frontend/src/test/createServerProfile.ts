@@ -6,6 +6,7 @@ export function createServerProfile(overrides: Partial<ServerProfile> = {}): Ser
     current_td: 0,
     total_td: 0,
     corporate_rank: "Junior Code Monkey",
+    is_executive_supporter: false,
     inventory: {},
     upgrades: [],
     achievements: [],

@@ -3,6 +3,7 @@ export interface ServerProfile {
   total_td: number;
   current_td: number;
   corporate_rank: string;
+  is_executive_supporter: boolean;
   inventory: Record<string, number>;
   upgrades: string[];
   achievements: string[];

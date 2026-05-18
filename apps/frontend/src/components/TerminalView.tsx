@@ -234,7 +234,8 @@ export function TerminalView({
           }
           username={state.username}
           isBYOK={BYOK_ENABLED && !!state.apiKey}
-          isMax={!!state.proKey || !!state.proKeyHash}
+          isMax={Boolean(state.proKey || state.proKeyHash || state.isPro || state.hasSessionPro)}
+          isExecutiveSupporter={Boolean(state.isExecutiveSupporter)}
           byokTotalCost={state.byokTotalCost}
           onHomeClick={handleHomeClick}
           onProfileClick={handleProfileClick}

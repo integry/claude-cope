@@ -42,6 +42,7 @@ function createGameState(overrides: Partial<GameState> = {}): GameState {
     pendingCompletedTaskIds: [],
     pendingCompletedTaskRewards: {},
     authoritativeProfileFloor: null,
+    isExecutiveSupporter: false,
     ...overrides,
   };
 }
@@ -67,6 +68,14 @@ describe("applyServerProfile", () => {
 
     expect(merged.economy.currentTD).toBe(1000);
     expect(merged.economy.totalTDEarned).toBe(1000);
+  });
+
+  it("hydrates executive supporter entitlement from the server profile", () => {
+    const merged = applyServerProfile(createGameState(), createServerProfile({
+      is_executive_supporter: true,
+    }));
+
+    expect(merged.isExecutiveSupporter).toBe(true);
   });
 
   it("preserves a legacy pending completed-ticket reward when the reward metadata is missing", () => {

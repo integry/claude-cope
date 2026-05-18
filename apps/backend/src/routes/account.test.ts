@@ -1218,6 +1218,29 @@ describe("POST /api/account/checkout-license", () => {
     expect(data.licenseKey).toBe("COPE-T1");
     expect(data.allKeys).toEqual(keys);
   });
+  it("persists executive supporter entitlement for multi-key checkout claims", async () => {
+    const origFetch = globalThis.fetch;
+    const { db, calls } = createMockDB({ runChanges: 1 });
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const u = typeof input === "string" ? input : input.toString();
+      if (u.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z", metadata: { reference_id: "s" } }));
+      }
+      if (u.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({ items: ["T1", "T2"].map((k, i) => ({ key: `COPE-${k}`, created_at: `2026-01-02T00:00:0${i + 1}Z`, status: "granted" })) }));
+      }
+      return origFetch(input as RequestInfo, undefined);
+    }) as typeof fetch;
+    try {
+      const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_supporter" },
+        { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", DB: db }, "s");
+      expect(res.status).toBe(200);
+      const supporterClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"));
+      expect(supporterClaimInsert?.bindings[supporterClaimInsert.bindings.length - 2]).toBe(1);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
   it("returns 400 for invalid checkoutId format", async () => {
     expect((await postJSON("/api/account/checkout-license", { checkoutId: ";;;invalid" }, {
       CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
@@ -1469,7 +1492,7 @@ describe("POST /api/account/checkout-license", () => {
               if (sql.includes("INSERT INTO checkout_key_claims")) {
                 const bindings = args as string[];
                 const checkoutId = bindings[bindings.length - 1]!;
-                const licenseKeyHashes = bindings.slice(0, -2);
+                const licenseKeyHashes = bindings.slice(0, -3);
                 const hasConflict = licenseKeyHashes.some((licenseKeyHash) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash) !== checkoutId);
                 if (hasConflict) return { meta: { changes: 0 } };
                 for (const licenseKeyHash of licenseKeyHashes) {
@@ -1960,6 +1983,26 @@ describe("GET /api/account/me", () => {
       profile: {
         username: "alice",
         corporate_rank: "Junior Code Monkey",
+        is_executive_supporter: false,
+      },
+    });
+  });
+  it("returns executive supporter entitlement in the restored paid profile", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, is_executive_supporter: 1 },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+    });
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      isPro: true,
+      profile: {
+        username: "alice",
+        is_executive_supporter: true,
       },
     });
   });

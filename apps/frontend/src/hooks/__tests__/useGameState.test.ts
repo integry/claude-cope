@@ -142,6 +142,7 @@ describe("canBuyTheme", () => {
         total_td: 6000,
         current_td: 6000,
         corporate_rank: "Junior Code Monkey",
+        is_executive_supporter: true,
         inventory: {},
         upgrades: [],
         achievements: [],
@@ -157,6 +158,7 @@ describe("canBuyTheme", () => {
 
     expect(nextState.isPro).toBe(true);
     expect(nextState.hasSessionPro).toBe(true);
+    expect(nextState.isExecutiveSupporter).toBe(true);
     expect(nextState.activeTheme).toBe("midnight");
     expect(nextState.unlockedThemes).toEqual(["default", "amber", "midnight"]);
   });

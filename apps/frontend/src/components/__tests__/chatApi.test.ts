@@ -206,6 +206,7 @@ describe("submitChatMessage - achievement parsing", () => {
       current_td: 100,
       total_td: 100,
       corporate_rank: "Junior Code Monkey",
+      is_executive_supporter: false,
       inventory: {},
       upgrades: [],
       achievements: [],

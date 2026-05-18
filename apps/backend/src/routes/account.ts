@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -182,7 +182,9 @@ async function redeemCheckoutLicense(
   if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
   const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: result.createdAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
-  const claimedKeys = await claimLicenseKeysForCheckout(db, checkoutId, lkResult.keys, claimSecret);
+  const claimedKeys = await claimLicenseKeysForCheckout(db, checkoutId, lkResult.keys, claimSecret, {
+    isExecutiveSupporter: lkResult.keys.length > 1,
+  });
   if (!claimedKeys.ok) {
     const isConflict = claimedKeys.error.includes("already claimed") || claimedKeys.error.includes("full license set");
     return c.json({ error: claimedKeys.error }, isConflict ? 409 : 503);
@@ -368,10 +370,12 @@ account.post("/sync", async (c) => {
   // This ordering ensures that failed syncs never produce orphaned active
   // licenses or quota entries.
   try {
+    const isExecutiveSupporter = await syncExecutiveSupporterEntitlement(db, hash);
     await commitSyncSideEffects(
       { db, kv, hash },
       { validationId: validation.id, proInitialQuota: limits.proInitialQuota },
     );
+    result.profile = { ...result.profile, is_executive_supporter: isExecutiveSupporter };
   } catch (err: unknown) {
     try {
       await rollbackProfileMutation(db, hash, result.mutation);
