@@ -11,7 +11,7 @@
 >
 > I didn't code any of it. **This entire project was autonomously generated, architected, and debugged by an AI.**
 >
-> Go look at the **Closed Pull Requests** tab. You will see an AI orchestrator catch and fix React `stale-closure` race conditions, extract components to satisfy strict CI/CD line-count linters, and generate hundreds of lines of satirical lore based on 4-word prompts.
+> Go look at the **[Closed Pull Requests](https://github.com/integry/claude-cope/pulls?q=is%3Apr+is%3Aclosed)**. You will see an AI orchestrator catch and fix React `stale-closure` race conditions, extract components to satisfy strict CI/CD line-count linters, and generate hundreds of lines of satirical lore based on 4-word prompts.
 > 
 > ### The Engine Behind the Curtain
 > This game is a live tech demo for **[Propr.dev](https://propr.dev)**, an autonomous AI coding orchestrator that integrates directly into GitHub PRs. 
