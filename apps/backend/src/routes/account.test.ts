@@ -2394,6 +2394,98 @@ describe("POST /api/account/update-display-rank", () => {
     expect(calls.some((call) => call.sql.includes("corporate_rank = ?"))).toBe(false);
   });
 
+  it("broadcasts activation when display-rank selection claims supporter status for the first time", async () => {
+    const selectedTitle = SUPPORTER_VANITY_TITLES[1]!.title;
+    const supporterHash = await hashKey("COPE-SUPPORTER-DISPLAY");
+    let currentSupporter = 0;
+    let currentDisplayRank: string | null = null;
+    let claimedSupporterHash: string | null = null;
+    const recentEvents: string[] = [];
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...bindings: unknown[]) => {
+          calls.push({ sql, bindings });
+          return {
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("license_hash, account_id FROM user_scores WHERE username = ?")) {
+                return { ...BASE_PROFILE, license_hash: supporterHash, is_executive_supporter: currentSupporter };
+              }
+              if (sql.includes("SELECT status, last_activated_at FROM licenses")) {
+                return { status: "active", last_activated_at: new Date().toISOString() };
+              }
+              if (sql.includes("FROM checkout_key_claims ckc") && sql.includes("JOIN checkout_claims cc")) {
+                return { checkout_id: "co_1" };
+              }
+              if (sql.includes("SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1")) {
+                return claimedSupporterHash ? { license_key_hash: claimedSupporterHash } : null;
+              }
+              if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")) {
+                return { is_executive_supporter: 1 };
+              }
+              if (sql.includes("SELECT username, is_executive_supporter FROM user_scores WHERE license_hash = ?")) {
+                return { username: "alice", is_executive_supporter: currentSupporter };
+              }
+              if (sql.includes("SELECT id FROM recent_events WHERE message = ?")) {
+                return recentEvents.length > 0 ? { id: "evt-1" } : null;
+              }
+              if (sql.includes("SELECT username, total_td, current_td, corporate_rank")) {
+                return {
+                  ...BASE_PROFILE,
+                  license_hash: supporterHash,
+                  is_executive_supporter: currentSupporter,
+                  display_rank: currentDisplayRank,
+                };
+              }
+              return null;
+            }),
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("UPDATE checkout_key_claims") && sql.includes("SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END")) {
+                claimedSupporterHash = supporterHash;
+                return { meta: { changes: 1 } };
+              }
+              if (sql.includes("INSERT INTO recent_events")) {
+                recentEvents.push(String(bindings[0]));
+                return { meta: { changes: 1 } };
+              }
+              if (sql.includes("UPDATE user_scores") && sql.includes("SET is_executive_supporter = 1")) {
+                const changes = currentSupporter === 0 ? 1 : 0;
+                currentSupporter = 1;
+                return { meta: { changes } };
+              }
+              if (sql.includes("UPDATE user_scores SET display_rank = ?")) {
+                currentDisplayRank = bindings[0] as string | null;
+                return { meta: { changes: 1 } };
+              }
+              return { meta: { changes: 1 } };
+            }),
+          };
+        }),
+        first: vi.fn().mockResolvedValue(null),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+      })),
+    };
+
+    const res = await postWithSession("/api/account/update-display-rank", {
+      username: "alice",
+      displayRank: selectedTitle,
+      licenseKeyHash: supporterHash,
+    }, { DB: db }, "owner-session");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: {
+        is_executive_supporter: true,
+        display_rank: selectedTitle,
+      },
+    });
+    expect(recentEvents).toEqual([
+      "[LIVE] 👑 alice just expensed the Executive Supporter Pack. Respect the grift.",
+    ]);
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === selectedTitle)).toBe(true);
+  });
+
   it("does not let a different session claim the supporter vanity entitlement first", async () => {
     const selectedTitle = SUPPORTER_VANITY_TITLES[2]!.title;
     const supporterHash = await hashKey("COPE-T1");

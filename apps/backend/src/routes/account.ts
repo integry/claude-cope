@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, emitExecutiveSupporterActivationEvent } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -458,9 +458,8 @@ async function finalizeSyncProfile(
   deps: { db: D1Database; kv: KVNamespace; hash: string; validationId?: string; proInitialQuota: number },
   result: Extract<Awaited<ReturnType<typeof resolveProfile>>, { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>> }>,
 ) {
-  let supporterEntitlement: Awaited<ReturnType<typeof syncExecutiveSupporterEntitlement>> | null = null;
   try {
-    supporterEntitlement = await syncExecutiveSupporterEntitlement(deps.db, deps.hash);
+    const supporterEntitlement = await syncExecutiveSupporterEntitlement(deps.db, deps.hash);
     await commitSyncSideEffects(
       { db: deps.db, kv: deps.kv, hash: deps.hash },
       { validationId: deps.validationId, proInitialQuota: deps.proInitialQuota },
@@ -474,25 +473,6 @@ async function finalizeSyncProfile(
   } catch (err: unknown) {
     await rollbackSyncProfileMutation(deps.db, deps.hash, result.mutation);
     throw err;
-  }
-}
-
-async function emitSupporterActivationIfNeeded(
-  db: D1Database,
-  hash: string,
-  supporterEntitlement: Awaited<ReturnType<typeof syncExecutiveSupporterEntitlement>> | null,
-) {
-  if (!supporterEntitlement?.activatedNow || !supporterEntitlement.username) {
-    return;
-  }
-
-  try {
-    await emitExecutiveSupporterActivationEvent(db, supporterEntitlement.username);
-  } catch (err: unknown) {
-    console.warn(
-      `[account/sync] failed to emit executive supporter activation for ${hash.slice(0, 8)}:`,
-      err instanceof Error ? err.message : err,
-    );
   }
 }
 
@@ -557,11 +537,10 @@ account.post("/sync", async (c) => {
   // Profile claim succeeded — now provision the licenses row and KV quota.
   // This ordering ensures that failed syncs never produce orphaned active
   // licenses or quota entries.
-  const supporterEntitlement = await finalizeSyncProfile(
+  await finalizeSyncProfile(
     { db, kv, hash, validationId: validation.id ? String(validation.id) : undefined, proInitialQuota: limits.proInitialQuota },
     result,
   );
-  await emitSupporterActivationIfNeeded(db, hash, supporterEntitlement);
 
   // Bind the session to the resolved username so /me can look it up.
   if (sessionId && result.profile?.username) {

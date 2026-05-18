@@ -3,7 +3,7 @@ import { API_BASE } from "../config";
 import AsciiBox from "./AsciiBox";
 
 type LeaderboardEntry = {
-  id?: string;
+  id: string;
   username: string;
   country: string;
   corporate_rank: string;
@@ -210,7 +210,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
               ].filter(Boolean).join(" ");
               return (
                 <div
-                  key={entry.id ?? `${entry.username}-${entry.country}-${i}`}
+                  key={entry.id}
                   className={rowClassName}
                 >
                   <span className="flex-1 min-w-0 truncate leaderboard-row-main">

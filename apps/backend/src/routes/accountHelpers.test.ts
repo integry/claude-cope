@@ -631,16 +631,16 @@ describe("syncExecutiveSupporterEntitlement", () => {
         return {
           bind: vi.fn((...args: unknown[]) => {
             calls.push({ sql, bindings: args });
-            return {
-              first: vi.fn().mockResolvedValue(sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
-                ? { is_executive_supporter: 1 }
-                : sql.includes("SELECT username FROM user_scores")
-                  ? { username: "alice" }
+          return {
+            first: vi.fn().mockResolvedValue(sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
+              ? { is_executive_supporter: 1 }
+                : sql.includes("SELECT username, is_executive_supporter FROM user_scores")
+                  ? { username: "alice", is_executive_supporter: 0 }
                 : null),
-              run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
-            };
-          }),
-          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+          };
+        }),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
         };
       }),
     } as unknown as D1Database;
@@ -650,9 +650,12 @@ describe("syncExecutiveSupporterEntitlement", () => {
       activatedNow: true,
       username: "alice",
     });
+    const insertCall = calls.find((call) => call.sql.includes("INSERT INTO recent_events"));
+    expect(insertCall?.bindings).toEqual([
+      "[LIVE] 👑 alice just expensed the Executive Supporter Pack. Respect the grift.",
+    ]);
     const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores"));
     expect(updateCall?.bindings).toEqual(["hash-123"]);
-    expect(calls.some((call) => call.sql.includes("INSERT INTO recent_events"))).toBe(false);
   });
 
   it("preserves existing supporter state when no supporter claim row is present", async () => {
@@ -696,8 +699,8 @@ describe("syncExecutiveSupporterEntitlement", () => {
               if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")) {
                 return { is_executive_supporter: 1 };
               }
-              if (sql.includes("SELECT username FROM user_scores")) {
-                return { username: "alice" };
+              if (sql.includes("SELECT username, is_executive_supporter FROM user_scores")) {
+                return { username: "alice", is_executive_supporter: 1 };
               }
               return null;
             }),
@@ -725,8 +728,8 @@ describe("syncExecutiveSupporterEntitlement", () => {
           return {
             first: vi.fn().mockResolvedValue(sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
               ? { is_executive_supporter: 0 }
-              : sql.includes("SELECT username FROM user_scores")
-                ? { username: "alice" }
+              : sql.includes("SELECT username, is_executive_supporter FROM user_scores")
+                ? { username: "alice", is_executive_supporter: 0 }
                 : null),
             run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
           };

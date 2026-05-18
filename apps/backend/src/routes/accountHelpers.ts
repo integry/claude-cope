@@ -79,6 +79,14 @@ async function insertRecentEventAndPrune(db: D1Database, message: string): Promi
     .run();
 }
 
+async function recentEventExists(db: D1Database, message: string): Promise<boolean> {
+  const existing = await db
+    .prepare("SELECT id FROM recent_events WHERE message = ? LIMIT 1")
+    .bind(message)
+    .first<{ id: string }>();
+  return Boolean(existing?.id);
+}
+
 export async function emitExecutiveSupporterActivationEvent(
   db: D1Database,
   username: string,
@@ -108,15 +116,20 @@ export async function syncExecutiveSupporterEntitlement(
 
   const isExecutiveSupporter = supporterRow.is_executive_supporter === 1;
   const existingUserRow = await db
-    .prepare("SELECT username FROM user_scores WHERE license_hash = ?")
+    .prepare("SELECT username, is_executive_supporter FROM user_scores WHERE license_hash = ?")
     .bind(hash)
-    .first<{ username: string }>();
+    .first<{ username: string; is_executive_supporter: number }>();
   if (!existingUserRow) {
     return { isExecutiveSupporter, activatedNow: false, username: null };
   }
 
   let activatedNow = false;
   if (isExecutiveSupporter) {
+    const message = buildExecutiveSupporterActivationMessage(existingUserRow.username);
+    const eventAlreadyRecorded = await recentEventExists(db, message);
+    if (existingUserRow.is_executive_supporter === 0 && !eventAlreadyRecorded) {
+      await insertRecentEventAndPrune(db, message);
+    }
     const activationUpdate = await db
       .prepare(
         `UPDATE user_scores

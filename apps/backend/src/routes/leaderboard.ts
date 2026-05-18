@@ -28,7 +28,8 @@ leaderboard.get("/", async (c) => {
   }
 
   let sql =
-    `SELECT us.username,
+    `SELECT us.username AS id,
+            us.username,
             CASE
               WHEN us.is_executive_supporter = 1 AND active_licenses.key_hash IS NOT NULL
                 THEN 1

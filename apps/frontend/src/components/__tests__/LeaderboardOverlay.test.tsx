@@ -43,6 +43,7 @@ describe("LeaderboardOverlay", () => {
     global.fetch = vi.fn(async () => (
       new Response(JSON.stringify([
         {
+          id: "alice",
           username: "alice",
           country: "US",
           corporate_rank: "Chief Firefighter",
@@ -51,6 +52,7 @@ describe("LeaderboardOverlay", () => {
           is_executive_supporter: true,
         },
         {
+          id: "bob",
           username: "bob",
           country: "CA",
           corporate_rank: "Staff IC",
@@ -59,6 +61,7 @@ describe("LeaderboardOverlay", () => {
           is_executive_supporter: false,
         },
         {
+          id: "carol",
           username: "carol",
           country: "GB",
           corporate_rank: "Principal",

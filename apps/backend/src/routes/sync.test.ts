@@ -181,8 +181,8 @@ describe("POST /api/account/sync", () => {
               if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")) {
                 return { is_executive_supporter: 1 };
               }
-              if (sql.includes("SELECT username FROM user_scores WHERE license_hash = ?")) {
-                return { username: "alice" };
+              if (sql.includes("SELECT username, is_executive_supporter FROM user_scores WHERE license_hash = ?")) {
+                return { username: "alice", is_executive_supporter: currentSupporter };
               }
               if (sql.includes("WHERE license_hash = ?")) {
                 return { ...PROFILE_ROW, license_hash: supporterHash, is_executive_supporter: currentSupporter };
@@ -236,6 +236,79 @@ describe("POST /api/account/sync", () => {
       "[LIVE] 👑 alice just expensed the Executive Supporter Pack. Respect the grift.",
     ]);
     expect(calls.filter((call) => call.sql.includes("INSERT INTO recent_events"))).toHaveLength(1);
+  });
+
+  it("retries executive supporter activation after a transient recent-events insert failure", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const supporterHash = await hashKey("COPE-SUPPORTER");
+    let currentSupporter = 0;
+    let failNextRecentEventInsert = true;
+    const recentEvents: string[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...bindings: unknown[]) => ({
+          first: vi.fn().mockImplementation(async () => {
+            if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")) {
+              return { is_executive_supporter: 1 };
+            }
+            if (sql.includes("SELECT username, is_executive_supporter FROM user_scores WHERE license_hash = ?")) {
+              return { username: "alice", is_executive_supporter: currentSupporter };
+            }
+            if (sql.includes("SELECT id FROM recent_events WHERE message = ?")) {
+              return recentEvents.length > 0 ? { id: "evt-1" } : null;
+            }
+            if (sql.includes("WHERE license_hash = ?")) {
+              return { ...PROFILE_ROW, license_hash: supporterHash, is_executive_supporter: currentSupporter };
+            }
+            return null;
+          }),
+          run: vi.fn().mockImplementation(async () => {
+            if (sql.includes("INSERT INTO recent_events")) {
+              if (failNextRecentEventInsert) {
+                failNextRecentEventInsert = false;
+                throw new Error("recent event insert failed");
+              }
+              recentEvents.push(String(bindings[0]));
+              return { meta: { changes: 1 } };
+            }
+            if (sql.includes("UPDATE user_scores")) {
+              const changes = currentSupporter === 0 ? 1 : 0;
+              currentSupporter = 1;
+              return { meta: { changes } };
+            }
+            return { meta: { changes: 1 } };
+          }),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        })),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        first: vi.fn().mockResolvedValue(null),
+        all: vi.fn().mockResolvedValue({ results: [] }),
+      })),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
+    const kv = mockKV();
+
+    const firstRes = await postSync({ licenseKey: "COPE-SUPPORTER" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+    expect(firstRes.status).toBe(500);
+    expect(currentSupporter).toBe(0);
+
+    const secondRes = await postSync({ licenseKey: "COPE-SUPPORTER" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+    expect(secondRes.status).toBe(200);
+    expect(await secondRes.json()).toMatchObject({
+      success: true,
+      profile: { is_executive_supporter: true },
+    });
+    expect(currentSupporter).toBe(1);
+    expect(recentEvents).toEqual([
+      "[LIVE] 👑 alice just expensed the Executive Supporter Pack. Respect the grift.",
+    ]);
   });
 
   it("rolls back license activation when KV provisioning fails", async () => {
