@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS user_scores (
     total_td INTEGER NOT NULL DEFAULT 0,
     current_td INTEGER NOT NULL DEFAULT 0,
     corporate_rank TEXT NOT NULL DEFAULT 'Junior Code Monkey',
+    display_rank TEXT,
     country TEXT NOT NULL DEFAULT 'Unknown',
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     last_sync_time TEXT NOT NULL DEFAULT (datetime('now')),

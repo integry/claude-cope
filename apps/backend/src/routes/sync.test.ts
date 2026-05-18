@@ -545,4 +545,28 @@ describe("POST /api/account/sync", () => {
       profile: { is_executive_supporter: true },
     });
   });
+
+  it("does not strip an existing supporter entitlement when no checkout claim row exists", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const supporterProfile = { ...PROFILE_ROW, is_executive_supporter: 1 };
+    const { db } = createMockDB({
+      firstBySQL: {
+        "license_hash =": supporterProfile,
+        "SELECT is_executive_supporter FROM checkout_key_claims": null,
+        "SELECT is_executive_supporter FROM user_scores": { is_executive_supporter: 1 },
+      },
+    });
+    const kv = mockKV();
+
+    const res = await postSync({ licenseKey: "COPE-TEST" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { is_executive_supporter: true },
+    });
+  });
 });

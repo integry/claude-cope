@@ -1236,7 +1236,12 @@ describe("POST /api/account/checkout-license", () => {
         { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", DB: db }, "s");
       expect(res.status).toBe(200);
       const supporterClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"));
-      expect(supporterClaimInsert?.bindings[supporterClaimInsert.bindings.length - 2]).toBe(1);
+      expect(supporterClaimInsert?.bindings.slice(0, 4)).toEqual([
+        expect.any(String),
+        1,
+        expect.any(String),
+        0,
+      ]);
     } finally {
       globalThis.fetch = origFetch;
     }

@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, resolvePaidProfileOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -186,7 +186,7 @@ async function redeemCheckoutLicense(
     checkoutId,
     keys: lkResult.keys,
     secret: claimSecret,
-    isExecutiveSupporter: lkResult.keys.length > 1,
+    executiveSupporterKey: lkResult.keys.length > 1 ? lkResult.keys[0] : undefined,
   });
   if (!claimedKeys.ok) {
     const isConflict = claimedKeys.error.includes("already claimed") || claimedKeys.error.includes("full license set");
@@ -463,7 +463,7 @@ account.post("/buy-generator", async (c) => {
   const generator = GENERATORS.find((g) => g.id === body.generatorId);
   if (!generator) return c.json({ error: "Unknown generator" }, 400);
 
-  const ownership = await resolveThemePurchaseOwnership(db, {
+  const ownership = await resolvePaidProfileOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -527,7 +527,7 @@ account.post("/buy-upgrade", async (c) => {
   const upgrade = UPGRADES.find((u) => u.id === body.upgradeId);
   if (!upgrade) return c.json({ error: "Unknown upgrade" }, 400);
 
-  const ownership = await resolveThemePurchaseOwnership(db, {
+  const ownership = await resolvePaidProfileOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -586,7 +586,7 @@ account.post("/buy-theme", async (c) => {
   const theme = THEMES.find((t) => t.id === body.themeId);
   if (!theme) return c.json({ error: "Unknown theme" }, 400);
 
-  const ownership = await resolveThemePurchaseOwnership(db, {
+  const ownership = await resolvePaidProfileOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -681,7 +681,7 @@ account.post("/unlock-achievement", async (c) => {
     return c.json({ error: "Unknown achievementId" }, 400);
   }
 
-  const ownership = await resolveThemePurchaseOwnership(db, {
+  const ownership = await resolvePaidProfileOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -735,7 +735,7 @@ account.post("/update-buddy", async (c) => {
     return c.json({ error: "Unknown buddyType" }, 400);
   }
 
-  const ownership = await resolveThemePurchaseOwnership(db, {
+  const ownership = await resolvePaidProfileOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -784,7 +784,7 @@ account.post("/update-ticket", async (c) => {
     return c.json({ error: ticketError }, 400);
   }
 
-  const ownership = await resolveThemePurchaseOwnership(db, {
+  const ownership = await resolvePaidProfileOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
@@ -828,7 +828,7 @@ account.post("/update-display-rank", async (c) => {
     return c.json({ error: "Unknown displayRank" }, 400);
   }
 
-  const ownership = await resolveThemePurchaseOwnership(db, {
+  const ownership = await resolvePaidProfileOwnership(db, {
     username: body.username,
     licenseKeyHash: body.licenseKeyHash,
     kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,

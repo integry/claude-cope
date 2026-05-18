@@ -331,7 +331,7 @@ describe("checkout key claims", () => {
             if (sql.includes("INSERT INTO checkout_key_claims")) {
               const bindings = args as string[];
               const checkoutId = bindings[bindings.length - 1]!;
-              const licenseKeyHashes = bindings.slice(0, -3);
+              const licenseKeyHashes = bindings.slice(0, -2).filter((_, index) => index % 2 === 0);
               const hasConflict = licenseKeyHashes.some((licenseKeyHash) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash) !== checkoutId);
               if (hasConflict) return { meta: { changes: 0 } };
               for (const licenseKeyHash of licenseKeyHashes) {
@@ -418,7 +418,7 @@ describe("checkout key claims", () => {
     await expect(storeClaimedKeys(db, "checkout-a", ["COPE-1"], CLAIM_SECRET)).resolves.toEqual({ ok: true });
   });
 
-  it("persists the executive supporter flag on claimed team-pack keys", async () => {
+  it("persists the executive supporter flag only on the purchaser key from a team-pack", async () => {
     const calls: { sql: string; bindings: unknown[] }[] = [];
     const db = {
       prepare: vi.fn((sql: string) => ({
@@ -437,12 +437,17 @@ describe("checkout key claims", () => {
       checkoutId: "checkout-a",
       keys: ["COPE-1", "COPE-2"],
       secret: CLAIM_SECRET,
-      isExecutiveSupporter: true,
+      executiveSupporterKey: "COPE-1",
     });
 
     const claimBindings = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"))?.bindings;
     expect(claimBindings).toBeDefined();
-    expect(claimBindings?.[claimBindings.length - 2]).toBe(1);
+    expect(claimBindings?.slice(0, 4)).toEqual([
+      expect.any(String),
+      1,
+      expect.any(String),
+      0,
+    ]);
   });
 
   it("returns stored keys for a previously completed checkout claim", async () => {
@@ -557,7 +562,31 @@ describe("syncExecutiveSupporterEntitlement", () => {
     } as unknown as D1Database;
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toBe(true);
-    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET is_executive_supporter = ?") && call.bindings[0] === 1)).toBe(true);
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET is_executive_supporter = 1"))).toBe(true);
+  });
+
+  it("preserves an existing supporter entitlement when no checkout claim row is present", async () => {
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => {
+          calls.push({ sql, bindings: args });
+          return {
+            first: vi.fn().mockResolvedValue(
+              sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
+                ? null
+                : sql.includes("SELECT is_executive_supporter FROM user_scores")
+                  ? { is_executive_supporter: 1 }
+                  : null,
+            ),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+          };
+        }),
+      })),
+    } as unknown as D1Database;
+
+    await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toBe(true);
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET is_executive_supporter = 1"))).toBe(false);
   });
 });
 
