@@ -55,6 +55,7 @@ describe("GET /api/leaderboard", () => {
 
     expect(getSQL()).toContain("WHEN is_executive_supporter = 1");
     expect(getSQL()).toContain("COALESCE(display_rank, corporate_rank)");
+    expect(getSQL()).toContain("LEFT JOIN licenses active_licenses");
     expect(getSQL()).toContain("datetime(last_activated_at) >= datetime('now', '-90 days')");
   });
 
@@ -66,7 +67,7 @@ describe("GET /api/leaderboard", () => {
       DB: db,
     });
 
-    expect(getSQL()).toContain("updated_at >= datetime('now', '-1 day')");
+    expect(getSQL()).toContain("us.updated_at >= datetime('now', '-1 day')");
   });
 
   it("filters by weekly timeframe", async () => {
@@ -77,7 +78,7 @@ describe("GET /api/leaderboard", () => {
       DB: db,
     });
 
-    expect(getSQL()).toContain("updated_at >= datetime('now', '-7 days')");
+    expect(getSQL()).toContain("us.updated_at >= datetime('now', '-7 days')");
   });
 
   it("filters by country", async () => {
@@ -101,7 +102,7 @@ describe("GET /api/leaderboard", () => {
     });
 
     const sql = getSQL();
-    expect(sql).toContain("updated_at >= datetime('now', '-1 day')");
+    expect(sql).toContain("us.updated_at >= datetime('now', '-1 day')");
     expect(sql).toContain("country = ?");
     expect(getBindings()).toContain("US");
   });

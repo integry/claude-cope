@@ -24,7 +24,7 @@ export function createMockDB(opts: {
   runChanges?: number;
 } = {}) {
   const calls: { sql: string; bindings: unknown[] }[] = [];
-  const checkoutClaims = new Map<string, { sessionId?: string; encryptedKeys: string | null }>();
+  const checkoutClaims = new Map<string, { sessionId?: string; encryptedKeys: string | null; isExecutiveSupporter: number }>();
   const keyOwners = new Map<string, { checkoutId: string; isExecutiveSupporter: number }>();
   const resolveFirst = (sql: string, bindings: unknown[]) => {
     if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims WHERE checkout_id = ?")) {
@@ -37,6 +37,21 @@ export function createMockDB(opts: {
       const checkoutId = bindings[0] as string;
       if (!checkoutClaims.has(checkoutId)) return null;
       return { encrypted_keys: checkoutClaims.get(checkoutId)?.encryptedKeys ?? null };
+    }
+    if (sql.includes("SELECT ckc.checkout_id FROM checkout_key_claims ckc JOIN checkout_claims cc")) {
+      const [licenseKeyHash, sessionId] = bindings as [string, string];
+      const claim = keyOwners.get(licenseKeyHash);
+      if (!claim) return null;
+      const checkoutClaim = checkoutClaims.get(claim.checkoutId);
+      if (!checkoutClaim || checkoutClaim.sessionId !== sessionId || checkoutClaim.isExecutiveSupporter !== 1) return null;
+      return { checkout_id: claim.checkoutId };
+    }
+    if (sql.includes("SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1")) {
+      const checkoutId = bindings[0] as string;
+      for (const [licenseKeyHash, owner] of keyOwners.entries()) {
+        if (owner.checkoutId === checkoutId && owner.isExecutiveSupporter === 1) return { license_key_hash: licenseKeyHash };
+      }
+      return null;
     }
     if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")) {
       const licenseKeyHash = bindings[0] as string;
@@ -59,9 +74,16 @@ export function createMockDB(opts: {
       first: vi.fn().mockResolvedValue(resolveFirst(sql, bindings)),
       run: vi.fn().mockImplementation(async () => {
       if (sql.includes("INSERT INTO checkout_claims")) {
-        const [checkoutId, sessionId] = bindings as [string, string];
+        const [checkoutId, sessionId, , isExecutiveSupporter] = bindings as [string, string, string | null, number];
         if (checkoutClaims.has(checkoutId)) return { meta: { changes: 0 } };
-        checkoutClaims.set(checkoutId, { sessionId, encryptedKeys: null });
+        checkoutClaims.set(checkoutId, { sessionId, encryptedKeys: null, isExecutiveSupporter: isExecutiveSupporter ?? 0 });
+        return { meta: { changes: 1 } };
+      }
+      if (sql.includes("UPDATE checkout_claims SET is_executive_supporter = 1")) {
+        const [checkoutId, sessionId] = bindings as [string, string];
+        const claim = checkoutClaims.get(checkoutId);
+        if (!claim || claim.sessionId !== sessionId) return { meta: { changes: 0 } };
+        claim.isExecutiveSupporter = 1;
         return { meta: { changes: 1 } };
       }
       if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
@@ -70,6 +92,18 @@ export function createMockDB(opts: {
         if (!claim) return { meta: { changes: 0 } };
         claim.encryptedKeys = encryptedKeys;
         return { meta: { changes: opts.runChanges ?? 1 } };
+      }
+      if (sql.includes("UPDATE checkout_key_claims SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END")) {
+        const [licenseKeyHash, checkoutId] = bindings as [string, string];
+        const hasExistingSupporter = Array.from(keyOwners.values()).some((owner) => owner.checkoutId === checkoutId && owner.isExecutiveSupporter === 1);
+        if (hasExistingSupporter) return { meta: { changes: 0 } };
+        let updated = 0;
+        for (const [ownedLicenseKeyHash, owner] of keyOwners.entries()) {
+          if (owner.checkoutId !== checkoutId) continue;
+          owner.isExecutiveSupporter = ownedLicenseKeyHash === licenseKeyHash ? 1 : 0;
+          updated += 1;
+        }
+        return { meta: { changes: updated } };
       }
       if (sql.includes("INSERT INTO checkout_key_claims")) {
         const { checkoutId, incomingClaims } = parseCheckoutKeyClaimBindings(bindings);

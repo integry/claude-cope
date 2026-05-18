@@ -1218,7 +1218,7 @@ describe("POST /api/account/checkout-license", () => {
     expect(data.licenseKey).toBe("COPE-T1");
     expect(data.allKeys).toEqual(keys);
   });
-  it("persists executive supporter entitlement onto the purchaser key for supporter checkouts", async () => {
+  it("persists supporter checkout intent without guessing which key belongs to the purchaser", async () => {
     const origFetch = globalThis.fetch;
     const { db, calls } = createMockDB({ runChanges: 1 });
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -1232,7 +1232,7 @@ describe("POST /api/account/checkout-license", () => {
           status: "succeeded",
           customer_id: "c1",
           created_at: "2026-01-02T00:00:00Z",
-          metadata: { reference_id: "s", tier: "Executive Supporter" },
+          metadata: { reference_id: "s", tier: "Executive Supporter Tier" },
         }));
       }
       if (u.includes("/v1/license-keys/")) {
@@ -1244,10 +1244,12 @@ describe("POST /api/account/checkout-license", () => {
       const res = await postWithSession("/api/account/checkout-license", { checkoutId: "co_supporter" },
         { CHECKOUT_CLAIM_SECRET: CLAIM_SECRET, POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org", DB: db }, "s");
       expect(res.status).toBe(200);
+      const checkoutClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_claims"));
+      expect(checkoutClaimInsert?.bindings).toEqual(["co_supporter", "s", "2026-01-02T00:00:00Z", 1]);
       const supporterClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"));
       expect(supporterClaimInsert?.bindings.slice(0, 4)).toEqual([
         expect.any(String),
-        1,
+        0,
         expect.any(String),
         0,
       ]);

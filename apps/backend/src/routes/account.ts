@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, assignExecutiveSupporterToPurchaserKey } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -225,7 +225,10 @@ async function redeemCheckoutLicense(
   const accessToken = c.env?.POLAR_ACCESS_TOKEN as string;
   const organizationId = c.env?.POLAR_ORGANIZATION_ID as string;
   const { customerId, checkoutCreatedAt, isExecutiveSupporter } = redemptionContext;
-  const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt });
+  const claim = await claimCheckoutForSession(db, checkoutId, sessionId, {
+    checkoutCreatedAt,
+    isExecutiveSupporter,
+  });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
   const postClaimResolution = await resolveCachedOrStoredClaim(c, {
     db, kv, checkoutId, sessionId, claimSecret, cacheLookup: { status: "cached", keys: [], sessionMismatch: false, requiresStoredClaim: true },
@@ -239,7 +242,6 @@ async function redeemCheckoutLicense(
     checkoutId,
     keys: lkResult.keys,
     secret: claimSecret,
-    executiveSupporterLicenseKey: isExecutiveSupporter ? lkResult.keys[0] : undefined,
   });
   if (!claimedKeys.ok) return mapClaimedKeysError(c, claimedKeys.error);
   return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: claimedKeys.keys });
@@ -446,6 +448,9 @@ account.post("/sync", async (c) => {
   // This ordering ensures that failed syncs never produce orphaned active
   // licenses or quota entries.
   try {
+    if (sessionId) {
+      await assignExecutiveSupporterToPurchaserKey(db, { licenseKeyHash: hash, sessionId });
+    }
     const isExecutiveSupporter = await syncExecutiveSupporterEntitlement(db, hash);
     await commitSyncSideEffects(
       { db, kv, hash },

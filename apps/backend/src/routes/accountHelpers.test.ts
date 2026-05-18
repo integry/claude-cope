@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys, fetchCheckoutCustomerId, syncExecutiveSupporterEntitlement } from "./accountHelpers";
+import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys, fetchCheckoutCustomerId, syncExecutiveSupporterEntitlement, assignExecutiveSupporterToPurchaserKey } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
 import { parseCheckoutKeyClaimBindings } from "./account.test-utils";
 import { hashKey } from "../utils/quota";
@@ -451,6 +451,42 @@ describe("checkout key claims", () => {
     ]);
   });
 
+  it("assigns executive supporter to the first purchaser-activated key for a supporter checkout", async () => {
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    let supporterHash: string | null = null;
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => ({
+          first: vi.fn().mockImplementation(async () => {
+            if (sql.includes("SELECT ckc.checkout_id FROM checkout_key_claims ckc JOIN checkout_claims cc")) {
+              return { checkout_id: "checkout-a" };
+            }
+            if (sql.includes("SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1")) {
+              return supporterHash ? { license_key_hash: supporterHash } : null;
+            }
+            return null;
+          }),
+          run: vi.fn().mockImplementation(async () => {
+            calls.push({ sql, bindings: args });
+            if (sql.includes("UPDATE checkout_key_claims SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END")) {
+              supporterHash = args[0] as string;
+            }
+            return { meta: { changes: 1 } };
+          }),
+        })),
+      })),
+    } as unknown as D1Database;
+
+    const licenseKeyHash = await hashKey("COPE-1");
+    await expect(assignExecutiveSupporterToPurchaserKey(db, {
+      licenseKeyHash,
+      sessionId: "sess-1",
+    })).resolves.toBe(true);
+
+    const updateCall = calls.find((call) => call.sql.includes("UPDATE checkout_key_claims SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END"));
+    expect(updateCall?.bindings).toEqual([licenseKeyHash, "checkout-a", "checkout-a"]);
+  });
+
   it("returns stored keys for a previously completed checkout claim", async () => {
     let encryptedKeys: string | null = null;
     const recordingDb = {
@@ -622,6 +658,23 @@ describe("fetchCheckoutCustomerId", () => {
       customer_id: "cust-1",
       created_at: "2026-01-02T00:00:00Z",
       metadata: { reference_id: "sess-1", product_slug: "executive-supporter" },
+    }))) as typeof fetch;
+
+    await expect(fetchCheckoutCustomerId("co_123", "tok", "org")).resolves.toEqual({
+      customerId: "cust-1",
+      createdAt: "2026-01-02T00:00:00Z",
+      referenceId: "sess-1",
+      isExecutiveSupporter: true,
+    });
+  });
+
+  it("detects executive supporter checkouts from richer product labels", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      organization_id: "org",
+      status: "succeeded",
+      customer_id: "cust-1",
+      created_at: "2026-01-02T00:00:00Z",
+      metadata: { reference_id: "sess-1", product_name: "Executive Supporter - 5 Licenses" },
     }))) as typeof fetch;
 
     await expect(fetchCheckoutCustomerId("co_123", "tok", "org")).resolves.toEqual({

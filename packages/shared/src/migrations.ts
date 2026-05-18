@@ -331,6 +331,11 @@ export const migrations: Migration[] = [
     sql: "ALTER TABLE user_scores ADD COLUMN display_rank TEXT",
     ignoreErrorMatching: /duplicate column name.*display_rank/i,
   },
+  {
+    name: "047_add_checkout_claims_is_executive_supporter",
+    sql: "ALTER TABLE checkout_claims ADD COLUMN is_executive_supporter INTEGER NOT NULL DEFAULT 0",
+    ignoreErrorMatching: /duplicate column name.*is_executive_supporter/i,
+  },
 ];
 
 /**

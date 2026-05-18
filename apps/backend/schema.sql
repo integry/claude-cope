@@ -174,7 +174,8 @@ CREATE TABLE IF NOT EXISTS checkout_claims (
     session_id TEXT NOT NULL,
     claimed_at TEXT NOT NULL DEFAULT (datetime('now')),
     encrypted_keys TEXT,
-    checkout_created_at TEXT
+    checkout_created_at TEXT,
+    is_executive_supporter INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS checkout_key_claims (

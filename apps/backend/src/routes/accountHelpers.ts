@@ -104,7 +104,11 @@ function normalizeMetadataIdentifier(value: unknown): string | null {
 
 function metadataMatchesExecutiveSupporter(value: unknown): boolean {
   const normalized = normalizeMetadataIdentifier(value);
-  return normalized === "executive-supporter";
+  if (!normalized) return false;
+  return normalized === "executive-supporter"
+    || normalized.startsWith("executive-supporter-")
+    || normalized.endsWith("-executive-supporter")
+    || normalized.includes("-executive-supporter-");
 }
 
 function isExecutiveSupporterCheckout(metadata: Record<string, unknown> | undefined): boolean {
@@ -119,6 +123,10 @@ function isExecutiveSupporterCheckout(metadata: Record<string, unknown> | undefi
     metadata.variant_handle,
     metadata.product_key,
     metadata.variant_key,
+    metadata.product_name,
+    metadata.variant_name,
+    metadata.product_title,
+    metadata.variant_title,
     metadata.tier,
     metadata.plan,
   ].some((value) => metadataMatchesExecutiveSupporter(value));
@@ -923,9 +931,9 @@ function shouldPruneCheckoutClaims(checkoutId: string): boolean {
   return hash % 64 === 0;
 }
 
-export async function claimCheckoutForSession(db: D1Database, checkoutId: string, sessionId: string, opts: { checkoutCreatedAt?: string } = {}): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
+export async function claimCheckoutForSession(db: D1Database, checkoutId: string, sessionId: string, opts: { checkoutCreatedAt?: string; isExecutiveSupporter?: boolean } = {}): Promise<{ ok: true } | { ok: false; error: string; retriable: boolean }> {
   try {
-    const result = await db.prepare("INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at) VALUES (?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING").bind(checkoutId, sessionId, opts.checkoutCreatedAt ?? null).run();
+    const result = await db.prepare("INSERT INTO checkout_claims (checkout_id, session_id, checkout_created_at, is_executive_supporter) VALUES (?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING").bind(checkoutId, sessionId, opts.checkoutCreatedAt ?? null, opts.isExecutiveSupporter ? 1 : 0).run();
     if (result.meta.changes) {
       if (shouldPruneCheckoutClaims(checkoutId)) {
         await db.prepare("DELETE FROM checkout_claims WHERE claimed_at < datetime('now', '-30 days')").run().catch(() => undefined);
@@ -933,12 +941,57 @@ export async function claimCheckoutForSession(db: D1Database, checkoutId: string
       return { ok: true };
     }
     const existing = await db.prepare("SELECT session_id, claimed_at FROM checkout_claims WHERE checkout_id = ?").bind(checkoutId).first<{ session_id: string; claimed_at: string }>();
-    return existing && existing.session_id === sessionId ? { ok: true } : { ok: false, error: "This checkout was already claimed by another session", retriable: false };
+    if (existing?.session_id === sessionId) {
+      if (opts.isExecutiveSupporter) {
+        await db.prepare("UPDATE checkout_claims SET is_executive_supporter = 1 WHERE checkout_id = ? AND session_id = ?").bind(checkoutId, sessionId).run().catch(() => undefined);
+      }
+      return { ok: true };
+    }
+    return { ok: false, error: "This checkout was already claimed by another session", retriable: false };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("no such table") || msg.includes("checkout_claims")) return { ok: false, error: "Checkout claim table is not available — please try again later", retriable: true };
     return { ok: false, error: "Unable to verify checkout claim — please try again", retriable: true };
   }
+}
+
+export async function assignExecutiveSupporterToPurchaserKey(
+  db: D1Database,
+  opts: { licenseKeyHash: string; sessionId: string },
+): Promise<boolean> {
+  const claim = await db.prepare(
+    `SELECT ckc.checkout_id
+     FROM checkout_key_claims ckc
+     JOIN checkout_claims cc
+       ON cc.checkout_id = ckc.checkout_id
+     WHERE ckc.license_key_hash = ?
+       AND cc.session_id = ?
+       AND cc.is_executive_supporter = 1
+     LIMIT 1`,
+  ).bind(opts.licenseKeyHash, opts.sessionId).first<{ checkout_id: string }>();
+  if (!claim?.checkout_id) return false;
+
+  const existingSupporter = await db.prepare(
+    "SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1 LIMIT 1",
+  ).bind(claim.checkout_id).first<{ license_key_hash: string }>();
+  if (existingSupporter?.license_key_hash) return existingSupporter.license_key_hash === opts.licenseKeyHash;
+
+  await db.prepare(
+    `UPDATE checkout_key_claims
+     SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END
+     WHERE checkout_id = ?
+       AND NOT EXISTS (
+         SELECT 1
+         FROM checkout_key_claims existing
+         WHERE existing.checkout_id = ?
+           AND existing.is_executive_supporter = 1
+       )`,
+  ).bind(opts.licenseKeyHash, claim.checkout_id, claim.checkout_id).run();
+
+  const assignedSupporter = await db.prepare(
+    "SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1 LIMIT 1",
+  ).bind(claim.checkout_id).first<{ license_key_hash: string }>();
+  return assignedSupporter?.license_key_hash === opts.licenseKeyHash;
 }
 
 export async function getStoredClaimedKeys(
