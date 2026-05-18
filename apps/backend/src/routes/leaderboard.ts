@@ -29,7 +29,11 @@ leaderboard.get("/", async (c) => {
 
   let sql =
     `SELECT us.username,
-            us.is_executive_supporter,
+            CASE
+              WHEN us.is_executive_supporter = 1 AND active_licenses.key_hash IS NOT NULL
+                THEN 1
+              ELSE 0
+            END AS is_executive_supporter,
             CASE
               WHEN us.is_executive_supporter = 1 AND active_licenses.key_hash IS NOT NULL
                 THEN COALESCE(us.display_rank, us.corporate_rank)

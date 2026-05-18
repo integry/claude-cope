@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import type { ChangeEvent, Dispatch, KeyboardEvent as ReactKeyboardEvent, RefObject, SetStateAction } from "react";
 import { useRef } from "react";
 import CommandLine from "./CommandLine";
@@ -169,6 +168,7 @@ function renderBuddyDock(buddy: GameState["buddy"]) {
   return <div className="terminal-buddy-dock hidden md:flex"><BuddyOverlay buddy={buddy} /></div>;
 }
 
+/* eslint-disable max-lines -- Large presentational component pending extraction */
 export function TerminalView({
   activeRegression,
   outageHp,
@@ -441,3 +441,4 @@ export function TerminalView({
     </div>
   );
 }
+/* eslint-enable max-lines */

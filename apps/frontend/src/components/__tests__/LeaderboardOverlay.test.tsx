@@ -58,6 +58,14 @@ describe("LeaderboardOverlay", () => {
           created_at: "2026-05-18T00:00:00Z",
           is_executive_supporter: false,
         },
+        {
+          username: "carol",
+          country: "GB",
+          corporate_rank: "Principal",
+          technical_debt: 1200,
+          created_at: "2026-05-18T00:00:00Z",
+          is_executive_supporter: false,
+        },
       ]), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -70,11 +78,12 @@ describe("LeaderboardOverlay", () => {
     expect(global.fetch).toHaveBeenCalledWith("https://example.com/api/leaderboard");
 
     const rows = container!.querySelectorAll(".leaderboard-row");
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows[0]?.classList.contains("leaderboard-row-podium-1")).toBe(true);
     expect(rows[0]?.classList.contains("leaderboard-row-supporter")).toBe(true);
     expect(rows[1]?.classList.contains("leaderboard-row-podium-2")).toBe(true);
     expect(rows[1]?.classList.contains("leaderboard-row-supporter")).toBe(false);
+    expect(rows[2]?.classList.contains("leaderboard-row-supporter")).toBe(false);
 
     const supporterBadge = container!.querySelector(".leaderboard-supporter-badge");
     const supporterUsername = container!.querySelector(".leaderboard-supporter-username");
@@ -84,5 +93,6 @@ describe("LeaderboardOverlay", () => {
     expect(supporterUsername?.textContent).toBe("alice");
     expect(supporterRankChip?.textContent).toContain("[Chief Firefighter]");
     expect(container!.textContent).not.toContain("bob EXEC");
+    expect(container!.textContent).not.toContain("carol EXEC");
   });
 });

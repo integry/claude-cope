@@ -181,8 +181,8 @@ describe("POST /api/account/sync", () => {
               if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")) {
                 return { is_executive_supporter: 1 };
               }
-              if (sql.includes("SELECT username, is_executive_supporter FROM user_scores WHERE license_hash = ?")) {
-                return { username: "alice", is_executive_supporter: currentSupporter };
+              if (sql.includes("SELECT username FROM user_scores WHERE license_hash = ?")) {
+                return { username: "alice" };
               }
               if (sql.includes("WHERE license_hash = ?")) {
                 return { ...PROFILE_ROW, license_hash: supporterHash, is_executive_supporter: currentSupporter };
@@ -191,7 +191,9 @@ describe("POST /api/account/sync", () => {
             }),
             run: vi.fn().mockImplementation(async () => {
               if (sql.includes("UPDATE user_scores")) {
-                currentSupporter = Number(bindings[0] ?? 0);
+                const changes = currentSupporter === 0 ? 1 : 0;
+                currentSupporter = 1;
+                return { meta: { changes } };
               }
               if (sql.includes("INSERT INTO recent_events")) {
                 recentEvents.push(String(bindings[0]));
@@ -284,6 +286,7 @@ describe("POST /api/account/sync", () => {
         expect.stringMatching(/^polar_id:/),
       ]),
     );
+    expect(calls.some((c) => c.sql.includes("INSERT INTO recent_events"))).toBe(false);
   });
 
   it("rolls back a newly created profile when provisioning fails after insert", async () => {

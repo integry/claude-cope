@@ -61,7 +61,9 @@ describe("GET /api/leaderboard", () => {
       DB: db,
     });
 
-    expect(getSQL()).toContain("us.is_executive_supporter");
+    expect(getSQL()).toContain("CASE");
+    expect(getSQL()).toContain("THEN 1");
+    expect(getSQL()).toContain("ELSE 0");
     expect(getSQL()).toContain("WHEN us.is_executive_supporter = 1");
     expect(getSQL()).toContain("COALESCE(us.display_rank, us.corporate_rank)");
     expect(getSQL()).toContain("LEFT JOIN licenses active_licenses");

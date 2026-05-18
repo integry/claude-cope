@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, emitExecutiveSupporterActivationEvent } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -470,8 +470,9 @@ account.post("/sync", async (c) => {
   // Profile claim succeeded — now provision the licenses row and KV quota.
   // This ordering ensures that failed syncs never produce orphaned active
   // licenses or quota entries.
+  let supporterEntitlement: Awaited<ReturnType<typeof syncExecutiveSupporterEntitlement>> | null = null;
   try {
-    const supporterEntitlement = await syncExecutiveSupporterEntitlement(db, hash);
+    supporterEntitlement = await syncExecutiveSupporterEntitlement(db, hash);
     await commitSyncSideEffects(
       { db, kv, hash },
       { validationId: validation.id, proInitialQuota: limits.proInitialQuota },
@@ -491,6 +492,17 @@ account.post("/sync", async (c) => {
       );
     }
     throw err;
+  }
+
+  if (supporterEntitlement?.activatedNow && supporterEntitlement.username) {
+    try {
+      await emitExecutiveSupporterActivationEvent(db, supporterEntitlement.username);
+    } catch (err: unknown) {
+      console.warn(
+        `[account/sync] failed to emit executive supporter activation for ${hash.slice(0, 8)}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
 
   // Bind the session to the resolved username so /me can look it up.

@@ -65,6 +65,7 @@ export type SyncBody = {
 export type ExecutiveSupporterEntitlementSyncResult = {
   isExecutiveSupporter: boolean;
   activatedNow: boolean;
+  username: string | null;
 };
 
 function buildExecutiveSupporterActivationMessage(username: string): string {
@@ -76,6 +77,13 @@ async function insertRecentEventAndPrune(db: D1Database, message: string): Promi
   await db
     .prepare("DELETE FROM recent_events WHERE id NOT IN (SELECT id FROM recent_events ORDER BY created_at DESC LIMIT 50)")
     .run();
+}
+
+export async function emitExecutiveSupporterActivationEvent(
+  db: D1Database,
+  username: string,
+): Promise<void> {
+  await insertRecentEventAndPrune(db, buildExecutiveSupporterActivationMessage(username));
 }
 
 export async function syncExecutiveSupporterEntitlement(
@@ -94,36 +102,47 @@ export async function syncExecutiveSupporterEntitlement(
     return {
       isExecutiveSupporter: existingUserRow?.is_executive_supporter === 1,
       activatedNow: false,
+      username: null,
     };
   }
 
   const isExecutiveSupporter = supporterRow.is_executive_supporter === 1;
   const existingUserRow = await db
-    .prepare("SELECT username, is_executive_supporter FROM user_scores WHERE license_hash = ?")
+    .prepare("SELECT username FROM user_scores WHERE license_hash = ?")
     .bind(hash)
-    .first<{ username: string; is_executive_supporter: number }>();
+    .first<{ username: string }>();
   if (!existingUserRow) {
-    return { isExecutiveSupporter, activatedNow: false };
+    return { isExecutiveSupporter, activatedNow: false, username: null };
   }
 
-  const wasExecutiveSupporter = existingUserRow.is_executive_supporter === 1;
-  await db
-    .prepare(
-      `UPDATE user_scores
-       SET is_executive_supporter = ?,
-           display_rank = CASE WHEN ? = 1 THEN display_rank ELSE NULL END,
-           updated_at = datetime('now')
-       WHERE license_hash = ?`,
-    )
-    .bind(isExecutiveSupporter ? 1 : 0, isExecutiveSupporter ? 1 : 0, hash)
-    .run();
-
-  const activatedNow = isExecutiveSupporter && !wasExecutiveSupporter;
-  if (activatedNow) {
-    await insertRecentEventAndPrune(db, buildExecutiveSupporterActivationMessage(existingUserRow.username));
+  let activatedNow = false;
+  if (isExecutiveSupporter) {
+    const activationUpdate = await db
+      .prepare(
+        `UPDATE user_scores
+         SET is_executive_supporter = 1,
+             updated_at = datetime('now')
+         WHERE license_hash = ?
+           AND is_executive_supporter = 0`,
+      )
+      .bind(hash)
+      .run();
+    activatedNow = Number(activationUpdate.meta.changes ?? 0) > 0;
+  } else {
+    await db
+      .prepare(
+        `UPDATE user_scores
+         SET is_executive_supporter = 0,
+             display_rank = NULL,
+             updated_at = datetime('now')
+         WHERE license_hash = ?
+           AND (is_executive_supporter != 0 OR display_rank IS NOT NULL)`,
+      )
+      .bind(hash)
+      .run();
   }
 
-  return { isExecutiveSupporter, activatedNow };
+  return { isExecutiveSupporter, activatedNow, username: existingUserRow.username };
 }
 
 function metadataFlagIsTrue(value: unknown): boolean {
