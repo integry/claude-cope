@@ -1074,6 +1074,20 @@ function handleAsyncCommand(command: string, ctx: SlashCommandContext, reply: Re
   return false;
 }
 
+function handleTakeExtendedCommand(command: string, ctx: SlashCommandContext, reply: Reply): boolean {
+  const hadActiveTicket = Boolean(ctx.state.activeTicket);
+  const input = command.slice("/take".length).trim();
+  const handled = handleTakeCommand(command, ctx.state, ctx.setState, reply, {
+    setInputValue: ctx.setInputValue,
+    onAccept: ctx.playChime,
+    onSuggestedReply: ctx.onSuggestedReply,
+    onLocked: () => openUpgradeFlow(ctx, { trackCommandUsage: false }),
+  });
+
+  if (handled && input && !hadActiveTicket) markValidSlashCommand(ctx, "/take");
+  return handled;
+}
+
 function handleExtendedCommand(command: string, ctx: SlashCommandContext, reply: Reply): "async" | boolean {
   if (command === "/key" || command.startsWith("/key ")) {
     return handleAsyncCommand(command, ctx, reply);
@@ -1098,16 +1112,7 @@ function handleExtendedCommand(command: string, ctx: SlashCommandContext, reply:
   if (asyncResult === "async") return "async";
 
   if (command.startsWith("/take")) {
-    const hadActiveTicket = Boolean(ctx.state.activeTicket);
-    const input = command.slice("/take".length).trim();
-    const handled = handleTakeCommand(command, ctx.state, ctx.setState, reply, {
-      setInputValue: ctx.setInputValue,
-      onAccept: ctx.playChime,
-      onSuggestedReply: ctx.onSuggestedReply,
-      onLocked: () => openUpgradeFlow(ctx, { trackCommandUsage: false }),
-    });
-    if (handled && input && !hadActiveTicket) markValidSlashCommand(ctx, "/take");
-    return handled;
+    return handleTakeExtendedCommand(command, ctx, reply);
   }
 
   if (command === "/accept") {
