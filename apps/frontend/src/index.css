@@ -565,6 +565,10 @@ body {
   display: block;
 }
 
+.upgrade-mobile-scroll {
+  overscroll-behavior: contain;
+}
+
 .upgrade-mobile-cta {
   white-space: nowrap;
 }

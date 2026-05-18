@@ -222,7 +222,9 @@ function MobileLayout({
           width: "calc(100vw - 2rem)",
           maxWidth: "480px",
           maxHeight: "calc(100vh - 2rem)",
-          overflowY: "auto",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
           color: W,
           ...(isForcedClosing ? { animation: closeEffectPresentation.panelAnimation, pointerEvents: "none" as const } : {}),
         }}
@@ -260,111 +262,122 @@ function MobileLayout({
           )}
         </div>
 
-        {/* Subtitle */}
-        <div className="upgrade-mobile-section" style={{ ...sectionStyle, textAlign: "center" }}>
-          <div className="upgrade-mobile-header" style={{ color: Y, fontWeight: "bold", fontSize: "12px" }}>
-            <span className="upgrade-mobile-header-line">INITIALIZING UPGRADE:</span>
-            <span className="upgrade-mobile-header-line">CLAUDE COPE [MAX 429X]</span>
+        <div
+          className="upgrade-mobile-scroll"
+          style={{
+            flex: "1 1 auto",
+            minHeight: 0,
+            overflowY: "auto",
+          }}
+        >
+          {/* Subtitle */}
+          <div className="upgrade-mobile-section" style={{ ...sectionStyle, textAlign: "center" }}>
+            <div className="upgrade-mobile-header" style={{ color: Y, fontWeight: "bold", fontSize: "12px" }}>
+              <span className="upgrade-mobile-header-line">INITIALIZING UPGRADE:</span>
+              <span className="upgrade-mobile-header-line">CLAUDE COPE [MAX 429X]</span>
+            </div>
+            <div style={{ color: DIM, fontSize: "11px", marginTop: "4px" }}>
+              {">"} {quotaLine}
+            </div>
           </div>
-          <div style={{ color: DIM, fontSize: "11px", marginTop: "4px" }}>
-            {">"} {quotaLine}
-          </div>
-        </div>
 
-        <hr style={hrStyle} />
+          <hr style={hrStyle} />
 
-        {/* Benchmarks */}
-        <div className="upgrade-mobile-section" style={sectionStyle}>
-          <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
-            [ THROUGHPUT BENCHMARKS ]
+          {/* Benchmarks */}
+          <div className="upgrade-mobile-section" style={sectionStyle}>
+            <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
+              [ THROUGHPUT BENCHMARKS ]
+            </div>
+            <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
+              Industry standards throttle capacity at 5x or 20x.
+              Claude Cope guarantees absolute system saturation.
+            </div>
           </div>
-          <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
-            Industry standards throttle capacity at 5x or 20x.
-            Claude Cope guarantees absolute system saturation.
-          </div>
-        </div>
 
-        {/* Comparison table — stacked on mobile */}
-        <div className="upgrade-mobile-section" style={{ ...sectionStyle, fontSize: "11px" }}>
-          <div
-            className="upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-muted"
-            style={{
-            border: `1px solid ${DIM}`,
-            marginBottom: "4px",
-            padding: "6px 8px",
-          }}>
-            <span className="upgrade-mobile-benchmark-label" style={{ color: DIM }}>Legacy AI</span>
-            <span className="upgrade-mobile-benchmark-outcome">Outcome: Manageable pull requests</span>
+          {/* Comparison table — stacked on mobile */}
+          <div className="upgrade-mobile-section" style={{ ...sectionStyle, fontSize: "11px" }}>
+            <div
+              className="upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-muted"
+              style={{
+                border: `1px solid ${DIM}`,
+                marginBottom: "4px",
+                padding: "6px 8px",
+              }}
+            >
+              <span className="upgrade-mobile-benchmark-label" style={{ color: DIM }}>Legacy AI</span>
+              <span className="upgrade-mobile-benchmark-outcome">Outcome: Manageable pull requests</span>
+            </div>
+            <div
+              className="upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-accent"
+              style={{
+                border: `1px solid ${G}`,
+                padding: "6px 8px",
+              }}
+            >
+              <span className="upgrade-mobile-benchmark-label" style={{ color: G, fontWeight: "bold" }}>Claude Cope</span>
+              <span className="upgrade-mobile-benchmark-outcome">Outcome: Unmitigated request storms</span>
+            </div>
           </div>
-          <div
-            className="upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-accent"
-            style={{
-            border: `1px solid ${G}`,
-            padding: "6px 8px",
-          }}>
-            <span className="upgrade-mobile-benchmark-label" style={{ color: G, fontWeight: "bold" }}>Claude Cope</span>
-            <span className="upgrade-mobile-benchmark-outcome">Outcome: Unmitigated request storms</span>
-          </div>
-        </div>
 
-        <hr style={hrStyle} />
+          <hr style={hrStyle} />
 
-        {/* Option 1 */}
-        <div className="upgrade-mobile-section" style={sectionStyle}>
-          <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
-            [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]
+          {/* Option 1 */}
+          <div className="upgrade-mobile-section" style={sectionStyle}>
+            <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
+              [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]
+            </div>
+            <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: "4px" }}>
+              One seat. Max 429X enabled (One-time extraction).
+            </div>
+            <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "8px", color: W }}>
+              Unlocks:{" "}
+              <span style={{ color: BW, fontWeight: "bold" }}>{PRO_QUOTA_LIMIT} non-expiring credits</span> and{" "}
+              <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>.
+            </div>
+            {mobileButton(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable, true)}
           </div>
-          <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: "4px" }}>
-            One seat. Max 429X enabled (One-time extraction).
-          </div>
-          <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "8px", color: W }}>
-            Unlocks:{" "}
-            <span style={{ color: BW, fontWeight: "bold" }}>{PRO_QUOTA_LIMIT} non-expiring credits</span> and{" "}
-            <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>.
-          </div>
-          {mobileButton(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable, true)}
-        </div>
 
-        <div style={{ height: "1px" }} />
+          <div style={{ height: "1px" }} />
 
-        {/* Option 2 */}
-        <div className="upgrade-mobile-section" style={sectionStyle}>
-          <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
-            [OPTION 2: TEAM PACK - 5 LICENSES]
+          {/* Option 2 */}
+          <div className="upgrade-mobile-section" style={sectionStyle}>
+            <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
+              [OPTION 2: TEAM PACK - 5 LICENSES]
+            </div>
+            <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
+              Let the entire team achieve HTTP 429 compliance.
+            </div>
+            <div style={{ color: "#8892b0", fontSize: "11px", marginBottom: "8px" }}>
+              (5 activation keys will be sent to your email)
+            </div>
+            {mobileButton(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}
           </div>
-          <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
-            Let the entire team achieve HTTP 429 compliance.
-          </div>
-          <div style={{ color: "#8892b0", fontSize: "11px", marginBottom: "8px" }}>
-            (5 activation keys will be sent to your email)
-          </div>
-          {mobileButton(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}
-        </div>
 
-        <hr style={hrStyle} />
+          <hr style={hrStyle} />
 
-        <div className="upgrade-mobile-section" style={sectionStyle}>
-          <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
-            [ APPENDIX: {premiumCategoryCount} NEW MAX CATEGORIES UNLOCKED ]
-          </div>
-          <div style={{ height: "8px" }} />
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "8px 12px",
-              fontSize: "11px",
-              lineHeight: "1.5",
-            }}
-          >
-            {premiumGroups.map((group) => (
-              <div key={group.id}>
-                <span style={{ color: Y, fontWeight: "bold" }}>
-                  * {group.title.toUpperCase()}:
-                </span>
-                <span>{` ${group.summary}`}</span>
-              </div>
-            ))}
+          <div className="upgrade-mobile-section" style={sectionStyle}>
+            <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
+              [ APPENDIX: {premiumCategoryCount} NEW MAX CATEGORIES UNLOCKED ]
+            </div>
+            <div style={{ height: "8px" }} />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: "8px 12px",
+                fontSize: "11px",
+                lineHeight: "1.5",
+              }}
+            >
+              {premiumGroups.map((group) => (
+                <div key={group.id}>
+                  <span style={{ color: Y, fontWeight: "bold" }}>
+                    * {group.title.toUpperCase()}:
+                  </span>
+                  <span>{` ${group.summary}`}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

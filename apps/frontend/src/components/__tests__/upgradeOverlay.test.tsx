@@ -348,6 +348,7 @@ describe("UpgradeOverlay", () => {
     expect(container.querySelector(".upgrade-mobile .upgrade-mobile-cta")).not.toBeNull();
     expect(container.querySelector(".upgrade-mobile .upgrade-mobile-cta-label")).not.toBeNull();
     expect(container.querySelector(".upgrade-mobile .upgrade-mobile-panel")).not.toBeNull();
+    expect(container.querySelector(".upgrade-mobile .upgrade-mobile-scroll")).not.toBeNull();
     expect(container.querySelectorAll(".upgrade-mobile .upgrade-mobile-section").length).toBeGreaterThan(0);
   });
 });
