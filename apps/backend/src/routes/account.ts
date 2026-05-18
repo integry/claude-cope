@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, assignExecutiveSupporterToPurchaserKey } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey } from "./accountHelpers";
 import type { CheckoutCache } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -401,6 +401,25 @@ async function persistActiveTheme(
   ).bind(themeId, username, themeId, licenseKeyHash).run();
 }
 
+async function ensureDisplayRankSupporterAccess(
+  db: D1Database,
+  opts: { displayRank: string | null; licenseKeyHash: string; profile: { is_executive_supporter: boolean } },
+) {
+  if (opts.displayRank === null) {
+    return true;
+  }
+
+  if (opts.profile.is_executive_supporter) {
+    return opts.profile.is_executive_supporter;
+  }
+
+  const claimed = await claimExecutiveSupporterForLicenseKey(db, { licenseKeyHash: opts.licenseKeyHash });
+  if (!claimed) return false;
+
+  opts.profile.is_executive_supporter = await syncExecutiveSupporterEntitlement(db, opts.licenseKeyHash);
+  return opts.profile.is_executive_supporter;
+}
+
 const SUPPORTER_VANITY_TITLE_SET = new Set(SUPPORTER_VANITY_TITLES.map((title) => title.title));
 
 account.post("/checkout-license", async (c) => {
@@ -448,9 +467,6 @@ account.post("/sync", async (c) => {
   // This ordering ensures that failed syncs never produce orphaned active
   // licenses or quota entries.
   try {
-    if (sessionId) {
-      await assignExecutiveSupporterToPurchaserKey(db, { licenseKeyHash: hash, sessionId });
-    }
     const isExecutiveSupporter = await syncExecutiveSupporterEntitlement(db, hash);
     await commitSyncSideEffects(
       { db, kv, hash },
@@ -905,7 +921,7 @@ account.post("/update-display-rank", async (c) => {
     body.displayRank === null
       ? null
       : typeof body.displayRank === "string"
-        ? body.displayRank
+        ? body.displayRank.trim()
         : undefined;
   if (!body.username || displayRank === undefined) {
     return c.json({ error: "username and displayRank are required" }, 400);
@@ -927,7 +943,7 @@ account.post("/update-display-rank", async (c) => {
   }
   const { profile, licenseKeyHash } = ownership;
 
-  if (displayRank !== null && !profile.is_executive_supporter) {
+  if (!(await ensureDisplayRankSupporterAccess(db, { displayRank, licenseKeyHash, profile }))) {
     return c.json({ error: PROMOTE_ACCESS_DENIED_MESSAGE }, 403);
   }
 

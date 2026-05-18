@@ -116,20 +116,35 @@ function isExecutiveSupporterCheckout(metadata: Record<string, unknown> | undefi
   if (metadataFlagIsTrue(metadata.is_executive_supporter) || metadataFlagIsTrue(metadata.executive_supporter)) {
     return true;
   }
-  return [
+
+  const explicitIdentifiers = [
     metadata.product_slug,
     metadata.variant_slug,
     metadata.product_handle,
     metadata.variant_handle,
     metadata.product_key,
     metadata.variant_key,
+    metadata.tier,
+    metadata.plan,
+  ];
+  if (explicitIdentifiers.some((value) => normalizeMetadataIdentifier(value) === "executive-supporter")) {
+    return true;
+  }
+
+  const fuzzyIdentifier = [
+    metadata.tier,
+    metadata.plan,
     metadata.product_name,
     metadata.variant_name,
     metadata.product_title,
     metadata.variant_title,
-    metadata.tier,
-    metadata.plan,
-  ].some((value) => metadataMatchesExecutiveSupporter(value));
+  ].find((value) => metadataMatchesExecutiveSupporter(value));
+  if (fuzzyIdentifier) {
+    console.warn("[account/checkout] executive supporter inferred from fuzzy Polar metadata", { fuzzyIdentifier });
+    return true;
+  }
+
+  return false;
 }
 
 function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
@@ -955,9 +970,9 @@ export async function claimCheckoutForSession(db: D1Database, checkoutId: string
   }
 }
 
-export async function assignExecutiveSupporterToPurchaserKey(
+export async function claimExecutiveSupporterForLicenseKey(
   db: D1Database,
-  opts: { licenseKeyHash: string; sessionId: string },
+  opts: { licenseKeyHash: string },
 ): Promise<boolean> {
   const claim = await db.prepare(
     `SELECT ckc.checkout_id
@@ -965,10 +980,9 @@ export async function assignExecutiveSupporterToPurchaserKey(
      JOIN checkout_claims cc
        ON cc.checkout_id = ckc.checkout_id
      WHERE ckc.license_key_hash = ?
-       AND cc.session_id = ?
        AND cc.is_executive_supporter = 1
      LIMIT 1`,
-  ).bind(opts.licenseKeyHash, opts.sessionId).first<{ checkout_id: string }>();
+  ).bind(opts.licenseKeyHash).first<{ checkout_id: string }>();
   if (!claim?.checkout_id) return false;
 
   const existingSupporter = await db.prepare(

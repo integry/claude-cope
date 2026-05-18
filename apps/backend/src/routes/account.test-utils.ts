@@ -56,12 +56,12 @@ function resolveKeyOwnerRow(
   checkoutClaims: Map<string, CheckoutClaim>,
   keyOwners: Map<string, KeyOwner>,
 ) {
-  if (sql.includes("SELECT ckc.checkout_id FROM checkout_key_claims ckc JOIN checkout_claims cc")) {
-    const [licenseKeyHash, sessionId] = bindings as [string, string];
+  if (sql.includes("FROM checkout_key_claims ckc") && sql.includes("JOIN checkout_claims cc")) {
+    const [licenseKeyHash] = bindings as [string];
     const claim = keyOwners.get(licenseKeyHash);
-    if (!claim) return null;
+    if (!claim) return undefined;
     const checkoutClaim = checkoutClaims.get(claim.checkoutId);
-    if (!checkoutClaim || checkoutClaim.sessionId !== sessionId || checkoutClaim.isExecutiveSupporter !== 1) return null;
+    if (!checkoutClaim || checkoutClaim.isExecutiveSupporter !== 1) return undefined;
     return { checkout_id: claim.checkoutId };
   }
 
@@ -70,13 +70,13 @@ function resolveKeyOwnerRow(
     for (const [licenseKeyHash, owner] of keyOwners.entries()) {
       if (owner.checkoutId === checkoutId && owner.isExecutiveSupporter === 1) return { license_key_hash: licenseKeyHash };
     }
-    return null;
+    return undefined;
   }
 
   if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")) {
     const licenseKeyHash = bindings[0] as string;
     const claim = keyOwners.get(licenseKeyHash);
-    return claim ? { is_executive_supporter: claim.isExecutiveSupporter } : null;
+    return claim ? { is_executive_supporter: claim.isExecutiveSupporter } : undefined;
   }
 
   return undefined;
@@ -178,7 +178,7 @@ export function createMockDB(opts: {
         if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
           return updateEncryptedKeys(bindings, checkoutClaims, opts.runChanges ?? 1);
         }
-        if (sql.includes("UPDATE checkout_key_claims SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END")) {
+        if (sql.includes("UPDATE checkout_key_claims") && sql.includes("SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END")) {
           return assignExecutiveSupporterLicense(bindings, keyOwners);
         }
         if (sql.includes("INSERT INTO checkout_key_claims")) {

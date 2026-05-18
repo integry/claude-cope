@@ -2393,6 +2393,31 @@ describe("POST /api/account/update-display-rank", () => {
     expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === selectedTitle)).toBe(true);
   });
 
+  it("trims displayRank before validating and persisting it", async () => {
+    const selectedTitle = SUPPORTER_VANITY_TITLES[1]!.title;
+    const { db, calls } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: { ...BASE_PROFILE, is_executive_supporter: 1 },
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+        [ACCOUNT_TEST_SQL.getProfile]: { ...BASE_PROFILE, is_executive_supporter: 1, display_rank: selectedTitle },
+      },
+      runChanges: 1,
+    });
+
+    const res = await postJSON("/api/account/update-display-rank", {
+      username: "alice",
+      displayRank: ` ${selectedTitle} `,
+      licenseKeyHash: "hash",
+    }, { DB: db });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: { display_rank: selectedTitle },
+    });
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === selectedTitle)).toBe(true);
+  });
+
   it("allows clearing a vanity title back to the organic rank", async () => {
     const { db, calls } = createMockDB({
       firstBySQL: {

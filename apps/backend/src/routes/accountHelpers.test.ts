@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys, fetchCheckoutCustomerId, syncExecutiveSupporterEntitlement, assignExecutiveSupporterToPurchaserKey } from "./accountHelpers";
+import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys, fetchCheckoutCustomerId, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
 import { parseCheckoutKeyClaimBindings } from "./account.test-utils";
 import { hashKey } from "../utils/quota";
@@ -451,14 +451,14 @@ describe("checkout key claims", () => {
     ]);
   });
 
-  it("assigns executive supporter to the first purchaser-activated key for a supporter checkout", async () => {
+  it("claims executive supporter for an explicitly selected license key", async () => {
     const calls: { sql: string; bindings: unknown[] }[] = [];
     let supporterHash: string | null = null;
     const db = {
       prepare: vi.fn((sql: string) => ({
         bind: vi.fn((...args: unknown[]) => ({
           first: vi.fn().mockImplementation(async () => {
-            if (sql.includes("SELECT ckc.checkout_id FROM checkout_key_claims ckc JOIN checkout_claims cc")) {
+            if (sql.includes("FROM checkout_key_claims ckc") && sql.includes("JOIN checkout_claims cc")) {
               return { checkout_id: "checkout-a" };
             }
             if (sql.includes("SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1")) {
@@ -468,7 +468,7 @@ describe("checkout key claims", () => {
           }),
           run: vi.fn().mockImplementation(async () => {
             calls.push({ sql, bindings: args });
-            if (sql.includes("UPDATE checkout_key_claims SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END")) {
+            if (sql.includes("UPDATE checkout_key_claims") && sql.includes("SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END")) {
               supporterHash = args[0] as string;
             }
             return { meta: { changes: 1 } };
@@ -478,13 +478,33 @@ describe("checkout key claims", () => {
     } as unknown as D1Database;
 
     const licenseKeyHash = await hashKey("COPE-1");
-    await expect(assignExecutiveSupporterToPurchaserKey(db, {
+    await expect(claimExecutiveSupporterForLicenseKey(db, {
       licenseKeyHash,
-      sessionId: "sess-1",
     })).resolves.toBe(true);
 
-    const updateCall = calls.find((call) => call.sql.includes("UPDATE checkout_key_claims SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END"));
+    const updateCall = calls.find((call) => call.sql.includes("UPDATE checkout_key_claims") && call.sql.includes("SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END"));
     expect(updateCall?.bindings).toEqual([licenseKeyHash, "checkout-a", "checkout-a"]);
+  });
+
+  it("does not claim executive supporter for a different already-assigned checkout key", async () => {
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn(() => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM checkout_key_claims ckc") && sql.includes("JOIN checkout_claims cc")
+              ? { checkout_id: "checkout-a" }
+              : sql.includes("SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1")
+                ? { license_key_hash: "other-hash" }
+                : null,
+          ),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        })),
+      })),
+    } as unknown as D1Database;
+
+    await expect(claimExecutiveSupporterForLicenseKey(db, {
+      licenseKeyHash: "hash-1",
+    })).resolves.toBe(false);
   });
 
   it("returns stored keys for a previously completed checkout claim", async () => {
