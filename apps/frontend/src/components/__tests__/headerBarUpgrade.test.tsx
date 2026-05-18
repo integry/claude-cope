@@ -308,6 +308,18 @@ describe("HeaderBar upgrade CTA visibility", () => {
     expectMobileIdentityLayout();
   });
 
+  it("shows a dark red mobile quota track when quota is exhausted", () => {
+    renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false, quotaPercent: 0 });
+
+    const quotaLine = queryByTestId("mobile-quota-line") as HTMLDivElement | null;
+    const quotaFill = queryByTestId("mobile-quota-fill") as HTMLDivElement | null;
+
+    expect(quotaLine).not.toBeNull();
+    expect(quotaLine?.style.backgroundColor).toBe("rgb(138, 0, 0)");
+    expect(quotaLine?.style.boxShadow).toContain("rgba(255, 0, 0, 0.45)");
+    expect(quotaFill?.style.width).toBe("0%");
+  });
+
   it("closes the mobile menu and invokes the shared home handler when the logo is clicked", () => {
     const onHomeClick = vi.fn();
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false, onHomeClick });
