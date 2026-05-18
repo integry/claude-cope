@@ -62,6 +62,7 @@ export default function UpgradeMobileLayout({
       color: DIM,
       borderColor: DIM,
       className: "upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-muted",
+      fontWeight: undefined,
     },
     {
       label: "Claude Cope",

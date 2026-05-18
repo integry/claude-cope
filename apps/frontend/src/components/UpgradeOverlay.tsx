@@ -7,7 +7,6 @@ import {
   UPGRADE_CHECKOUT_MULTI,
   UPGRADE_PRICE_SINGLE,
   UPGRADE_PRICE_MULTI,
-  PRO_QUOTA_LIMIT,
 } from "../config";
 import DesktopLayout from "./UpgradeDesktopLayout";
 import UpgradeMobileLayout from "./UpgradeMobileLayout";
@@ -21,14 +20,6 @@ import { getQuotaStatus } from "./upgradeQuotaStatus";
 
 /* ── helpers ─────────────────────────────────────────────────── */
 
-const B = "#ff5555"; // border (red)
-const Y = "#ffff55"; // yellow headings
-const W = "#c9d1d9"; // soft off-white body text
-const BW = "#ffffff"; // bright white (ANSI bold)
-const G = "#4ade80"; // green buttons
-const DIM = "#aaaaaa"; // dim footer
-
-const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
 export { UPGRADE_NAG_CLOSE_EFFECTS } from "./upgradeOverlayEffects";
 export type { UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
 
