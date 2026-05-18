@@ -3,12 +3,13 @@ import { API_BASE } from "../config";
 import AsciiBox from "./AsciiBox";
 
 type LeaderboardEntry = {
-  id: string;
+  id?: string;
   username: string;
   country: string;
   corporate_rank: string;
   technical_debt: number;
   created_at: string;
+  is_executive_supporter: boolean | number;
 };
 
 type LeaderboardOverlayProps = {
@@ -195,21 +196,39 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
             {entries.map((entry, i) => {
               const rank = String(i + 1).padStart(2, " ");
               const countryId = (entry.country && entry.country !== "Unknown") ? entry.country : "\u00A0\u00A0";
+              const isExecutiveSupporter = entry.is_executive_supporter === true || entry.is_executive_supporter === 1;
+              const rowClassName = [
+                "leaderboard-row",
+                i === 0
+                  ? "leaderboard-row-podium-1"
+                  : i === 1
+                    ? "leaderboard-row-podium-2"
+                    : i === 2
+                      ? "leaderboard-row-podium-3"
+                      : "leaderboard-row-standard",
+                isExecutiveSupporter ? "leaderboard-row-supporter" : "",
+              ].filter(Boolean).join(" ");
               return (
                 <div
-                  key={entry.id}
-                  className={`flex justify-between text-xs font-mono py-0.5 ${
-                    i === 0
-                      ? "text-yellow-300"
-                      : i === 1
-                        ? "text-gray-300"
-                        : i === 2
-                          ? "text-amber-600"
-                          : "text-gray-500"
-                  }`}
+                  key={entry.id ?? `${entry.username}-${entry.country}-${i}`}
+                  className={rowClassName}
                 >
-                  <span className="flex-1 min-w-0 truncate">
-                    <span className="text-gray-500 inline-block w-[2ch]">{countryId}</span> {rank}. {entry.username} <span className="text-gray-400">[{entry.corporate_rank}]</span>
+                  <span className="flex-1 min-w-0 truncate leaderboard-row-main">
+                    <span className="text-gray-500 inline-block w-[2ch]">{countryId}</span>{" "}
+                    <span>{rank}.</span>{" "}
+                    <span className={isExecutiveSupporter ? "leaderboard-supporter-username" : undefined}>{entry.username}</span>{" "}
+                    {isExecutiveSupporter && (
+                      <span
+                        className="leaderboard-supporter-badge"
+                        aria-label="Executive Supporter"
+                        title="Executive Supporter"
+                      >
+                        EXEC
+                      </span>
+                    )}{" "}
+                    <span className={isExecutiveSupporter ? "leaderboard-supporter-rank-chip" : "text-gray-400"}>
+                      [{entry.corporate_rank}]
+                    </span>
                   </span>
                   <span className="flex-shrink-0 text-right w-24 text-green-400">
                     {entry.technical_debt.toLocaleString()} TD
