@@ -23,6 +23,8 @@ const RETAIN_TEXT = "[Press ESC to retain your net worth]";
 export type LayoutProps = {
   singleLabel: string;
   multiLabel: string;
+  multiOptionHeading: string;
+  multiOptionDescription: string;
   singleAvailable: boolean;
   multiAvailable: boolean;
   quotaLine: string;
@@ -52,6 +54,8 @@ const PANEL_STYLE = {
 export default function DesktopLayout({
   singleLabel,
   multiLabel,
+  multiOptionHeading,
+  multiOptionDescription,
   singleAvailable,
   multiAvailable,
   quotaLine,
@@ -348,9 +352,8 @@ export default function DesktopLayout({
         {boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{" and "}<span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>{"."}</span>, `  Unlocks: ${creditsStr} and advanced Cope models.`.length)}{"\n"}
         {buttonBlock(OPTION_IDS.single, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
-        {boxLine("  [OPTION 2: TEAM PACK - 5 LICENSES]", Y)}{"\n"}
-        {boxLine("  Let the entire team achieve HTTP 429 compliance.")}{"\n"}
-        {boxLine("  (5 activation keys will be sent to your email)", "#8892b0")}{"\n"}
+        {boxLine(`  ${multiOptionHeading}`, Y)}{"\n"}
+        {renderWrappedBoxLines(multiOptionDescription)}
         {buttonBlock(OPTION_IDS.multi, multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  ---------------------------------------------------------")}{"\n"}
