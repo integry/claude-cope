@@ -95,10 +95,16 @@ function metadataFlagIsTrue(value: unknown): boolean {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
-function metadataLooksLikeExecutiveSupporter(value: unknown): boolean {
-  if (typeof value !== "string") return false;
+function normalizeMetadataIdentifier(value: unknown): string | null {
+  if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
-  return normalized.includes("executive") && normalized.includes("supporter");
+  if (!normalized) return null;
+  return normalized.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function metadataMatchesExecutiveSupporter(value: unknown): boolean {
+  const normalized = normalizeMetadataIdentifier(value);
+  return normalized === "executive-supporter";
 }
 
 function isExecutiveSupporterCheckout(metadata: Record<string, unknown> | undefined): boolean {
@@ -107,13 +113,15 @@ function isExecutiveSupporterCheckout(metadata: Record<string, unknown> | undefi
     return true;
   }
   return [
+    metadata.product_slug,
+    metadata.variant_slug,
+    metadata.product_handle,
+    metadata.variant_handle,
+    metadata.product_key,
+    metadata.variant_key,
     metadata.tier,
     metadata.plan,
-    metadata.product,
-    metadata.product_name,
-    metadata.product_slug,
-    metadata.variant,
-  ].some((value) => metadataLooksLikeExecutiveSupporter(value));
+  ].some((value) => metadataMatchesExecutiveSupporter(value));
 }
 
 function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {

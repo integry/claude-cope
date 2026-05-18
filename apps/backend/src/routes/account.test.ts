@@ -2284,6 +2284,46 @@ describe("GET /api/account/me", () => {
       profile: {
         username: "alice",
         corporate_rank: "Junior Code Monkey",
+        display_rank: null,
+        is_executive_supporter: false,
+      },
+    });
+  });
+
+  it("suppresses stale supporter vanity fields for revoked licenses in /me", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const staleDate = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString();
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((value: string) => ({
+          first: vi.fn().mockResolvedValue(
+            sql.includes("FROM licenses")
+              ? { status: "active", last_activated_at: staleDate }
+              : value === "alice"
+                ? {
+                  ...BASE_PROFILE,
+                  license_hash: "pro-hash",
+                  corporate_rank: "CTO",
+                  display_rank: SUPPORTER_VANITY_TITLES[0]!.title,
+                  is_executive_supporter: 1,
+                }
+                : null,
+          ),
+        })),
+      })),
+    };
+
+    const res = await meReq({ QUOTA_KV: kv, DB: db });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      found: true,
+      username: "alice",
+      isPro: false,
+      revoked: true,
+      profile: {
+        corporate_rank: FREE_TIER_RANK_CAP,
+        display_rank: null,
+        is_executive_supporter: false,
       },
     });
   });

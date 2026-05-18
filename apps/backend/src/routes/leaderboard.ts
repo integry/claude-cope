@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { ACTIVE_LICENSE_EXISTS_SQL } from "./accountHelpers";
 
 type Env = {
   Bindings: {
@@ -28,7 +29,16 @@ leaderboard.get("/", async (c) => {
   }
 
   let sql =
-    "SELECT username, COALESCE(display_rank, corporate_rank) AS corporate_rank, country, total_td as technical_debt, updated_at as created_at FROM user_scores";
+    `SELECT username,
+            CASE
+              WHEN is_executive_supporter = 1 AND ${ACTIVE_LICENSE_EXISTS_SQL}
+                THEN COALESCE(display_rank, corporate_rank)
+              ELSE corporate_rank
+            END AS corporate_rank,
+            country,
+            total_td as technical_debt,
+            updated_at as created_at
+     FROM user_scores`;
   const conditions: string[] = [];
   const bindings: string[] = [];
 

@@ -53,7 +53,9 @@ describe("GET /api/leaderboard", () => {
       DB: db,
     });
 
-    expect(getSQL()).toContain("COALESCE(display_rank, corporate_rank) AS corporate_rank");
+    expect(getSQL()).toContain("WHEN is_executive_supporter = 1");
+    expect(getSQL()).toContain("COALESCE(display_rank, corporate_rank)");
+    expect(getSQL()).toContain("datetime(last_activated_at) >= datetime('now', '-90 days')");
   });
 
   it("filters by daily timeframe", async () => {

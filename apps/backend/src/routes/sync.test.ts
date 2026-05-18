@@ -9,6 +9,7 @@ vi.mock("../utils/polar", () => ({
 
 import app from "../app";
 import { validatePolarKey } from "../utils/polar";
+import { parseCheckoutKeyClaimBindings } from "./account.test-utils";
 
 const mockedValidatePolarKey = vi.mocked(validatePolarKey);
 
@@ -20,6 +21,11 @@ function createMockDB(opts: {
   const checkoutClaims = new Map<string, { sessionId?: string; encryptedKeys: string | null }>();
   const keyOwners = new Map<string, { checkoutId: string; isExecutiveSupporter: number }>();
   const resolveFirst = (sql: string, bindings: unknown[]) => {
+    if (opts.firstBySQL) {
+      for (const [pattern, result] of Object.entries(opts.firstBySQL)) {
+        if (sql.includes(pattern)) return result;
+      }
+    }
     if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims WHERE checkout_id = ?")) {
       const checkoutId = bindings[0] as string;
       if (!checkoutClaims.has(checkoutId)) return null;
@@ -35,11 +41,6 @@ function createMockDB(opts: {
       const licenseKeyHash = bindings[0] as string;
       const claim = keyOwners.get(licenseKeyHash);
       return claim ? { is_executive_supporter: claim.isExecutiveSupporter } : null;
-    }
-    if (opts.firstBySQL) {
-      for (const [pattern, result] of Object.entries(opts.firstBySQL)) {
-        if (sql.includes(pattern)) return result;
-      }
     }
     return null;
   };
@@ -70,22 +71,8 @@ function createMockDB(opts: {
                 return { meta: { changes: 1 } };
               }
               if (sql.includes("INSERT INTO checkout_key_claims")) {
-                const bound = args as Array<string | number>;
-                const checkoutId = bound[bound.length - 1]!;
-                const incomingClaims = bound
-                  .slice(0, -2)
-                  .reduce<Array<{ licenseKeyHash: string; isExecutiveSupporter: number }>>((claims, value, index, values) => {
-                    if (index % 2 === 0) {
-                      const isExecutiveSupporter = values[index + 1];
-                      if (typeof value !== "string" || typeof isExecutiveSupporter !== "number") return claims;
-                      claims.push({
-                        licenseKeyHash: value,
-                        isExecutiveSupporter,
-                      });
-                    }
-                    return claims;
-                  }, []);
-                if (typeof checkoutId !== "string") return { meta: { changes: 0 } };
+                const { checkoutId, incomingClaims } = parseCheckoutKeyClaimBindings(args);
+                if (!checkoutId) return { meta: { changes: 0 } };
                 const hasConflict = incomingClaims.some(({ licenseKeyHash }) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash)?.checkoutId !== checkoutId);
                 if (hasConflict) return { meta: { changes: 0 } };
                 let inserted = 0;

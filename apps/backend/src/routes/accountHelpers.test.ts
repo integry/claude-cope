@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys, fetchCheckoutCustomerId, syncExecutiveSupporterEntitlement } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
+import { parseCheckoutKeyClaimBindings } from "./account.test-utils";
 import { hashKey } from "../utils/quota";
 
 const CLAIM_SECRET = "polar-test-secret";
@@ -329,9 +330,9 @@ describe("checkout key claims", () => {
         bind: vi.fn((...args: unknown[]) => ({
           run: vi.fn().mockImplementation(async () => {
             if (sql.includes("INSERT INTO checkout_key_claims")) {
-              const bindings = args as string[];
-              const checkoutId = bindings[bindings.length - 1]!;
-              const licenseKeyHashes = bindings.slice(0, -2).filter((_, index) => index % 2 === 0);
+              const { checkoutId, incomingClaims } = parseCheckoutKeyClaimBindings(args);
+              const licenseKeyHashes = incomingClaims.map((claim) => claim.licenseKeyHash);
+              if (!checkoutId) return { meta: { changes: 0 } };
               const hasConflict = licenseKeyHashes.some((licenseKeyHash) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash) !== checkoutId);
               if (hasConflict) return { meta: { changes: 0 } };
               for (const licenseKeyHash of licenseKeyHashes) {
@@ -620,7 +621,24 @@ describe("fetchCheckoutCustomerId", () => {
       status: "succeeded",
       customer_id: "cust-1",
       created_at: "2026-01-02T00:00:00Z",
-      metadata: { reference_id: "sess-1", tier: "Executive Supporter" },
+      metadata: { reference_id: "sess-1", product_slug: "executive-supporter" },
+    }))) as typeof fetch;
+
+    await expect(fetchCheckoutCustomerId("co_123", "tok", "org")).resolves.toEqual({
+      customerId: "cust-1",
+      createdAt: "2026-01-02T00:00:00Z",
+      referenceId: "sess-1",
+      isExecutiveSupporter: true,
+    });
+  });
+
+  it("detects executive supporter checkouts from an explicit metadata flag", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      organization_id: "org",
+      status: "succeeded",
+      customer_id: "cust-1",
+      created_at: "2026-01-02T00:00:00Z",
+      metadata: { reference_id: "sess-1", is_executive_supporter: true },
     }))) as typeof fetch;
 
     await expect(fetchCheckoutCustomerId("co_123", "tok", "org")).resolves.toEqual({

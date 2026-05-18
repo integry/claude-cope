@@ -249,10 +249,31 @@ async function redeemCheckoutLicense(
 function normalizeFreeTierRank(row: unknown, isPro: boolean) {
   if (!row || isPro) return row;
 
-  const corporateRank = (row as { corporate_rank: string }).corporate_rank;
-  if (corporateRank === FREE_TIER_RANK_CAP) return row;
+  const typedRow = row as {
+    corporate_rank: string;
+    display_rank?: string | null;
+    is_executive_supporter?: number;
+  };
+  const nextCorporateRank = typedRow.corporate_rank === FREE_TIER_RANK_CAP
+    ? typedRow.corporate_rank
+    : FREE_TIER_RANK_CAP;
+  const nextDisplayRank = null;
+  const nextExecutiveSupporter = 0;
 
-  return { ...(row as Record<string, unknown>), corporate_rank: FREE_TIER_RANK_CAP };
+  if (
+    typedRow.corporate_rank === nextCorporateRank &&
+    typedRow.display_rank === nextDisplayRank &&
+    typedRow.is_executive_supporter === nextExecutiveSupporter
+  ) {
+    return row;
+  }
+
+  return {
+    ...(row as Record<string, unknown>),
+    corporate_rank: nextCorporateRank,
+    display_rank: nextDisplayRank,
+    is_executive_supporter: nextExecutiveSupporter,
+  };
 }
 
 async function buildMePayload(opts: {
