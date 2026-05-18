@@ -267,6 +267,8 @@ export const THEMES: Theme[] = [
   { id: "amber", name: "Amber", cost: 5000 },
   { id: "matrix", name: "Matrix", cost: 10000 },
   { id: "light", name: "Light", cost: 25000 },
+  { id: "corporate-beige", name: "Corporate Beige", cost: 40000 },
+  { id: "syntax-error", name: "Syntax Error", cost: 50000 },
 ];
 
 /** Geometric series sum: total cost to buy `amount` generators starting at `owned`. */

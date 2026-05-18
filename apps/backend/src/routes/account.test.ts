@@ -2391,6 +2391,7 @@ describe("POST /api/account/update-display-rank", () => {
       },
     });
     expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === selectedTitle)).toBe(true);
+    expect(calls.some((call) => call.sql.includes("corporate_rank = ?"))).toBe(false);
   });
 
   it("does not let a different session claim the supporter vanity entitlement first", async () => {
