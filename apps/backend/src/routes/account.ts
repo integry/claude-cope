@@ -419,7 +419,8 @@ async function ensureDisplayRankSupporterAccess(
   });
   if (!claimed) return false;
 
-  opts.profile.is_executive_supporter = await syncExecutiveSupporterEntitlement(db, opts.licenseKeyHash);
+  const entitlement = await syncExecutiveSupporterEntitlement(db, opts.licenseKeyHash);
+  opts.profile.is_executive_supporter = entitlement.isExecutiveSupporter;
   return opts.profile.is_executive_supporter;
 }
 
@@ -470,15 +471,15 @@ account.post("/sync", async (c) => {
   // This ordering ensures that failed syncs never produce orphaned active
   // licenses or quota entries.
   try {
-    const isExecutiveSupporter = await syncExecutiveSupporterEntitlement(db, hash);
+    const supporterEntitlement = await syncExecutiveSupporterEntitlement(db, hash);
     await commitSyncSideEffects(
       { db, kv, hash },
       { validationId: validation.id, proInitialQuota: limits.proInitialQuota },
     );
     result.profile = {
       ...result.profile,
-      is_executive_supporter: isExecutiveSupporter,
-      display_rank: isExecutiveSupporter ? result.profile.display_rank : null,
+      is_executive_supporter: supporterEntitlement.isExecutiveSupporter,
+      display_rank: supporterEntitlement.isExecutiveSupporter ? result.profile.display_rank : null,
     };
   } catch (err: unknown) {
     try {

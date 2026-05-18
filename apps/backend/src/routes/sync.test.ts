@@ -166,6 +166,76 @@ describe("POST /api/account/sync", () => {
     expect(licenseInserts.length).toBeGreaterThan(0);
   });
 
+  it("broadcasts executive supporter activation on first sync and does not duplicate it on later syncs", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const supporterHash = await hashKey("COPE-SUPPORTER");
+    let currentSupporter = 0;
+    const recentEvents: string[] = [];
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...bindings: unknown[]) => {
+          calls.push({ sql, bindings });
+          return {
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")) {
+                return { is_executive_supporter: 1 };
+              }
+              if (sql.includes("SELECT username, is_executive_supporter FROM user_scores WHERE license_hash = ?")) {
+                return { username: "alice", is_executive_supporter: currentSupporter };
+              }
+              if (sql.includes("WHERE license_hash = ?")) {
+                return { ...PROFILE_ROW, license_hash: supporterHash, is_executive_supporter: currentSupporter };
+              }
+              return null;
+            }),
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("UPDATE user_scores")) {
+                currentSupporter = Number(bindings[0] ?? 0);
+              }
+              if (sql.includes("INSERT INTO recent_events")) {
+                recentEvents.push(String(bindings[0]));
+              }
+              return { meta: { changes: 1 } };
+            }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          };
+        }),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        first: vi.fn().mockResolvedValue(null),
+        all: vi.fn().mockResolvedValue({ results: [] }),
+      })),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
+    const kv = mockKV();
+
+    const firstRes = await postSync({ licenseKey: "COPE-SUPPORTER" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+    expect(firstRes.status).toBe(200);
+    expect(await firstRes.json()).toMatchObject({
+      success: true,
+      profile: { is_executive_supporter: true },
+    });
+
+    const secondRes = await postSync({ licenseKey: "COPE-SUPPORTER" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+    expect(secondRes.status).toBe(200);
+    expect(await secondRes.json()).toMatchObject({
+      success: true,
+      profile: { is_executive_supporter: true },
+    });
+
+    expect(recentEvents).toEqual([
+      "[LIVE] 👑 alice just expensed the Executive Supporter Pack. Respect the grift.",
+    ]);
+    expect(calls.filter((call) => call.sql.includes("INSERT INTO recent_events"))).toHaveLength(1);
+  });
+
   it("rolls back license activation when KV provisioning fails", async () => {
     mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
     const calls: { sql: string; bindings: unknown[] }[] = [];
