@@ -424,6 +424,93 @@ async function ensureDisplayRankSupporterAccess(
   return opts.profile.is_executive_supporter;
 }
 
+function respondWithSyncProfileError(
+  c: { json: (data: unknown, status?: number) => Response },
+  error: string,
+) {
+  const isConflict =
+    error.includes("already taken")
+    || error.includes("just claimed")
+    || error.includes("being activated");
+  return c.json({ error }, isConflict ? 409 : 403);
+}
+
+async function rollbackSyncProfileMutation(
+  db: D1Database,
+  hash: string,
+  mutation: Awaited<ReturnType<typeof resolveProfile>>["mutation"],
+) {
+  try {
+    await rollbackProfileMutation(db, hash, mutation);
+  } catch (rollbackErr: unknown) {
+    console.warn(
+      `[account/sync] failed to rollback profile mutation for ${hash.slice(0, 8)}:`,
+      rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+    );
+  }
+}
+
+async function finalizeSyncProfile(
+  deps: { db: D1Database; kv: KVNamespace; hash: string; validationId: number; proInitialQuota: number },
+  result: Extract<Awaited<ReturnType<typeof resolveProfile>>, { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>> }>,
+) {
+  let supporterEntitlement: Awaited<ReturnType<typeof syncExecutiveSupporterEntitlement>> | null = null;
+  try {
+    supporterEntitlement = await syncExecutiveSupporterEntitlement(deps.db, deps.hash);
+    await commitSyncSideEffects(
+      { db: deps.db, kv: deps.kv, hash: deps.hash },
+      { validationId: deps.validationId, proInitialQuota: deps.proInitialQuota },
+    );
+    result.profile = {
+      ...result.profile,
+      is_executive_supporter: supporterEntitlement.isExecutiveSupporter,
+      display_rank: supporterEntitlement.isExecutiveSupporter ? result.profile.display_rank : null,
+    };
+    return supporterEntitlement;
+  } catch (err: unknown) {
+    await rollbackSyncProfileMutation(deps.db, deps.hash, result.mutation);
+    throw err;
+  }
+}
+
+async function emitSupporterActivationIfNeeded(
+  db: D1Database,
+  hash: string,
+  supporterEntitlement: Awaited<ReturnType<typeof syncExecutiveSupporterEntitlement>> | null,
+) {
+  if (!supporterEntitlement?.activatedNow || !supporterEntitlement.username) {
+    return;
+  }
+
+  try {
+    await emitExecutiveSupporterActivationEvent(db, supporterEntitlement.username);
+  } catch (err: unknown) {
+    console.warn(
+      `[account/sync] failed to emit executive supporter activation for ${hash.slice(0, 8)}:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
+async function bindSessionUserIfPresent(
+  kv: KVNamespace,
+  sessionId: string,
+  username: string | undefined,
+) {
+  if (!username) {
+    return;
+  }
+
+  try {
+    await kv.put(accountKvKeys.sessionUser(sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+  } catch (err: unknown) {
+    console.warn(
+      `[account/sync] failed to bind session for ${username}:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
 const SUPPORTER_VANITY_TITLE_SET = new Set(SUPPORTER_VANITY_TITLES.map((title) => title.title));
 
 account.post("/checkout-license", async (c) => {
@@ -460,61 +547,21 @@ account.post("/sync", async (c) => {
   // quota for a sync that never completed.
   const result = await resolveProfile(db, hash, body, sessionId && kv ? { sessionId, kv } : undefined);
   if (result.profile === null) {
-    const isConflict =
-      result.error.includes("already taken") ||
-      result.error.includes("just claimed") ||
-      result.error.includes("being activated");
-    return c.json({ error: result.error }, isConflict ? 409 : 403);
+    return respondWithSyncProfileError(c, result.error);
   }
 
   // Profile claim succeeded — now provision the licenses row and KV quota.
   // This ordering ensures that failed syncs never produce orphaned active
   // licenses or quota entries.
-  let supporterEntitlement: Awaited<ReturnType<typeof syncExecutiveSupporterEntitlement>> | null = null;
-  try {
-    supporterEntitlement = await syncExecutiveSupporterEntitlement(db, hash);
-    await commitSyncSideEffects(
-      { db, kv, hash },
-      { validationId: validation.id, proInitialQuota: limits.proInitialQuota },
-    );
-    result.profile = {
-      ...result.profile,
-      is_executive_supporter: supporterEntitlement.isExecutiveSupporter,
-      display_rank: supporterEntitlement.isExecutiveSupporter ? result.profile.display_rank : null,
-    };
-  } catch (err: unknown) {
-    try {
-      await rollbackProfileMutation(db, hash, result.mutation);
-    } catch (rollbackErr: unknown) {
-      console.warn(
-        `[account/sync] failed to rollback profile mutation for ${hash.slice(0, 8)}:`,
-        rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
-      );
-    }
-    throw err;
-  }
-
-  if (supporterEntitlement?.activatedNow && supporterEntitlement.username) {
-    try {
-      await emitExecutiveSupporterActivationEvent(db, supporterEntitlement.username);
-    } catch (err: unknown) {
-      console.warn(
-        `[account/sync] failed to emit executive supporter activation for ${hash.slice(0, 8)}:`,
-        err instanceof Error ? err.message : err,
-      );
-    }
-  }
+  const supporterEntitlement = await finalizeSyncProfile(
+    { db, kv, hash, validationId: validation.id, proInitialQuota: limits.proInitialQuota },
+    result,
+  );
+  await emitSupporterActivationIfNeeded(db, hash, supporterEntitlement);
 
   // Bind the session to the resolved username so /me can look it up.
   if (sessionId && result.profile?.username) {
-    try {
-      await kv.put(accountKvKeys.sessionUser(sessionId), result.profile.username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
-    } catch (err: unknown) {
-      console.warn(
-        `[account/sync] failed to bind session for ${result.profile.username}:`,
-        err instanceof Error ? err.message : err,
-      );
-    }
+    await bindSessionUserIfPresent(kv, sessionId, result.profile.username);
   }
 
   const quotaPercent = await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
