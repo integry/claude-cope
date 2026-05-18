@@ -28,11 +28,10 @@ const defaultProps = {
 } satisfies Parameters<typeof UpgradeOverlay>[0];
 
 const executiveSupporterHeading = "OPTION 2: EXECUTIVE SUPPORTER - $19.99";
-const executiveSupporterDescription = "Includes 5 team keys, plus personal vanity upgrades: buy a fake promotion on the leaderboard and unlock premium terminal themes.";
+const executiveSupporterDescription = "5 team keys, plus vanity upgrades: buy a fake promotion and unlock premium terminal themes.";
 const executiveSupporterCta = "EXPENSE TO EMPLOYER - $19.99";
-const executiveSupporterDesktopLine1 = "Includes 5 team keys, plus personal vanity upgrades: buy a";
-const executiveSupporterDesktopLine2 = "fake promotion on the leaderboard and unlock premium terminal";
-const executiveSupporterDesktopLine3 = "themes.";
+const executiveSupporterDesktopLine1 = "5 team keys, plus vanity upgrades: buy a fake promotion and";
+const executiveSupporterDesktopLine2 = "unlock premium terminal themes.";
 
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
@@ -106,7 +105,6 @@ describe("UpgradeOverlay", () => {
     expect(text(desktop())).toContain(executiveSupporterHeading);
     expect(text(desktop())).toContain(executiveSupporterDesktopLine1);
     expect(text(desktop())).toContain(executiveSupporterDesktopLine2);
-    expect(text(desktop())).toContain(executiveSupporterDesktopLine3);
     expect(text(desktop())).toContain(executiveSupporterCta);
     expect(text(mobile())).toContain(executiveSupporterHeading);
     expect(text(mobile())).toContain(executiveSupporterDescription);

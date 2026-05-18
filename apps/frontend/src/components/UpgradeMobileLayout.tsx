@@ -9,7 +9,6 @@ import {
 const B = "#ff5555"; // border (red)
 const Y = "#ffff55"; // yellow headings
 const W = "#c9d1d9"; // soft off-white body text
-const BW = "#ffffff"; // bright white (ANSI bold)
 const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
@@ -77,18 +76,12 @@ export default function UpgradeMobileLayout({
     {
       key: "single",
       heading: "[OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]",
-      body: "One seat. Max 429X enabled (One-time extraction).",
+      body: `One seat. Unlocks ${PRO_QUOTA_LIMIT} lifetime credits and advanced Cope models.`,
       ctaLabel: singleLabel,
       ctaUrl: UPGRADE_CHECKOUT_SINGLE,
       ctaAvailable: singleAvailable,
       ctaPrimary: true,
-      extra: (
-        <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "8px", color: W }}>
-          Unlocks:{" "}
-          <span style={{ color: BW, fontWeight: "bold" }}>{PRO_QUOTA_LIMIT} non-expiring credits</span> and{" "}
-          <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>.
-        </div>
-      ),
+      extra: null,
     },
     {
       key: "multi",
@@ -235,7 +228,7 @@ export default function UpgradeMobileLayout({
               [ THROUGHPUT BENCHMARKS ]
             </div>
             <div style={{ fontSize: "12px", lineHeight: "1.5" }}>
-              Industry standards throttle capacity at 5x or 20x.
+              Industry standards stop at 5x.
               Claude Cope guarantees absolute system saturation.
             </div>
           </div>

@@ -337,7 +337,7 @@ export default function DesktopLayout({
         {boxLine(`  > ${quotaLine}`, DIM)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [ THROUGHPUT BENCHMARKS ]", Y)}{"\n"}
-        {boxLine("  Industry standards throttle capacity at 5x or 20x.")}{"\n"}
+        {boxLine("  Industry standards stop at 5x.")}{"\n"}
         {boxLine("  Claude Cope guarantees absolute system saturation.")}{"\n"}
         {emptyLine}{"\n"}
         {tableLines.border}{"\n"}
@@ -348,8 +348,7 @@ export default function DesktopLayout({
         {tableLines.border}{"\n"}
         {emptyLine}{"\n"}
         {boxLine("  [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]", Y)}{"\n"}
-        {boxLine(`  One seat. Max 429X enabled (One-time extraction).`)}{"\n"}
-        {boxLineRich(<span style={{ color: W }}>{"  Unlocks: "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{" and "}<span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>{"."}</span>, `  Unlocks: ${creditsStr} and advanced Cope models.`.length)}{"\n"}
+        {boxLineRich(<span style={{ color: W }}>{"  One seat. Unlocks "}<span style={{ color: BW, fontWeight: "bold" }}>{creditsStr}</span>{" lifetime credits"}{" and "}<span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>{"."}</span>, `  One seat. Unlocks ${creditsStr} lifetime credits and advanced Cope models.`.length)}{"\n"}
         {buttonBlock(OPTION_IDS.single, singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable)}{"\n"}
         {emptyLine}{"\n"}
         {boxLine(`  ${multiOptionHeading}`, Y)}{"\n"}

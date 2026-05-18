@@ -62,7 +62,7 @@ function UpgradeOverlay({
   const singleLabel = `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`;
   const multiLabel = `[ EXPENSE TO EMPLOYER - ${UPGRADE_PRICE_MULTI} ]`;
   const multiOptionHeading = `[OPTION 2: EXECUTIVE SUPPORTER - ${UPGRADE_PRICE_MULTI}]`;
-  const multiOptionDescription = "Includes 5 team keys, plus personal vanity upgrades: buy a fake promotion on the leaderboard and unlock premium terminal themes.";
+  const multiOptionDescription = "5 team keys, plus vanity upgrades: buy a fake promotion and unlock premium terminal themes.";
   const mobileSingleLabel = `[ EXTRACT FUNDS - ${UPGRADE_PRICE_SINGLE} ]`;
   const mobileMultiLabel = multiLabel;
 
