@@ -431,4 +431,55 @@ describe("UpgradeOverlay", () => {
     expect(container.querySelector(".upgrade-desktop a[data-selected='true']")).toBeNull();
     expect(desktop?.getAttribute("data-keyboard-nav")).toBe("false");
   });
+
+  it("uses mobile-only CTA copy while preserving desktop CTA copy", () => {
+    setViewportWidth(375);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+
+    const mobile = container.querySelector(".upgrade-mobile");
+    const desktop = container.querySelector(".upgrade-desktop");
+
+    expect(mobile?.textContent).toContain("EXTRACT FUNDS - $4.99");
+    expect(mobile?.textContent).not.toContain("AUTHORIZE EXTRACTION - $4.99");
+    expect(desktop?.textContent).toContain("AUTHORIZE EXTRACTION - $4.99");
+  });
+
+  it("renders the mobile header as two explicit lines", () => {
+    setViewportWidth(375);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+
+    const headerLines = Array.from(container.querySelectorAll(".upgrade-mobile-header-line")).map((line) => line.textContent);
+
+    expect(headerLines).toEqual(["INITIALIZING UPGRADE:", "CLAUDE COPE [MAX 429X]"]);
+  });
+
+  it("renders mobile benchmark cards as stacked label and outcome lines", () => {
+    setViewportWidth(375);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+
+    const cards = Array.from(container.querySelectorAll(".upgrade-mobile-benchmark-card"));
+
+    expect(cards).toHaveLength(2);
+    expect(cards[0]?.querySelector(".upgrade-mobile-benchmark-label")?.textContent).toBe("Legacy AI");
+    expect(cards[0]?.querySelector(".upgrade-mobile-benchmark-outcome")?.textContent).toBe("Outcome: Manageable pull requests");
+    expect(cards[1]?.querySelector(".upgrade-mobile-benchmark-label")?.textContent).toBe("Claude Cope");
+    expect(cards[1]?.querySelector(".upgrade-mobile-benchmark-outcome")?.textContent).toBe("Outcome: Unmitigated request storms");
+    expect(cards[0]?.textContent).not.toContain("·");
+    expect(cards[1]?.textContent).not.toContain("·");
+  });
+
+  it("applies mobile CTA nowrap hooks and narrower mobile panel spacing classes", () => {
+    setViewportWidth(320);
+    render({ quotaPercent: 65, totalQuota: 20, isBYOK: false, onDismiss: vi.fn() });
+
+    const cta = container.querySelector(".upgrade-mobile .upgrade-mobile-cta");
+    const label = container.querySelector(".upgrade-mobile .upgrade-mobile-cta-label");
+    const panel = container.querySelector(".upgrade-mobile .upgrade-mobile-panel");
+    const sections = container.querySelectorAll(".upgrade-mobile .upgrade-mobile-section");
+
+    expect(cta).not.toBeNull();
+    expect(label).not.toBeNull();
+    expect(panel).not.toBeNull();
+    expect(sections.length).toBeGreaterThan(0);
+  });
 });

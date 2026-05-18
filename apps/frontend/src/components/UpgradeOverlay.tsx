@@ -70,6 +70,8 @@ function UpgradeOverlay({
 
   const singleLabel = `[ AUTHORIZE EXTRACTION - ${UPGRADE_PRICE_SINGLE} ]`;
   const multiLabel = `[ EXTRACT TEAM FUNDS - ${UPGRADE_PRICE_MULTI} ]`;
+  const mobileSingleLabel = `[ EXTRACT FUNDS - ${UPGRADE_PRICE_SINGLE} ]`;
+  const mobileMultiLabel = multiLabel;
 
   const currentCredits = Math.round((quotaPercent / 100) * totalQuota);
   const quotaLine = isBYOK
@@ -103,8 +105,8 @@ function UpgradeOverlay({
       />
       {/* Mobile: visible up to the shared max-width breakpoint */}
       <MobileLayout
-        singleLabel={singleLabel}
-        multiLabel={multiLabel}
+        singleLabel={mobileSingleLabel}
+        multiLabel={mobileMultiLabel}
         singleAvailable={singleAvailable}
         multiAvailable={multiAvailable}
         quotaLine={quotaLine}
@@ -162,7 +164,7 @@ function MobileLayout({
     return (
       <a
         href={url}
-        className={primary ? "upgrade-btn-primary" : "upgrade-btn-secondary"}
+        className={`${primary ? "upgrade-btn-primary" : "upgrade-btn-secondary"} upgrade-mobile-cta`}
         style={{
           display: "block",
           textDecoration: "none",
@@ -179,6 +181,7 @@ function MobileLayout({
         </span>
         <span
           data-btn=""
+          className="upgrade-mobile-cta-label"
           style={{
             backgroundColor: primary ? G : "transparent",
             color: primary ? "#0d1117" : G,
@@ -207,7 +210,7 @@ function MobileLayout({
       />
 
       <div
-        className={`relative z-10 upgrade-overlay-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
+        className={`relative z-10 upgrade-overlay-panel upgrade-mobile-panel${isForcedClosing ? " upgrade-overlay-panel-closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
         style={{
           fontFamily: MONO_FONT,
@@ -226,6 +229,7 @@ function MobileLayout({
       >
         {/* Title bar */}
         <div
+          className="upgrade-mobile-section upgrade-mobile-titlebar"
           style={{
             ...sectionStyle,
             display: "flex",
@@ -257,10 +261,11 @@ function MobileLayout({
         </div>
 
         {/* Subtitle */}
-        <div style={{ ...sectionStyle, textAlign: "center" }}>
-          <span style={{ color: Y, fontWeight: "bold", fontSize: "12px" }}>
-            INITIALIZING UPGRADE: CLAUDE COPE [MAX 429X]
-          </span>
+        <div className="upgrade-mobile-section" style={{ ...sectionStyle, textAlign: "center" }}>
+          <div className="upgrade-mobile-header" style={{ color: Y, fontWeight: "bold", fontSize: "12px" }}>
+            <span className="upgrade-mobile-header-line">INITIALIZING UPGRADE:</span>
+            <span className="upgrade-mobile-header-line">CLAUDE COPE [MAX 429X]</span>
+          </div>
           <div style={{ color: DIM, fontSize: "11px", marginTop: "4px" }}>
             {">"} {quotaLine}
           </div>
@@ -269,7 +274,7 @@ function MobileLayout({
         <hr style={hrStyle} />
 
         {/* Benchmarks */}
-        <div style={sectionStyle}>
+        <div className="upgrade-mobile-section" style={sectionStyle}>
           <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
             [ THROUGHPUT BENCHMARKS ]
           </div>
@@ -280,28 +285,32 @@ function MobileLayout({
         </div>
 
         {/* Comparison table — stacked on mobile */}
-        <div style={{ ...sectionStyle, fontSize: "11px" }}>
-          <div style={{
+        <div className="upgrade-mobile-section" style={{ ...sectionStyle, fontSize: "11px" }}>
+          <div
+            className="upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-muted"
+            style={{
             border: `1px solid ${DIM}`,
             marginBottom: "4px",
             padding: "6px 8px",
           }}>
-            <span style={{ color: DIM }}>Legacy AI</span>
-            {" · Max 20x · Manageable pull requests"}
+            <span className="upgrade-mobile-benchmark-label" style={{ color: DIM }}>Legacy AI</span>
+            <span className="upgrade-mobile-benchmark-outcome">Outcome: Manageable pull requests</span>
           </div>
-          <div style={{
+          <div
+            className="upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-accent"
+            style={{
             border: `1px solid ${G}`,
             padding: "6px 8px",
           }}>
-            <span style={{ color: G, fontWeight: "bold" }}>Claude Cope</span>
-            {" · MAX 429X · Unmitigated request storms"}
+            <span className="upgrade-mobile-benchmark-label" style={{ color: G, fontWeight: "bold" }}>Claude Cope</span>
+            <span className="upgrade-mobile-benchmark-outcome">Outcome: Unmitigated request storms</span>
           </div>
         </div>
 
         <hr style={hrStyle} />
 
         {/* Option 1 */}
-        <div style={sectionStyle}>
+        <div className="upgrade-mobile-section" style={sectionStyle}>
           <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
             [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]
           </div>
@@ -319,7 +328,7 @@ function MobileLayout({
         <div style={{ height: "1px" }} />
 
         {/* Option 2 */}
-        <div style={sectionStyle}>
+        <div className="upgrade-mobile-section" style={sectionStyle}>
           <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
             [OPTION 2: TEAM PACK - 5 LICENSES]
           </div>
@@ -334,7 +343,7 @@ function MobileLayout({
 
         <hr style={hrStyle} />
 
-        <div style={sectionStyle}>
+        <div className="upgrade-mobile-section" style={sectionStyle}>
           <div style={{ color: Y, fontWeight: "bold", marginBottom: "6px", fontSize: "12px" }}>
             [ APPENDIX: {premiumCategoryCount} NEW MAX CATEGORIES UNLOCKED ]
           </div>
