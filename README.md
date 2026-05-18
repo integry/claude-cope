@@ -40,7 +40,7 @@ Short alias: [cope.bot](https://cope.bot)
 ## ✨ Features
 
 * **Agentic Sabotage:** Backed by real LLMs routed through OpenRouter, using specialized system prompts to ensure maximum condescension and architectural ruin.
-* **The Hallucination Engine:** Hot-swap your AI models using `/model`. Choose between *Cope Sunset* (fast, cheap, easily distracted) or unlock *Cope Copus 4.69* (massive context window; will over-engineer everything into Java).
+* **The Hallucination Engine:** Hot-swap your AI models using `/model`. Stay on the default *Cope Regret vFINAL_v2_USE_THIS_ONE*, or unlock *Cope Copus 4.69* and *Cope Psychos (Red-Teamed)* for more expensive, more dangerous varieties of overconfidence.
 * **Corporate Buddies:** Why suffer alone? Spawn an emotional support companion like **Agile Snail** or **Grumpy Senior** to silently judge your keystrokes from the corner of your terminal.
 * **Multiplayer Misery:** See live global events in your `[LIVE]` ticker. Type `/who` to quantify your loneliness, or `/party` to watch the firehose of other users' failures in real-time.
 * **Pixel-Perfect Terminal UI:** A highly responsive, mobile-friendly CLI environment built in React.
@@ -66,6 +66,8 @@ Because no modern dev tool is complete without predatory B2B SaaS pricing, Claud
 Players can upgrade to **MAX 429X** to unlock 50+ specialized trauma categories (like E-Commerce logic, Game Dev crunch, and Ad-Tech slime), premium hostile AI models, and exclusive terminal themes. 
 
 **The Executive Supporter Tier:** Senior developers can expense the $19.99 tier to their employer to unlock 5 team keys, one Executive Supporter vanity seat, supporter-only `/promote` titles, premium terminal themes, and the ability to flex their bad financial decisions globally.
+
+If $4.99 feels excessive, clone the repo and disappoint yourself locally.
 
 ## 🚧 Running It Locally
 
