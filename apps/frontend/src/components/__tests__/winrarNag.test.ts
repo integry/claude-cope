@@ -403,6 +403,17 @@ describe("WinRAR nag: TerminalOverlays production wiring", () => {
     expect(props.onUpgradeDismiss).toHaveBeenCalled();
   });
 
+  it("fires onUpgradeDismiss when the mobile header [x] is tapped in nag mode", () => {
+    const { container, props } = renderOverlays({ showUpgrade: true, upgradeDismissMode: "nag" });
+    const mobileButtons = Array.from(container.querySelectorAll(".upgrade-mobile button"));
+    const headerClose = mobileButtons.find((button) => button.textContent?.includes("[x]"));
+    expect(headerClose).toBeTruthy();
+    act(() => {
+      headerClose!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(props.onUpgradeDismiss).toHaveBeenCalledTimes(1);
+  });
+
   it("shows free-tier quota status for free-tier users in UpgradeOverlay", () => {
     const state = makeGameState({ proKey: undefined, proKeyHash: undefined });
     const { container } = renderOverlays({ showUpgrade: true, state });

@@ -246,19 +246,27 @@ function MobileLayout({
           {dismissMode === "manual" ? (
             <button
               type="button"
-              onClick={onDismiss}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismiss();
+              }}
               style={{ color: DIM, fontSize: "14px", background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
               title="Tap to dismiss"
             >
               [x]
             </button>
           ) : (
-            <span
-              style={{ color: DIM, fontSize: "14px" }}
-              title="Tap footer to dismiss"
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismiss();
+              }}
+              style={{ color: DIM, fontSize: "14px", background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
+              title="Tap to dismiss"
             >
               [x]
-            </span>
+            </button>
           )}
         </div>
 
