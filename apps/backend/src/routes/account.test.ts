@@ -2407,6 +2407,8 @@ describe("POST /api/account/update-display-rank", () => {
         bind: vi.fn((...bindings: unknown[]) => {
           calls.push({ sql, bindings });
           return {
+            sql,
+            bindings,
             first: vi.fn().mockImplementation(async () => {
               if (sql.includes("license_hash, account_id FROM user_scores WHERE username = ?")) {
                 return { ...BASE_PROFILE, license_hash: supporterHash, is_executive_supporter: currentSupporter };
@@ -2423,12 +2425,6 @@ describe("POST /api/account/update-display-rank", () => {
               if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")) {
                 return { is_executive_supporter: 1 };
               }
-              if (sql.includes("SELECT username, is_executive_supporter FROM user_scores WHERE license_hash = ?")) {
-                return { username: "alice", is_executive_supporter: currentSupporter };
-              }
-              if (sql.includes("SELECT id FROM recent_events WHERE message = ?")) {
-                return recentEvents.length > 0 ? { id: "evt-1" } : null;
-              }
               if (sql.includes("SELECT username, total_td, current_td, corporate_rank")) {
                 return {
                   ...BASE_PROFILE,
@@ -2444,14 +2440,16 @@ describe("POST /api/account/update-display-rank", () => {
                 claimedSupporterHash = supporterHash;
                 return { meta: { changes: 1 } };
               }
-              if (sql.includes("INSERT INTO recent_events")) {
-                recentEvents.push(String(bindings[0]));
-                return { meta: { changes: 1 } };
-              }
               if (sql.includes("UPDATE user_scores") && sql.includes("SET is_executive_supporter = 1")) {
                 const changes = currentSupporter === 0 ? 1 : 0;
                 currentSupporter = 1;
+                currentDisplayRank = bindings[0] as string | null;
                 return { meta: { changes } };
+              }
+              if (sql.includes("UPDATE user_scores") && sql.includes("SET is_executive_supporter = 0")) {
+                currentSupporter = 0;
+                currentDisplayRank = null;
+                return { meta: { changes: 1 } };
               }
               if (sql.includes("UPDATE user_scores SET display_rank = ?")) {
                 currentDisplayRank = bindings[0] as string | null;
@@ -2464,6 +2462,13 @@ describe("POST /api/account/update-display-rank", () => {
         first: vi.fn().mockResolvedValue(null),
         run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
       })),
+      batch: vi.fn().mockImplementation(async (statements: Array<{ sql?: string; bindings?: unknown[] }>) => {
+        const insertStatement = statements.find((statement) => statement.sql?.includes("INSERT INTO recent_events"));
+        if (insertStatement?.bindings?.[0]) {
+          recentEvents.push(String(insertStatement.bindings[0]));
+        }
+        return [];
+      }),
     };
 
     const res = await postWithSession("/api/account/update-display-rank", {
@@ -2483,7 +2488,7 @@ describe("POST /api/account/update-display-rank", () => {
     expect(recentEvents).toEqual([
       "[LIVE] 👑 alice just expensed the Executive Supporter Pack. Respect the grift.",
     ]);
-    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === selectedTitle)).toBe(true);
+    expect(calls.some((call) => call.sql.includes("SET is_executive_supporter = 1") && call.bindings[0] === selectedTitle)).toBe(true);
   });
 
   it("does not let a different session claim the supporter vanity entitlement first", async () => {

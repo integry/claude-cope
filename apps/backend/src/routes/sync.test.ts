@@ -177,6 +177,8 @@ describe("POST /api/account/sync", () => {
         bind: vi.fn((...bindings: unknown[]) => {
           calls.push({ sql, bindings });
           return {
+            sql,
+            bindings,
             first: vi.fn().mockImplementation(async () => {
               if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")) {
                 return { is_executive_supporter: 1 };
@@ -195,9 +197,6 @@ describe("POST /api/account/sync", () => {
                 currentSupporter = 1;
                 return { meta: { changes } };
               }
-              if (sql.includes("INSERT INTO recent_events")) {
-                recentEvents.push(String(bindings[0]));
-              }
               return { meta: { changes: 1 } };
             }),
             all: vi.fn().mockResolvedValue({ results: [] }),
@@ -208,7 +207,13 @@ describe("POST /api/account/sync", () => {
         all: vi.fn().mockResolvedValue({ results: [] }),
       })),
       exec: vi.fn().mockResolvedValue({ results: [] }),
-      batch: vi.fn().mockResolvedValue([]),
+      batch: vi.fn().mockImplementation(async (statements: Array<{ sql?: string; bindings?: unknown[] }>) => {
+        const insertStatement = statements.find((statement) => statement.sql?.includes("INSERT INTO recent_events"));
+        if (insertStatement?.bindings?.[0]) {
+          recentEvents.push(String(insertStatement.bindings[0]));
+        }
+        return [];
+      }),
     };
     const kv = mockKV();
 
@@ -247,6 +252,8 @@ describe("POST /api/account/sync", () => {
     const db = {
       prepare: vi.fn((sql: string) => ({
         bind: vi.fn((...bindings: unknown[]) => ({
+          sql,
+          bindings,
           first: vi.fn().mockImplementation(async () => {
             if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")) {
               return { is_executive_supporter: 1 };
@@ -254,23 +261,12 @@ describe("POST /api/account/sync", () => {
             if (sql.includes("SELECT username, is_executive_supporter FROM user_scores WHERE license_hash = ?")) {
               return { username: "alice", is_executive_supporter: currentSupporter };
             }
-            if (sql.includes("SELECT id FROM recent_events WHERE message = ?")) {
-              return recentEvents.length > 0 ? { id: "evt-1" } : null;
-            }
             if (sql.includes("WHERE license_hash = ?")) {
               return { ...PROFILE_ROW, license_hash: supporterHash, is_executive_supporter: currentSupporter };
             }
             return null;
           }),
           run: vi.fn().mockImplementation(async () => {
-            if (sql.includes("INSERT INTO recent_events")) {
-              if (failNextRecentEventInsert) {
-                failNextRecentEventInsert = false;
-                throw new Error("recent event insert failed");
-              }
-              recentEvents.push(String(bindings[0]));
-              return { meta: { changes: 1 } };
-            }
             if (sql.includes("UPDATE user_scores")) {
               if (sql.includes("SET is_executive_supporter = 0")) {
                 currentSupporter = 0;
@@ -289,7 +285,18 @@ describe("POST /api/account/sync", () => {
         all: vi.fn().mockResolvedValue({ results: [] }),
       })),
       exec: vi.fn().mockResolvedValue({ results: [] }),
-      batch: vi.fn().mockResolvedValue([]),
+      batch: vi.fn().mockImplementation(async (statements: Array<{ sql?: string; bindings?: unknown[] }>) => {
+        const insertStatement = statements.find((statement) => statement.sql?.includes("INSERT INTO recent_events"));
+        if (!insertStatement) return [];
+        if (failNextRecentEventInsert) {
+          failNextRecentEventInsert = false;
+          throw new Error("recent event insert failed");
+        }
+        if (insertStatement.bindings?.[0]) {
+          recentEvents.push(String(insertStatement.bindings[0]));
+        }
+        return [];
+      }),
     };
     const kv = mockKV();
 
@@ -364,6 +371,55 @@ describe("POST /api/account/sync", () => {
       ]),
     );
     expect(calls.some((c) => c.sql.includes("INSERT INTO recent_events"))).toBe(false);
+  });
+
+  it("does not apply supporter activation when sync provisioning fails first", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const supporterHash = await hashKey("COPE-SUPPORTER");
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => {
+          calls.push({ sql, bindings: args });
+          return {
+            sql,
+            bindings: args,
+            first: vi.fn().mockResolvedValue(
+              sql.includes("SELECT status, last_activated_at FROM licenses") ? null :
+              sql.includes("WHERE license_hash = ?") ? { ...PROFILE_ROW, license_hash: supporterHash, is_executive_supporter: 0 } :
+              sql.includes("SELECT is_executive_supporter FROM checkout_key_claims") ? { is_executive_supporter: 1 } :
+              sql.includes("SELECT username, is_executive_supporter FROM user_scores WHERE license_hash = ?") ? { username: "alice", is_executive_supporter: 0 } :
+              null,
+            ),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          };
+        }),
+        first: vi.fn().mockResolvedValue(null),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        all: vi.fn().mockResolvedValue({ results: [] }),
+      })),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
+    const kv = {
+      get: vi.fn(() => Promise.resolve(null)),
+      put: vi.fn((key: string) => (
+        key.startsWith("polar:")
+          ? Promise.reject(new Error("kv unavailable"))
+          : Promise.resolve()
+      )),
+      delete: vi.fn(() => Promise.resolve()),
+    };
+
+    const res = await postSync({ licenseKey: "COPE-SUPPORTER" }, {
+      DB: db, QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
+    });
+
+    expect(res.status).toBe(500);
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores") && call.sql.includes("SET is_executive_supporter = 1"))).toBe(false);
+    expect(calls.some((call) => call.sql.includes("INSERT INTO recent_events"))).toBe(false);
   });
 
   it("rolls back a newly created profile when provisioning fails after insert", async () => {

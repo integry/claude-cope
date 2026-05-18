@@ -64,6 +64,7 @@ export type SyncBody = {
 
 export type ExecutiveSupporterEntitlementSyncResult = {
   isExecutiveSupporter: boolean;
+  activatedNow: boolean;
 };
 
 function buildExecutiveSupporterActivationMessage(username: string): string {
@@ -71,13 +72,13 @@ function buildExecutiveSupporterActivationMessage(username: string): string {
 }
 
 async function insertRecentEventAndPrune(db: D1Database, message: string): Promise<void> {
-  await db.prepare("INSERT INTO recent_events (message) VALUES (?)").bind(message).run();
-  await db
-    .prepare("DELETE FROM recent_events WHERE id NOT IN (SELECT id FROM recent_events ORDER BY created_at DESC LIMIT 50)")
-    .run();
+  await db.batch([
+    db.prepare("INSERT INTO recent_events (message) VALUES (?)").bind(message),
+    db.prepare("DELETE FROM recent_events WHERE id NOT IN (SELECT id FROM recent_events ORDER BY created_at DESC LIMIT 50)"),
+  ]);
 }
 
-async function emitExecutiveSupporterActivationEvent(
+export async function emitExecutiveSupporterActivationEvent(
   db: D1Database,
   username: string,
 ): Promise<void> {
@@ -99,6 +100,7 @@ export async function syncExecutiveSupporterEntitlement(
       .first<{ is_executive_supporter: number }>();
     return {
       isExecutiveSupporter: existingUserRow?.is_executive_supporter === 1,
+      activatedNow: false,
     };
   }
 
@@ -108,7 +110,7 @@ export async function syncExecutiveSupporterEntitlement(
     .bind(hash)
     .first<{ username: string; is_executive_supporter: number }>();
   if (!existingUserRow) {
-    return { isExecutiveSupporter };
+    return { isExecutiveSupporter, activatedNow: false };
   }
 
   if (isExecutiveSupporter) {
@@ -140,6 +142,7 @@ export async function syncExecutiveSupporterEntitlement(
         throw err;
       }
     }
+    return { isExecutiveSupporter, activatedNow };
   } else {
     await db
       .prepare(
@@ -154,7 +157,7 @@ export async function syncExecutiveSupporterEntitlement(
       .run();
   }
 
-  return { isExecutiveSupporter };
+  return { isExecutiveSupporter, activatedNow: false };
 }
 
 function metadataFlagIsTrue(value: unknown): boolean {
@@ -709,18 +712,8 @@ export async function commitSyncSideEffects(
   opts: { validationId?: string; proInitialQuota: number },
 ) {
   const { db, kv, hash } = deps;
-  const polarKey = `polar:${hash}`;
-  const revokedKey = `polar_revoked:${hash}`;
   const polarIdKey = `polar_id:${hash}`;
-  const [previousLicense, previousQuota, previousRevokedQuota, previousPolarId] = await Promise.all([
-    db
-      .prepare("SELECT status, last_activated_at FROM licenses WHERE key_hash = ?")
-      .bind(hash)
-      .first<{ status: string; last_activated_at: string | null }>(),
-    kv.get(polarKey),
-    kv.get(revokedKey),
-    kv.get(polarIdKey),
-  ]);
+  const snapshot = await captureSyncSideEffectSnapshot(deps);
 
   try {
     await db
@@ -736,33 +729,73 @@ export async function commitSyncSideEffects(
       await kv.put(polarIdKey, opts.validationId);
     }
   } catch (err: unknown) {
-    try {
-      await rollbackLicenseActivation(db, hash, previousLicense);
-
-      if (previousQuota === null) {
-        await kv.delete(polarKey);
-      } else {
-        await kv.put(polarKey, previousQuota);
-      }
-
-      if (previousRevokedQuota === null) {
-        await kv.delete(revokedKey);
-      } else {
-        await kv.put(revokedKey, previousRevokedQuota);
-      }
-
-      if (previousPolarId === null) {
-        await kv.delete(polarIdKey);
-      } else {
-        await kv.put(polarIdKey, previousPolarId);
-      }
-    } catch (rollbackErr: unknown) {
-      console.warn(
-        `[account/sync] failed to rollback side effects for ${hash.slice(0, 8)}:`,
-        rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
-      );
-    }
+    await rollbackSyncSideEffects(deps, snapshot);
     throw err;
+  }
+
+  return snapshot;
+}
+
+type SyncSideEffectsSnapshot = {
+  previousLicense: { status: string; last_activated_at: string | null } | null;
+  previousQuota: string | null;
+  previousRevokedQuota: string | null;
+  previousPolarId: string | null;
+};
+
+async function captureSyncSideEffectSnapshot(
+  deps: { db: D1Database; kv: KVNamespace; hash: string },
+): Promise<SyncSideEffectsSnapshot> {
+  const { db, kv, hash } = deps;
+  const polarKey = `polar:${hash}`;
+  const revokedKey = `polar_revoked:${hash}`;
+  const polarIdKey = `polar_id:${hash}`;
+  const [previousLicense, previousQuota, previousRevokedQuota, previousPolarId] = await Promise.all([
+    db
+      .prepare("SELECT status, last_activated_at FROM licenses WHERE key_hash = ?")
+      .bind(hash)
+      .first<{ status: string; last_activated_at: string | null }>(),
+    kv.get(polarKey),
+    kv.get(revokedKey),
+    kv.get(polarIdKey),
+  ]);
+  return { previousLicense, previousQuota, previousRevokedQuota, previousPolarId };
+}
+
+export async function rollbackSyncSideEffects(
+  deps: { db: D1Database; kv: KVNamespace; hash: string },
+  snapshot: SyncSideEffectsSnapshot,
+) {
+  const { db, kv, hash } = deps;
+  const polarKey = `polar:${hash}`;
+  const revokedKey = `polar_revoked:${hash}`;
+  const polarIdKey = `polar_id:${hash}`;
+
+  try {
+    await rollbackLicenseActivation(db, hash, snapshot.previousLicense);
+
+    if (snapshot.previousQuota === null) {
+      await kv.delete(polarKey);
+    } else {
+      await kv.put(polarKey, snapshot.previousQuota);
+    }
+
+    if (snapshot.previousRevokedQuota === null) {
+      await kv.delete(revokedKey);
+    } else {
+      await kv.put(revokedKey, snapshot.previousRevokedQuota);
+    }
+
+    if (snapshot.previousPolarId === null) {
+      await kv.delete(polarIdKey);
+    } else {
+      await kv.put(polarIdKey, snapshot.previousPolarId);
+    }
+  } catch (rollbackErr: unknown) {
+    console.warn(
+      `[account/sync] failed to rollback side effects for ${hash.slice(0, 8)}:`,
+      rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+    );
   }
 }
 

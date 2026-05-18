@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, rollbackSyncSideEffects, emitExecutiveSupporterActivationEvent } from "./accountHelpers";
 import type { CheckoutCache, ResolveProfileResult } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -417,11 +417,7 @@ async function ensureDisplayRankSupporterAccess(
     licenseKeyHash: opts.licenseKeyHash,
     sessionId: opts.sessionId,
   });
-  if (!claimed) return false;
-
-  const entitlement = await syncExecutiveSupporterEntitlement(db, opts.licenseKeyHash);
-  opts.profile.is_executive_supporter = entitlement.isExecutiveSupporter;
-  return opts.profile.is_executive_supporter;
+  return claimed;
 }
 
 function respondWithSyncProfileError(
@@ -438,7 +434,7 @@ function respondWithSyncProfileError(
 async function rollbackSyncProfileMutation(
   db: D1Database,
   hash: string,
-  mutation: ResolveProfileResult["mutation"],
+  mutation: ResolveProfileResult["mutation"] | undefined,
 ) {
   if (!mutation) {
     return;
@@ -458,9 +454,9 @@ async function finalizeSyncProfile(
   deps: { db: D1Database; kv: KVNamespace; hash: string; validationId?: string; proInitialQuota: number },
   result: Exclude<ResolveProfileResult, { profile: null }>,
 ) {
-  const supporterEntitlement = await syncExecutiveSupporterEntitlement(deps.db, deps.hash);
+  let sideEffectsSnapshot: Awaited<ReturnType<typeof commitSyncSideEffects>>;
   try {
-    await commitSyncSideEffects(
+    sideEffectsSnapshot = await commitSyncSideEffects(
       { db: deps.db, kv: deps.kv, hash: deps.hash },
       { validationId: deps.validationId, proInitialQuota: deps.proInitialQuota },
     );
@@ -469,11 +465,70 @@ async function finalizeSyncProfile(
     throw err;
   }
 
-  result.profile = {
-    ...result.profile,
-    is_executive_supporter: supporterEntitlement.isExecutiveSupporter,
-    display_rank: supporterEntitlement.isExecutiveSupporter ? result.profile.display_rank : null,
-  };
+  try {
+    const supporterEntitlement = await syncExecutiveSupporterEntitlement(deps.db, deps.hash);
+    result.profile = {
+      ...result.profile,
+      is_executive_supporter: supporterEntitlement.isExecutiveSupporter,
+      display_rank: supporterEntitlement.isExecutiveSupporter ? result.profile.display_rank : null,
+    };
+  } catch (err: unknown) {
+    await rollbackSyncSideEffects({ db: deps.db, kv: deps.kv, hash: deps.hash }, sideEffectsSnapshot);
+    await rollbackSyncProfileMutation(deps.db, deps.hash, result.mutation);
+    throw err;
+  }
+}
+
+async function persistDisplayRankUpdate(
+  db: D1Database,
+  opts: {
+    displayRank: string | null;
+    licenseKeyHash: string;
+    username: string;
+    needsFirstSupporterActivation: boolean;
+  },
+) {
+  if (opts.needsFirstSupporterActivation) {
+    return db
+      .prepare(
+        `UPDATE user_scores
+         SET is_executive_supporter = 1,
+             display_rank = ?,
+             updated_at = datetime('now')
+         WHERE username = ? AND license_hash = ?
+           AND is_executive_supporter = 0
+           AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
+      )
+      .bind(opts.displayRank, opts.username, opts.licenseKeyHash)
+      .run();
+  }
+
+  return db
+    .prepare(
+      `UPDATE user_scores SET display_rank = ?, updated_at = datetime('now')
+       WHERE username = ? AND license_hash = ?${opts.displayRank === null ? "" : " AND is_executive_supporter = 1"}
+         AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
+    )
+    .bind(opts.displayRank, opts.username, opts.licenseKeyHash)
+    .run();
+}
+
+async function rollbackDisplayRankSupporterActivation(
+  db: D1Database,
+  opts: { username: string; licenseKeyHash: string; displayRank: string },
+) {
+  await db
+    .prepare(
+      `UPDATE user_scores
+       SET is_executive_supporter = 0,
+           display_rank = NULL,
+           updated_at = datetime('now')
+       WHERE username = ? AND license_hash = ?
+         AND is_executive_supporter = 1
+         AND display_rank = ?`,
+    )
+    .bind(opts.username, opts.licenseKeyHash, opts.displayRank)
+    .run();
 }
 
 async function bindSessionUserIfPresent(
@@ -989,6 +1044,7 @@ account.post("/update-display-rank", async (c) => {
     return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
   }
   const { profile, licenseKeyHash } = ownership;
+  const needsFirstSupporterActivation = displayRank !== null && !profile.is_executive_supporter;
 
   if (!(await ensureDisplayRankSupporterAccess(db, {
     displayRank,
@@ -999,18 +1055,29 @@ account.post("/update-display-rank", async (c) => {
     return c.json({ error: PROMOTE_ACCESS_DENIED_MESSAGE }, 403);
   }
 
-  const supporterClause = displayRank === null ? "" : " AND is_executive_supporter = 1";
-  const result = await db
-    .prepare(
-      `UPDATE user_scores SET display_rank = ?, updated_at = datetime('now')
-       WHERE username = ? AND license_hash = ?${supporterClause}
-         AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
-    )
-    .bind(displayRank, profile.username, licenseKeyHash)
-    .run();
+  const result = await persistDisplayRankUpdate(db, {
+    displayRank,
+    licenseKeyHash,
+    username: profile.username,
+    needsFirstSupporterActivation,
+  });
 
   if (!result.meta.changes) {
     return c.json({ error: "Update failed — profile not found, supporter entitlement missing, or license revoked" }, 409);
+  }
+
+  if (needsFirstSupporterActivation) {
+    try {
+      await emitExecutiveSupporterActivationEvent(db, profile.username);
+      profile.is_executive_supporter = true;
+    } catch (err: unknown) {
+      await rollbackDisplayRankSupporterActivation(db, {
+        username: profile.username,
+        licenseKeyHash,
+        displayRank,
+      });
+      throw err;
+    }
   }
 
   const updated = await getProfile(db, profile.username);

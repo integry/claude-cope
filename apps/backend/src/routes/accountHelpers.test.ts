@@ -629,24 +629,29 @@ describe("syncExecutiveSupporterEntitlement", () => {
     const db = {
       prepare: vi.fn((sql: string) => {
         return {
+          sql,
           bind: vi.fn((...args: unknown[]) => {
             calls.push({ sql, bindings: args });
-          return {
-            first: vi.fn().mockResolvedValue(sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
-              ? { is_executive_supporter: 1 }
-                : sql.includes("SELECT username, is_executive_supporter FROM user_scores")
-                  ? { username: "alice", is_executive_supporter: 0 }
-                : null),
-            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
-          };
-        }),
-        run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+            return {
+              sql,
+              bindings: args,
+              first: vi.fn().mockResolvedValue(sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
+                ? { is_executive_supporter: 1 }
+                  : sql.includes("SELECT username, is_executive_supporter FROM user_scores")
+                    ? { username: "alice", is_executive_supporter: 0 }
+                  : null),
+              run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+            };
+          }),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
         };
       }),
+      batch: vi.fn().mockResolvedValue([]),
     } as unknown as D1Database;
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
       isExecutiveSupporter: true,
+      activatedNow: true,
     });
     const insertCall = calls.find((call) => call.sql.includes("INSERT INTO recent_events"));
     expect(insertCall?.bindings).toEqual([
@@ -663,6 +668,8 @@ describe("syncExecutiveSupporterEntitlement", () => {
         bind: vi.fn((...args: unknown[]) => {
           calls.push({ sql, bindings: args });
           return {
+            sql,
+            bindings: args,
             first: vi.fn().mockResolvedValue(
               sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
                 ? null
@@ -674,10 +681,12 @@ describe("syncExecutiveSupporterEntitlement", () => {
           };
         }),
       })),
+      batch: vi.fn().mockResolvedValue([]),
     } as unknown as D1Database;
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
       isExecutiveSupporter: true,
+      activatedNow: false,
     });
     const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores"));
     expect(updateCall).toBeUndefined();
@@ -691,6 +700,8 @@ describe("syncExecutiveSupporterEntitlement", () => {
         bind: vi.fn((...args: unknown[]) => {
           calls.push({ sql, bindings: args });
           return {
+            sql,
+            bindings: args,
             first: vi.fn().mockImplementation(async () => {
               if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")) {
                 return { is_executive_supporter: 1 };
@@ -705,10 +716,12 @@ describe("syncExecutiveSupporterEntitlement", () => {
         }),
         run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
       })),
+      batch: vi.fn().mockResolvedValue([]),
     } as unknown as D1Database;
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
       isExecutiveSupporter: true,
+      activatedNow: false,
     });
     expect(calls.some((call) => call.sql.includes("INSERT INTO recent_events"))).toBe(false);
   });
@@ -720,6 +733,8 @@ describe("syncExecutiveSupporterEntitlement", () => {
         bind: vi.fn((...args: unknown[]) => {
           calls.push({ sql, bindings: args });
           return {
+            sql,
+            bindings: args,
             first: vi.fn().mockResolvedValue(sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
               ? { is_executive_supporter: 0 }
               : sql.includes("SELECT username, is_executive_supporter FROM user_scores")
@@ -729,10 +744,12 @@ describe("syncExecutiveSupporterEntitlement", () => {
           };
         }),
       })),
+      batch: vi.fn().mockResolvedValue([]),
     } as unknown as D1Database;
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
       isExecutiveSupporter: false,
+      activatedNow: false,
     });
     expect(calls.some((call) => call.sql.includes("INSERT INTO recent_events"))).toBe(false);
   });
