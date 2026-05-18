@@ -369,6 +369,7 @@ function MobileLayout({
             </div>
             <div style={{ height: "8px" }} />
             <div
+              className="upgrade-mobile-appendix-grid"
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(2, minmax(0, 1fr))",

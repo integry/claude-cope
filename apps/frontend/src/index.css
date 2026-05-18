@@ -573,9 +573,21 @@ body {
   white-space: nowrap;
 }
 
+.upgrade-mobile-appendix-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
 /* Responsive layout switching: CSS-first, no JS matchMedia needed */
 .upgrade-mobile { display: none; }
 .upgrade-desktop { display: flex; }
+
+@media (max-width: 768px) {
+  .upgrade-mobile-appendix-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+}
 
 @media (max-width: 640px) {
   .upgrade-mobile { display: flex; }
