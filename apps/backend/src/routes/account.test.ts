@@ -1218,13 +1218,22 @@ describe("POST /api/account/checkout-license", () => {
     expect(data.licenseKey).toBe("COPE-T1");
     expect(data.allKeys).toEqual(keys);
   });
-  it("does not persist executive supporter entitlement onto an arbitrary claimed key", async () => {
+  it("persists executive supporter entitlement onto the purchaser key for supporter checkouts", async () => {
     const origFetch = globalThis.fetch;
     const { db, calls } = createMockDB({ runChanges: 1 });
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const u = typeof input === "string" ? input : input.toString();
+      if (u.includes("/v1/checkouts/?")) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
       if (u.includes("/v1/checkouts/")) {
-        return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: "2026-01-02T00:00:00Z", metadata: { reference_id: "s" } }));
+        return new Response(JSON.stringify({
+          organization_id: "org",
+          status: "succeeded",
+          customer_id: "c1",
+          created_at: "2026-01-02T00:00:00Z",
+          metadata: { reference_id: "s", tier: "Executive Supporter" },
+        }));
       }
       if (u.includes("/v1/license-keys/")) {
         return new Response(JSON.stringify({ items: ["T1", "T2"].map((k, i) => ({ key: `COPE-${k}`, created_at: `2026-01-02T00:00:0${i + 1}Z`, status: "granted" })) }));
@@ -1238,7 +1247,7 @@ describe("POST /api/account/checkout-license", () => {
       const supporterClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"));
       expect(supporterClaimInsert?.bindings.slice(0, 4)).toEqual([
         expect.any(String),
-        0,
+        1,
         expect.any(String),
         0,
       ]);

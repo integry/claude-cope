@@ -17,7 +17,25 @@ function createMockDB(opts: {
   runChanges?: number;
 } = {}) {
   const calls: { sql: string; bindings: unknown[] }[] = [];
-  const resolveFirst = (sql: string) => {
+  const checkoutClaims = new Map<string, { sessionId?: string; encryptedKeys: string | null }>();
+  const keyOwners = new Map<string, { checkoutId: string; isExecutiveSupporter: number }>();
+  const resolveFirst = (sql: string, bindings: unknown[]) => {
+    if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims WHERE checkout_id = ?")) {
+      const checkoutId = bindings[0] as string;
+      if (!checkoutClaims.has(checkoutId)) return null;
+      const claim = checkoutClaims.get(checkoutId)!;
+      return { session_id: claim.sessionId ?? null, encrypted_keys: claim.encryptedKeys ?? null };
+    }
+    if (sql.includes("SELECT encrypted_keys FROM checkout_claims WHERE checkout_id = ?")) {
+      const checkoutId = bindings[0] as string;
+      if (!checkoutClaims.has(checkoutId)) return null;
+      return { encrypted_keys: checkoutClaims.get(checkoutId)?.encryptedKeys ?? null };
+    }
+    if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")) {
+      const licenseKeyHash = bindings[0] as string;
+      const claim = keyOwners.get(licenseKeyHash);
+      return claim ? { is_executive_supporter: claim.isExecutiveSupporter } : null;
+    }
     if (opts.firstBySQL) {
       for (const [pattern, result] of Object.entries(opts.firstBySQL)) {
         if (sql.includes(pattern)) return result;
@@ -26,7 +44,7 @@ function createMockDB(opts: {
     return null;
   };
   const stmt = (sql: string) => ({
-    first: vi.fn().mockResolvedValue(resolveFirst(sql)),
+    first: vi.fn().mockImplementation(() => Promise.resolve(resolveFirst(sql, []))),
     run: vi.fn().mockResolvedValue({ meta: { changes: opts.runChanges ?? 1 } }),
     all: vi.fn().mockResolvedValue({ results: [] }),
   });
@@ -35,7 +53,61 @@ function createMockDB(opts: {
       prepare: vi.fn((sql: string) => ({
         bind: vi.fn((...args: unknown[]) => {
           calls.push({ sql, bindings: args });
-          return stmt(sql);
+          return {
+            first: vi.fn().mockResolvedValue(resolveFirst(sql, args)),
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("INSERT INTO checkout_claims")) {
+                const [checkoutId, sessionId] = args as [string, string];
+                if (checkoutClaims.has(checkoutId)) return { meta: { changes: 0 } };
+                checkoutClaims.set(checkoutId, { sessionId, encryptedKeys: null });
+                return { meta: { changes: 1 } };
+              }
+              if (sql.includes("UPDATE checkout_claims SET encrypted_keys")) {
+                const [encryptedKeys, checkoutId] = args as [string, string];
+                const claim = checkoutClaims.get(checkoutId);
+                if (!claim) return { meta: { changes: 0 } };
+                claim.encryptedKeys = encryptedKeys;
+                return { meta: { changes: 1 } };
+              }
+              if (sql.includes("INSERT INTO checkout_key_claims")) {
+                const checkoutId = (args as string[])[args.length - 1]!;
+                const incomingClaims = (args as string[])
+                  .slice(0, -2)
+                  .reduce<Array<{ licenseKeyHash: string; isExecutiveSupporter: number }>>((claims, value, index, values) => {
+                    if (index % 2 === 0) {
+                      claims.push({
+                        licenseKeyHash: value,
+                        isExecutiveSupporter: values[index + 1] as number,
+                      });
+                    }
+                    return claims;
+                  }, []);
+                const hasConflict = incomingClaims.some(({ licenseKeyHash }) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash)?.checkoutId !== checkoutId);
+                if (hasConflict) return { meta: { changes: 0 } };
+                let inserted = 0;
+                for (const { licenseKeyHash, isExecutiveSupporter } of incomingClaims) {
+                  if (keyOwners.has(licenseKeyHash)) continue;
+                  keyOwners.set(licenseKeyHash, { checkoutId, isExecutiveSupporter });
+                  inserted += 1;
+                }
+                return { meta: { changes: inserted } };
+              }
+              return { meta: { changes: opts.runChanges ?? 1 } };
+            }),
+            all: vi.fn().mockImplementation(async () => {
+              if (sql.includes("SELECT license_key_hash, checkout_id FROM checkout_key_claims")) {
+                return {
+                  results: (args as string[])
+                    .filter((licenseKeyHash) => keyOwners.has(licenseKeyHash))
+                    .map((licenseKeyHash) => ({
+                      license_key_hash: licenseKeyHash,
+                      checkout_id: keyOwners.get(licenseKeyHash)!.checkoutId,
+                    })),
+                };
+              }
+              return { results: [] };
+            }),
+          };
         }),
         ...stmt(sql),
       })),
@@ -56,6 +128,14 @@ function mockKV(store: Record<string, string> = {}) {
 
 function postSync(body: unknown, env: Record<string, unknown>) {
   return app.request("/api/account/sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: "cope_session_id=test-session" },
+    body: JSON.stringify(body),
+  }, { ALLOWED_ORIGINS: "http://localhost:5173", ...env });
+}
+
+function postCheckoutLicense(body: unknown, env: Record<string, unknown>) {
+  return app.request("/api/account/checkout-license", {
     method: "POST",
     headers: { "Content-Type": "application/json", Cookie: "cope_session_id=test-session" },
     body: JSON.stringify(body),
@@ -546,13 +626,79 @@ describe("POST /api/account/sync", () => {
     });
   });
 
-  it("strips supporter entitlement and vanity rank when no supporter claim row exists", async () => {
+  it("grants executive supporter on checkout redemption and returns it on the next sync", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
+    const origFetch = globalThis.fetch;
+    const { db } = createMockDB({
+      firstBySQL: {
+        "license_hash =": PROFILE_ROW,
+      },
+    });
+    const kv = mockKV();
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/v1/checkouts/?")) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
+      if (url.includes("/v1/checkouts/")) {
+        return new Response(JSON.stringify({
+          organization_id: "org",
+          status: "succeeded",
+          customer_id: "cust-1",
+          created_at: "2026-01-02T00:00:00Z",
+          metadata: { reference_id: "test-session", tier: "Executive Supporter" },
+        }));
+      }
+      if (url.includes("/v1/license-keys/")) {
+        return new Response(JSON.stringify({
+          items: [
+            { key: "COPE-SUPPORTER", created_at: "2026-01-02T00:00:01Z", status: "granted" },
+            { key: "COPE-TEAMMATE", created_at: "2026-01-02T00:00:02Z", status: "granted" },
+          ],
+        }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const checkoutRes = await postCheckoutLicense({ checkoutId: "co_supporter" }, {
+        DB: db,
+        QUOTA_KV: kv,
+        CHECKOUT_CLAIM_SECRET: "secret",
+        POLAR_ACCESS_TOKEN: "tok",
+        POLAR_ORGANIZATION_ID: "org",
+      });
+      expect(checkoutRes.status).toBe(200);
+      expect(await checkoutRes.json()).toMatchObject({
+        licenseKey: "COPE-SUPPORTER",
+        allKeys: ["COPE-SUPPORTER", "COPE-TEAMMATE"],
+      });
+
+      const syncRes = await postSync({ licenseKey: "COPE-SUPPORTER" }, {
+        DB: db,
+        QUOTA_KV: kv,
+        POLAR_ACCESS_TOKEN: "tok",
+        POLAR_ORGANIZATION_ID: "org",
+      });
+      expect(syncRes.status).toBe(200);
+      expect(await syncRes.json()).toMatchObject({
+        success: true,
+        profile: { is_executive_supporter: true },
+      });
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it("preserves existing supporter entitlement when no supporter claim row exists", async () => {
     mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
     const supporterProfile = { ...PROFILE_ROW, is_executive_supporter: 1, display_rank: "Mid-Level Googler" };
     const { db, calls } = createMockDB({
       firstBySQL: {
         "license_hash =": supporterProfile,
         "SELECT is_executive_supporter FROM checkout_key_claims": null,
+        "SELECT is_executive_supporter FROM user_scores": { is_executive_supporter: 1 },
       },
     });
     const kv = mockKV();
@@ -565,12 +711,9 @@ describe("POST /api/account/sync", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       success: true,
-      profile: { is_executive_supporter: false, display_rank: null },
+      profile: { is_executive_supporter: true, display_rank: "Mid-Level Googler" },
     });
-    expect(calls.some((call) =>
-      call.sql.includes("UPDATE user_scores")
-      && call.bindings[0] === 0
-      && call.bindings[1] === 0
-    )).toBe(true);
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores"))).toBe(false);
+    expect(calls.some((call) => call.sql.includes("SELECT is_executive_supporter FROM user_scores"))).toBe(true);
   });
 });

@@ -67,7 +67,14 @@ export async function syncExecutiveSupporterEntitlement(db: D1Database, hash: st
     .prepare("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")
     .bind(hash)
     .first<{ is_executive_supporter: number }>();
-  const isExecutiveSupporter = supporterRow?.is_executive_supporter === 1;
+  if (!supporterRow) {
+    const existingUserRow = await db
+      .prepare("SELECT is_executive_supporter FROM user_scores WHERE license_hash = ?")
+      .bind(hash)
+      .first<{ is_executive_supporter: number }>();
+    return existingUserRow?.is_executive_supporter === 1;
+  }
+  const isExecutiveSupporter = supporterRow.is_executive_supporter === 1;
   await db
     .prepare(
       `UPDATE user_scores
@@ -79,6 +86,34 @@ export async function syncExecutiveSupporterEntitlement(db: D1Database, hash: st
     .bind(isExecutiveSupporter ? 1 : 0, isExecutiveSupporter ? 1 : 0, hash)
     .run();
   return isExecutiveSupporter;
+}
+
+function metadataFlagIsTrue(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function metadataLooksLikeExecutiveSupporter(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized.includes("executive") && normalized.includes("supporter");
+}
+
+function isExecutiveSupporterCheckout(metadata: Record<string, unknown> | undefined): boolean {
+  if (!metadata) return false;
+  if (metadataFlagIsTrue(metadata.is_executive_supporter) || metadataFlagIsTrue(metadata.executive_supporter)) {
+    return true;
+  }
+  return [
+    metadata.tier,
+    metadata.plan,
+    metadata.product,
+    metadata.product_name,
+    metadata.product_slug,
+    metadata.variant,
+  ].some((value) => metadataLooksLikeExecutiveSupporter(value));
 }
 
 function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
@@ -706,7 +741,10 @@ export async function fetchCheckoutCustomerId(
   accessToken: string,
   organizationId: string,
   opts: { allowMissingReferenceId?: boolean } = {},
-): Promise<{ customerId: string; createdAt?: string; referenceId?: string } | { error: string; status: ContentfulStatusCode }> {
+): Promise<
+  | { customerId: string; createdAt?: string; referenceId?: string; isExecutiveSupporter: boolean }
+  | { error: string; status: ContentfulStatusCode }
+> {
   let resp: Response;
   try {
     resp = await fetch(`https://api.polar.sh/v1/checkouts/${encodeURIComponent(checkoutId)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -727,7 +765,12 @@ export async function fetchCheckoutCustomerId(
   if (!referenceId && !opts.allowMissingReferenceId) {
     return { error: "Checkout is missing session binding metadata — cannot verify license ownership", status: 500 };
   }
-  return { customerId, createdAt: checkout.created_at, referenceId };
+  return {
+    customerId,
+    createdAt: checkout.created_at,
+    referenceId,
+    isExecutiveSupporter: isExecutiveSupporterCheckout(checkout.metadata),
+  };
 }
 
 export async function fetchNextCheckoutCreatedAt(customerId: string, organizationId: string, accessToken: string, opts: { checkoutId: string; checkoutCreatedAt: string }): Promise<{ createdAt: string | null } | { error: string; status: ContentfulStatusCode }> {
@@ -938,14 +981,16 @@ export async function claimLicenseKeysForCheckout(
     checkoutId: string;
     keys: string[];
     secret: string;
+    executiveSupporterLicenseKey?: string;
   },
 ): Promise<{ ok: true; keys: string[] } | { ok: false; error: string }> {
   try {
-    const { checkoutId, keys, secret } = claim;
+    const { checkoutId, keys, secret, executiveSupporterLicenseKey } = claim;
     if (!keys.length) return { ok: false, error: "No license keys were provided for this checkout" };
     const keyHashes = await Promise.all(keys.map((key) => hashKey(key)));
+    const executiveSupporterHash = executiveSupporterLicenseKey ? await hashKey(executiveSupporterLicenseKey) : null;
     const valuePlaceholders = keyHashes.map(() => "(?, ?)").join(", ");
-    const valueBindings = keyHashes.flatMap((keyHash) => [keyHash, 0]);
+    const valueBindings = keyHashes.flatMap((keyHash) => [keyHash, executiveSupporterHash === keyHash ? 1 : 0]);
     await db.prepare(
       `WITH incoming(license_key_hash, is_executive_supporter) AS (VALUES ${valuePlaceholders})
        INSERT INTO checkout_key_claims (license_key_hash, checkout_id, is_executive_supporter)

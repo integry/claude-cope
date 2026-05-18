@@ -418,7 +418,7 @@ describe("checkout key claims", () => {
     await expect(storeClaimedKeys(db, "checkout-a", ["COPE-1"], CLAIM_SECRET)).resolves.toEqual({ ok: true });
   });
 
-  it("does not assign executive supporter to an arbitrary key from a team-pack", async () => {
+  it("assigns executive supporter only to the designated checkout key", async () => {
     const calls: { sql: string; bindings: unknown[] }[] = [];
     const db = {
       prepare: vi.fn((sql: string) => ({
@@ -437,13 +437,14 @@ describe("checkout key claims", () => {
       checkoutId: "checkout-a",
       keys: ["COPE-1", "COPE-2"],
       secret: CLAIM_SECRET,
+      executiveSupporterLicenseKey: "COPE-1",
     });
 
     const claimBindings = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"))?.bindings;
     expect(claimBindings).toBeDefined();
     expect(claimBindings?.slice(0, 4)).toEqual([
       expect.any(String),
-      0,
+      1,
       expect.any(String),
       0,
     ]);
@@ -565,23 +566,29 @@ describe("syncExecutiveSupporterEntitlement", () => {
     expect(updateCall?.bindings).toEqual([1, 1, "hash-123"]);
   });
 
-  it("clears supporter vanity state when no supporter claim row is present", async () => {
+  it("preserves existing supporter state when no supporter claim row is present", async () => {
     const calls: { sql: string; bindings: unknown[] }[] = [];
     const db = {
       prepare: vi.fn((sql: string) => ({
         bind: vi.fn((...args: unknown[]) => {
           calls.push({ sql, bindings: args });
           return {
-            first: vi.fn().mockResolvedValue(sql.includes("SELECT is_executive_supporter FROM checkout_key_claims") ? null : null),
+            first: vi.fn().mockResolvedValue(
+              sql.includes("SELECT is_executive_supporter FROM checkout_key_claims")
+                ? null
+                : sql.includes("SELECT is_executive_supporter FROM user_scores")
+                  ? { is_executive_supporter: 1 }
+                  : null,
+            ),
             run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
           };
         }),
       })),
     } as unknown as D1Database;
 
-    await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toBe(false);
+    await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toBe(true);
     const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores"));
-    expect(updateCall?.bindings).toEqual([0, 0, "hash-123"]);
+    expect(updateCall).toBeUndefined();
   });
 });
 
@@ -604,6 +611,23 @@ describe("fetchCheckoutCustomerId", () => {
     await expect(fetchCheckoutCustomerId("co_123", "tok", "org")).resolves.toEqual({
       error: "Checkout is missing session binding metadata — cannot verify license ownership",
       status: 500,
+    });
+  });
+
+  it("detects executive supporter checkouts from Polar metadata", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      organization_id: "org",
+      status: "succeeded",
+      customer_id: "cust-1",
+      created_at: "2026-01-02T00:00:00Z",
+      metadata: { reference_id: "sess-1", tier: "Executive Supporter" },
+    }))) as typeof fetch;
+
+    await expect(fetchCheckoutCustomerId("co_123", "tok", "org")).resolves.toEqual({
+      customerId: "cust-1",
+      createdAt: "2026-01-02T00:00:00Z",
+      referenceId: "sess-1",
+      isExecutiveSupporter: true,
     });
   });
 });

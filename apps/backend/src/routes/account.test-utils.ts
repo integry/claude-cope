@@ -8,7 +8,7 @@ export function createMockDB(opts: {
 } = {}) {
   const calls: { sql: string; bindings: unknown[] }[] = [];
   const checkoutClaims = new Map<string, { sessionId?: string; encryptedKeys: string | null }>();
-  const keyOwners = new Map<string, string>();
+  const keyOwners = new Map<string, { checkoutId: string; isExecutiveSupporter: number }>();
   const resolveFirst = (sql: string, bindings: unknown[]) => {
     if (sql.includes("SELECT session_id, encrypted_keys FROM checkout_claims WHERE checkout_id = ?")) {
       const checkoutId = bindings[0] as string;
@@ -20,6 +20,11 @@ export function createMockDB(opts: {
       const checkoutId = bindings[0] as string;
       if (!checkoutClaims.has(checkoutId)) return null;
       return { encrypted_keys: checkoutClaims.get(checkoutId)?.encryptedKeys ?? null };
+    }
+    if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")) {
+      const licenseKeyHash = bindings[0] as string;
+      const claim = keyOwners.get(licenseKeyHash);
+      return claim ? { is_executive_supporter: claim.isExecutiveSupporter } : null;
     }
     if (opts.firstBySQL) {
       for (const [pattern, result] of Object.entries(opts.firstBySQL)) {
@@ -52,13 +57,23 @@ export function createMockDB(opts: {
       if (sql.includes("INSERT INTO checkout_key_claims")) {
         const bound = bindings as string[];
         const checkoutId = bound[bound.length - 1]!;
-        const licenseKeyHashes = bound.slice(0, -2).filter((_, index) => index % 2 === 0);
-        const hasConflict = licenseKeyHashes.some((licenseKeyHash) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash) !== checkoutId);
+        const incomingClaims = bound
+          .slice(0, -2)
+          .reduce<Array<{ licenseKeyHash: string; isExecutiveSupporter: number }>>((claims, value, index, values) => {
+            if (index % 2 === 0) {
+              claims.push({
+                licenseKeyHash: value as string,
+                isExecutiveSupporter: values[index + 1] as number,
+              });
+            }
+            return claims;
+          }, []);
+        const hasConflict = incomingClaims.some(({ licenseKeyHash }) => keyOwners.has(licenseKeyHash) && keyOwners.get(licenseKeyHash)?.checkoutId !== checkoutId);
         if (hasConflict) return { meta: { changes: 0 } };
         let inserted = 0;
-        for (const licenseKeyHash of licenseKeyHashes) {
+        for (const { licenseKeyHash, isExecutiveSupporter } of incomingClaims) {
           if (keyOwners.has(licenseKeyHash)) continue;
-          keyOwners.set(licenseKeyHash, checkoutId);
+          keyOwners.set(licenseKeyHash, { checkoutId, isExecutiveSupporter });
           inserted += 1;
         }
         return { meta: { changes: inserted } };
@@ -70,7 +85,7 @@ export function createMockDB(opts: {
         return {
           results: (bindings as string[])
             .filter((licenseKeyHash) => keyOwners.has(licenseKeyHash))
-            .map((licenseKeyHash) => ({ license_key_hash: licenseKeyHash, checkout_id: keyOwners.get(licenseKeyHash)! })),
+            .map((licenseKeyHash) => ({ license_key_hash: licenseKeyHash, checkout_id: keyOwners.get(licenseKeyHash)!.checkoutId })),
         };
       }
       return { results: [] };

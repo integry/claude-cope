@@ -181,7 +181,7 @@ async function resolveCheckoutRedemptionContext(
   c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
   deps: { checkoutId: string; sessionId: string; allowMissingReferenceBinding?: boolean },
 ): Promise<
-  | { customerId: string; checkoutCreatedAt: string }
+  | { customerId: string; checkoutCreatedAt: string; isExecutiveSupporter: boolean }
   | { response: Response }
 > {
   const accessToken = c.env?.POLAR_ACCESS_TOKEN;
@@ -207,7 +207,11 @@ async function resolveCheckoutRedemptionContext(
     return { response: c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500) };
   }
 
-  return { customerId: result.customerId, checkoutCreatedAt: result.createdAt };
+  return {
+    customerId: result.customerId,
+    checkoutCreatedAt: result.createdAt,
+    isExecutiveSupporter: result.isExecutiveSupporter,
+  };
 }
 
 async function redeemCheckoutLicense(
@@ -220,7 +224,7 @@ async function redeemCheckoutLicense(
 
   const accessToken = c.env?.POLAR_ACCESS_TOKEN as string;
   const organizationId = c.env?.POLAR_ORGANIZATION_ID as string;
-  const { customerId, checkoutCreatedAt } = redemptionContext;
+  const { customerId, checkoutCreatedAt, isExecutiveSupporter } = redemptionContext;
   const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
   const postClaimResolution = await resolveCachedOrStoredClaim(c, {
@@ -235,6 +239,7 @@ async function redeemCheckoutLicense(
     checkoutId,
     keys: lkResult.keys,
     secret: claimSecret,
+    executiveSupporterLicenseKey: isExecutiveSupporter ? lkResult.keys[0] : undefined,
   });
   if (!claimedKeys.ok) return mapClaimedKeysError(c, claimedKeys.error);
   return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: claimedKeys.keys });
