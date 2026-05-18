@@ -262,6 +262,24 @@ function hasValidAuthoritativeProfileFloor(state: GameState): boolean {
   );
 }
 
+function applyPresentationDefaults(state: GameState): void {
+  if (!state.activeTheme) {
+    state.activeTheme = "default";
+  }
+  if (!Array.isArray(state.unlockedThemes)) {
+    state.unlockedThemes = ["default"];
+  }
+  if (state.soundEnabled === undefined) {
+    state.soundEnabled = true;
+  }
+  if (state.isExecutiveSupporter === undefined) {
+    state.isExecutiveSupporter = false;
+  }
+  if (state.displayRank === undefined) {
+    state.displayRank = null;
+  }
+}
+
 function applyDefensiveDefaults(state: GameState): void {
   if (!Array.isArray(state.upgrades)) {
     state.upgrades = [];
@@ -295,15 +313,7 @@ function applyDefensiveDefaults(state: GameState): void {
   if (state.hasSeenTicketPrompt === undefined) {
     state.hasSeenTicketPrompt = false;
   }
-  if (!state.activeTheme) {
-    state.activeTheme = "default";
-  }
-  if (!Array.isArray(state.unlockedThemes)) {
-    state.unlockedThemes = ["default"];
-  }
-  if (state.soundEnabled === undefined) {
-    state.soundEnabled = true;
-  }
+  applyPresentationDefaults(state);
   if (!Array.isArray(state.pendingCompletedTaskIds)) {
     state.pendingCompletedTaskIds = [];
   }
@@ -312,12 +322,6 @@ function applyDefensiveDefaults(state: GameState): void {
   }
   if (!hasValidAuthoritativeProfileFloor(state)) {
     state.authoritativeProfileFloor = null;
-  }
-  if (state.isExecutiveSupporter === undefined) {
-    state.isExecutiveSupporter = false;
-  }
-  if (state.displayRank === undefined) {
-    state.displayRank = null;
   }
 }
 
