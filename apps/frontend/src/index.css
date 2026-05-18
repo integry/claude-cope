@@ -521,6 +521,16 @@ body {
   --color-text: #1a1a1a;
 }
 
+.theme-corporate-beige {
+  --color-bg: #e7dcc8;
+  --color-text: #4d4437;
+}
+
+.theme-syntax-error {
+  --color-bg: #200a0f;
+  --color-text: #ff5c8a;
+}
+
 .ticker-header-link {
   color: #9ca3af;
   cursor: pointer;
