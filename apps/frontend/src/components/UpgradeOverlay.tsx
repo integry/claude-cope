@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import {
   BACKLOG_CATEGORY_UPGRADE_GROUPS,
   PREMIUM_BACKLOG_CATEGORY_COUNT,
@@ -55,6 +56,17 @@ const PREMIUM_GROUP_SUMMARIES: Record<string, string> = {
 const PREMIUM_GROUP_DISPLAY_TITLES: Record<string, string> = {
   "marketing-growth-sludge": "Growth Sludge",
 };
+
+const MOBILE_OPTION_DETAILS = [
+  {
+    key: "single",
+    heading: "[OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]",
+    body: "One seat. Max 429X enabled (One-time extraction).",
+  },
+  {
+    key: "multi",
+  },
+] as const;
 
 function UpgradeOverlay({
   quotaPercent,
@@ -154,6 +166,59 @@ function MobileLayout({
     borderTop: `1px solid ${B}`,
     margin: 0,
   } as const;
+  const dismissButtonStyle = {
+    color: DIM,
+    fontSize: "14px",
+    background: "none",
+    border: "none",
+    padding: 0,
+    font: "inherit",
+    cursor: "pointer",
+  } as const;
+  const benchmarkCards = [
+    {
+      label: "Legacy AI",
+      outcome: "Outcome: Manageable pull requests",
+      color: DIM,
+      borderColor: DIM,
+      className: "upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-muted",
+    },
+    {
+      label: "Claude Cope",
+      outcome: "Outcome: Unmitigated request storms",
+      color: G,
+      borderColor: G,
+      className: "upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-accent",
+      fontWeight: "bold",
+    },
+  ] as const;
+  const mobileOptions = MOBILE_OPTION_DETAILS.map((option) => (
+    option.key === "single"
+      ? {
+          ...option,
+          ctaLabel: singleLabel,
+          ctaUrl: UPGRADE_CHECKOUT_SINGLE,
+          ctaAvailable: singleAvailable,
+          ctaPrimary: true,
+          extra: (
+            <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "8px", color: W }}>
+              Unlocks:{" "}
+              <span style={{ color: BW, fontWeight: "bold" }}>{PRO_QUOTA_LIMIT} non-expiring credits</span> and{" "}
+              <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>.
+            </div>
+          ),
+        }
+      : {
+          ...option,
+          heading: multiOptionHeading,
+          body: multiOptionDescription,
+          ctaLabel: multiLabel,
+          ctaUrl: UPGRADE_CHECKOUT_MULTI,
+          ctaAvailable: multiAvailable,
+          ctaPrimary: false,
+          extra: null,
+        }
+  ));
 
   // Links open in same tab so the app receives checkout_id on return navigation.
   const mobileButton = (
@@ -251,31 +316,17 @@ function MobileLayout({
           <span style={{ color: B, fontWeight: "bold", fontSize: "11px" }}>
             WALLET EXTRACTION UTILITY
           </span>
-          {dismissMode === "manual" ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDismiss();
-              }}
-              style={{ color: DIM, fontSize: "14px", background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
-              title="Tap to dismiss"
-            >
-              [x]
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDismiss();
-              }}
-              style={{ color: DIM, fontSize: "14px", background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer" }}
-              title="Tap to dismiss"
-            >
-              [x]
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDismiss();
+            }}
+            style={dismissButtonStyle}
+            title="Tap to dismiss"
+          >
+            [x]
+          </button>
         </div>
 
         <div
@@ -312,59 +363,41 @@ function MobileLayout({
 
           {/* Comparison table — stacked on mobile */}
           <div className="upgrade-mobile-section" style={{ ...sectionStyle, fontSize: "11px" }}>
-            <div
-              className="upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-muted"
-              style={{
-                border: `1px solid ${DIM}`,
-                marginBottom: "4px",
-                padding: "6px 8px",
-              }}
-            >
-              <span className="upgrade-mobile-benchmark-label" style={{ color: DIM }}>Legacy AI</span>
-              <span className="upgrade-mobile-benchmark-outcome">Outcome: Manageable pull requests</span>
-            </div>
-            <div
-              className="upgrade-mobile-benchmark-card upgrade-mobile-benchmark-card-accent"
-              style={{
-                border: `1px solid ${G}`,
-                padding: "6px 8px",
-              }}
-            >
-              <span className="upgrade-mobile-benchmark-label" style={{ color: G, fontWeight: "bold" }}>Claude Cope</span>
-              <span className="upgrade-mobile-benchmark-outcome">Outcome: Unmitigated request storms</span>
-            </div>
+            {benchmarkCards.map((card, index) => (
+              <div
+                key={card.label}
+                className={card.className}
+                style={{
+                  border: `1px solid ${card.borderColor}`,
+                  marginBottom: index === 0 ? "4px" : undefined,
+                  padding: "6px 8px",
+                }}
+              >
+                <span className="upgrade-mobile-benchmark-label" style={{ color: card.color, fontWeight: card.fontWeight }}>
+                  {card.label}
+                </span>
+                <span className="upgrade-mobile-benchmark-outcome">{card.outcome}</span>
+              </div>
+            ))}
           </div>
 
           <hr style={hrStyle} />
 
-          {/* Option 1 */}
-          <div className="upgrade-mobile-section" style={sectionStyle}>
-            <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
-              [OPTION 1: SINGLE LICENSE] [LEAST TERRIBLE]
+          {mobileOptions.map((option, index) => (
+            <div key={option.key}>
+              <div className="upgrade-mobile-section" style={sectionStyle}>
+                <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
+                  {option.heading}
+                </div>
+                <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: option.extra ? "4px" : "8px" }}>
+                  {option.body}
+                </div>
+                {option.extra}
+                {mobileButton(option.ctaLabel, option.ctaUrl, option.ctaAvailable, option.ctaPrimary)}
+              </div>
+              {index === 0 ? <div style={{ height: "1px" }} /> : null}
             </div>
-            <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: "4px" }}>
-              One seat. Max 429X enabled (One-time extraction).
-            </div>
-            <div style={{ fontSize: "11px", lineHeight: "1.5", marginBottom: "8px", color: W }}>
-              Unlocks:{" "}
-              <span style={{ color: BW, fontWeight: "bold" }}>{PRO_QUOTA_LIMIT} non-expiring credits</span> and{" "}
-              <span style={{ color: BW, fontWeight: "bold" }}>advanced Cope models</span>.
-            </div>
-            {mobileButton(singleLabel, UPGRADE_CHECKOUT_SINGLE, singleAvailable, true)}
-          </div>
-
-          <div style={{ height: "1px" }} />
-
-          {/* Option 2 */}
-          <div className="upgrade-mobile-section" style={sectionStyle}>
-            <div style={{ color: Y, fontWeight: "bold", marginBottom: "4px", fontSize: "12px" }}>
-              {multiOptionHeading}
-            </div>
-            <div style={{ fontSize: "12px", lineHeight: "1.5", marginBottom: "8px" }}>
-              {multiOptionDescription}
-            </div>
-            {mobileButton(multiLabel, UPGRADE_CHECKOUT_MULTI, multiAvailable, false)}
-          </div>
+          ))}
 
           <hr style={hrStyle} />
 
