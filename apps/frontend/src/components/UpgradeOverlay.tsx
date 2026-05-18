@@ -409,10 +409,21 @@ function MobileLayout({
             fontSize: "12px",
             cursor: "pointer",
             textAlign: "center",
+            position: "relative",
+            zIndex: 1,
+            flex: "0 0 auto",
           }}
           className="upgrade-esc-btn"
         >
-          <span data-esc="" style={{ color: DIM }}>
+          <span
+            data-esc=""
+            style={{
+              color: DIM,
+              display: "block",
+              width: "100%",
+              pointerEvents: "none",
+            }}
+          >
             [Tap to retain your net worth]
           </span>
         </button>
