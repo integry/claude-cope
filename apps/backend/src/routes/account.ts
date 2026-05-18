@@ -193,22 +193,27 @@ async function redeemCheckoutLicense(
     allowMissingReferenceId: deps.allowMissingReferenceBinding,
   });
   if ("error" in result) return c.json({ error: result.error }, result.status);
+  const referenceId = result.referenceId ?? null;
+  const checkoutCreatedAt = result.createdAt ?? null;
   const ownershipError = validateCheckoutOwnership(c, {
-    referenceId: result.referenceId,
+    referenceId,
     sessionId,
     allowMissingReferenceBinding: deps.allowMissingReferenceBinding,
-    createdAt: result.createdAt,
+    createdAt: checkoutCreatedAt,
   });
   if (ownershipError) return ownershipError;
-  const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt: result.createdAt });
+  if (!checkoutCreatedAt) {
+    return c.json({ error: "Checkout is missing creation timestamp — cannot verify license ownership" }, 500);
+  }
+  const claim = await claimCheckoutForSession(db, checkoutId, sessionId, { checkoutCreatedAt });
   if (!claim.ok) return c.json({ error: claim.error }, claim.retriable ? 503 : 403);
   const postClaimResolution = await resolveCachedOrStoredClaim(c, {
     db, kv, checkoutId, sessionId, claimSecret, cacheLookup: { status: "cached", keys: [], sessionMismatch: false, requiresStoredClaim: true },
   });
   if (postClaimResolution.response) return postClaimResolution.response;
-  const nextCheckout = await fetchNextCheckoutCreatedAt(result.customerId, organizationId, accessToken, { checkoutId, checkoutCreatedAt: result.createdAt });
+  const nextCheckout = await fetchNextCheckoutCreatedAt(result.customerId, organizationId, accessToken, { checkoutId, checkoutCreatedAt });
   if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
-  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: result.createdAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
+  const lkResult = await fetchLicenseKeys(result.customerId, organizationId, accessToken, { createdAt: checkoutCreatedAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
   const claimedKeys = await claimLicenseKeysForCheckout(db, {
     checkoutId,
