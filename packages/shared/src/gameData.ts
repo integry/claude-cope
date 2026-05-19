@@ -236,7 +236,7 @@ export const FREE_TIER_RANK_CAP = CORPORATE_RANKS[0]!.title;
 
 export const ALIAS_CHANGES_PER_DAY = 3;
 
-export const PROMOTE_ACCESS_DENIED_MESSAGE = "[HR ERROR] You have not accumulated enough leverage or spent enough fiat currency to earn a promotion. Run /upgrade to buy your way up the ladder.";
+export const PROMOTE_ACCESS_DENIED_MESSAGE = "[HR ERROR] Only Executive Supporters get to use /promote. Run /upgrade to buy your way into the vanity org chart.";
 
 export type SupporterVanityTitle = {
   id: string;

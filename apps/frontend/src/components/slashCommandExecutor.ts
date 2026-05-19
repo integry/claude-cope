@@ -865,7 +865,7 @@ const SUPPORTER_VANITY_TITLES_BY_ID = new Map(SUPPORTER_VANITY_TITLES.map((title
 function buildPromoteListMessage(currentDisplayRank: string | null | undefined): string {
   const header = [
     "[ EXECUTIVE VANITY OVERRIDE ]",
-    "You have bypassed HR. Select your unearned vanity title to display on the leaderboard:",
+    "Executive Supporter perk unlocked. Select your unearned vanity title to display on the leaderboard:",
     "",
     "ID          TITLE                          PROFILE",
     "----------  -----------------------------  ---------------------------------------------------------",
@@ -874,7 +874,7 @@ function buildPromoteListMessage(currentDisplayRank: string | null | undefined):
     const activeSuffix = currentDisplayRank === title.title ? " [ACTIVE]" : "";
     return `${title.id.padEnd(10, " ")}  ${title.title.padEnd(29, " ")}  ${title.profile}${activeSuffix}`;
   });
-  return `${header.join("\n")}\n${rows.join("\n")}\n\nType /promote <id> to overwrite your corporate rank and assert dominance.`;
+  return `${header.join("\n")}\n${rows.join("\n")}\n\nOnly Executive Supporters can use /promote. Type /promote <id> to overwrite your corporate rank and assert dominance.`;
 }
 
 async function handlePromoteCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<void> {

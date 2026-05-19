@@ -138,7 +138,15 @@ function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecuti
                     }`}
                     onClick={() => onSelect(item.value)}
                   >
-                    <span className={`whitespace-nowrap ${item.value === "/backlog" || item.value === "/model" || item.value === "/promote" ? "font-bold text-yellow-400" : ""}`}>
+                    <span
+                      className={`whitespace-nowrap ${
+                        item.value === "/backlog" || item.value === "/model"
+                          ? "font-bold text-yellow-400"
+                          : item.value === "/promote"
+                            ? "font-bold text-fuchsia-300"
+                            : ""
+                      }`}
+                    >
                       {item.value}
                       {item.argumentHint && <span className="ml-1 text-xs font-normal text-gray-500"> {item.argumentHint}</span>}
                     </span>
