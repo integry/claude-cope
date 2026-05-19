@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
 import { act } from "react";
