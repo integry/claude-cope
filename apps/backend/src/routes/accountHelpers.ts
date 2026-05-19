@@ -67,6 +67,18 @@ export type ExecutiveSupporterEntitlementSyncResult = {
   activatedNow: boolean;
 };
 
+export type SyncProfileErrorCode =
+  | "username_required"
+  | "session_required"
+  | "free_username_claim_forbidden"
+  | "sync_conflict"
+  | "profile_lookup_failed";
+
+type SyncProfileError = {
+  code: SyncProfileErrorCode;
+  message: string;
+};
+
 type ExecutiveSupporterActivationOptions = {
   username: string;
   licenseKeyHash: string;
@@ -95,67 +107,40 @@ export async function activateExecutiveSupporterIfNeeded(
   db: D1Database,
   opts: ExecutiveSupporterActivationOptions,
 ): Promise<boolean> {
-  const updateResult = opts.displayRank === undefined
-    ? await db
-      .prepare(
-        `UPDATE user_scores
-         SET is_executive_supporter = 1,
-             updated_at = datetime('now')
-         WHERE license_hash = ?
-           AND is_executive_supporter = 0`,
-      )
-      .bind(opts.licenseKeyHash)
-      .run()
-    : await db
-      .prepare(
-        `UPDATE user_scores
-         SET is_executive_supporter = 1,
-             display_rank = ?,
-             updated_at = datetime('now')
-         WHERE username = ? AND license_hash = ?
-           AND is_executive_supporter = 0
-           AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
-      )
-      .bind(opts.displayRank, opts.username, opts.licenseKeyHash)
-      .run();
-
-  const activatedNow = Number(updateResult.meta.changes ?? 0) > 0;
-  if (!activatedNow) {
-    return false;
-  }
-
-  try {
-    await emitExecutiveSupporterActivationEvent(db, opts.username);
-  } catch (err: unknown) {
-    if (opts.displayRank === undefined) {
-      await db
+  const statements = opts.displayRank === undefined
+    ? [
+      db
         .prepare(
           `UPDATE user_scores
-           SET is_executive_supporter = 0,
+           SET is_executive_supporter = 1,
                updated_at = datetime('now')
            WHERE license_hash = ?
-             AND is_executive_supporter = 1`,
+             AND is_executive_supporter = 0`,
         )
-        .bind(opts.licenseKeyHash)
-        .run();
-    } else {
-      await db
+        .bind(opts.licenseKeyHash),
+      db.prepare("INSERT INTO recent_events (message) SELECT ? WHERE changes() > 0")
+        .bind(buildExecutiveSupporterActivationMessage(opts.username)),
+      db.prepare("DELETE FROM recent_events WHERE id NOT IN (SELECT id FROM recent_events ORDER BY created_at DESC LIMIT 50)"),
+    ]
+    : [
+      db
         .prepare(
           `UPDATE user_scores
-           SET is_executive_supporter = 0,
-               display_rank = NULL,
+           SET is_executive_supporter = 1,
+               display_rank = ?,
                updated_at = datetime('now')
            WHERE username = ? AND license_hash = ?
-             AND is_executive_supporter = 1
-             AND display_rank = ?`,
+             AND is_executive_supporter = 0
+             AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
         )
-        .bind(opts.username, opts.licenseKeyHash, opts.displayRank)
-        .run();
-    }
-    throw err;
-  }
+        .bind(opts.displayRank, opts.username, opts.licenseKeyHash),
+      db.prepare("INSERT INTO recent_events (message) SELECT ? WHERE changes() > 0")
+        .bind(buildExecutiveSupporterActivationMessage(opts.username)),
+      db.prepare("DELETE FROM recent_events WHERE id NOT IN (SELECT id FROM recent_events ORDER BY created_at DESC LIMIT 50)"),
+    ];
 
-  return true;
+  const [updateResult] = await db.batch(statements);
+  return Number(updateResult.meta.changes ?? 0) > 0;
 }
 
 export async function syncExecutiveSupporterEntitlement(
@@ -282,7 +267,7 @@ function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
 
 type CreateProfileResult =
   | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; mutation: SyncProfileMutation; error?: undefined }
-  | { profile: null; error: string; mutation?: undefined };
+  | { profile: null; error: SyncProfileError; mutation?: undefined };
 
 export type SyncProfileMutation =
   | { kind: "none" }
@@ -292,7 +277,13 @@ export type SyncProfileMutation =
 async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<CreateProfileResult> {
   const newUsername = body.username?.trim();
   if (!newUsername) {
-    return { profile: null, error: "Username is required — please set a username before activating." };
+    return {
+      profile: null,
+      error: {
+        code: "username_required",
+        message: "Username is required — please set a username before activating.",
+      },
+    };
   }
 
   // Check if username already exists.
@@ -305,7 +296,15 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
     if (existing.license_hash === hash) {
       // Already belongs to this license — just return the existing profile
       const profile = await getProfile(db, existingUsername);
-      if (!profile) return { profile: null, error: "Profile not found after lookup" };
+      if (!profile) {
+        return {
+          profile: null,
+          error: {
+            code: "profile_lookup_failed",
+            message: "Profile not found after lookup",
+          },
+        };
+      }
       return { profile, mutation: { kind: "none" } };
     }
     if (existing.license_hash === null) {
@@ -316,11 +315,23 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
       // have no way to verify ownership of an existing free row, so refuse
       // the upgrade rather than allowing it unconditionally.
       if (!sessionContext) {
-        return { profile: null, error: "Session required to upgrade an existing username." };
+        return {
+          profile: null,
+          error: {
+            code: "session_required",
+            message: "Session required to upgrade an existing username.",
+          },
+        };
       }
       const boundUsername = await sessionContext.kv.get(accountKvKeys.sessionUser(sessionContext.sessionId));
       if (boundUsername?.toLowerCase() !== existingUsername.toLowerCase()) {
-        return { profile: null, error: "Cannot claim an existing free username — log in to that account first or pick a different username." };
+        return {
+          profile: null,
+          error: {
+            code: "free_username_claim_forbidden",
+            message: "Cannot claim an existing free username — log in to that account first or pick a different username.",
+          },
+        };
       }
       // Preserve the server-authoritative profile data (TD, inventory, etc.).
       // The WHERE clause includes `license_hash IS NULL` so that under a
@@ -332,14 +343,34 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
         .run();
       if (!upgradeResult.meta.changes) {
         // Another concurrent request already attached a license to this row.
-        return { profile: null, error: "This username was just claimed by another request. Please try again." };
+        return {
+          profile: null,
+          error: {
+            code: "sync_conflict",
+            message: "This username was just claimed by another request. Please try again.",
+          },
+        };
       }
       const profile = await getProfile(db, newUsername);
-      if (!profile) return { profile: null, error: "Profile not found after upgrade" };
+      if (!profile) {
+        return {
+          profile: null,
+          error: {
+            code: "profile_lookup_failed",
+            message: "Profile not found after upgrade",
+          },
+        };
+      }
       return { profile, mutation: { kind: "attached_license", username: newUsername, previousUsername: existingUsername } };
     }
     // Username is owned by a different license — refuse
-    return { profile: null, error: "This username is already taken. Please change your username and try again." };
+    return {
+      profile: null,
+      error: {
+        code: "sync_conflict",
+        message: "This username is already taken. Please change your username and try again.",
+      },
+    };
   }
 
   // New profile for a freshly activated license — use server-authoritative defaults.
@@ -368,19 +399,33 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
     // Catch UNIQUE constraint violations from concurrent /sync requests racing
     // on the same username or license_hash.
     if (msg.includes("UNIQUE") || msg.includes("unique") || msg.includes("constraint")) {
-      return { profile: null, error: "This username or license is being activated by another request. Please try again." };
+      return {
+        profile: null,
+        error: {
+          code: "sync_conflict",
+          message: "This username or license is being activated by another request. Please try again.",
+        },
+      };
     }
     throw err;
   }
 
   const profile = await getProfile(db, newUsername);
-  if (!profile) return { profile: null, error: "Failed to create profile" };
+  if (!profile) {
+    return {
+      profile: null,
+      error: {
+        code: "profile_lookup_failed",
+        message: "Failed to create profile",
+      },
+    };
+  }
   return { profile, mutation: { kind: "created", username: newUsername } };
 }
 
 export type ResolveProfileResult =
   | { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; mutation: SyncProfileMutation; error?: undefined }
-  | { restored: false; profile: null; error: string; mutation?: undefined };
+  | { restored: false; profile: null; error: SyncProfileError; mutation?: undefined };
 
 export async function resolveProfile(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<ResolveProfileResult> {
   // Case 1: Existing profile with this license_hash → restore (cross-device sync)

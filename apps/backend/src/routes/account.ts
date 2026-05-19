@@ -5,7 +5,7 @@ import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
 import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, rollbackSyncSideEffects, activateExecutiveSupporterIfNeeded } from "./accountHelpers";
-import type { CheckoutCache, ResolveProfileResult, SyncProfileMutation } from "./accountHelpers";
+import type { CheckoutCache, ResolveProfileResult, SyncProfileErrorCode, SyncProfileMutation } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 import { issueFreeAccountCookie } from "../utils/freeAccountIdentity";
@@ -420,15 +420,23 @@ async function ensureDisplayRankSupporterAccess(
   return claimed;
 }
 
+function getSyncProfileErrorStatus(code: SyncProfileErrorCode): number {
+  switch (code) {
+    case "sync_conflict":
+      return 409;
+    case "username_required":
+    case "session_required":
+    case "free_username_claim_forbidden":
+    case "profile_lookup_failed":
+      return 403;
+  }
+}
+
 function respondWithSyncProfileError(
   c: { json: (data: unknown, status?: number) => Response },
-  error: string,
+  error: { code: SyncProfileErrorCode; message: string },
 ) {
-  const isConflict =
-    error.includes("already taken")
-    || error.includes("just claimed")
-    || error.includes("being activated");
-  return c.json({ error }, isConflict ? 409 : 403);
+  return c.json({ error: error.message }, getSyncProfileErrorStatus(error.code));
 }
 
 async function rollbackSyncProfileMutation(
@@ -452,7 +460,7 @@ async function rollbackSyncProfileMutation(
 
 async function finalizeSyncProfile(
   deps: { db: D1Database; kv: KVNamespace; hash: string; validationId?: string; proInitialQuota: number },
-  result: Exclude<ResolveProfileResult, { profile: null }>,
+  result: { profile: NonNullable<Exclude<ResolveProfileResult, { profile: null }>["profile"]>; mutation: SyncProfileMutation },
 ) {
   let sideEffectsSnapshot: Awaited<ReturnType<typeof commitSyncSideEffects>>;
   try {
@@ -570,7 +578,7 @@ account.post("/sync", async (c) => {
   if (result.profile === null) {
     return respondWithSyncProfileError(c, result.error);
   }
-  const resolvedProfile = result;
+  const resolvedProfile: { restored: boolean; profile: typeof result.profile; mutation: SyncProfileMutation } = result;
 
   // Profile claim succeeded — now provision the licenses row and KV quota.
   // This ordering ensures that failed syncs never produce orphaned active

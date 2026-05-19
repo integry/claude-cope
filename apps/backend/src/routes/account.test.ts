@@ -2440,17 +2440,6 @@ describe("POST /api/account/update-display-rank", () => {
                 claimedSupporterHash = supporterHash;
                 return { meta: { changes: 1 } };
               }
-              if (sql.includes("UPDATE user_scores") && sql.includes("SET is_executive_supporter = 1")) {
-                const changes = currentSupporter === 0 ? 1 : 0;
-                currentSupporter = 1;
-                currentDisplayRank = bindings[0] as string | null;
-                return { meta: { changes } };
-              }
-              if (sql.includes("UPDATE user_scores") && sql.includes("SET is_executive_supporter = 0")) {
-                currentSupporter = 0;
-                currentDisplayRank = null;
-                return { meta: { changes: 1 } };
-              }
               if (sql.includes("UPDATE user_scores SET display_rank = ?")) {
                 currentDisplayRank = bindings[0] as string | null;
                 return { meta: { changes: 1 } };
@@ -2463,11 +2452,22 @@ describe("POST /api/account/update-display-rank", () => {
         run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
       })),
       batch: vi.fn().mockImplementation(async (statements: Array<{ sql?: string; bindings?: unknown[] }>) => {
+        const updateStatement = statements.find((statement) => statement.sql?.includes("UPDATE user_scores") && statement.sql.includes("SET is_executive_supporter = 1"));
         const insertStatement = statements.find((statement) => statement.sql?.includes("INSERT INTO recent_events"));
+        if (updateStatement) {
+          const displayRank = updateStatement.bindings?.[0] as string | null;
+          const changes = currentSupporter === 0 ? 1 : 0;
+          currentSupporter = 1;
+          currentDisplayRank = displayRank;
+          if (insertStatement?.bindings?.[0]) {
+            recentEvents.push(String(insertStatement.bindings[0]));
+          }
+          return [{ meta: { changes } }, { meta: { changes } }, { meta: { changes: 1 } }];
+        }
         if (insertStatement?.bindings?.[0]) {
           recentEvents.push(String(insertStatement.bindings[0]));
         }
-        return [];
+        return [{ meta: { changes: 1 } }];
       }),
     };
 
@@ -2537,10 +2537,6 @@ describe("POST /api/account/update-display-rank", () => {
                 claimedSupporterHash = supporterHash;
                 return { meta: { changes: 1 } };
               }
-              if (sql.includes("UPDATE user_scores") && sql.includes("SET is_executive_supporter = 1")) {
-                currentSupporter = 1;
-                return { meta: { changes: 0 } };
-              }
               if (sql.includes("UPDATE user_scores SET display_rank = ?")) {
                 currentDisplayRank = bindings[0] as string | null;
                 return { meta: { changes: 1 } };
@@ -2553,11 +2549,16 @@ describe("POST /api/account/update-display-rank", () => {
         run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
       })),
       batch: vi.fn().mockImplementation(async (statements: Array<{ sql?: string; bindings?: unknown[] }>) => {
+        const updateStatement = statements.find((statement) => statement.sql?.includes("UPDATE user_scores") && statement.sql.includes("SET is_executive_supporter = 1"));
         const insertStatement = statements.find((statement) => statement.sql?.includes("INSERT INTO recent_events"));
+        if (updateStatement) {
+          currentSupporter = 1;
+          return [{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 1 } }];
+        }
         if (insertStatement?.bindings?.[0]) {
           recentEvents.push(String(insertStatement.bindings[0]));
         }
-        return [];
+        return [{ meta: { changes: 1 } }];
       }),
     };
 

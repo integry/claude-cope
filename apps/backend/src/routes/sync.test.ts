@@ -208,11 +208,20 @@ describe("POST /api/account/sync", () => {
       })),
       exec: vi.fn().mockResolvedValue({ results: [] }),
       batch: vi.fn().mockImplementation(async (statements: Array<{ sql?: string; bindings?: unknown[] }>) => {
+        const updateStatement = statements.find((statement) => statement.sql?.includes("UPDATE user_scores") && statement.sql.includes("SET is_executive_supporter = 1"));
         const insertStatement = statements.find((statement) => statement.sql?.includes("INSERT INTO recent_events"));
+        if (updateStatement) {
+          const changes = currentSupporter === 0 ? 1 : 0;
+          currentSupporter = 1;
+          if (changes > 0 && insertStatement?.bindings?.[0]) {
+            recentEvents.push(String(insertStatement.bindings[0]));
+          }
+          return [{ meta: { changes } }, { meta: { changes } }, { meta: { changes: 1 } }];
+        }
         if (insertStatement?.bindings?.[0]) {
           recentEvents.push(String(insertStatement.bindings[0]));
         }
-        return [];
+        return [{ meta: { changes: 1 } }];
       }),
     };
     const kv = mockKV();
@@ -240,7 +249,6 @@ describe("POST /api/account/sync", () => {
     expect(recentEvents).toEqual([
       "[LIVE] 👑 alice just expensed the Executive Supporter Pack. Respect the grift.",
     ]);
-    expect(calls.filter((call) => call.sql.includes("INSERT INTO recent_events"))).toHaveLength(1);
   });
 
   it("retries executive supporter activation after a transient recent-events insert failure", async () => {
@@ -266,18 +274,7 @@ describe("POST /api/account/sync", () => {
             }
             return null;
           }),
-          run: vi.fn().mockImplementation(async () => {
-            if (sql.includes("UPDATE user_scores")) {
-              if (sql.includes("SET is_executive_supporter = 0")) {
-                currentSupporter = 0;
-                return { meta: { changes: 1 } };
-              }
-              const changes = currentSupporter === 0 ? 1 : 0;
-              currentSupporter = 1;
-              return { meta: { changes } };
-            }
-            return { meta: { changes: 1 } };
-          }),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
           all: vi.fn().mockResolvedValue({ results: [] }),
         })),
         run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
@@ -286,16 +283,21 @@ describe("POST /api/account/sync", () => {
       })),
       exec: vi.fn().mockResolvedValue({ results: [] }),
       batch: vi.fn().mockImplementation(async (statements: Array<{ sql?: string; bindings?: unknown[] }>) => {
+        const updateStatement = statements.find((statement) => statement.sql?.includes("UPDATE user_scores") && statement.sql.includes("SET is_executive_supporter = 1"));
         const insertStatement = statements.find((statement) => statement.sql?.includes("INSERT INTO recent_events"));
-        if (!insertStatement) return [];
+        if (!insertStatement) return [{ meta: { changes: 1 } }];
         if (failNextRecentEventInsert) {
           failNextRecentEventInsert = false;
           throw new Error("recent event insert failed");
         }
+        const changes = currentSupporter === 0 ? 1 : 0;
+        if (updateStatement && changes > 0) {
+          currentSupporter = 1;
+        }
         if (insertStatement.bindings?.[0]) {
           recentEvents.push(String(insertStatement.bindings[0]));
         }
-        return [];
+        return [{ meta: { changes } }, { meta: { changes } }, { meta: { changes: 1 } }];
       }),
     };
     const kv = mockKV();

@@ -646,7 +646,7 @@ describe("syncExecutiveSupporterEntitlement", () => {
           run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
         };
       }),
-      batch: vi.fn().mockResolvedValue([]),
+      batch: vi.fn().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }]),
     } as unknown as D1Database;
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
@@ -681,7 +681,7 @@ describe("syncExecutiveSupporterEntitlement", () => {
           };
         }),
       })),
-      batch: vi.fn().mockResolvedValue([]),
+      batch: vi.fn().mockResolvedValue([{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]),
     } as unknown as D1Database;
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
@@ -716,14 +716,13 @@ describe("syncExecutiveSupporterEntitlement", () => {
         }),
         run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
       })),
-      batch: vi.fn().mockResolvedValue([]),
+      batch: vi.fn().mockResolvedValue([{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]),
     } as unknown as D1Database;
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
       isExecutiveSupporter: true,
       activatedNow: false,
     });
-    expect(calls.some((call) => call.sql.includes("INSERT INTO recent_events"))).toBe(false);
   });
 
   it("does not emit an activation event for a non-supporter entitlement", async () => {
