@@ -35,40 +35,81 @@ import { useIsMobileViewport } from "./useIsMobileViewport";
 export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
 type PromptSubmission = { command: string; replayId: number | null; submissionId: number };
 const createPromptLoadingMessage = (submissionId: number): Message => ({ id: submissionId, role: "loading", content: getRandomLoadingPhrase() });
-const removePromptMessages = (submissionId: number) => (prev: Message[]) => prev.filter((message) => !(message.id === submissionId && (message.role === "user" || message.role === "loading")));
+const removePromptMessages = (submissionId: number) => (prev: Message[]) =>
+  prev.filter((message) => !(message.id === submissionId && (message.role === "user" || message.role === "loading")));
 
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
-  const history = state.chatHistory; const setHistory = setChatHistory;
-  const creditTD = useCallback((amount: number) => addActiveTD(amount, true), [addActiveTD]); const debitTD = useCallback((amount: number) => setState((prev) => ({ ...prev, economy: { ...prev.economy, currentTD: Math.max(0, prev.economy.currentTD - amount) } })), [setState]);
-  const activeTicketRef = useRef(state.activeTicket); activeTicketRef.current = state.activeTicket;
+  const history = state.chatHistory;
+  const setHistory = setChatHistory;
+  const creditTD = useCallback((amount: number) => addActiveTD(amount, true), [addActiveTD]);
+  const debitTD = useCallback((amount: number) => setState((prev) => ({ ...prev, economy: { ...prev.economy, currentTD: Math.max(0, prev.economy.currentTD - amount) } })), [setState]);
+  const activeTicketRef = useRef(state.activeTicket);
+  activeTicketRef.current = state.activeTicket;
   const applyReviewSprintBoost = useCallback((ticketId: string, boost: number) => {
     if (activeTicketRef.current?.id === ticketId) updateTicketProgress(boost);
   }, [updateTicketProgress]);
   const { onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, outageHp, activeOutageScenario, sendDamage } = useMultiplayer({
     username: state.username, setHistory, applyOutageReward, applyOutagePenalty, creditTD, debitTD, applyReviewSprintBoost,
   });
-  const rank = state.displayRank ?? state.economy.currentRank; const isMobileViewport = useIsMobileViewport();
+  const rank = state.displayRank ?? state.economy.currentRank;
+  const isMobileViewport = useIsMobileViewport();
   const { isBooting, regressionGlitch, activeRegression } = useTerminalEffects({ history, setHistory, setState, totalTDEarned: state.economy.totalTDEarned, offlineTDEarned, clearOfflineTDEarned });
   const { playError, playChime } = useSoundEffects(state.soundEnabled);
-  const [instantBanReady, setInstantBanReady] = useState(false); const [commandHistory, setCommandHistory] = useState<string[]>([]); const [historyIndex, setHistoryIndex] = useState(-1);
-  const [slashQuery, setSlashQuery] = useState(""); const [slashIndex, setSlashIndex] = useState(0); const [inputValue, setInputValue] = useState(""); const suggestedReply = state.suggestedReply ?? null;
+  const [instantBanReady, setInstantBanReady] = useState(false);
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [slashQuery, setSlashQuery] = useState("");
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [inputValue, setInputValue] = useState("");
+  const suggestedReply = state.suggestedReply ?? null;
   const overlays = useOverlays();
   const { closeAllOverlays, ...terminalOverlayProps } = overlays;
   const { showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade } = terminalOverlayProps;
-  const [bragPending, setBragPending] = useState(false); const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false); const [clearCount, setClearCount] = useState(0);
-  const [compactEffect, setCompactEffect] = useState(false); const [freeCommandCount, setFreeCommandCount] = useState(0); const pingAcknowledged = usePingAcknowledged(pendingReviewPing);
-  const inputRef = useRef<HTMLInputElement>(null); const scrollViewportRef = useRef<HTMLDivElement>(null); const bottomRef = useRef<HTMLDivElement>(null); const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const initialHistoryLen = useRef(history.length); const messageKeys = useRef<number[]>([]); const messageKeyMap = useRef(new WeakMap<Message, number>()); const nextKeyId = useRef(0);
+  const [bragPending, setBragPending] = useState(false);
+  const [buddyPendingConfirm, setBuddyPendingConfirm] = useState(false);
+  const [clearCount, setClearCount] = useState(0);
+  const [compactEffect, setCompactEffect] = useState(false);
+  const [freeCommandCount, setFreeCommandCount] = useState(0);
+  const pingAcknowledged = usePingAcknowledged(pendingReviewPing);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const initialHistoryLen = useRef(history.length);
+  const messageKeys = useRef<number[]>([]);
+  const messageKeyMap = useRef(new WeakMap<Message, number>());
+  const nextKeyId = useRef(0);
   syncMessageKeys(messageKeys.current, nextKeyId, history, messageKeyMap.current);
-  const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null }); const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const historyRef = useRef(history); historyRef.current = history;
-  const hasScrolledTerminalToBottomOnLoadRef = useRef(false); const wasMobileRequestProcessingRef = useRef(false); const activeMobilePromptKeyRef = useRef<number | null>(null);
-  const mobilePromptFollowFrameRef = useRef<number | null>(null); const mobilePromptFollowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); const lastMobilePromptScrollHeightRef = useRef(0); const lastMobilePromptGrowthAtRef = useRef(0);
-  const lastSuggestedReplyRef = useRef<string | null>(null); const nextPendingBacklogRollbackIdRef = useRef(0); const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>()); const nextPromptSubmissionIdRef = useRef(0);
+  const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
+  const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyRef = useRef(history);
+  historyRef.current = history;
+  const hasScrolledTerminalToBottomOnLoadRef = useRef(false);
+  const wasMobileRequestProcessingRef = useRef(false);
+  const activeMobilePromptKeyRef = useRef<number | null>(null);
+  const mobilePromptFollowFrameRef = useRef<number | null>(null);
+  const mobilePromptFollowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastMobilePromptScrollHeightRef = useRef(0);
+  const lastMobilePromptGrowthAtRef = useRef(0);
+  const lastSuggestedReplyRef = useRef<string | null>(null);
+  const nextPendingBacklogRollbackIdRef = useRef(0);
+  const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
+  const nextPromptSubmissionIdRef = useRef(0);
   const commandHistoryEntriesRef = useRef<Array<{ submissionId: number; command: string }>>([]);
-  const promptString = getPromptString(activeRegression); const isFreeTier = isFreeUser(state); const anyOverlayOpen = isAnyOverlayOpen(overlays);
-  const { abortControllerRef, createPromptProcessingSetter, isProcessing, resetPromptProcessing, setIsProcessing, startPromptProcessing, trackAbortController, untrackAbortController } = usePromptSubmissionState();
+  const promptString = getPromptString(activeRegression);
+  const isFreeTier = isFreeUser(state);
+  const anyOverlayOpen = isAnyOverlayOpen(overlays);
+  const {
+    abortControllerRef,
+    createPromptProcessingSetter,
+    isProcessing,
+    resetPromptProcessing,
+    setIsProcessing,
+    startPromptProcessing,
+    trackAbortController,
+    untrackAbortController,
+  } = usePromptSubmissionState();
   const { recordConversationRound, recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
   const resolveScrollViewport = useCallback((): HTMLDivElement | null => {
     if (scrollViewportRef.current) return scrollViewportRef.current;
@@ -76,17 +117,38 @@ function Terminal() {
     return document.querySelector<HTMLDivElement>('[data-terminal-scroll-viewport="true"]');
   }, []);
   const stopMobilePromptFollowLoop = useCallback(() => {
-    if (mobilePromptFollowFrameRef.current !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(mobilePromptFollowFrameRef.current);
-    mobilePromptFollowFrameRef.current = null; if (mobilePromptFollowTimeoutRef.current) clearTimeout(mobilePromptFollowTimeoutRef.current); mobilePromptFollowTimeoutRef.current = null;
+    if (mobilePromptFollowFrameRef.current !== null && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(mobilePromptFollowFrameRef.current);
+    }
+    mobilePromptFollowFrameRef.current = null;
+    if (mobilePromptFollowTimeoutRef.current) {
+      clearTimeout(mobilePromptFollowTimeoutRef.current);
+    }
+    mobilePromptFollowTimeoutRef.current = null;
   }, []);
   const scrollTerminalToBottom = useCallback(() => {
     const viewport = resolveScrollViewport();
-    if (viewport) return void requestAnimationFrame(() => { viewport.scrollTop = viewport.scrollHeight; });
-    if (typeof bottomRef.current?.scrollIntoView === "function") bottomRef.current.scrollIntoView({ behavior: "auto", block: "end" });
+    if (viewport) {
+      requestAnimationFrame(() => {
+        viewport.scrollTop = viewport.scrollHeight;
+      });
+      return;
+    }
+    if (typeof bottomRef.current?.scrollIntoView === "function") {
+      bottomRef.current.scrollIntoView({ behavior: "auto", block: "end" });
+    }
   }, [resolveScrollViewport]);
-  useEffect(() => () => { stopMobilePromptFollowLoop(); }, [stopMobilePromptFollowLoop]);
-  useEffect(() => () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); }, []);
-  useEffect(() => () => { if (startupTicketPromptTimeoutRef.current) clearTimeout(startupTicketPromptTimeoutRef.current); }, []);
+  useEffect(() => () => {
+    stopMobilePromptFollowLoop();
+  }, [stopMobilePromptFollowLoop]);
+  useEffect(() => () => {
+    const ds = freeTierDelayRef.current;
+    ds.cancelled = true;
+    if (ds.timeoutId) clearTimeout(ds.timeoutId);
+  }, []);
+  useEffect(() => () => {
+    if (startupTicketPromptTimeoutRef.current) clearTimeout(startupTicketPromptTimeoutRef.current);
+  }, []);
   const scheduleHistoryCommitCallback = useHistoryCommitQueue(history.length);
   const setPersistedSuggestedReply = useCallback((nextSuggestedReply: string | null) => {
     setState((prev) => prev.suggestedReply === nextSuggestedReply ? prev : { ...prev, suggestedReply: nextSuggestedReply });
@@ -95,7 +157,9 @@ function Terminal() {
     const nextEntries = updater(commandHistoryEntriesRef.current); commandHistoryEntriesRef.current = nextEntries; setCommandHistory(nextEntries.map(({ command }) => command));
   }, []);
   const unlockAchievementWithSound = useCallback((id: string): boolean => {
-    const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew;
+    const isNew = unlockAchievement(id);
+    if (isNew) playChime();
+    return isNew;
   }, [unlockAchievement, playChime]);
   const handleSuggestedReply = useCallback((suggestion: string) => {
     const merged = mergeSuggestedReply(lastSuggestedReplyRef.current, suggestion);
@@ -108,7 +172,23 @@ function Terminal() {
     setCommandHistoryEntries((prev) => [...prev, { submissionId, command }]);
     processCommandRef.current({ command, replayId, submissionId });
   }, [setCommandHistoryEntries]);
-  const { closeAllOverlaysAndRestoreNag, closeAllOverlaysPreservingNag, dismissUpgradeOverlay: dismissUpgradeNagOverlay, handleUpgradeNagClose, nagArmedFromQuotaRef, openUpgradeNag, pendingNagCommand, pendingNagCommandRef, settleAcceptedNagReplay, upgradeNagDismissEffect, upgradeNagDismissPhase } = useUpgradeNagState({ closeAllOverlays, setInputValue, setShowUpgrade });
+  const {
+    closeAllOverlaysAndRestoreNag,
+    closeAllOverlaysPreservingNag,
+    dismissUpgradeOverlay: dismissUpgradeNagOverlay,
+    handleUpgradeNagClose,
+    nagArmedFromQuotaRef,
+    openUpgradeNag,
+    pendingNagCommand,
+    pendingNagCommandRef,
+    settleAcceptedNagReplay,
+    upgradeNagDismissEffect,
+    upgradeNagDismissPhase,
+  } = useUpgradeNagState({
+    closeAllOverlays,
+    setInputValue,
+    setShowUpgrade,
+  });
   const handleProfileClick = useCallback(() => {
     closeAllOverlaysPreservingNag();
     setShowProfile(true);
@@ -122,9 +202,18 @@ function Terminal() {
     }
     scrollTerminalToBottom();
   }, [closeAllOverlays, dismissUpgradeNagOverlay, scrollTerminalToBottom]);
-  useEffect(() => { lastSuggestedReplyRef.current = suggestedReply; }, [suggestedReply]);
-  useEffect(() => { if (hasScrolledTerminalToBottomOnLoadRef.current) return; hasScrolledTerminalToBottomOnLoadRef.current = true; scrollTerminalToBottom(); }, [scrollTerminalToBottom]);
-  useEffect(() => { if (isMobileViewport) return; scrollTerminalToBottom(); }, [history, isMobileViewport, scrollTerminalToBottom]);
+  useEffect(() => {
+    lastSuggestedReplyRef.current = suggestedReply;
+  }, [suggestedReply]);
+  useEffect(() => {
+    if (hasScrolledTerminalToBottomOnLoadRef.current) return;
+    hasScrolledTerminalToBottomOnLoadRef.current = true;
+    scrollTerminalToBottom();
+  }, [scrollTerminalToBottom]);
+  useEffect(() => {
+    if (isMobileViewport) return;
+    scrollTerminalToBottom();
+  }, [history, isMobileViewport, scrollTerminalToBottom]);
   useEffect(() => {
     if (!isMobileViewport) {
       wasMobileRequestProcessingRef.current = isProcessing;
@@ -146,8 +235,16 @@ function Terminal() {
     if (latestPromptKey == null) return;
     const viewport = resolveScrollViewport();
     const justFinishedProcessing = wasMobileRequestProcessingRef.current && !isProcessing;
-    if (isProcessing && activeMobilePromptKeyRef.current !== latestPromptKey) activeMobilePromptKeyRef.current = latestPromptKey;
-    if ((isProcessing || justFinishedProcessing) && viewport) { lastMobilePromptScrollHeightRef.current = viewport.scrollHeight; lastMobilePromptGrowthAtRef.current = Date.now(); }
+    if (isProcessing && activeMobilePromptKeyRef.current !== latestPromptKey) {
+      activeMobilePromptKeyRef.current = latestPromptKey;
+    }
+    if (isProcessing && viewport) {
+      lastMobilePromptScrollHeightRef.current = viewport.scrollHeight;
+      lastMobilePromptGrowthAtRef.current = Date.now();
+    } else if (justFinishedProcessing && viewport) {
+      lastMobilePromptScrollHeightRef.current = viewport.scrollHeight;
+      lastMobilePromptGrowthAtRef.current = Date.now();
+    }
     const trackedPromptKey = activeMobilePromptKeyRef.current;
     const shouldTrack = trackedPromptKey === latestPromptKey && (isProcessing || justFinishedProcessing);
     wasMobileRequestProcessingRef.current = isProcessing;
@@ -155,28 +252,47 @@ function Terminal() {
     stopMobilePromptFollowLoop();
     const runFollowFrame = () => {
       const currentPromptKey = activeMobilePromptKeyRef.current;
-      if (currentPromptKey !== latestPromptKey) { mobilePromptFollowFrameRef.current = null; return; }
+      if (currentPromptKey !== latestPromptKey) {
+        mobilePromptFollowFrameRef.current = null;
+        return;
+      }
       const currentViewport = resolveScrollViewport();
       const target = document.querySelector<HTMLElement>(`[data-message-key="${latestPromptKey}"]`);
-      if (!currentViewport || !target) { mobilePromptFollowFrameRef.current = null; return; }
+      if (!currentViewport || !target) {
+        mobilePromptFollowFrameRef.current = null;
+        return;
+      }
       const viewportRect = currentViewport.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
       const promptReachedTop = targetRect.top <= viewportRect.top + 1;
       const maxScrollTop = currentViewport.scrollHeight - currentViewport.clientHeight;
       const now = Date.now();
-      if (currentViewport.scrollHeight !== lastMobilePromptScrollHeightRef.current) { lastMobilePromptScrollHeightRef.current = currentViewport.scrollHeight; lastMobilePromptGrowthAtRef.current = now; }
+      if (currentViewport.scrollHeight !== lastMobilePromptScrollHeightRef.current) {
+        lastMobilePromptScrollHeightRef.current = currentViewport.scrollHeight;
+        lastMobilePromptGrowthAtRef.current = now;
+      }
       if (!promptReachedTop) {
         const remainingDistance = Math.max(0, maxScrollTop - currentViewport.scrollTop);
-        const nextStep = remainingDistance > 0 ? Math.max(12, Math.min(remainingDistance, remainingDistance * 0.18)) : 0;
+        const nextStep = remainingDistance > 0
+          ? Math.max(12, Math.min(remainingDistance, remainingDistance * 0.18))
+          : 0;
         currentViewport.scrollTop = Math.min(maxScrollTop, currentViewport.scrollTop + nextStep);
       }
       const quietMs = now - lastMobilePromptGrowthAtRef.current;
       const isStuckAtBottom = currentViewport.scrollTop >= maxScrollTop && !promptReachedTop;
-      const shouldContinue = activeMobilePromptKeyRef.current === latestPromptKey && !promptReachedTop && (isProcessing || quietMs < 1000);
+      const shouldContinue =
+        activeMobilePromptKeyRef.current === latestPromptKey &&
+        !promptReachedTop &&
+        (isProcessing || quietMs < 1000);
       if (shouldContinue) {
         if (isStuckAtBottom && !isProcessing) {
-          mobilePromptFollowTimeoutRef.current = setTimeout(() => { mobilePromptFollowTimeoutRef.current = null; mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame); }, 80);
-        } else mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
+          mobilePromptFollowTimeoutRef.current = setTimeout(() => {
+            mobilePromptFollowTimeoutRef.current = null;
+            mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
+          }, 80);
+        } else {
+          mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
+        }
         return;
       }
       if (promptReachedTop) activeMobilePromptKeyRef.current = null;
@@ -204,7 +320,12 @@ function Terminal() {
       setState((prev) => (prev.hasSeenTicketPrompt || prev.activeTicket ? prev : { ...prev, hasSeenTicketPrompt: true }));
       void fetchRandomTicketPrompt(setHistory, currentState.proKeyHash);
     }, STARTUP_TICKET_PROMPT_DELAY_MS);
-    return () => { if (startupTicketPromptTimeoutRef.current) { clearTimeout(startupTicketPromptTimeoutRef.current); startupTicketPromptTimeoutRef.current = null; } };
+    return () => {
+      if (startupTicketPromptTimeoutRef.current) {
+        clearTimeout(startupTicketPromptTimeoutRef.current);
+        startupTicketPromptTimeoutRef.current = null;
+      }
+    };
   }, [getCurrentState, isBooting, state.hasSeenTicketPrompt, state.activeTicket, state.proKeyHash, setState, setHistory]);
   const handleQuotaLockout = useCallback((command?: string) => {
     if (!state.proKey && !state.proKeyHash) {
@@ -218,7 +339,7 @@ function Terminal() {
     handleQuotaLockout(command);
     return true;
   }, [state.proKey, state.proKeyHash, state.economy.quotaPercent, handleQuotaLockout]);
-  const handleInstantBan = useCallback(() => { triggerInstantBan({ setInstantBanReady, setIsProcessing, playError, setHistory }); }, [playError, setHistory, setIsProcessing]);
+  const handleInstantBan = useCallback(() => { triggerInstantBan({ setInstantBanReady, setIsProcessing, playError, setHistory }); }, [setIsProcessing, playError, setHistory]);
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = getNextTerminalInputValue(inputValue, e.target.value, activeRegression === "backwards_typing");
     setInputValue(value);
@@ -227,7 +348,8 @@ function Terminal() {
     setSlashQuery(value.startsWith("/") ? value : "");
     setSlashIndex(0);
   };
-  const getFilteredSlashCommands = () => getSlashMenuItems(slashQuery, state.economy.totalTDEarned, isPaidUser(state)).map((item) => item.value);
+  const getFilteredSlashCommands = () =>
+    getSlashMenuItems(slashQuery, state.economy.totalTDEarned, isPaidUser(state)).map((item) => item.value);
   const settlePendingBacklogRollback = useCallback((rollbackId: number, shouldRollback: boolean) => {
     const rollback = pendingBacklogRollbacksRef.current.get(rollbackId);
     if (!rollback) return;
@@ -300,23 +422,47 @@ function Terminal() {
     pendingBacklogRollbacksRef.current.set(rollbackId, recordMessageWithoutTicket());
     const contextMessages = filterChatHistory(historyRef.current);
     const chatMessages = isFreeTier ? contextMessages : [...contextMessages, { role: "user", content: userMessage.content }];
-    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({ getState: getCurrentState, updateTicketProgress, addActiveTD, playChime, setState, onCompletedRewardSettled: (ticketId, profile) => { applySettledCompletedReward(ticketId, profile); } });
+    const { onSprintProgress, getSprintCompleteMessage } = buildSprintCallbacks({
+      getState: getCurrentState,
+      updateTicketProgress,
+      addActiveTD,
+      playChime,
+      setState,
+      onCompletedRewardSettled: (ticketId, profile) => { applySettledCompletedReward(ticketId, profile); },
+    });
     const controller = new AbortController();
     const setPromptProcessing = createPromptProcessingSetter(controller);
-    controller.signal.addEventListener("abort", () => { settlePendingBacklogRollback(rollbackId, true); untrackAbortController(controller); }, { once: true });
+    controller.signal.addEventListener("abort", () => {
+      settlePendingBacklogRollback(rollbackId, true);
+      untrackAbortController(controller);
+    }, { once: true });
     trackAbortController(controller);
     submitChatMessage({
-      chatMessages, buddyResult, unlockAchievement: unlockAchievementWithSound, setHistory, setIsProcessing: setPromptProcessing, currentRank: rank, apiKey: effectiveApiKey,
-      customModel: state.selectedModel, proKey: state.proKey, proKeyHash: state.proKeyHash, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress,
-      getSprintCompleteMessage, addActiveTD, onSuggestedReply: handleSuggestedReply, buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades,
+      chatMessages, buddyResult, unlockAchievement: unlockAchievementWithSound, setHistory, setIsProcessing: setPromptProcessing,
+      currentRank: rank, apiKey: effectiveApiKey, customModel: state.selectedModel, proKey: state.proKey, proKeyHash: state.proKeyHash,
+      modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, getSprintCompleteMessage, addActiveTD, onSuggestedReply: handleSuggestedReply,
+      buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades,
       onByokUsage: (usage) => setState((prev) => { const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 }; return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } }; }),
       onQuotaUpdate: (quotaPercent) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })); if (quotaPercent <= 0 && isFreeTier && !effectiveApiKey) nagArmedFromQuotaRef.current = true; },
       loadingMessageId: isFreeTier ? undefined : submissionId,
-      onQuotaExhausted: effectiveApiKey ? undefined : () => { untrackAbortController(controller); settlePendingBacklogRollback(rollbackId, true); setCommandHistoryEntries((prev) => prev.filter((entry) => entry.submissionId !== submissionId)); setHistory(removePromptMessages(submissionId)); handleQuotaLockout(command); },
+      onQuotaExhausted: effectiveApiKey ? undefined : () => {
+        untrackAbortController(controller);
+        settlePendingBacklogRollback(rollbackId, true);
+        setCommandHistoryEntries((prev) => prev.filter((entry) => entry.submissionId !== submissionId));
+        setHistory(removePromptMessages(submissionId));
+        handleQuotaLockout(command);
+      },
       onProfileUpdate: applyProfileUpdate,
-      onAccepted: () => { recordConversationRound(); untrackAbortController(controller); handlePromptAccepted(rollbackId, replayId); },
+      onAccepted: () => {
+        recordConversationRound();
+        untrackAbortController(controller);
+        handlePromptAccepted(rollbackId, replayId);
+      },
       scheduleHistoryCommitCallback,
-      onError: () => { untrackAbortController(controller); handlePromptError(rollbackId); },
+      onError: () => {
+        untrackAbortController(controller);
+        handlePromptError(rollbackId);
+      },
       signal: controller.signal,
     });
   };
@@ -332,13 +478,10 @@ function Terminal() {
     if (bragPending) { handleBragSubmit({ inputValue: commandValue, setInputValue, state, setHistory, setBragPending }); return; }
     if (buddyPendingConfirm) { handleBuddyConfirm({ inputValue: commandValue, setInputValue, setBuddyPendingConfirm, setState, setHistory, buddyType: state.buddy?.type ?? undefined, username: state.username, proKeyHash: state.proKeyHash }); return; }
     if (commandValue.trim().length === 0) {
-      setInputValue("");
-      setHistoryIndex(-1);
-      return;
+      setInputValue(""); setHistoryIndex(-1); return;
     }
     if (BYOK_ENABLED && await handleKeyCommand(commandValue, setState, setHistory, state)) {
-      setInputValue("");
-      return;
+      setInputValue(""); return;
     }
     const command = commandValue;
     const effectiveApiKey = BYOK_ENABLED ? state.apiKey : undefined;
@@ -348,7 +491,11 @@ function Terminal() {
     }
     if (checkQuotaAndHandleExhaustion(command, effectiveApiKey)) return;
     submitPromptCommandWithAccounting(command);
-  }, [outageHp, activeOutageScenario, sendDamage, setHistory, setInputValue, runSlashCommand, bragPending, state, setBragPending, buddyPendingConfirm, setBuddyPendingConfirm, setState, setHistoryIndex, openUpgradeNag, checkQuotaAndHandleExhaustion, submitPromptCommandWithAccounting, nagArmedFromQuotaRef, pendingNagCommandRef]);
+  }, [
+    outageHp, activeOutageScenario, sendDamage, setHistory, setInputValue, runSlashCommand, bragPending, state, setBragPending,
+    buddyPendingConfirm, setBuddyPendingConfirm, setState, setHistoryIndex, openUpgradeNag, checkQuotaAndHandleExhaustion,
+    submitPromptCommandWithAccounting, nagArmedFromQuotaRef, pendingNagCommandRef,
+  ]);
   const handleEnterSubmit = async () => { recordEnter(); await submitCommandValue(inputValue); };
   const handleUpgradeNagDismiss = useCallback(() => { handleUpgradeNagClose((command, replayId) => { submitPromptCommandWithAccounting(command, replayId); }); }, [handleUpgradeNagClose, submitPromptCommandWithAccounting]);
   const handleManualUpgradeDismiss = dismissUpgradeNagOverlay;
@@ -362,19 +509,20 @@ function Terminal() {
     slashQuery, slashIndex, suggestedReply, inputValue, isProcessing, commandHistory, historyIndex, showStore, showLeaderboard, showAchievements, showSynergize, showHelp, showAbout, showPrivacy, showTerms, showContact, showProfile, showParty, showUpgrade, brrrrrrIntervalRef, abortControllerRef,
     freeTierDelayRef, inputRef, setSlashIndex, setInputValue, setSuggestedReply: setPersistedSuggestedReply, setSlashQuery, setHistoryIndex, setIsProcessing: resetPromptProcessing, setHistory, closeAllOverlays: closeAllOverlaysPreservingNag, handleUpgradeNagClose: handleUpgradeNagDismiss, runSlashCommand, handleEnterSubmit, getFilteredSlashCommands,
   });
-  return <TerminalView
-    activeRegression={activeRegression} outageHp={outageHp} activeOutageScenario={activeOutageScenario} pendingReviewPing={pendingReviewPing} pingAcknowledged={pingAcknowledged}
-    activeTheme={state.activeTheme} regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} isMobileViewport={isMobileViewport} inputRef={inputRef} closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
-    onlineCount={onlineCount} rank={rank} state={state} handleHomeClick={handleHomeClick} handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue}
-    setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect} isBooting={isBooting} history={history}
-    messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} scrollViewportRef={scrollViewportRef} bottomRef={bottomRef}
-    slashQuery={slashQuery} slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect} runSlashCommand={runSlashCommand} inputValue={inputValue} suggestedReply={suggestedReply} acceptSuggestedReply={acceptSuggestedReply}
-    isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown} handleSubmit={handleEnterSubmit} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme}
-    showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy}
-    showTerms={showTerms} showContact={showContact} showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade} setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard}
-    setShowAchievements={setShowAchievements} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms} setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty}
-    setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory} pendingNagCommand={pendingNagCommand} handleUpgradeNagClose={handleUpgradeNagDismiss}
-    handleManualUpgradeDismiss={handleManualUpgradeDismiss} upgradeNagDismissPhase={upgradeNagDismissPhase} upgradeNagDismissEffect={upgradeNagDismissEffect}
-  />;
+  return (
+    <TerminalView
+      activeRegression={activeRegression} outageHp={outageHp} activeOutageScenario={activeOutageScenario} pendingReviewPing={pendingReviewPing} pingAcknowledged={pingAcknowledged}
+      activeTheme={state.activeTheme} regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} isMobileViewport={isMobileViewport} inputRef={inputRef} closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
+      onlineCount={onlineCount} rank={rank} state={state} handleHomeClick={handleHomeClick} handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue}
+      setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect} isBooting={isBooting} history={history}
+      messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} scrollViewportRef={scrollViewportRef} bottomRef={bottomRef}
+      slashQuery={slashQuery} slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect} runSlashCommand={runSlashCommand} inputValue={inputValue} suggestedReply={suggestedReply} acceptSuggestedReply={acceptSuggestedReply}
+      isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown} handleSubmit={handleEnterSubmit} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme}
+      showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy}
+      showTerms={showTerms} showContact={showContact} showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade} setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard}
+      setShowAchievements={setShowAchievements} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms} setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty}
+      setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory} pendingNagCommand={pendingNagCommand} handleUpgradeNagClose={handleUpgradeNagDismiss}
+      handleManualUpgradeDismiss={handleManualUpgradeDismiss} upgradeNagDismissPhase={upgradeNagDismissPhase} upgradeNagDismissEffect={upgradeNagDismissEffect} />
+  );
 }
 export default Terminal;

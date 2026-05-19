@@ -69,6 +69,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   const previewImageObjectUrlRef = useRef<string | null>(null);
   const nativeShareCardRef = useRef<CreateShareCardResult | null>(null);
   const nativeShareCardRequestRef = useRef<Promise<CreateShareCardResult> | null>(null);
+  const nativeShareCardAbortRef = useRef<AbortController | null>(null);
   const nativeShareCardGenerationRef = useRef(0);
 
   const clearTimeouts = useCallback(() => {
@@ -100,7 +101,10 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   }, []);
 
   useEffect(() => () => { clearTimeouts(); }, [clearTimeouts]);
-  useEffect(() => () => { previewCreationAbortRef.current?.abort(); }, []);
+  useEffect(() => () => {
+    previewCreationAbortRef.current?.abort();
+    nativeShareCardAbortRef.current?.abort();
+  }, []);
   useEffect(() => {
     const spinnerActive = status === "generating" || previewImageStatus === "loading";
     if (!spinnerActive) {
@@ -131,6 +135,8 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     previewSessionRef.current += 1;
     previewCreationAbortRef.current?.abort();
     previewCreationAbortRef.current = null;
+    nativeShareCardAbortRef.current?.abort();
+    nativeShareCardAbortRef.current = null;
     generatingRef.current = false;
     sharingRef.current = false;
     clearTimeouts();
@@ -187,14 +193,16 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     setFeedback(null);
   }, [prewarmPreviewImage]);
 
-  const requestNativeShareCard = useCallback((signal: AbortSignal) => {
+  const requestNativeShareCard = useCallback(() => {
     if (nativeShareCardRef.current) return Promise.resolve(nativeShareCardRef.current);
     if (nativeShareCardRequestRef.current) return nativeShareCardRequestRef.current;
     const generation = nativeShareCardGenerationRef.current;
+    const abortController = new AbortController();
+    nativeShareCardAbortRef.current = abortController;
 
-    const request = createShareCard({ shareClaim, signal })
+    const request = createShareCard({ shareClaim, signal: abortController.signal })
       .then((card) => {
-        if (signal.aborted || generation !== nativeShareCardGenerationRef.current) {
+        if (abortController.signal.aborted || generation !== nativeShareCardGenerationRef.current) {
           throw new DOMException("The operation was aborted.", "AbortError");
         }
         nativeShareCardRef.current = card;
@@ -203,6 +211,9 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       .finally(() => {
         if (nativeShareCardRequestRef.current === request) {
           nativeShareCardRequestRef.current = null;
+        }
+        if (nativeShareCardAbortRef.current === abortController) {
+          nativeShareCardAbortRef.current = null;
         }
       });
 
@@ -215,6 +226,8 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     previewSessionRef.current += 1;
     previewCreationAbortRef.current?.abort();
     previewCreationAbortRef.current = null;
+    nativeShareCardAbortRef.current?.abort();
+    nativeShareCardAbortRef.current = null;
     generatingRef.current = false;
     sharingRef.current = false;
     nativeShareCardRef.current = null;
@@ -289,6 +302,13 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     };
   }, [previewCard, loadPreviewBlob]);
 
+  const handleShareIntentStart = useCallback(() => {
+    if (!shouldUseNativeShareFlow()) return;
+    void requestNativeShareCard().catch(() => {
+      // Click keeps ownership of the visible fallback and error behavior.
+    });
+  }, [requestNativeShareCard]);
+
   const handleOpenPreview = useCallback(async () => {
     if (generatingRef.current) return;
     generatingRef.current = true;
@@ -315,7 +335,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       }
 
       const card = useNativeShareFlow
-        ? await requestNativeShareCard(abortController.signal)
+        ? await requestNativeShareCard()
         : await createShareCard({
             shareClaim,
             signal: abortController.signal,
@@ -502,6 +522,12 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     <span className="relative ml-2 inline-flex align-baseline">
       <button
         ref={triggerRef}
+        onPointerDown={handleShareIntentStart}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            handleShareIntentStart();
+          }
+        }}
         onClick={handleOpenPreview}
         className="font-mono text-[11px] text-gray-600 opacity-20 transition-all duration-200 hover:text-[#56b6c2] group-hover:opacity-100 group-hover:text-[#56b6c2]"
       >
