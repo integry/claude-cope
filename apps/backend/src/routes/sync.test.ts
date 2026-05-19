@@ -170,6 +170,8 @@ describe("POST /api/account/sync", () => {
     mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
     const supporterHash = await hashKey("COPE-SUPPORTER");
     let currentSupporter = 0;
+    let pendingSupporter = 0;
+    let transactionOpen = false;
     const recentEvents: string[] = [];
     const calls: { sql: string; bindings: unknown[] }[] = [];
     const db = {
@@ -194,8 +196,14 @@ describe("POST /api/account/sync", () => {
             run: vi.fn().mockImplementation(async () => {
               if (sql.includes("UPDATE user_scores")) {
                 const changes = currentSupporter === 0 ? 1 : 0;
-                currentSupporter = 1;
+                if (changes > 0) {
+                  pendingSupporter = 1;
+                }
                 return { meta: { changes } };
+              }
+              if (sql.includes("INSERT INTO recent_events")) {
+                recentEvents.push(String(bindings[0]));
+                return { meta: { changes: 1 } };
               }
               return { meta: { changes: 1 } };
             }),
@@ -206,22 +214,25 @@ describe("POST /api/account/sync", () => {
         first: vi.fn().mockResolvedValue(null),
         all: vi.fn().mockResolvedValue({ results: [] }),
       })),
-      exec: vi.fn().mockResolvedValue({ results: [] }),
-      batch: vi.fn().mockImplementation(async (statements: Array<{ sql?: string; bindings?: unknown[] }>) => {
-        const updateStatement = statements.find((statement) => statement.sql?.includes("UPDATE user_scores") && statement.sql.includes("SET is_executive_supporter = 1"));
-        const insertStatement = statements.find((statement) => statement.sql?.includes("INSERT INTO recent_events"));
-        if (updateStatement) {
-          const changes = currentSupporter === 0 ? 1 : 0;
-          currentSupporter = 1;
-          if (changes > 0 && insertStatement?.bindings?.[0]) {
-            recentEvents.push(String(insertStatement.bindings[0]));
+      exec: vi.fn().mockImplementation(async (sql: string) => {
+        if (sql === "BEGIN TRANSACTION") {
+          transactionOpen = true;
+          pendingSupporter = currentSupporter;
+          return { results: [] };
+        }
+        if (sql === "COMMIT") {
+          if (transactionOpen) {
+            currentSupporter = pendingSupporter;
           }
-          return [{ meta: { changes } }, { meta: { changes } }, { meta: { changes: 1 } }];
+          transactionOpen = false;
+          return { results: [] };
         }
-        if (insertStatement?.bindings?.[0]) {
-          recentEvents.push(String(insertStatement.bindings[0]));
+        if (sql === "ROLLBACK") {
+          transactionOpen = false;
+          pendingSupporter = currentSupporter;
+          return { results: [] };
         }
-        return [{ meta: { changes: 1 } }];
+        return { results: [] };
       }),
     };
     const kv = mockKV();
@@ -255,7 +266,9 @@ describe("POST /api/account/sync", () => {
     mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
     const supporterHash = await hashKey("COPE-SUPPORTER");
     let currentSupporter = 0;
+    let pendingSupporter = 0;
     let failNextRecentEventInsert = true;
+    let transactionOpen = false;
     const recentEvents: string[] = [];
     const db = {
       prepare: vi.fn((sql: string) => ({
@@ -274,30 +287,49 @@ describe("POST /api/account/sync", () => {
             }
             return null;
           }),
-            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+          run: vi.fn().mockImplementation(async () => {
+            if (sql.includes("UPDATE user_scores")) {
+              const changes = currentSupporter === 0 ? 1 : 0;
+              if (changes > 0) {
+                pendingSupporter = 1;
+              }
+              return { meta: { changes } };
+            }
+            if (sql.includes("INSERT INTO recent_events")) {
+              if (failNextRecentEventInsert) {
+                failNextRecentEventInsert = false;
+                throw new Error("recent event insert failed");
+              }
+              recentEvents.push(String(bindings[0]));
+              return { meta: { changes: 1 } };
+            }
+            return { meta: { changes: 1 } };
+          }),
           all: vi.fn().mockResolvedValue({ results: [] }),
         })),
         run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
         first: vi.fn().mockResolvedValue(null),
         all: vi.fn().mockResolvedValue({ results: [] }),
       })),
-      exec: vi.fn().mockResolvedValue({ results: [] }),
-      batch: vi.fn().mockImplementation(async (statements: Array<{ sql?: string; bindings?: unknown[] }>) => {
-        const updateStatement = statements.find((statement) => statement.sql?.includes("UPDATE user_scores") && statement.sql.includes("SET is_executive_supporter = 1"));
-        const insertStatement = statements.find((statement) => statement.sql?.includes("INSERT INTO recent_events"));
-        if (!insertStatement) return [{ meta: { changes: 1 } }];
-        if (failNextRecentEventInsert) {
-          failNextRecentEventInsert = false;
-          throw new Error("recent event insert failed");
+      exec: vi.fn().mockImplementation(async (sql: string) => {
+        if (sql === "BEGIN TRANSACTION") {
+          transactionOpen = true;
+          pendingSupporter = currentSupporter;
+          return { results: [] };
         }
-        const changes = currentSupporter === 0 ? 1 : 0;
-        if (updateStatement && changes > 0) {
-          currentSupporter = 1;
+        if (sql === "COMMIT") {
+          if (transactionOpen) {
+            currentSupporter = pendingSupporter;
+          }
+          transactionOpen = false;
+          return { results: [] };
         }
-        if (insertStatement.bindings?.[0]) {
-          recentEvents.push(String(insertStatement.bindings[0]));
+        if (sql === "ROLLBACK") {
+          transactionOpen = false;
+          pendingSupporter = currentSupporter;
+          return { results: [] };
         }
-        return [{ meta: { changes } }, { meta: { changes } }, { meta: { changes: 1 } }];
+        return { results: [] };
       }),
     };
     const kv = mockKV();

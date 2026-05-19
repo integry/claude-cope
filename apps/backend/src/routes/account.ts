@@ -424,11 +424,14 @@ function getSyncProfileErrorStatus(code: SyncProfileErrorCode): number {
   switch (code) {
     case "sync_conflict":
       return 409;
+    case "profile_lookup_failed":
+      return 500;
     case "username_required":
     case "session_required":
     case "free_username_claim_forbidden":
-    case "profile_lookup_failed":
       return 403;
+    default:
+      return 500;
   }
 }
 
@@ -578,7 +581,7 @@ account.post("/sync", async (c) => {
   if (result.profile === null) {
     return respondWithSyncProfileError(c, result.error);
   }
-  const resolvedProfile: { restored: boolean; profile: typeof result.profile; mutation: SyncProfileMutation } = result;
+  const resolvedProfile = result;
 
   // Profile claim succeeded — now provision the licenses row and KV quota.
   // This ordering ensures that failed syncs never produce orphaned active

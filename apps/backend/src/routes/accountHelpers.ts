@@ -89,27 +89,17 @@ function buildExecutiveSupporterActivationMessage(username: string): string {
   return `[LIVE] 👑 ${username} just expensed the Executive Supporter Pack. Respect the grift.`;
 }
 
-async function insertRecentEventAndPrune(db: D1Database, message: string): Promise<void> {
-  await db.batch([
-    db.prepare("INSERT INTO recent_events (message) VALUES (?)").bind(message),
-    db.prepare("DELETE FROM recent_events WHERE id NOT IN (SELECT id FROM recent_events ORDER BY created_at DESC LIMIT 50)"),
-  ]);
-}
-
-export async function emitExecutiveSupporterActivationEvent(
-  db: D1Database,
-  username: string,
-): Promise<void> {
-  await insertRecentEventAndPrune(db, buildExecutiveSupporterActivationMessage(username));
-}
-
 export async function activateExecutiveSupporterIfNeeded(
   db: D1Database,
   opts: ExecutiveSupporterActivationOptions,
 ): Promise<boolean> {
-  const statements = opts.displayRank === undefined
-    ? [
-      db
+  let transactionOpen = false;
+  await db.exec("BEGIN TRANSACTION");
+  transactionOpen = true;
+
+  try {
+    const updateResult = opts.displayRank === undefined
+      ? await db
         .prepare(
           `UPDATE user_scores
            SET is_executive_supporter = 1,
@@ -117,13 +107,9 @@ export async function activateExecutiveSupporterIfNeeded(
            WHERE license_hash = ?
              AND is_executive_supporter = 0`,
         )
-        .bind(opts.licenseKeyHash),
-      db.prepare("INSERT INTO recent_events (message) SELECT ? WHERE changes() > 0")
-        .bind(buildExecutiveSupporterActivationMessage(opts.username)),
-      db.prepare("DELETE FROM recent_events WHERE id NOT IN (SELECT id FROM recent_events ORDER BY created_at DESC LIMIT 50)"),
-    ]
-    : [
-      db
+        .bind(opts.licenseKeyHash)
+        .run()
+      : await db
         .prepare(
           `UPDATE user_scores
            SET is_executive_supporter = 1,
@@ -133,14 +119,35 @@ export async function activateExecutiveSupporterIfNeeded(
              AND is_executive_supporter = 0
              AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
         )
-        .bind(opts.displayRank, opts.username, opts.licenseKeyHash),
-      db.prepare("INSERT INTO recent_events (message) SELECT ? WHERE changes() > 0")
-        .bind(buildExecutiveSupporterActivationMessage(opts.username)),
-      db.prepare("DELETE FROM recent_events WHERE id NOT IN (SELECT id FROM recent_events ORDER BY created_at DESC LIMIT 50)"),
-    ];
+        .bind(opts.displayRank, opts.username, opts.licenseKeyHash)
+        .run();
 
-  const [updateResult] = await db.batch(statements);
-  return Number(updateResult.meta.changes ?? 0) > 0;
+    if (Number(updateResult.meta.changes ?? 0) === 0) {
+      await db.exec("ROLLBACK");
+      transactionOpen = false;
+      return false;
+    }
+
+    await db
+      .prepare("INSERT INTO recent_events (message) VALUES (?)")
+      .bind(buildExecutiveSupporterActivationMessage(opts.username))
+      .run();
+    await db
+      .prepare("DELETE FROM recent_events WHERE id NOT IN (SELECT id FROM recent_events ORDER BY created_at DESC LIMIT 50)")
+      .run();
+    await db.exec("COMMIT");
+    transactionOpen = false;
+    return true;
+  } catch (err: unknown) {
+    if (transactionOpen) {
+      try {
+        await db.exec("ROLLBACK");
+      } catch {
+        // Preserve the original failure if rollback also fails.
+      }
+    }
+    throw err;
+  }
 }
 
 export async function syncExecutiveSupporterEntitlement(
