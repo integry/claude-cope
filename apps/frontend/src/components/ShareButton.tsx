@@ -2,6 +2,7 @@
 import { useState, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
 import { copyBlobToClipboard, copyTextToClipboard, openShareIntent } from "./shareChatUtils";
+import { isNativeShareCancellation, shouldUseNativeShareFlowForDevice } from "./shareButtonNativeShare";
 import ShareCardRenderSurface from "./ShareCardRenderSurface";
 
 type MountToken = { cancelled: boolean };
@@ -40,28 +41,14 @@ function supportsNativeShare(): boolean {
   return typeof navigator !== "undefined" && typeof navigator.share === "function";
 }
 
-function hasCoarsePointer(): boolean {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-  return window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(any-pointer: coarse)").matches;
-}
-
 function shouldUseNativeShareFlow(): boolean {
-  if (!supportsNativeShare() || typeof navigator === "undefined") return false;
+  if (typeof navigator === "undefined") return false;
   const uaData = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
-  if (uaData.userAgentData?.mobile === true) return true;
-  const userAgent = navigator.userAgent || "";
-  if (/android|iphone|ipad|ipod|mobile/i.test(userAgent)) return true;
-  if (uaData.userAgentData?.mobile === false) return false;
-  return navigator.maxTouchPoints > 0 && hasCoarsePointer();
-}
-
-function isNativeShareCancellation(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const name = "name" in error && typeof error.name === "string" ? error.name : "";
-  const message = "message" in error && typeof error.message === "string" ? error.message : "";
-  if (name === "AbortError") return true;
-  if (name === "NotAllowedError" && /\b(cancelled|canceled|dismissed)\b/i.test(message)) return true;
-  return /\b(cancelled|canceled|dismissed|closed)\b/i.test(message) || /\baborted by user\b/i.test(message);
+  return shouldUseNativeShareFlowForDevice({
+    supportsNativeShare: supportsNativeShare(),
+    userAgentDataMobile: uaData.userAgentData?.mobile,
+    userAgent: navigator.userAgent || "",
+  });
 }
 
 export function ShareButton({ userMessage, systemMessage, username, shareClaim }: { userMessage: string; systemMessage: string; username: string; shareClaim: string }) {
@@ -80,6 +67,8 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   const previewBlobRef = useRef<{ imageUrl: string; blob: Blob } | null>(null);
   const previewBlobRequestRef = useRef<{ imageUrl: string; request: Promise<Blob> } | null>(null);
   const previewImageObjectUrlRef = useRef<string | null>(null);
+  const nativeShareCardRef = useRef<CreateShareCardResult | null>(null);
+  const nativeShareCardRequestRef = useRef<Promise<CreateShareCardResult> | null>(null);
 
   const clearTimeouts = useCallback(() => {
     timeoutIds.current.forEach(clearTimeout);
@@ -197,6 +186,64 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     setFeedback(null);
   }, [prewarmPreviewImage]);
 
+  const primeNativeShareCard = useCallback(() => {
+    if (!shouldUseNativeShareFlow()) return null;
+    if (nativeShareCardRef.current) return Promise.resolve(nativeShareCardRef.current);
+    if (nativeShareCardRequestRef.current) return nativeShareCardRequestRef.current;
+
+    const request = createShareCard({ shareClaim })
+      .then((card) => {
+        nativeShareCardRef.current = card;
+        return card;
+      })
+      .finally(() => {
+        if (nativeShareCardRequestRef.current === request) {
+          nativeShareCardRequestRef.current = null;
+        }
+      });
+
+    nativeShareCardRequestRef.current = request;
+    return request;
+  }, [shareClaim]);
+
+  useEffect(() => {
+    nativeShareCardRef.current = null;
+    nativeShareCardRequestRef.current = null;
+    const request = primeNativeShareCard();
+    if (!request) return;
+    void request.catch(() => {
+      if (nativeShareCardRequestRef.current === request) {
+        nativeShareCardRequestRef.current = null;
+      }
+    });
+  }, [primeNativeShareCard]);
+
+  const tryNativeShare = useCallback(async (
+    card: CreateShareCardResult,
+    token: MountToken,
+    sessionId: number,
+  ): Promise<"shared" | "cancelled" | "fallback"> => {
+    try {
+      await navigator.share({
+        title: `Claude Cope chat by @${username}`,
+        text: userMessage.trim().slice(0, 140) || undefined,
+        url: card.shareUrl,
+      });
+      if (token.cancelled || sessionId !== previewSessionRef.current) return "shared";
+      setStatus("idle");
+      setFeedback(null);
+      return "shared";
+    } catch (error) {
+      if (token.cancelled || sessionId !== previewSessionRef.current) return "shared";
+      if (isNativeShareCancellation(error)) {
+        setStatus("idle");
+        setFeedback(null);
+        return "cancelled";
+      }
+      return "fallback";
+    }
+  }, [username, userMessage]);
+
   useEffect(() => {
     if (!previewCard) return;
     setPreviewImageStatus("loading");
@@ -241,33 +288,26 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     setPasteHint(null);
 
     try {
-      const card = await createShareCard({
-        shareClaim,
-        signal: abortController.signal,
-      });
-      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      const useNativeShareFlow = shouldUseNativeShareFlow();
+      const nativeShareCard = nativeShareCardRef.current;
 
-      if (shouldUseNativeShareFlow()) {
-        try {
-          await navigator.share({
-            title: `Claude Cope chat by @${username}`,
-            text: userMessage.trim().slice(0, 140) || undefined,
-            url: card.shareUrl,
-          });
-          if (token.cancelled || sessionId !== previewSessionRef.current) return;
-          setStatus("idle");
-          setFeedback(null);
+      if (useNativeShareFlow && nativeShareCard) {
+        const nativeShareResult = await tryNativeShare(nativeShareCard, token, sessionId);
+        if (nativeShareResult !== "fallback") {
           return;
-        } catch (error) {
-          if (token.cancelled || sessionId !== previewSessionRef.current) return;
-          if (isNativeShareCancellation(error)) {
-            setStatus("idle");
-            setFeedback(null);
-            return;
-          }
         }
+
+        openPreviewCard(nativeShareCard);
+        return;
       }
 
+      const card = useNativeShareFlow && nativeShareCardRequestRef.current
+        ? await nativeShareCardRequestRef.current
+        : await createShareCard({
+            shareClaim,
+            signal: abortController.signal,
+          });
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
       openPreviewCard(card);
     } catch (error) {
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
@@ -282,7 +322,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
         generatingRef.current = false;
       }
     }
-  }, [shareClaim, resetAfterDelay, openPreviewCard, username, userMessage]);
+  }, [shareClaim, resetAfterDelay, openPreviewCard, tryNativeShare]);
 
   const handleShare = useCallback(async (platform: SharePlatform) => {
     if (!previewCard || sharingRef.current) return;
@@ -441,6 +481,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       <button
         ref={triggerRef}
         onClick={handleOpenPreview}
+        onPointerDown={() => { void primeNativeShareCard(); }}
         className="font-mono text-[11px] text-gray-600 opacity-20 transition-all duration-200 hover:text-[#56b6c2] group-hover:opacity-100 group-hover:text-[#56b6c2]"
       >
         [share]

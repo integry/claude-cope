@@ -2,24 +2,61 @@
 import { describe, it, expect } from "vitest";
 import { act } from "react";
 
+import { isNativeShareCancellation, shouldUseNativeShareFlowForDevice } from "../shareButtonNativeShare";
 import { shareCardResponse, signedShareClaim, setupShareButtonTest } from "./ShareButton.testUtils";
 import { mockClipboard } from "./ShareButton.testUtils";
 
 describe("ShareButton native share flow", () => {
   const testScope = setupShareButtonTest();
 
-  it("uses navigator.share on mobile with the backend-generated public share URL", async () => {
-    testScope.setNativeShareDevice(true);
-    testScope.setNavigatorShare(async () => undefined);
-    testScope.renderComponent();
-
+  const triggerMobileTap = async () => {
     const shareBtn = testScope.container.querySelector("button");
     expect(shareBtn).not.toBeNull();
 
     await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      shareBtn!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
       shareBtn!.click();
       await Promise.resolve();
     });
+  };
+
+  it("uses the native-share device helper only for mobile-class devices", () => {
+    expect(shouldUseNativeShareFlowForDevice({
+      supportsNativeShare: true,
+      userAgentDataMobile: true,
+      userAgent: "",
+    })).toBe(true);
+    expect(shouldUseNativeShareFlowForDevice({
+      supportsNativeShare: true,
+      userAgentDataMobile: false,
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    })).toBe(false);
+    expect(shouldUseNativeShareFlowForDevice({
+      supportsNativeShare: true,
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    })).toBe(false);
+  });
+
+  it("only treats known share-sheet dismissals as cancellations", () => {
+    expect(isNativeShareCancellation(new DOMException("The share operation was aborted.", "AbortError"))).toBe(true);
+    expect(isNativeShareCancellation(new DOMException("Share dismissed", "NotAllowedError"))).toBe(true);
+    expect(isNativeShareCancellation(new DOMException("Message port closed unexpectedly", "NotAllowedError"))).toBe(false);
+    expect(isNativeShareCancellation(new Error("share request aborted by browser extension"))).toBe(false);
+  });
+
+  it("uses navigator.share on mobile with the backend-generated public share URL", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(async () => undefined);
+    testScope.renderComponent();
+    await triggerMobileTap();
 
     expect(testScope.fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
       method: "POST",
@@ -55,14 +92,7 @@ describe("ShareButton native share flow", () => {
       throw new DOMException("The share operation was aborted.", "AbortError");
     });
     testScope.renderComponent();
-
-    const shareBtn = testScope.container.querySelector("button");
-    expect(shareBtn).not.toBeNull();
-
-    await act(async () => {
-      shareBtn!.click();
-      await Promise.resolve();
-    });
+    await triggerMobileTap();
 
     expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
     expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
@@ -77,14 +107,7 @@ describe("ShareButton native share flow", () => {
       throw new DOMException("Share dismissed", "NotAllowedError");
     });
     testScope.renderComponent();
-
-    const shareBtn = testScope.container.querySelector("button");
-    expect(shareBtn).not.toBeNull();
-
-    await act(async () => {
-      shareBtn!.click();
-      await Promise.resolve();
-    });
+    await triggerMobileTap();
 
     expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
     expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
@@ -98,14 +121,7 @@ describe("ShareButton native share flow", () => {
       throw new Error("share request aborted by browser extension");
     });
     testScope.renderComponent();
-
-    const shareBtn = testScope.container.querySelector("button");
-    expect(shareBtn).not.toBeNull();
-
-    await act(async () => {
-      shareBtn!.click();
-      await Promise.resolve();
-    });
+    await triggerMobileTap();
 
     expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
     expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(1);
