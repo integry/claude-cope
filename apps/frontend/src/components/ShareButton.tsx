@@ -154,6 +154,64 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     }
   }, [username, userMessage]);
 
+  const canAttemptImmediateNativeShare = useCallback((shareClaimValue: string) => {
+    invalidateStaleNativeShareCache(shareClaimValue);
+    const nativeShareCard = getCachedNativeShareCard(shareClaimValue);
+    if (!nativeShareCard) {
+      return null;
+    }
+    return nativeShareCard;
+  }, [getCachedNativeShareCard, invalidateStaleNativeShareCache]);
+
+  const shouldFallbackToPreviewBeforeNativeShare = useCallback((activationAtStart: boolean | null) => {
+    const activationBeforeShare = getTransientUserActivationState();
+    const canConfirmActivation = activationAtStart !== null && activationBeforeShare !== null;
+    return !canConfirmActivation || activationAtStart === false || activationBeforeShare === false;
+  }, []);
+
+  const trySharingExistingNativeCard = useCallback(async (
+    shareClaimValue: string,
+    token: MountToken,
+    sessionId: number,
+  ) => {
+    const nativeShareCard = canAttemptImmediateNativeShare(shareClaimValue);
+    if (!nativeShareCard) {
+      return false;
+    }
+    const nativeShareResult = await tryNativeShare(nativeShareCard, token, sessionId);
+    if (nativeShareResult !== "fallback") {
+      return true;
+    }
+    openPreviewCard(nativeShareCard);
+    return true;
+  }, [canAttemptImmediateNativeShare, openPreviewCard, tryNativeShare]);
+
+  const createPreviewCard = useCallback((useNativeShareFlow: boolean, abortController: AbortController) => {
+    return useNativeShareFlow
+      ? requestNativeShareCard()
+      : createShareCard({
+          shareClaim,
+          signal: abortController.signal,
+        });
+  }, [requestNativeShareCard, shareClaim]);
+
+  const maybeHandleNativeShareForNewCard = useCallback(async (
+    card: CreateShareCardResult,
+    activationAtStart: boolean | null,
+    token: MountToken,
+    sessionId: number,
+  ) => {
+    if (shouldFallbackToPreviewBeforeNativeShare(activationAtStart)) {
+      openPreviewCard(card);
+      return true;
+    }
+    const nativeShareResult = await tryNativeShare(card, token, sessionId);
+    if (nativeShareResult !== "fallback") {
+      return true;
+    }
+    return false;
+  }, [openPreviewCard, shouldFallbackToPreviewBeforeNativeShare, tryNativeShare]);
+
   const handleOpenPreview = useCallback(async () => {
     if (generatingRef.current) return;
     generatingRef.current = true;
@@ -167,38 +225,23 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
 
     try {
       const useNativeShareFlow = shouldUseNativeShareFlow();
-      invalidateStaleNativeShareCache(shareClaim);
-      const nativeShareCard = getCachedNativeShareCard(shareClaim);
-      const activationAtStart = getTransientUserActivationState();
-
-      if (useNativeShareFlow && nativeShareCard) {
-        const nativeShareResult = await tryNativeShare(nativeShareCard, token, sessionId);
-        if (nativeShareResult !== "fallback") {
-          return;
-        }
-        openPreviewCard(nativeShareCard);
-        return;
-      }
-
-      const card = useNativeShareFlow
-        ? await requestNativeShareCard()
-        : await createShareCard({
-            shareClaim,
-            signal: abortController.signal,
-          });
-      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      const activationAtStart = useNativeShareFlow ? getTransientUserActivationState() : null;
 
       if (useNativeShareFlow) {
-        const activationBeforeShare = getTransientUserActivationState();
-        const canConfirmActivation = activationAtStart !== null && activationBeforeShare !== null;
-        if (!canConfirmActivation || activationAtStart === false || activationBeforeShare === false) {
-          openPreviewCard(card);
+        const handledCachedShare = await trySharingExistingNativeCard(shareClaim, token, sessionId);
+        if (handledCachedShare) {
           return;
         }
-        const nativeShareResult = await tryNativeShare(card, token, sessionId);
-        if (nativeShareResult !== "fallback") {
+      }
+
+      const card = await createPreviewCard(useNativeShareFlow, abortController);
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+
+      if (
+        useNativeShareFlow
+        && await maybeHandleNativeShareForNewCard(card, activationAtStart, token, sessionId)
+      ) {
           return;
-        }
       }
       openPreviewCard(card);
     } catch (error) {
@@ -215,7 +258,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
         generatingRef.current = false;
       }
     }
-  }, [getCachedNativeShareCard, invalidateStaleNativeShareCache, shareClaim, resetAfterDelay, openPreviewCard, requestNativeShareCard, tryNativeShare]);
+  }, [createPreviewCard, maybeHandleNativeShareForNewCard, shareClaim, resetAfterDelay, openPreviewCard, trySharingExistingNativeCard]);
 
   const handleShare = useCallback(async (platform: SharePlatform) => {
     if (!previewCard || sharingRef.current) return;
