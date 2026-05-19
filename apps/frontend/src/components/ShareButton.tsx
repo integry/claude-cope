@@ -9,9 +9,7 @@ import { useSharePreviewImage } from "./useSharePreviewImage";
 
 type MountToken = { cancelled: boolean };
 type SharePlatform = "twitter" | "linkedin";
-type PasteHintState =
-  | { platform: "twitter"; method: "image" | "link" }
-  | { platform: "linkedin" };
+type PasteHintState = { platform: "twitter"; method: "image" | "link" } | { platform: "linkedin" };
 
 const SPINNER_FRAMES = ["|", "/", "-", "\\"];
 
@@ -26,19 +24,8 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   const triggerRef = useRef<HTMLButtonElement>(null);
   const previewSessionRef = useRef(0);
   const previewCreationAbortRef = useRef<AbortController | null>(null);
-  const {
-    getCachedNativeShareCard,
-    invalidateStaleNativeShareCache,
-    requestNativeShareCard,
-    resetNativeShareCardCache,
-  } = useNativeShareCard(shareClaim);
-  const {
-    loadPreviewBlob,
-    previewImageObjectUrl,
-    previewImageStatus,
-    prewarmPreviewImage,
-    resetPreviewImage,
-  } = useSharePreviewImage(previewCard);
+  const { getCachedNativeShareCard, invalidateStaleNativeShareCache, requestNativeShareCard, resetNativeShareCardCache } = useNativeShareCard(shareClaim);
+  const { loadPreviewBlob, previewImageObjectUrl, previewImageStatus, prewarmPreviewImage, resetPreviewImage } = useSharePreviewImage(previewCard);
 
   const clearTimeouts = useCallback(() => {
     timeoutIds.current.forEach(clearTimeout);
@@ -65,9 +52,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   }, []);
 
   useEffect(() => () => { clearTimeouts(); }, [clearTimeouts]);
-  useEffect(() => () => {
-    previewCreationAbortRef.current?.abort();
-  }, []);
+  useEffect(() => () => { previewCreationAbortRef.current?.abort(); }, []);
   useEffect(() => {
     const spinnerActive = status === "generating" || previewImageStatus === "loading";
     if (!spinnerActive) {
@@ -84,11 +69,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
 
   const resetAfterDelay = useCallback((ms: number) => {
     clearTimeouts();
-    addTimeout(() => {
-      setStatus("idle");
-      setFeedback(null);
-      triggerRef.current?.focus();
-    }, ms);
+    addTimeout(() => { setStatus("idle"); setFeedback(null); triggerRef.current?.focus(); }, ms);
   }, [clearTimeouts, addTimeout]);
 
   const generatingRef = useRef(false);
@@ -113,9 +94,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     }
   }, [clearTimeouts, resetNativeShareCardCache, resetPreviewImage]);
 
-  const closePreview = useCallback((options?: { resetStatus?: boolean }) => {
-    resetPreviewState(options);
-  }, [resetPreviewState]);
+  const closePreview = useCallback((options?: { resetStatus?: boolean }) => { resetPreviewState(options); }, [resetPreviewState]);
 
   const openPreviewCard = useCallback((card: CreateShareCardResult) => {
     setPreviewCard(card);
@@ -128,11 +107,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     resetPreviewState({ resetNativeShareCardCache: true });
   }, [shareClaim, resetPreviewState]);
 
-  const tryNativeShare = useCallback(async (
-    card: CreateShareCardResult,
-    token: MountToken,
-    sessionId: number,
-  ): Promise<"shared" | "cancelled" | "fallback"> => {
+  const tryNativeShare = useCallback(async (card: CreateShareCardResult, token: MountToken, sessionId: number): Promise<"shared" | "cancelled" | "fallback"> => {
     try {
       await navigator.share({
         title: `Claude Cope chat by @${username}`,
@@ -156,11 +131,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
 
   const canAttemptImmediateNativeShare = useCallback((shareClaimValue: string) => {
     invalidateStaleNativeShareCache(shareClaimValue);
-    const nativeShareCard = getCachedNativeShareCard(shareClaimValue);
-    if (!nativeShareCard) {
-      return null;
-    }
-    return nativeShareCard;
+    return getCachedNativeShareCard(shareClaimValue);
   }, [getCachedNativeShareCard, invalidateStaleNativeShareCache]);
 
   const shouldFallbackToPreviewBeforeNativeShare = useCallback((activationAtStart: boolean | null) => {
@@ -169,11 +140,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     return !canConfirmActivation || activationAtStart === false || activationBeforeShare === false;
   }, []);
 
-  const trySharingExistingNativeCard = useCallback(async (
-    shareClaimValue: string,
-    token: MountToken,
-    sessionId: number,
-  ) => {
+  const trySharingExistingNativeCard = useCallback(async (shareClaimValue: string, token: MountToken, sessionId: number) => {
     const nativeShareCard = canAttemptImmediateNativeShare(shareClaimValue);
     if (!nativeShareCard) {
       return false;
@@ -186,21 +153,13 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     return true;
   }, [canAttemptImmediateNativeShare, openPreviewCard, tryNativeShare]);
 
-  const createPreviewCard = useCallback((useNativeShareFlow: boolean, abortController: AbortController) => {
-    return useNativeShareFlow
+  const createPreviewCard = useCallback((useNativeShareFlow: boolean, abortController: AbortController) => (
+    useNativeShareFlow
       ? requestNativeShareCard()
-      : createShareCard({
-          shareClaim,
-          signal: abortController.signal,
-        });
-  }, [requestNativeShareCard, shareClaim]);
+      : createShareCard({ shareClaim, signal: abortController.signal })
+  ), [requestNativeShareCard, shareClaim]);
 
-  const maybeHandleNativeShareForNewCard = useCallback(async (
-    card: CreateShareCardResult,
-    activationAtStart: boolean | null,
-    token: MountToken,
-    sessionId: number,
-  ) => {
+  const maybeHandleNativeShareForNewCard = useCallback(async (card: CreateShareCardResult, activationAtStart: boolean | null, token: MountToken, sessionId: number) => {
     if (shouldFallbackToPreviewBeforeNativeShare(activationAtStart)) {
       openPreviewCard(card);
       return true;
@@ -237,12 +196,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       const card = await createPreviewCard(useNativeShareFlow, abortController);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
 
-      if (
-        useNativeShareFlow
-        && await maybeHandleNativeShareForNewCard(card, activationAtStart, token, sessionId)
-      ) {
-          return;
-      }
+      if (useNativeShareFlow && await maybeHandleNativeShareForNewCard(card, activationAtStart, token, sessionId)) return;
       openPreviewCard(card);
     } catch (error) {
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
@@ -377,9 +331,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       }
 
       if (e.key === "Tab" && modal) {
-        const focusable = modal.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        );
+        const focusable = modal.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
         if (focusable.length === 0) return;
         const first = focusable[0]!;
         const last = focusable[focusable.length - 1]!;
@@ -419,21 +371,12 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       {previewCard ? (
         <ShareButtonPreviewModal
           closePreview={() => closePreview()}
-          feedback={feedback}
-          handleCopyImage={handleCopyImage}
-          handleOpenShareTarget={handleOpenShareTarget}
-          handleShare={handleShare}
-          isGenerating={isGenerating}
-          isPreviewImageLoading={isPreviewImageLoading}
+          feedback={feedback} handleCopyImage={handleCopyImage} handleOpenShareTarget={handleOpenShareTarget} handleShare={handleShare} isGenerating={isGenerating} isPreviewImageLoading={isPreviewImageLoading}
           modalRef={modalRef}
           pasteHint={pasteHint}
-          previewImageObjectUrl={previewImageObjectUrl}
-          spinnerChar={spinnerChar}
-          status={status}
-          systemMessage={systemMessage}
+          previewImageObjectUrl={previewImageObjectUrl} spinnerChar={spinnerChar} status={status} systemMessage={systemMessage}
           triggerFocus={() => triggerRef.current?.focus()}
-          userMessage={userMessage}
-          username={username}
+          userMessage={userMessage} username={username}
         />
       ) : null}
     </span>
