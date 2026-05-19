@@ -3,6 +3,23 @@ import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
 
 type NativeShareCardCache = { shareClaim: string; card: CreateShareCardResult };
 type NativeShareCardRequest = { shareClaim: string; request: Promise<CreateShareCardResult> };
+type NativeShareCardOptions = { signal?: AbortSignal };
+
+function createAbortError() {
+  return new DOMException("The operation was aborted.", "AbortError");
+}
+
+function bindAbortSignal(signal: AbortSignal | undefined, abortController: AbortController) {
+  if (!signal) return () => {};
+  if (signal.aborted) {
+    abortController.abort();
+    return () => {};
+  }
+
+  const handleAbort = () => abortController.abort();
+  signal.addEventListener("abort", handleAbort, { once: true });
+  return () => signal.removeEventListener("abort", handleAbort);
+}
 
 export function useNativeShareCard(shareClaim: string) {
   const nativeShareCardRef = useRef<NativeShareCardCache | null>(null);
@@ -40,29 +57,38 @@ export function useNativeShareCard(shareClaim: string) {
     return nativeShareCardRef.current?.shareClaim === expectedShareClaim ? nativeShareCardRef.current.card : null;
   }, []);
 
-  const requestNativeShareCard = useCallback(() => {
+  const requestNativeShareCard = useCallback((options?: NativeShareCardOptions) => {
     invalidateStaleNativeShareCache(shareClaim);
+    const signal = options?.signal;
 
     const cachedCard = getCachedNativeShareCard(shareClaim);
     if (cachedCard) return Promise.resolve(cachedCard);
 
     if (nativeShareCardRequestRef.current?.shareClaim === shareClaim) {
-      return nativeShareCardRequestRef.current.request;
+      if (signal?.aborted) {
+        return Promise.reject(createAbortError());
+      }
+
+      const existingAbortController = nativeShareCardAbortRef.current;
+      const cleanup = existingAbortController ? bindAbortSignal(signal, existingAbortController) : () => {};
+      return nativeShareCardRequestRef.current.request.finally(cleanup);
     }
 
     const generation = nativeShareCardGenerationRef.current;
     const abortController = new AbortController();
     nativeShareCardAbortRef.current = abortController;
+    const cleanupBoundSignal = bindAbortSignal(signal, abortController);
 
     const request = createShareCard({ shareClaim, signal: abortController.signal })
       .then((card) => {
         if (abortController.signal.aborted || generation !== nativeShareCardGenerationRef.current) {
-          throw new DOMException("The operation was aborted.", "AbortError");
+          throw createAbortError();
         }
         nativeShareCardRef.current = { shareClaim, card };
         return card;
       })
       .finally(() => {
+        cleanupBoundSignal();
         if (nativeShareCardRequestRef.current?.request === request) {
           nativeShareCardRequestRef.current = null;
         }

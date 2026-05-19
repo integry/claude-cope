@@ -3,7 +3,7 @@ import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
 import { copyBlobToClipboard, copyTextToClipboard, openShareIntent } from "./shareChatUtils";
 import { isNativeShareCancellation } from "./shareButtonNativeShare";
 import { getTransientUserActivationState, shouldUseNativeShareFlow } from "./shareButtonBrowser";
-import { ShareButtonInlineStatus, ShareButtonPreviewModal } from "./ShareButtonPreviewModal";
+import { ShareButtonInlineStatus, ShareButtonPreviewModal, type ShareButtonPreviewActions, type ShareButtonPreviewModel } from "./ShareButtonPreviewModal";
 import { useNativeShareCard } from "./useNativeShareCard";
 import { useSharePreviewImage } from "./useSharePreviewImage";
 
@@ -134,12 +134,6 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     return getCachedNativeShareCard(shareClaimValue);
   }, [getCachedNativeShareCard, invalidateStaleNativeShareCache]);
 
-  const shouldFallbackToPreviewBeforeNativeShare = useCallback((activationAtStart: boolean | null) => {
-    const activationBeforeShare = getTransientUserActivationState();
-    const canConfirmActivation = activationAtStart !== null && activationBeforeShare !== null;
-    return !canConfirmActivation || activationAtStart === false || activationBeforeShare === false;
-  }, []);
-
   const trySharingExistingNativeCard = useCallback(async (shareClaimValue: string, token: MountToken, sessionId: number) => {
     const nativeShareCard = canAttemptImmediateNativeShare(shareClaimValue);
     if (!nativeShareCard) {
@@ -155,12 +149,13 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
 
   const createPreviewCard = useCallback((useNativeShareFlow: boolean, abortController: AbortController) => (
     useNativeShareFlow
-      ? requestNativeShareCard()
+      ? requestNativeShareCard({ signal: abortController.signal })
       : createShareCard({ shareClaim, signal: abortController.signal })
   ), [requestNativeShareCard, shareClaim]);
 
   const maybeHandleNativeShareForNewCard = useCallback(async (card: CreateShareCardResult, activationAtStart: boolean | null, token: MountToken, sessionId: number) => {
-    if (shouldFallbackToPreviewBeforeNativeShare(activationAtStart)) {
+    const activationBeforeShare = getTransientUserActivationState();
+    if (activationAtStart === false || activationBeforeShare === false) {
       openPreviewCard(card);
       return true;
     }
@@ -169,7 +164,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       return true;
     }
     return false;
-  }, [openPreviewCard, shouldFallbackToPreviewBeforeNativeShare, tryNativeShare]);
+  }, [openPreviewCard, tryNativeShare]);
 
   const handleOpenPreview = useCallback(async () => {
     if (generatingRef.current) return;
@@ -354,6 +349,25 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   const isGenerating = status === "generating";
   const spinnerChar = SPINNER_FRAMES[spinnerFrameIndex]!;
   const isPreviewImageLoading = previewImageStatus === "loading";
+  const previewActions: ShareButtonPreviewActions = {
+    closePreview: () => closePreview(),
+    copyImage: handleCopyImage,
+    openShareTarget: handleOpenShareTarget,
+    shareToPlatform: handleShare,
+    triggerFocus: () => triggerRef.current?.focus(),
+  };
+  const previewModel: ShareButtonPreviewModel = {
+    feedback,
+    isGenerating,
+    isPreviewImageLoading,
+    pasteHint,
+    previewImageObjectUrl,
+    spinnerChar,
+    status,
+    systemMessage,
+    userMessage,
+    username,
+  };
 
   if (status !== "idle" && !previewCard) {
     return <ShareButtonInlineStatus closePreview={() => closePreview()} feedback={feedback} spinnerChar={spinnerChar} status={status} />;
@@ -370,13 +384,9 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       </button>
       {previewCard ? (
         <ShareButtonPreviewModal
-          closePreview={() => closePreview()}
-          feedback={feedback} handleCopyImage={handleCopyImage} handleOpenShareTarget={handleOpenShareTarget} handleShare={handleShare} isGenerating={isGenerating} isPreviewImageLoading={isPreviewImageLoading}
+          actions={previewActions}
           modalRef={modalRef}
-          pasteHint={pasteHint}
-          previewImageObjectUrl={previewImageObjectUrl} spinnerChar={spinnerChar} status={status} systemMessage={systemMessage}
-          triggerFocus={() => triggerRef.current?.focus()}
-          userMessage={userMessage} username={username}
+          preview={previewModel}
         />
       ) : null}
     </span>

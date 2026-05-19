@@ -6,6 +6,7 @@ type SharePlatform = "twitter" | "linkedin";
 type PasteHintState =
   | { platform: "twitter"; method: "image" | "link" }
   | { platform: "linkedin" };
+type ShareStatus = "idle" | "generating" | "copied" | "error";
 
 const modalStyle: CSSProperties = { fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace", fontSize: "13px", lineHeight: "1.4", backgroundColor: "#1e232b", border: "2px solid #ff5555", boxShadow: "8px 8px 0px rgba(0, 0, 0, 0.9)", maxWidth: "calc(100vw - 2rem)", maxHeight: "calc(100vh - 2rem)", overflow: "hidden", color: "#c9d1d9", display: "flex", flexDirection: "column" };
 const modalHeaderStyle: CSSProperties = { padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #ff5555" };
@@ -40,7 +41,7 @@ export function ShareButtonInlineStatus({
   closePreview: () => void;
   feedback: string | null;
   spinnerChar: string;
-  status: "idle" | "generating" | "copied" | "error";
+  status: ShareStatus;
 }) {
   if (status === "idle") return null;
 
@@ -53,41 +54,39 @@ export function ShareButtonInlineStatus({
   );
 }
 
-export function ShareButtonPreviewModal({
-  closePreview,
-  feedback,
-  handleCopyImage,
-  handleOpenShareTarget,
-  handleShare,
-  isGenerating,
-  isPreviewImageLoading,
-  modalRef,
-  pasteHint,
-  previewImageObjectUrl,
-  spinnerChar,
-  status,
-  triggerFocus,
-  userMessage,
-  username,
-  systemMessage,
-}: {
-  closePreview: () => void;
+export type ShareButtonPreviewModel = {
   feedback: string | null;
-  handleCopyImage: () => void;
-  handleOpenShareTarget: (platform: SharePlatform) => void;
-  handleShare: (platform: SharePlatform) => void;
   isGenerating: boolean;
   isPreviewImageLoading: boolean;
-  modalRef: RefObject<HTMLDivElement | null>;
   pasteHint: PasteHintState | null;
   previewImageObjectUrl: string | null;
   spinnerChar: string;
-  status: "idle" | "generating" | "copied" | "error";
-  triggerFocus: () => void;
+  status: ShareStatus;
+  systemMessage: string;
   userMessage: string;
   username: string;
-  systemMessage: string;
+};
+
+export type ShareButtonPreviewActions = {
+  closePreview: () => void;
+  copyImage: () => void;
+  openShareTarget: (platform: SharePlatform) => void;
+  shareToPlatform: (platform: SharePlatform) => void;
+  triggerFocus: () => void;
+};
+
+export function ShareButtonPreviewModal({
+  actions,
+  modalRef,
+  preview,
+}: {
+  actions: ShareButtonPreviewActions;
+  modalRef: RefObject<HTMLDivElement | null>;
+  preview: ShareButtonPreviewModel;
 }) {
+  const { closePreview, copyImage, openShareTarget, shareToPlatform, triggerFocus } = actions;
+  const { feedback, isGenerating, isPreviewImageLoading, pasteHint, previewImageObjectUrl, spinnerChar, status, systemMessage, userMessage, username } = preview;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
@@ -157,7 +156,7 @@ export function ShareButtonPreviewModal({
                   </>
                 )}
               </div>
-              <button onClick={() => handleOpenShareTarget(pasteHint.platform)} className="share-popup-action" style={linkStyle}>
+              <button onClick={() => openShareTarget(pasteHint.platform)} className="share-popup-action" style={linkStyle}>
                 <span data-cursor="">{">"}</span>
                 <span data-btn="">{` [ OPEN ${pasteHint.platform === "twitter" ? "X" : "LINKEDIN"} TAB ]`}</span>
               </button>
@@ -173,7 +172,7 @@ export function ShareButtonPreviewModal({
               {ACTIONS.map(({ label, platform }) => (
                 <button
                   key={label}
-                  onClick={platform ? () => handleShare(platform) : handleCopyImage}
+                  onClick={platform ? () => shareToPlatform(platform) : copyImage}
                   disabled={isGenerating}
                   className="share-popup-action"
                   style={{ ...closeButtonStyle, padding: 0, cursor: isGenerating ? "not-allowed" : "pointer", fontSize: "12px", opacity: isGenerating ? 0.5 : 1 }}
