@@ -67,6 +67,12 @@ export type ExecutiveSupporterEntitlementSyncResult = {
   activatedNow: boolean;
 };
 
+type ExecutiveSupporterActivationOptions = {
+  username: string;
+  licenseKeyHash: string;
+  displayRank?: string | null;
+};
+
 function buildExecutiveSupporterActivationMessage(username: string): string {
   return `[LIVE] 👑 ${username} just expensed the Executive Supporter Pack. Respect the grift.`;
 }
@@ -83,6 +89,73 @@ export async function emitExecutiveSupporterActivationEvent(
   username: string,
 ): Promise<void> {
   await insertRecentEventAndPrune(db, buildExecutiveSupporterActivationMessage(username));
+}
+
+export async function activateExecutiveSupporterIfNeeded(
+  db: D1Database,
+  opts: ExecutiveSupporterActivationOptions,
+): Promise<boolean> {
+  const updateResult = opts.displayRank === undefined
+    ? await db
+      .prepare(
+        `UPDATE user_scores
+         SET is_executive_supporter = 1,
+             updated_at = datetime('now')
+         WHERE license_hash = ?
+           AND is_executive_supporter = 0`,
+      )
+      .bind(opts.licenseKeyHash)
+      .run()
+    : await db
+      .prepare(
+        `UPDATE user_scores
+         SET is_executive_supporter = 1,
+             display_rank = ?,
+             updated_at = datetime('now')
+         WHERE username = ? AND license_hash = ?
+           AND is_executive_supporter = 0
+           AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
+      )
+      .bind(opts.displayRank, opts.username, opts.licenseKeyHash)
+      .run();
+
+  const activatedNow = Number(updateResult.meta.changes ?? 0) > 0;
+  if (!activatedNow) {
+    return false;
+  }
+
+  try {
+    await emitExecutiveSupporterActivationEvent(db, opts.username);
+  } catch (err: unknown) {
+    if (opts.displayRank === undefined) {
+      await db
+        .prepare(
+          `UPDATE user_scores
+           SET is_executive_supporter = 0,
+               updated_at = datetime('now')
+           WHERE license_hash = ?
+             AND is_executive_supporter = 1`,
+        )
+        .bind(opts.licenseKeyHash)
+        .run();
+    } else {
+      await db
+        .prepare(
+          `UPDATE user_scores
+           SET is_executive_supporter = 0,
+               display_rank = NULL,
+               updated_at = datetime('now')
+           WHERE username = ? AND license_hash = ?
+             AND is_executive_supporter = 1
+             AND display_rank = ?`,
+        )
+        .bind(opts.username, opts.licenseKeyHash, opts.displayRank)
+        .run();
+    }
+    throw err;
+  }
+
+  return true;
 }
 
 export async function syncExecutiveSupporterEntitlement(
@@ -114,34 +187,10 @@ export async function syncExecutiveSupporterEntitlement(
   }
 
   if (isExecutiveSupporter) {
-    const activationUpdate = await db
-      .prepare(
-        `UPDATE user_scores
-         SET is_executive_supporter = 1,
-             updated_at = datetime('now')
-         WHERE license_hash = ?
-           AND is_executive_supporter = 0`,
-      )
-      .bind(hash)
-      .run();
-    const activatedNow = Number(activationUpdate.meta.changes ?? 0) > 0;
-    if (activatedNow) {
-      try {
-        await emitExecutiveSupporterActivationEvent(db, existingUserRow.username);
-      } catch (err: unknown) {
-        await db
-          .prepare(
-            `UPDATE user_scores
-             SET is_executive_supporter = 0,
-                 updated_at = datetime('now')
-             WHERE license_hash = ?
-               AND is_executive_supporter = 1`,
-          )
-          .bind(hash)
-          .run();
-        throw err;
-      }
-    }
+    const activatedNow = await activateExecutiveSupporterIfNeeded(db, {
+      username: existingUserRow.username,
+      licenseKeyHash: hash,
+    });
     return { isExecutiveSupporter, activatedNow };
   } else {
     await db
@@ -235,7 +284,7 @@ type CreateProfileResult =
   | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; mutation: SyncProfileMutation; error?: undefined }
   | { profile: null; error: string; mutation?: undefined };
 
-type SyncProfileMutation =
+export type SyncProfileMutation =
   | { kind: "none" }
   | { kind: "created"; username: string }
   | { kind: "attached_license"; username: string; previousUsername: string };

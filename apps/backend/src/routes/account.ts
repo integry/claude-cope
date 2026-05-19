@@ -4,8 +4,8 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, rollbackSyncSideEffects, emitExecutiveSupporterActivationEvent } from "./accountHelpers";
-import type { CheckoutCache, ResolveProfileResult } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, rollbackSyncSideEffects, activateExecutiveSupporterIfNeeded } from "./accountHelpers";
+import type { CheckoutCache, ResolveProfileResult, SyncProfileMutation } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 import { issueFreeAccountCookie } from "../utils/freeAccountIdentity";
@@ -434,7 +434,7 @@ function respondWithSyncProfileError(
 async function rollbackSyncProfileMutation(
   db: D1Database,
   hash: string,
-  mutation: ResolveProfileResult["mutation"] | undefined,
+  mutation: SyncProfileMutation | undefined,
 ) {
   if (!mutation) {
     return;
@@ -489,21 +489,17 @@ async function persistDisplayRankUpdate(
   },
 ) {
   if (opts.needsFirstSupporterActivation) {
-    return db
-      .prepare(
-        `UPDATE user_scores
-         SET is_executive_supporter = 1,
-             display_rank = ?,
-             updated_at = datetime('now')
-         WHERE username = ? AND license_hash = ?
-           AND is_executive_supporter = 0
-           AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
-      )
-      .bind(opts.displayRank, opts.username, opts.licenseKeyHash)
-      .run();
+    const activatedNow = await activateExecutiveSupporterIfNeeded(db, {
+      username: opts.username,
+      licenseKeyHash: opts.licenseKeyHash,
+      displayRank: opts.displayRank,
+    });
+    if (activatedNow) {
+      return { updated: true, activatedNow: true };
+    }
   }
 
-  return db
+  const result = await db
     .prepare(
       `UPDATE user_scores SET display_rank = ?, updated_at = datetime('now')
        WHERE username = ? AND license_hash = ?${opts.displayRank === null ? "" : " AND is_executive_supporter = 1"}
@@ -511,24 +507,10 @@ async function persistDisplayRankUpdate(
     )
     .bind(opts.displayRank, opts.username, opts.licenseKeyHash)
     .run();
-}
-
-async function rollbackDisplayRankSupporterActivation(
-  db: D1Database,
-  opts: { username: string; licenseKeyHash: string; displayRank: string },
-) {
-  await db
-    .prepare(
-      `UPDATE user_scores
-       SET is_executive_supporter = 0,
-           display_rank = NULL,
-           updated_at = datetime('now')
-       WHERE username = ? AND license_hash = ?
-         AND is_executive_supporter = 1
-         AND display_rank = ?`,
-    )
-    .bind(opts.username, opts.licenseKeyHash, opts.displayRank)
-    .run();
+  return {
+    updated: Number(result.meta.changes ?? 0) > 0,
+    activatedNow: false,
+  };
 }
 
 async function bindSessionUserIfPresent(
@@ -1062,22 +1044,11 @@ account.post("/update-display-rank", async (c) => {
     needsFirstSupporterActivation,
   });
 
-  if (!result.meta.changes) {
+  if (!result.updated) {
     return c.json({ error: "Update failed — profile not found, supporter entitlement missing, or license revoked" }, 409);
   }
-
-  if (needsFirstSupporterActivation) {
-    try {
-      await emitExecutiveSupporterActivationEvent(db, profile.username);
-      profile.is_executive_supporter = true;
-    } catch (err: unknown) {
-      await rollbackDisplayRankSupporterActivation(db, {
-        username: profile.username,
-        licenseKeyHash,
-        displayRank,
-      });
-      throw err;
-    }
+  if (result.activatedNow) {
+    profile.is_executive_supporter = true;
   }
 
   const updated = await getProfile(db, profile.username);
