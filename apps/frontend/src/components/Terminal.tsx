@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import type { ServerProfile } from "@claude-cope/shared/profile";
 import { getSlashMenuItems, resolveSlashMenuSelection } from "./slashCommands";
@@ -33,11 +32,11 @@ import { usePromptSubmissionState } from "./usePromptSubmissionState";
 import { useUpgradeNagState } from "./useUpgradeNagState";
 import { STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, getSlashCommandClickSelection, syncMessageKeys } from "./terminalUtils";
 import { useIsMobileViewport } from "./useIsMobileViewport";
+import { useMobilePromptFollow } from "./useMobilePromptFollow";
 export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
 type PromptSubmission = { command: string; replayId: number | null; submissionId: number };
 const createPromptLoadingMessage = (submissionId: number): Message => ({ id: submissionId, role: "loading", content: getRandomLoadingPhrase() });
-const removePromptMessages = (submissionId: number) => (prev: Message[]) =>
-  prev.filter((message) => !(message.id === submissionId && (message.role === "user" || message.role === "loading")));
+const removePromptMessages = (submissionId: number) => (prev: Message[]) => prev.filter((message) => !(message.id === submissionId && (message.role === "user" || message.role === "loading")));
 
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
@@ -87,12 +86,6 @@ function Terminal() {
   const historyRef = useRef(history);
   historyRef.current = history;
   const hasScrolledTerminalToBottomOnLoadRef = useRef(false);
-  const wasMobileRequestProcessingRef = useRef(false);
-  const activeMobilePromptKeyRef = useRef<number | null>(null);
-  const mobilePromptFollowFrameRef = useRef<number | null>(null);
-  const mobilePromptFollowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastMobilePromptScrollHeightRef = useRef(0);
-  const lastMobilePromptGrowthAtRef = useRef(0);
   const lastSuggestedReplyRef = useRef<string | null>(null);
   const nextPendingBacklogRollbackIdRef = useRef(0);
   const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
@@ -101,31 +94,12 @@ function Terminal() {
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
-  const {
-    abortControllerRef,
-    createPromptProcessingSetter,
-    isProcessing,
-    resetPromptProcessing,
-    setIsProcessing,
-    startPromptProcessing,
-    trackAbortController,
-    untrackAbortController,
-  } = usePromptSubmissionState();
+  const { abortControllerRef, createPromptProcessingSetter, isProcessing, resetPromptProcessing, setIsProcessing, startPromptProcessing, trackAbortController, untrackAbortController } = usePromptSubmissionState();
   const { recordConversationRound, recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
   const resolveScrollViewport = useCallback((): HTMLDivElement | null => {
     if (scrollViewportRef.current) return scrollViewportRef.current;
     if (typeof document === "undefined") return null;
     return document.querySelector<HTMLDivElement>('[data-terminal-scroll-viewport="true"]');
-  }, []);
-  const stopMobilePromptFollowLoop = useCallback(() => {
-    if (mobilePromptFollowFrameRef.current !== null && typeof cancelAnimationFrame === "function") {
-      cancelAnimationFrame(mobilePromptFollowFrameRef.current);
-    }
-    mobilePromptFollowFrameRef.current = null;
-    if (mobilePromptFollowTimeoutRef.current) {
-      clearTimeout(mobilePromptFollowTimeoutRef.current);
-    }
-    mobilePromptFollowTimeoutRef.current = null;
   }, []);
   const scrollTerminalToBottom = useCallback(() => {
     const viewport = resolveScrollViewport();
@@ -139,9 +113,6 @@ function Terminal() {
       bottomRef.current.scrollIntoView({ behavior: "auto", block: "end" });
     }
   }, [resolveScrollViewport]);
-  useEffect(() => () => {
-    stopMobilePromptFollowLoop();
-  }, [stopMobilePromptFollowLoop]);
   useEffect(() => () => {
     const ds = freeTierDelayRef.current;
     ds.cancelled = true;
@@ -173,23 +144,7 @@ function Terminal() {
     setCommandHistoryEntries((prev) => [...prev, { submissionId, command }]);
     processCommandRef.current({ command, replayId, submissionId });
   }, [setCommandHistoryEntries]);
-  const {
-    closeAllOverlaysAndRestoreNag,
-    closeAllOverlaysPreservingNag,
-    dismissUpgradeOverlay: dismissUpgradeNagOverlay,
-    handleUpgradeNagClose,
-    nagArmedFromQuotaRef,
-    openUpgradeNag,
-    pendingNagCommand,
-    pendingNagCommandRef,
-    settleAcceptedNagReplay,
-    upgradeNagDismissEffect,
-    upgradeNagDismissPhase,
-  } = useUpgradeNagState({
-    closeAllOverlays,
-    setInputValue,
-    setShowUpgrade,
-  });
+  const { closeAllOverlaysAndRestoreNag, closeAllOverlaysPreservingNag, dismissUpgradeOverlay: dismissUpgradeNagOverlay, handleUpgradeNagClose, nagArmedFromQuotaRef, openUpgradeNag, pendingNagCommand, pendingNagCommandRef, settleAcceptedNagReplay, upgradeNagDismissEffect, upgradeNagDismissPhase } = useUpgradeNagState({ closeAllOverlays, setInputValue, setShowUpgrade });
   const handleProfileClick = useCallback(() => {
     closeAllOverlaysPreservingNag();
     setShowProfile(true);
@@ -215,92 +170,7 @@ function Terminal() {
     if (isMobileViewport) return;
     scrollTerminalToBottom();
   }, [history, isMobileViewport, scrollTerminalToBottom]);
-  useEffect(() => {
-    if (!isMobileViewport) {
-      wasMobileRequestProcessingRef.current = isProcessing;
-      activeMobilePromptKeyRef.current = null;
-      lastMobilePromptScrollHeightRef.current = 0;
-      lastMobilePromptGrowthAtRef.current = 0;
-      stopMobilePromptFollowLoop();
-      return;
-    }
-    let latestPromptIndex = -1;
-    for (let i = history.length - 1; i >= 0; i -= 1) {
-      if (history[i]?.role === "user") {
-        latestPromptIndex = i;
-        break;
-      }
-    }
-    if (latestPromptIndex < 0) return;
-    const latestPromptKey = messageKeys.current[latestPromptIndex];
-    if (latestPromptKey == null) return;
-    const viewport = resolveScrollViewport();
-    const justFinishedProcessing = wasMobileRequestProcessingRef.current && !isProcessing;
-    if (isProcessing && activeMobilePromptKeyRef.current !== latestPromptKey) {
-      activeMobilePromptKeyRef.current = latestPromptKey;
-    }
-    if (isProcessing && viewport) {
-      lastMobilePromptScrollHeightRef.current = viewport.scrollHeight;
-      lastMobilePromptGrowthAtRef.current = Date.now();
-    } else if (justFinishedProcessing && viewport) {
-      lastMobilePromptScrollHeightRef.current = viewport.scrollHeight;
-      lastMobilePromptGrowthAtRef.current = Date.now();
-    }
-    const trackedPromptKey = activeMobilePromptKeyRef.current;
-    const shouldTrack = trackedPromptKey === latestPromptKey && (isProcessing || justFinishedProcessing);
-    wasMobileRequestProcessingRef.current = isProcessing;
-    if (!shouldTrack || !viewport || typeof document === "undefined") return;
-    stopMobilePromptFollowLoop();
-    const runFollowFrame = () => {
-      const currentPromptKey = activeMobilePromptKeyRef.current;
-      if (currentPromptKey !== latestPromptKey) {
-        mobilePromptFollowFrameRef.current = null;
-        return;
-      }
-      const currentViewport = resolveScrollViewport();
-      const target = document.querySelector<HTMLElement>(`[data-message-key="${latestPromptKey}"]`);
-      if (!currentViewport || !target) {
-        mobilePromptFollowFrameRef.current = null;
-        return;
-      }
-      const viewportRect = currentViewport.getBoundingClientRect();
-      const targetRect = target.getBoundingClientRect();
-      const promptReachedTop = targetRect.top <= viewportRect.top + 1;
-      const maxScrollTop = currentViewport.scrollHeight - currentViewport.clientHeight;
-      const now = Date.now();
-      if (currentViewport.scrollHeight !== lastMobilePromptScrollHeightRef.current) {
-        lastMobilePromptScrollHeightRef.current = currentViewport.scrollHeight;
-        lastMobilePromptGrowthAtRef.current = now;
-      }
-      if (!promptReachedTop) {
-        const remainingDistance = Math.max(0, maxScrollTop - currentViewport.scrollTop);
-        const nextStep = remainingDistance > 0
-          ? Math.max(12, Math.min(remainingDistance, remainingDistance * 0.18))
-          : 0;
-        currentViewport.scrollTop = Math.min(maxScrollTop, currentViewport.scrollTop + nextStep);
-      }
-      const quietMs = now - lastMobilePromptGrowthAtRef.current;
-      const isStuckAtBottom = currentViewport.scrollTop >= maxScrollTop && !promptReachedTop;
-      const shouldContinue =
-        activeMobilePromptKeyRef.current === latestPromptKey &&
-        !promptReachedTop &&
-        (isProcessing || quietMs < 1000);
-      if (shouldContinue) {
-        if (isStuckAtBottom && !isProcessing) {
-          mobilePromptFollowTimeoutRef.current = setTimeout(() => {
-            mobilePromptFollowTimeoutRef.current = null;
-            mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
-          }, 80);
-        } else {
-          mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
-        }
-        return;
-      }
-      if (promptReachedTop) activeMobilePromptKeyRef.current = null;
-      mobilePromptFollowFrameRef.current = null;
-    };
-    mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
-  }, [history, isMobileViewport, isProcessing, resolveScrollViewport, stopMobilePromptFollowLoop]);
+  useMobilePromptFollow({ history, isMobileViewport, isProcessing, messageKeys: messageKeys.current, resolveScrollViewport });
   useEffect(() => {
     const onPopState = () => {
       if (pendingNagCommandRef.current !== null) return void setShowUpgrade(true);
@@ -322,10 +192,7 @@ function Terminal() {
       void fetchRandomTicketPrompt(setHistory, currentState.proKeyHash);
     }, STARTUP_TICKET_PROMPT_DELAY_MS);
     return () => {
-      if (startupTicketPromptTimeoutRef.current) {
-        clearTimeout(startupTicketPromptTimeoutRef.current);
-        startupTicketPromptTimeoutRef.current = null;
-      }
+      if (startupTicketPromptTimeoutRef.current) { clearTimeout(startupTicketPromptTimeoutRef.current); startupTicketPromptTimeoutRef.current = null; }
     };
   }, [getCurrentState, isBooting, state.hasSeenTicketPrompt, state.activeTicket, state.proKeyHash, setState, setHistory]);
   const handleQuotaLockout = useCallback((command?: string) => {
@@ -469,9 +336,7 @@ function Terminal() {
   };
   processCommandRef.current = processCommand;
   const submitPromptCommandWithAccounting = useCallback((command: string, replayId: number | null = null) => {
-    setInputValue("");
-    setHistoryIndex(-1);
-    submitPromptCommand(command, replayId);
+    setInputValue(""); setHistoryIndex(-1); submitPromptCommand(command, replayId);
   }, [submitPromptCommand]);
   const submitCommandValue = useCallback(async (commandValue: string) => {
     if (tryOutageDamage({ inputValue: commandValue, outageHp, activeOutageScenario, sendDamage, setHistory, setInputValue })) return;
@@ -514,16 +379,16 @@ function Terminal() {
     <TerminalView
       activeRegression={activeRegression} outageHp={outageHp} activeOutageScenario={activeOutageScenario} pendingReviewPing={pendingReviewPing} pingAcknowledged={pingAcknowledged}
       activeTheme={state.activeTheme} regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} isMobileViewport={isMobileViewport} inputRef={inputRef} closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
-      onlineCount={onlineCount} rank={rank} state={state} handleHomeClick={handleHomeClick} handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue}
-      setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect} isBooting={isBooting} history={history}
-      messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} scrollViewportRef={scrollViewportRef} bottomRef={bottomRef}
-      slashQuery={slashQuery} slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect} runSlashCommand={runSlashCommand} inputValue={inputValue} suggestedReply={suggestedReply} acceptSuggestedReply={acceptSuggestedReply}
-      isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown} handleSubmit={handleEnterSubmit} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme}
-      showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy}
-      showTerms={showTerms} showContact={showContact} showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade} setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard}
-      setShowAchievements={setShowAchievements} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms} setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty}
-      setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory} pendingNagCommand={pendingNagCommand} handleUpgradeNagClose={handleUpgradeNagDismiss}
-      handleManualUpgradeDismiss={handleManualUpgradeDismiss} upgradeNagDismissPhase={upgradeNagDismissPhase} upgradeNagDismissEffect={upgradeNagDismissEffect} />
+      onlineCount={onlineCount} rank={rank} state={state} handleHomeClick={handleHomeClick} handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue} setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex}
+      setShowUpgrade={setShowUpgrade} compactEffect={compactEffect} isBooting={isBooting} history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString}
+      handleSlashCommandClick={handleSlashCommandClick} scrollViewportRef={scrollViewportRef} bottomRef={bottomRef} slashQuery={slashQuery} slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect}
+      runSlashCommand={runSlashCommand} inputValue={inputValue} suggestedReply={suggestedReply} acceptSuggestedReply={acceptSuggestedReply} isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown}
+      handleSubmit={handleEnterSubmit} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements}
+      showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact} showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade}
+      setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard} setShowAchievements={setShowAchievements} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms} setShowContact={setShowContact}
+      setShowProfile={setShowProfile} setShowParty={setShowParty} setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory} pendingNagCommand={pendingNagCommand}
+      handleUpgradeNagClose={handleUpgradeNagDismiss} handleManualUpgradeDismiss={handleManualUpgradeDismiss} upgradeNagDismissPhase={upgradeNagDismissPhase} upgradeNagDismissEffect={upgradeNagDismissEffect}
+    />
   );
 }
 export default Terminal;

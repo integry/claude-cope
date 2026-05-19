@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import type { ChangeEvent, Dispatch, KeyboardEvent as ReactKeyboardEvent, RefObject, SetStateAction } from "react";
 import { useRef } from "react";
 import CommandLine from "./CommandLine";
@@ -15,12 +14,12 @@ import SprintProgressBar from "./SprintProgressBar";
 import MessageList from "./MessageList";
 import type { SlashCommandAction } from "./slashCommandDetect";
 import { TerminalOverlays } from "./TerminalOverlays";
-import { BuddyOverlay } from "./BuddyOverlay";
 import type { GameState, Message } from "../hooks/useGameState";
 import type { PendingReviewPing } from "../hooks/useMultiplayer";
 import type { OverlayVisibility } from "./terminalViewUtils";
 import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
 import type { OutageScenario } from "@claude-cope/shared/multiplayer-types";
+import { buildTerminalOpeners, focusTerminalInputIfEligible, getUpgradeDismissProps, renderBuddyDock } from "./terminalViewHelpers";
 
 type TerminalViewProps = OverlayVisibility & {
   activeRegression: string | null;
@@ -89,85 +88,6 @@ type TerminalViewProps = OverlayVisibility & {
   upgradeNagDismissPhase: "idle" | "closing";
   upgradeNagDismissEffect: UpgradeNagCloseEffect;
 };
-
-function getUpgradeDismissProps(
-  pendingNagCommand: string | null,
-  handleUpgradeNagClose: () => void,
-  handleManualUpgradeDismiss: () => void,
-) {
-  const nagDismiss = pendingNagCommand !== null;
-  return {
-    onUpgradeDismiss: nagDismiss
-      ? handleUpgradeNagClose
-      : handleManualUpgradeDismiss,
-    upgradeDismissMode: nagDismiss ? "nag" : "manual",
-  } as const;
-}
-
-function focusTerminalInputIfEligible(
-  isMobileViewport: boolean,
-  anyOverlayOpen: boolean,
-  inputRef: RefObject<HTMLInputElement | null>,
-) {
-  if (
-    !isMobileViewport &&
-    !anyOverlayOpen &&
-    !window.getSelection()?.toString()
-  ) {
-    inputRef.current?.focus();
-  }
-}
-
-function createOverlayOpener(
-  closeAllOverlaysPreservingNag: () => void,
-  setVisible: Dispatch<SetStateAction<boolean>>,
-) {
-  return () => {
-    closeAllOverlaysPreservingNag();
-    setVisible(true);
-  };
-}
-
-function createSlashMenuOpener(
-  setInputValue: Dispatch<SetStateAction<string>>,
-  setSlashQuery: Dispatch<SetStateAction<string>>,
-  setSlashIndex: Dispatch<SetStateAction<number>>,
-  isMobileViewport: boolean,
-  inputRef: RefObject<HTMLInputElement | null>,
-) {
-  return () => {
-    setInputValue("/");
-    setSlashQuery("/");
-    setSlashIndex(0);
-    if (!isMobileViewport) inputRef.current?.focus();
-  };
-}
-
-function createUpgradeOpener(
-  closeAllOverlaysPreservingNag: () => void,
-  setShowUpgrade: Dispatch<SetStateAction<boolean>>,
-) {
-  return () => {
-    closeAllOverlaysPreservingNag();
-    setShowUpgrade(true);
-    window.history.pushState(null, "", "/upgrade");
-  };
-}
-
-function createTickerCommandRunner(
-  closeAllOverlaysPreservingNag: () => void,
-  runSlashCommand: (command: string) => void,
-) {
-  return (command: string) => {
-    closeAllOverlaysPreservingNag();
-    runSlashCommand(command);
-  };
-}
-
-function renderBuddyDock(buddy: GameState["buddy"]) {
-  if (!buddy.type) return null;
-  return <div className="terminal-buddy-dock hidden md:flex"><BuddyOverlay buddy={buddy} /></div>;
-}
 
 export function TerminalView({
   activeRegression,
@@ -252,37 +172,23 @@ export function TerminalView({
     handleUpgradeNagClose,
     handleManualUpgradeDismiss,
   );
-  const openHelp = createOverlayOpener(closeAllOverlaysPreservingNag, setShowHelp);
-  const openAbout = createOverlayOpener(closeAllOverlaysPreservingNag, setShowAbout);
-  const openStore = createOverlayOpener(closeAllOverlaysPreservingNag, setShowStore);
-  const openLeaderboard = createOverlayOpener(
+  const { openHelp, openAbout, openStore, openLeaderboard, openAchievements, openContact, openParty, openUpgrade, openSlashMenu, handleTickerCommand } = buildTerminalOpeners({
     closeAllOverlaysPreservingNag,
+    setShowHelp,
+    setShowAbout,
+    setShowStore,
     setShowLeaderboard,
-  );
-  const openAchievements = createOverlayOpener(
-    closeAllOverlaysPreservingNag,
     setShowAchievements,
-  );
-  const openContact = createOverlayOpener(
-    closeAllOverlaysPreservingNag,
     setShowContact,
-  );
-  const openParty = createOverlayOpener(closeAllOverlaysPreservingNag, setShowParty);
-  const openUpgrade = createUpgradeOpener(
-    closeAllOverlaysPreservingNag,
+    setShowParty,
     setShowUpgrade,
-  );
-  const openSlashMenu = createSlashMenuOpener(
     setInputValue,
     setSlashQuery,
     setSlashIndex,
     isMobileViewport,
     inputRef,
-  );
-  const handleTickerCommand = createTickerCommandRunner(
-    closeAllOverlaysPreservingNag,
     runSlashCommand,
-  );
+  });
 
   return (
     <div
