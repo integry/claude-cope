@@ -212,11 +212,23 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
 
   useEffect(() => {
     nativeShareCardGenerationRef.current += 1;
+    previewSessionRef.current += 1;
     previewCreationAbortRef.current?.abort();
     previewCreationAbortRef.current = null;
     generatingRef.current = false;
+    sharingRef.current = false;
     nativeShareCardRef.current = null;
     nativeShareCardRequestRef.current = null;
+    setPreviewCard(null);
+    setPreviewImageStatus("idle");
+    if (previewImageObjectUrlRef.current) {
+      URL.revokeObjectURL(previewImageObjectUrlRef.current);
+      previewImageObjectUrlRef.current = null;
+    }
+    setPreviewImageObjectUrl(null);
+    setStatus("idle");
+    setFeedback(null);
+    setPasteHint(null);
   }, [shareClaim]);
 
   const tryNativeShare = useCallback(async (
