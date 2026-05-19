@@ -254,6 +254,7 @@ export const SUPPORTER_VANITY_TITLES: SupporterVanityTitle[] = [
   { id: "evangelist", title: "Developer Evangelist", profile: "Hasn't pushed to production since 2019. Has great stickers." },
   { id: "prompt", title: "Head of Prompt Engineering", profile: "Actually believes typing in English is computer science." },
   { id: "maverick", title: "Agile Maverick", profile: "Will hold your hotfix hostage until you assign it story points." },
+  { id: "paradigm", title: "Chief Paradigm Officer", profile: "Has not fixed the bug, but has aligned the roadmap around it." },
 ];
 
 export const PRO_GATED_COMMANDS: ReadonlySet<string> = new Set([
