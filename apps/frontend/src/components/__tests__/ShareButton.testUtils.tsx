@@ -3,12 +3,6 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, vi } from "vitest";
 
-let isMobileViewportMock = false;
-
-vi.mock("../useIsMobileViewport", () => ({
-  useIsMobileViewport: () => isMobileViewportMock,
-}));
-
 import { ShareButton } from "../ShareButton";
 
 export type ShareCardResponse = {
@@ -65,7 +59,6 @@ export const setupShareButtonTest = () => {
   let imageFetchOverrides = new Map<string, Promise<Response>>();
 
   beforeEach(() => {
-    isMobileViewportMock = false;
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -83,6 +76,26 @@ export const setupShareButtonTest = () => {
       writable: true,
       configurable: true,
     });
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      value: 0,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgentData", {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+    vi.stubGlobal("matchMedia", vi.fn().mockImplementation(() => ({
+      matches: false,
+      media: "",
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })));
     // @ts-expect-error - ClipboardItem may not exist in jsdom
     globalThis.ClipboardItem = MockClipboardItem;
     vi.stubGlobal("URL", class extends URL {
@@ -173,8 +186,22 @@ export const setupShareButtonTest = () => {
     return Array.from(buttons).find((button) => button.textContent?.includes(label)) ?? null;
   };
 
-  const setMobileViewport = (value: boolean) => {
-    isMobileViewportMock = value;
+  const setNativeShareDevice = (value: boolean) => {
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      value: value ? 5 : 0,
+      writable: true,
+      configurable: true,
+    });
+    vi.stubGlobal("matchMedia", vi.fn().mockImplementation((query: string) => ({
+      matches: value && (query === "(pointer: coarse)" || query === "(any-pointer: coarse)"),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })));
   };
 
   const setNavigatorShare = (implementation?: typeof navigator.share) => {
@@ -219,7 +246,7 @@ export const setupShareButtonTest = () => {
     openPreview,
     renderOpenPreview,
     renderComponent,
-    setMobileViewport,
+    setNativeShareDevice,
     setNavigatorShare,
   };
 };

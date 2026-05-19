@@ -3,7 +3,6 @@ import { useState, useCallback, useEffect, useRef, type CSSProperties } from "re
 import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
 import { copyBlobToClipboard, copyTextToClipboard, openShareIntent } from "./shareChatUtils";
 import ShareCardRenderSurface from "./ShareCardRenderSurface";
-import { useIsMobileViewport } from "./useIsMobileViewport";
 
 type MountToken = { cancelled: boolean };
 type SharePlatform = "twitter" | "linkedin";
@@ -41,16 +40,27 @@ function supportsNativeShare(): boolean {
   return typeof navigator !== "undefined" && typeof navigator.share === "function";
 }
 
+function shouldUseNativeShareFlow(): boolean {
+  if (!supportsNativeShare() || typeof navigator === "undefined") return false;
+  const uaData = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
+  if (uaData.userAgentData?.mobile === true) return true;
+  const hasTouch = navigator.maxTouchPoints > 0;
+  const hasCoarsePointer = typeof window !== "undefined"
+    && typeof window.matchMedia === "function"
+    && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(any-pointer: coarse)").matches);
+  if (hasTouch && hasCoarsePointer) return true;
+  return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || "");
+}
+
 function isNativeShareCancellation(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const name = "name" in error && typeof error.name === "string" ? error.name : "";
   const message = "message" in error && typeof error.message === "string" ? error.message : "";
   if (name === "AbortError") return true;
-  return /cancelled|canceled|abort/i.test(message);
+  return /\b(cancelled|canceled)\b/i.test(message);
 }
 
 export function ShareButton({ userMessage, systemMessage, username, shareClaim }: { userMessage: string; systemMessage: string; username: string; shareClaim: string }) {
-  const isMobileViewport = useIsMobileViewport();
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [previewCard, setPreviewCard] = useState<CreateShareCardResult | null>(null);
@@ -233,7 +243,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       });
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
 
-      if (isMobileViewport && supportsNativeShare()) {
+      if (shouldUseNativeShareFlow()) {
         try {
           await navigator.share({
             title: `Claude Cope chat by @${username}`,
@@ -268,7 +278,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
         generatingRef.current = false;
       }
     }
-  }, [shareClaim, resetAfterDelay, isMobileViewport, openPreviewCard, username, userMessage]);
+  }, [shareClaim, resetAfterDelay, openPreviewCard, username, userMessage]);
 
   const handleShare = useCallback(async (platform: SharePlatform) => {
     if (!previewCard || sharingRef.current) return;

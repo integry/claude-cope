@@ -25,7 +25,7 @@ describe("ShareButton modal share flow", () => {
   const testScope = setupShareButtonTest();
 
   it("uses navigator.share on mobile with the backend-generated public share URL", async () => {
-    testScope.setMobileViewport(true);
+    testScope.setNativeShareDevice(true);
     testScope.setNavigatorShare(async () => undefined);
     testScope.renderComponent();
 
@@ -54,7 +54,7 @@ describe("ShareButton modal share flow", () => {
   });
 
   it("treats native share cancellation on mobile as a non-error", async () => {
-    testScope.setMobileViewport(true);
+    testScope.setNativeShareDevice(true);
     testScope.setNavigatorShare(async () => {
       throw new DOMException("The share operation was aborted.", "AbortError");
     });
@@ -75,8 +75,29 @@ describe("ShareButton modal share flow", () => {
     expect(testScope.container.querySelector("button")?.textContent).toBe("[share]");
   });
 
+  it("falls back to the existing modal when native share rejects unexpectedly", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(async () => {
+      throw new Error("share request aborted by browser extension");
+    });
+    testScope.renderComponent();
+
+    const shareBtn = testScope.container.querySelector("button");
+    expect(shareBtn).not.toBeNull();
+
+    await act(async () => {
+      shareBtn!.click();
+      await Promise.resolve();
+    });
+
+    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
+    expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(1);
+    expect(testScope.container.querySelector("[role='dialog']")).not.toBeNull();
+    expect(testScope.container.textContent).toContain("SHARE ON X");
+  });
+
   it("falls back to the existing modal on mobile when native share is unavailable", async () => {
-    testScope.setMobileViewport(true);
+    testScope.setNativeShareDevice(true);
     testScope.setNavigatorShare(undefined);
 
     const dialog = await testScope.renderOpenPreview();
