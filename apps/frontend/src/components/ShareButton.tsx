@@ -40,11 +40,19 @@ function supportsNativeShare(): boolean {
   return typeof navigator !== "undefined" && typeof navigator.share === "function";
 }
 
+function hasCoarsePointer(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(any-pointer: coarse)").matches;
+}
+
 function shouldUseNativeShareFlow(): boolean {
   if (!supportsNativeShare() || typeof navigator === "undefined") return false;
   const uaData = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
   if (uaData.userAgentData?.mobile === true) return true;
-  return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || "");
+  const userAgent = navigator.userAgent || "";
+  if (/android|iphone|ipad|ipod|mobile/i.test(userAgent)) return true;
+  if (uaData.userAgentData?.mobile === false) return false;
+  return navigator.maxTouchPoints > 0 && hasCoarsePointer();
 }
 
 function isNativeShareCancellation(error: unknown): boolean {
