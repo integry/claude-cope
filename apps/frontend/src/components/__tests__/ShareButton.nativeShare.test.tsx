@@ -58,6 +58,7 @@ describe("ShareButton native share flow", () => {
   it("uses navigator.share on mobile with the backend-generated public share URL", async () => {
     testScope.setNativeShareDevice(true);
     testScope.setNavigatorShare(async () => undefined);
+    testScope.setTransientUserActivation(true);
     testScope.renderComponent();
     await triggerMobileTap();
 
@@ -155,6 +156,7 @@ describe("ShareButton native share flow", () => {
   it("uses navigator.share for desktop-class iPad Safari user agents", async () => {
     testScope.setDesktopClassIpadDevice();
     testScope.setNavigatorShare(async () => undefined);
+    testScope.setTransientUserActivation(true);
     testScope.renderComponent();
     await triggerMobileTap();
 
@@ -170,6 +172,7 @@ describe("ShareButton native share flow", () => {
     testScope.setNavigatorShare(async () => {
       throw new DOMException("The share operation was aborted.", "AbortError");
     });
+    testScope.setTransientUserActivation(true);
     testScope.renderComponent();
     await triggerMobileTap();
 
@@ -185,6 +188,7 @@ describe("ShareButton native share flow", () => {
     testScope.setNavigatorShare(async () => {
       throw new DOMException("Share dismissed", "NotAllowedError");
     });
+    testScope.setTransientUserActivation(true);
     testScope.renderComponent();
     await triggerMobileTap();
 
@@ -199,6 +203,7 @@ describe("ShareButton native share flow", () => {
     testScope.setNavigatorShare(async () => {
       throw new Error("share request aborted by browser extension");
     });
+    testScope.setTransientUserActivation(true);
     testScope.renderComponent();
     await triggerMobileTap();
 
@@ -222,6 +227,7 @@ describe("ShareButton native share flow", () => {
   it("does not reuse a cached native-share card after shareClaim changes before effects flush", async () => {
     testScope.setNativeShareDevice(true);
     testScope.setNavigatorShare(async () => undefined);
+    testScope.setTransientUserActivation(true);
     testScope.shareCardResponses = [
       {
         ...shareCardResponse,
@@ -277,6 +283,7 @@ describe("ShareButton native share flow", () => {
   it("does not reuse a stale native-share card after shareClaim changes mid-request", async () => {
     testScope.setNativeShareDevice(true);
     testScope.setNavigatorShare(async () => undefined);
+    testScope.setTransientUserActivation(true);
     const firstCard = {
       ...shareCardResponse,
       shareId: "share-old",
