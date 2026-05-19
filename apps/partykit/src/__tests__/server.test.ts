@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Intentional single-file regression suite with shared typed harness helpers. */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type * as Party from "partykit/server";
 import ClaudeCopeServer from "../server";
@@ -10,7 +11,6 @@ import type {
   ReviewTicket,
   ServerMessage,
 } from "@claude-cope/shared/multiplayer-types";
-import { OUTAGE_SCENARIOS } from "@claude-cope/shared/outageScenarios";
 
 /**
  * Regression coverage for the PartyKit review-request state machine (issue #679).
@@ -95,10 +95,6 @@ function expectScenarioMessage<T extends OutageStartMessage | OutageUpdateMessag
 function expectScenarioIdentity(message: { scenario: OutageScenario }, scenario: OutageScenario): void {
   expect(message.scenario.id).toBe(scenario.id);
   expect(message.scenario.title).toBe(scenario.title);
-}
-
-function getOutageScenario(id: string): OutageScenario {
-  return OUTAGE_SCENARIOS.find((entry) => entry.id === id)!;
 }
 
 function latestPresence(room: FakeRoom): Extract<ServerMessage, { type: "presence" }> | undefined {
