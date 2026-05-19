@@ -282,6 +282,16 @@ function expectExecutiveBadgePlacement() {
   expect(mobileBadge?.textContent).toContain("EXECUTIVE MAX");
 }
 
+function expectVanityRankStyling() {
+  const rankLine = queryByTestId("desktop-rank-line");
+  const mobileRankLine = queryByTestId("mobile-rank-line");
+
+  expect(rankLine?.className).toContain("text-fuchsia-300");
+  expect(rankLine?.className).toContain("font-semibold");
+  expect(mobileRankLine?.className).toContain("text-fuchsia-300");
+  expect(mobileRankLine?.className).toContain("font-semibold");
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   if (container) {
@@ -319,6 +329,11 @@ describe("HeaderBar upgrade CTA visibility", () => {
   it("renders the mobile identity as a two-row layout with a home logo and abbreviated rank", () => {
     renderHeaderBar({ ...baseProps, currentTD: 3880, isBYOK: false, isMax: false });
     expectMobileIdentityLayout();
+  });
+
+  it("renders vanity overrides in the premium title color", () => {
+    renderHeaderBar({ ...baseProps, rank: "Founder in Stealth", hasVanityTitle: true, isBYOK: false, isMax: true, isExecutiveSupporter: true });
+    expectVanityRankStyling();
   });
 
   it("shows a dark red mobile quota track when quota is exhausted", () => {

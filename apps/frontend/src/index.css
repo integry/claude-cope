@@ -308,6 +308,20 @@ body {
   background: rgba(250, 204, 21, 0.08);
 }
 
+.leaderboard-vanity-rank-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid rgba(217, 70, 239, 0.45);
+  border-radius: 9999px;
+  padding: 0 0.35rem;
+  color: #f5d0fe;
+  background: rgba(217, 70, 239, 0.14);
+  box-shadow: 0 0 14px rgba(217, 70, 239, 0.12);
+}
+
 @media (max-width: 420px) {
   .leaderboard-row {
     gap: 0.35rem;
@@ -316,7 +330,8 @@ body {
   }
 
   .leaderboard-supporter-badge,
-  .leaderboard-supporter-rank-chip {
+  .leaderboard-supporter-rank-chip,
+  .leaderboard-vanity-rank-chip {
     max-width: 7.5rem;
   }
 }

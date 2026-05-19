@@ -323,6 +323,7 @@ export function TerminalView({
           isBYOK={BYOK_ENABLED && !!state.apiKey}
           isMax={Boolean(state.proKey || state.proKeyHash || state.isPro || state.hasSessionPro)}
           isExecutiveSupporter={Boolean(state.isExecutiveSupporter)}
+          hasVanityTitle={Boolean(state.displayRank)}
           byokTotalCost={state.byokTotalCost}
           onHomeClick={handleHomeClick}
           onProfileClick={handleProfileClick}

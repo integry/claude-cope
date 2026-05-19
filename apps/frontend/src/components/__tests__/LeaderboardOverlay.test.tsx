@@ -46,7 +46,8 @@ describe("LeaderboardOverlay", () => {
           id: "alice",
           username: "alice",
           country: "US",
-          corporate_rank: "Chief Firefighter",
+          corporate_rank: "Founder in Stealth",
+          display_rank: "Founder in Stealth",
           technical_debt: 9999,
           created_at: "2026-05-18T00:00:00Z",
           is_executive_supporter: true,
@@ -90,11 +91,11 @@ describe("LeaderboardOverlay", () => {
 
     const supporterBadge = container!.querySelector(".leaderboard-supporter-badge");
     const supporterUsername = container!.querySelector(".leaderboard-supporter-username");
-    const supporterRankChip = container!.querySelector(".leaderboard-supporter-rank-chip");
+    const supporterRankChip = container!.querySelector(".leaderboard-vanity-rank-chip");
 
     expect(supporterBadge?.textContent).toBe("EXEC");
     expect(supporterUsername?.textContent).toBe("alice");
-    expect(supporterRankChip?.textContent).toContain("[Chief Firefighter]");
+    expect(supporterRankChip?.textContent).toContain("[Founder in Stealth]");
     expect(container!.textContent).not.toContain("bob EXEC");
     expect(container!.textContent).not.toContain("carol EXEC");
   });

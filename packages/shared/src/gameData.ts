@@ -241,19 +241,20 @@ export const PROMOTE_ACCESS_DENIED_MESSAGE = "[HR ERROR] You have not accumulate
 export type SupporterVanityTitle = {
   id: string;
   title: string;
+  profile: string;
 };
 
-function toVanityTitleId(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-export const SUPPORTER_VANITY_TITLES: SupporterVanityTitle[] = CORPORATE_RANKS.map((rank) => ({
-  id: toVanityTitleId(rank.title),
-  title: rank.title,
-}));
+export const SUPPORTER_VANITY_TITLES: SupporterVanityTitle[] = [
+  { id: "10x", title: "10x Rockstar Ninja", profile: "Leaves a trail of unmaintainable genius. Quits after 6 months." },
+  { id: "crypto", title: "Web3 Degen", profile: "Still waiting for Ethereum to solve supply chain logistics." },
+  { id: "vibe", title: "Vibe Coder", profile: "Doesn't write code. Just prompts LLMs and trusts the universe." },
+  { id: "thought", title: "LinkedIn Thought Leader", profile: "Extracts 5 paragraphs of leadership advice from a delayed flight." },
+  { id: "growth", title: "Growth Hacker", profile: "Will ruin the entire UX just to get a 0.02% bump in conversions." },
+  { id: "stealth", title: "Founder in Stealth", profile: "Building something \"disruptive.\" It's just a ChatGPT wrapper." },
+  { id: "evangelist", title: "Developer Evangelist", profile: "Hasn't pushed to production since 2019. Has great stickers." },
+  { id: "prompt", title: "Head of Prompt Engineering", profile: "Actually believes typing in English is computer science." },
+  { id: "maverick", title: "Agile Maverick", profile: "Will hold your hotfix hostage until you assign it story points." },
+];
 
 export const PRO_GATED_COMMANDS: ReadonlySet<string> = new Set([
   "/brrrrrr",

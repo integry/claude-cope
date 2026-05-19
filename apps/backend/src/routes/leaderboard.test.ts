@@ -36,6 +36,7 @@ describe("GET /api/leaderboard", () => {
         username: "alice",
         is_executive_supporter: 1,
         corporate_rank: "CTO",
+        display_rank: "CTO",
         country: "US",
         technical_debt: 999,
         created_at: "2026-01-01",
@@ -66,6 +67,7 @@ describe("GET /api/leaderboard", () => {
     expect(getSQL()).toContain("ELSE 0");
     expect(getSQL()).toContain("WHEN us.is_executive_supporter = 1");
     expect(getSQL()).toContain("COALESCE(us.display_rank, us.corporate_rank)");
+    expect(getSQL()).toContain("END AS display_rank");
     expect(getSQL()).toContain("LEFT JOIN licenses active_licenses");
     expect(getSQL()).toContain("datetime(active_licenses.last_activated_at) >= datetime('now', '-90 days')");
   });

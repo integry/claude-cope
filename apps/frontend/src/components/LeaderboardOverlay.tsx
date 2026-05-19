@@ -7,6 +7,7 @@ type LeaderboardEntry = {
   username: string;
   country: string;
   corporate_rank: string;
+  display_rank?: string | null;
   technical_debt: number;
   created_at: string;
   is_executive_supporter: boolean | number;
@@ -197,6 +198,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
               const rank = String(i + 1).padStart(2, " ");
               const countryId = (entry.country && entry.country !== "Unknown") ? entry.country : "\u00A0\u00A0";
               const isExecutiveSupporter = entry.is_executive_supporter === true || entry.is_executive_supporter === 1;
+              const hasVanityTitle = Boolean(entry.display_rank);
               const rowClassName = [
                 "leaderboard-row",
                 i === 0
@@ -226,7 +228,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
                         EXEC
                       </span>
                     )}{" "}
-                    <span className={isExecutiveSupporter ? "leaderboard-supporter-rank-chip" : "text-gray-400"}>
+                    <span className={hasVanityTitle ? "leaderboard-vanity-rank-chip" : isExecutiveSupporter ? "leaderboard-supporter-rank-chip" : "text-gray-400"}>
                       [{entry.corporate_rank}]
                     </span>
                   </span>

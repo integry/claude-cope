@@ -863,11 +863,18 @@ function handleModelCommand(command: string, ctx: SlashCommandContext, reply: Re
 const SUPPORTER_VANITY_TITLES_BY_ID = new Map(SUPPORTER_VANITY_TITLES.map((title) => [title.id, title.title]));
 
 function buildPromoteListMessage(currentDisplayRank: string | null | undefined): string {
-  const lines = SUPPORTER_VANITY_TITLES.map((title) => {
-    const active = currentDisplayRank === title.title ? " <- active" : "";
-    return `- \`${title.id}\` - **${title.title}**${active}`;
-  }).join("\n");
-  return `[🏷️] Vanity title catalog:\n\n${lines}\n\nUsage: \`/promote <title-id>\``;
+  const header = [
+    "[ EXECUTIVE VANITY OVERRIDE ]",
+    "You have bypassed HR. Select your unearned vanity title to display on the leaderboard:",
+    "",
+    "ID          TITLE                          PROFILE",
+    "----------  -----------------------------  ---------------------------------------------------------",
+  ];
+  const rows = SUPPORTER_VANITY_TITLES.map((title) => {
+    const activeSuffix = currentDisplayRank === title.title ? " [ACTIVE]" : "";
+    return `${title.id.padEnd(10, " ")}  ${title.title.padEnd(29, " ")}  ${title.profile}${activeSuffix}`;
+  });
+  return `${header.join("\n")}\n${rows.join("\n")}\n\nType /promote <id> to overwrite your corporate rank and assert dominance.`;
 }
 
 async function handlePromoteCommand(command: string, ctx: SlashCommandContext, reply: Reply): Promise<void> {

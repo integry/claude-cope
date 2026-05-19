@@ -107,8 +107,8 @@ function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecuti
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="whitespace-nowrap font-bold text-cyan-300">{item.titleId}</span>
-                      <span className="truncate text-sm">{item.label}</span>
+                      <span className="whitespace-nowrap font-bold text-fuchsia-300">{item.titleId}</span>
+                      <span className="truncate text-sm text-fuchsia-100">{item.label}</span>
                       {item.locked && <span className="shrink-0 text-[10px] font-bold tracking-[0.2em] text-amber-400">LOCKED</span>}
                     </div>
                     <div className="text-xs text-gray-500">{item.description}</div>

@@ -42,6 +42,11 @@ leaderboard.get("/", async (c) => {
                 THEN COALESCE(us.display_rank, us.corporate_rank)
               ELSE us.corporate_rank
             END AS corporate_rank,
+            CASE
+              WHEN us.is_executive_supporter = 1 AND active_licenses.key_hash IS NOT NULL
+                THEN us.display_rank
+              ELSE NULL
+            END AS display_rank,
             us.country,
             us.total_td as technical_debt,
             us.updated_at as created_at

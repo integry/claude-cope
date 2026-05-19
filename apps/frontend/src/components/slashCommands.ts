@@ -221,7 +221,7 @@ export function getSlashMenuItems(
         value: `/promote ${title.id}`,
         titleId: title.id,
         label: title.title,
-        description: "Executive Supporter vanity title",
+        description: title.profile,
         locked: !isExecutiveSupporter,
       }));
   }

@@ -137,8 +137,9 @@ describe("SlashMenu", () => {
     });
 
     expect(menu.textContent).toContain("VANITY TITLES");
-    expect(menu.textContent).toContain("junior-code-monkey");
-    expect(menu.textContent).toContain("Junior Code Monkey");
+    expect(menu.textContent).toContain("10x");
+    expect(menu.textContent).toContain("10x Rockstar Ninja");
+    expect(menu.textContent).toContain("Leaves a trail of unmaintainable genius. Quits after 6 months.");
   });
 
   it("shows /promote [title-id] in the command list", () => {
