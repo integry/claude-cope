@@ -301,9 +301,10 @@ describe("/promote command", () => {
 
     const reply = getLastReply(ctx);
     expect(reply).toContain("[ EXECUTIVE VANITY OVERRIDE ]");
+    expect(reply).toContain("Executive Supporter perk unlocked.");
     expect(reply).toContain("10x Rockstar Ninja");
     expect(reply).toContain("Founder in Stealth");
-    expect(reply).toContain("Type /promote <id> to overwrite your corporate rank and assert dominance.");
+    expect(reply).toContain("Only Executive Supporters can use /promote.");
   });
 
   it("persists supporter vanity title selections", async () => {

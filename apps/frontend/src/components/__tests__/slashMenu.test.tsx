@@ -152,7 +152,9 @@ describe("SlashMenu", () => {
     });
 
     expect(menu.textContent).toContain("/promote [title-id]");
-    expect(menu.textContent).toContain("Buy a vanity title and wear it in public");
+    expect(menu.textContent).toContain("Executive Supporter-only vanity titles");
+    const promoteCommand = Array.from(menu.querySelectorAll("li.cursor-pointer span")).find((item) => item.textContent?.includes("/promote"));
+    expect(promoteCommand?.className).toContain("text-fuchsia-300");
   });
 
   it("emits full /backlog category commands when category rows are clicked", () => {
