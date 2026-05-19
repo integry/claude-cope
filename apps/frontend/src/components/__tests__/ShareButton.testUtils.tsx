@@ -89,6 +89,11 @@ export const setupShareButtonTest = () => {
       writable: true,
       configurable: true,
     });
+    Object.defineProperty(navigator, "userActivation", {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
     vi.stubGlobal("matchMedia", vi.fn().mockImplementation(() => ({
       matches: false,
       media: "",
@@ -273,6 +278,14 @@ export const setupShareButtonTest = () => {
     });
   };
 
+  const setTransientUserActivation = (isActive?: boolean) => {
+    Object.defineProperty(navigator, "userActivation", {
+      value: typeof isActive === "boolean" ? { isActive } : undefined,
+      writable: true,
+      configurable: true,
+    });
+  };
+
   return {
     get container() {
       return container;
@@ -305,6 +318,7 @@ export const setupShareButtonTest = () => {
     renderComponent,
     setDesktopClassIpadDevice,
     setNativeShareDevice,
+    setTransientUserActivation,
     setTouchDesktopDevice,
     setNavigatorShare,
   };

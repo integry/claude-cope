@@ -41,6 +41,12 @@ function supportsNativeShare(): boolean {
   return typeof navigator !== "undefined" && typeof navigator.share === "function";
 }
 
+function getTransientUserActivationState(): boolean | null {
+  if (typeof navigator === "undefined") return null;
+  const activation = (navigator as Navigator & { userActivation?: { isActive?: boolean } }).userActivation;
+  return typeof activation?.isActive === "boolean" ? activation.isActive : null;
+}
+
 function shouldUseNativeShareFlow(): boolean {
   if (typeof navigator === "undefined") return false;
   const uaData = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
@@ -303,13 +309,6 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     };
   }, [previewCard, loadPreviewBlob]);
 
-  const handleShareIntentStart = useCallback(() => {
-    if (!shouldUseNativeShareFlow()) return;
-    void requestNativeShareCard().catch(() => {
-      // Click keeps ownership of the visible fallback and error behavior.
-    });
-  }, [requestNativeShareCard]);
-
   const handleOpenPreview = useCallback(async () => {
     if (generatingRef.current) return;
     generatingRef.current = true;
@@ -324,6 +323,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     try {
       const useNativeShareFlow = shouldUseNativeShareFlow();
       const nativeShareCard = nativeShareCardRef.current;
+      const activationAtStart = getTransientUserActivationState();
 
       if (useNativeShareFlow && nativeShareCard) {
         const nativeShareResult = await tryNativeShare(nativeShareCard, token, sessionId);
@@ -344,6 +344,11 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
 
       if (useNativeShareFlow) {
+        const activationBeforeShare = getTransientUserActivationState();
+        if (activationAtStart === false || activationBeforeShare === false) {
+          openPreviewCard(card);
+          return;
+        }
         const nativeShareResult = await tryNativeShare(card, token, sessionId);
         if (nativeShareResult !== "fallback") {
           return;
@@ -523,12 +528,6 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     <span className="relative ml-2 inline-flex align-baseline">
       <button
         ref={triggerRef}
-        onPointerDown={handleShareIntentStart}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            handleShareIntentStart();
-          }
-        }}
         onClick={handleOpenPreview}
         className="font-mono text-[11px] text-gray-600 opacity-20 transition-all duration-200 hover:text-[#56b6c2] group-hover:opacity-100 group-hover:text-[#56b6c2]"
       >
