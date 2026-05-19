@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Message } from "../hooks/useGameState";
 
 type UseMobilePromptFollowArgs = {
@@ -23,23 +23,20 @@ export function useMobilePromptFollow({
   const lastMobilePromptScrollHeightRef = useRef(0);
   const lastMobilePromptGrowthAtRef = useRef(0);
 
-  useEffect(() => () => {
+  const stopMobilePromptFollowLoop = useCallback(() => {
     if (mobilePromptFollowFrameRef.current !== null && typeof cancelAnimationFrame === "function") {
       cancelAnimationFrame(mobilePromptFollowFrameRef.current);
     }
+    mobilePromptFollowFrameRef.current = null;
     if (mobilePromptFollowTimeoutRef.current) clearTimeout(mobilePromptFollowTimeoutRef.current);
+    mobilePromptFollowTimeoutRef.current = null;
   }, []);
 
-  useEffect(() => {
-    const stopMobilePromptFollowLoop = () => {
-      if (mobilePromptFollowFrameRef.current !== null && typeof cancelAnimationFrame === "function") {
-        cancelAnimationFrame(mobilePromptFollowFrameRef.current);
-      }
-      mobilePromptFollowFrameRef.current = null;
-      if (mobilePromptFollowTimeoutRef.current) clearTimeout(mobilePromptFollowTimeoutRef.current);
-      mobilePromptFollowTimeoutRef.current = null;
-    };
+  useEffect(() => () => {
+    stopMobilePromptFollowLoop();
+  }, [stopMobilePromptFollowLoop]);
 
+  useEffect(() => {
     if (!isMobileViewport) {
       wasMobileRequestProcessingRef.current = isProcessing;
       activeMobilePromptKeyRef.current = null;
@@ -125,5 +122,5 @@ export function useMobilePromptFollow({
 
     mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
     return stopMobilePromptFollowLoop;
-  }, [history, isMobileViewport, isProcessing, messageKeys, resolveScrollViewport]);
+  }, [history, isMobileViewport, isProcessing, messageKeys, resolveScrollViewport, stopMobilePromptFollowLoop]);
 }

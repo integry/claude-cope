@@ -219,6 +219,61 @@ describe("ShareButton native share flow", () => {
     expect(testScope.container.textContent).toContain("SHARE ON X");
   });
 
+  it("does not reuse a cached native-share card after shareClaim changes before effects flush", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(async () => undefined);
+    testScope.shareCardResponses = [
+      {
+        ...shareCardResponse,
+        shareId: "share-old",
+        imageUrl: "https://claudecope.com/api/share-image/share-old",
+        shareUrl: "https://claudecope.com/s/share-old",
+      },
+      {
+        ...shareCardResponse,
+        shareId: "share-new",
+        imageUrl: "https://claudecope.com/api/share-image/share-new",
+        shareUrl: "https://claudecope.com/s/share-new",
+      },
+    ];
+
+    testScope.renderComponent({ shareClaim: signedShareClaim });
+    await triggerMobileTap();
+
+    expect(testScope.navigatorShareMock).toHaveBeenCalledWith(expect.objectContaining({
+      url: "https://claudecope.com/s/share-old",
+    }));
+
+    testScope.navigatorShareMock.mockClear();
+    testScope.renderComponent({ shareClaim: nextSignedShareClaim });
+
+    const shareBtn = testScope.container.querySelector("button");
+    expect(shareBtn).not.toBeNull();
+
+    await act(async () => {
+      shareBtn!.click();
+    });
+
+    expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(2);
+    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
+    expect(testScope.navigatorShareMock).toHaveBeenCalledWith(expect.objectContaining({
+      url: "https://claudecope.com/s/share-new",
+    }));
+  });
+
+  it("opens the existing modal when activation cannot be confirmed after creating the share card", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(async () => undefined);
+    testScope.renderComponent();
+
+    await triggerMobileTap();
+
+    expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(1);
+    expect(testScope.navigatorShareMock).not.toHaveBeenCalled();
+    expect(testScope.container.querySelector("[role='dialog']")).not.toBeNull();
+    expect(testScope.container.textContent).toContain("SHARE ON X");
+  });
+
   it("does not reuse a stale native-share card after shareClaim changes mid-request", async () => {
     testScope.setNativeShareDevice(true);
     testScope.setNavigatorShare(async () => undefined);
