@@ -41,6 +41,12 @@ describe("ShareButton native share flow", () => {
     })).toBe(false);
     expect(shouldUseNativeShareFlowForDevice({
       supportsNativeShare: true,
+      userAgentDataMobile: false,
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15",
+      maxTouchPoints: 5,
+    })).toBe(true);
+    expect(shouldUseNativeShareFlowForDevice({
+      supportsNativeShare: true,
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     })).toBe(false);
   });
@@ -155,6 +161,19 @@ describe("ShareButton native share flow", () => {
     expect(testScope.navigatorShareMock).not.toHaveBeenCalled();
     expect(dialog).not.toBeNull();
     expect(testScope.container.textContent).toContain("SHARE ON X");
+  });
+
+  it("uses navigator.share for desktop-class iPad Safari user agents", async () => {
+    testScope.setDesktopClassIpadDevice();
+    testScope.setNavigatorShare(async () => undefined);
+    testScope.renderComponent();
+    await triggerMobileTap();
+
+    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
+    expect(testScope.navigatorShareMock).toHaveBeenCalledWith(expect.objectContaining({
+      url: shareCardResponse.shareUrl,
+    }));
+    expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
   });
 
   it("treats native share cancellation on mobile as a non-error", async () => {

@@ -242,6 +242,25 @@ export const setupShareButtonTest = () => {
     setDeviceMatchMedia(true);
   };
 
+  const setDesktopClassIpadDevice = () => {
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      value: 5,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgentData", {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgent", {
+      value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15",
+      writable: true,
+      configurable: true,
+    });
+    setDeviceMatchMedia(true);
+  };
+
   const setNavigatorShare = (implementation?: typeof navigator.share) => {
     navigatorShareMock.mockReset();
     if (implementation) {
@@ -284,6 +303,7 @@ export const setupShareButtonTest = () => {
     openPreview,
     renderOpenPreview,
     renderComponent,
+    setDesktopClassIpadDevice,
     setNativeShareDevice,
     setTouchDesktopDevice,
     setNavigatorShare,

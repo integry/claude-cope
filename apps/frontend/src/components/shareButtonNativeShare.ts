@@ -2,12 +2,16 @@ export type NativeShareDeviceInfo = {
   supportsNativeShare: boolean;
   userAgentDataMobile?: boolean;
   userAgent: string;
+  maxTouchPoints?: number;
 };
 
 export function shouldUseNativeShareFlowForDevice(device: NativeShareDeviceInfo): boolean {
   if (!device.supportsNativeShare) return false;
   if (device.userAgentDataMobile === true) return true;
-  if (device.userAgentDataMobile === false) return false;
+  if (device.userAgentDataMobile === false) {
+    return /macintosh/i.test(device.userAgent) && (device.maxTouchPoints ?? 0) > 1;
+  }
+  if (/macintosh/i.test(device.userAgent) && (device.maxTouchPoints ?? 0) > 1) return true;
   return /android|iphone|ipad|ipod|mobile/i.test(device.userAgent);
 }
 

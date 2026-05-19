@@ -48,6 +48,7 @@ function shouldUseNativeShareFlow(): boolean {
     supportsNativeShare: supportsNativeShare(),
     userAgentDataMobile: uaData.userAgentData?.mobile,
     userAgent: navigator.userAgent || "",
+    maxTouchPoints: navigator.maxTouchPoints,
   });
 }
 
