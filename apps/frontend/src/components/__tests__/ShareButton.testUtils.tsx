@@ -204,6 +204,34 @@ export const setupShareButtonTest = () => {
     })));
   };
 
+  const setTouchDesktopDevice = () => {
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      value: 5,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgentData", {
+      value: { mobile: false },
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgent", {
+      value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/136.0.0.0 Safari/537.36",
+      writable: true,
+      configurable: true,
+    });
+    vi.stubGlobal("matchMedia", vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(pointer: coarse)" || query === "(any-pointer: coarse)",
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })));
+  };
+
   const setNavigatorShare = (implementation?: typeof navigator.share) => {
     navigatorShareMock.mockReset();
     if (implementation) {
@@ -247,6 +275,7 @@ export const setupShareButtonTest = () => {
     renderOpenPreview,
     renderComponent,
     setNativeShareDevice,
+    setTouchDesktopDevice,
     setNavigatorShare,
   };
 };

@@ -1,0 +1,105 @@
+// @vitest-environment jsdom
+import { describe, it, expect } from "vitest";
+import { act } from "react";
+
+import { shareCardResponse, signedShareClaim, setupShareButtonTest } from "./ShareButton.testUtils";
+import { mockClipboard } from "./ShareButton.testUtils";
+
+describe("ShareButton native share flow", () => {
+  const testScope = setupShareButtonTest();
+
+  it("uses navigator.share on mobile with the backend-generated public share URL", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(async () => undefined);
+    testScope.renderComponent();
+
+    const shareBtn = testScope.container.querySelector("button");
+    expect(shareBtn).not.toBeNull();
+
+    await act(async () => {
+      shareBtn!.click();
+      await Promise.resolve();
+    });
+
+    expect(testScope.fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/share-cards"), expect.objectContaining({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shareClaim: signedShareClaim }),
+    }));
+    expect(testScope.navigatorShareMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Claude Cope chat by @testuser",
+      text: "Hello",
+      url: shareCardResponse.shareUrl,
+    }));
+    expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
+    expect(testScope.fetchMock).not.toHaveBeenCalledWith(shareCardResponse.imageUrl);
+    expect(mockClipboard.write).not.toHaveBeenCalled();
+    expect(mockClipboard.writeText).not.toHaveBeenCalled();
+  });
+
+  it("does not use navigator.share for touch-enabled desktop devices", async () => {
+    testScope.setNativeShareDevice(false);
+    testScope.setTouchDesktopDevice();
+    testScope.setNavigatorShare(async () => undefined);
+
+    const dialog = await testScope.renderOpenPreview();
+
+    expect(testScope.navigatorShareMock).not.toHaveBeenCalled();
+    expect(dialog).not.toBeNull();
+    expect(testScope.container.textContent).toContain("SHARE ON X");
+  });
+
+  it("treats native share cancellation on mobile as a non-error", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(async () => {
+      throw new DOMException("The share operation was aborted.", "AbortError");
+    });
+    testScope.renderComponent();
+
+    const shareBtn = testScope.container.querySelector("button");
+    expect(shareBtn).not.toBeNull();
+
+    await act(async () => {
+      shareBtn!.click();
+      await Promise.resolve();
+    });
+
+    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
+    expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
+    expect(testScope.container.textContent).not.toContain("Something went wrong");
+    expect(testScope.container.textContent).not.toContain("Failed to create share preview");
+    expect(testScope.container.querySelector("button")?.textContent).toBe("[share]");
+  });
+
+  it("falls back to the existing modal when native share rejects unexpectedly", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(async () => {
+      throw new Error("share request aborted by browser extension");
+    });
+    testScope.renderComponent();
+
+    const shareBtn = testScope.container.querySelector("button");
+    expect(shareBtn).not.toBeNull();
+
+    await act(async () => {
+      shareBtn!.click();
+      await Promise.resolve();
+    });
+
+    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
+    expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(1);
+    expect(testScope.container.querySelector("[role='dialog']")).not.toBeNull();
+    expect(testScope.container.textContent).toContain("SHARE ON X");
+  });
+
+  it("falls back to the existing modal on mobile when native share is unavailable", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(undefined);
+
+    const dialog = await testScope.renderOpenPreview();
+
+    expect(dialog).not.toBeNull();
+    expect(testScope.navigatorShareMock).not.toHaveBeenCalled();
+    expect(testScope.container.textContent).toContain("SHARE ON X");
+  });
+});

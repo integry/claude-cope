@@ -44,11 +44,6 @@ function shouldUseNativeShareFlow(): boolean {
   if (!supportsNativeShare() || typeof navigator === "undefined") return false;
   const uaData = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
   if (uaData.userAgentData?.mobile === true) return true;
-  const hasTouch = navigator.maxTouchPoints > 0;
-  const hasCoarsePointer = typeof window !== "undefined"
-    && typeof window.matchMedia === "function"
-    && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(any-pointer: coarse)").matches);
-  if (hasTouch && hasCoarsePointer) return true;
   return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || "");
 }
 
