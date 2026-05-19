@@ -138,7 +138,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   const generatingRef = useRef(false);
   const sharingRef = useRef(false);
 
-  const closePreview = useCallback((options?: { resetStatus?: boolean }) => {
+  const resetPreviewState = useCallback((options?: { resetStatus?: boolean; resetNativeShareCardCache?: boolean }) => {
     previewSessionRef.current += 1;
     previewCreationAbortRef.current?.abort();
     previewCreationAbortRef.current = null;
@@ -146,6 +146,11 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     nativeShareCardAbortRef.current = null;
     generatingRef.current = false;
     sharingRef.current = false;
+    if (options?.resetNativeShareCardCache) {
+      nativeShareCardGenerationRef.current += 1;
+      nativeShareCardRef.current = null;
+      nativeShareCardRequestRef.current = null;
+    }
     clearTimeouts();
     setPreviewCard(null);
     setPreviewImageStatus("idle");
@@ -160,6 +165,10 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       setFeedback(null);
     }
   }, [clearTimeouts]);
+
+  const closePreview = useCallback((options?: { resetStatus?: boolean }) => {
+    resetPreviewState(options);
+  }, [resetPreviewState]);
 
   const loadPreviewBlob = useCallback(async (imageUrl: string): Promise<Blob> => {
     const cached = previewBlobRef.current;
@@ -229,27 +238,8 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   }, [shareClaim]);
 
   useEffect(() => {
-    nativeShareCardGenerationRef.current += 1;
-    previewSessionRef.current += 1;
-    previewCreationAbortRef.current?.abort();
-    previewCreationAbortRef.current = null;
-    nativeShareCardAbortRef.current?.abort();
-    nativeShareCardAbortRef.current = null;
-    generatingRef.current = false;
-    sharingRef.current = false;
-    nativeShareCardRef.current = null;
-    nativeShareCardRequestRef.current = null;
-    setPreviewCard(null);
-    setPreviewImageStatus("idle");
-    if (previewImageObjectUrlRef.current) {
-      URL.revokeObjectURL(previewImageObjectUrlRef.current);
-      previewImageObjectUrlRef.current = null;
-    }
-    setPreviewImageObjectUrl(null);
-    setStatus("idle");
-    setFeedback(null);
-    setPasteHint(null);
-  }, [shareClaim]);
+    resetPreviewState({ resetNativeShareCardCache: true });
+  }, [shareClaim, resetPreviewState]);
 
   const tryNativeShare = useCallback(async (
     card: CreateShareCardResult,
