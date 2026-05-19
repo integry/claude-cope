@@ -74,6 +74,26 @@ describe("ShareButton native share flow", () => {
     expect(mockClipboard.writeText).not.toHaveBeenCalled();
   });
 
+  it("does not create a share card before the user clicks share on mobile", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(async () => undefined);
+    testScope.renderComponent();
+
+    const shareBtn = testScope.container.querySelector("button");
+    expect(shareBtn).not.toBeNull();
+
+    await act(async () => {
+      shareBtn!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(testScope.fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("/api/share-cards"),
+      expect.anything(),
+    );
+    expect(testScope.navigatorShareMock).not.toHaveBeenCalled();
+  });
+
   it("does not use navigator.share for touch-enabled desktop devices", async () => {
     testScope.setNativeShareDevice(false);
     testScope.setTouchDesktopDevice();

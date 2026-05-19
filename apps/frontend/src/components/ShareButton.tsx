@@ -186,12 +186,11 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     setFeedback(null);
   }, [prewarmPreviewImage]);
 
-  const primeNativeShareCard = useCallback(() => {
-    if (!shouldUseNativeShareFlow()) return null;
+  const requestNativeShareCard = useCallback((signal: AbortSignal) => {
     if (nativeShareCardRef.current) return Promise.resolve(nativeShareCardRef.current);
     if (nativeShareCardRequestRef.current) return nativeShareCardRequestRef.current;
 
-    const request = createShareCard({ shareClaim })
+    const request = createShareCard({ shareClaim, signal })
       .then((card) => {
         nativeShareCardRef.current = card;
         return card;
@@ -209,14 +208,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   useEffect(() => {
     nativeShareCardRef.current = null;
     nativeShareCardRequestRef.current = null;
-    const request = primeNativeShareCard();
-    if (!request) return;
-    void request.catch(() => {
-      if (nativeShareCardRequestRef.current === request) {
-        nativeShareCardRequestRef.current = null;
-      }
-    });
-  }, [primeNativeShareCard]);
+  }, [shareClaim]);
 
   const tryNativeShare = useCallback(async (
     card: CreateShareCardResult,
@@ -301,13 +293,21 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
         return;
       }
 
-      const card = useNativeShareFlow && nativeShareCardRequestRef.current
-        ? await nativeShareCardRequestRef.current
+      const card = useNativeShareFlow
+        ? await requestNativeShareCard(abortController.signal)
         : await createShareCard({
             shareClaim,
             signal: abortController.signal,
           });
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
+
+      if (useNativeShareFlow) {
+        const nativeShareResult = await tryNativeShare(card, token, sessionId);
+        if (nativeShareResult !== "fallback") {
+          return;
+        }
+      }
+
       openPreviewCard(card);
     } catch (error) {
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
@@ -322,7 +322,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
         generatingRef.current = false;
       }
     }
-  }, [shareClaim, resetAfterDelay, openPreviewCard, tryNativeShare]);
+  }, [shareClaim, resetAfterDelay, openPreviewCard, requestNativeShareCard, tryNativeShare]);
 
   const handleShare = useCallback(async (platform: SharePlatform) => {
     if (!previewCard || sharingRef.current) return;
@@ -481,7 +481,6 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       <button
         ref={triggerRef}
         onClick={handleOpenPreview}
-        onPointerDown={() => { void primeNativeShareCard(); }}
         className="font-mono text-[11px] text-gray-600 opacity-20 transition-all duration-200 hover:text-[#56b6c2] group-hover:opacity-100 group-hover:text-[#56b6c2]"
       >
         [share]
