@@ -24,7 +24,7 @@ export function TerminalFooter({ closeAllOverlays, buddyType, buddyIsShiny, setS
         </div>
         <div className="flex items-center justify-between">
           <span className="flex gap-4 items-center"><span className="text-gray-400">[LINKS]</span>{([["terms", setShowTerms], ["privacy", setShowPrivacy], ["about", setShowAbout], ["help", setShowHelp], ["contact", setShowContact]] as [string, Dispatch<SetStateAction<boolean>>][]).map(([key, setter]: [string, Dispatch<SetStateAction<boolean>>]) => (<button key={key} onClick={() => { closeAllOverlays(); setter(true); if (key !== "about" && key !== "help") window.history.pushState(null, "", `/${key}`); }} className="text-gray-400 hover:text-white">/{key}</button>))}</span>
-          <span className="flex gap-4">{[["https://github.com/integry/claude-cope", "/github"], ["https://reddit.com/r/claudecope", "/reddit"]].map(([href, label]) => (<a key={label} href={href} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">{label}</a>))}</span>
+          <span className="flex gap-4">{[["https://github.com/integry/claude-cope", "/github"], ["https://reddit.com/r/CopeBot", "/reddit"]].map(([href, label]) => (<a key={label} href={href} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">{label}</a>))}</span>
         </div>
       </footer>
       <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 backdrop-blur-sm font-mono sm:hidden" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
