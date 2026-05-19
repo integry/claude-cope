@@ -911,7 +911,10 @@ async function handlePromoteCommand(command: string, ctx: SlashCommandContext, r
   }
 
   if (result.profile) {
-    ctx.setState((prev) => applyServerProfile(prev, result.profile!));
+    ctx.setState((prev) => ({
+      ...applyServerProfile(prev, result.profile!),
+      displayRank: title,
+    }));
   } else {
     ctx.setState((prev) => ({ ...prev, displayRank: title }));
   }
