@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, vi } from "vitest";
 
@@ -17,6 +17,7 @@ export const shareCardResponse: ShareCardResponse = {
   shareUrl: "https://claudecope.com/s/share-123",
 };
 export const signedShareClaim = "signed-share-claim";
+export const nextSignedShareClaim = "signed-share-claim-next";
 
 export const imageBytes = new TextEncoder().encode("server-image");
 
@@ -58,6 +59,7 @@ export const setupShareButtonTest = () => {
   let shareCardResponses: Array<ShareCardResponse> = [];
   let imageBodies = new Map<string, ArrayBuffer>();
   let imageFetchOverrides = new Map<string, Promise<Response>>();
+  let currentProps!: ComponentProps<typeof ShareButton>;
 
   beforeEach(() => {
     container = document.createElement("div");
@@ -128,6 +130,12 @@ export const setupShareButtonTest = () => {
     vi.stubGlobal("fetch", fetchMock);
 
     vi.useFakeTimers();
+    currentProps = {
+      userMessage: "Hello",
+      systemMessage: "World",
+      username: "testuser",
+      shareClaim: signedShareClaim,
+    };
   });
 
   afterEach(() => {
@@ -138,16 +146,10 @@ export const setupShareButtonTest = () => {
     vi.clearAllMocks();
   });
 
-  const renderComponent = () => {
+  const renderComponent = (props?: Partial<ComponentProps<typeof ShareButton>>) => {
+    currentProps = { ...currentProps, ...props };
     act(() => {
-      root.render(
-        <ShareButton
-          userMessage="Hello"
-          systemMessage="World"
-          username="testuser"
-          shareClaim={signedShareClaim}
-        />,
-      );
+      root.render(<ShareButton {...currentProps} />);
     });
   };
 

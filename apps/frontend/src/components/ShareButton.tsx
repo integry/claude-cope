@@ -69,6 +69,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   const previewImageObjectUrlRef = useRef<string | null>(null);
   const nativeShareCardRef = useRef<CreateShareCardResult | null>(null);
   const nativeShareCardRequestRef = useRef<Promise<CreateShareCardResult> | null>(null);
+  const nativeShareCardGenerationRef = useRef(0);
 
   const clearTimeouts = useCallback(() => {
     timeoutIds.current.forEach(clearTimeout);
@@ -189,9 +190,13 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   const requestNativeShareCard = useCallback((signal: AbortSignal) => {
     if (nativeShareCardRef.current) return Promise.resolve(nativeShareCardRef.current);
     if (nativeShareCardRequestRef.current) return nativeShareCardRequestRef.current;
+    const generation = nativeShareCardGenerationRef.current;
 
     const request = createShareCard({ shareClaim, signal })
       .then((card) => {
+        if (signal.aborted || generation !== nativeShareCardGenerationRef.current) {
+          throw new DOMException("The operation was aborted.", "AbortError");
+        }
         nativeShareCardRef.current = card;
         return card;
       })
@@ -206,6 +211,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   }, [shareClaim]);
 
   useEffect(() => {
+    nativeShareCardGenerationRef.current += 1;
     nativeShareCardRef.current = null;
     nativeShareCardRequestRef.current = null;
   }, [shareClaim]);
@@ -311,6 +317,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       openPreviewCard(card);
     } catch (error) {
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      if (error instanceof DOMException && error.name === "AbortError") return;
       setStatus("error");
       setFeedback(error instanceof Error ? error.message : "Failed to create share preview.");
       resetAfterDelay(3000);

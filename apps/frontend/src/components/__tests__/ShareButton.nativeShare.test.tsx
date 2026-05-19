@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { act } from "react";
 
 import { isNativeShareCancellation, shouldUseNativeShareFlowForDevice } from "../shareButtonNativeShare";
-import { shareCardResponse, signedShareClaim, setupShareButtonTest } from "./ShareButton.testUtils";
+import { createDeferred, nextSignedShareClaim, shareCardResponse, signedShareClaim, setupShareButtonTest } from "./ShareButton.testUtils";
 import { mockClipboard } from "./ShareButton.testUtils";
 
 describe("ShareButton native share flow", () => {
@@ -158,5 +158,63 @@ describe("ShareButton native share flow", () => {
     expect(dialog).not.toBeNull();
     expect(testScope.navigatorShareMock).not.toHaveBeenCalled();
     expect(testScope.container.textContent).toContain("SHARE ON X");
+  });
+
+  it("does not reuse a stale native-share card after shareClaim changes mid-request", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(async () => undefined);
+    const firstCard = {
+      ...shareCardResponse,
+      shareId: "share-old",
+      imageUrl: "https://claudecope.com/api/share-image/share-old",
+      shareUrl: "https://claudecope.com/s/share-old",
+    };
+    const secondCard = {
+      ...shareCardResponse,
+      shareId: "share-new",
+      imageUrl: "https://claudecope.com/api/share-image/share-new",
+      shareUrl: "https://claudecope.com/s/share-new",
+    };
+    const firstResponse = createDeferred<Response>();
+    let shareCardRequestCount = 0;
+
+    testScope.fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/share-cards")) {
+        shareCardRequestCount += 1;
+        if (shareCardRequestCount === 1) {
+          return firstResponse.promise;
+        }
+        return Promise.resolve(new Response(JSON.stringify(secondCard), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }));
+      }
+      if (url.includes("/api/share-image/")) {
+        return Promise.resolve(new Response("unexpected", { status: 500 }));
+      }
+      return Promise.resolve(new Response("unexpected", { status: 500 }));
+    });
+
+    testScope.renderComponent({ shareClaim: signedShareClaim });
+    await triggerMobileTap();
+    testScope.renderComponent({ shareClaim: nextSignedShareClaim });
+    firstResponse.resolve(new Response(JSON.stringify(firstCard), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await triggerMobileTap();
+
+    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
+    expect(testScope.navigatorShareMock).toHaveBeenCalledWith(expect.objectContaining({
+      url: secondCard.shareUrl,
+    }));
+    expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(2);
   });
 });
