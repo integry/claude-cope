@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useRef, type CSSProperties } from "re
 import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
 import { copyBlobToClipboard, copyTextToClipboard, openShareIntent } from "./shareChatUtils";
 import ShareCardRenderSurface from "./ShareCardRenderSurface";
+import { useIsMobileViewport } from "./useIsMobileViewport";
 
 type MountToken = { cancelled: boolean };
 type SharePlatform = "twitter" | "linkedin";
@@ -36,7 +37,20 @@ function isMacPlatform(): boolean {
   return /mac/i.test(navigator.platform || "");
 }
 
+function supportsNativeShare(): boolean {
+  return typeof navigator !== "undefined" && typeof navigator.share === "function";
+}
+
+function isNativeShareCancellation(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const name = "name" in error && typeof error.name === "string" ? error.name : "";
+  const message = "message" in error && typeof error.message === "string" ? error.message : "";
+  if (name === "AbortError") return true;
+  return /cancelled|canceled|abort/i.test(message);
+}
+
 export function ShareButton({ userMessage, systemMessage, username, shareClaim }: { userMessage: string; systemMessage: string; username: string; shareClaim: string }) {
+  const isMobileViewport = useIsMobileViewport();
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [previewCard, setPreviewCard] = useState<CreateShareCardResult | null>(null);
@@ -161,6 +175,14 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     });
   }, [loadPreviewBlob]);
 
+  const openPreviewCard = useCallback((card: CreateShareCardResult) => {
+    if (previewBlobRef.current?.imageUrl !== card.imageUrl) previewBlobRef.current = null;
+    setPreviewCard(card);
+    prewarmPreviewImage(card.imageUrl);
+    setStatus("idle");
+    setFeedback(null);
+  }, [prewarmPreviewImage]);
+
   useEffect(() => {
     if (!previewCard) return;
     setPreviewImageStatus("loading");
@@ -210,11 +232,29 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
         signal: abortController.signal,
       });
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
-      if (previewBlobRef.current?.imageUrl !== card.imageUrl) previewBlobRef.current = null;
-      setPreviewCard(card);
-      prewarmPreviewImage(card.imageUrl);
-      setStatus("idle");
-      setFeedback(null);
+
+      if (isMobileViewport && supportsNativeShare()) {
+        try {
+          await navigator.share({
+            title: `Claude Cope chat by @${username}`,
+            text: userMessage.trim().slice(0, 140) || undefined,
+            url: card.shareUrl,
+          });
+          if (token.cancelled || sessionId !== previewSessionRef.current) return;
+          setStatus("idle");
+          setFeedback(null);
+          return;
+        } catch (error) {
+          if (token.cancelled || sessionId !== previewSessionRef.current) return;
+          if (isNativeShareCancellation(error)) {
+            setStatus("idle");
+            setFeedback(null);
+            return;
+          }
+        }
+      }
+
+      openPreviewCard(card);
     } catch (error) {
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
       setStatus("error");
@@ -228,7 +268,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
         generatingRef.current = false;
       }
     }
-  }, [shareClaim, resetAfterDelay, prewarmPreviewImage]);
+  }, [shareClaim, resetAfterDelay, isMobileViewport, openPreviewCard, username, userMessage]);
 
   const handleShare = useCallback(async (platform: SharePlatform) => {
     if (!previewCard || sharingRef.current) return;

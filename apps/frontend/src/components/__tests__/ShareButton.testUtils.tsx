@@ -3,6 +3,12 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, vi } from "vitest";
 
+let isMobileViewportMock = false;
+
+vi.mock("../useIsMobileViewport", () => ({
+  useIsMobileViewport: () => isMobileViewportMock,
+}));
+
 import { ShareButton } from "../ShareButton";
 
 export type ShareCardResponse = {
@@ -43,6 +49,7 @@ export const mockClipboard = {
 
 export const createObjectURLMock = vi.fn((blob: Blob) => `blob:mock-${blob.size}`);
 export const revokeObjectURLMock = vi.fn();
+export const navigatorShareMock = vi.fn();
 
 export const MockClipboardItem = vi.fn().mockImplementation((items: Record<string, Blob>) => ({
   types: Object.keys(items),
@@ -58,6 +65,7 @@ export const setupShareButtonTest = () => {
   let imageFetchOverrides = new Map<string, Promise<Response>>();
 
   beforeEach(() => {
+    isMobileViewportMock = false;
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -67,6 +75,11 @@ export const setupShareButtonTest = () => {
 
     Object.defineProperty(navigator, "clipboard", {
       value: mockClipboard,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "share", {
+      value: undefined,
       writable: true,
       configurable: true,
     });
@@ -160,6 +173,22 @@ export const setupShareButtonTest = () => {
     return Array.from(buttons).find((button) => button.textContent?.includes(label)) ?? null;
   };
 
+  const setMobileViewport = (value: boolean) => {
+    isMobileViewportMock = value;
+  };
+
+  const setNavigatorShare = (implementation?: typeof navigator.share) => {
+    navigatorShareMock.mockReset();
+    if (implementation) {
+      navigatorShareMock.mockImplementation(implementation);
+    }
+    Object.defineProperty(navigator, "share", {
+      value: implementation ? navigatorShareMock : undefined,
+      writable: true,
+      configurable: true,
+    });
+  };
+
   return {
     get container() {
       return container;
@@ -184,8 +213,13 @@ export const setupShareButtonTest = () => {
     },
     clickShareButton,
     getButtonByLabel,
+    get navigatorShareMock() {
+      return navigatorShareMock;
+    },
     openPreview,
     renderOpenPreview,
     renderComponent,
+    setMobileViewport,
+    setNavigatorShare,
   };
 };
