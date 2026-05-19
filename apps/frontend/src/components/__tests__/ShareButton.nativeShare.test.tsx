@@ -71,6 +71,27 @@ describe("ShareButton native share flow", () => {
     expect(testScope.container.querySelector("button")?.textContent).toBe("[share]");
   });
 
+  it("treats mobile share-sheet dismissal variants as a non-error", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(async () => {
+      throw new DOMException("Share dismissed", "NotAllowedError");
+    });
+    testScope.renderComponent();
+
+    const shareBtn = testScope.container.querySelector("button");
+    expect(shareBtn).not.toBeNull();
+
+    await act(async () => {
+      shareBtn!.click();
+      await Promise.resolve();
+    });
+
+    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
+    expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
+    expect(testScope.container.textContent).not.toContain("Something went wrong");
+    expect(testScope.container.textContent).not.toContain("Failed to create share preview");
+  });
+
   it("falls back to the existing modal when native share rejects unexpectedly", async () => {
     testScope.setNativeShareDevice(true);
     testScope.setNavigatorShare(async () => {

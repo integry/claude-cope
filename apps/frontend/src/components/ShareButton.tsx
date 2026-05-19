@@ -60,7 +60,8 @@ function isNativeShareCancellation(error: unknown): boolean {
   const name = "name" in error && typeof error.name === "string" ? error.name : "";
   const message = "message" in error && typeof error.message === "string" ? error.message : "";
   if (name === "AbortError") return true;
-  return /\b(cancelled|canceled)\b/i.test(message);
+  if (name === "NotAllowedError" && /\b(cancelled|canceled|dismissed)\b/i.test(message)) return true;
+  return /\b(cancelled|canceled|dismissed|closed)\b/i.test(message) || /\baborted by user\b/i.test(message);
 }
 
 export function ShareButton({ userMessage, systemMessage, username, shareClaim }: { userMessage: string; systemMessage: string; username: string; shareClaim: string }) {

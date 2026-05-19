@@ -44,6 +44,7 @@ export const mockClipboard = {
 export const createObjectURLMock = vi.fn((blob: Blob) => `blob:mock-${blob.size}`);
 export const revokeObjectURLMock = vi.fn();
 export const navigatorShareMock = vi.fn();
+const defaultUserAgent = navigator.userAgent;
 
 export const MockClipboardItem = vi.fn().mockImplementation((items: Record<string, Blob>) => ({
   types: Object.keys(items),
@@ -186,14 +187,9 @@ export const setupShareButtonTest = () => {
     return Array.from(buttons).find((button) => button.textContent?.includes(label)) ?? null;
   };
 
-  const setNativeShareDevice = (value: boolean) => {
-    Object.defineProperty(navigator, "maxTouchPoints", {
-      value: value ? 5 : 0,
-      writable: true,
-      configurable: true,
-    });
+  const setDeviceMatchMedia = (coarsePointer: boolean) => {
     vi.stubGlobal("matchMedia", vi.fn().mockImplementation((query: string) => ({
-      matches: value && (query === "(pointer: coarse)" || query === "(any-pointer: coarse)"),
+      matches: coarsePointer && (query === "(pointer: coarse)" || query === "(any-pointer: coarse)"),
       media: query,
       onchange: null,
       addListener: vi.fn(),
@@ -202,6 +198,27 @@ export const setupShareButtonTest = () => {
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
     })));
+  };
+
+  const setNativeShareDevice = (value: boolean) => {
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      value: value ? 5 : 0,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgentData", {
+      value: value ? { mobile: true } : undefined,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgent", {
+      value: value
+        ? "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1"
+        : defaultUserAgent,
+      writable: true,
+      configurable: true,
+    });
+    setDeviceMatchMedia(value);
   };
 
   const setTouchDesktopDevice = () => {
@@ -220,16 +237,7 @@ export const setupShareButtonTest = () => {
       writable: true,
       configurable: true,
     });
-    vi.stubGlobal("matchMedia", vi.fn().mockImplementation((query: string) => ({
-      matches: query === "(pointer: coarse)" || query === "(any-pointer: coarse)",
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })));
+    setDeviceMatchMedia(true);
   };
 
   const setNavigatorShare = (implementation?: typeof navigator.share) => {
