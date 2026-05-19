@@ -212,6 +212,9 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
 
   useEffect(() => {
     nativeShareCardGenerationRef.current += 1;
+    previewCreationAbortRef.current?.abort();
+    previewCreationAbortRef.current = null;
+    generatingRef.current = false;
     nativeShareCardRef.current = null;
     nativeShareCardRequestRef.current = null;
   }, [shareClaim]);
