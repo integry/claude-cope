@@ -101,6 +101,16 @@ function getOutageScenario(id: string): OutageScenario {
   return OUTAGE_SCENARIOS.find((entry) => entry.id === id)!;
 }
 
+function latestPresence(room: FakeRoom): Extract<ServerMessage, { type: "presence" }> | undefined {
+  for (let i = room.broadcasts.length - 1; i >= 0; i--) {
+    const message = room.broadcasts[i]!;
+    if (message.type === "presence") {
+      return message as Extract<ServerMessage, { type: "presence" }>;
+    }
+  }
+  return undefined;
+}
+
 function sendOutageDamage(
   harness: ServerHarness,
   from: FakeConnection,
@@ -212,6 +222,17 @@ describe("PartyKit review-request lifecycle", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it("broadcasts unique usernames in presence even when one user has multiple connections", () => {
+    harness.connect("conn-a", "Alice");
+    harness.connect("conn-b", "Alice");
+    harness.connect("conn-c", "Bob");
+
+    const presence = latestPresence(harness.room);
+    expect(presence).toBeDefined();
+    expect(presence?.count).toBe(2);
+    expect(presence?.users).toEqual(["Alice", "Bob"]);
   });
 
   it("routes a valid ping to the target and acknowledges the sender", () => {
@@ -451,8 +472,6 @@ describe("PartyKit outage lifecycle", () => {
   it("broadcasts authoritative scenario metadata on start, update, and clear", () => {
     const alice = harness.connect("conn-a", "Alice");
     vi.spyOn(Math, "random").mockReturnValue(0.3);
-    const scenario = getOutageScenario("cloudflare-cache-purge");
-    const command = scenario.commands[1]!.label;
 
     harness.startOutage();
 
@@ -460,6 +479,8 @@ describe("PartyKit outage lifecycle", () => {
       harness.room.broadcasts.at(-1),
       "outage_start"
     );
+    const scenario = start.scenario;
+    const command = scenario.commands[1]!.label;
     expectScenarioIdentity(start, scenario);
     expect(start.scenario.commands[1]?.label).toBe(command);
 
@@ -482,9 +503,12 @@ describe("PartyKit outage lifecycle", () => {
   it("resets internal outage state after a successful clear", () => {
     const alice = harness.connect("conn-a", "Alice");
     vi.spyOn(Math, "random").mockReturnValue(0.3);
-    const scenario = getOutageScenario("cloudflare-cache-purge");
 
     harness.startOutage();
+    const scenario = expectScenarioMessage<OutageStartMessage>(
+      harness.room.broadcasts.at(-1),
+      "outage_start"
+    ).scenario;
     sendOutageDamage(harness, alice, scenario.commands[1]!.label, 10);
 
     const state = harness.outageState();
@@ -498,6 +522,10 @@ describe("PartyKit outage lifecycle", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.3);
 
     harness.startOutage();
+    const startedScenario = expectScenarioMessage<OutageStartMessage>(
+      harness.room.broadcasts.at(-1),
+      "outage_start"
+    ).scenario;
     const beforeCount = harness.room.broadcasts.length;
 
     harness.send(alice, { type: "damage_outage", command: "echo hacked" });
@@ -505,7 +533,7 @@ describe("PartyKit outage lifecycle", () => {
     expect(harness.room.broadcasts).toHaveLength(beforeCount);
     const serverState = harness.outageState();
     expect(serverState.outageHp).toBe(100);
-    expect(serverState.activeOutageScenario?.id).toBe("cloudflare-cache-purge");
+    expect(serverState.activeOutageScenario?.id).toBe(startedScenario.id);
   });
 
   it("broadcasts the same scenario metadata on outage failure", () => {
