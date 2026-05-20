@@ -4,6 +4,11 @@ import { useIsMobileViewport } from "./useIsMobileViewport";
 type CommandLineProps = {
   value: string;
   disabled?: boolean;
+  autoFocus?: boolean;
+  forceFocused?: boolean;
+  blinkCursor?: boolean;
+  cursorBlinkOn?: boolean;
+  showNativeCaret?: boolean;
   onChange: (e: ChangeEvent<HTMLInputElement>) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onSubmit?: () => void;
@@ -63,6 +68,11 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     {
       value,
       disabled,
+      autoFocus,
+      forceFocused,
+      blinkCursor = true,
+      cursorBlinkOn,
+      showNativeCaret = true,
       onChange,
       onKeyDown,
       onSubmit,
@@ -78,17 +88,22 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     const isMobileViewport = useIsMobileViewport();
     const canAcceptPlaceholder = !!onPlaceholderAccept;
     const canSubmit = !!onSubmit;
-    const isInputFocused = isFocused && !disabled;
+    const isInputFocused = (forceFocused ?? isFocused) && !disabled;
     const showPlaceholder = !value && !!placeholder;
     const showTabHint = showPlaceholder && !disabled && canAcceptPlaceholder;
     const showMobileSendButton = isMobileViewport && !!value && !disabled && canSubmit;
     const showDecorativeCursor = showPlaceholder && !disabled;
-    const hideNativeCaret = showDecorativeCursor && isInputFocused;
-    const shouldAutoFocus = !isMobileViewport;
+    const showEmptyDecorativeCursor = !showPlaceholder && !value && isInputFocused && !disabled && !showNativeCaret;
+    const showValueDecorativeCursor = !!value && isInputFocused && !disabled && !showNativeCaret;
+    const hideNativeCaret = (showDecorativeCursor && isInputFocused) || !showNativeCaret;
+    const shouldAutoFocus = autoFocus ?? !isMobileViewport;
     const { accessiblePlaceholder, leadingPlaceholderChar, tabHintAriaLabel, tabHintLabel, trailingPlaceholderText } =
       getPlaceholderMetadata(placeholder, assistivePlaceholderHint, disabled, isMobileViewport, canAcceptPlaceholder);
     const commandRowClassName = getCommandRowClassName(isInputFocused, disabled);
     const tabHintClassName = getTabHintClassName(isMobileViewport);
+    const useDeterministicCursor = cursorBlinkOn !== undefined;
+    const cursorClassName = `terminal-command-cursor ${!useDeterministicCursor && isInputFocused && blinkCursor ? "terminal-command-cursor-blinking" : ""}`;
+    const cursorStyle = useDeterministicCursor ? { opacity: cursorBlinkOn ? 1 : 0 } : undefined;
 
     useEffect(() => {
       if (disabled && isFocused) {
@@ -125,7 +140,12 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     return (
       <div className="terminal-command-line border-t border-white/20">
         <div className={commandRowClassName}>
-          <span className="terminal-command-prompt font-bold whitespace-pre leading-none">{promptString}</span>
+          <span
+            className="terminal-command-prompt font-bold whitespace-pre leading-none"
+            style={{ color: "var(--terminal-command-prompt-color, #f8fafc)" }}
+          >
+            {promptString}
+          </span>
           <div className="flex flex-1 min-w-0 items-center self-stretch">
             <div className="relative flex-1 min-w-0 self-center">
               {showPlaceholder && (
@@ -142,7 +162,8 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                       {showDecorativeCursor && (
                         <span
                           data-testid="command-line-cursor"
-                          className={`terminal-command-cursor ${isInputFocused ? "terminal-command-cursor-blinking" : ""}`}
+                          className={cursorClassName}
+                          style={cursorStyle}
                         />
                       )}
                       <span className="terminal-command-placeholder-leading-char-text">{leadingPlaceholderChar}</span>
@@ -163,6 +184,22 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
                     </button>
                   )}
                 </div>
+              )}
+              {showEmptyDecorativeCursor && (
+                <span
+                  aria-hidden="true"
+                  data-testid="command-line-empty-cursor"
+                  className={`${cursorClassName} pointer-events-none absolute left-0 top-1/2 z-20 -translate-y-1/2`}
+                  style={cursorStyle}
+                />
+              )}
+              {showValueDecorativeCursor && (
+                <span
+                  aria-hidden="true"
+                  data-testid="command-line-value-cursor"
+                  className={`${cursorClassName} pointer-events-none absolute top-1/2 z-20 -translate-y-1/2`}
+                  style={{ ...cursorStyle, left: `${value.length}ch` }}
+                />
               )}
               <input
                 ref={ref}

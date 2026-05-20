@@ -14,38 +14,51 @@ import { TicketMessage } from "./TicketMessage";
 import { getTipRenderData, type TipRenderData } from "../hooks/tipMessageUtils";
 
 const SPINNER_FRAMES = ["/", "-", "\\", "|"];
+const STATIC_TOOL_STEPS = [
+  { tool: "Read", target: "src/router.ts", action: "Looking for the URL bar custody agreement" },
+  { tool: "Grep", target: "redux", action: "Finding somewhere irresponsible to put global state" },
+  { tool: "Bash", target: "npm run build", action: "Asking 14 routers to share one steering wheel" },
+];
 
-function SimulatedToolCall({ activeTicketId }: { activeTicketId?: string | null }) {
+function SimulatedToolCall({ activeTicketId, staticFrame = false, staticFrameIndex = 0 }: { activeTicketId?: string | null; staticFrame?: boolean; staticFrameIndex?: number }) {
   // Pick a random sequence once on mount, based on active ticket ID
-  const [steps] = useState(() => pickRandomSequence(activeTicketId));
-  const [stepIndex, setStepIndex] = useState(0);
-  const [elapsed, setElapsed] = useState(0);
-  const [frame, setFrame] = useState(0);
+  const [steps] = useState(() => staticFrame ? STATIC_TOOL_STEPS : pickRandomSequence(activeTicketId));
+  const deterministicStepIndex = Math.floor(staticFrameIndex / 24) % steps.length;
+  const deterministicSpinnerFrame = Math.floor(staticFrameIndex / 5) % SPINNER_FRAMES.length;
+  const deterministicElapsed = (staticFrameIndex % 24) * 80;
+  const [stepIndex, setStepIndex] = useState(deterministicStepIndex);
+  const [elapsed, setElapsed] = useState(deterministicElapsed);
+  const [frame, setFrame] = useState(deterministicSpinnerFrame);
 
   useEffect(() => {
+    if (staticFrame) return;
     // Cycle through tool steps at varying intervals for realism
     const interval = setInterval(() => {
       setStepIndex((prev) => (prev + 1) % steps.length);
       setElapsed(0);
     }, 2500 + Math.random() * 1500);
     return () => clearInterval(interval);
-  }, [steps.length]);
+  }, [staticFrame, steps.length]);
 
   useEffect(() => {
+    if (staticFrame) return;
     const id = setInterval(() => {
       setElapsed((e) => e + 80);
       setFrame((f) => (f + 1) % SPINNER_FRAMES.length);
     }, 80);
     return () => clearInterval(id);
-  }, []);
+  }, [staticFrame]);
 
-  const step = steps[stepIndex]!;
-  const durationSec = (elapsed / 1000).toFixed(1);
+  const displayedStepIndex = staticFrame ? deterministicStepIndex : stepIndex;
+  const displayedFrame = staticFrame ? deterministicSpinnerFrame : frame;
+  const displayedElapsed = staticFrame ? deterministicElapsed : elapsed;
+  const step = steps[displayedStepIndex]!;
+  const durationSec = (displayedElapsed / 1000).toFixed(1);
 
   return (
     <div className="mt-1 space-y-0.5 text-sm font-mono">
       <div className="text-gray-500 flex items-center gap-2">
-        <span className="text-yellow-400">{SPINNER_FRAMES[frame]}</span>
+        <span className="text-yellow-400">{SPINNER_FRAMES[displayedFrame]}</span>
         <span className="text-blue-400">{step.tool}</span>
         <span className="text-gray-400">{step.target}</span>
         <span className="text-gray-600">({durationSec}s)</span>
@@ -74,21 +87,24 @@ function Spinner() {
   return <span>{SPINNER_FRAMES[frame]} </span>;
 }
 
-function TokenCounter({ tokensSent, tokensReceived }: { tokensSent?: number; tokensReceived?: number }) {
+function TokenCounter({ tokensSent, tokensReceived, staticFrame = false, staticFrameIndex = 0 }: { tokensSent?: number; tokensReceived?: number; staticFrame?: boolean; staticFrameIndex?: number }) {
   const hasRealTokens = tokensSent != null || tokensReceived != null;
-  const [sent, setSent] = useState(185000 + Math.floor(Math.random() * 40000));
-  const [received, setReceived] = useState(0);
+  const deterministicSent = 185000 + Math.min(42000, staticFrameIndex * 410);
+  const deterministicReceived = Math.min(5200, Math.floor(Math.max(0, staticFrameIndex - 12) * 46));
+  const [sent, setSent] = useState(() => staticFrame ? deterministicSent : 185000 + Math.floor(Math.random() * 40000));
+  const [received, setReceived] = useState(() => staticFrame ? deterministicReceived : 0);
   useEffect(() => {
+    if (staticFrame) return;
     if (hasRealTokens) return;
     const id = setInterval(() => {
       setSent((s: number) => s + Math.floor(Math.random() * 120) + 30);
       setReceived((r: number) => r + Math.floor(Math.random() * 80) + 10);
     }, 80);
     return () => clearInterval(id);
-  }, [hasRealTokens]);
+  }, [hasRealTokens, staticFrame]);
 
-  const displaySent = hasRealTokens ? (tokensSent ?? 0) : sent;
-  const displayReceived = hasRealTokens ? (tokensReceived ?? 0) : received;
+  const displaySent = hasRealTokens ? (tokensSent ?? 0) : staticFrame ? deterministicSent : sent;
+  const displayReceived = hasRealTokens ? (tokensReceived ?? 0) : staticFrame ? deterministicReceived : received;
 
   return (
     <span className="text-yellow-400/70 ml-2 text-sm">
@@ -326,7 +342,7 @@ function getShareProps(
   };
 }
 
-function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand, enableShare = true }: { message: Message; previousMessage?: Message; nextMessage?: Message; shareUserMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void; enableShare?: boolean }) {
+function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, isNew = false, promptString = "❯ ", activeTicketId, username = "", onSlashCommand, enableShare = true, staticLoadingAnimation = false, staticLoadingFrame = 0 }: { message: Message; previousMessage?: Message; nextMessage?: Message; shareUserMessage?: Message; isNew?: boolean; promptString?: string; activeTicketId?: string | null; username?: string; onSlashCommand?: (command: string, action: SlashCommandAction) => void; enableShare?: boolean; staticLoadingAnimation?: boolean; staticLoadingFrame?: number }) {
   void nextMessage;
   const isAwaitingResponse = message.role === "loading" && message.content.startsWith("[⚙️]");
   const { showShareButton, shareClaim, shareSystemMessage, shareUserPrompt } = getShareProps(message, previousMessage, shareUserMessage, enableShare);
@@ -356,10 +372,10 @@ function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, 
           className={isAwaitingResponse ? undefined : "invisible pointer-events-none"}
           aria-hidden={!isAwaitingResponse}
         >
-          <SimulatedToolCall activeTicketId={activeTicketId} />
+          <SimulatedToolCall activeTicketId={activeTicketId} staticFrame={staticLoadingAnimation} staticFrameIndex={staticLoadingFrame} />
         </div>
       )}
-      {message.role === "loading" && <TokenCounter />}
+      {message.role === "loading" && <TokenCounter staticFrame={staticLoadingAnimation} staticFrameIndex={staticLoadingFrame} />}
       {message.role === "system" && message.cost != null && <CostDisplay cost={message.cost} />}
     </div>
   );
@@ -390,6 +406,8 @@ function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps
   if (prev.username !== next.username) return false;
   if (prev.onSlashCommand !== next.onSlashCommand) return false;
   if (prev.enableShare !== next.enableShare) return false;
+  if (prev.staticLoadingAnimation !== next.staticLoadingAnimation) return false;
+  if (prev.staticLoadingFrame !== next.staticLoadingFrame) return false;
   // Only compare activeTicketId for loading messages
   if (prev.message.role === "loading" && prev.activeTicketId !== next.activeTicketId) return false;
   return true;

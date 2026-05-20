@@ -6,10 +6,11 @@ type SlashMenuProps = {
   totalTechnicalDebt: number;
   paidUser: boolean;
   isExecutiveSupporter?: boolean;
+  previewScrollY?: number;
   onSelect: (cmd: string) => void;
 };
 
-function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecutiveSupporter = false, onSelect }: SlashMenuProps) {
+function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecutiveSupporter = false, previewScrollY = 0, onSelect }: SlashMenuProps) {
   const items = getSlashMenuItems(query, totalTechnicalDebt, paidUser, isExecutiveSupporter);
   if (items.length === 0) return null;
 
@@ -27,7 +28,12 @@ function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecuti
           <div className="px-3 pb-1 pt-2 text-[10px] font-bold tracking-[0.24em] text-cyan-500/80 first:pt-1 select-none">
             BACKLOG CATEGORIES
           </div>
-          <ul>
+          <ul
+            style={previewScrollY ? {
+              transform: `translate3d(0, ${previewScrollY}px, 0)`,
+              willChange: "transform",
+            } : undefined}
+          >
             {items.map((item, index) => {
               if (item.type !== "backlog-category") return null;
 

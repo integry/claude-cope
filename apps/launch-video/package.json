@@ -1,0 +1,33 @@
+{
+  "name": "@claude-cope/launch-video",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.js -i src/tailwind-entry.css -o src/generated.css",
+    "dev": "remotion studio src/index.ts",
+    "render:still": "remotion still src/index.ts LaunchVideo out/launch-video.png",
+    "render:review": "bash scripts/render-review.sh",
+    "render:review:seconds": "bash scripts/render-second-contact-sheet.sh",
+    "render:video": "bash scripts/render-video.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@claude-cope/shared": "*",
+    "@fontsource/fira-code": "^5.2.6",
+    "@fontsource/lora": "^5.2.8",
+    "@fontsource/poppins": "^5.2.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.366",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@remotion/cli": "^4.0.366",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.0.0"
+  }
+}
