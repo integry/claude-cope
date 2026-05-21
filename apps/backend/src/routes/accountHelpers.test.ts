@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys, fetchCheckoutCustomerId, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey } from "./accountHelpers";
+import { fetchLicenseKeys, fetchNextCheckoutCreatedAt, pickAllLicenseKeys, validateActiveTicket, parseCheckoutCache, claimLicenseKeysForCheckout, getStoredClaimedKeys, storeClaimedKeys, fetchCheckoutCustomerId, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, fetchCheckoutIdFromCustomerSession } from "./accountHelpers";
 import type { PolarLicenseKeyItem } from "./accountHelpers";
 import { parseCheckoutKeyClaimBindings } from "./account.test-utils";
 import { hashKey } from "../utils/quota";
@@ -855,6 +855,39 @@ describe("fetchCheckoutCustomerId", () => {
       createdAt: "2026-01-02T00:00:00Z",
       referenceId: "sess-1",
       isExecutiveSupporter: true,
+    });
+  });
+});
+
+describe("fetchCheckoutIdFromCustomerSession", () => {
+  const origFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+  });
+
+  it("resolves the latest paid order checkout id from a customer session token", async () => {
+    globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer polar_cst_test");
+      return new Response(JSON.stringify({
+        items: [
+          { paid: false, checkout_id: "co_pending" },
+          { paid: true, checkout_id: "co_paid" },
+        ],
+      }));
+    }) as typeof fetch;
+
+    await expect(fetchCheckoutIdFromCustomerSession("polar_cst_test", "org")).resolves.toEqual({
+      checkoutId: "co_paid",
+    });
+  });
+
+  it("retries when the customer session has no paid checkout yet", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ items: [] }))) as typeof fetch;
+
+    await expect(fetchCheckoutIdFromCustomerSession("polar_cst_test", "org")).resolves.toEqual({
+      error: "No paid checkout found for this customer session yet — try again in a few seconds",
+      status: 409,
     });
   });
 });

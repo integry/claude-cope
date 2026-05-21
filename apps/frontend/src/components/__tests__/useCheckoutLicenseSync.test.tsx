@@ -152,4 +152,32 @@ describe("useCheckoutLicenseSync", () => {
     expect(runSlashCommand).toHaveBeenCalledWith("/sync COPE-123");
     expect(window.location.search).toBe("");
   });
+
+  it("starts checkout sync from Polar customer session token return URLs", async () => {
+    window.history.replaceState({}, "", "/?customer_session_token=polar_cst_return_1234567890&keep=1");
+
+    const setHistory = vi.fn<(value: SetStateAction<Message[]>) => void>();
+    const runSlashCommand = vi.fn();
+    const fetchMock = vi.fn(async (): Promise<Response> => (
+      new Response(JSON.stringify({ licenseKey: "COPE-456" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    ));
+    global.fetch = fetchMock as typeof fetch;
+
+    await act(async () => {
+      renderHarness({ setHistory, runSlashCommand });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://example.com/api/account/checkout-license", expect.objectContaining({
+      body: JSON.stringify({ customerSessionToken: "polar_cst_return_1234567890" }),
+      credentials: "include",
+      method: "POST",
+    }));
+    expect(runSlashCommand).toHaveBeenCalledWith("/sync COPE-456");
+    expect(window.location.search).toBe("?keep=1");
+  });
 });

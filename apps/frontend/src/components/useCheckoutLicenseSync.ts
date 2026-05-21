@@ -21,13 +21,18 @@ type CheckoutLicenseFetchResult = {
   data: CheckoutLicenseResponse;
 };
 
+type CheckoutReturnRef =
+  | { type: "checkout_id"; value: string }
+  | { type: "customer_session_token"; value: string };
+
 const CHECKOUT_RETRY_DELAY_MS = 2000;
 const CHECKOUT_MAX_ATTEMPTS = 5;
 
-function stripCheckoutIdFromLocation(signal: AbortSignal) {
+function stripCheckoutReturnParams(signal: AbortSignal) {
   if (signal.aborted) return;
   const params = new URLSearchParams(window.location.search);
   params.delete("checkout_id");
+  params.delete("customer_session_token");
   const queryString = params.toString();
   window.history.replaceState({}, "", window.location.pathname + (queryString ? `?${queryString}` : ""));
 }
@@ -56,7 +61,7 @@ function waitForRetryDelay(signal: AbortSignal, milliseconds: number) {
 }
 
 async function fetchCheckoutLicense(
-  checkoutId: string,
+  checkoutRef: CheckoutReturnRef,
   signal: AbortSignal,
 ): Promise<CheckoutLicenseFetchResult | null> {
   let lastStatus = 0;
@@ -68,7 +73,7 @@ async function fetchCheckoutLicense(
     }
     if (signal.aborted) return null;
 
-    const response = await fetchCheckoutLicenseAttempt(checkoutId, signal, attempt);
+    const response = await fetchCheckoutLicenseAttempt(checkoutRef, signal, attempt);
     if (response === "retry") continue;
     if (response === null) return null;
 
@@ -87,7 +92,7 @@ async function fetchCheckoutLicense(
 }
 
 async function fetchCheckoutLicenseAttempt(
-  checkoutId: string,
+  checkoutRef: CheckoutReturnRef,
   signal: AbortSignal,
   attempt: number,
 ): Promise<Response | "retry" | null> {
@@ -95,7 +100,9 @@ async function fetchCheckoutLicenseAttempt(
     const response = await fetch(`${API_BASE}/api/account/checkout-license`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ checkoutId }),
+      body: JSON.stringify(checkoutRef.type === "checkout_id"
+        ? { checkoutId: checkoutRef.value }
+        : { customerSessionToken: checkoutRef.value }),
       credentials: "include",
       signal,
     });
@@ -145,7 +152,7 @@ function handleSuccessfulCheckoutSync({
     if (!alreadyPro && !signal.aborted) {
       runSlashCommand(`/sync ${licenseKey}`);
     }
-    stripCheckoutIdFromLocation(signal);
+    stripCheckoutReturnParams(signal);
     return true;
   }
 
@@ -154,24 +161,24 @@ function handleSuccessfulCheckoutSync({
       role: "system",
       content: `[✅] License key retrieved: \`${licenseKey}\`. You're already synced — run \`/sync ${licenseKey}\` to switch keys.`,
     });
-    stripCheckoutIdFromLocation(signal);
+    stripCheckoutReturnParams(signal);
     return true;
   }
 
   if (signal.aborted) return true;
   runSlashCommand(`/sync ${licenseKey}`);
-  stripCheckoutIdFromLocation(signal);
+  stripCheckoutReturnParams(signal);
   return true;
 }
 
 async function syncCheckoutLicense({
-  checkoutId,
+  checkoutRef,
   getAlreadyPro,
   runSlashCommand,
   setHistory,
   signal,
 }: {
-  checkoutId: string;
+  checkoutRef: CheckoutReturnRef;
   getAlreadyPro: () => boolean;
   runSlashCommand: (command: string) => void;
   setHistory: Dispatch<SetStateAction<Message[]>>;
@@ -183,10 +190,10 @@ async function syncCheckoutLicense({
   });
 
   try {
-    const result = await fetchCheckoutLicense(checkoutId, signal);
+    const result = await fetchCheckoutLicense(checkoutRef, signal);
     if (!result || signal.aborted) return;
     if (handleSuccessfulCheckoutSync({ alreadyPro: getAlreadyPro(), data: result.data, runSlashCommand, setHistory, signal })) return;
-    if (result.status !== 409) stripCheckoutIdFromLocation(signal);
+    if (result.status !== 409) stripCheckoutReturnParams(signal);
     appendCheckoutHistory(signal, setHistory, {
       role: "error",
       content: `[❌] License activation failed: ${result.data.error ?? "Unknown error"}.${buildManualSyncHint(result.status, result.data)}`,
@@ -212,12 +219,20 @@ export function useCheckoutLicenseSync({ isBooting, proKeyHash, setHistory, runS
 
   useEffect(() => {
     if (isBooting) return;
-    const checkoutId = new URLSearchParams(window.location.search).get("checkout_id");
-    if (!checkoutId || checkoutHandledRef.current === checkoutId) return;
-    checkoutHandledRef.current = checkoutId;
+    const params = new URLSearchParams(window.location.search);
+    const checkoutId = params.get("checkout_id");
+    const customerSessionToken = params.get("customer_session_token");
+    const checkoutRef: CheckoutReturnRef | null = checkoutId
+      ? { type: "checkout_id", value: checkoutId }
+      : customerSessionToken
+        ? { type: "customer_session_token", value: customerSessionToken }
+        : null;
+    const handledKey = checkoutRef ? `${checkoutRef.type}:${checkoutRef.value}` : null;
+    if (!checkoutRef || checkoutHandledRef.current === handledKey) return;
+    checkoutHandledRef.current = handledKey;
     const abortController = new AbortController();
     void syncCheckoutLicense({
-      checkoutId,
+      checkoutRef,
       getAlreadyPro: () => Boolean(latestProKeyHashRef.current),
       runSlashCommand: (command) => latestRunSlashCommandRef.current(command),
       setHistory: (value) => latestSetHistoryRef.current(value),

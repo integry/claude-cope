@@ -35,6 +35,7 @@ export type PolarCheckout = {
   metadata?: Record<string, unknown>;
 };
 export type PolarLicenseKeyItem = { key: string; created_at: string; status: string };
+type PolarCustomerOrder = { paid?: boolean; status?: string; checkout_id?: string | null; created_at?: string };
 export type CheckoutCache = { keys: string[]; sessionId: string };
 
 const MAX_KEY_MINT_WINDOW_MS = 15 * 60 * 1000;
@@ -1042,6 +1043,40 @@ export async function fetchCheckoutCustomerId(
     referenceId,
     isExecutiveSupporter: isExecutiveSupporterCheckout(checkout.metadata),
   };
+}
+
+export async function fetchCheckoutIdFromCustomerSession(
+  customerSessionToken: string,
+  organizationId: string,
+): Promise<{ checkoutId: string } | { error: string; status: ContentfulStatusCode }> {
+  let resp: Response;
+  try {
+    const params = new URLSearchParams({
+      organization_id: organizationId,
+      product_billing_type: "one_time",
+      limit: "10",
+      sorting: "-created_at",
+    });
+    resp = await fetch(`https://api.polar.sh/v1/customer-portal/orders/?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${customerSessionToken}` },
+    });
+  } catch {
+    return { error: "Unable to reach Polar — please try again", status: 502 };
+  }
+  if (!resp.ok) {
+    if (resp.status === 401 || resp.status === 403) {
+      return { error: "Invalid customer session token", status: 403 };
+    }
+    if (resp.status >= 500) return { error: "Polar is temporarily unavailable — please try again", status: 502 };
+    return { error: `Polar returned an unexpected customer session error (${resp.status})`, status: 502 };
+  }
+
+  const items = ((await resp.json()) as { items?: PolarCustomerOrder[] }).items ?? [];
+  const order = items.find((item) => item?.checkout_id && (item.paid === true || item.status === "paid"));
+  if (!order?.checkout_id) {
+    return { error: "No paid checkout found for this customer session yet — try again in a few seconds", status: 409 };
+  }
+  return { checkoutId: order.checkout_id };
 }
 
 export async function fetchNextCheckoutCreatedAt(customerId: string, organizationId: string, accessToken: string, opts: { checkoutId: string; checkoutCreatedAt: string }): Promise<{ createdAt: string | null } | { error: string; status: ContentfulStatusCode }> {

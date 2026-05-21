@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES, EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, rollbackSyncSideEffects, activateExecutiveSupporterIfNeeded } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, rollbackSyncSideEffects, activateExecutiveSupporterIfNeeded, fetchCheckoutIdFromCustomerSession } from "./accountHelpers";
 import type { CheckoutCache, ResolveProfileResult, SyncProfileErrorCode, SyncProfileMutation } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -53,17 +53,35 @@ async function lookupCheckoutCache(
 }
 
 async function validateCheckoutRequest(c: { req: { json: <T>() => Promise<T> }; get: (key: string) => string; env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response }) {
-  let body: { checkoutId?: string };
+  let body: { checkoutId?: string; customerSessionToken?: string };
   try {
-    body = await c.req.json<{ checkoutId?: string }>();
+    body = await c.req.json<{ checkoutId?: string; customerSessionToken?: string }>();
   } catch {
     return { error: c.json({ error: "Invalid JSON body" }, 400) } as const;
   }
-  if (!body.checkoutId) return { error: c.json({ error: "checkoutId is required" }, 400) } as const;
-  if (!/^[\w-]{4,128}$/.test(body.checkoutId)) return { error: c.json({ error: "Invalid checkoutId format" }, 400) } as const;
+  if (!body.checkoutId && !body.customerSessionToken) {
+    return { error: c.json({ error: "checkoutId or customerSessionToken is required" }, 400) } as const;
+  }
+  if (body.checkoutId && !/^[\w-]{4,128}$/.test(body.checkoutId)) return { error: c.json({ error: "Invalid checkoutId format" }, 400) } as const;
+  if (body.customerSessionToken && !/^polar_cst_[A-Za-z0-9_-]{16,256}$/.test(body.customerSessionToken)) {
+    return { error: c.json({ error: "Invalid customerSessionToken format" }, 400) } as const;
+  }
   const sessionId = c.get("sessionId");
   if (!sessionId) return { error: c.json({ error: "Session required" }, 401) } as const;
-  return { checkoutId: body.checkoutId, sessionId, kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV } as const;
+  return { checkoutId: body.checkoutId, customerSessionToken: body.customerSessionToken, sessionId, kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV } as const;
+}
+
+async function resolveCheckoutRequestId(
+  c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
+  request: { checkoutId?: string; customerSessionToken?: string },
+): Promise<{ checkoutId: string } | { response: Response }> {
+  if (request.checkoutId) return { checkoutId: request.checkoutId };
+
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
+  if (!organizationId) return { response: c.json({ error: "Polar integration is not configured" }, 500) };
+  const result = await fetchCheckoutIdFromCustomerSession(request.customerSessionToken!, organizationId);
+  if ("error" in result) return { response: c.json({ error: result.error }, result.status) };
+  return { checkoutId: result.checkoutId };
 }
 
 function respondWithClaimedKeys(c: { json: (data: unknown, status?: number) => Response }, keys: string[]) {
@@ -576,7 +594,10 @@ account.get("/checkout-reference", async (c) => {
 account.post("/checkout-license", async (c) => {
   const validated = await validateCheckoutRequest(c);
   if ("error" in validated) return validated.error;
-  const { checkoutId, sessionId, kv } = validated;
+  const resolvedCheckout = await resolveCheckoutRequestId(c, validated);
+  if ("response" in resolvedCheckout) return resolvedCheckout.response;
+  const { checkoutId } = resolvedCheckout;
+  const { sessionId, kv } = validated;
   const claimSecret = c.env?.CHECKOUT_CLAIM_SECRET;
   if (!claimSecret) return c.json({ error: "Checkout claim secret is not configured" }, 500);
   const db = c.env?.DB;
