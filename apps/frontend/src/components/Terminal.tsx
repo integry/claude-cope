@@ -9,7 +9,7 @@ import { BYOK_ENABLED } from "../config";
 import { executeSlashCommand } from "./slashCommandExecutor";
 import { applyAuthoritativeProfile as mergeAuthoritativeProfile, applyServerProfile, settlePendingCompletedRewards } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
-import { fetchRandomTicketPrompt } from "./ticketPrompt";
+import { fetchRandomTicketPrompt, getPendingOffer, publishTicketOffer } from "./ticketPrompt";
 import { filterChatHistory } from "./filterChatHistory";
 import { useMultiplayer } from "../hooks/useMultiplayer";
 import { useTerminalEffects } from "../hooks/useTerminalEffects";
@@ -85,6 +85,9 @@ function Terminal() {
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
   const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startupTicketPromptInFlightRef = useRef(false);
+  const startupTicketPromptAbortControllerRef = useRef<AbortController | null>(null);
+  const startupTicketPromptAttemptIdRef = useRef(0);
+  const startupTicketPromptMountedRef = useRef(true);
   const historyRef = useRef(history);
   historyRef.current = history;
   const hasScrolledTerminalToBottomOnLoadRef = useRef(false);
@@ -153,28 +156,64 @@ function Terminal() {
     clearTimeout(startupTicketPromptTimeoutRef.current);
     startupTicketPromptTimeoutRef.current = null;
   }, []);
+  const markStartupTicketPromptSeen = useCallback(() => {
+    setState((prev) => (prev.hasSeenTicketPrompt || prev.activeTicket ? prev : { ...prev, hasSeenTicketPrompt: true }));
+  }, [setState]);
+  const cancelStartupTicketPromptAttempt = useCallback(() => {
+    startupTicketPromptAttemptIdRef.current += 1;
+    startupTicketPromptInFlightRef.current = false;
+    clearStartupTicketPromptTimeout();
+    startupTicketPromptAbortControllerRef.current?.abort();
+    startupTicketPromptAbortControllerRef.current = null;
+  }, [clearStartupTicketPromptTimeout]);
   const runStartupTicketPromptAttempt = useCallback(async () => {
     startupTicketPromptTimeoutRef.current = null;
     const currentState = getCurrentState();
     if (currentState.hasSeenTicketPrompt || currentState.activeTicket) return;
-
-    startupTicketPromptInFlightRef.current = true;
-    const result = await fetchRandomTicketPrompt(setHistory, currentState.proKeyHash);
-    startupTicketPromptInFlightRef.current = false;
-
-    const latestState = getCurrentState();
-    if (latestState.hasSeenTicketPrompt || latestState.activeTicket) return;
-
-    if (result === "offered" || result === "empty") {
-      setState((prev) => (prev.hasSeenTicketPrompt || prev.activeTicket ? prev : { ...prev, hasSeenTicketPrompt: true }));
+    if (getPendingOffer()) {
+      markStartupTicketPromptSeen();
       return;
     }
 
+    const attemptId = startupTicketPromptAttemptIdRef.current + 1;
+    startupTicketPromptAttemptIdRef.current = attemptId;
+    const abortController = new AbortController();
+    startupTicketPromptAbortControllerRef.current = abortController;
+    startupTicketPromptInFlightRef.current = true;
+    const result = await fetchRandomTicketPrompt(currentState.proKeyHash, abortController.signal);
+    const isLatestAttempt = startupTicketPromptAttemptIdRef.current === attemptId;
+    if (startupTicketPromptAbortControllerRef.current === abortController) {
+      startupTicketPromptAbortControllerRef.current = null;
+    }
+    if (isLatestAttempt) {
+      startupTicketPromptInFlightRef.current = false;
+    }
+
+    if (!startupTicketPromptMountedRef.current || !isLatestAttempt) return;
+    const latestState = getCurrentState();
+    if (latestState.hasSeenTicketPrompt || latestState.activeTicket) return;
+    if (getPendingOffer()) {
+      markStartupTicketPromptSeen();
+      return;
+    }
+
+    if (result.status === "offered") {
+      publishTicketOffer(setHistory, result.ticket);
+      markStartupTicketPromptSeen();
+      return;
+    }
+
+    if (result.status === "empty") {
+      markStartupTicketPromptSeen();
+      return;
+    }
+
+    if (!result.retryable) return;
     if (startupTicketPromptTimeoutRef.current || startupTicketPromptInFlightRef.current) return;
     startupTicketPromptTimeoutRef.current = setTimeout(() => {
       void runStartupTicketPromptAttempt();
     }, STARTUP_TICKET_PROMPT_DELAY_MS);
-  }, [getCurrentState, setHistory, setState]);
+  }, [getCurrentState, markStartupTicketPromptSeen, setHistory]);
   const scheduleStartupTicketPromptAttempt = useCallback(() => {
     if (startupTicketPromptTimeoutRef.current || startupTicketPromptInFlightRef.current) return;
     startupTicketPromptTimeoutRef.current = setTimeout(() => {
@@ -182,8 +221,9 @@ function Terminal() {
     }, STARTUP_TICKET_PROMPT_DELAY_MS);
   }, [runStartupTicketPromptAttempt]);
   useEffect(() => () => {
-    clearStartupTicketPromptTimeout();
-  }, [clearStartupTicketPromptTimeout]);
+    startupTicketPromptMountedRef.current = false;
+    cancelStartupTicketPromptAttempt();
+  }, [cancelStartupTicketPromptAttempt]);
   const scheduleHistoryCommitCallback = useHistoryCommitQueue(history.length);
   const setPersistedSuggestedReply = useCallback((nextSuggestedReply: string | null) => {
     setState((prev) => prev.suggestedReply === nextSuggestedReply ? prev : { ...prev, suggestedReply: nextSuggestedReply });
@@ -348,12 +388,12 @@ function Terminal() {
   }, [isMobileViewport, isProcessing, isBooting, anyOverlayOpen]);
   useEffect(() => {
     if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) {
-      clearStartupTicketPromptTimeout();
+      cancelStartupTicketPromptAttempt();
       return;
     }
     scheduleStartupTicketPromptAttempt();
-    return clearStartupTicketPromptTimeout;
-  }, [clearStartupTicketPromptTimeout, isBooting, scheduleStartupTicketPromptAttempt, state.hasSeenTicketPrompt, state.activeTicket, state.proKeyHash]);
+    return cancelStartupTicketPromptAttempt;
+  }, [cancelStartupTicketPromptAttempt, isBooting, scheduleStartupTicketPromptAttempt, state.hasSeenTicketPrompt, state.activeTicket, state.proKeyHash]);
   const handleQuotaLockout = useCallback((command?: string) => {
     if (!state.proKey && !state.proKeyHash) {
       nagArmedFromQuotaRef.current = true;

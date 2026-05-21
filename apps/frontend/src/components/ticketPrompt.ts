@@ -95,35 +95,46 @@ export function buildTicketMessage(
   };
 }
 
-export type TicketPromptFetchResult = "offered" | "empty" | "error";
+export function publishTicketOffer(
+  setHistory: React.Dispatch<React.SetStateAction<Message[]>>,
+  ticket: PlayableBacklogTicket,
+): void {
+  pendingTicketOffer = ticket;
+  setHistory((prev) => [
+    ...prev,
+    buildTicketMessage(ticket, "offered"),
+  ]);
+}
+
+export type TicketPromptFetchResult =
+  | { status: "offered"; ticket: PlayableBacklogTicket }
+  | { status: "empty" }
+  | { status: "error"; retryable: boolean };
 
 /**
- * Fetches a random community ticket and displays it as an offer.
+ * Fetches a random community ticket candidate for the caller to offer.
  * Only called if no active ticket exists.
  */
 export async function fetchRandomTicketPrompt(
-  setHistory: React.Dispatch<React.SetStateAction<Message[]>>,
   proKeyHash?: string,
+  signal?: AbortSignal,
 ): Promise<TicketPromptFetchResult> {
   try {
     const res = await fetch(`${API_BASE}/api/tickets/community`, {
       headers: proKeyHash ? { "x-pro-key-hash": proKeyHash } : undefined,
+      signal,
     });
-    if (!res.ok) return "error";
+    if (!res.ok) {
+      return { status: "error", retryable: res.status === 408 || res.status === 429 || res.status >= 500 };
+    }
 
     const tickets = (await res.json()) as CommunityBacklogTicket[];
     const playableTickets = tickets.filter((ticket): ticket is PlayableBacklogTicket => !ticket.is_locked);
-    if (!playableTickets.length) return "empty";
+    if (!playableTickets.length) return { status: "empty" };
 
     const ticket = playableTickets[Math.floor(Math.random() * playableTickets.length)]!;
-    pendingTicketOffer = ticket;
-
-    setHistory((prev) => [
-      ...prev,
-      buildTicketMessage(ticket, "offered"),
-    ]);
-    return "offered";
+    return { status: "offered", ticket };
   } catch {
-    return "error";
+    return { status: "error", retryable: true };
   }
 }

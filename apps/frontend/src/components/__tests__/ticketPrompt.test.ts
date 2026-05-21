@@ -7,7 +7,7 @@ vi.mock("../../config", () => ({
   API_BASE: "https://example.test",
 }));
 
-import { clearPendingOffer, fetchRandomTicketPrompt, getPendingOffer } from "../ticketPrompt";
+import { clearPendingOffer, fetchRandomTicketPrompt, getPendingOffer, publishTicketOffer } from "../ticketPrompt";
 
 function makeTicket(overrides: Partial<PlayableBacklogTicket> = {}): PlayableBacklogTicket {
   return {
@@ -55,7 +55,7 @@ describe("fetchRandomTicketPrompt", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns offered after appending a structured incoming ticket message", async () => {
+  it("returns an offered ticket without mutating history until the caller publishes it", async () => {
     const ticket = makeTicket();
     vi.spyOn(Math, "random").mockReturnValue(0);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
@@ -63,12 +63,22 @@ describe("fetchRandomTicketPrompt", () => {
       json: async () => [ticket],
     }));
 
-    const result = await fetchRandomTicketPrompt(setHistory, "pro-hash");
+    const result = await fetchRandomTicketPrompt("pro-hash");
 
-    expect(result).toBe("offered");
+    expect(result).toEqual({ status: "offered", ticket });
     expect(fetch).toHaveBeenCalledWith("https://example.test/api/tickets/community", {
       headers: { "x-pro-key-hash": "pro-hash" },
+      signal: undefined,
     });
+    expect(history).toEqual([]);
+    expect(getPendingOffer()).toBeNull();
+  });
+
+  it("publishes a structured incoming ticket message when given a fetched offer", () => {
+    const ticket = makeTicket();
+
+    publishTicketOffer(setHistory, ticket);
+
     expect(getPendingOffer()).toEqual(ticket);
     expect(history).toHaveLength(1);
     expect(history[0]).toMatchObject({
@@ -88,19 +98,32 @@ describe("fetchRandomTicketPrompt", () => {
       json: async () => [makeLockedTicket()],
     }));
 
-    const result = await fetchRandomTicketPrompt(setHistory);
+    const result = await fetchRandomTicketPrompt();
 
-    expect(result).toBe("empty");
+    expect(result).toEqual({ status: "empty" });
     expect(history).toEqual([]);
     expect(getPendingOffer()).toBeNull();
   });
 
-  it("returns error on transient fetch failure without mutating prompt state", async () => {
+  it("marks 4xx responses as terminal errors without mutating prompt state", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+    }));
+
+    const result = await fetchRandomTicketPrompt();
+
+    expect(result).toEqual({ status: "error", retryable: false });
+    expect(history).toEqual([]);
+    expect(getPendingOffer()).toBeNull();
+  });
+
+  it("returns a retryable error on transient fetch failure without mutating prompt state", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 
-    const result = await fetchRandomTicketPrompt(setHistory);
+    const result = await fetchRandomTicketPrompt();
 
-    expect(result).toBe("error");
+    expect(result).toEqual({ status: "error", retryable: true });
     expect(history).toEqual([]);
     expect(getPendingOffer()).toBeNull();
   });
