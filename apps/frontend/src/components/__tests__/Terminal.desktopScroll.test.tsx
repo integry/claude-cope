@@ -299,22 +299,15 @@ describe("Terminal desktop scroll orchestration", () => {
   it("keeps desktop pinned to the bottom while the final assistant render keeps growing after processing stops", async () => {
     rendered = await renderTerminal(Terminal);
     const { viewport, metrics } = installScrollHarness(rendered.container);
-
     metrics.contentHeight = 180;
-    await submitCommand(rendered.container, "ship it");
-    await act(async () => {
-      globalThis.__triggerResizeObserver?.();
-    });
-
+    await submitCommand(rendered.container, "ship it"); await act(async () => { globalThis.__triggerResizeObserver?.(); });
     expect(getInput(rendered.container).disabled).toBe(false);
     expect(viewport.scrollTop).toBe(100);
-
     await act(async () => {
       metrics.contentHeight = 320;
       renderGrowthControlRef.current();
       globalThis.__triggerResizeObserver?.();
     });
-
     expect(viewport.scrollTop).toBe(240);
   });
 
@@ -322,56 +315,79 @@ describe("Terminal desktop scroll orchestration", () => {
     isMobileViewportRef.current = true;
     rendered = await renderTerminal(Terminal);
     const { viewport, metrics } = installScrollHarness(rendered.container);
-
     metrics.contentHeight = 180;
     await submitCommand(rendered.container, "ship it");
-
     metrics.scrollTop = 24;
-
     await act(async () => {
       metrics.contentHeight = 320;
       renderGrowthControlRef.current();
       globalThis.__triggerResizeObserver?.();
     });
-
     expect(viewport.scrollTop).toBe(24);
   });
 
   it("does not yank desktop users back to the bottom after they scroll up", async () => {
     rendered = await renderTerminal(Terminal);
     const { viewport, metrics } = installScrollHarness(rendered.container);
-
     metrics.contentHeight = 180;
-    await submitCommand(rendered.container, "ship it");
-    await act(async () => {
-      globalThis.__triggerResizeObserver?.();
-    });
-
+    await submitCommand(rendered.container, "ship it"); await act(async () => { globalThis.__triggerResizeObserver?.(); });
     metrics.scrollTop = 40;
-
     await act(async () => {
       metrics.contentHeight = 320;
       renderGrowthControlRef.current();
       globalThis.__triggerResizeObserver?.();
     });
-
     expect(viewport.scrollTop).toBe(40);
+  });
+
+  it("keeps desktop pinned when the browser reports a rounded scrollTop near the bottom", async () => {
+    rendered = await renderTerminal(Terminal);
+    const { viewport, metrics } = installScrollHarness(rendered.container);
+    metrics.contentHeight = 180.3;
+    metrics.viewportHeight = 80.1;
+    await submitCommand(rendered.container, "ship it");
+    await act(async () => { globalThis.__triggerResizeObserver?.(); });
+    metrics.scrollTop = 99;
+    await act(async () => {
+      metrics.contentHeight = 320.3;
+      renderGrowthControlRef.current();
+      globalThis.__triggerResizeObserver?.();
+    });
+    expect(viewport.scrollTop).toBeCloseTo(240.2, 5);
+  });
+
+  it("keeps desktop pinned across viewport resizes before the final render grows again", async () => {
+    rendered = await renderTerminal(Terminal);
+    const { viewport, metrics } = installScrollHarness(rendered.container);
+    metrics.contentHeight = 180;
+    await submitCommand(rendered.container, "ship it");
+    await act(async () => { globalThis.__triggerResizeObserver?.(); });
+    expect(viewport.scrollTop).toBe(100);
+    await act(async () => {
+      metrics.viewportHeight = 60;
+      globalThis.__triggerResizeObserver?.();
+    });
+    expect(viewport.scrollTop).toBe(120);
+    await act(async () => {
+      metrics.contentHeight = 320;
+      renderGrowthControlRef.current();
+      globalThis.__triggerResizeObserver?.();
+    });
+    expect(viewport.scrollTop).toBe(260);
   });
 
   it("does not treat a slight manual desktop scroll-up as bottom-pinned", async () => {
     rendered = await renderTerminal(Terminal);
     const { viewport, metrics } = installScrollHarness(rendered.container);
-
     metrics.contentHeight = 180;
     await submitCommand(rendered.container, "ship it");
+    await act(async () => { globalThis.__triggerResizeObserver?.(); });
     metrics.scrollTop = 95;
-
     await act(async () => {
       metrics.contentHeight = 320;
       renderGrowthControlRef.current();
       globalThis.__triggerResizeObserver?.();
     });
-
     expect(viewport.scrollTop).toBe(95);
   });
 });

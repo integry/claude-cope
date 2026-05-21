@@ -35,10 +35,42 @@ import { useIsMobileViewport } from "./useIsMobileViewport";
 
 export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
 type PromptSubmission = { command: string; replayId: number | null; submissionId: number };
-const DESKTOP_BOTTOM_EPSILON_PX = 0.5;
+type DesktopScrollMetrics = { contentHeight: number; viewportHeight: number; maxScrollTop: number };
+const DESKTOP_BOTTOM_EPSILON_PX = 2;
+const DESKTOP_GEOMETRY_EPSILON_PX = 0.5;
 const createPromptLoadingMessage = (submissionId: number): Message => ({ id: submissionId, role: "loading", content: getRandomLoadingPhrase() });
 const removePromptMessages = (submissionId: number) => (prev: Message[]) => prev.filter((message) => !(message.id === submissionId && (message.role === "user" || message.role === "loading")));
-const measureScrollContentHeight = (scrollContent: HTMLDivElement) => scrollContent.getBoundingClientRect().height || scrollContent.scrollHeight || scrollContent.offsetHeight || 0;
+
+function measureContentHeight(scrollContent: HTMLDivElement): number {
+  return Math.max(
+    scrollContent.scrollHeight,
+    scrollContent.offsetHeight,
+    scrollContent.getBoundingClientRect().height,
+    0,
+  );
+}
+
+function measureViewportHeight(viewport: HTMLDivElement): number {
+  return Math.max(
+    viewport.clientHeight,
+    viewport.getBoundingClientRect().height,
+    0,
+  );
+}
+
+function getDesktopScrollMetrics(scrollContent: HTMLDivElement, viewport: HTMLDivElement): DesktopScrollMetrics {
+  const contentHeight = measureContentHeight(scrollContent);
+  const viewportHeight = measureViewportHeight(viewport);
+  return {
+    contentHeight,
+    viewportHeight,
+    maxScrollTop: Math.max(0, contentHeight - viewportHeight),
+  };
+}
+
+function isDesktopBottomPinned(scrollTop: number, maxScrollTop: number): boolean {
+  return scrollTop >= maxScrollTop - DESKTOP_BOTTOM_EPSILON_PX;
+}
 
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
@@ -62,7 +94,7 @@ function Terminal() {
   const nextKeyId = useRef(0); syncMessageKeys(messageKeys.current, nextKeyId, history, messageKeyMap.current);
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
   const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); const historyRef = useRef(history); historyRef.current = history;
-  const hasScrolledTerminalToBottomOnLoadRef = useRef(false); const lastDesktopScrollContentHeightRef = useRef(0); const lastDesktopViewportHeightRef = useRef(0);
+  const hasScrolledTerminalToBottomOnLoadRef = useRef(false); const lastDesktopScrollMetricsRef = useRef<DesktopScrollMetrics | null>(null);
   const wasMobileRequestProcessingRef = useRef(false); const activeMobilePromptKeyRef = useRef<number | null>(null); const mobilePromptFollowFrameRef = useRef<number | null>(null);
   const mobilePromptFollowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); const lastMobilePromptScrollHeightRef = useRef(0); const lastMobilePromptGrowthAtRef = useRef(0);
   const lastSuggestedReplyRef = useRef<string | null>(null); const nextPendingBacklogRollbackIdRef = useRef(0); const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
@@ -135,16 +167,26 @@ function Terminal() {
   }, [history, isMobileViewport, isProcessing, resolveScrollViewport, stopMobilePromptFollowLoop]);
   useEffect(() => {
     const scrollContent = scrollContentRef.current; const viewport = resolveScrollViewport();
-    if (isMobileViewport || !scrollContent || !viewport || typeof ResizeObserver === "undefined") { lastDesktopScrollContentHeightRef.current = 0; lastDesktopViewportHeightRef.current = 0; return; }
-    lastDesktopScrollContentHeightRef.current = measureScrollContentHeight(scrollContent); lastDesktopViewportHeightRef.current = viewport.clientHeight;
+    if (isMobileViewport || !scrollContent || !viewport || typeof ResizeObserver === "undefined") {
+      lastDesktopScrollMetricsRef.current = null; return;
+    }
+    lastDesktopScrollMetricsRef.current = getDesktopScrollMetrics(scrollContent, viewport);
     const observer = new ResizeObserver(() => {
-      const nextHeight = measureScrollContentHeight(scrollContent); const previousMaxScrollTop = Math.max(0, lastDesktopScrollContentHeightRef.current - lastDesktopViewportHeightRef.current);
-      const wasAtBottom = Math.abs(previousMaxScrollTop - viewport.scrollTop) < DESKTOP_BOTTOM_EPSILON_PX;
-      if (nextHeight > lastDesktopScrollContentHeightRef.current && wasAtBottom) scrollTerminalToBottom();
-      lastDesktopScrollContentHeightRef.current = nextHeight; lastDesktopViewportHeightRef.current = viewport.clientHeight;
+      const previousMetrics = lastDesktopScrollMetricsRef.current ?? getDesktopScrollMetrics(scrollContent, viewport);
+      const nextMetrics = getDesktopScrollMetrics(scrollContent, viewport);
+      const contentGrew = nextMetrics.contentHeight > previousMetrics.contentHeight + DESKTOP_GEOMETRY_EPSILON_PX;
+      const viewportResized = Math.abs(nextMetrics.viewportHeight - previousMetrics.viewportHeight) > DESKTOP_GEOMETRY_EPSILON_PX;
+      const wasAtBottom = isDesktopBottomPinned(viewport.scrollTop, previousMetrics.maxScrollTop);
+      if (wasAtBottom && (contentGrew || viewportResized)) viewport.scrollTop = nextMetrics.maxScrollTop;
+      lastDesktopScrollMetricsRef.current = nextMetrics;
     });
-    observer.observe(scrollContent); return () => observer.disconnect();
-  }, [isMobileViewport, resolveScrollViewport, scrollTerminalToBottom]);
+    observer.observe(scrollContent);
+    observer.observe(viewport);
+    return () => {
+      observer.disconnect();
+      lastDesktopScrollMetricsRef.current = null;
+    };
+  }, [isMobileViewport, resolveScrollViewport]);
   useEffect(() => {
     const onPopState = () => { if (pendingNagCommandRef.current !== null) return void setShowUpgrade(true); setShowUpgrade(window.location.pathname === "/upgrade"); };
     window.addEventListener("popstate", onPopState); return () => window.removeEventListener("popstate", onPopState);
@@ -257,17 +299,81 @@ function Terminal() {
 
   return (
     <TerminalView
-      activeRegression={activeRegression} outageHp={outageHp} activeOutageScenario={activeOutageScenario} pendingReviewPing={pendingReviewPing} pingAcknowledged={pingAcknowledged} activeTheme={state.activeTheme}
-      regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} isMobileViewport={isMobileViewport} inputRef={inputRef} closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag} onlineCount={onlineCount}
-      rank={rank} state={state} handleHomeClick={handleHomeClick} handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue} setSlashQuery={setSlashQuery}
-      setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect} isBooting={isBooting} history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current}
-      promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} scrollViewportRef={scrollViewportRef} scrollContentRef={scrollContentRef} bottomRef={bottomRef} slashQuery={slashQuery} slashIndex={slashIndex}
-      handleSlashMenuSelect={handleSlashMenuSelect} runSlashCommand={runSlashCommand} inputValue={inputValue} suggestedReply={suggestedReply} acceptSuggestedReply={acceptSuggestedReply} isProcessing={isProcessing}
-      handleChange={handleChange} handleKeyDown={handleKeyDown} handleSubmit={handleEnterSubmit} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} showStore={showStore}
-      showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact}
-      showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade} setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard} setShowAchievements={setShowAchievements} setShowPrivacy={setShowPrivacy}
-      setShowTerms={setShowTerms} setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty} setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory}
-      pendingNagCommand={pendingNagCommand} handleUpgradeNagClose={handleUpgradeNagDismiss} handleManualUpgradeDismiss={handleManualUpgradeDismiss} upgradeNagDismissPhase={upgradeNagDismissPhase} upgradeNagDismissEffect={upgradeNagDismissEffect}
+      activeRegression={activeRegression}
+      outageHp={outageHp}
+      activeOutageScenario={activeOutageScenario}
+      pendingReviewPing={pendingReviewPing}
+      pingAcknowledged={pingAcknowledged}
+      activeTheme={state.activeTheme}
+      regressionGlitch={regressionGlitch}
+      anyOverlayOpen={anyOverlayOpen}
+      isMobileViewport={isMobileViewport}
+      inputRef={inputRef}
+      closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
+      onlineCount={onlineCount}
+      rank={rank}
+      state={state}
+      handleHomeClick={handleHomeClick}
+      handleProfileClick={handleProfileClick}
+      setShowHelp={setShowHelp}
+      setShowAbout={setShowAbout}
+      setInputValue={setInputValue}
+      setSlashQuery={setSlashQuery}
+      setSlashIndex={setSlashIndex}
+      setShowUpgrade={setShowUpgrade}
+      compactEffect={compactEffect}
+      isBooting={isBooting}
+      history={history}
+      messageKeys={messageKeys.current}
+      initialHistoryLen={initialHistoryLen.current}
+      promptString={promptString}
+      handleSlashCommandClick={handleSlashCommandClick}
+      scrollViewportRef={scrollViewportRef}
+      scrollContentRef={scrollContentRef}
+      bottomRef={bottomRef}
+      slashQuery={slashQuery}
+      slashIndex={slashIndex}
+      handleSlashMenuSelect={handleSlashMenuSelect}
+      runSlashCommand={runSlashCommand}
+      inputValue={inputValue}
+      suggestedReply={suggestedReply}
+      acceptSuggestedReply={acceptSuggestedReply}
+      isProcessing={isProcessing}
+      handleChange={handleChange}
+      handleKeyDown={handleKeyDown}
+      handleSubmit={handleEnterSubmit}
+      buyGenerator={buyGenerator}
+      buyUpgrade={buyUpgrade}
+      buyTheme={buyTheme}
+      setActiveTheme={setActiveTheme}
+      showStore={showStore}
+      showLeaderboard={showLeaderboard}
+      showAchievements={showAchievements}
+      showSynergize={showSynergize}
+      showHelp={showHelp}
+      showAbout={showAbout}
+      showPrivacy={showPrivacy}
+      showTerms={showTerms}
+      showContact={showContact}
+      showProfile={showProfile}
+      showParty={showParty}
+      showUpgrade={showUpgrade}
+      setShowStore={setShowStore}
+      setShowLeaderboard={setShowLeaderboard}
+      setShowAchievements={setShowAchievements}
+      setShowPrivacy={setShowPrivacy}
+      setShowTerms={setShowTerms}
+      setShowContact={setShowContact}
+      setShowProfile={setShowProfile}
+      setShowParty={setShowParty}
+      setShowSynergize={setShowSynergize}
+      setIsProcessing={setIsProcessing}
+      setHistory={setHistory}
+      pendingNagCommand={pendingNagCommand}
+      handleUpgradeNagClose={handleUpgradeNagDismiss}
+      handleManualUpgradeDismiss={handleManualUpgradeDismiss}
+      upgradeNagDismissPhase={upgradeNagDismissPhase}
+      upgradeNagDismissEffect={upgradeNagDismissEffect}
     />
   );
 }
