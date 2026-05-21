@@ -101,6 +101,55 @@ describe("filterChatHistory", () => {
     ]);
   });
 
+  it("resets context after the most recent structured claimed ticket and keeps post-claim filtering", () => {
+    const history: Message[] = [
+      msg("user", "old task context"),
+      msg("system", "old task reply"),
+      {
+        role: "system",
+        content: "[ JIRA PAYLOAD IMPORTED ]\n\nID: NEW-123",
+        ticketDisplay: {
+          kind: "corporate-dossier",
+          status: "claimed",
+          heading: "[ JIRA PAYLOAD IMPORTED ]",
+          ticketId: "NEW-123",
+          title: "Fix the incident bot",
+          reporter: "Pat [SRE]",
+          body: "The bot is lying again.",
+          reward: "500 TD",
+          footer: ["Start prompting to make progress."],
+        },
+      },
+      msg("user", "/backlog"),
+      msg("system", "[📋 **COMMUNITY BACKLOG**]\n\n```table```"),
+      msg("user", "start with the failing path"),
+      msg("system", "Focus on the serializer first."),
+    ];
+
+    expect(filterChatHistory(history)).toEqual([
+      { role: "user", content: "start with the failing path" },
+      { role: "assistant", content: "Focus on the serializer first." },
+    ]);
+  });
+
+  it("resets context after a claimed ticket fallback text even without structured ticketDisplay", () => {
+    const history: Message[] = [
+      msg("user", "previous ticket notes"),
+      msg("system", "previous answer"),
+      msg(
+        "system",
+        "[ JIRA PAYLOAD IMPORTED ]\n\nID: OPS-77\nTITLE: Repair the pager bridge\nREPORTER: Morgan [Operations]\n\nDESCRIPTION: The handoff keeps dropping alerts.\n\nREWARD: 750 TD\nStart prompting to make progress.",
+      ),
+      msg("user", "what should I inspect first?"),
+      msg("system", "Inspect the reconnect loop and retry backoff."),
+    ];
+
+    expect(filterChatHistory(history)).toEqual([
+      { role: "user", content: "what should I inspect first?" },
+      { role: "assistant", content: "Inspect the reconnect loop and retry backoff." },
+    ]);
+  });
+
   it("filters out non-user non-system roles (e.g. warning)", () => {
     const history = [
       msg("user", "hello"),
