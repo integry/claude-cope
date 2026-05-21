@@ -754,7 +754,7 @@ describe("POST /api/account/sync", () => {
     });
   });
 
-  it("keeps executive supporter pending after checkout until the owner explicitly claims a vanity title", async () => {
+  it("activates executive supporter when the checkout owner syncs the first team key", async () => {
     mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
     const origFetch = globalThis.fetch;
     const supporterHash = await hashKey("COPE-SUPPORTER");
@@ -821,18 +821,7 @@ describe("POST /api/account/sync", () => {
       expect(syncRes.status).toBe(200);
       expect(await syncRes.json()).toMatchObject({
         success: true,
-        profile: { is_executive_supporter: false },
-      });
-
-      const claimRes = await postJSON("/api/account/update-display-rank", {
-        username: "alice",
-        displayRank: "  Mid-Level Googler  ",
-        licenseKeyHash: supporterHash,
-      }, { DB: db });
-      expect(claimRes.status).toBe(200);
-      expect(await claimRes.json()).toMatchObject({
-        success: true,
-        profile: { is_executive_supporter: true, display_rank: "Mid-Level Googler" },
+        profile: { is_executive_supporter: true },
       });
 
     } finally {

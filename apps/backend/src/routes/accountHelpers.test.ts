@@ -647,6 +647,7 @@ describe("syncExecutiveSupporterEntitlement", () => {
         };
       }),
       batch: vi.fn().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }]),
+      exec: vi.fn().mockResolvedValue(undefined),
     } as unknown as D1Database;
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
@@ -682,6 +683,7 @@ describe("syncExecutiveSupporterEntitlement", () => {
         }),
       })),
       batch: vi.fn().mockResolvedValue([{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]),
+      exec: vi.fn().mockResolvedValue(undefined),
     } as unknown as D1Database;
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({
@@ -717,6 +719,7 @@ describe("syncExecutiveSupporterEntitlement", () => {
         run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
       })),
       batch: vi.fn().mockResolvedValue([{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]),
+      exec: vi.fn().mockResolvedValue(undefined),
     } as unknown as D1Database;
 
     await expect(syncExecutiveSupporterEntitlement(db, "hash-123")).resolves.toEqual({

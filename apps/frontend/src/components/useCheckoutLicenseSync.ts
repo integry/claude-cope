@@ -140,8 +140,11 @@ function handleSuccessfulCheckoutSync({
     const keyList = keys.map((key, index) => `${index + 1}. \`${key}\``).join("\n");
     appendCheckoutHistory(signal, setHistory, {
       role: "system",
-      content: `[✅ TEAM PACK] Your purchase includes **${keys.length} license keys**:\n\n${keyList}\n\nShare these with your team. Each person can activate their key by running \`/sync <KEY>\`.`,
+      content: `[✅ TEAM PACK] Your purchase includes **${keys.length} license keys**:\n\n${keyList}\n\nSyncing the first key now. Share the rest with your team; each person can activate their key by running \`/sync <KEY>\`.`,
     });
+    if (!alreadyPro && !signal.aborted) {
+      runSlashCommand(`/sync ${licenseKey}`);
+    }
     stripCheckoutIdFromLocation(signal);
     return true;
   }

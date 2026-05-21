@@ -185,6 +185,9 @@ if ! $FRONTEND_ONLY; then
   else
     (cd "$ROOT/apps/backend" && printf 'y\n' | wrangler secret delete FREE_ACCOUNT_COOKIE_SECRET --config "$WRANGLER_CFG") || true
   fi
+  if [[ -n "${CHECKOUT_CLAIM_SECRET:-}" ]]; then
+    echo "$CHECKOUT_CLAIM_SECRET" | (cd "$ROOT/apps/backend" && wrangler secret put CHECKOUT_CLAIM_SECRET --config "$WRANGLER_CFG")
+  fi
   if [[ -n "${OPENROUTER_PROVIDERS:-}" ]]; then
     echo "$OPENROUTER_PROVIDERS" | (cd "$ROOT/apps/backend" && wrangler secret put OPENROUTER_PROVIDERS --config "$WRANGLER_CFG")
   fi

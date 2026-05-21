@@ -28,8 +28,13 @@ type Env = {
   };
 };
 const SHILL_CREDIT = 5;
+const CHECKOUT_REFERENCE_TTL_SECONDS = 24 * 60 * 60;
 
 const account = new Hono<Env>();
+
+function checkoutReferenceKey(referenceId: string): string {
+  return `checkout_reference:${referenceId}`;
+}
 
 async function lookupCheckoutCache(
   kv: KVNamespace,
@@ -151,16 +156,22 @@ async function resolveCachedOrStoredClaim(
   };
 }
 
-function validateCheckoutOwnership(
+async function validateCheckoutOwnership(
   c: { json: (data: unknown, status?: number) => Response },
   opts: {
     referenceId: string | null;
     sessionId: string;
+    kv?: KVNamespace;
     allowMissingReferenceBinding?: boolean;
   },
-) {
-  const { referenceId, sessionId, allowMissingReferenceBinding } = opts;
-  if (referenceId && referenceId !== sessionId) {
+): Promise<Response | null> {
+  const { referenceId, sessionId, kv, allowMissingReferenceBinding } = opts;
+  if (referenceId && referenceId === sessionId) return null;
+  if (referenceId && kv) {
+    const boundSessionId = await kv.get(checkoutReferenceKey(referenceId)).catch(() => null);
+    if (boundSessionId === sessionId) return null;
+  }
+  if (referenceId) {
     return c.json({ error: "This checkout belongs to a different session" }, 403);
   }
   if (!referenceId && !allowMissingReferenceBinding) {
@@ -179,7 +190,7 @@ function mapClaimedKeysError(
 
 async function resolveCheckoutRedemptionContext(
   c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
-  deps: { checkoutId: string; sessionId: string; allowMissingReferenceBinding?: boolean },
+  deps: { checkoutId: string; sessionId: string; kv?: KVNamespace; allowMissingReferenceBinding?: boolean },
 ): Promise<
   | { customerId: string; checkoutCreatedAt: string; isExecutiveSupporter: boolean }
   | { response: Response }
@@ -197,9 +208,10 @@ async function resolveCheckoutRedemptionContext(
     return { response: c.json({ error: result.error }, result.status) };
   }
 
-  const ownershipError = validateCheckoutOwnership(c, {
+  const ownershipError = await validateCheckoutOwnership(c, {
     referenceId: result.referenceId ?? null,
     sessionId: deps.sessionId,
+    kv: deps.kv,
     allowMissingReferenceBinding: deps.allowMissingReferenceBinding,
   });
   if (ownershipError) return { response: ownershipError };
@@ -242,6 +254,7 @@ async function redeemCheckoutLicense(
     checkoutId,
     keys: lkResult.keys,
     secret: claimSecret,
+    executiveSupporterLicenseKey: isExecutiveSupporter ? lkResult.keys[0] : undefined,
   });
   if (!claimedKeys.ok) return mapClaimedKeysError(c, claimedKeys.error);
   return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: claimedKeys.keys });
@@ -544,6 +557,17 @@ async function bindSessionUserIfPresent(
 }
 
 const SUPPORTER_VANITY_TITLE_SET = new Set(SUPPORTER_VANITY_TITLES.map((title) => title.title));
+
+account.get("/checkout-reference", async (c) => {
+  const sessionId = c.get("sessionId");
+  if (!sessionId) return c.json({ error: "Session required" }, 401);
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  if (!kv) return c.json({ error: "Checkout binding storage is not configured" }, 500);
+
+  const referenceId = crypto.randomUUID();
+  await kv.put(checkoutReferenceKey(referenceId), sessionId, { expirationTtl: CHECKOUT_REFERENCE_TTL_SECONDS });
+  return c.json({ referenceId });
+});
 
 account.post("/checkout-license", async (c) => {
   const validated = await validateCheckoutRequest(c);

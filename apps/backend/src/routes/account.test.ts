@@ -1218,7 +1218,7 @@ describe("POST /api/account/checkout-license", () => {
     expect(data.licenseKey).toBe("COPE-T1");
     expect(data.allKeys).toEqual(keys);
   });
-  it("persists supporter checkout intent without guessing which key belongs to the purchaser", async () => {
+  it("assigns supporter checkout entitlement to the first returned key", async () => {
     const origFetch = globalThis.fetch;
     const { db, calls } = createMockDB({ runChanges: 1 });
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -1249,7 +1249,7 @@ describe("POST /api/account/checkout-license", () => {
       const supporterClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"));
       expect(supporterClaimInsert?.bindings.slice(0, 4)).toEqual([
         expect.any(String),
-        0,
+        1,
         expect.any(String),
         0,
       ]);

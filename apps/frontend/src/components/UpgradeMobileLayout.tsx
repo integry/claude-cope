@@ -1,6 +1,7 @@
 import { PRO_QUOTA_LIMIT, UPGRADE_CHECKOUT_MULTI, UPGRADE_CHECKOUT_SINGLE } from "../config";
 import type { CSSProperties } from "react";
 import type { LayoutProps } from "./UpgradeDesktopLayout";
+import { openBoundCheckoutUrl } from "./checkoutLinks";
 import {
   DEFAULT_CLOSE_EFFECT,
   getCloseEffectPresentation,
@@ -119,7 +120,13 @@ export default function UpgradeMobileLayout({
           cursor: "pointer",
           padding: "12px",
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void openBoundCheckoutUrl(url).catch(() => {
+            window.alert("Checkout could not be bound to this session. Please retry.");
+          });
+        }}
       >
         <span
           data-cursor=""
