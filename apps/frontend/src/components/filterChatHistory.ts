@@ -1,12 +1,17 @@
 import { Message } from "../hooks/useGameState";
 
 const TICKET_SCAFFOLD_PATTERN = /^\[\s*(?:📋\s+INCOMING TICKET|INCOMING TICKET|CORPORATE DOSSIER|JIRA PAYLOAD IMPORTED|📋\s+\*\*(?:BACKLOG|COMMUNITY BACKLOG)\*\*)\s*\]/;
-const CLAIMED_TICKET_FALLBACK_PATTERN = /^\[\s*JIRA PAYLOAD IMPORTED\s*\]/;
+const CLAIMED_TICKET_FALLBACK_HEADER_PATTERN = /^\[\s*JIRA PAYLOAD IMPORTED\s*\]/;
+const CLAIMED_TICKET_FALLBACK_FOOTER_PATTERN = /(?:^|\n)Start prompting to make progress\.\s*$/;
 
 function isClaimedTicketBoundary(message: Message): boolean {
+  const hasClaimedTicketFallback =
+    CLAIMED_TICKET_FALLBACK_HEADER_PATTERN.test(message.content)
+    && CLAIMED_TICKET_FALLBACK_FOOTER_PATTERN.test(message.content);
+
   return message.role === "system" && (
     message.ticketDisplay?.status === "claimed"
-    || CLAIMED_TICKET_FALLBACK_PATTERN.test(message.content)
+    || hasClaimedTicketFallback
   );
 }
 
