@@ -5,6 +5,7 @@ import type { ProfileRow } from "../utils/profile";
 import { getProfile, getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank } from "../utils/profile";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey } from "../utils/quota";
+import { EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS } from "../gameConstants";
 
 const LICENSE_STALE_SQL_CUTOFF = "-90 days";
 const MAX_SESSION_RENAME_HOPS = 32;
@@ -89,6 +90,39 @@ function buildExecutiveSupporterActivationMessage(username: string): string {
   return `[LIVE] 👑 ${username} just expensed the Executive Supporter Pack. Respect the grift.`;
 }
 
+function parseUnlockedThemes(raw: string | null | undefined): string[] {
+  if (!raw) return ["default"];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) && parsed.every((item) => typeof item === "string")
+      ? parsed
+      : ["default"];
+  } catch {
+    return ["default"];
+  }
+}
+
+async function grantExecutiveSupporterIncludedThemes(db: D1Database, licenseKeyHash: string) {
+  const row = await db
+    .prepare("SELECT unlocked_themes FROM user_scores WHERE license_hash = ?")
+    .bind(licenseKeyHash)
+    .first<{ unlocked_themes: string | null }>();
+  if (!row) return;
+
+  const mergedThemes = new Set(parseUnlockedThemes(row.unlocked_themes));
+  mergedThemes.add("default");
+  for (const themeId of EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS) {
+    mergedThemes.add(themeId);
+  }
+
+  const nextUnlockedThemes = JSON.stringify([...mergedThemes]);
+  if (nextUnlockedThemes === row.unlocked_themes) return;
+  await db
+    .prepare("UPDATE user_scores SET unlocked_themes = ?, updated_at = datetime('now') WHERE license_hash = ?")
+    .bind(nextUnlockedThemes, licenseKeyHash)
+    .run();
+}
+
 export async function activateExecutiveSupporterIfNeeded(
   db: D1Database,
   opts: ExecutiveSupporterActivationOptions,
@@ -128,6 +162,7 @@ export async function activateExecutiveSupporterIfNeeded(
       return false;
     }
 
+    await grantExecutiveSupporterIncludedThemes(db, opts.licenseKeyHash);
     await db
       .prepare("INSERT INTO recent_events (message) VALUES (?)")
       .bind(buildExecutiveSupporterActivationMessage(opts.username))
@@ -163,10 +198,11 @@ export async function syncExecutiveSupporterEntitlement(
       .prepare("SELECT is_executive_supporter FROM user_scores WHERE license_hash = ?")
       .bind(hash)
       .first<{ is_executive_supporter: number }>();
-    return {
-      isExecutiveSupporter: existingUserRow?.is_executive_supporter === 1,
-      activatedNow: false,
-    };
+    const isExecutiveSupporter = existingUserRow?.is_executive_supporter === 1;
+    if (isExecutiveSupporter) {
+      await grantExecutiveSupporterIncludedThemes(db, hash);
+    }
+    return { isExecutiveSupporter, activatedNow: false };
   }
 
   const isExecutiveSupporter = supporterRow.is_executive_supporter === 1;
@@ -183,6 +219,9 @@ export async function syncExecutiveSupporterEntitlement(
       username: existingUserRow.username,
       licenseKeyHash: hash,
     });
+    if (!activatedNow) {
+      await grantExecutiveSupporterIncludedThemes(db, hash);
+    }
     return { isExecutiveSupporter, activatedNow };
   } else {
     await db

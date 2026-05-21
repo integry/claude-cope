@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
-import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
+import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES, EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS } from "../gameConstants";
 import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, rollbackSyncSideEffects, activateExecutiveSupporterIfNeeded } from "./accountHelpers";
 import type { CheckoutCache, ResolveProfileResult, SyncProfileErrorCode, SyncProfileMutation } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
@@ -403,15 +403,19 @@ async function persistActiveTheme(
   themeId: string,
   licenseKeyHash: string,
 ) {
+  const includedThemePlaceholders = EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS.map(() => "?").join(", ");
   return db.prepare(
     `UPDATE user_scores SET
       active_theme = ?,
       updated_at = datetime('now')
     WHERE username = ?
-      AND ? IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
+      AND (
+        ? IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
+        OR (is_executive_supporter = 1 AND ? IN (${includedThemePlaceholders}))
+      )
       AND license_hash = ?
       AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
-  ).bind(themeId, username, themeId, licenseKeyHash).run();
+  ).bind(themeId, username, themeId, themeId, ...EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS, licenseKeyHash).run();
 }
 
 async function ensureDisplayRankSupporterAccess(

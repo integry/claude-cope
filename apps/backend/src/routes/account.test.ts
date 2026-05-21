@@ -625,6 +625,38 @@ describe("POST /api/account/update-theme", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("Theme is not unlocked");
   });
+
+  it("lets executive supporters equip included premium themes without buying them first", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = {
+      ...BASE_PROFILE,
+      current_td: 6000,
+      is_executive_supporter: 1,
+      unlocked_themes: '["default"]',
+      active_theme: "default",
+    };
+    const updatedProfile = { ...paidProfile, active_theme: "syntax-error" };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: updatedProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "alice",
+      themeId: "syntax-error",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: {
+        active_theme: "syntax-error",
+        unlocked_themes: ["default", "amber", "syntax-error"],
+      },
+    });
+  });
 });
 
 describe("POST /api/account/unlock-achievement", () => {
@@ -2019,6 +2051,7 @@ describe("GET /api/account/me", () => {
       profile: {
         username: "alice",
         is_executive_supporter: true,
+        unlocked_themes: ["default", "amber", "syntax-error"],
       },
     });
   });

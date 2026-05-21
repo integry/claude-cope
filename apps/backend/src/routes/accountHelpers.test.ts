@@ -639,6 +639,8 @@ describe("syncExecutiveSupporterEntitlement", () => {
                 ? { is_executive_supporter: 1 }
                   : sql.includes("SELECT username, is_executive_supporter FROM user_scores")
                     ? { username: "alice", is_executive_supporter: 0 }
+                    : sql.includes("SELECT unlocked_themes FROM user_scores")
+                      ? { unlocked_themes: '["default"]' }
                   : null),
               run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
             };
@@ -660,6 +662,8 @@ describe("syncExecutiveSupporterEntitlement", () => {
     ]);
     const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores"));
     expect(updateCall?.bindings).toEqual(["hash-123"]);
+    const themeGrantCall = calls.find((call) => call.sql.includes("UPDATE user_scores SET unlocked_themes = ?"));
+    expect(themeGrantCall?.bindings).toEqual(['["default","amber","syntax-error"]', "hash-123"]);
   });
 
   it("preserves existing supporter state when no supporter claim row is present", async () => {
@@ -676,6 +680,8 @@ describe("syncExecutiveSupporterEntitlement", () => {
                 ? null
                 : sql.includes("SELECT is_executive_supporter FROM user_scores")
                   ? { is_executive_supporter: 1 }
+                  : sql.includes("SELECT unlocked_themes FROM user_scores")
+                    ? { unlocked_themes: '["default"]' }
                   : null,
             ),
             run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
@@ -690,8 +696,8 @@ describe("syncExecutiveSupporterEntitlement", () => {
       isExecutiveSupporter: true,
       activatedNow: false,
     });
-    const updateCall = calls.find((call) => call.sql.includes("UPDATE user_scores"));
-    expect(updateCall).toBeUndefined();
+    const themeGrantCall = calls.find((call) => call.sql.includes("UPDATE user_scores SET unlocked_themes = ?"));
+    expect(themeGrantCall?.bindings).toEqual(['["default","amber","syntax-error"]', "hash-123"]);
     expect(calls.some((call) => call.sql.includes("INSERT INTO recent_events"))).toBe(false);
   });
 
@@ -711,6 +717,9 @@ describe("syncExecutiveSupporterEntitlement", () => {
               if (sql.includes("SELECT username, is_executive_supporter FROM user_scores")) {
                 return { username: "alice", is_executive_supporter: 1 };
               }
+              if (sql.includes("SELECT unlocked_themes FROM user_scores")) {
+                return { unlocked_themes: '["default","amber"]' };
+              }
               return null;
             }),
             run: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
@@ -726,6 +735,8 @@ describe("syncExecutiveSupporterEntitlement", () => {
       isExecutiveSupporter: true,
       activatedNow: false,
     });
+    const themeGrantCall = calls.find((call) => call.sql.includes("UPDATE user_scores SET unlocked_themes = ?"));
+    expect(themeGrantCall?.bindings).toEqual(['["default","amber","syntax-error"]', "hash-123"]);
   });
 
   it("does not emit an activation event for a non-supporter entitlement", async () => {

@@ -911,9 +911,14 @@ describe("POST /api/account/sync", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       success: true,
-      profile: { is_executive_supporter: true, display_rank: "Mid-Level Googler" },
+      profile: {
+        is_executive_supporter: true,
+        display_rank: "Mid-Level Googler",
+        unlocked_themes: ["default", "amber", "syntax-error"],
+      },
     });
-    expect(calls.some((call) => call.sql.includes("UPDATE user_scores"))).toBe(false);
+    const themeGrantCall = calls.find((call) => call.sql.includes("UPDATE user_scores SET unlocked_themes = ?"));
+    expect(themeGrantCall?.bindings).toEqual(['["default","amber","syntax-error"]', expect.any(String)]);
     expect(calls.some((call) => call.sql.includes("SELECT is_executive_supporter FROM user_scores"))).toBe(true);
   });
 });

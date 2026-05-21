@@ -273,6 +273,8 @@ export const THEMES: Theme[] = [
   { id: "syntax-error", name: "Syntax Error", cost: 50000 },
 ];
 
+export const EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS = ["amber", "syntax-error"] as const;
+
 /** Geometric series sum: total cost to buy `amount` generators starting at `owned`. */
 export function calcBulkCost(baseCost: number, owned: number, amount: number): number {
   const rOwned = Math.pow(GROWTH_RATE, owned);
