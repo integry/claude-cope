@@ -262,63 +262,65 @@ function hasValidAuthoritativeProfileFloor(state: GameState): boolean {
   );
 }
 
+function ensureArrayField<K extends keyof GameState>(
+  state: GameState,
+  key: K,
+  fallback: Extract<GameState[K], unknown[]>,
+): void {
+  if (!Array.isArray(state[key])) {
+    state[key] = fallback as GameState[K];
+  }
+}
+
+function ensureObjectField<K extends keyof GameState>(
+  state: GameState,
+  key: K,
+  fallback: Exclude<GameState[K], undefined>,
+): void {
+  if (!state[key] || typeof state[key] !== "object") {
+    state[key] = fallback as GameState[K];
+  }
+}
+
+function ensureDefaultValue<K extends keyof GameState>(
+  state: GameState,
+  key: K,
+  fallback: Exclude<GameState[K], undefined>,
+): void {
+  if (state[key] === undefined) {
+    state[key] = fallback as GameState[K];
+  }
+}
+
 function applyDefensiveDefaults(state: GameState): void {
-  if (!Array.isArray(state.upgrades)) {
-    state.upgrades = [];
-  }
-  if (!Array.isArray(state.achievements)) {
-    state.achievements = [];
-  }
-  if (!state.buddy) {
-    state.buddy = {
-      type: null,
-      isShiny: false,
-      promptsSinceLastInterjection: 0,
-    };
-  }
-  if (!Array.isArray(state.chatHistory)) {
-    state.chatHistory = [];
-  }
+  ensureArrayField(state, "upgrades", []);
+  ensureArrayField(state, "achievements", []);
+  ensureObjectField(state, "buddy", {
+    type: null,
+    isShiny: false,
+    promptsSinceLastInterjection: 0,
+  });
+  ensureArrayField(state, "chatHistory", []);
   state.chatHistory = normalizePersistedChatHistory(state.chatHistory);
   if (typeof state.suggestedReply !== "string") {
     state.suggestedReply = null;
   }
-  if (!state.commandUsage || typeof state.commandUsage !== "object") {
-    state.commandUsage = {};
-  }
-  if (!state.modes || typeof state.modes !== "object") {
-    state.modes = { fast: false, voice: false };
-  }
-  if (state.activeTicket === undefined) {
-    state.activeTicket = null;
-  }
-  if (state.hasSeenTicketPrompt === undefined) {
-    state.hasSeenTicketPrompt = false;
-  }
+  ensureObjectField(state, "commandUsage", {});
+  ensureObjectField(state, "modes", { fast: false, voice: false });
+  ensureDefaultValue(state, "activeTicket", null);
+  ensureDefaultValue(state, "hasSeenTicketPrompt", false);
   if (!state.activeTheme) {
     state.activeTheme = "default";
   }
-  if (!Array.isArray(state.unlockedThemes)) {
-    state.unlockedThemes = ["default"];
-  }
-  if (state.soundEnabled === undefined) {
-    state.soundEnabled = true;
-  }
-  if (!Array.isArray(state.pendingCompletedTaskIds)) {
-    state.pendingCompletedTaskIds = [];
-  }
-  if (!state.pendingCompletedTaskRewards || typeof state.pendingCompletedTaskRewards !== "object") {
-    state.pendingCompletedTaskRewards = {};
-  }
+  ensureArrayField(state, "unlockedThemes", ["default"]);
+  ensureDefaultValue(state, "soundEnabled", true);
+  ensureArrayField(state, "pendingCompletedTaskIds", []);
+  ensureObjectField(state, "pendingCompletedTaskRewards", {});
   if (!hasValidAuthoritativeProfileFloor(state)) {
     state.authoritativeProfileFloor = null;
   }
-  if (state.isExecutiveSupporter === undefined) {
-    state.isExecutiveSupporter = false;
-  }
-  if (state.displayRank === undefined) {
-    state.displayRank = null;
-  }
+  ensureDefaultValue(state, "isExecutiveSupporter", false);
+  ensureDefaultValue(state, "displayRank", null);
 }
 
 export function loadState(): GameState {
