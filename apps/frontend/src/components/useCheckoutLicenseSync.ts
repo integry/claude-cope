@@ -6,6 +6,7 @@ import type { GameState, Message } from "../hooks/useGameState";
 type UseCheckoutLicenseSyncArgs = {
   isBooting: boolean;
   proKeyHash: GameState["proKeyHash"];
+  username: GameState["username"];
   setHistory: Dispatch<SetStateAction<Message[]>>;
   runSlashCommand: (command: string) => void;
 };
@@ -126,25 +127,39 @@ function buildManualSyncHint(status: number, data: CheckoutLicenseResponse) {
   return " If your license arrived by email, you can run `/sync <COPE-XXX>` manually.";
 }
 
+function getCheckoutSyncUsernameLabel(username: GameState["username"]) {
+  const normalizedUsername = username?.trim();
+  return normalizedUsername || "this user";
+}
+
+function formatTeamPackKeyLine(key: string, index: number, username: GameState["username"]) {
+  if (index === 0) {
+    return `${index + 1}. ~~${key}~~ [${getCheckoutSyncUsernameLabel(username)}]`;
+  }
+  return `${index + 1}. \`${key}\``;
+}
+
 function handleSuccessfulCheckoutSync({
   alreadyPro,
   data,
   runSlashCommand,
   setHistory,
   signal,
+  username,
 }: {
   alreadyPro: boolean;
   data: CheckoutLicenseResponse;
   runSlashCommand: (command: string) => void;
   setHistory: Dispatch<SetStateAction<Message[]>>;
   signal: AbortSignal;
+  username: GameState["username"];
 }) {
   const licenseKey = data.licenseKey;
   if (!licenseKey) return false;
 
   const keys = data.allKeys ?? [licenseKey];
   if (keys.length > 1) {
-    const keyList = keys.map((key, index) => `${index + 1}. \`${key}\``).join("\n");
+    const keyList = keys.map((key, index) => formatTeamPackKeyLine(key, index, username)).join("\n");
     appendCheckoutHistory(signal, setHistory, {
       role: "system",
       content: `[✅ TEAM PACK] Your purchase includes **${keys.length} license keys**:\n\n${keyList}\n\nSyncing the first key now. Share the rest with your team; each person can activate their key by running \`/sync <KEY>\`.`,
@@ -174,12 +189,14 @@ function handleSuccessfulCheckoutSync({
 async function syncCheckoutLicense({
   checkoutRef,
   getAlreadyPro,
+  getUsername,
   runSlashCommand,
   setHistory,
   signal,
 }: {
   checkoutRef: CheckoutReturnRef;
   getAlreadyPro: () => boolean;
+  getUsername: () => GameState["username"];
   runSlashCommand: (command: string) => void;
   setHistory: Dispatch<SetStateAction<Message[]>>;
   signal: AbortSignal;
@@ -192,7 +209,7 @@ async function syncCheckoutLicense({
   try {
     const result = await fetchCheckoutLicense(checkoutRef, signal);
     if (!result || signal.aborted) return;
-    if (handleSuccessfulCheckoutSync({ alreadyPro: getAlreadyPro(), data: result.data, runSlashCommand, setHistory, signal })) return;
+    if (handleSuccessfulCheckoutSync({ alreadyPro: getAlreadyPro(), data: result.data, runSlashCommand, setHistory, signal, username: getUsername() })) return;
     if (result.status !== 409) stripCheckoutReturnParams(signal);
     appendCheckoutHistory(signal, setHistory, {
       role: "error",
@@ -207,13 +224,15 @@ async function syncCheckoutLicense({
   }
 }
 
-export function useCheckoutLicenseSync({ isBooting, proKeyHash, setHistory, runSlashCommand }: UseCheckoutLicenseSyncArgs) {
+export function useCheckoutLicenseSync({ isBooting, proKeyHash, username, setHistory, runSlashCommand }: UseCheckoutLicenseSyncArgs) {
   const checkoutHandledRef = useRef<string | null>(null);
   const latestProKeyHashRef = useRef(proKeyHash);
+  const latestUsernameRef = useRef(username);
   const latestSetHistoryRef = useRef(setHistory);
   const latestRunSlashCommandRef = useRef(runSlashCommand);
 
   latestProKeyHashRef.current = proKeyHash;
+  latestUsernameRef.current = username;
   latestSetHistoryRef.current = setHistory;
   latestRunSlashCommandRef.current = runSlashCommand;
 
@@ -234,6 +253,7 @@ export function useCheckoutLicenseSync({ isBooting, proKeyHash, setHistory, runS
     void syncCheckoutLicense({
       checkoutRef,
       getAlreadyPro: () => Boolean(latestProKeyHashRef.current),
+      getUsername: () => latestUsernameRef.current,
       runSlashCommand: (command) => latestRunSlashCommandRef.current(command),
       setHistory: (value) => latestSetHistoryRef.current(value),
       signal: abortController.signal,

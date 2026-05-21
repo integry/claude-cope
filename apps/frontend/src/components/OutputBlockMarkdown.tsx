@@ -53,15 +53,43 @@ function renderLineWithTags(line: string, onSlashCommand?: (command: string, act
   const tagInline = /`__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g;
   const bracketTag = /^\[([^\]]+)\]/;
 
-  const linkify = (text: string): React.ReactNode =>
-    onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
+  const renderInlineText = (text: string): React.ReactNode => {
+    const strikeRegex = /~~([^~]+)~~/g;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+    const pushText = (value: string, key: string) => {
+      if (!value) return;
+      parts.push(
+        <React.Fragment key={key}>
+          {onSlashCommand ? renderWithSlashLinks(value, onSlashCommand) : value}
+        </React.Fragment>
+      );
+    };
+
+    while ((match = strikeRegex.exec(text)) !== null) {
+      pushText(text.slice(lastIndex, match.index), `text-${lastIndex}`);
+      parts.push(
+        <del key={`strike-${match.index}`} className="text-gray-500 decoration-gray-400">
+          {match[1]}
+        </del>
+      );
+      lastIndex = strikeRegex.lastIndex;
+    }
+
+    if (parts.length === 0) {
+      return onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
+    }
+    pushText(text.slice(lastIndex), `text-${lastIndex}`);
+    return <>{parts}</>;
+  };
 
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let inlineMatch;
   while ((inlineMatch = tagInline.exec(line)) !== null) {
     if (inlineMatch.index > lastIndex) {
-      parts.push(linkify(line.slice(lastIndex, inlineMatch.index)));
+      parts.push(renderInlineText(line.slice(lastIndex, inlineMatch.index)));
     }
     const category = inlineMatch[1] as TagCategory;
     const tagText = inlineMatch[2];
@@ -73,7 +101,7 @@ function renderLineWithTags(line: string, onSlashCommand?: (command: string, act
     lastIndex = tagInline.lastIndex;
   }
   if (parts.length > 0) {
-    if (lastIndex < line.length) parts.push(linkify(line.slice(lastIndex)));
+    if (lastIndex < line.length) parts.push(renderInlineText(line.slice(lastIndex)));
     return <>{parts}</>;
   }
 
@@ -88,12 +116,12 @@ function renderLineWithTags(line: string, onSlashCommand?: (command: string, act
         <span className={`${colorClass} font-mono ${sizeClass} font-bold mr-2`}>
           {bracketMatch[1]}
         </span>
-        {linkify(line.slice(bracketMatch[0].length))}
+        {renderInlineText(line.slice(bracketMatch[0].length))}
       </>
     );
   }
 
-  return linkify(line);
+  return renderInlineText(line);
 }
 
 function endsWithCodeBlock(content: string): boolean {
