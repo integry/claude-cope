@@ -2,17 +2,34 @@ import { Message } from "../hooks/useGameState";
 
 const TICKET_SCAFFOLD_PATTERN = /^\[\s*(?:📋\s+INCOMING TICKET|INCOMING TICKET|CORPORATE DOSSIER|JIRA PAYLOAD IMPORTED|📋\s+\*\*(?:BACKLOG|COMMUNITY BACKLOG)\*\*)\s*\]/;
 const CLAIMED_TICKET_FALLBACK_HEADER_PATTERN = /^\[\s*JIRA PAYLOAD IMPORTED\s*\]/;
-const CLAIMED_TICKET_FALLBACK_FOOTER_PATTERN = /(?:^|\n)Start prompting to make progress\.\s*$/;
+const CLAIMED_TICKET_FALLBACK_REQUIRED_PREFIXES = [
+  "ID: ",
+  "TITLE: ",
+  "REPORTER: ",
+] as const;
+const CLAIMED_TICKET_FALLBACK_DESCRIPTION_PREFIX = "DESCRIPTION: ";
+const CLAIMED_TICKET_FALLBACK_REWARD_PREFIX = "REWARD: ";
+
+function hasLegacyClaimedTicketStructure(content: string): boolean {
+  if (!CLAIMED_TICKET_FALLBACK_HEADER_PATTERN.test(content)) return false;
+
+  const lines = content.split("\n");
+  const metadataStartIndex = 2;
+  const hasMetadataBlock = CLAIMED_TICKET_FALLBACK_REQUIRED_PREFIXES.every(
+    (prefix, index) => lines[metadataStartIndex + index]?.startsWith(prefix),
+  );
+
+  if (!hasMetadataBlock) return false;
+
+  return lines.some((line) => line.startsWith(CLAIMED_TICKET_FALLBACK_DESCRIPTION_PREFIX))
+    && lines.some((line) => line.startsWith(CLAIMED_TICKET_FALLBACK_REWARD_PREFIX));
+}
 
 function isClaimedTicketBoundary(message: Message): boolean {
-  const hasClaimedTicketFallback =
-    CLAIMED_TICKET_FALLBACK_HEADER_PATTERN.test(message.content)
-    && CLAIMED_TICKET_FALLBACK_FOOTER_PATTERN.test(message.content);
-
-  return message.role === "system" && (
-    message.ticketDisplay?.status === "claimed"
-    || hasClaimedTicketFallback
-  );
+  if (message.role !== "system") return false;
+  if (message.contextBoundary === "ticket-claim") return true;
+  if (message.ticketDisplay) return false;
+  return hasLegacyClaimedTicketStructure(message.content);
 }
 
 function getTicketContextScope(history: Message[]): Message[] {

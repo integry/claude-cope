@@ -108,6 +108,7 @@ describe("filterChatHistory", () => {
       {
         role: "system",
         content: "[ JIRA PAYLOAD IMPORTED ]\n\nID: NEW-123",
+        contextBoundary: "ticket-claim",
         ticketDisplay: {
           kind: "corporate-dossier",
           status: "claimed",
@@ -139,6 +140,7 @@ describe("filterChatHistory", () => {
       {
         role: "system",
         content: "[ JIRA PAYLOAD IMPORTED ]\n\nID: OPS-1",
+        contextBoundary: "ticket-claim",
         ticketDisplay: {
           kind: "corporate-dossier",
           status: "claimed",
@@ -156,6 +158,7 @@ describe("filterChatHistory", () => {
       {
         role: "system",
         content: "[ JIRA PAYLOAD IMPORTED ]\n\nID: OPS-2",
+        contextBoundary: "ticket-claim",
         ticketDisplay: {
           kind: "corporate-dossier",
           status: "claimed",
@@ -193,6 +196,37 @@ describe("filterChatHistory", () => {
     expect(filterChatHistory(history)).toEqual([
       { role: "user", content: "what should I inspect first?" },
       { role: "assistant", content: "Inspect the reconnect loop and retry backoff." },
+    ]);
+  });
+
+  it("does not reset context for a structured claimed ticket without an explicit boundary marker", () => {
+    const history: Message[] = [
+      msg("user", "keep earlier same-ticket context"),
+      msg("system", "still on the same investigation"),
+      {
+        role: "system",
+        content: "[ JIRA PAYLOAD IMPORTED ]\n\nID: OPS-77",
+        ticketDisplay: {
+          kind: "corporate-dossier",
+          status: "claimed",
+          heading: "[ JIRA PAYLOAD IMPORTED ]",
+          ticketId: "OPS-77",
+          title: "Repair the pager bridge",
+          reporter: "Morgan [Operations]",
+          body: "The handoff keeps dropping alerts.",
+          reward: "750 TD",
+          footer: ["Start prompting to make progress."],
+        },
+      },
+      msg("user", "continue from the reconnect path"),
+      msg("system", "Check whether the same worker owns the websocket."),
+    ];
+
+    expect(filterChatHistory(history)).toEqual([
+      { role: "user", content: "keep earlier same-ticket context" },
+      { role: "assistant", content: "still on the same investigation" },
+      { role: "user", content: "continue from the reconnect path" },
+      { role: "assistant", content: "Check whether the same worker owns the websocket." },
     ]);
   });
 

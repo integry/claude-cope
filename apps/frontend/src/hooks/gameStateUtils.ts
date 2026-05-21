@@ -74,6 +74,7 @@ export type Message = {
   id?: number;
   role: "user" | "system" | "loading" | "warning" | "error";
   content: string;
+  contextBoundary?: "ticket-claim";
   displayType?: "tip";
   shareClaim?: string;
   buddyType?: string;
