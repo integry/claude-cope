@@ -136,41 +136,46 @@ vi.mock("../SprintProgressBar", () => ({ default: () => null }));
 vi.mock("../TerminalOverlays", () => ({ TerminalOverlays: () => null }));
 vi.mock("../BuddyOverlay", () => ({ BuddyOverlay: () => null }));
 
-function MockMessageList({
-  history,
-  messageKeys,
-}: {
-  history: Array<{ id?: number; role: string; content: string }>;
-  messageKeys: number[];
-}) {
-  const [expanded, setExpanded] = React.useState(false);
-  renderGrowthControlRef.current = () => setExpanded(true);
+vi.mock("../MessageList", async () => {
+  const React = await import("react");
+  class MockMessageList extends React.Component<{
+    history: Array<{ id?: number; role: string; content: string }>;
+    messageKeys: number[];
+  }, { expanded: boolean }> {
+    state = { expanded: false };
 
-  React.useEffect(() => {
-    if (!history.some((message) => message.role === "system")) {
-      setExpanded(false);
+    componentDidMount() {
+      renderGrowthControlRef.current = () => this.setState({ expanded: true });
     }
-  }, [history]);
 
-  return (
-    <div data-testid="message-list">
-      {history.map((message, index) => (
-        <div key={messageKeys[index] ?? index} data-message-key={messageKeys[index] ?? index}>
-          <div data-role={message.role}>{message.content}</div>
-          {message.role === "system" ? (
-            <div data-testid="assistant-rendered" data-expanded={expanded ? "true" : "false"}>
-              {expanded ? "final reply with extra rendered lines" : "final reply"}
+    componentDidUpdate() {
+      if (!this.props.history.some((message) => message.role === "system") && this.state.expanded) {
+        this.setState({ expanded: false });
+      }
+    }
+
+    render() {
+      const { history, messageKeys } = this.props;
+      const { expanded } = this.state;
+      return (
+        <div data-testid="message-list">
+          {history.map((message, index) => (
+            <div key={messageKeys[index] ?? index} data-message-key={messageKeys[index] ?? index}>
+              <div data-role={message.role}>{message.content}</div>
+              {message.role === "system" ? (
+                <div data-testid="assistant-rendered" data-expanded={expanded ? "true" : "false"}>
+                  {expanded ? "final reply with extra rendered lines" : "final reply"}
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          ))}
         </div>
-      ))}
-    </div>
-  );
-}
+      );
+    }
+  }
 
-vi.mock("../MessageList", () => ({
-  default: MockMessageList,
-}));
+  return { default: MockMessageList };
+});
 
 import Terminal from "../Terminal";
 
@@ -227,7 +232,8 @@ function installScrollHarness(container: HTMLDivElement): ScrollHarness {
     configurable: true,
     get: () => metrics.scrollTop,
     set: (value: number) => {
-      metrics.scrollTop = value;
+      const maxScrollTop = Math.max(0, metrics.contentHeight - metrics.viewportHeight);
+      metrics.scrollTop = Math.max(0, Math.min(value, maxScrollTop));
     },
   });
   viewport.getBoundingClientRect = () => createRect(metrics.viewportHeight);
@@ -296,9 +302,12 @@ describe("Terminal desktop scroll orchestration", () => {
 
     metrics.contentHeight = 180;
     await submitCommand(rendered.container, "ship it");
+    await act(async () => {
+      globalThis.__triggerResizeObserver?.();
+    });
 
     expect(getInput(rendered.container).disabled).toBe(false);
-    expect(viewport.scrollTop).toBe(180);
+    expect(viewport.scrollTop).toBe(100);
 
     await act(async () => {
       metrics.contentHeight = 320;
@@ -306,7 +315,7 @@ describe("Terminal desktop scroll orchestration", () => {
       globalThis.__triggerResizeObserver?.();
     });
 
-    expect(viewport.scrollTop).toBe(320);
+    expect(viewport.scrollTop).toBe(240);
   });
 
   it("does not force mobile terminals to the bottom when the rendered reply grows", async () => {
@@ -347,5 +356,22 @@ describe("Terminal desktop scroll orchestration", () => {
     });
 
     expect(viewport.scrollTop).toBe(40);
+  });
+
+  it("does not treat a slight manual desktop scroll-up as bottom-pinned", async () => {
+    rendered = await renderTerminal(Terminal);
+    const { viewport, metrics } = installScrollHarness(rendered.container);
+
+    metrics.contentHeight = 180;
+    await submitCommand(rendered.container, "ship it");
+    metrics.scrollTop = 95;
+
+    await act(async () => {
+      metrics.contentHeight = 320;
+      renderGrowthControlRef.current();
+      globalThis.__triggerResizeObserver?.();
+    });
+
+    expect(viewport.scrollTop).toBe(95);
   });
 });
