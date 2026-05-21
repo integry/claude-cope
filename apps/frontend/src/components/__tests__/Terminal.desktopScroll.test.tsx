@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import React, { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type React from "react";
 import {
   cleanupRenderedTerminal,
   getInput,
@@ -136,44 +135,42 @@ vi.mock("../OutageBar", () => ({ OutageBar: () => null }));
 vi.mock("../SprintProgressBar", () => ({ default: () => null }));
 vi.mock("../TerminalOverlays", () => ({ TerminalOverlays: () => null }));
 vi.mock("../BuddyOverlay", () => ({ BuddyOverlay: () => null }));
-vi.mock("../MessageList", async () => {
-  const React = await import("react");
-  function MockMessageList({
-    history,
-    messageKeys,
-  }: {
-    history: Array<{ id?: number; role: string; content: string }>;
-    messageKeys: number[];
-  }) {
-    const [expanded, setExpanded] = React.useState(false);
-    renderGrowthControlRef.current = () => setExpanded(true);
 
-    React.useEffect(() => {
-      if (!history.some((message) => message.role === "system")) {
-        setExpanded(false);
-      }
-    }, [history]);
+function MockMessageList({
+  history,
+  messageKeys,
+}: {
+  history: Array<{ id?: number; role: string; content: string }>;
+  messageKeys: number[];
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  renderGrowthControlRef.current = () => setExpanded(true);
 
-    return (
-      <div data-testid="message-list">
-        {history.map((message, index) => (
-          <div key={messageKeys[index] ?? index} data-message-key={messageKeys[index] ?? index}>
-            <div data-role={message.role}>{message.content}</div>
-            {message.role === "system" ? (
-              <div data-testid="assistant-rendered" data-expanded={expanded ? "true" : "false"}>
-                {expanded ? "final reply with extra rendered lines" : "final reply"}
-              </div>
-            ) : null}
-          </div>
-        ))}
-      </div>
-    );
-  }
+  React.useEffect(() => {
+    if (!history.some((message) => message.role === "system")) {
+      setExpanded(false);
+    }
+  }, [history]);
 
-  return {
-    default: MockMessageList,
-  };
-});
+  return (
+    <div data-testid="message-list">
+      {history.map((message, index) => (
+        <div key={messageKeys[index] ?? index} data-message-key={messageKeys[index] ?? index}>
+          <div data-role={message.role}>{message.content}</div>
+          {message.role === "system" ? (
+            <div data-testid="assistant-rendered" data-expanded={expanded ? "true" : "false"}>
+              {expanded ? "final reply with extra rendered lines" : "final reply"}
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+vi.mock("../MessageList", () => ({
+  default: MockMessageList,
+}));
 
 import Terminal from "../Terminal";
 
@@ -329,5 +326,26 @@ describe("Terminal desktop scroll orchestration", () => {
     });
 
     expect(viewport.scrollTop).toBe(24);
+  });
+
+  it("does not yank desktop users back to the bottom after they scroll up", async () => {
+    rendered = await renderTerminal(Terminal);
+    const { viewport, metrics } = installScrollHarness(rendered.container);
+
+    metrics.contentHeight = 180;
+    await submitCommand(rendered.container, "ship it");
+    await act(async () => {
+      globalThis.__triggerResizeObserver?.();
+    });
+
+    metrics.scrollTop = 40;
+
+    await act(async () => {
+      metrics.contentHeight = 320;
+      renderGrowthControlRef.current();
+      globalThis.__triggerResizeObserver?.();
+    });
+
+    expect(viewport.scrollTop).toBe(40);
   });
 });

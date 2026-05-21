@@ -89,6 +89,7 @@ function Terminal() {
   historyRef.current = history;
   const hasScrolledTerminalToBottomOnLoadRef = useRef(false);
   const lastDesktopScrollContentHeightRef = useRef(0);
+  const lastDesktopViewportHeightRef = useRef(0);
   const wasMobileRequestProcessingRef = useRef(false);
   const activeMobilePromptKeyRef = useRef<number | null>(null);
   const mobilePromptFollowFrameRef = useRef<number | null>(null);
@@ -305,8 +306,10 @@ function Terminal() {
   }, [history, isMobileViewport, isProcessing, resolveScrollViewport, stopMobilePromptFollowLoop]);
   useEffect(() => {
     const scrollContent = scrollContentRef.current;
-    if (isMobileViewport || !scrollContent || typeof ResizeObserver === "undefined") {
+    const viewport = resolveScrollViewport();
+    if (isMobileViewport || !scrollContent || !viewport || typeof ResizeObserver === "undefined") {
       lastDesktopScrollContentHeightRef.current = 0;
+      lastDesktopViewportHeightRef.current = 0;
       return;
     }
 
@@ -317,18 +320,25 @@ function Terminal() {
       || 0;
 
     lastDesktopScrollContentHeightRef.current = measureHeight();
+    lastDesktopViewportHeightRef.current = viewport.clientHeight;
 
     const observer = new ResizeObserver(() => {
       const nextHeight = measureHeight();
-      if (nextHeight > lastDesktopScrollContentHeightRef.current) {
+      const previousMaxScrollTop = Math.max(
+        0,
+        lastDesktopScrollContentHeightRef.current - lastDesktopViewportHeightRef.current,
+      );
+      const wasNearBottom = viewport.scrollTop >= previousMaxScrollTop - 24;
+      if (nextHeight > lastDesktopScrollContentHeightRef.current && wasNearBottom) {
         scrollTerminalToBottom();
       }
       lastDesktopScrollContentHeightRef.current = nextHeight;
+      lastDesktopViewportHeightRef.current = viewport.clientHeight;
     });
 
     observer.observe(scrollContent);
     return () => observer.disconnect();
-  }, [isMobileViewport, scrollTerminalToBottom]);
+  }, [isMobileViewport, resolveScrollViewport, scrollTerminalToBottom]);
   useEffect(() => {
     const onPopState = () => {
       if (pendingNagCommandRef.current !== null) return void setShowUpgrade(true);
