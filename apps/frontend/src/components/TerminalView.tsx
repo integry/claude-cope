@@ -314,6 +314,8 @@ export function TerminalView({
           rank={rank}
           currentTD={state.economy.currentTD}
           quotaPercent={state.economy.quotaPercent}
+          quotaRemaining={state.economy.quotaRemaining}
+          quotaTotal={state.economy.quotaTotal}
           outageHp={outageHp}
           activeMultiplier={
             calculateActiveMultiplier(state.inventory, state.upgrades) *

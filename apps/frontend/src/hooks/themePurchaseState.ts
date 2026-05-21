@@ -11,6 +11,8 @@ export type SessionProfileResult = {
   profile?: ServerProfile | null;
   isPro?: boolean;
   quotaPercent?: number | null;
+  quotaRemaining?: number | null;
+  quotaTotal?: number | null;
 };
 
 function hasThemePurchaseAccess(state: Pick<GameState, "proKeyHash" | "hasSessionPro">): boolean {
@@ -96,6 +98,8 @@ export function mergeSessionIdentity(state: GameState, result: SessionProfileRes
     economy: {
       ...nextState.economy,
       ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}),
+      ...(result.quotaRemaining != null ? { quotaRemaining: result.quotaRemaining } : {}),
+      ...(result.quotaTotal != null ? { quotaTotal: result.quotaTotal } : {}),
     },
   };
 }
@@ -123,13 +127,15 @@ export function applyValidatedSessionProState(state: GameState, result: SessionP
       };
     }
 
-    if (!result.username && result.quotaPercent == null) return state;
+    if (!result.username && result.quotaPercent == null && result.quotaRemaining == null && result.quotaTotal == null) return state;
     return {
       ...state,
       ...(result.username && state.username !== result.username ? { username: result.username } : {}),
       economy: {
         ...state.economy,
         ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}),
+        ...(result.quotaRemaining != null ? { quotaRemaining: result.quotaRemaining } : {}),
+        ...(result.quotaTotal != null ? { quotaTotal: result.quotaTotal } : {}),
       },
     };
   }

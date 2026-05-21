@@ -989,10 +989,10 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
         },
       }),
     });
-    const data = await res.json() as { success?: boolean; hash?: string; restored?: boolean; profile?: ServerProfile; error?: string };
+    const data = await res.json() as { success?: boolean; hash?: string; restored?: boolean; credited?: boolean; creditsAdded?: number; profile?: ServerProfile; error?: string };
     if (res.ok && data.success) {
       ctx.setState((prev) => {
-        const withKey: GameState = { ...prev, proKey: licenseKey, proKeyHash: data.hash, isPro: true };
+        const withKey: GameState = { ...prev, proKey: data.credited ? (prev.proKey ?? licenseKey) : licenseKey, proKeyHash: data.hash, isPro: true };
         if (data.profile) {
           return applyServerProfile(withKey, data.profile, { includeActiveTicket: true });
         }
@@ -1004,10 +1004,16 @@ async function handleSyncCommand(command: string, ctx: SlashCommandContext, repl
         track(AnalyticsEvents.ACCOUNT_UPGRADED);
       }
       identify({ username: data.profile?.username ?? ctx.state.username });
-      if (data.restored && data.profile) {
-        reply({ role: "system", content: `[✓ **PROFILE RESTORED**] Welcome back, **${data.profile.username}**! Your profile has been restored across devices.\n\n**TD:** ${data.profile.current_td.toLocaleString()} / ${data.profile.total_td.toLocaleString()} total\n**Rank:** ${data.profile.corporate_rank}\n**Generators:** ${Object.values(data.profile.inventory).reduce((a, b) => a + b, 0)} owned\n**Upgrades:** ${data.profile.upgrades.length} unlocked\n\nYou now have **${Math.round((data.profile.quota_percent ?? 100) * PRO_QUOTA_LIMIT / 100)} Max credits**. Your progress is synced across all devices.\n\n[🔐 *FYI*] Your license key doubles as the password to this account. Anyone with it can \`/sync\` in and live their best life on your dime.` });
+      if (data.credited && data.profile) {
+        const creditsAdded = data.creditsAdded ?? PRO_QUOTA_LIMIT;
+        const remainingCredits = data.profile.quota_remaining ?? Math.round((data.profile.quota_percent ?? 100) * PRO_QUOTA_LIMIT / 100);
+        reply({ role: "system", content: `[✓ MAX CREDITS ADDED] Unused license key linked to **${data.profile.username}**. Added **${creditsAdded} Max credits** to this account.\n\nYou now have **${remainingCredits} Max credits** remaining.` });
+      } else if (data.restored && data.profile) {
+        const remainingCredits = data.profile.quota_remaining ?? Math.round((data.profile.quota_percent ?? 100) * PRO_QUOTA_LIMIT / 100);
+        reply({ role: "system", content: `[✓ **PROFILE RESTORED**] Welcome back, **${data.profile.username}**! Your profile has been restored across devices.\n\n**TD:** ${data.profile.current_td.toLocaleString()} / ${data.profile.total_td.toLocaleString()} total\n**Rank:** ${data.profile.corporate_rank}\n**Generators:** ${Object.values(data.profile.inventory).reduce((a, b) => a + b, 0)} owned\n**Upgrades:** ${data.profile.upgrades.length} unlocked\n\nYou now have **${remainingCredits} Max credits**. Your progress is synced across all devices.\n\n[🔐 *FYI*] Your license key doubles as the password to this account. Anyone with it can \`/sync\` in and live their best life on your dime.` });
       } else {
-        reply({ role: "system", content: `[✓ **MAX ACTIVATED**] License key validated and profile linked. Welcome to the premium suffering tier. You now have **${PRO_QUOTA_LIMIT} Max credits**. Your progress will now sync across devices.\n\n[🔐 *FYI*] Your license key doubles as the password to this account. Anyone with it can \`/sync\` in and live their best life on your dime.` });
+        const activationLabel = data.profile?.is_executive_supporter ? "✓ EXECUTIVE MAX ACTIVATED" : "✓ MAX ACTIVATED";
+        reply({ role: "system", content: `[${activationLabel}] License key validated and profile linked. Welcome to the premium suffering tier. You now have **${PRO_QUOTA_LIMIT} Max credits**. Your progress will now sync across devices.\n\n[🔐 *FYI*] Your license key doubles as the password to this account. Anyone with it can \`/sync\` in and live their best life on your dime.` });
       }
     } else {
       track(AnalyticsEvents.SLASH_COMMAND_FAILED, { command: "/sync", reason: SlashCommandFailureReasons.VALIDATION_FAILED });

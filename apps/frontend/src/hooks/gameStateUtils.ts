@@ -116,6 +116,8 @@ export interface EconomyState {
   totalTDEarned: number;
   currentRank: string;
   quotaPercent: number;
+  quotaRemaining?: number;
+  quotaTotal?: number;
   quotaLockouts: number;
   tdMultiplier: number;
 }

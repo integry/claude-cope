@@ -348,6 +348,16 @@ describe("HeaderBar upgrade CTA visibility", () => {
     expect(quotaFill?.style.width).toBe("0%");
   });
 
+  it("displays stacked Max credits without overflowing the quota bars", () => {
+    renderHeaderBar({ ...baseProps, isBYOK: false, isMax: true, quotaPercent: 200, quotaTotalOverride: 100 });
+
+    const desktopQuotaLine = container.querySelector("[data-testid='desktop-status-detail-line']");
+    const quotaFill = queryByTestId("mobile-quota-fill") as HTMLDivElement | null;
+
+    expect(desktopQuotaLine?.textContent).toContain("200/200");
+    expect(quotaFill?.style.width).toBe("100%");
+  });
+
   it("closes the mobile menu and invokes the shared home handler when the logo is clicked", () => {
     const onHomeClick = vi.fn();
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false, onHomeClick });

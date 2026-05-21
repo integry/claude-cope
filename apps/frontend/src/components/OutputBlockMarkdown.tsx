@@ -4,16 +4,17 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { renderWithSlashLinks, linkifySlashCommands } from "./slashCommandLinks";
 import type { SlashCommandAction } from "./slashCommandDetect";
 
-type TagCategory = "ERROR" | "WARN" | "SUCCESS" | "INFO";
+type TagCategory = "ERROR" | "WARN" | "SUCCESS" | "INFO" | "EXECUTIVE";
 
 const TAG_STYLES: Record<TagCategory, string> = {
   ERROR: "text-red-400",
   WARN: "text-yellow-400",
   SUCCESS: "text-green-400",
   INFO: "text-blue-400",
+  EXECUTIVE: "text-amber-300",
 };
 
-const TAG_MARKER_REGEX = /^__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+)$/;
+const TAG_MARKER_REGEX = /^__TAG_(ERROR|WARN|SUCCESS|INFO|EXECUTIVE)__:(.+)$/;
 
 function isExternalHref(href?: string): boolean {
   return typeof href === "string" && /^(https?:)?\/\//i.test(href);
@@ -31,6 +32,7 @@ function stripOrphanEmphasisMarkers(content: string): string {
 
 function classifyTag(tagContent: string): TagCategory {
   const lower = tagContent.toLowerCase();
+  if (/executive/.test(lower)) return "EXECUTIVE";
   if (/error|❌|💀|🚨|fail|fatal|critical|sigsegv/.test(lower)) return "ERROR";
   if (/warn|⚠️|caution|notice|deprecated/.test(lower)) return "WARN";
   if (/success|✓|✅|complete|done|installed/.test(lower)) return "SUCCESS";
@@ -38,7 +40,7 @@ function classifyTag(tagContent: string): TagCategory {
 }
 
 export function cleanLLMOutput(content: string): string {
-  let cleaned = content.replace(/`__TAG_(?:ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g, "[$1]");
+  let cleaned = content.replace(/`__TAG_(?:ERROR|WARN|SUCCESS|INFO|EXECUTIVE)__:(.+?)`/g, "[$1]");
   const terminalLangs = "bash|sh|shell|console|terminal|text|log|plaintext|markdown|md";
   const fenceRegex = new RegExp("```(?:" + terminalLangs + ")\\s*\\n([\\s\\S]*?)```", "g");
   cleaned = cleaned.replace(fenceRegex, "$1");

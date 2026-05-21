@@ -1,10 +1,10 @@
 /* eslint-disable max-lines */
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
+import { getQuotaLimits, getQuotaPercent, getQuotaState } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
 import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES, EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, rollbackSyncSideEffects, activateExecutiveSupporterIfNeeded, fetchCheckoutIdFromCustomerSession } from "./accountHelpers";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, rollbackSyncSideEffects, activateExecutiveSupporterIfNeeded, fetchCheckoutIdFromCustomerSession, getLinkedLicenseAccount, creditExistingAccountWithLicense } from "./accountHelpers";
 import type { CheckoutCache, ResolveProfileResult, SyncProfileErrorCode, SyncProfileMutation } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
@@ -331,14 +331,19 @@ async function buildMePayload(opts: {
   const isPro = Boolean(rawLicenseHash && licenseActive);
   const normalizedRow = normalizeFreeTierRank(row, isPro);
   const limits = getQuotaLimits(env);
-  const quotaPercent = isPro
-    ? await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: rawLicenseHash!, limits })
-    : await getQuotaPercent(kv, { tier: "free", sessionId, limits });
+  const quotaState = isPro
+    ? await getQuotaState(kv, { tier: "pro", sessionId: "", licenseKeyHash: rawLicenseHash!, limits })
+    : await getQuotaState(kv, { tier: "free", sessionId, limits });
   const profile = normalizedRow
-    ? { ...rowToProfile(normalizedRow as Parameters<typeof rowToProfile>[0]), quota_percent: quotaPercent }
+    ? {
+      ...rowToProfile(normalizedRow as Parameters<typeof rowToProfile>[0]),
+      quota_percent: quotaState.percent,
+      quota_remaining: quotaState.remaining,
+      quota_total: quotaState.total,
+    }
     : null;
   const revoked = Boolean(rawLicenseHash && !licenseActive);
-  return { isPro, quotaPercent, profile, revoked };
+  return { isPro, quotaState, profile, revoked };
 }
 
 async function respondWithMeProfile(
@@ -351,7 +356,7 @@ async function respondWithMeProfile(
     username: string;
   },
 ) {
-  const { isPro, quotaPercent, profile, revoked } = await buildMePayload({
+  const { isPro, quotaState, profile, revoked } = await buildMePayload({
     row: opts.row,
     db: opts.db,
     kv: opts.kv,
@@ -366,7 +371,9 @@ async function respondWithMeProfile(
     found: true,
     username: opts.username,
     profile,
-    quotaPercent,
+    quotaPercent: quotaState.percent,
+    quotaRemaining: quotaState.remaining,
+    quotaTotal: quotaState.total,
     isPro,
     ...(revoked ? { revoked: true } : {}),
   });
@@ -587,6 +594,82 @@ async function bindSessionUserIfPresent(
   }
 }
 
+async function resolveLinkedLicenseSync(
+  deps: { db: D1Database; kv: KVNamespace; hash: string; limits: ReturnType<typeof getQuotaLimits> },
+) {
+  const linked = await getLinkedLicenseAccount(deps.db, deps.hash);
+  if (!linked) return null;
+  const quotaState = await getQuotaState(deps.kv, {
+    tier: "pro",
+    sessionId: "",
+    licenseKeyHash: linked.primaryLicenseHash,
+    limits: deps.limits,
+  });
+  return {
+    hash: linked.primaryLicenseHash,
+    profile: {
+      ...linked.profile,
+      quota_percent: quotaState.percent,
+      quota_remaining: quotaState.remaining,
+      quota_total: quotaState.total,
+    },
+  };
+}
+
+async function resolveExistingAccountCreditSync(
+  deps: {
+    db: D1Database;
+    kv: KVNamespace;
+    hash: string;
+    body: { username?: string };
+    sessionId: string | undefined;
+    validationId?: string;
+    limits: ReturnType<typeof getQuotaLimits>;
+  },
+) {
+  const username = deps.body.username?.trim();
+  if (!username || !deps.sessionId) return null;
+  const existing = await deps.db
+    .prepare("SELECT username, license_hash FROM user_scores WHERE LOWER(username) = LOWER(?)")
+    .bind(username)
+    .first<{ username: string; license_hash: string | null }>();
+  if (!existing?.username || !existing.license_hash || existing.license_hash === deps.hash) return null;
+
+  const boundUsername = await deps.kv.get(accountKvKeys.sessionUser(deps.sessionId));
+  if (boundUsername?.toLowerCase() !== existing.username.toLowerCase()) return null;
+
+  const creditResult = await creditExistingAccountWithLicense(
+    { db: deps.db, kv: deps.kv },
+    {
+      username: existing.username,
+      primaryLicenseHash: existing.license_hash,
+      topUpLicenseHash: deps.hash,
+      credits: deps.limits.proInitialQuota,
+      validationId: deps.validationId,
+    },
+  );
+  if (!creditResult.credited) return null;
+
+  const profile = await getProfile(deps.db, existing.username);
+  if (!profile) return null;
+  const quotaState = await getQuotaState(deps.kv, {
+    tier: "pro",
+    sessionId: "",
+    licenseKeyHash: existing.license_hash,
+    limits: deps.limits,
+  });
+  return {
+    hash: existing.license_hash,
+    profile: {
+      ...profile,
+      quota_percent: quotaState.percent,
+      quota_remaining: quotaState.remaining,
+      quota_total: quotaState.total,
+    },
+    creditsAdded: deps.limits.proInitialQuota,
+  };
+}
+
 const SUPPORTER_VANITY_TITLE_SET = new Set(SUPPORTER_VANITY_TITLES.map((title) => title.title));
 
 account.get("/checkout-reference", async (c) => {
@@ -633,6 +716,42 @@ account.post("/sync", async (c) => {
   const sessionId = c.get("sessionId");
   const limits = getQuotaLimits(c.env);
 
+  const linkedLicenseSync = await resolveLinkedLicenseSync({ db, kv, hash, limits });
+  if (linkedLicenseSync) {
+    if (sessionId && linkedLicenseSync.profile.username) {
+      await bindSessionUserIfPresent(kv, sessionId, linkedLicenseSync.profile.username);
+    }
+    return c.json({
+      success: true,
+      hash: linkedLicenseSync.hash,
+      restored: true,
+      profile: linkedLicenseSync.profile,
+    });
+  }
+
+  const creditSync = await resolveExistingAccountCreditSync({
+    db,
+    kv,
+    hash,
+    body,
+    sessionId,
+    validationId: validation.id ? String(validation.id) : undefined,
+    limits,
+  });
+  if (creditSync) {
+    if (sessionId && creditSync.profile.username) {
+      await bindSessionUserIfPresent(kv, sessionId, creditSync.profile.username);
+    }
+    return c.json({
+      success: true,
+      hash: creditSync.hash,
+      restored: true,
+      credited: true,
+      creditsAdded: creditSync.creditsAdded,
+      profile: creditSync.profile,
+    });
+  }
+
   // Resolve the profile FIRST — if this fails (username taken, concurrent
   // claim, etc.) we must NOT leave behind an activated license row or KV
   // quota for a sync that never completed.
@@ -655,8 +774,13 @@ account.post("/sync", async (c) => {
     await bindSessionUserIfPresent(kv, sessionId, resolvedProfile.profile.username);
   }
 
-  const quotaPercent = await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
-  const profile = { ...resolvedProfile.profile, quota_percent: quotaPercent };
+  const quotaState = await getQuotaState(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
+  const profile = {
+    ...resolvedProfile.profile,
+    quota_percent: quotaState.percent,
+    quota_remaining: quotaState.remaining,
+    quota_total: quotaState.total,
+  };
 
   return c.json({ success: true, hash, restored: resolvedProfile.restored, profile });
 });

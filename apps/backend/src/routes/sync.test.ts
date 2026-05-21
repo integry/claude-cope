@@ -100,6 +100,76 @@ describe("POST /api/account/sync", () => {
     expect(res.status).toBe(409);
   });
 
+  it("credits an unused extra license key to the same session-owned account", async () => {
+    mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-top-up-id" });
+    const primaryHash = await hashKey("COPE-PRIMARY");
+    const topUpHash = await hashKey("COPE-TOP-UP");
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...bindings: unknown[]) => {
+          calls.push({ sql, bindings });
+          return {
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("SELECT username, credited_to_hash FROM license_account_links")) return null;
+              if (sql.includes("SELECT username, license_hash FROM user_scores WHERE LOWER(username) = LOWER(?)")) {
+                return { username: "alice", license_hash: primaryHash };
+              }
+              if (sql.includes("SELECT status, last_activated_at FROM licenses")) return null;
+              if (sql.includes("FROM user_scores WHERE license_hash = ?")) return null;
+              if (sql.includes("FROM user_scores WHERE username = ?")) {
+                return { ...PROFILE_ROW, username: "alice", license_hash: primaryHash };
+              }
+              return null;
+            }),
+            run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          };
+        }),
+        first: vi.fn().mockResolvedValue(null),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        all: vi.fn().mockResolvedValue({ results: [] }),
+      })),
+      exec: vi.fn().mockResolvedValue({ results: [] }),
+      batch: vi.fn().mockResolvedValue([]),
+    };
+    const store = new Map<string, string>([
+      ["session_user:test-session", "alice"],
+      [`polar:${primaryHash}`, "100"],
+      [`polar_total:${primaryHash}`, "100"],
+    ]);
+    const kv = {
+      get: vi.fn(async (key: string) => store.get(key) ?? null),
+      put: vi.fn(async (key: string, value: string) => { store.set(key, value); }),
+      delete: vi.fn(async (key: string) => { store.delete(key); }),
+    };
+
+    const res = await postSync({ licenseKey: "COPE-TOP-UP", username: "alice" }, {
+      DB: db,
+      QUOTA_KV: kv,
+      POLAR_ACCESS_TOKEN: "tok",
+      POLAR_ORGANIZATION_ID: "org",
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      hash: primaryHash,
+      restored: true,
+      credited: true,
+      creditsAdded: 100,
+      profile: {
+        username: "alice",
+        quota_percent: 100,
+        quota_remaining: 200,
+        quota_total: 200,
+      },
+    });
+    expect(store.get(`polar:${primaryHash}`)).toBe("200");
+    expect(store.get(`polar_total:${primaryHash}`)).toBe("200");
+    expect(calls.some((call) => call.sql.includes("INSERT INTO license_account_links") && call.bindings[0] === topUpHash)).toBe(true);
+  });
+
   it("does NOT activate license when profile resolution fails", async () => {
     mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
     const calls: { sql: string; bindings: unknown[] }[] = [];
@@ -198,6 +268,7 @@ describe("POST /api/account/sync", () => {
                 const changes = currentSupporter === 0 ? 1 : 0;
                 if (changes > 0) {
                   pendingSupporter = 1;
+                  currentSupporter = 1;
                 }
                 return { meta: { changes } };
               }
@@ -262,7 +333,7 @@ describe("POST /api/account/sync", () => {
     ]);
   });
 
-  it("retries executive supporter activation after a transient recent-events insert failure", async () => {
+  it("does not fail executive supporter activation when recent-events insert fails", async () => {
     mockedValidatePolarKey.mockResolvedValue({ valid: true, status: "activated", id: "polar-id" });
     const supporterHash = await hashKey("COPE-SUPPORTER");
     let currentSupporter = 0;
@@ -292,6 +363,7 @@ describe("POST /api/account/sync", () => {
               const changes = currentSupporter === 0 ? 1 : 0;
               if (changes > 0) {
                 pendingSupporter = 1;
+                currentSupporter = 1;
               }
               return { meta: { changes } };
             }
@@ -338,8 +410,8 @@ describe("POST /api/account/sync", () => {
       DB: db, QUOTA_KV: kv,
       POLAR_ACCESS_TOKEN: "tok", POLAR_ORGANIZATION_ID: "org",
     });
-    expect(firstRes.status).toBe(500);
-    expect(currentSupporter).toBe(0);
+    expect(firstRes.status).toBe(200);
+    expect(currentSupporter).toBe(1);
 
     const secondRes = await postSync({ licenseKey: "COPE-SUPPORTER" }, {
       DB: db, QUOTA_KV: kv,
@@ -351,9 +423,7 @@ describe("POST /api/account/sync", () => {
       profile: { is_executive_supporter: true },
     });
     expect(currentSupporter).toBe(1);
-    expect(recentEvents).toEqual([
-      "[LIVE] 👑 alice just expensed the Executive Supporter Pack. Respect the grift.",
-    ]);
+    expect(recentEvents).toEqual([]);
   });
 
   it("rolls back license activation when KV provisioning fails", async () => {

@@ -2521,6 +2521,8 @@ describe("POST /api/account/update-display-rank", () => {
                 if (changes > 0) {
                   pendingSupporter = 1;
                   pendingDisplayRank = bindings[0] as string | null;
+                  currentSupporter = 1;
+                  currentDisplayRank = bindings[0] as string | null;
                 }
                 return { meta: { changes } };
               }
