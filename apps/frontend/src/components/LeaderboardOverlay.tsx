@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { API_BASE } from "../config";
 import AsciiBox from "./AsciiBox";
 
@@ -48,6 +48,15 @@ const ALL_COUNTRIES: { code: string; name: string }[] = [
   { code: "AE", name: "UAE" }, { code: "GB", name: "United Kingdom" }, { code: "US", name: "United States" },
   { code: "VN", name: "Vietnam" },
 ];
+
+const LEGACY_LEADERBOARD_OVERLAY_WIDTH_REM = 20;
+const LEADERBOARD_OVERLAY_WIDTH_REM = LEGACY_LEADERBOARD_OVERLAY_WIDTH_REM * 1.5;
+const LEADERBOARD_OVERLAY_MAX_WIDTH = "calc(100vw - 1rem)";
+const LEADERBOARD_OVERLAY_STYLE = {
+  backgroundColor: "var(--color-bg)",
+  width: `${LEADERBOARD_OVERLAY_WIDTH_REM}rem`,
+  maxWidth: LEADERBOARD_OVERLAY_MAX_WIDTH,
+} satisfies CSSProperties;
 
 function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -100,7 +109,11 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
   const selectedCountryLabel = country === "all" ? "All Countries" : (ALL_COUNTRIES.find((c) => c.code === country)?.name ?? country);
 
   return (
-    <div className="fixed right-0 top-0 h-full w-80 border-l border-gray-700 flex flex-col z-20" style={{ backgroundColor: 'var(--color-bg)' }}>
+    <div
+      data-testid="leaderboard-overlay"
+      className="fixed right-0 top-0 h-full border-l border-gray-700 flex flex-col z-20"
+      style={LEADERBOARD_OVERLAY_STYLE}
+    >
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <span className="text-green-400 font-bold text-sm">
           &gt; cat /var/log/hall_of_blame
