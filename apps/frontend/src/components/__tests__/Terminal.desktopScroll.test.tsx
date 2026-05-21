@@ -138,38 +138,40 @@ vi.mock("../TerminalOverlays", () => ({ TerminalOverlays: () => null }));
 vi.mock("../BuddyOverlay", () => ({ BuddyOverlay: () => null }));
 vi.mock("../MessageList", async () => {
   const React = await import("react");
+  function MockMessageList({
+    history,
+    messageKeys,
+  }: {
+    history: Array<{ id?: number; role: string; content: string }>;
+    messageKeys: number[];
+  }) {
+    const [expanded, setExpanded] = React.useState(false);
+    renderGrowthControlRef.current = () => setExpanded(true);
+
+    React.useEffect(() => {
+      if (!history.some((message) => message.role === "system")) {
+        setExpanded(false);
+      }
+    }, [history]);
+
+    return (
+      <div data-testid="message-list">
+        {history.map((message, index) => (
+          <div key={messageKeys[index] ?? index} data-message-key={messageKeys[index] ?? index}>
+            <div data-role={message.role}>{message.content}</div>
+            {message.role === "system" ? (
+              <div data-testid="assistant-rendered" data-expanded={expanded ? "true" : "false"}>
+                {expanded ? "final reply with extra rendered lines" : "final reply"}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return {
-    default: ({
-      history,
-      messageKeys,
-    }: {
-      history: Array<{ id?: number; role: string; content: string }>;
-      messageKeys: number[];
-    }) => {
-      const [expanded, setExpanded] = React.useState(false);
-      renderGrowthControlRef.current = () => setExpanded(true);
-
-      React.useEffect(() => {
-        if (!history.some((message) => message.role === "system")) {
-          setExpanded(false);
-        }
-      }, [history]);
-
-      return (
-        <div data-testid="message-list">
-          {history.map((message, index) => (
-            <div key={messageKeys[index] ?? index} data-message-key={messageKeys[index] ?? index}>
-              <div data-role={message.role}>{message.content}</div>
-              {message.role === "system" ? (
-                <div data-testid="assistant-rendered" data-expanded={expanded ? "true" : "false"}>
-                  {expanded ? "final reply with extra rendered lines" : "final reply"}
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      );
-    },
+    default: MockMessageList,
   };
 });
 

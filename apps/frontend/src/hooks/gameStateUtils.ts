@@ -262,32 +262,58 @@ function hasValidAuthoritativeProfileFloor(state: GameState): boolean {
   );
 }
 
-function applyDefensiveDefaults(state: GameState): void {
+function createDefaultBuddyState(): BuddyState {
+  return {
+    type: null,
+    isShiny: false,
+    promptsSinceLastInterjection: 0,
+  };
+}
+
+function createDefaultModesState(): ModesState {
+  return { fast: false, voice: false };
+}
+
+function applyCollectionDefaults(state: GameState): void {
   if (!Array.isArray(state.upgrades)) {
     state.upgrades = [];
   }
   if (!Array.isArray(state.achievements)) {
     state.achievements = [];
   }
-  if (!state.buddy) {
-    state.buddy = {
-      type: null,
-      isShiny: false,
-      promptsSinceLastInterjection: 0,
-    };
-  }
   if (!Array.isArray(state.chatHistory)) {
     state.chatHistory = [];
   }
   state.chatHistory = normalizePersistedChatHistory(state.chatHistory);
-  if (typeof state.suggestedReply !== "string") {
-    state.suggestedReply = null;
+  if (!Array.isArray(state.unlockedThemes)) {
+    state.unlockedThemes = ["default"];
+  }
+  if (!Array.isArray(state.pendingCompletedTaskIds)) {
+    state.pendingCompletedTaskIds = [];
+  }
+}
+
+function applyObjectDefaults(state: GameState): void {
+  if (!state.buddy) {
+    state.buddy = createDefaultBuddyState();
   }
   if (!state.commandUsage || typeof state.commandUsage !== "object") {
     state.commandUsage = {};
   }
   if (!state.modes || typeof state.modes !== "object") {
-    state.modes = { fast: false, voice: false };
+    state.modes = createDefaultModesState();
+  }
+  if (!state.pendingCompletedTaskRewards || typeof state.pendingCompletedTaskRewards !== "object") {
+    state.pendingCompletedTaskRewards = {};
+  }
+  if (!hasValidAuthoritativeProfileFloor(state)) {
+    state.authoritativeProfileFloor = null;
+  }
+}
+
+function applyScalarDefaults(state: GameState): void {
+  if (typeof state.suggestedReply !== "string") {
+    state.suggestedReply = null;
   }
   if (state.activeTicket === undefined) {
     state.activeTicket = null;
@@ -298,20 +324,8 @@ function applyDefensiveDefaults(state: GameState): void {
   if (!state.activeTheme) {
     state.activeTheme = "default";
   }
-  if (!Array.isArray(state.unlockedThemes)) {
-    state.unlockedThemes = ["default"];
-  }
   if (state.soundEnabled === undefined) {
     state.soundEnabled = true;
-  }
-  if (!Array.isArray(state.pendingCompletedTaskIds)) {
-    state.pendingCompletedTaskIds = [];
-  }
-  if (!state.pendingCompletedTaskRewards || typeof state.pendingCompletedTaskRewards !== "object") {
-    state.pendingCompletedTaskRewards = {};
-  }
-  if (!hasValidAuthoritativeProfileFloor(state)) {
-    state.authoritativeProfileFloor = null;
   }
   if (state.isExecutiveSupporter === undefined) {
     state.isExecutiveSupporter = false;
@@ -319,6 +333,12 @@ function applyDefensiveDefaults(state: GameState): void {
   if (state.displayRank === undefined) {
     state.displayRank = null;
   }
+}
+
+function applyDefensiveDefaults(state: GameState): void {
+  applyCollectionDefaults(state);
+  applyObjectDefaults(state);
+  applyScalarDefaults(state);
 }
 
 export function loadState(): GameState {
