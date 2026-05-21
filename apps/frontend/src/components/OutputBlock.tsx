@@ -384,33 +384,38 @@ function OutputBlock({ message, previousMessage, nextMessage, shareUserMessage, 
 type OutputBlockProps = Parameters<typeof OutputBlock>[0];
 
 const MESSAGE_COMPARISON_FIELDS = ["role", "content", "displayType", "shareClaim", "buddyType", "backlogDisplay", "ticketDisplay"] as const satisfies readonly (keyof Message)[];
+const OUTPUT_BLOCK_MESSAGE_FIELDS = [...MESSAGE_COMPARISON_FIELDS, "cost"] as const satisfies readonly (keyof Message)[];
+const OUTPUT_BLOCK_PROP_FIELDS = [
+  "isNew",
+  "promptString",
+  "username",
+  "onSlashCommand",
+  "enableShare",
+  "staticLoadingAnimation",
+  "staticLoadingFrame",
+] as const satisfies readonly (keyof OutputBlockProps)[];
+
+function fieldsEqual<T extends object, K extends readonly (keyof T)[]>(
+  prev: T | undefined,
+  next: T | undefined,
+  fields: K,
+): boolean {
+  return prev === next || fields.every((field) => prev?.[field] === next?.[field]);
+}
 
 function messagesEqual(a: Message | undefined, b: Message | undefined): boolean {
-  return a === b || MESSAGE_COMPARISON_FIELDS.every((field) => a?.[field] === b?.[field]);
+  return fieldsEqual(a, b, MESSAGE_COMPARISON_FIELDS);
 }
 
 function outputBlockPropsAreEqual(prev: OutputBlockProps, next: OutputBlockProps): boolean {
-  if (prev.message.role !== next.message.role) return false;
-  if (prev.message.content !== next.message.content) return false;
-  if (prev.message.displayType !== next.message.displayType) return false;
-  if (prev.message.shareClaim !== next.message.shareClaim) return false;
-  if (prev.message.buddyType !== next.message.buddyType) return false;
-  if (prev.message.cost !== next.message.cost) return false;
-  if (prev.message.backlogDisplay !== next.message.backlogDisplay) return false;
-  if (prev.message.ticketDisplay !== next.message.ticketDisplay) return false;
-  if (prev.isNew !== next.isNew) return false;
-  if (prev.promptString !== next.promptString) return false;
-  if (!messagesEqual(prev.previousMessage, next.previousMessage)) return false;
-  if (!messagesEqual(prev.nextMessage, next.nextMessage)) return false;
-  if (!messagesEqual(prev.shareUserMessage, next.shareUserMessage)) return false;
-  if (prev.username !== next.username) return false;
-  if (prev.onSlashCommand !== next.onSlashCommand) return false;
-  if (prev.enableShare !== next.enableShare) return false;
-  if (prev.staticLoadingAnimation !== next.staticLoadingAnimation) return false;
-  if (prev.staticLoadingFrame !== next.staticLoadingFrame) return false;
-  // Only compare activeTicketId for loading messages
-  if (prev.message.role === "loading" && prev.activeTicketId !== next.activeTicketId) return false;
-  return true;
+  return (
+    fieldsEqual(prev.message, next.message, OUTPUT_BLOCK_MESSAGE_FIELDS)
+    && fieldsEqual(prev, next, OUTPUT_BLOCK_PROP_FIELDS)
+    && messagesEqual(prev.previousMessage, next.previousMessage)
+    && messagesEqual(prev.nextMessage, next.nextMessage)
+    && messagesEqual(prev.shareUserMessage, next.shareUserMessage)
+    && (prev.message.role !== "loading" || prev.activeTicketId === next.activeTicketId)
+  );
 }
 
 export default React.memo(OutputBlock, outputBlockPropsAreEqual);
