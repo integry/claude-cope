@@ -8,7 +8,7 @@ VIDEO_PATH="${1:-out/launch-video.mp4}"
 OUT_DIR="out/review"
 SECOND_DIR="$OUT_DIR/seconds"
 OUT_PATH="$OUT_DIR/every-second-contact-sheet.png"
-TOTAL_FRAMES=3730
+TOTAL_FRAMES=1860
 FPS=30
 
 mkdir -p "$OUT_DIR"
@@ -22,7 +22,7 @@ if command -v ffmpeg >/dev/null 2>&1; then
 
   ffmpeg -hide_banner -loglevel error -y \
     -i "$VIDEO_PATH" \
-    -vf "fps=1,scale=270:270:flags=lanczos,tile=6x21" \
+    -vf "fps=1,scale=270:270:flags=lanczos,tile=6x11" \
     -frames:v 1 \
     "$OUT_PATH"
 

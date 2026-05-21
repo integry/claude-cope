@@ -196,7 +196,7 @@ function renderBuddyInterjection(
     <div className="space-y-3">
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
         <pre className="m-0 whitespace-pre font-mono leading-tight">{parsedBuddyBlock.art}</pre>
-        <div className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+        <div className="min-w-0 flex-1 whitespace-pre-wrap break-words pt-[1em] [overflow-wrap:anywhere]">
           <div className="font-mono">[{parsedBuddyBlock.type}]</div>
           <div>{parsedBuddyBlock.speech}</div>
         </div>

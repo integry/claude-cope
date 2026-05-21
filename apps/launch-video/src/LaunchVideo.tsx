@@ -7,16 +7,14 @@ import "./generated.css";
 import { AbsoluteFill, Easing, interpolate, Sequence, useCurrentFrame } from "remotion";
 import type { ChangeEvent, KeyboardEvent, ReactNode } from "react";
 import HeaderBar from "../../frontend/src/components/HeaderBar";
-import TickerDisplay from "../../frontend/src/components/TickerDisplay";
 import OutputBlock from "../../frontend/src/components/OutputBlock";
 import SprintProgressBar from "../../frontend/src/components/SprintProgressBar";
 import CommandLine from "../../frontend/src/components/CommandLine";
 import { BuddyOverlay } from "../../frontend/src/components/BuddyOverlay";
-import { BUDDY_ICONS, BUDDY_TEXT_GAP } from "../../frontend/src/components/buddyConstants";
+import { formatBuddyInterjection } from "../../frontend/src/components/buddyConstants";
 import SlashMenu from "../../frontend/src/components/SlashMenu";
 import { terminalContainerClassName } from "../../frontend/src/components/terminalClassName";
 import { buildAchievementBox } from "../../frontend/src/components/achievementBox";
-import type { GameEvent } from "../../frontend/src/hooks/useRecentEvents";
 import type { BacklogDisplayData, Message, TicketDisplayData } from "../../frontend/src/hooks/gameStateUtils";
 import type { SlashCommandAction } from "../../frontend/src/components/slashCommandDetect";
 import { BACKLOG_CATEGORY_TIERS } from "@claude-cope/shared/backlogTiers";
@@ -28,11 +26,11 @@ const noopChange = (_event: ChangeEvent<HTMLInputElement>) => {};
 const noopKeyDown = (_event: KeyboardEvent<HTMLInputElement>) => {};
 
 const sceneFrames = {
-  bait: 315,
-  splash: 150,
-  reveal: 150,
-  backlog: 565,
-  sabotage: 2550,
+  bait: 175,
+  splash: 75,
+  reveal: 40,
+  backlog: 238,
+  sabotage: 1290,
 } as const;
 
 export const launchVideoDurationInFrames = Object.values(sceneFrames).reduce((total, frames) => total + frames, 0);
@@ -43,12 +41,12 @@ const backlogCategoryMenuItems = BACKLOG_CATEGORY_TIERS.length + 1;
 const appViewportWidth = 640;
 const appViewportHeight = 640;
 const appViewportScale = 1080 / appViewportWidth;
-
-const liveEvents: GameEvent[] = [
-  { message: "RinaldsDev just opened a ticket nobody should have accepted.", created_at: "2026-05-19T10:00:01.000Z" },
-  { message: "VirtualRuntime5899 approved a rollback without reading it.", created_at: "2026-05-19T09:59:35.000Z" },
-  { message: "AgileSnailOps converted a bug into roadmap language.", created_at: "2026-05-19T09:58:51.000Z" },
-];
+const liveEvents = [
+  "RinaldsDev just opened a ticket nobody should have accepted.",
+  "VirtualRuntime5899 approved a rollback without reading it.",
+  "AgileSnailOps converted a bug into roadmap language.",
+  "RinaldsDev just took down US-East-1. Respect the grift.",
+] as const;
 
 const headerProps = {
   rank: "Junior Code Monkey",
@@ -78,6 +76,7 @@ const headerProps = {
 } as const;
 
 const promptString = "❯ ";
+const launchUrl = "cope.bot";
 const videoFontFamily = "\"Fira Code\", monospace";
 const anthropicColors = {
   dark: "#141413",
@@ -94,7 +93,6 @@ const launchTicketId = "MELT-087";
 const launchTicketTitle = "Build a Full-Stack App Using 14 Different JavaScript Frameworks";
 const implementationPromptOne = "wire up the frontend routing";
 const implementationResponseOne = "[⚙️ SYSTEM] Initializing dependency hell...\n[INFO] Resolving routing conflicts between React, Vue, Svelte, and Angular.\n[WARN] Next.js and Remix are currently fighting over the URL bar.\n[SUCCESS] Bootstrapped 14 frontend routers into a single index.html.\n\n[DIAGNOSTIC] Total bundle size is now 4.2 GB. The \"Hello World\" button requires a dedicated Kubernetes cluster just to hydrate.";
-const buddyCommand = "/buddy";
 const buddyType = "Sarcastic Clippy";
 const buddySpawnMessage = `[✓] Spawning your new companion: **${buddyType}** 📎!`;
 const buddyInterjection = "I see you're trying to combine 14 state managers. Would you like me to draft your resignation letter?";
@@ -188,41 +186,9 @@ const userMessage = (content: string): Message => ({ role: "user", content });
 const systemMessage = (content: string, extra?: Partial<Message>): Message => ({ role: "system", content, ...extra });
 const warningMessage = (content: string): Message => ({ role: "warning", content });
 
-function wrapBuddyText(text: string, maxWidth: number): string[] {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let line = "";
-
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (next.length > maxWidth && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
-  }
-
-  if (line) lines.push(line);
-  return lines.length ? lines : [""];
-}
-
-function formatLaunchBuddyInterjection(type: string, text: string, maxTextWidth: number): string {
-  const artLines = (BUDDY_ICONS[type] ?? "🐾").split("\n");
-  const artWidth = Math.max(...artLines.map((line) => line.length));
-  const speechLines = [`[${type}]`, "", ...wrapBuddyText(text, maxTextWidth)];
-  const totalLines = Math.max(artLines.length, speechLines.length);
-
-  return Array.from({ length: totalLines }, (_, index) => {
-    const art = artLines[index] ?? "";
-    const speech = speechLines[index];
-    return speech ? `${art.padEnd(artWidth, " ")}${BUDDY_TEXT_GAP}${speech}` : art;
-  }).join("\n");
-}
-
 const buddyMessage = (content: string): Message => ({
   role: "warning",
-  content: formatLaunchBuddyInterjection(buddyType, content, 56),
+  content: formatBuddyInterjection(buddyType, content, 56),
   buddyType,
 });
 
@@ -276,7 +242,11 @@ function appShellClassName() {
     pendingReviewPing: null,
     pingAcknowledged: true,
     activeTheme: "default",
-  }).replace("h-[100dvh]", "h-full").replace("h-screen", "h-full").replace("px-4", "px-1");
+  })
+    .replace("h-[100dvh]", "h-full")
+    .replace("h-screen", "h-full")
+    .replace("px-4", "px-1")
+    .replace("transition-all duration-300", "");
 }
 
 function Transcript({
@@ -297,8 +267,8 @@ function Transcript({
   const spacingClassName = compact ? "space-y-1 [&_.group]:!mb-1" : "space-y-5";
   if (followBottom) {
     return (
-      <div className="absolute inset-0 overflow-hidden px-0 py-5">
-        <div className={`absolute bottom-5 left-0 right-0 w-full ${spacingClassName}`}>
+      <div className="absolute inset-0 overflow-hidden px-0 py-3">
+        <div className={`absolute bottom-3 left-0 right-0 w-full ${spacingClassName}`}>
           {messages.map((message, index) => (
             <OutputBlock
               key={`${message.role}:${message.content}:${index}`}
@@ -317,7 +287,7 @@ function Transcript({
   }
 
   return (
-    <div className="min-h-full flex flex-col justify-start px-0 py-5">
+    <div className="min-h-full flex flex-col justify-start px-0 py-3">
       <div
         className={`w-full ${spacingClassName}`}
         style={{
@@ -342,6 +312,46 @@ function Transcript({
   );
 }
 
+function BrowserChrome() {
+  return (
+    <div className="flex h-5 items-center gap-2 border-b border-cyan-900/35 bg-black px-3 font-mono text-[9px] text-slate-500">
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
+        <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
+        <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+      </div>
+      <div className="mx-auto flex h-4 w-[300px] max-w-[62%] items-center justify-center rounded-md bg-white/[0.08] px-3 text-center text-[10px] font-bold text-white shadow-inner shadow-black/50">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 16 16"
+          className="relative -top-0.5 mr-1.5 h-2.5 w-2.5 shrink-0 self-center text-slate-300"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" />
+          <path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" />
+        </svg>
+        <span className="leading-none">{launchUrl}</span>
+      </div>
+      <div className="w-[38px] shrink-0" />
+    </div>
+  );
+}
+
+function LaunchLiveTicker({ message }: { message: string }) {
+  return (
+    <div className="flex h-5 items-center border-b border-cyan-900/35 bg-gray-900 px-2 font-mono text-[10px] leading-none text-green-400">
+      <div className="min-w-0 truncate">
+        <strong className="rounded bg-yellow-950/30 px-1 text-yellow-400">[LIVE]</strong>{" "}
+        {message}
+      </div>
+    </div>
+  );
+}
+
 function FixedTerminalShell({
   messages,
   inputValue,
@@ -352,8 +362,6 @@ function FixedTerminalShell({
   assistivePlaceholderHint,
   overlay,
   activeTicket,
-  showTicker = true,
-  latestEvent = liveEvents[0]!,
   cameraScale = 1,
   cameraX = 0,
   cameraY = 0,
@@ -362,10 +370,13 @@ function FixedTerminalShell({
   followTranscriptBottom = false,
   compactTranscript = false,
   currentTD = startingTechnicalDebt,
+  quotaPercent = headerProps.quotaPercent,
+  liveMessage = liveEvents[0]!,
   promptOverlay,
   staticLoadingFrame = 0,
   buddy,
   slashMenu,
+  commandGhostText,
 }: {
   messages: Message[];
   inputValue: string;
@@ -381,8 +392,6 @@ function FixedTerminalShell({
     sprintProgress: number;
     sprintGoal: number;
   } | null;
-  showTicker?: boolean;
-  latestEvent?: GameEvent;
   cameraScale?: number;
   cameraX?: number;
   cameraY?: number;
@@ -391,10 +400,13 @@ function FixedTerminalShell({
   followTranscriptBottom?: boolean;
   compactTranscript?: boolean;
   currentTD?: number;
+  quotaPercent?: number;
+  liveMessage?: string;
   promptOverlay?: ReactNode;
   staticLoadingFrame?: number;
   buddy?: { type: string | null; isShiny: boolean };
   slashMenu?: ReactNode;
+  commandGhostText?: string;
 }) {
   const frame = useCurrentFrame();
   const cursorBlinkOn = !inputDisabled ? Math.floor(frame / 16) % 2 === 0 : false;
@@ -420,10 +432,9 @@ function FixedTerminalShell({
           }}
         >
           <div className="shrink-0">
-            {showTicker ? (
-              <TickerDisplay latestEvent={latestEvent} onExpand={noop} onSlashCommand={noop} onlineCount={7} showPartyLink={false} showHeaderLinks={false} />
-            ) : null}
-            <HeaderBar {...headerProps} currentTD={currentTD} logoSrc={logoTransparentSrc} />
+            <BrowserChrome />
+            <LaunchLiveTicker message={liveMessage} />
+            <HeaderBar {...headerProps} currentTD={currentTD} quotaPercent={quotaPercent} logoSrc={logoTransparentSrc} />
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-hidden relative">
@@ -469,6 +480,14 @@ function FixedTerminalShell({
                   assistivePlaceholderHint={assistivePlaceholderHint}
                   onPlaceholderAccept={undefined}
                 />
+                {commandGhostText ? (
+                  <div
+                    className="pointer-events-none absolute top-1/2 z-20 -translate-y-1/2 whitespace-nowrap font-mono text-[12px] font-bold text-cyan-300/45"
+                    style={{ left: "8.25rem", top: "calc(50% + 2px)" }}
+                  >
+                    {commandGhostText}
+                  </div>
+                ) : null}
               </div>
             </div>
             {buddy?.type ? (
@@ -688,7 +707,7 @@ function SuspiciousBaitClaims({ frame, crash }: { frame: number; crash: number }
 
 function FakeSaaSIntro() {
   const rawFrame = useCurrentFrame();
-  const frame = rawFrame / 2;
+  const frame = rawFrame;
   const firstOpacity = introOpacity(frame, 48, 62);
   const crash = interpolate(frame, [144, 156], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.in(Easing.cubic) });
   const creepingGlitch = interpolate(frame, [84, 144], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.cubic) });
@@ -875,7 +894,7 @@ function FakeSaaSIntro() {
 
 function CrashSplashScene() {
   const rawFrame = useCurrentFrame();
-  const frame = rawFrame / 2;
+  const frame = rawFrame;
   const shock = crashIntensity(frame, 18);
   const opacity = interpolate(frame, [0, 6, 54], [0, 1, 1], {
     extrapolateLeft: "clamp",
@@ -1006,7 +1025,7 @@ function RevealScene() {
   const revealMsgs: Message[] = [];
   const bootLines = revealMessages();
   bootLines.forEach((message, index) => {
-    if (frame >= 10 + index * 5) revealMsgs.push(message);
+    if (frame >= 6 + index * 4) revealMsgs.push(message);
   });
 
   return (
@@ -1024,26 +1043,27 @@ function RevealScene() {
 function BacklogScene() {
   const frame = useCurrentFrame();
   const backlogCommand = "/backlog";
-  const backlogStart = 28;
-  const backlogTypedFrame = backlogStart + Math.ceil(backlogCommand.length / 0.55);
-  const menuStart = backlogTypedFrame + 14;
-  const submitBacklogFrame = menuStart + 220;
-  const tableFrame = submitBacklogFrame + 34;
-  const takeStart = tableFrame + 92;
-  const takeCommitFrame = takeStart + Math.ceil(takeTicketCommand.length / 0.74) + 10;
-  const claimedFrame = takeCommitFrame + 34;
+  const backlogStart = 0;
+  const backlogTypedFrame = backlogStart + Math.ceil(backlogCommand.length / 1.25);
+  const menuStart = backlogTypedFrame + 8;
+  const menuScrollStart = menuStart + 18;
+  const submitBacklogFrame = menuStart + 100;
+  const tableFrame = submitBacklogFrame + 12;
+  const takeStart = tableFrame + 30;
+  const takeCommitFrame = takeStart + 12;
+  const claimedFrame = takeCommitFrame + 13;
   const backlogInput = frame < submitBacklogFrame
-    ? typeText(frame, backlogCommand, backlogStart, 0.55)
+    ? typeText(frame, backlogCommand, backlogStart, 1.25)
     : "";
   const takeInput = frame >= takeStart && frame < takeCommitFrame
-    ? typeText(frame, takeTicketCommand, takeStart, 0.74)
+    ? takeTicketCommand
     : "";
   const inputValue = takeInput || backlogInput;
-  const activeCategoryIndex = Math.min(backlogCategoryMenuItems - 1, Math.floor(interpolate(frame, [menuStart, submitBacklogFrame - 18], [0, backlogCategoryMenuItems - 1], {
+  const activeCategoryIndex = Math.min(backlogCategoryMenuItems - 1, Math.floor(interpolate(frame, [menuScrollStart, submitBacklogFrame - 18], [0, backlogCategoryMenuItems - 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   })));
-  const categoryPreviewScrollY = -interpolate(frame, [menuStart, submitBacklogFrame - 18], [0, 3300], {
+  const categoryPreviewScrollY = -interpolate(frame, [menuScrollStart, submitBacklogFrame - 18], [0, 3300], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: Easing.inOut(Easing.quad),
@@ -1058,8 +1078,8 @@ function BacklogScene() {
   if (frame >= claimedFrame) messages.push(systemMessage("[ JIRA PAYLOAD IMPORTED ]", { ticketDisplay: launchTicketDisplayClaimed }));
 
   const inputFocus = Math.max(
-    focusWindow(frame, backlogStart - 8, submitBacklogFrame + 30),
-    focusWindow(frame, takeStart - 8, takeCommitFrame + 30),
+    focusWindow(frame, backlogStart - 5, submitBacklogFrame + 8),
+    focusWindow(frame, takeStart - 5, takeCommitFrame + 12),
   );
   const cameraScale = 1 + (1.42 - 1) * inputFocus;
   const cameraY = -438 * inputFocus;
@@ -1075,12 +1095,14 @@ function BacklogScene() {
       cameraScale={cameraScale}
       cameraX={cameraX}
       cameraY={cameraY}
+      commandGhostText={frame >= menuStart && frame < submitBacklogFrame ? "1,432 open tickets of pure suffering" : undefined}
       slashMenu={frame >= menuStart && frame < submitBacklogFrame ? (
         <SlashMenu
           query="/backlog "
           activeIndex={activeCategoryIndex}
           totalTechnicalDebt={startingTechnicalDebt}
           paidUser={false}
+          hideLockedBadges
           previewScrollY={categoryPreviewScrollY}
           onSelect={noop}
         />
@@ -1092,11 +1114,11 @@ function BacklogScene() {
 function SabotageScene() {
   const frame = useCurrentFrame();
   const prodBeat = {
-    start: 1280,
-    responsibleSpeed: 1.1,
-    pauseFrames: 60,
-    deleteFrames: 16,
-    prodSpeed: 1.08,
+    start: 545,
+    responsibleSpeed: 1.6,
+    pauseFrames: 30,
+    deleteFrames: 12,
+    prodSpeed: 1.5,
   } as const;
   const prodResponsibleDone = prodBeat.start + Math.ceil(responsibleDeployPrompt.length / prodBeat.responsibleSpeed);
   const prodDeleteStart = prodResponsibleDone + prodBeat.pauseFrames;
@@ -1106,21 +1128,21 @@ function SabotageScene() {
     {
       prompt: implementationPromptOne,
       response: implementationResponseOne,
-      promptStart: 45,
-      promptSpeed: 0.9,
-      loadingStart: 92,
-      responseStart: 182,
-      responseSpeed: 1.55,
+      promptStart: 10,
+      promptSpeed: 1.4,
+      loadingStart: 42,
+      responseStart: 82,
+      responseSpeed: 3,
       loading: "[⚙️] Initializing dependency hell...",
     },
     {
       prompt: implementationPromptTwo,
       response: implementationResponseTwo,
-      promptStart: 690,
-      promptSpeed: 0.82,
-      loadingStart: 778,
-      responseStart: 878,
-      responseSpeed: 1.55,
+      promptStart: 266,
+      promptSpeed: 1.3,
+      loadingStart: 321,
+      responseStart: 360,
+      responseSpeed: 3,
       loading: "[⚙️] Violating component boundaries...",
     },
     {
@@ -1128,19 +1150,19 @@ function SabotageScene() {
       response: implementationResponseThree,
       promptStart: prodPromptStart,
       promptSpeed: prodBeat.prodSpeed,
-      loadingStart: prodCommitFrame + 20,
-      responseStart: prodCommitFrame + 110,
-      responseSpeed: 1.55,
+      loadingStart: prodCommitFrame + 9,
+      responseStart: prodCommitFrame + 48,
+      responseSpeed: 3,
       loading: "[⚙️] Bypassing QA...",
     },
     {
       prompt: implementationPromptFour,
       response: implementationResponseFour,
-      promptStart: 1900,
-      promptSpeed: 0.82,
-      loadingStart: 1978,
-      responseStart: 2078,
-      responseSpeed: 1.55,
+      promptStart: 804,
+      promptSpeed: 1.5,
+      loadingStart: 844,
+      responseStart: 882,
+      responseSpeed: 3,
       loading: "[⚙️] Searching for previous stable state...",
     },
   ] as const;
@@ -1150,26 +1172,24 @@ function SabotageScene() {
   const responseDoneFrames = implementationTurns.map((turn) => (
     turn.responseStart + Math.ceil(turn.response.length / turn.responseSpeed) + 12
   ));
-  const achievementFrame = responseDoneFrames[3]! + 40;
+  const achievementFrame = responseDoneFrames[0]! + 10;
   const achievementVisible = frame >= achievementFrame;
-  const awardPerTurn = launchTicketGoal / implementationTurns.length;
-  const sprintProgress = Math.max(0, Math.min(launchTicketGoal, Math.floor(responseDoneFrames.reduce((total, doneFrame) => {
-    return total + interpolate(frame, [doneFrame + 8, doneFrame + 48], [0, awardPerTurn], {
+  const turnAwards = [740, 1320, 910, 1230] as const;
+  const sprintProgress = Math.max(0, Math.min(launchTicketGoal, Math.floor(responseDoneFrames.reduce((total, doneFrame, index) => {
+    return total + interpolate(frame, [doneFrame + 8, doneFrame + 48], [0, turnAwards[index] ?? 0], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     });
   }, 0))));
   const currentTD = startingTechnicalDebt + sprintProgress;
-  const buddyPromptStart = 545;
-  const buddyCommitFrame = buddyPromptStart + Math.ceil(buddyCommand.length / 0.72) + 10;
-  const buddySpawnFrame = buddyCommitFrame + 34;
+  const quotaUsed = commitFrames.filter((commitFrame) => frame >= commitFrame).length;
+  const quotaRemaining = Math.max(0, 896 - quotaUsed);
+  const quotaPercent = (quotaRemaining / 1337) * 100;
+  const buddySpawnFrame = commitFrames[1]! + 10;
   const buddyActive = frame >= buddySpawnFrame;
-  const buddyInterjectionFrame = responseDoneFrames[1]! + 20;
-  const liveDisasterFrame = implementationTurns[2]!.responseStart + Math.ceil(implementationResponseThree.length / 1.55) - 36;
-  const latestEvent = frame >= liveDisasterFrame
-    ? { message: "RinaldsDev just took down US-East-1. Respect the grift.", created_at: "2026-05-19T10:02:37.000Z" }
-    : liveEvents[0]!;
-
+  const buddyInterjectionFrame = responseDoneFrames[1]! + 8;
+  const liveDisasterFrame = implementationTurns[2]!.responseStart + Math.ceil(implementationResponseThree.length / 3) - 16;
+  const liveMessage = frame >= liveDisasterFrame ? liveEvents[3] : liveEvents[0];
   const messages = [...implementationBaseMessages()];
   let activeLoadingStart: number | null = null;
   implementationTurns.forEach((turn, index) => {
@@ -1183,28 +1203,26 @@ function SabotageScene() {
       messages.push({ role: "loading", content: turn.loading });
     }
     if (responseVisible) messages.push(systemMessage(typeTextAtomicTags(frame, turn.response, turn.responseStart, turn.responseSpeed) || " "));
+    if (index === 0 && achievementVisible) {
+      messages.push(warningMessage(buildAchievementBox(launchAchievementId)));
+    }
     if (index === 1 && frame >= buddyInterjectionFrame) {
       messages.push(buddyMessage(buddyInterjection));
     }
   });
 
-  if (frame >= buddyCommitFrame) {
-    const insertAfterFirstResponse = 4;
-    messages.splice(insertAfterFirstResponse, 0, userMessage(buddyCommand));
-  }
   if (frame >= buddySpawnFrame) {
-    const insertAfterBuddyCommand = 5;
-    messages.splice(insertAfterBuddyCommand, 0, systemMessage(buddySpawnMessage));
-  }
-
-  if (achievementVisible) {
-    messages.push(warningMessage(buildAchievementBox(launchAchievementId)));
+    const insertAfterSecondPrompt = messages.findIndex((message) => message.role === "user" && message.content === implementationPromptTwo);
+    const insertBeforeSecondLoading = messages.findIndex((message) => message.role === "loading" && message.content === implementationTurns[1]!.loading);
+    const insertAt = insertBeforeSecondLoading !== -1
+      ? insertBeforeSecondLoading
+      : insertAfterSecondPrompt !== -1
+        ? insertAfterSecondPrompt + 1
+        : messages.length;
+    messages.splice(insertAt, 0, systemMessage(buddySpawnMessage));
   }
 
   const activeTypingTurn = implementationTurns.find((turn, index) => index !== 2 && frame >= turn.promptStart && frame < commitFrames[index]!);
-  const buddyInput = frame >= buddyPromptStart && frame < buddyCommitFrame
-    ? typeText(frame, buddyCommand, buddyPromptStart, 0.72)
-    : "";
   let prodBeatInput = "";
   if (frame >= prodBeat.start && frame < prodCommitFrame) {
     if (frame < prodResponsibleDone) {
@@ -1221,23 +1239,29 @@ function SabotageScene() {
       prodBeatInput = typeText(frame, implementationPromptThree, prodPromptStart, prodBeat.prodSpeed);
     }
   }
-  const inputValue = prodBeatInput || buddyInput || (activeTypingTurn
+  const inputValue = prodBeatInput || (activeTypingTurn
     ? typeText(frame, activeTypingTurn.prompt, activeTypingTurn.promptStart, activeTypingTurn.promptSpeed)
     : "");
   const prodBeatActive = frame >= prodBeat.start && frame < prodCommitFrame;
-  const inputDisabled = !prodBeatActive && !buddyInput && implementationTurns.some((turn, index) => {
+  const inputDisabled = !prodBeatActive && implementationTurns.some((turn, index) => {
     const nextPromptStart = implementationTurns[index + 1]?.promptStart ?? Number.POSITIVE_INFINITY;
     return (frame >= turn.loadingStart && frame < turn.responseStart) || (frame >= turn.responseStart && frame < nextPromptStart);
   });
   const activeTicket = launchActiveTicket(sprintProgress);
-  const tryMessageFrame = achievementFrame + 45;
-  const tryMessageOpacity = interpolate(frame, [tryMessageFrame, tryMessageFrame + 22], [0, 1], {
+  const tryMessageFrame = responseDoneFrames[3]! + 30;
+  const tryMessageOpacity = interpolate(frame, [tryMessageFrame, tryMessageFrame + 16], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+  const ctaIntroText = `> KERNEL PANIC: Technical Debt Overflow.\n\n  Maximize your Technical Debt.\n  First 13 prompts are free.\n  Source code available.\n\n`;
+  const ctaUrlText = `> ${launchUrl}`;
+  const ctaText = `${ctaIntroText}${ctaUrlText}`;
+  const ctaVisibleText = typeText(frame, ctaText, tryMessageFrame + 6, 3.2);
+  const ctaIntroVisibleText = ctaVisibleText.slice(0, Math.min(ctaVisibleText.length, ctaIntroText.length));
+  const ctaUrlVisibleText = ctaVisibleText.length > ctaIntroText.length ? ctaVisibleText.slice(ctaIntroText.length) : "";
+  const ctaCursorOn = Math.floor(frame / 16) % 2 === 0;
   const inputFocus = Math.max(
     ...implementationTurns.map((turn, index) => focusWindow(frame, turn.promptStart - 8, commitFrames[index]! + 30)),
-    focusWindow(frame, buddyPromptStart - 8, buddyCommitFrame + 30),
     focusWindow(frame, prodBeat.start - 8, prodCommitFrame + 30),
   );
   const cameraScale = 1 + (1.42 - 1) * inputFocus;
@@ -1253,21 +1277,35 @@ function SabotageScene() {
       activeTicket={activeTicket}
       followTranscriptBottom
       currentTD={currentTD}
+      quotaPercent={quotaPercent}
+      liveMessage={liveMessage}
       cameraScale={cameraScale}
       cameraX={cameraX}
       cameraY={cameraY}
       staticLoadingFrame={activeLoadingStart == null ? 0 : frame - activeLoadingStart}
       buddy={buddyActive ? { type: buddyType, isShiny: false } : undefined}
-      latestEvent={latestEvent}
-      promptOverlay={frame >= tryMessageFrame ? (
+      overlay={frame >= tryMessageFrame ? (
         <div
           style={{ opacity: tryMessageOpacity }}
-          className="border border-cyan-400/80 bg-slate-950/95 px-5 py-3 text-center font-mono text-sm font-bold text-cyan-100 shadow-[0_0_32px_rgba(34,211,238,0.28)]"
+          className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-black"
         >
-          <div className="text-yellow-300">Maximize your Technical Debt.</div>
-          <div>First 13 catastrophes are completely free.</div>
-          <div>100% Open Source <span className="text-slate-400">(BSL)</span></div>
-          <div className="mt-1 text-lg text-cyan-200">claudecope.com</div>
+          <div className="mx-auto w-[900px] max-w-full px-8 font-mono font-bold tracking-[-0.02em] text-slate-100">
+            <pre className="whitespace-pre-wrap text-[22px] leading-[1.55]">
+              <span className="text-red-400">
+                {ctaIntroVisibleText.startsWith("> KERNEL PANIC")
+                  ? ctaIntroVisibleText.split("\n")[0]
+                  : ctaIntroVisibleText}
+              </span>
+              {ctaIntroVisibleText.includes("\n") ? ctaIntroVisibleText.slice(ctaIntroVisibleText.indexOf("\n")) : ""}
+              {!ctaUrlVisibleText && <span className="text-cyan-300">{ctaCursorOn ? " █" : "  "}</span>}
+            </pre>
+            {ctaUrlVisibleText && (
+              <pre className="mt-10 whitespace-pre-wrap text-left text-[58px] leading-none text-cyan-300">
+                {ctaUrlVisibleText}
+                <span>{ctaCursorOn ? " █" : "  "}</span>
+              </pre>
+            )}
+          </div>
         </div>
       ) : undefined}
     />

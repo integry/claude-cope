@@ -6,11 +6,12 @@ type SlashMenuProps = {
   totalTechnicalDebt: number;
   paidUser: boolean;
   isExecutiveSupporter?: boolean;
+  hideLockedBadges?: boolean;
   previewScrollY?: number;
   onSelect: (cmd: string) => void;
 };
 
-function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecutiveSupporter = false, previewScrollY = 0, onSelect }: SlashMenuProps) {
+function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecutiveSupporter = false, hideLockedBadges = false, previewScrollY = 0, onSelect }: SlashMenuProps) {
   const items = getSlashMenuItems(query, totalTechnicalDebt, paidUser, isExecutiveSupporter);
   if (items.length === 0) return null;
 
@@ -51,7 +52,7 @@ function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecuti
                     <div className="flex items-center gap-2">
                       <span className={`whitespace-nowrap font-bold ${item.prefix === "ALL" ? "text-yellow-400" : "text-cyan-300"}`}>{item.prefix}</span>
                       <span className="truncate text-sm">{item.label}</span>
-                      {item.locked && <span className="shrink-0 text-[10px] font-bold tracking-[0.2em] text-amber-400">LOCKED</span>}
+                      {item.locked && !hideLockedBadges && <span className="shrink-0 text-[10px] font-bold tracking-[0.2em] text-amber-400">LOCKED</span>}
                     </div>
                     <div className="text-xs text-gray-500">{item.description}</div>
                   </div>
