@@ -95,6 +95,8 @@ export function buildTicketMessage(
   };
 }
 
+export type TicketPromptFetchResult = "offered" | "empty" | "error";
+
 /**
  * Fetches a random community ticket and displays it as an offer.
  * Only called if no active ticket exists.
@@ -102,16 +104,16 @@ export function buildTicketMessage(
 export async function fetchRandomTicketPrompt(
   setHistory: React.Dispatch<React.SetStateAction<Message[]>>,
   proKeyHash?: string,
-): Promise<void> {
+): Promise<TicketPromptFetchResult> {
   try {
     const res = await fetch(`${API_BASE}/api/tickets/community`, {
       headers: proKeyHash ? { "x-pro-key-hash": proKeyHash } : undefined,
     });
-    if (!res.ok) return;
+    if (!res.ok) return "error";
 
     const tickets = (await res.json()) as CommunityBacklogTicket[];
     const playableTickets = tickets.filter((ticket): ticket is PlayableBacklogTicket => !ticket.is_locked);
-    if (!playableTickets.length) return;
+    if (!playableTickets.length) return "empty";
 
     const ticket = playableTickets[Math.floor(Math.random() * playableTickets.length)]!;
     pendingTicketOffer = ticket;
@@ -120,7 +122,8 @@ export async function fetchRandomTicketPrompt(
       ...prev,
       buildTicketMessage(ticket, "offered"),
     ]);
+    return "offered";
   } catch {
-    // Network error — silently skip the prompt
+    return "error";
   }
 }

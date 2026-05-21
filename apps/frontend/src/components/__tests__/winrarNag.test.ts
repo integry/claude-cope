@@ -27,10 +27,11 @@ vi.mock("../../config", () => ({
 }));
 
 vi.mock("../../supabaseClient", () => ({ supabase: {} }));
-const { submitChatMessageMock, testConfig, fetchRandomTicketPromptMock, setMockGameStateRef, triggerQuotaLockoutMock } = vi.hoisted(() => ({
+const { submitChatMessageMock, testConfig, fetchRandomTicketPromptMock, mockGameStateRef, setMockGameStateRef, triggerQuotaLockoutMock } = vi.hoisted(() => ({
   submitChatMessageMock: vi.fn(),
   testConfig: { initialQuotaPercent: 0 },
   fetchRandomTicketPromptMock: vi.fn(),
+  mockGameStateRef: { current: null as null | Record<string, unknown> },
   setMockGameStateRef: { current: null as null | React.Dispatch<React.SetStateAction<Record<string, unknown>>> },
   triggerQuotaLockoutMock: vi.fn(),
 }));
@@ -115,6 +116,7 @@ vi.mock("../../hooks/useGameState", async () => {
         ...initialState,
         economy: { ...initialState.economy, quotaPercent: testConfig.initialQuotaPercent },
       }));
+      mockGameStateRef.current = state as unknown as Record<string, unknown>;
       const setChatHistory = React.useCallback((updater: React.SetStateAction<typeof initialState.chatHistory>) => {
         setState((prev) => ({
           ...prev,
@@ -489,7 +491,9 @@ describe("WinRAR nag: Terminal integration", () => {
     vi.setSystemTime(new Date("2026-05-10T00:00:00.000Z"));
     submitChatMessageMock.mockReset();
     fetchRandomTicketPromptMock.mockReset();
+    fetchRandomTicketPromptMock.mockResolvedValue("offered");
     triggerQuotaLockoutMock.mockReset();
+    mockGameStateRef.current = null;
     setMockGameStateRef.current = null;
     window.history.pushState(null, "", "/");
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
@@ -713,6 +717,69 @@ describe("WinRAR nag: Terminal integration", () => {
 
     expect(fetchRandomTicketPromptMock).toHaveBeenCalledTimes(1);
     expect(fetchRandomTicketPromptMock).toHaveBeenCalledWith(expect.any(Function), "pro-hash");
+  });
+
+  it("marks hasSeenTicketPrompt only after the startup offer is actually shown", async () => {
+    fetchRandomTicketPromptMock.mockResolvedValue("offered");
+
+    await renderTerminal();
+    expect(mockGameStateRef.current?.hasSeenTicketPrompt).toBe(false);
+
+    await act(async () => {
+      vi.advanceTimersByTime(STARTUP_TICKET_PROMPT_DELAY_MS);
+      await Promise.resolve();
+    });
+
+    expect(fetchRandomTicketPromptMock).toHaveBeenCalledTimes(1);
+    expect(mockGameStateRef.current?.hasSeenTicketPrompt).toBe(true);
+  });
+
+  it("marks hasSeenTicketPrompt when the backend definitively returns no playable tickets", async () => {
+    fetchRandomTicketPromptMock.mockResolvedValue("empty");
+
+    await renderTerminal();
+
+    await act(async () => {
+      vi.advanceTimersByTime(STARTUP_TICKET_PROMPT_DELAY_MS);
+      await Promise.resolve();
+    });
+
+    expect(fetchRandomTicketPromptMock).toHaveBeenCalledTimes(1);
+    expect(mockGameStateRef.current?.hasSeenTicketPrompt).toBe(true);
+
+    await act(async () => {
+      vi.advanceTimersByTime(STARTUP_TICKET_PROMPT_DELAY_MS * 2);
+      await Promise.resolve();
+    });
+
+    expect(fetchRandomTicketPromptMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries startup prompt fetch failures without burning the one-time prompt flag", async () => {
+    fetchRandomTicketPromptMock.mockResolvedValueOnce("error").mockResolvedValue("offered");
+
+    await renderTerminal();
+
+    await act(async () => {
+      vi.advanceTimersByTime(STARTUP_TICKET_PROMPT_DELAY_MS);
+      await Promise.resolve();
+    });
+
+    expect(fetchRandomTicketPromptMock).toHaveBeenCalledTimes(1);
+    expect(mockGameStateRef.current?.hasSeenTicketPrompt).toBe(false);
+
+    await act(async () => {
+      setMockGameStateRef.current?.((prev: Record<string, unknown>) => ({ ...prev, username: "RetryUser" }));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(STARTUP_TICKET_PROMPT_DELAY_MS);
+      await Promise.resolve();
+    });
+
+    expect(fetchRandomTicketPromptMock).toHaveBeenCalledTimes(2);
+    expect(mockGameStateRef.current?.hasSeenTicketPrompt).toBe(true);
   });
 
   it("disables terminal input while the upgrade overlay is open", async () => {

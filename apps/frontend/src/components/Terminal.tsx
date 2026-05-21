@@ -83,6 +83,7 @@ function Terminal() {
   syncMessageKeys(messageKeys.current, nextKeyId, history, messageKeyMap.current);
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
   const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startupTicketPromptInFlightRef = useRef(false);
   const historyRef = useRef(history);
   historyRef.current = history;
   const hasScrolledTerminalToBottomOnLoadRef = useRef(false);
@@ -146,9 +147,42 @@ function Terminal() {
     ds.cancelled = true;
     if (ds.timeoutId) clearTimeout(ds.timeoutId);
   }, []);
-  useEffect(() => () => {
-    if (startupTicketPromptTimeoutRef.current) clearTimeout(startupTicketPromptTimeoutRef.current);
+  const clearStartupTicketPromptTimeout = useCallback(() => {
+    if (!startupTicketPromptTimeoutRef.current) return;
+    clearTimeout(startupTicketPromptTimeoutRef.current);
+    startupTicketPromptTimeoutRef.current = null;
   }, []);
+  const runStartupTicketPromptAttempt = useCallback(async () => {
+    startupTicketPromptTimeoutRef.current = null;
+    const currentState = getCurrentState();
+    if (currentState.hasSeenTicketPrompt || currentState.activeTicket) return;
+
+    startupTicketPromptInFlightRef.current = true;
+    const result = await fetchRandomTicketPrompt(setHistory, currentState.proKeyHash);
+    startupTicketPromptInFlightRef.current = false;
+
+    const latestState = getCurrentState();
+    if (latestState.hasSeenTicketPrompt || latestState.activeTicket) return;
+
+    if (result === "offered" || result === "empty") {
+      setState((prev) => (prev.hasSeenTicketPrompt || prev.activeTicket ? prev : { ...prev, hasSeenTicketPrompt: true }));
+      return;
+    }
+
+    if (startupTicketPromptTimeoutRef.current || startupTicketPromptInFlightRef.current) return;
+    startupTicketPromptTimeoutRef.current = setTimeout(() => {
+      void runStartupTicketPromptAttempt();
+    }, STARTUP_TICKET_PROMPT_DELAY_MS);
+  }, [getCurrentState, setHistory, setState]);
+  const scheduleStartupTicketPromptAttempt = useCallback(() => {
+    if (startupTicketPromptTimeoutRef.current || startupTicketPromptInFlightRef.current) return;
+    startupTicketPromptTimeoutRef.current = setTimeout(() => {
+      void runStartupTicketPromptAttempt();
+    }, STARTUP_TICKET_PROMPT_DELAY_MS);
+  }, [runStartupTicketPromptAttempt]);
+  useEffect(() => () => {
+    clearStartupTicketPromptTimeout();
+  }, [clearStartupTicketPromptTimeout]);
   const scheduleHistoryCommitCallback = useHistoryCommitQueue(history.length);
   const setPersistedSuggestedReply = useCallback((nextSuggestedReply: string | null) => {
     setState((prev) => prev.suggestedReply === nextSuggestedReply ? prev : { ...prev, suggestedReply: nextSuggestedReply });
@@ -312,21 +346,13 @@ function Terminal() {
     if (!isMobileViewport && !isProcessing && !isBooting && !anyOverlayOpen) inputRef.current?.focus();
   }, [isMobileViewport, isProcessing, isBooting, anyOverlayOpen]);
   useEffect(() => {
-    if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) return;
-    startupTicketPromptTimeoutRef.current = setTimeout(() => {
-      startupTicketPromptTimeoutRef.current = null;
-      const currentState = getCurrentState();
-      if (currentState.hasSeenTicketPrompt || currentState.activeTicket) return;
-      setState((prev) => (prev.hasSeenTicketPrompt || prev.activeTicket ? prev : { ...prev, hasSeenTicketPrompt: true }));
-      void fetchRandomTicketPrompt(setHistory, currentState.proKeyHash);
-    }, STARTUP_TICKET_PROMPT_DELAY_MS);
-    return () => {
-      if (startupTicketPromptTimeoutRef.current) {
-        clearTimeout(startupTicketPromptTimeoutRef.current);
-        startupTicketPromptTimeoutRef.current = null;
-      }
-    };
-  }, [getCurrentState, isBooting, state.hasSeenTicketPrompt, state.activeTicket, state.proKeyHash, setState, setHistory]);
+    if (isBooting || state.hasSeenTicketPrompt || state.activeTicket) {
+      clearStartupTicketPromptTimeout();
+      return;
+    }
+    scheduleStartupTicketPromptAttempt();
+    return clearStartupTicketPromptTimeout;
+  }, [clearStartupTicketPromptTimeout, isBooting, scheduleStartupTicketPromptAttempt, state.hasSeenTicketPrompt, state.activeTicket, state.proKeyHash]);
   const handleQuotaLockout = useCallback((command?: string) => {
     if (!state.proKey && !state.proKeyHash) {
       nagArmedFromQuotaRef.current = true;
