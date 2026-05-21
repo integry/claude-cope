@@ -199,7 +199,7 @@ describe("filterChatHistory", () => {
     ]);
   });
 
-  it("does not reset context for a structured claimed ticket without an explicit boundary marker", () => {
+  it("resets context for a structured claimed ticket without an explicit boundary marker", () => {
     const history: Message[] = [
       msg("user", "keep earlier same-ticket context"),
       msg("system", "still on the same investigation"),
@@ -223,8 +223,6 @@ describe("filterChatHistory", () => {
     ];
 
     expect(filterChatHistory(history)).toEqual([
-      { role: "user", content: "keep earlier same-ticket context" },
-      { role: "assistant", content: "still on the same investigation" },
       { role: "user", content: "continue from the reconnect path" },
       { role: "assistant", content: "Check whether the same worker owns the websocket." },
     ]);

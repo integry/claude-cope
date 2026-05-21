@@ -85,13 +85,26 @@ export type Message = {
   ticketDisplay?: TicketDisplayData;
 };
 
+export function isStructuredClaimedTicketMessage(
+  message: Pick<Message, "role" | "ticketDisplay">,
+): boolean {
+  return message.role === "system" && message.ticketDisplay?.status === "claimed";
+}
+
 // Backlog messages persist their structured payload so the responsive renderer
 // survives reloads; this hook exists as the single normalization point if that changes.
 export function normalizePersistedMessage(message: Message): Message {
-  if (message.displayType === "tip" && !getTipRenderData(message).isTip) {
-    return { ...message, displayType: undefined };
+  let normalized = message;
+
+  if (normalized.displayType === "tip" && !getTipRenderData(normalized).isTip) {
+    normalized = { ...normalized, displayType: undefined };
   }
-  return message;
+
+  if (isStructuredClaimedTicketMessage(normalized) && normalized.contextBoundary !== "ticket-claim") {
+    normalized = { ...normalized, contextBoundary: "ticket-claim" };
+  }
+
+  return normalized;
 }
 
 function normalizePersistedChatHistory(chatHistory: Message[]): Message[] {
