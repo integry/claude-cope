@@ -1448,10 +1448,14 @@ describe("POST /api/account/checkout-license", () => {
       globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
         const u = typeof input === "string" ? input : input.toString();
         if (u.includes("/v1/customer-portal/orders/")) {
-          return new Response(JSON.stringify({ items: [{ paid: true, checkout_id: "co_from_token", product: { name: "Executive Supporter - 5 Licenses" } }] }));
+          return new Response(JSON.stringify({ items: [{ paid: true, checkout_id: "co_from_token" }] }));
         }
         if (u.includes("/v1/license-keys/")) {
-          return new Response(JSON.stringify({ items: [{ key: "COPE-FROM-TOKEN", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
+          return new Response(JSON.stringify({ items: ["T1", "T2", "T3", "T4", "T5"].map((key, index) => ({
+            key: `COPE-${key}`,
+            created_at: `2026-01-02T00:00:0${index + 1}Z`,
+            status: "granted",
+          })) }));
         }
         if (u.includes("/v1/checkouts/?")) {
           return new Response(JSON.stringify({ items: [] }));
@@ -1472,9 +1476,11 @@ describe("POST /api/account/checkout-license", () => {
       }, "s");
 
       expect(res.status).toBe(200);
-      expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-FROM-TOKEN"]);
+      expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-T1", "COPE-T2", "COPE-T3", "COPE-T4", "COPE-T5"]);
       const checkoutClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_claims"));
-      expect(checkoutClaimInsert?.bindings).toEqual(["co_from_token", "s", T, 1]);
+      expect(checkoutClaimInsert?.bindings).toEqual(["co_from_token", "s", T, 0]);
+      const checkoutClaimUpdate = calls.find((call) => call.sql.includes("UPDATE checkout_claims SET is_executive_supporter = 1"));
+      expect(checkoutClaimUpdate?.bindings).toEqual(["co_from_token", "s"]);
       const keyClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"));
       expect(keyClaimInsert?.bindings[1]).toBe(1);
     });

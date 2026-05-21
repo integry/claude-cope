@@ -29,6 +29,7 @@ type Env = {
 };
 const SHILL_CREDIT = 5;
 const CHECKOUT_REFERENCE_TTL_SECONDS = 24 * 60 * 60;
+const EXECUTIVE_SUPPORTER_LICENSE_COUNT = 5;
 
 const account = new Hono<Env>();
 
@@ -86,6 +87,10 @@ async function resolveCheckoutRequestId(
 
 function respondWithClaimedKeys(c: { json: (data: unknown, status?: number) => Response }, keys: string[]) {
   return c.json({ licenseKey: keys[0], allKeys: keys });
+}
+
+function isExecutiveSupporterLicenseSet(keys: string[]) {
+  return keys.length >= EXECUTIVE_SUPPORTER_LICENSE_COUNT;
 }
 
 async function cacheClaimedKeys(kv: KVNamespace | undefined, checkoutId: string, sessionId: string, keys: string[]) {
@@ -268,11 +273,15 @@ async function redeemCheckoutLicense(
   if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
   const lkResult = await fetchLicenseKeys(customerId, organizationId, accessToken, { createdAt: checkoutCreatedAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
+  const shouldClaimExecutiveSupporter = isExecutiveSupporter || isExecutiveSupporterLicenseSet(lkResult.keys);
+  if (shouldClaimExecutiveSupporter && !isExecutiveSupporter) {
+    await db.prepare("UPDATE checkout_claims SET is_executive_supporter = 1 WHERE checkout_id = ? AND session_id = ?").bind(checkoutId, sessionId).run().catch(() => undefined);
+  }
   const claimedKeys = await claimLicenseKeysForCheckout(db, {
     checkoutId,
     keys: lkResult.keys,
     secret: claimSecret,
-    executiveSupporterLicenseKey: isExecutiveSupporter ? lkResult.keys[0] : undefined,
+    executiveSupporterLicenseKey: shouldClaimExecutiveSupporter ? lkResult.keys[0] : undefined,
   });
   if (!claimedKeys.ok) return mapClaimedKeysError(c, claimedKeys.error);
   return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: claimedKeys.keys });
