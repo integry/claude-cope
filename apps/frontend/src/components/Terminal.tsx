@@ -74,6 +74,7 @@ function Terminal() {
   const pingAcknowledged = usePingAcknowledged(pendingReviewPing);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
+  const scrollContentRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialHistoryLen = useRef(history.length);
@@ -86,6 +87,7 @@ function Terminal() {
   const historyRef = useRef(history);
   historyRef.current = history;
   const hasScrolledTerminalToBottomOnLoadRef = useRef(false);
+  const lastDesktopScrollContentHeightRef = useRef(0);
   const wasMobileRequestProcessingRef = useRef(false);
   const activeMobilePromptKeyRef = useRef<number | null>(null);
   const mobilePromptFollowFrameRef = useRef<number | null>(null);
@@ -301,6 +303,32 @@ function Terminal() {
     mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
   }, [history, isMobileViewport, isProcessing, resolveScrollViewport, stopMobilePromptFollowLoop]);
   useEffect(() => {
+    const scrollContent = scrollContentRef.current;
+    if (isMobileViewport || !scrollContent || typeof ResizeObserver === "undefined") {
+      lastDesktopScrollContentHeightRef.current = 0;
+      return;
+    }
+
+    const measureHeight = () =>
+      scrollContent.getBoundingClientRect().height
+      || scrollContent.scrollHeight
+      || scrollContent.offsetHeight
+      || 0;
+
+    lastDesktopScrollContentHeightRef.current = measureHeight();
+
+    const observer = new ResizeObserver(() => {
+      const nextHeight = measureHeight();
+      if (nextHeight > lastDesktopScrollContentHeightRef.current) {
+        scrollTerminalToBottom();
+      }
+      lastDesktopScrollContentHeightRef.current = nextHeight;
+    });
+
+    observer.observe(scrollContent);
+    return () => observer.disconnect();
+  }, [isMobileViewport, scrollTerminalToBottom]);
+  useEffect(() => {
     const onPopState = () => {
       if (pendingNagCommandRef.current !== null) return void setShowUpgrade(true);
       setShowUpgrade(window.location.pathname === "/upgrade");
@@ -515,7 +543,7 @@ function Terminal() {
       activeTheme={state.activeTheme} regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} isMobileViewport={isMobileViewport} inputRef={inputRef} closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
       onlineCount={onlineCount} rank={rank} state={state} handleHomeClick={handleHomeClick} handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue}
       setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect} isBooting={isBooting} history={history}
-      messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} scrollViewportRef={scrollViewportRef} bottomRef={bottomRef}
+      messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} scrollViewportRef={scrollViewportRef} scrollContentRef={scrollContentRef} bottomRef={bottomRef}
       slashQuery={slashQuery} slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect} runSlashCommand={runSlashCommand} inputValue={inputValue} suggestedReply={suggestedReply} acceptSuggestedReply={acceptSuggestedReply}
       isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown} handleSubmit={handleEnterSubmit} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme}
       showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy}

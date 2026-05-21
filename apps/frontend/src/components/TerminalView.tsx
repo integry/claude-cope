@@ -55,6 +55,7 @@ type TerminalViewProps = OverlayVisibility & {
     action: SlashCommandAction,
   ) => void;
   scrollViewportRef?: RefObject<HTMLDivElement | null>;
+  scrollContentRef?: RefObject<HTMLDivElement | null>;
   bottomRef: RefObject<HTMLDivElement | null>;
   slashQuery: string;
   slashIndex: number;
@@ -199,6 +200,7 @@ export function TerminalView({
   promptString,
   handleSlashCommandClick,
   scrollViewportRef,
+  scrollContentRef,
   bottomRef,
   slashQuery,
   slashIndex,
@@ -340,17 +342,19 @@ export function TerminalView({
         data-terminal-scroll-viewport="true"
         className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}
       >
-        {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
-        <MessageList
-          history={history}
-          messageKeys={messageKeys}
-          initialHistoryLen={initialHistoryLen}
-          promptString={promptString}
-          activeTicketId={state.activeTicket?.id}
-          username={state.username}
-          onSlashCommand={handleSlashCommandClick}
-        />
-        <div ref={bottomRef} />
+        <div ref={scrollContentRef} data-terminal-scroll-content="true">
+          {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
+          <MessageList
+            history={history}
+            messageKeys={messageKeys}
+            initialHistoryLen={initialHistoryLen}
+            promptString={promptString}
+            activeTicketId={state.activeTicket?.id}
+            username={state.username}
+            onSlashCommand={handleSlashCommandClick}
+          />
+          <div ref={bottomRef} />
+        </div>
       </div>
       <div
         ref={bottomChromeRef}
