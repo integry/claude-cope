@@ -262,6 +262,7 @@ function hasValidAuthoritativeProfileFloor(state: GameState): boolean {
   );
 }
 
+// eslint-disable-next-line complexity -- storage migration intentionally validates each persisted field independently.
 function applyDefensiveDefaults(state: GameState): void {
   if (!Array.isArray(state.upgrades)) {
     state.upgrades = [];
