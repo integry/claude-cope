@@ -302,15 +302,17 @@ function renderOverlays(overrides: Record<string, unknown> = {}) {
   const props = makeOverlayProps(overrides);
   container = document.createElement("div");
   document.body.appendChild(container);
-  root = createRoot(container);
+  const mountedRoot = createRoot(container);
+  root = mountedRoot;
   act(() => {
-    root.render(createElement(TerminalOverlays, props as Parameters<typeof TerminalOverlays>[0]));
+    mountedRoot.render(createElement(TerminalOverlays, props as Parameters<typeof TerminalOverlays>[0]));
   });
   return { container, props };
 }
 
 function cleanup() {
-  if (root) act(() => root.unmount());
+  const mountedRoot = root;
+  if (mountedRoot) act(() => mountedRoot.unmount());
   if (container && container.parentNode) container.parentNode.removeChild(container);
   root = null;
 }
@@ -326,9 +328,10 @@ function createDeferred<T>() {
 async function renderTerminal() {
   container = document.createElement("div");
   document.body.appendChild(container);
-  root = createRoot(container);
+  const mountedRoot = createRoot(container);
+  root = mountedRoot;
   await act(async () => {
-    root.render(createElement(Terminal));
+    mountedRoot.render(createElement(Terminal));
   });
   return { container };
 }
