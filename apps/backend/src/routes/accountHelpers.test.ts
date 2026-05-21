@@ -872,13 +872,14 @@ describe("fetchCheckoutIdFromCustomerSession", () => {
       return new Response(JSON.stringify({
         items: [
           { paid: false, checkout_id: "co_pending" },
-          { paid: true, checkout_id: "co_paid" },
+          { paid: true, checkout_id: "co_paid", product: { name: "Executive Supporter - 5 Licenses" } },
         ],
       }));
     }) as typeof fetch;
 
     await expect(fetchCheckoutIdFromCustomerSession("polar_cst_test", "org")).resolves.toEqual({
       checkoutId: "co_paid",
+      isExecutiveSupporter: true,
     });
   });
 

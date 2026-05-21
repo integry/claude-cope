@@ -74,14 +74,14 @@ async function validateCheckoutRequest(c: { req: { json: <T>() => Promise<T> }; 
 async function resolveCheckoutRequestId(
   c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
   request: { checkoutId?: string; customerSessionToken?: string },
-): Promise<{ checkoutId: string } | { response: Response }> {
+): Promise<{ checkoutId: string; isExecutiveSupporterHint?: boolean } | { response: Response }> {
   if (request.checkoutId) return { checkoutId: request.checkoutId };
 
   const organizationId = c.env?.POLAR_ORGANIZATION_ID;
   if (!organizationId) return { response: c.json({ error: "Polar integration is not configured" }, 500) };
   const result = await fetchCheckoutIdFromCustomerSession(request.customerSessionToken!, organizationId);
   if ("error" in result) return { response: c.json({ error: result.error }, result.status) };
-  return { checkoutId: result.checkoutId };
+  return { checkoutId: result.checkoutId, isExecutiveSupporterHint: result.isExecutiveSupporter };
 }
 
 function respondWithClaimedKeys(c: { json: (data: unknown, status?: number) => Response }, keys: string[]) {
@@ -208,7 +208,7 @@ function mapClaimedKeysError(
 
 async function resolveCheckoutRedemptionContext(
   c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
-  deps: { checkoutId: string; sessionId: string; kv?: KVNamespace; allowMissingReferenceBinding?: boolean },
+  deps: { checkoutId: string; sessionId: string; kv?: KVNamespace; allowMissingReferenceBinding?: boolean; isExecutiveSupporterHint?: boolean },
 ): Promise<
   | { customerId: string; checkoutCreatedAt: string; isExecutiveSupporter: boolean }
   | { response: Response }
@@ -240,13 +240,13 @@ async function resolveCheckoutRedemptionContext(
   return {
     customerId: result.customerId,
     checkoutCreatedAt: result.createdAt,
-    isExecutiveSupporter: result.isExecutiveSupporter,
+    isExecutiveSupporter: result.isExecutiveSupporter || Boolean(deps.isExecutiveSupporterHint),
   };
 }
 
 async function redeemCheckoutLicense(
   c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
-  deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string; allowMissingReferenceBinding?: boolean },
+  deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string; allowMissingReferenceBinding?: boolean; isExecutiveSupporterHint?: boolean },
 ) {
   const { db, kv, checkoutId, sessionId, claimSecret } = deps;
   const redemptionContext = await resolveCheckoutRedemptionContext(c, deps);
@@ -611,6 +611,7 @@ account.post("/checkout-license", async (c) => {
     checkoutId,
     sessionId,
     claimSecret,
+    isExecutiveSupporterHint: resolvedCheckout.isExecutiveSupporterHint,
     allowMissingReferenceBinding: resolvedClaim.allowMissingReferenceBinding,
   });
 });

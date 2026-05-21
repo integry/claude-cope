@@ -1448,7 +1448,7 @@ describe("POST /api/account/checkout-license", () => {
       globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
         const u = typeof input === "string" ? input : input.toString();
         if (u.includes("/v1/customer-portal/orders/")) {
-          return new Response(JSON.stringify({ items: [{ paid: true, checkout_id: "co_from_token" }] }));
+          return new Response(JSON.stringify({ items: [{ paid: true, checkout_id: "co_from_token", product: { name: "Executive Supporter - 5 Licenses" } }] }));
         }
         if (u.includes("/v1/license-keys/")) {
           return new Response(JSON.stringify({ items: [{ key: "COPE-FROM-TOKEN", created_at: "2026-01-02T00:00:05Z", status: "granted" }] }));
@@ -1462,16 +1462,21 @@ describe("POST /api/account/checkout-license", () => {
         return origFetch(input as RequestInfo, undefined);
       }) as typeof fetch;
 
+      const { db, calls } = createMockDB({ runChanges: 1 });
       const res = await postWithSession("/api/account/checkout-license", { customerSessionToken: "polar_cst_return_1234567890" }, {
         CHECKOUT_CLAIM_SECRET: CLAIM_SECRET,
         POLAR_ACCESS_TOKEN: "tok",
         POLAR_ORGANIZATION_ID: "org",
         QUOTA_KV: mockKV({}),
-        DB: createMockDB({ runChanges: 1 }).db,
+        DB: db,
       }, "s");
 
       expect(res.status).toBe(200);
       expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-FROM-TOKEN"]);
+      const checkoutClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_claims"));
+      expect(checkoutClaimInsert?.bindings).toEqual(["co_from_token", "s", T, 1]);
+      const keyClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"));
+      expect(keyClaimInsert?.bindings[1]).toBe(1);
     });
     it("returns multiple keys for team-pack", async () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: ["T1", "T2", "T3"].map((k, i) => ({ key: `COPE-${k}`, created_at: `2026-01-02T00:00:0${i + 1}Z`, status: "granted" })) });

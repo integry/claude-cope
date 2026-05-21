@@ -33,9 +33,16 @@ export type PolarCheckout = {
   customer?: { id?: string };
   created_at?: string;
   metadata?: Record<string, unknown>;
+  product?: { name?: string; slug?: string; metadata?: Record<string, unknown> };
 };
 export type PolarLicenseKeyItem = { key: string; created_at: string; status: string };
-type PolarCustomerOrder = { paid?: boolean; status?: string; checkout_id?: string | null; created_at?: string };
+type PolarCustomerOrder = {
+  paid?: boolean;
+  status?: string;
+  checkout_id?: string | null;
+  created_at?: string;
+  product?: { name?: string; slug?: string; metadata?: Record<string, unknown> };
+};
 export type CheckoutCache = { keys: string[]; sessionId: string };
 
 const MAX_KEY_MINT_WINDOW_MS = 15 * 60 * 1000;
@@ -296,6 +303,13 @@ function isExecutiveSupporterCheckout(metadata: Record<string, unknown> | undefi
   }
 
   return false;
+}
+
+function isExecutiveSupporterProduct(product: { name?: string; slug?: string; metadata?: Record<string, unknown> } | undefined): boolean {
+  if (!product) return false;
+  return isExecutiveSupporterCheckout(product.metadata)
+    || normalizeMetadataIdentifier(product.slug) === "executive-supporter"
+    || metadataMatchesExecutiveSupporter(product.name);
 }
 
 function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
@@ -1041,14 +1055,14 @@ export async function fetchCheckoutCustomerId(
     customerId,
     createdAt: checkout.created_at,
     referenceId,
-    isExecutiveSupporter: isExecutiveSupporterCheckout(checkout.metadata),
+    isExecutiveSupporter: isExecutiveSupporterCheckout(checkout.metadata) || isExecutiveSupporterProduct(checkout.product),
   };
 }
 
 export async function fetchCheckoutIdFromCustomerSession(
   customerSessionToken: string,
   organizationId: string,
-): Promise<{ checkoutId: string } | { error: string; status: ContentfulStatusCode }> {
+): Promise<{ checkoutId: string; isExecutiveSupporter: boolean } | { error: string; status: ContentfulStatusCode }> {
   let resp: Response;
   try {
     const params = new URLSearchParams({
@@ -1076,7 +1090,7 @@ export async function fetchCheckoutIdFromCustomerSession(
   if (!order?.checkout_id) {
     return { error: "No paid checkout found for this customer session yet — try again in a few seconds", status: 409 };
   }
-  return { checkoutId: order.checkout_id };
+  return { checkoutId: order.checkout_id, isExecutiveSupporter: isExecutiveSupporterProduct(order.product) };
 }
 
 export async function fetchNextCheckoutCreatedAt(customerId: string, organizationId: string, accessToken: string, opts: { checkoutId: string; checkoutCreatedAt: string }): Promise<{ createdAt: string | null } | { error: string; status: ContentfulStatusCode }> {
