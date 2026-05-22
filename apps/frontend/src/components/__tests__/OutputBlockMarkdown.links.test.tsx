@@ -70,4 +70,28 @@ describe("OutputBlock markdown links", () => {
       .find((element) => element.textContent === "✓ EXECUTIVE MAX ACTIVATED");
     expect(tag?.className).toContain("text-amber-300");
   });
+
+  it("renders custom terminal tags instead of printing the brackets verbatim", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <OutputBlock
+          message={{ role: "system", content: "[SUCCESS] Ticket created. [EXIT] Boredom level: 9000." }}
+          promptString=">"
+          username=""
+        />,
+      );
+    });
+
+    const successTag = Array.from(container.querySelectorAll("span"))
+      .find((element) => element.textContent === "SUCCESS");
+    const exitTag = Array.from(container.querySelectorAll("span"))
+      .find((element) => element.textContent === "EXIT");
+    expect(successTag?.className).toContain("text-green-400");
+    expect(exitTag?.className).toContain("text-blue-400");
+    expect(container.textContent).not.toContain("[EXIT]");
+  });
 });

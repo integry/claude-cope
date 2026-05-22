@@ -15,6 +15,9 @@ const TAG_STYLES: Record<TagCategory, string> = {
 };
 
 const TAG_MARKER_REGEX = /^__TAG_(ERROR|WARN|SUCCESS|INFO|EXECUTIVE)__:(.+)$/;
+const TERMINAL_TAG_LABEL_PATTERN = String.raw`(?:[A-Z][A-Z0-9 _./-]{1,40}|[⚙️⚠️❌✓✅🔥💀🚨][^\]]{0,48})`;
+const TERMINAL_TAG_REGEX = new RegExp(String.raw`\[(?:${TERMINAL_TAG_LABEL_PATTERN})(?::[^\]]*)?\]`, "g");
+const TERMINAL_TAG_BOUNDARY_REGEX = new RegExp(String.raw`([^\n])\s+(${TERMINAL_TAG_REGEX.source})`, "g");
 
 function isExternalHref(href?: string): boolean {
   return typeof href === "string" && /^(https?:)?\/\//i.test(href);
@@ -46,8 +49,8 @@ export function cleanLLMOutput(content: string): string {
   cleaned = cleaned.replace(fenceRegex, "$1");
   cleaned = cleaned.replace(/([^\n])\s+([1-9]\uFE0F?\u20E3)\s+/g, "$1\n\n\u2003$2 ");
   cleaned = stripOrphanEmphasisMarkers(cleaned);
-  cleaned = cleaned.replace(/\n(\[(?:WARN|ERROR|SUCCESS|INFO|FATAL|CRITICAL|DEBUG|DONE|PROGRESS|RESULT|⚙️|⚠️|❌|✓|✅|🔥|💀|🚨|SIGSEGV)[^\]]*\])/g, "\n\n$1");
-  cleaned = cleaned.replace(/([^\n])(\[(?:WARN|ERROR|SUCCESS|INFO|FATAL|CRITICAL|DEBUG|DONE|PROGRESS|RESULT|⚙️|⚠️|❌|✓|✅|🔥|💀|🚨|SIGSEGV)[^\]]*\])/g, "$1\n\n$2");
+  cleaned = cleaned.replace(new RegExp(String.raw`\n(${TERMINAL_TAG_REGEX.source})`, "g"), "\n\n$1");
+  cleaned = cleaned.replace(TERMINAL_TAG_BOUNDARY_REGEX, "$1\n\n$2");
   return cleaned;
 }
 
