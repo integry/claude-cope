@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import type { ChangeEvent, Dispatch, KeyboardEvent as ReactKeyboardEvent, RefObject, SetStateAction } from "react";
 import { useRef } from "react";
 import CommandLine from "./CommandLine";
