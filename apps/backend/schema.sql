@@ -120,6 +120,15 @@ CREATE TABLE IF NOT EXISTS licenses (
 CREATE INDEX IF NOT EXISTS idx_licenses_status
     ON licenses (status);
 
+-- Secondary license keys that have been spent into an existing account for
+-- extra credits. The account keeps its primary license_hash in user_scores.
+CREATE TABLE IF NOT EXISTS license_account_links (
+    key_hash TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    credited_to_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Idempotency table for webhook processing — prevents concurrent retries
 -- from both executing side effects via a UNIQUE constraint on webhook_id.
 CREATE TABLE IF NOT EXISTS processed_webhooks (

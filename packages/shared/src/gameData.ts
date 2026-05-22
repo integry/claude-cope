@@ -236,24 +236,26 @@ export const FREE_TIER_RANK_CAP = CORPORATE_RANKS[0]!.title;
 
 export const ALIAS_CHANGES_PER_DAY = 3;
 
-export const PROMOTE_ACCESS_DENIED_MESSAGE = "[HR ERROR] You have not accumulated enough leverage or spent enough fiat currency to earn a promotion. Run /upgrade to buy your way up the ladder.";
+export const PROMOTE_ACCESS_DENIED_MESSAGE = "[HR ERROR] Only Executive Supporters get to use /promote. Run /upgrade to buy your way into the vanity org chart.";
 
 export type SupporterVanityTitle = {
   id: string;
   title: string;
+  profile: string;
 };
 
-function toVanityTitleId(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-export const SUPPORTER_VANITY_TITLES: SupporterVanityTitle[] = CORPORATE_RANKS.map((rank) => ({
-  id: toVanityTitleId(rank.title),
-  title: rank.title,
-}));
+export const SUPPORTER_VANITY_TITLES: SupporterVanityTitle[] = [
+  { id: "10x", title: "10x Rockstar Ninja", profile: "Leaves a trail of unmaintainable genius. Quits after 6 months." },
+  { id: "crypto", title: "Web3 Degen", profile: "Still waiting for Ethereum to solve supply chain logistics." },
+  { id: "vibe", title: "Vibe Coder", profile: "Doesn't write code. Just prompts LLMs and trusts the universe." },
+  { id: "thought", title: "LinkedIn Thought Leader", profile: "Extracts 5 paragraphs of leadership advice from a delayed flight." },
+  { id: "growth", title: "Growth Hacker", profile: "Will ruin the entire UX just to get a 0.02% bump in conversions." },
+  { id: "stealth", title: "Founder in Stealth", profile: "Building something \"disruptive.\" It's just a ChatGPT wrapper." },
+  { id: "evangelist", title: "Developer Evangelist", profile: "Hasn't pushed to production since 2019. Has great stickers." },
+  { id: "prompt", title: "Head of Prompt Engineering", profile: "Actually believes typing in English is computer science." },
+  { id: "maverick", title: "Agile Maverick", profile: "Will hold your hotfix hostage until you assign it story points." },
+  { id: "paradigm", title: "Chief Paradigm Officer", profile: "Has not fixed the bug, but has aligned the roadmap around it." },
+];
 
 export const PRO_GATED_COMMANDS: ReadonlySet<string> = new Set([
   "/brrrrrr",
@@ -267,7 +269,11 @@ export const THEMES: Theme[] = [
   { id: "amber", name: "Amber", cost: 5000 },
   { id: "matrix", name: "Matrix", cost: 10000 },
   { id: "light", name: "Light", cost: 25000 },
+  { id: "corporate-beige", name: "Corporate Beige", cost: 40000 },
+  { id: "syntax-error", name: "Syntax Error", cost: 50000 },
 ];
+
+export const EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS = ["amber", "syntax-error"] as const;
 
 /** Geometric series sum: total cost to buy `amount` generators starting at `owned`. */
 export function calcBulkCost(baseCost: number, owned: number, amount: number): number {

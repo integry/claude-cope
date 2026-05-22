@@ -130,6 +130,8 @@ export interface EconomyState {
   totalTDEarned: number;
   currentRank: string;
   quotaPercent: number;
+  quotaRemaining?: number;
+  quotaTotal?: number;
   quotaLockouts: number;
   tdMultiplier: number;
 }
@@ -276,6 +278,21 @@ function hasValidAuthoritativeProfileFloor(state: GameState): boolean {
   );
 }
 
+function applyPresentationDefaults(state: GameState): void {
+  if (!state.activeTheme) {
+    state.activeTheme = "default";
+  }
+  if (state.soundEnabled === undefined) {
+    state.soundEnabled = true;
+  }
+  if (state.isExecutiveSupporter === undefined) {
+    state.isExecutiveSupporter = false;
+  }
+  if (state.displayRank === undefined) {
+    state.displayRank = null;
+  }
+}
+
 function applyCollectionDefaults(state: GameState): void {
   if (!Array.isArray(state.upgrades)) {
     state.upgrades = [];
@@ -324,18 +341,7 @@ function applyScalarDefaults(state: GameState): void {
   if (state.hasSeenTicketPrompt === undefined) {
     state.hasSeenTicketPrompt = false;
   }
-  if (!state.activeTheme) {
-    state.activeTheme = "default";
-  }
-  if (state.soundEnabled === undefined) {
-    state.soundEnabled = true;
-  }
-  if (state.isExecutiveSupporter === undefined) {
-    state.isExecutiveSupporter = false;
-  }
-  if (state.displayRank === undefined) {
-    state.displayRank = null;
-  }
+  applyPresentationDefaults(state);
 }
 
 function applyDefensiveDefaults(state: GameState): void {
