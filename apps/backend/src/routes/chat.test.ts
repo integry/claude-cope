@@ -22,7 +22,7 @@ import {
   normalizeReplyContent,
   rewriteTutorialLeakIfNeeded,
 } from "./chat";
-import { buildChatMessages } from "@claude-cope/shared/systemPrompt";
+import { buildChatMessages, getSystemPrompt } from "@claude-cope/shared/systemPrompt";
 
 function createExecutionContext(): ExecutionContext {
   return {
@@ -182,6 +182,29 @@ describe("buildChatMessages bare option follow-up hints", () => {
     const system = messages[0]?.content ?? "";
     expect(system).toContain("- selected_number_reply: 2");
     expect(system).toContain("selected_option_text: [blank option]");
+  });
+});
+
+describe("getSystemPrompt vanity behavior selection", () => {
+  it("uses vanity behaviors instead of corporate rank behaviors when the displayed rank is a vanity title", () => {
+    const prompt = getSystemPrompt({
+      rank: "Founder in Stealth",
+      chatMessages: [{ role: "user", content: "deploy it" }],
+    });
+
+    expect(prompt).toContain("## Vanity Behavior: Founder in Stealth");
+    expect(prompt).toContain("VCs are watching");
+    expect(prompt).not.toContain("## Rank Behavior: Junior Code Monkey");
+  });
+
+  it("includes the full supporter vanity catalog, including Chief Paradigm Officer", () => {
+    const prompt = getSystemPrompt({
+      rank: "Chief Paradigm Officer",
+      chatMessages: [{ role: "user", content: "fix the variable" }],
+    });
+
+    expect(prompt).toContain("## Vanity Behavior: Chief Paradigm Officer");
+    expect(prompt).toContain("blue-ocean synergy");
   });
 });
 

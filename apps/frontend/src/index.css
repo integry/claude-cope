@@ -236,6 +236,106 @@ body {
   font-size: 0.875rem;
 }
 
+.leaderboard-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  font-family: var(--font-terminal-mono);
+}
+
+.leaderboard-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-row-standard {
+  color: #6b7280;
+}
+
+.leaderboard-row-podium-1 {
+  color: #fde68a;
+}
+
+.leaderboard-row-podium-2 {
+  color: #d1d5db;
+}
+
+.leaderboard-row-podium-3 {
+  color: #d97706;
+}
+
+.leaderboard-row-supporter {
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.12), rgba(250, 204, 21, 0.03));
+  box-shadow: inset 2px 0 0 rgba(250, 204, 21, 0.65);
+}
+
+.leaderboard-supporter-username {
+  color: #fef08a;
+  font-weight: 700;
+}
+
+.leaderboard-supporter-badge {
+  flex: 0 0 auto;
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  border-radius: 9999px;
+  padding: 0 0.35rem;
+  color: #fef08a;
+  background: rgba(250, 204, 21, 0.1);
+  font-size: 0.625rem;
+  line-height: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.leaderboard-supporter-rank-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  border-radius: 9999px;
+  padding: 0 0.35rem;
+  color: #fcd34d;
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.leaderboard-vanity-rank-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid rgba(217, 70, 239, 0.45);
+  border-radius: 9999px;
+  padding: 0 0.35rem;
+  color: #f5d0fe;
+  background: rgba(217, 70, 239, 0.14);
+  box-shadow: 0 0 14px rgba(217, 70, 239, 0.12);
+}
+
+@media (max-width: 420px) {
+  .leaderboard-row {
+    gap: 0.35rem;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  .leaderboard-supporter-badge,
+  .leaderboard-supporter-rank-chip,
+  .leaderboard-vanity-rank-chip {
+    max-width: 7.5rem;
+  }
+}
+
 @media (max-width: 768px) {
   .terminal-buddy-display {
     font-size: 0.625rem;
@@ -434,6 +534,16 @@ body {
 .theme-light {
   --color-bg: #f5f5f5;
   --color-text: #1a1a1a;
+}
+
+.theme-corporate-beige {
+  --color-bg: #e7dcc8;
+  --color-text: #4d4437;
+}
+
+.theme-syntax-error {
+  --color-bg: #200a0f;
+  --color-text: #ff5c8a;
 }
 
 .ticker-header-link {

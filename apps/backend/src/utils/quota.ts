@@ -6,6 +6,12 @@ export type QuotaLimits = {
   proInitialQuota: number;
 };
 
+export type QuotaState = {
+  percent: number;
+  remaining: number;
+  total: number;
+};
+
 type QuotaEnv = {
   FREE_QUOTA_LIMIT?: string;
   PRO_INITIAL_QUOTA?: string;
@@ -35,6 +41,25 @@ const DEFAULT_LIMITS: QuotaLimits = {
   freeLimit: DEFAULT_FREE_QUOTA_LIMIT,
   proInitialQuota: DEFAULT_PRO_INITIAL_QUOTA,
 };
+
+export function proQuotaKey(hash: string): string {
+  return `polar:${hash}`;
+}
+
+export function proQuotaTotalKey(hash: string): string {
+  return `polar_total:${hash}`;
+}
+
+function parseStoredInt(raw: string | null): number | null {
+  if (raw === null) return null;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function fallbackProQuotaTotal(remaining: number, baseQuota: number): number {
+  if (baseQuota <= 0) return Math.max(0, remaining);
+  return Math.max(baseQuota, Math.ceil(Math.max(remaining, 1) / baseQuota) * baseQuota);
+}
 
 export class QuotaExhaustedError extends Error {
   constructor(tier: "free" | "pro") {
@@ -70,25 +95,47 @@ export async function getQuotaPercent(
     limits?: QuotaLimits;
   },
 ): Promise<number> {
+  return (await getQuotaState(kv, opts)).percent;
+}
+
+export async function getQuotaState(
+  kv: KVNamespace,
+  opts: {
+    tier: "free" | "pro";
+    sessionId: string;
+    licenseKeyHash?: string;
+    limits?: QuotaLimits;
+  },
+): Promise<QuotaState> {
   const limits = opts.limits ?? DEFAULT_LIMITS;
 
   if (opts.tier === "pro") {
-    if (!opts.licenseKeyHash) return 0;
-    const kvKey = `polar:${opts.licenseKeyHash}`;
-    const raw = await kv.get(kvKey);
-    if (raw === null) return 0;
-    const remaining = parseInt(raw, 10);
-    if (isNaN(remaining)) return 0;
-    if (limits.proInitialQuota <= 0) return 0;
-    return Math.min(100, Math.max(0, (remaining / limits.proInitialQuota) * 100));
+    if (!opts.licenseKeyHash) return { percent: 0, remaining: 0, total: limits.proInitialQuota };
+    const [rawRemaining, rawTotal] = await Promise.all([
+      kv.get(proQuotaKey(opts.licenseKeyHash)),
+      kv.get(proQuotaTotalKey(opts.licenseKeyHash)),
+    ]);
+    const remaining = parseStoredInt(rawRemaining);
+    if (remaining === null) return { percent: 0, remaining: 0, total: limits.proInitialQuota };
+    const storedTotal = parseStoredInt(rawTotal);
+    const total = storedTotal !== null && storedTotal > 0
+      ? storedTotal
+      : fallbackProQuotaTotal(remaining, limits.proInitialQuota);
+    const percent = total > 0 ? Math.max(0, (remaining / total) * 100) : 0;
+    return { percent, remaining, total };
   }
 
   // Free tier
   const kvKey = `free:${opts.sessionId}`;
   const raw = await kv.get(kvKey);
   const current = raw !== null ? parseInt(raw, 10) : 0;
-  if (limits.freeLimit <= 0) return 0;
-  return Math.min(100, Math.max(0, ((limits.freeLimit - current) / limits.freeLimit) * 100));
+  const remaining = Math.max(0, limits.freeLimit - current);
+  if (limits.freeLimit <= 0) return { percent: 0, remaining, total: limits.freeLimit };
+  return {
+    percent: Math.min(100, Math.max(0, (remaining / limits.freeLimit) * 100)),
+    remaining,
+    total: limits.freeLimit,
+  };
 }
 
 /**
@@ -122,7 +169,7 @@ export async function consumeQuota(
     }
 
     const hashed = opts.licenseKeyHash ?? (await hashKey(opts.licenseKey!));
-    const kvKey = `polar:${hashed}`;
+    const kvKey = proQuotaKey(hashed);
     const raw = await kv.get(kvKey);
 
     if (raw === null) {
@@ -136,9 +183,12 @@ export async function consumeQuota(
 
     const newRemaining = remaining - cost;
     await kv.put(kvKey, String(newRemaining));
-    const quotaPercent = limits.proInitialQuota > 0
-      ? Math.min(100, Math.max(0, (newRemaining / limits.proInitialQuota) * 100))
-      : 0;
+    const rawTotal = await kv.get(proQuotaTotalKey(hashed));
+    const storedTotal = parseStoredInt(rawTotal);
+    const total = storedTotal !== null && storedTotal > 0
+      ? storedTotal
+      : fallbackProQuotaTotal(remaining, limits.proInitialQuota);
+    const quotaPercent = total > 0 ? Math.max(0, (newRemaining / total) * 100) : 0;
     return { quotaPercent, remaining: newRemaining };
   }
 

@@ -9,6 +9,7 @@ interface SprintProgressBarProps {
   sprintProgress?: number;
   sprintGoal?: number;
   onSlashCommand?: (command: string, action: SlashCommandAction) => void;
+  staticCounters?: boolean;
 }
 
 function useIsMobileViewport(breakpointPx = 767): boolean {
@@ -42,7 +43,7 @@ function useIsMobileViewport(breakpointPx = 767): boolean {
   return isMobileViewport;
 }
 
-export default function SprintProgressBar({ id, title, sprintProgress, sprintGoal, onSlashCommand }: SprintProgressBarProps) {
+export default function SprintProgressBar({ id, title, sprintProgress, sprintGoal, onSlashCommand, staticCounters = false }: SprintProgressBarProps) {
   const hasActiveTicket = Boolean(id && title && sprintProgress !== undefined && sprintGoal !== undefined);
   const totalBlocks = 30;
   const idleBarBlocks = 17;
@@ -50,7 +51,7 @@ export default function SprintProgressBar({ id, title, sprintProgress, sprintGoa
   const safeProgress = sprintProgress ?? 0;
   const safeGoal = sprintGoal ?? 0;
   const animatedProgress = useAnimatedCounter(safeProgress, {
-    duration: 2200,
+    duration: staticCounters ? 0 : 2200,
     animateDecreases: false,
     resetKey: hasActiveTicket ? `${id}:${safeGoal}` : "idle",
   });

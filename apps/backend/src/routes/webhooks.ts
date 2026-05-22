@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { verifyWebhookSignature } from "../utils/webhook";
-import { hashKey } from "../utils/quota";
+import { hashKey, proQuotaKey, proQuotaTotalKey } from "../utils/quota";
 import { getQuotaLimits } from "../utils/quota";
 
 type Env = {
@@ -22,7 +22,8 @@ async function handleBenefitGrantCreated(
   env: Env["Bindings"],
 ) {
   const hash = await hashKey(licenseKey);
-  const kvKey = `polar:${hash}`;
+  const kvKey = proQuotaKey(hash);
+  const totalKey = proQuotaTotalKey(hash);
 
   const db = env?.DB;
   if (db) {
@@ -50,6 +51,10 @@ async function handleBenefitGrantCreated(
       await kv.put(kvKey, String(limits.proInitialQuota));
     }
   }
+  if (await kv.get(totalKey) === null) {
+    const limits = getQuotaLimits(env);
+    await kv.put(totalKey, String(limits.proInitialQuota));
+  }
 }
 
 async function handleBenefitGrantRevoked(
@@ -58,7 +63,7 @@ async function handleBenefitGrantRevoked(
   env: Env["Bindings"],
 ) {
   const hash = await hashKey(licenseKey);
-  const kvKey = `polar:${hash}`;
+  const kvKey = proQuotaKey(hash);
   // Preserve the remaining quota so a future reactivation restores it
   // instead of granting a fresh PRO_INITIAL_QUOTA.
   const remaining = await kv.get(kvKey);

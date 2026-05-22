@@ -111,6 +111,8 @@ binding = "BROWSER"
 [vars]
 ALLOWED_ORIGINS = "$ALLOWED_ORIGINS"
 TURNSTILE_EXPECTED_HOSTNAME = "${TURNSTILE_EXPECTED_HOSTNAME:-}"
+FREE_QUOTA_LIMIT = "${FREE_QUOTA_LIMIT:-20}"
+PRO_INITIAL_QUOTA = "${PRO_INITIAL_QUOTA:-100}"
 $ROUTES_BLOCK
 
 [[d1_databases]]
@@ -184,6 +186,9 @@ if ! $FRONTEND_ONLY; then
     echo "$FREE_ACCOUNT_COOKIE_SECRET" | (cd "$ROOT/apps/backend" && wrangler secret put FREE_ACCOUNT_COOKIE_SECRET --config "$WRANGLER_CFG")
   else
     (cd "$ROOT/apps/backend" && printf 'y\n' | wrangler secret delete FREE_ACCOUNT_COOKIE_SECRET --config "$WRANGLER_CFG") || true
+  fi
+  if [[ -n "${CHECKOUT_CLAIM_SECRET:-}" ]]; then
+    echo "$CHECKOUT_CLAIM_SECRET" | (cd "$ROOT/apps/backend" && wrangler secret put CHECKOUT_CLAIM_SECRET --config "$WRANGLER_CFG")
   fi
   if [[ -n "${OPENROUTER_PROVIDERS:-}" ]]; then
     echo "$OPENROUTER_PROVIDERS" | (cd "$ROOT/apps/backend" && wrangler secret put OPENROUTER_PROVIDERS --config "$WRANGLER_CFG")

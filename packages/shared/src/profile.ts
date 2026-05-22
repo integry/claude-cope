@@ -16,4 +16,6 @@ export interface ServerProfile {
   td_multiplier: number;
   multiplier: number;
   quota_percent?: number;
+  quota_remaining?: number;
+  quota_total?: number;
 }

@@ -48,8 +48,11 @@ describe("SLASH_COMMAND_GROUPS", () => {
 
     expect(items[0]).toMatchObject({
       type: "promote-choice",
-      value: "/promote junior-code-monkey",
+      value: "/promote 10x",
       locked: false,
+    });
+    expect(items[0]).toMatchObject({
+      description: "Leaves a trail of unmaintainable genius. Quits after 6 months.",
     });
     expect(items.every((item) => item.type === "promote-choice")).toBe(true);
   });
