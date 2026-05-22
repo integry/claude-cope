@@ -378,5 +378,4 @@ function Terminal() {
     />
   );
 }
-/* eslint-enable max-lines */
 export default Terminal;
