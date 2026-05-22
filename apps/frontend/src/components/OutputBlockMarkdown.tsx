@@ -4,16 +4,17 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { renderWithSlashLinks, linkifySlashCommands } from "./slashCommandLinks";
 import type { SlashCommandAction } from "./slashCommandDetect";
 
-type TagCategory = "ERROR" | "WARN" | "SUCCESS" | "INFO";
+type TagCategory = "ERROR" | "WARN" | "SUCCESS" | "INFO" | "EXECUTIVE";
 
 const TAG_STYLES: Record<TagCategory, string> = {
   ERROR: "text-red-400",
   WARN: "text-yellow-400",
   SUCCESS: "text-green-400",
   INFO: "text-blue-400",
+  EXECUTIVE: "text-amber-300",
 };
 
-const TAG_MARKER_REGEX = /^__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+)$/;
+const TAG_MARKER_REGEX = /^__TAG_(ERROR|WARN|SUCCESS|INFO|EXECUTIVE)__:(.+)$/;
 
 function isExternalHref(href?: string): boolean {
   return typeof href === "string" && /^(https?:)?\/\//i.test(href);
@@ -31,6 +32,7 @@ function stripOrphanEmphasisMarkers(content: string): string {
 
 function classifyTag(tagContent: string): TagCategory {
   const lower = tagContent.toLowerCase();
+  if (/executive/.test(lower)) return "EXECUTIVE";
   if (/error|❌|💀|🚨|fail|fatal|critical|sigsegv/.test(lower)) return "ERROR";
   if (/warn|⚠️|caution|notice|deprecated/.test(lower)) return "WARN";
   if (/success|✓|✅|complete|done|installed/.test(lower)) return "SUCCESS";
@@ -38,7 +40,7 @@ function classifyTag(tagContent: string): TagCategory {
 }
 
 export function cleanLLMOutput(content: string): string {
-  let cleaned = content.replace(/`__TAG_(?:ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g, "[$1]");
+  let cleaned = content.replace(/`__TAG_(?:ERROR|WARN|SUCCESS|INFO|EXECUTIVE)__:(.+?)`/g, "[$1]");
   const terminalLangs = "bash|sh|shell|console|terminal|text|log|plaintext|markdown|md";
   const fenceRegex = new RegExp("```(?:" + terminalLangs + ")\\s*\\n([\\s\\S]*?)```", "g");
   cleaned = cleaned.replace(fenceRegex, "$1");
@@ -53,15 +55,43 @@ function renderLineWithTags(line: string, onSlashCommand?: (command: string, act
   const tagInline = /`__TAG_(ERROR|WARN|SUCCESS|INFO)__:(.+?)`/g;
   const bracketTag = /^\[([^\]]+)\]/;
 
-  const linkify = (text: string): React.ReactNode =>
-    onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
+  const renderInlineText = (text: string): React.ReactNode => {
+    const strikeRegex = /~~([^~]+)~~/g;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+    const pushText = (value: string, key: string) => {
+      if (!value) return;
+      parts.push(
+        <React.Fragment key={key}>
+          {onSlashCommand ? renderWithSlashLinks(value, onSlashCommand) : value}
+        </React.Fragment>
+      );
+    };
+
+    while ((match = strikeRegex.exec(text)) !== null) {
+      pushText(text.slice(lastIndex, match.index), `text-${lastIndex}`);
+      parts.push(
+        <del key={`strike-${match.index}`} className="text-gray-500 decoration-gray-400">
+          {match[1]}
+        </del>
+      );
+      lastIndex = strikeRegex.lastIndex;
+    }
+
+    if (parts.length === 0) {
+      return onSlashCommand ? renderWithSlashLinks(text, onSlashCommand) : text;
+    }
+    pushText(text.slice(lastIndex), `text-${lastIndex}`);
+    return <>{parts}</>;
+  };
 
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let inlineMatch;
   while ((inlineMatch = tagInline.exec(line)) !== null) {
     if (inlineMatch.index > lastIndex) {
-      parts.push(linkify(line.slice(lastIndex, inlineMatch.index)));
+      parts.push(renderInlineText(line.slice(lastIndex, inlineMatch.index)));
     }
     const category = inlineMatch[1] as TagCategory;
     const tagText = inlineMatch[2];
@@ -73,7 +103,7 @@ function renderLineWithTags(line: string, onSlashCommand?: (command: string, act
     lastIndex = tagInline.lastIndex;
   }
   if (parts.length > 0) {
-    if (lastIndex < line.length) parts.push(linkify(line.slice(lastIndex)));
+    if (lastIndex < line.length) parts.push(renderInlineText(line.slice(lastIndex)));
     return <>{parts}</>;
   }
 
@@ -88,12 +118,12 @@ function renderLineWithTags(line: string, onSlashCommand?: (command: string, act
         <span className={`${colorClass} font-mono ${sizeClass} font-bold mr-2`}>
           {bracketMatch[1]}
         </span>
-        {linkify(line.slice(bracketMatch[0].length))}
+        {renderInlineText(line.slice(bracketMatch[0].length))}
       </>
     );
   }
 
-  return linkify(line);
+  return renderInlineText(line);
 }
 
 function endsWithCodeBlock(content: string): boolean {

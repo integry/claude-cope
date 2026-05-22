@@ -58,6 +58,8 @@ type SessionRestoreResult = {
   username?: string;
   profile?: ServerProfile | null;
   quotaPercent?: number;
+  quotaRemaining?: number;
+  quotaTotal?: number;
   isPro?: boolean;
   revoked?: boolean;
 };

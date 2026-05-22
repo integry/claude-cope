@@ -9,7 +9,7 @@ const MOBILE_MENU_VERTICAL_GAP = 8;
 type BillingProps = { isBYOK: boolean; isMax: boolean; isExecutiveSupporter?: boolean; byokTotalCost?: number };
 type QuotaProps = { quotaPercent: number; remaining: number; totalQuota: number; quotaTooltip: string };
 type TdProps = { displayTD: number; activeMultiplier: number };
-type IdentityProps = BillingProps & { username: string; rank: string; onProfileClick: () => void };
+type IdentityProps = BillingProps & { username: string; rank: string; hasVanityTitle?: boolean; onProfileClick: () => void };
 type StatusProps = BillingProps & QuotaProps & TdProps & { onUpgradeClick?: () => void };
 type MobileQuotaLineProps = { quotaPercent: number; quotaTooltip: string; tipOpen: boolean; setTipOpen: (open: boolean | ((prev: boolean) => boolean)) => void };
 
@@ -56,7 +56,8 @@ function EntitlementBadges({ isBYOK, isMax, isExecutiveSupporter, byokTotalCost,
 
 function DesktopQuotaBar({ quotaPercent, remaining, totalQuota, quotaTooltip }: QuotaProps) {
   const totalBlocks = 20;
-  const filledBlocks = Math.round((quotaPercent / 100) * totalBlocks);
+  const fillPercent = totalQuota > 0 ? (remaining / totalQuota) * 100 : quotaPercent;
+  const filledBlocks = Math.max(0, Math.min(totalBlocks, Math.round((fillPercent / 100) * totalBlocks)));
   return <div title={quotaTooltip} className={`flex-shrink-0 cursor-default whitespace-nowrap text-xs font-mono ${getQuotaTextColor(quotaPercent)}`}>{`[API Quota: ${"█".repeat(filledBlocks)}${"░".repeat(totalBlocks - filledBlocks)} ${remaining}/${totalQuota}]`}</div>;
 }
 
@@ -76,14 +77,15 @@ function StatusDetailLine({ isBYOK, byokTotalCost, quotaPercent, remaining, tota
 }
 
 function MobileQuotaLine({ quotaPercent, quotaTooltip, tipOpen, setTipOpen }: MobileQuotaLineProps) {
-  return <div data-testid="mobile-quota-line" className="absolute bottom-0 left-0 right-0 h-[2px] cursor-pointer bg-gray-800 sm:hidden" style={getMobileQuotaTrackStyle(quotaPercent)} onClick={() => setTipOpen((v) => !v)}><div data-testid="mobile-quota-fill" className={`h-full ${getQuotaBgColor(quotaPercent)} transition-all duration-500`} style={{ width: `${quotaPercent}%` }} />{tipOpen && <div className="absolute bottom-full left-1/2 z-30 mb-1 -translate-x-1/2 whitespace-nowrap rounded border border-gray-700 bg-gray-900 px-2 py-1 text-[10px] font-mono text-gray-300 shadow-lg">{quotaTooltip}</div>}</div>;
+  const fillPercent = Math.max(0, Math.min(100, quotaPercent));
+  return <div data-testid="mobile-quota-line" className="absolute bottom-0 left-0 right-0 h-[2px] cursor-pointer bg-gray-800 sm:hidden" style={getMobileQuotaTrackStyle(quotaPercent)} onClick={() => setTipOpen((v) => !v)}><div data-testid="mobile-quota-fill" className={`h-full ${getQuotaBgColor(quotaPercent)} transition-all duration-500`} style={{ width: `${fillPercent}%` }} />{tipOpen && <div className="absolute bottom-full left-1/2 z-30 mb-1 -translate-x-1/2 whitespace-nowrap rounded border border-gray-700 bg-gray-900 px-2 py-1 text-[10px] font-mono text-gray-300 shadow-lg">{quotaTooltip}</div>}</div>;
 }
 
-function DesktopIdentityBlock({ username, rank, isBYOK, isMax, isExecutiveSupporter, byokTotalCost, onProfileClick }: IdentityProps) {
-  return <div data-testid="desktop-identity-block" className="hidden min-w-0 flex-col justify-center gap-1 leading-snug sm:flex"><div className="flex min-w-0 items-center gap-2"><button onClick={onProfileClick} className="cursor-pointer truncate text-cyan-400 hover:text-white hover:underline">{username}</button><EntitlementBadges isBYOK={isBYOK} isMax={isMax} isExecutiveSupporter={isExecutiveSupporter} byokTotalCost={byokTotalCost} maxBadgeTestId="desktop-max-badge" /></div><div data-testid="desktop-rank-line" title={rank} className="max-w-full truncate text-xs text-gray-400">[{rank}]</div></div>;
+function DesktopIdentityBlock({ username, rank, isBYOK, isMax, isExecutiveSupporter, byokTotalCost, hasVanityTitle, onProfileClick }: IdentityProps) {
+  return <div data-testid="desktop-identity-block" className="hidden min-w-0 flex-col justify-center gap-1 leading-snug sm:flex"><div className="flex min-w-0 items-center gap-2"><button onClick={onProfileClick} className="cursor-pointer truncate text-cyan-400 hover:text-white hover:underline">{username}</button><EntitlementBadges isBYOK={isBYOK} isMax={isMax} isExecutiveSupporter={isExecutiveSupporter} byokTotalCost={byokTotalCost} maxBadgeTestId="desktop-max-badge" /></div><div data-testid="desktop-rank-line" title={rank} className={`max-w-full truncate text-xs ${hasVanityTitle ? "font-semibold text-fuchsia-300" : "text-gray-400"}`}>[{rank}]</div></div>;
 }
 
-function MobileIdentityBlock({ username, rank, isBYOK, isMax, isExecutiveSupporter, byokTotalCost, onProfileClick }: IdentityProps) {
+function MobileIdentityBlock({ username, rank, isBYOK, isMax, isExecutiveSupporter, byokTotalCost, hasVanityTitle, onProfileClick }: IdentityProps) {
   return (
     <>
       <div data-testid="mobile-identity-block" className="col-start-2 row-start-1 flex min-w-0 items-center gap-2 self-end sm:hidden">
@@ -94,7 +96,7 @@ function MobileIdentityBlock({ username, rank, isBYOK, isMax, isExecutiveSupport
           <EntitlementBadges isBYOK={isBYOK} isMax={isMax} isExecutiveSupporter={isExecutiveSupporter} byokTotalCost={byokTotalCost} maxBadgeTestId="mobile-max-badge" maxBadgeLabel="[MAX]" />
         </span>
       </div>
-      <div data-testid="mobile-rank-line" title={rank} className="col-start-2 row-start-2 min-w-0 self-start whitespace-nowrap text-[11px] leading-none text-gray-400 sm:hidden sm:text-xs">
+      <div data-testid="mobile-rank-line" title={rank} className={`col-start-2 row-start-2 min-w-0 self-start whitespace-nowrap text-[11px] leading-none sm:hidden sm:text-xs ${hasVanityTitle ? "font-semibold text-fuchsia-300" : "text-gray-400"}`}>
         [{getMobileRankLabel(rank)}]
       </div>
     </>
@@ -105,8 +107,8 @@ function DesktopStatusBlock({ displayTD, activeMultiplier, isBYOK, isMax, byokTo
   return <div data-testid="desktop-status-block" className="ml-auto hidden flex-shrink-0 flex-col items-end justify-center gap-1 px-2 leading-snug sm:flex sm:px-0"><div data-testid="desktop-technical-debt-line"><TechnicalDebtLine displayTD={displayTD} activeMultiplier={activeMultiplier} /></div><div data-testid="desktop-status-detail-line"><StatusDetailLine isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} onUpgradeClick={onUpgradeClick} /></div></div>;
 }
 
-function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, username, isBYOK, isMax, isExecutiveSupporter, byokTotalCost, onProfileClick, onHelpClick, onAboutClick, onStoreClick, onLeaderboardClick, onAchievementsClick, onContactClick, onSlashMenuClick, onUpgradeClick, onHomeClick }: { rank: string; currentTD: number; quotaPercent: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isMax: boolean; isExecutiveSupporter?: boolean; byokTotalCost?: number; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onStoreClick: () => void; onLeaderboardClick: () => void; onAchievementsClick: () => void; onContactClick: () => void; onSlashMenuClick?: () => void; onUpgradeClick?: () => void; onHomeClick?: () => void }) {
-  const displayTD = useAnimatedCounter(currentTD, 2660);
+function HeaderBar({ rank, currentTD, quotaPercent, quotaRemaining, quotaTotal, outageHp, activeMultiplier, username, isBYOK, isMax, isExecutiveSupporter, byokTotalCost, hasVanityTitle, onProfileClick, onHelpClick, onAboutClick, onStoreClick, onLeaderboardClick, onAchievementsClick, onContactClick, onSlashMenuClick, onUpgradeClick, onHomeClick, logoSrc = "/media/logo-400-transparent.png", staticCounters = false, quotaTotalOverride, compactHeader = false }: { rank: string; currentTD: number; quotaPercent: number; quotaRemaining?: number; quotaTotal?: number; outageHp: number | null; activeMultiplier: number; username: string; isBYOK: boolean; isMax: boolean; isExecutiveSupporter?: boolean; byokTotalCost?: number; hasVanityTitle?: boolean; onProfileClick: () => void; onHelpClick: () => void; onAboutClick: () => void; onStoreClick: () => void; onLeaderboardClick: () => void; onAchievementsClick: () => void; onContactClick: () => void; onSlashMenuClick?: () => void; onUpgradeClick?: () => void; onHomeClick?: () => void; logoSrc?: string; staticCounters?: boolean; quotaTotalOverride?: number; compactHeader?: boolean }) {
+  const displayTD = useAnimatedCounter(currentTD, staticCounters ? 0 : 2660);
   const [menuOpen, setMenuOpen] = useState(false);
   const [quotaTipOpen, setQuotaTipOpen] = useState(false);
   const headerRootRef = useRef<HTMLDivElement>(null);
@@ -114,8 +116,10 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
   const menuPanelRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [mobileMenuPosition, setMobileMenuPosition] = useState(() => ({ top: 0, maxHeight: 0 }));
-  const totalQuota = isMax ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT;
-  const remaining = Math.round((quotaPercent / 100) * totalQuota);
+  const baseQuota = quotaTotalOverride ?? (isMax ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT);
+  const remaining = quotaRemaining ?? Math.round((quotaPercent / 100) * baseQuota);
+  const totalQuota = quotaTotal ?? Math.max(baseQuota, Math.ceil(Math.max(remaining, 1) / Math.max(baseQuota, 1)) * baseQuota);
+  const displayedQuotaPercent = totalQuota > 0 ? (remaining / totalQuota) * 100 : quotaPercent;
   const quotaTooltip = `${totalQuota - remaining}/${totalQuota} requests used · ${remaining} remaining`;
 
   useEffect(() => {
@@ -164,23 +168,23 @@ function HeaderBar({ rank, currentTD, quotaPercent, outageHp, activeMultiplier, 
 
   return (
     <div ref={headerRootRef} data-testid="header-bar-root" className={`relative sticky top-0 z-10 mb-2 grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 border-b pt-3 pb-2 sm:flex sm:items-center sm:gap-4 ${outageHp !== null ? "border-red-500 bg-red-900" : "border-gray-700"}`} style={outageHp !== null ? undefined : { backgroundColor: "var(--color-bg)" }}>
-      <div className="hidden min-w-0 items-center gap-2 px-2 sm:flex sm:px-0">
-        <button type="button" onClick={handleHomeClick} aria-label="Home" className="hidden cursor-pointer sm:block"><img src="/media/logo-400-transparent.png" alt="Logo" className="hidden max-h-12 w-auto flex-shrink-0 object-contain sm:mr-2 sm:block" /></button>
-        <DesktopIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} isExecutiveSupporter={isExecutiveSupporter} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
+      <div className={`hidden min-w-0 items-center px-2 sm:flex sm:px-0 ${compactHeader ? "gap-1" : "gap-2"}`}>
+        <button type="button" onClick={handleHomeClick} aria-label="Home" className="hidden cursor-pointer sm:block"><img src={logoSrc} alt="Logo" className={`hidden w-auto flex-shrink-0 object-contain sm:block ${compactHeader ? "max-h-10 sm:mr-1" : "max-h-12 sm:mr-2"}`} /></button>
+        <DesktopIdentityBlock username={username} rank={rank} hasVanityTitle={hasVanityTitle} isBYOK={isBYOK} isMax={isMax} isExecutiveSupporter={isExecutiveSupporter} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
       </div>
-      {menuOpen ? <button type="button" onClick={handleHomeClick} aria-label="Home" data-testid="mobile-header-logo-expanded" className="col-start-1 col-end-3 row-span-2 row-start-1 my-3 flex min-w-0 items-center self-center px-2 sm:hidden"><img src="/media/logo-400-transparent.png" alt="Logo" className="h-8 w-auto max-w-full object-contain" /></button> : <>
-        <button type="button" onClick={handleHomeClick} aria-label="Home" data-testid="mobile-header-logo" className="col-start-1 row-span-2 row-start-1 flex items-center self-center px-2 sm:hidden"><span className="relative block h-8 w-[34px] overflow-hidden"><img src="/media/logo-400-transparent.png" alt="" aria-hidden="true" className="absolute left-0 top-1/2 h-8 max-w-none -translate-y-1/2" /></span></button>
-        <MobileIdentityBlock username={username} rank={rank} isBYOK={isBYOK} isMax={isMax} isExecutiveSupporter={isExecutiveSupporter} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
+      {menuOpen ? <button type="button" onClick={handleHomeClick} aria-label="Home" data-testid="mobile-header-logo-expanded" className="col-start-1 col-end-3 row-span-2 row-start-1 my-3 flex min-w-0 items-center self-center px-2 sm:hidden"><img src={logoSrc} alt="Logo" className="h-8 w-auto max-w-full object-contain" /></button> : <>
+        <button type="button" onClick={handleHomeClick} aria-label="Home" data-testid="mobile-header-logo" className="col-start-1 row-span-2 row-start-1 flex items-center self-center px-2 sm:hidden"><span className="relative block h-8 w-[34px] overflow-hidden"><img src={logoSrc} alt="" aria-hidden="true" className="absolute left-0 top-1/2 h-8 max-w-none -translate-y-1/2" /></span></button>
+        <MobileIdentityBlock username={username} rank={rank} hasVanityTitle={hasVanityTitle} isBYOK={isBYOK} isMax={isMax} isExecutiveSupporter={isExecutiveSupporter} byokTotalCost={byokTotalCost} onProfileClick={onProfileClick} />
       </>}
-      <DesktopStatusBlock displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} onUpgradeClick={onUpgradeClick} />
+      <DesktopStatusBlock displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={displayedQuotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} onUpgradeClick={onUpgradeClick} />
       {!menuOpen && <div data-testid="mobile-status-block" className="col-start-3 row-start-2 flex min-w-0 items-center justify-end self-start whitespace-nowrap px-2 text-right sm:hidden"><span className="whitespace-nowrap font-bold text-white">{Math.floor(displayTD).toLocaleString()} TD{activeMultiplier > 1 && <span className="text-yellow-400"> ({activeMultiplier.toFixed(1)}x)</span>}</span></div>}
       <div ref={menuRef} data-testid="mobile-menu-anchor" className="col-start-3 row-start-1 flex-shrink-0 self-end justify-self-end sm:hidden">
         <button ref={menuButtonRef} type="button" onClick={() => setMenuOpen((v) => !v)} className="rounded-none px-3 py-1.5 text-gray-400 transition-colors hover:bg-gray-800/70 hover:text-white" aria-label="Menu" aria-expanded={menuOpen} aria-controls="mobile-menu-panel">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>{menuOpen ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /> : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />}</svg>
         </button>
       </div>
-      {menuOpen && <div ref={menuPanelRef}><HeaderBarMobileMenu displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={quotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} mobileMenuPosition={mobileMenuPosition} closeMenu={closeMenu} onStoreClick={onStoreClick} onLeaderboardClick={onLeaderboardClick} onAchievementsClick={onAchievementsClick} onProfileClick={onProfileClick} onHelpClick={onHelpClick} onAboutClick={onAboutClick} onContactClick={onContactClick} onSlashMenuClick={onSlashMenuClick} onUpgradeClick={onUpgradeClick} /></div>}
-      {!isBYOK && <MobileQuotaLine quotaPercent={quotaPercent} quotaTooltip={quotaTooltip} tipOpen={quotaTipOpen} setTipOpen={setQuotaTipOpen} />}
+      {menuOpen && <div ref={menuPanelRef}><HeaderBarMobileMenu displayTD={displayTD} activeMultiplier={activeMultiplier} isBYOK={isBYOK} isMax={isMax} byokTotalCost={byokTotalCost} quotaPercent={displayedQuotaPercent} remaining={remaining} totalQuota={totalQuota} quotaTooltip={quotaTooltip} mobileMenuPosition={mobileMenuPosition} closeMenu={closeMenu} onStoreClick={onStoreClick} onLeaderboardClick={onLeaderboardClick} onAchievementsClick={onAchievementsClick} onProfileClick={onProfileClick} onHelpClick={onHelpClick} onAboutClick={onAboutClick} onContactClick={onContactClick} onSlashMenuClick={onSlashMenuClick} onUpgradeClick={onUpgradeClick} /></div>}
+      {!isBYOK && <MobileQuotaLine quotaPercent={displayedQuotaPercent} quotaTooltip={quotaTooltip} tipOpen={quotaTipOpen} setTipOpen={setQuotaTipOpen} />}
     </div>
   );
 }

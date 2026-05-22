@@ -163,6 +163,8 @@ export function createMockDB(opts: {
   };
   const createStatement = (sql: string, bindings: unknown[]) => {
     const statement = {
+      sql,
+      bindings,
       bind: vi.fn((...args: unknown[]) => {
         calls.push({ sql, bindings: args });
         return createStatement(sql, args);

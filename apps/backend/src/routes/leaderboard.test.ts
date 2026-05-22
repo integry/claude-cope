@@ -31,7 +31,16 @@ function createGetMockDB(results: unknown[] = []) {
 describe("GET /api/leaderboard", () => {
   it("returns leaderboard entries from the database", async () => {
     const mockResults = [
-      { id: "1", username: "alice", corporate_rank: "CTO", country: "US", technical_debt: 999, created_at: "2026-01-01" },
+      {
+        id: "1",
+        username: "alice",
+        is_executive_supporter: 1,
+        corporate_rank: "CTO",
+        display_rank: "CTO",
+        country: "US",
+        technical_debt: 999,
+        created_at: "2026-01-01",
+      },
     ];
     const { db } = createGetMockDB(mockResults);
 
@@ -45,7 +54,7 @@ describe("GET /api/leaderboard", () => {
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=60");
   });
 
-  it("projects vanity titles ahead of organic ranks", async () => {
+  it("projects supporter status and vanity titles ahead of organic ranks", async () => {
     const { db, getSQL } = createGetMockDB();
 
     await app.request("/api/leaderboard", undefined, {
@@ -53,10 +62,14 @@ describe("GET /api/leaderboard", () => {
       DB: db,
     });
 
-    expect(getSQL()).toContain("WHEN is_executive_supporter = 1");
-    expect(getSQL()).toContain("COALESCE(display_rank, corporate_rank)");
+    expect(getSQL()).toContain("CASE");
+    expect(getSQL()).toContain("THEN 1");
+    expect(getSQL()).toContain("ELSE 0");
+    expect(getSQL()).toContain("WHEN us.is_executive_supporter = 1");
+    expect(getSQL()).toContain("COALESCE(us.display_rank, us.corporate_rank)");
+    expect(getSQL()).toContain("END AS display_rank");
     expect(getSQL()).toContain("LEFT JOIN licenses active_licenses");
-    expect(getSQL()).toContain("datetime(last_activated_at) >= datetime('now', '-90 days')");
+    expect(getSQL()).toContain("datetime(active_licenses.last_activated_at) >= datetime('now', '-90 days')");
   });
 
   it("filters by daily timeframe", async () => {
