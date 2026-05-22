@@ -13,7 +13,7 @@ describe("ShareCardRenderSurface", () => {
     );
 
     expect(markup).toContain('id="share-card-root"');
-    expect(markup).toContain('class="w-[760px] overflow-hidden bg-[#0d1117] text-sm text-white"');
+    expect(markup).toContain('class="w-[760px] overflow-hidden bg-[#0d1117] text-[21px] text-white"');
     expect(markup).not.toContain("h-[630px]");
     expect(markup).toContain("inline-block max-w-full break-words");
     expect(markup).toContain("what&#x27;s the least legal risk?");

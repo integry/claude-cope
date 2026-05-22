@@ -13,15 +13,13 @@ import SprintProgressBar from "./SprintProgressBar";
 import MessageList from "./MessageList";
 import { TerminalOverlays } from "./TerminalOverlays";
 import {
-  createOverlayOpener,
-  createSlashMenuOpener,
-  createTickerCommandRunner,
-  createUpgradeOpener,
+  buildTerminalOpeners,
   focusTerminalInputIfEligible,
   getUpgradeDismissProps,
   renderBuddyDock,
   type TerminalViewProps as SharedTerminalViewProps,
 } from "./terminalViewHelpers";
+
 type TerminalViewProps = SharedTerminalViewProps & {
   scrollContentRef?: RefObject<HTMLDivElement | null>;
 };
@@ -104,17 +102,28 @@ export function TerminalView({
 }: TerminalViewProps) {
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const bottomChromeRef = useRef<HTMLDivElement | null>(null);
-  const upgradeDismissProps = getUpgradeDismissProps(pendingNagCommand, handleUpgradeNagClose, handleManualUpgradeDismiss);
-  const openHelp = createOverlayOpener(closeAllOverlaysPreservingNag, setShowHelp);
-  const openAbout = createOverlayOpener(closeAllOverlaysPreservingNag, setShowAbout);
-  const openStore = createOverlayOpener(closeAllOverlaysPreservingNag, setShowStore);
-  const openLeaderboard = createOverlayOpener(closeAllOverlaysPreservingNag, setShowLeaderboard);
-  const openAchievements = createOverlayOpener(closeAllOverlaysPreservingNag, setShowAchievements);
-  const openContact = createOverlayOpener(closeAllOverlaysPreservingNag, setShowContact);
-  const openParty = createOverlayOpener(closeAllOverlaysPreservingNag, setShowParty);
-  const openUpgrade = createUpgradeOpener(closeAllOverlaysPreservingNag, setShowUpgrade);
-  const openSlashMenu = createSlashMenuOpener(setInputValue, setSlashQuery, setSlashIndex, isMobileViewport, inputRef);
-  const handleTickerCommand = createTickerCommandRunner(closeAllOverlaysPreservingNag, runSlashCommand);
+  const upgradeDismissProps = getUpgradeDismissProps(
+    pendingNagCommand,
+    handleUpgradeNagClose,
+    handleManualUpgradeDismiss,
+  );
+  const { openHelp, openAbout, openStore, openLeaderboard, openAchievements, openContact, openParty, openUpgrade, openSlashMenu, handleTickerCommand } = buildTerminalOpeners({
+    closeAllOverlaysPreservingNag,
+    setShowHelp,
+    setShowAbout,
+    setShowStore,
+    setShowLeaderboard,
+    setShowAchievements,
+    setShowContact,
+    setShowParty,
+    setShowUpgrade,
+    setInputValue,
+    setSlashQuery,
+    setSlashIndex,
+    isMobileViewport,
+    inputRef,
+    runSlashCommand,
+  });
 
   return (
     <div ref={terminalRef} className={`relative ${terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}`} style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : "var(--color-bg)", color: "var(--color-text)" }} onClick={() => focusTerminalInputIfEligible(isMobileViewport, anyOverlayOpen, inputRef)}>

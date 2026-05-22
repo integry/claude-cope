@@ -129,23 +129,7 @@ function Terminal() {
     setCommandHistoryEntries((prev) => [...prev, { submissionId, command }]);
     processCommandRef.current({ command, replayId, submissionId });
   }, [setCommandHistoryEntries]);
-  const {
-    closeAllOverlaysAndRestoreNag,
-    closeAllOverlaysPreservingNag,
-    dismissUpgradeOverlay: dismissUpgradeNagOverlay,
-    handleUpgradeNagClose,
-    nagArmedFromQuotaRef,
-    openUpgradeNag,
-    pendingNagCommand,
-    pendingNagCommandRef,
-    settleAcceptedNagReplay,
-    upgradeNagDismissEffect,
-    upgradeNagDismissPhase,
-  } = useUpgradeNagState({
-    closeAllOverlays,
-    setInputValue,
-    setShowUpgrade,
-  });
+  const { closeAllOverlaysAndRestoreNag, closeAllOverlaysPreservingNag, dismissUpgradeOverlay: dismissUpgradeNagOverlay, handleUpgradeNagClose, nagArmedFromQuotaRef, openUpgradeNag, pendingNagCommand, pendingNagCommandRef, settleAcceptedNagReplay, upgradeNagDismissEffect, upgradeNagDismissPhase } = useUpgradeNagState({ closeAllOverlays, setInputValue, setShowUpgrade });
   const handleProfileClick = useCallback(() => {
     closeAllOverlaysPreservingNag();
     setShowProfile(true);
