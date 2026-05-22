@@ -3,6 +3,7 @@ import { GENERATORS, UPGRADES, THEMES } from "../game/constants";
 import { calcBulkCost } from "../hooks/useGameState";
 import type { GameState } from "../hooks/useGameState";
 import { isPaidUser } from "../hooks/gameStateUtils";
+import type { CSSProperties } from "react";
 
 type BuyMultiplier = 1 | 10 | 100;
 
@@ -13,6 +14,8 @@ type StoreOverlayProps = {
   buyTheme: (themeId: string) => boolean;
   equipTheme: (themeId: string) => void;
   onClose: () => void;
+  className?: string;
+  style?: CSSProperties;
 };
 
 function formatOwnedLabel(owned: number): string {
@@ -32,11 +35,23 @@ function formatUpgradeEffectLabel(
   return `Boost: ${effectTarget} x${upgrade.multiplier}`;
 }
 
-function StoreOverlay({ state, buyGenerator, buyUpgrade, buyTheme, equipTheme, onClose }: StoreOverlayProps) {
+function StoreOverlay({
+  state,
+  buyGenerator,
+  buyUpgrade,
+  buyTheme,
+  equipTheme,
+  onClose,
+  className = "",
+  style,
+}: StoreOverlayProps) {
   const [buyMultiplier, setBuyMultiplier] = useState<BuyMultiplier>(1);
 
   return (
-    <div className="fixed right-0 top-0 h-full w-72 border-l border-gray-700 flex flex-col z-20" style={{ backgroundColor: 'var(--color-bg)' }}>
+    <div
+      className={`fixed right-0 top-0 h-full w-72 border-l border-gray-700 flex flex-col z-20 ${className}`.trim()}
+      style={{ backgroundColor: "var(--color-bg)", ...style }}
+    >
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <span className="text-green-400 font-bold text-sm">
           &gt; store --team

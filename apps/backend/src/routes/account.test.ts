@@ -625,6 +625,38 @@ describe("POST /api/account/update-theme", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("Theme is not unlocked");
   });
+
+  it("lets executive supporters equip included premium themes without buying them first", async () => {
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const paidProfile = {
+      ...BASE_PROFILE,
+      current_td: 6000,
+      is_executive_supporter: 1,
+      unlocked_themes: '["default"]',
+      active_theme: "default",
+    };
+    const updatedProfile = { ...paidProfile, active_theme: "syntax-error" };
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfileRow]: paidProfile,
+        [ACCOUNT_TEST_SQL.getProfile]: updatedProfile,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+      },
+      runChanges: 1,
+    });
+    const res = await postWithSession("/api/account/update-theme", {
+      username: "alice",
+      themeId: "syntax-error",
+    }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: {
+        active_theme: "syntax-error",
+        unlocked_themes: ["default", "amber", "syntax-error"],
+      },
+    });
+  });
 });
 
 describe("POST /api/account/unlock-achievement", () => {
@@ -1218,7 +1250,7 @@ describe("POST /api/account/checkout-license", () => {
     expect(data.licenseKey).toBe("COPE-T1");
     expect(data.allKeys).toEqual(keys);
   });
-  it("persists supporter checkout intent without guessing which key belongs to the purchaser", async () => {
+  it("assigns supporter checkout entitlement to the first returned key", async () => {
     const origFetch = globalThis.fetch;
     const { db, calls } = createMockDB({ runChanges: 1 });
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -1249,7 +1281,7 @@ describe("POST /api/account/checkout-license", () => {
       const supporterClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"));
       expect(supporterClaimInsert?.bindings.slice(0, 4)).toEqual([
         expect.any(String),
-        0,
+        1,
         expect.any(String),
         0,
       ]);
@@ -1411,6 +1443,46 @@ describe("POST /api/account/checkout-license", () => {
       const res = await co("co_new");
       expect(res.status).toBe(200);
       expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-NEW"]);
+    });
+    it("redeems a checkout from Polar customer session token return URLs", async () => {
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const u = typeof input === "string" ? input : input.toString();
+        if (u.includes("/v1/customer-portal/orders/")) {
+          return new Response(JSON.stringify({ items: [{ paid: true, checkout_id: "co_from_token" }] }));
+        }
+        if (u.includes("/v1/license-keys/")) {
+          return new Response(JSON.stringify({ items: ["T1", "T2", "T3", "T4", "T5"].map((key, index) => ({
+            key: `COPE-${key}`,
+            created_at: `2026-01-02T00:00:0${index + 1}Z`,
+            status: "granted",
+          })) }));
+        }
+        if (u.includes("/v1/checkouts/?")) {
+          return new Response(JSON.stringify({ items: [] }));
+        }
+        if (u.includes("/v1/checkouts/co_from_token")) {
+          return new Response(JSON.stringify({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T, metadata: { reference_id: "s" } }));
+        }
+        return origFetch(input as RequestInfo, undefined);
+      }) as typeof fetch;
+
+      const { db, calls } = createMockDB({ runChanges: 1 });
+      const res = await postWithSession("/api/account/checkout-license", { customerSessionToken: "polar_cst_return_1234567890" }, {
+        CHECKOUT_CLAIM_SECRET: CLAIM_SECRET,
+        POLAR_ACCESS_TOKEN: "tok",
+        POLAR_ORGANIZATION_ID: "org",
+        QUOTA_KV: mockKV({}),
+        DB: db,
+      }, "s");
+
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { allKeys: string[] }).allKeys).toEqual(["COPE-T1", "COPE-T2", "COPE-T3", "COPE-T4", "COPE-T5"]);
+      const checkoutClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_claims"));
+      expect(checkoutClaimInsert?.bindings).toEqual(["co_from_token", "s", T, 0]);
+      const checkoutClaimUpdate = calls.find((call) => call.sql.includes("UPDATE checkout_claims SET is_executive_supporter = 1"));
+      expect(checkoutClaimUpdate?.bindings).toEqual(["co_from_token", "s"]);
+      const keyClaimInsert = calls.find((call) => call.sql.includes("INSERT INTO checkout_key_claims"));
+      expect(keyClaimInsert?.bindings[1]).toBe(1);
     });
     it("returns multiple keys for team-pack", async () => {
       stubPolar({ organization_id: "org", status: "succeeded", customer_id: "c1", created_at: T }, { items: ["T1", "T2", "T3"].map((k, i) => ({ key: `COPE-${k}`, created_at: `2026-01-02T00:00:0${i + 1}Z`, status: "granted" })) });
@@ -2019,6 +2091,7 @@ describe("GET /api/account/me", () => {
       profile: {
         username: "alice",
         is_executive_supporter: true,
+        unlocked_themes: ["default", "amber", "syntax-error"],
       },
     });
   });
@@ -2390,6 +2463,229 @@ describe("POST /api/account/update-display-rank", () => {
         is_executive_supporter: true,
       },
     });
+    expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === selectedTitle)).toBe(true);
+    expect(calls.some((call) => call.sql.includes("corporate_rank = ?"))).toBe(false);
+  });
+
+  it("broadcasts activation when display-rank selection claims supporter status for the first time", async () => {
+    const selectedTitle = SUPPORTER_VANITY_TITLES[1]!.title;
+    const supporterHash = await hashKey("COPE-SUPPORTER-DISPLAY");
+    let currentSupporter = 0;
+    let currentDisplayRank: string | null = null;
+    let claimedSupporterHash: string | null = null;
+    let pendingSupporter = 0;
+    let pendingDisplayRank: string | null = null;
+    let transactionOpen = false;
+    const recentEvents: string[] = [];
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...bindings: unknown[]) => {
+          calls.push({ sql, bindings });
+          return {
+            sql,
+            bindings,
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("license_hash, account_id FROM user_scores WHERE username = ?")) {
+                return { ...BASE_PROFILE, license_hash: supporterHash, is_executive_supporter: currentSupporter };
+              }
+              if (sql.includes("SELECT status, last_activated_at FROM licenses")) {
+                return { status: "active", last_activated_at: new Date().toISOString() };
+              }
+              if (sql.includes("FROM checkout_key_claims ckc") && sql.includes("JOIN checkout_claims cc")) {
+                return { checkout_id: "co_1" };
+              }
+              if (sql.includes("SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1")) {
+                return claimedSupporterHash ? { license_key_hash: claimedSupporterHash } : null;
+              }
+              if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")) {
+                return { is_executive_supporter: 1 };
+              }
+              if (sql.includes("SELECT username, total_td, current_td, corporate_rank")) {
+                return {
+                  ...BASE_PROFILE,
+                  license_hash: supporterHash,
+                  is_executive_supporter: currentSupporter,
+                  display_rank: currentDisplayRank,
+                };
+              }
+              return null;
+            }),
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("UPDATE checkout_key_claims") && sql.includes("SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END")) {
+                claimedSupporterHash = supporterHash;
+                return { meta: { changes: 1 } };
+              }
+              if (sql.includes("SET is_executive_supporter = 1")) {
+                const changes = currentSupporter === 0 ? 1 : 0;
+                if (changes > 0) {
+                  pendingSupporter = 1;
+                  pendingDisplayRank = bindings[0] as string | null;
+                  currentSupporter = 1;
+                  currentDisplayRank = bindings[0] as string | null;
+                }
+                return { meta: { changes } };
+              }
+              if (sql.includes("INSERT INTO recent_events")) {
+                recentEvents.push(String(bindings[0]));
+                return { meta: { changes: 1 } };
+              }
+              if (sql.includes("DELETE FROM recent_events")) {
+                return { meta: { changes: 1 } };
+              }
+              if (sql.includes("UPDATE user_scores SET display_rank = ?")) {
+                currentDisplayRank = bindings[0] as string | null;
+                return { meta: { changes: 1 } };
+              }
+              return { meta: { changes: 1 } };
+            }),
+          };
+        }),
+        first: vi.fn().mockResolvedValue(null),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+      })),
+      exec: vi.fn().mockImplementation(async (sql: string) => {
+        if (sql === "BEGIN TRANSACTION") {
+          transactionOpen = true;
+          pendingSupporter = currentSupporter;
+          pendingDisplayRank = currentDisplayRank;
+          return { results: [] };
+        }
+        if (sql === "COMMIT") {
+          if (transactionOpen) {
+            currentSupporter = pendingSupporter;
+            currentDisplayRank = pendingDisplayRank;
+          }
+          transactionOpen = false;
+          return { results: [] };
+        }
+        if (sql === "ROLLBACK") {
+          transactionOpen = false;
+          pendingSupporter = currentSupporter;
+          pendingDisplayRank = currentDisplayRank;
+          return { results: [] };
+        }
+        return { results: [] };
+      }),
+    };
+
+    const res = await postWithSession("/api/account/update-display-rank", {
+      username: "alice",
+      displayRank: selectedTitle,
+      licenseKeyHash: supporterHash,
+    }, { DB: db }, "owner-session");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: {
+        is_executive_supporter: true,
+        display_rank: selectedTitle,
+      },
+    });
+    expect(recentEvents).toEqual([
+      "[LIVE] 👑 alice just expensed the Executive Supporter Pack. Respect the grift.",
+    ]);
+    expect(calls.some((call) => call.sql.includes("SET is_executive_supporter = 1") && call.bindings[0] === selectedTitle)).toBe(true);
+  });
+
+  it("falls back to a plain display-rank update when supporter activation wins concurrently", async () => {
+    const selectedTitle = SUPPORTER_VANITY_TITLES[1]!.title;
+    const supporterHash = await hashKey("COPE-SUPPORTER-RACE");
+    let currentSupporter = 0;
+    let currentDisplayRank: string | null = null;
+    let claimedSupporterHash: string | null = null;
+    const recentEvents: string[] = [];
+    const calls: { sql: string; bindings: unknown[] }[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...bindings: unknown[]) => {
+          calls.push({ sql, bindings });
+          return {
+            sql,
+            bindings,
+            first: vi.fn().mockImplementation(async () => {
+              if (sql.includes("license_hash, account_id FROM user_scores WHERE username = ?")) {
+                return { ...BASE_PROFILE, license_hash: supporterHash, is_executive_supporter: currentSupporter };
+              }
+              if (sql.includes("SELECT status, last_activated_at FROM licenses")) {
+                return { status: "active", last_activated_at: new Date().toISOString() };
+              }
+              if (sql.includes("FROM checkout_key_claims ckc") && sql.includes("JOIN checkout_claims cc")) {
+                return { checkout_id: "co_1" };
+              }
+              if (sql.includes("SELECT license_key_hash FROM checkout_key_claims WHERE checkout_id = ? AND is_executive_supporter = 1")) {
+                return claimedSupporterHash ? { license_key_hash: claimedSupporterHash } : null;
+              }
+              if (sql.includes("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")) {
+                return { is_executive_supporter: 1 };
+              }
+              if (sql.includes("SELECT username, total_td, current_td, corporate_rank")) {
+                return {
+                  ...BASE_PROFILE,
+                  license_hash: supporterHash,
+                  is_executive_supporter: currentSupporter,
+                  display_rank: currentDisplayRank,
+                };
+              }
+              return null;
+            }),
+            run: vi.fn().mockImplementation(async () => {
+              if (sql.includes("UPDATE checkout_key_claims") && sql.includes("SET is_executive_supporter = CASE WHEN license_key_hash = ? THEN 1 ELSE 0 END")) {
+                claimedSupporterHash = supporterHash;
+                return { meta: { changes: 1 } };
+              }
+              if (sql.includes("SET is_executive_supporter = 1")) {
+                currentSupporter = 1;
+                return { meta: { changes: 0 } };
+              }
+              if (sql.includes("INSERT INTO recent_events")) {
+                recentEvents.push(String(bindings[0]));
+                return { meta: { changes: 1 } };
+              }
+              if (sql.includes("DELETE FROM recent_events")) {
+                return { meta: { changes: 1 } };
+              }
+              if (sql.includes("UPDATE user_scores SET display_rank = ?")) {
+                currentDisplayRank = bindings[0] as string | null;
+                return { meta: { changes: 1 } };
+              }
+              return { meta: { changes: 1 } };
+            }),
+          };
+        }),
+        first: vi.fn().mockResolvedValue(null),
+        run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+      })),
+      exec: vi.fn().mockImplementation(async (sql: string) => {
+        if (sql === "BEGIN TRANSACTION") {
+          return { results: [] };
+        }
+        if (sql === "ROLLBACK") {
+          return { results: [] };
+        }
+        if (sql === "COMMIT") {
+          return { results: [] };
+        }
+        return { results: [] };
+      }),
+    };
+
+    const res = await postWithSession("/api/account/update-display-rank", {
+      username: "alice",
+      displayRank: selectedTitle,
+      licenseKeyHash: supporterHash,
+    }, { DB: db }, "owner-session");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      success: true,
+      profile: {
+        is_executive_supporter: true,
+        display_rank: selectedTitle,
+      },
+    });
+    expect(recentEvents).toEqual([]);
     expect(calls.some((call) => call.sql.includes("UPDATE user_scores SET display_rank = ?") && call.bindings[0] === selectedTitle)).toBe(true);
   });
 

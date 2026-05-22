@@ -137,8 +137,9 @@ describe("SlashMenu", () => {
     });
 
     expect(menu.textContent).toContain("VANITY TITLES");
-    expect(menu.textContent).toContain("junior-code-monkey");
-    expect(menu.textContent).toContain("Junior Code Monkey");
+    expect(menu.textContent).toContain("10x");
+    expect(menu.textContent).toContain("10x Rockstar Ninja");
+    expect(menu.textContent).toContain("Leaves a trail of unmaintainable genius. Quits after 6 months.");
   });
 
   it("shows /promote [title-id] in the command list", () => {
@@ -151,7 +152,9 @@ describe("SlashMenu", () => {
     });
 
     expect(menu.textContent).toContain("/promote [title-id]");
-    expect(menu.textContent).toContain("Buy a vanity title and wear it in public");
+    expect(menu.textContent).toContain("Executive Supporter-only vanity titles");
+    const promoteCommand = Array.from(menu.querySelectorAll("li.cursor-pointer span")).find((item) => item.textContent?.includes("/promote"));
+    expect(promoteCommand?.className).toContain("text-fuchsia-300");
   });
 
   it("emits full /backlog category commands when category rows are clicked", () => {

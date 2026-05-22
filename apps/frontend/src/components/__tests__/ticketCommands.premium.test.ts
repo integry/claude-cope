@@ -372,6 +372,7 @@ describe("premium backlog handling", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(reply.mock.calls[0]?.[0].content).toContain("CATEGORY LOCKED");
     expect(reply.mock.calls[0]?.[0].content).toContain("MELT");
+    expect(reply.mock.calls[0]?.[0].content).toContain("Run `/upgrade` to Max 429X to unlock.");
   });
 
   it("rejects invalid backlog categories with a readable error", async () => {

@@ -1,11 +1,11 @@
 /* eslint-disable max-lines */
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { getQuotaLimits, getQuotaPercent } from "../utils/quota";
+import { getQuotaLimits, getQuotaPercent, getQuotaState } from "../utils/quota";
 import { getProfile, getProfileRowByAccountId, rowToProfile, isLicenseActive } from "../utils/profile";
-import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES } from "../gameConstants";
-import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey } from "./accountHelpers";
-import type { CheckoutCache } from "./accountHelpers";
+import { GENERATORS, UPGRADES, THEMES, ALIAS_CHANGES_PER_DAY, calcBulkCost, FREE_TIER_RANK_CAP, PROMOTE_ACCESS_DENIED_MESSAGE, SUPPORTER_VANITY_TITLES, EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS } from "../gameConstants";
+import { resolveProfile, verifyOwnership, resolveThemePurchaseOwnership, resolveThemeSelectionOwnership, broadcastPurchase, validateSyncRequest, commitSyncSideEffects, validateActiveTicket, validateAlias, performAliasDbUpdate, ACTIVE_LICENSE_EXISTS_SQL, rollbackProfileMutation, accountKvKeys, fetchLicenseKeys, fetchCheckoutCustomerId, fetchNextCheckoutCreatedAt, parseCheckoutCache, claimCheckoutForSession, getStoredClaimedKeys, claimLicenseKeysForCheckout, resolveSessionProfileRow, SESSION_USERNAME_TTL_SECONDS, RENAME_REDIRECT_TTL_SECONDS, syncExecutiveSupporterEntitlement, claimExecutiveSupporterForLicenseKey, rollbackSyncSideEffects, activateExecutiveSupporterIfNeeded, fetchCheckoutIdFromCustomerSession, getLinkedLicenseAccount, creditExistingAccountWithLicense } from "./accountHelpers";
+import type { CheckoutCache, ResolveProfileResult, SyncProfileErrorCode, SyncProfileMutation } from "./accountHelpers";
 import { ACHIEVEMENT_IDS } from "@claude-cope/shared/achievements";
 import { BUDDY_TYPE_SET } from "@claude-cope/shared/buddies";
 import { issueFreeAccountCookie } from "../utils/freeAccountIdentity";
@@ -28,8 +28,14 @@ type Env = {
   };
 };
 const SHILL_CREDIT = 5;
+const CHECKOUT_REFERENCE_TTL_SECONDS = 24 * 60 * 60;
+const EXECUTIVE_SUPPORTER_LICENSE_COUNT = 5;
 
 const account = new Hono<Env>();
+
+function checkoutReferenceKey(referenceId: string): string {
+  return `checkout_reference:${referenceId}`;
+}
 
 async function lookupCheckoutCache(
   kv: KVNamespace,
@@ -48,21 +54,43 @@ async function lookupCheckoutCache(
 }
 
 async function validateCheckoutRequest(c: { req: { json: <T>() => Promise<T> }; get: (key: string) => string; env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response }) {
-  let body: { checkoutId?: string };
+  let body: { checkoutId?: string; customerSessionToken?: string };
   try {
-    body = await c.req.json<{ checkoutId?: string }>();
+    body = await c.req.json<{ checkoutId?: string; customerSessionToken?: string }>();
   } catch {
     return { error: c.json({ error: "Invalid JSON body" }, 400) } as const;
   }
-  if (!body.checkoutId) return { error: c.json({ error: "checkoutId is required" }, 400) } as const;
-  if (!/^[\w-]{4,128}$/.test(body.checkoutId)) return { error: c.json({ error: "Invalid checkoutId format" }, 400) } as const;
+  if (!body.checkoutId && !body.customerSessionToken) {
+    return { error: c.json({ error: "checkoutId or customerSessionToken is required" }, 400) } as const;
+  }
+  if (body.checkoutId && !/^[\w-]{4,128}$/.test(body.checkoutId)) return { error: c.json({ error: "Invalid checkoutId format" }, 400) } as const;
+  if (body.customerSessionToken && !/^polar_cst_[A-Za-z0-9_-]{16,256}$/.test(body.customerSessionToken)) {
+    return { error: c.json({ error: "Invalid customerSessionToken format" }, 400) } as const;
+  }
   const sessionId = c.get("sessionId");
   if (!sessionId) return { error: c.json({ error: "Session required" }, 401) } as const;
-  return { checkoutId: body.checkoutId, sessionId, kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV } as const;
+  return { checkoutId: body.checkoutId, customerSessionToken: body.customerSessionToken, sessionId, kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV } as const;
+}
+
+async function resolveCheckoutRequestId(
+  c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
+  request: { checkoutId?: string; customerSessionToken?: string },
+): Promise<{ checkoutId: string; isExecutiveSupporterHint?: boolean } | { response: Response }> {
+  if (request.checkoutId) return { checkoutId: request.checkoutId };
+
+  const organizationId = c.env?.POLAR_ORGANIZATION_ID;
+  if (!organizationId) return { response: c.json({ error: "Polar integration is not configured" }, 500) };
+  const result = await fetchCheckoutIdFromCustomerSession(request.customerSessionToken!, organizationId);
+  if ("error" in result) return { response: c.json({ error: result.error }, result.status) };
+  return { checkoutId: result.checkoutId, isExecutiveSupporterHint: result.isExecutiveSupporter };
 }
 
 function respondWithClaimedKeys(c: { json: (data: unknown, status?: number) => Response }, keys: string[]) {
   return c.json({ licenseKey: keys[0], allKeys: keys });
+}
+
+function isExecutiveSupporterLicenseSet(keys: string[]) {
+  return keys.length >= EXECUTIVE_SUPPORTER_LICENSE_COUNT;
 }
 
 async function cacheClaimedKeys(kv: KVNamespace | undefined, checkoutId: string, sessionId: string, keys: string[]) {
@@ -151,16 +179,22 @@ async function resolveCachedOrStoredClaim(
   };
 }
 
-function validateCheckoutOwnership(
+async function validateCheckoutOwnership(
   c: { json: (data: unknown, status?: number) => Response },
   opts: {
     referenceId: string | null;
     sessionId: string;
+    kv?: KVNamespace;
     allowMissingReferenceBinding?: boolean;
   },
-) {
-  const { referenceId, sessionId, allowMissingReferenceBinding } = opts;
-  if (referenceId && referenceId !== sessionId) {
+): Promise<Response | null> {
+  const { referenceId, sessionId, kv, allowMissingReferenceBinding } = opts;
+  if (referenceId && referenceId === sessionId) return null;
+  if (referenceId && kv) {
+    const boundSessionId = await kv.get(checkoutReferenceKey(referenceId)).catch(() => null);
+    if (boundSessionId === sessionId) return null;
+  }
+  if (referenceId) {
     return c.json({ error: "This checkout belongs to a different session" }, 403);
   }
   if (!referenceId && !allowMissingReferenceBinding) {
@@ -179,7 +213,7 @@ function mapClaimedKeysError(
 
 async function resolveCheckoutRedemptionContext(
   c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
-  deps: { checkoutId: string; sessionId: string; allowMissingReferenceBinding?: boolean },
+  deps: { checkoutId: string; sessionId: string; kv?: KVNamespace; allowMissingReferenceBinding?: boolean; isExecutiveSupporterHint?: boolean },
 ): Promise<
   | { customerId: string; checkoutCreatedAt: string; isExecutiveSupporter: boolean }
   | { response: Response }
@@ -197,9 +231,10 @@ async function resolveCheckoutRedemptionContext(
     return { response: c.json({ error: result.error }, result.status) };
   }
 
-  const ownershipError = validateCheckoutOwnership(c, {
+  const ownershipError = await validateCheckoutOwnership(c, {
     referenceId: result.referenceId ?? null,
     sessionId: deps.sessionId,
+    kv: deps.kv,
     allowMissingReferenceBinding: deps.allowMissingReferenceBinding,
   });
   if (ownershipError) return { response: ownershipError };
@@ -210,13 +245,13 @@ async function resolveCheckoutRedemptionContext(
   return {
     customerId: result.customerId,
     checkoutCreatedAt: result.createdAt,
-    isExecutiveSupporter: result.isExecutiveSupporter,
+    isExecutiveSupporter: result.isExecutiveSupporter || Boolean(deps.isExecutiveSupporterHint),
   };
 }
 
 async function redeemCheckoutLicense(
   c: { env?: Env["Bindings"]; json: (data: unknown, status?: number) => Response },
-  deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string; allowMissingReferenceBinding?: boolean },
+  deps: { db: D1Database; kv: KVNamespace | undefined; checkoutId: string; sessionId: string; claimSecret: string; allowMissingReferenceBinding?: boolean; isExecutiveSupporterHint?: boolean },
 ) {
   const { db, kv, checkoutId, sessionId, claimSecret } = deps;
   const redemptionContext = await resolveCheckoutRedemptionContext(c, deps);
@@ -238,10 +273,15 @@ async function redeemCheckoutLicense(
   if ("error" in nextCheckout) return c.json({ error: nextCheckout.error }, nextCheckout.status);
   const lkResult = await fetchLicenseKeys(customerId, organizationId, accessToken, { createdAt: checkoutCreatedAt, nextCheckoutCreatedAt: nextCheckout.createdAt ?? undefined });
   if ("error" in lkResult) return c.json({ error: lkResult.error }, lkResult.status);
+  const shouldClaimExecutiveSupporter = isExecutiveSupporter || isExecutiveSupporterLicenseSet(lkResult.keys);
+  if (shouldClaimExecutiveSupporter && !isExecutiveSupporter) {
+    await db.prepare("UPDATE checkout_claims SET is_executive_supporter = 1 WHERE checkout_id = ? AND session_id = ?").bind(checkoutId, sessionId).run().catch(() => undefined);
+  }
   const claimedKeys = await claimLicenseKeysForCheckout(db, {
     checkoutId,
     keys: lkResult.keys,
     secret: claimSecret,
+    executiveSupporterLicenseKey: shouldClaimExecutiveSupporter ? lkResult.keys[0] : undefined,
   });
   if (!claimedKeys.ok) return mapClaimedKeysError(c, claimedKeys.error);
   return respondWithStoredClaim(c, { kv, checkoutId, sessionId, keys: claimedKeys.keys });
@@ -291,14 +331,19 @@ async function buildMePayload(opts: {
   const isPro = Boolean(rawLicenseHash && licenseActive);
   const normalizedRow = normalizeFreeTierRank(row, isPro);
   const limits = getQuotaLimits(env);
-  const quotaPercent = isPro
-    ? await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: rawLicenseHash!, limits })
-    : await getQuotaPercent(kv, { tier: "free", sessionId, limits });
+  const quotaState = isPro
+    ? await getQuotaState(kv, { tier: "pro", sessionId: "", licenseKeyHash: rawLicenseHash!, limits })
+    : await getQuotaState(kv, { tier: "free", sessionId, limits });
   const profile = normalizedRow
-    ? { ...rowToProfile(normalizedRow as Parameters<typeof rowToProfile>[0]), quota_percent: quotaPercent }
+    ? {
+      ...rowToProfile(normalizedRow as Parameters<typeof rowToProfile>[0]),
+      quota_percent: quotaState.percent,
+      quota_remaining: quotaState.remaining,
+      quota_total: quotaState.total,
+    }
     : null;
   const revoked = Boolean(rawLicenseHash && !licenseActive);
-  return { isPro, quotaPercent, profile, revoked };
+  return { isPro, quotaState, profile, revoked };
 }
 
 async function respondWithMeProfile(
@@ -311,7 +356,7 @@ async function respondWithMeProfile(
     username: string;
   },
 ) {
-  const { isPro, quotaPercent, profile, revoked } = await buildMePayload({
+  const { isPro, quotaState, profile, revoked } = await buildMePayload({
     row: opts.row,
     db: opts.db,
     kv: opts.kv,
@@ -326,7 +371,9 @@ async function respondWithMeProfile(
     found: true,
     username: opts.username,
     profile,
-    quotaPercent,
+    quotaPercent: quotaState.percent,
+    quotaRemaining: quotaState.remaining,
+    quotaTotal: quotaState.total,
     isPro,
     ...(revoked ? { revoked: true } : {}),
   });
@@ -390,15 +437,19 @@ async function persistActiveTheme(
   themeId: string,
   licenseKeyHash: string,
 ) {
+  const includedThemePlaceholders = EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS.map(() => "?").join(", ");
   return db.prepare(
     `UPDATE user_scores SET
       active_theme = ?,
       updated_at = datetime('now')
     WHERE username = ?
-      AND ? IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
+      AND (
+        ? IN (SELECT value FROM json_each(COALESCE(unlocked_themes, '["default"]')))
+        OR (is_executive_supporter = 1 AND ? IN (${includedThemePlaceholders}))
+      )
       AND license_hash = ?
       AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
-  ).bind(themeId, username, themeId, licenseKeyHash).run();
+  ).bind(themeId, username, themeId, themeId, ...EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS, licenseKeyHash).run();
 }
 
 async function ensureDisplayRankSupporterAccess(
@@ -417,18 +468,228 @@ async function ensureDisplayRankSupporterAccess(
     licenseKeyHash: opts.licenseKeyHash,
     sessionId: opts.sessionId,
   });
-  if (!claimed) return false;
+  return claimed;
+}
 
-  opts.profile.is_executive_supporter = await syncExecutiveSupporterEntitlement(db, opts.licenseKeyHash);
-  return opts.profile.is_executive_supporter;
+function getSyncProfileErrorStatus(code: SyncProfileErrorCode): number {
+  switch (code) {
+    case "sync_conflict":
+      return 409;
+    case "profile_lookup_failed":
+      return 500;
+    case "username_required":
+    case "session_required":
+    case "free_username_claim_forbidden":
+      return 403;
+    default:
+      return 500;
+  }
+}
+
+function respondWithSyncProfileError(
+  c: { json: (data: unknown, status?: number) => Response },
+  error: { code: SyncProfileErrorCode; message: string },
+) {
+  return c.json({ error: error.message }, getSyncProfileErrorStatus(error.code));
+}
+
+async function rollbackSyncProfileMutation(
+  db: D1Database,
+  hash: string,
+  mutation: SyncProfileMutation | undefined,
+) {
+  if (!mutation) {
+    return;
+  }
+
+  try {
+    await rollbackProfileMutation(db, hash, mutation);
+  } catch (rollbackErr: unknown) {
+    console.warn(
+      `[account/sync] failed to rollback profile mutation for ${hash.slice(0, 8)}:`,
+      rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+    );
+  }
+}
+
+async function finalizeSyncProfile(
+  deps: { db: D1Database; kv: KVNamespace; hash: string; validationId?: string; proInitialQuota: number },
+  result: { profile: NonNullable<Exclude<ResolveProfileResult, { profile: null }>["profile"]>; mutation: SyncProfileMutation },
+) {
+  let sideEffectsSnapshot: Awaited<ReturnType<typeof commitSyncSideEffects>>;
+  try {
+    sideEffectsSnapshot = await commitSyncSideEffects(
+      { db: deps.db, kv: deps.kv, hash: deps.hash },
+      { validationId: deps.validationId, proInitialQuota: deps.proInitialQuota },
+    );
+  } catch (err: unknown) {
+    await rollbackSyncProfileMutation(deps.db, deps.hash, result.mutation);
+    throw err;
+  }
+
+  try {
+    const supporterEntitlement = await syncExecutiveSupporterEntitlement(deps.db, deps.hash);
+    result.profile = {
+      ...result.profile,
+      is_executive_supporter: supporterEntitlement.isExecutiveSupporter,
+      display_rank: supporterEntitlement.isExecutiveSupporter ? result.profile.display_rank : null,
+    };
+  } catch (err: unknown) {
+    await rollbackSyncSideEffects({ db: deps.db, kv: deps.kv, hash: deps.hash }, sideEffectsSnapshot);
+    await rollbackSyncProfileMutation(deps.db, deps.hash, result.mutation);
+    throw err;
+  }
+}
+
+async function persistDisplayRankUpdate(
+  db: D1Database,
+  opts: {
+    displayRank: string | null;
+    licenseKeyHash: string;
+    username: string;
+    needsFirstSupporterActivation: boolean;
+  },
+) {
+  if (opts.needsFirstSupporterActivation) {
+    const activatedNow = await activateExecutiveSupporterIfNeeded(db, {
+      username: opts.username,
+      licenseKeyHash: opts.licenseKeyHash,
+      displayRank: opts.displayRank,
+    });
+    if (activatedNow) {
+      return { updated: true, activatedNow: true };
+    }
+  }
+
+  const result = await db
+    .prepare(
+      `UPDATE user_scores SET display_rank = ?, updated_at = datetime('now')
+       WHERE username = ? AND license_hash = ?${opts.displayRank === null ? "" : " AND is_executive_supporter = 1"}
+         AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
+    )
+    .bind(opts.displayRank, opts.username, opts.licenseKeyHash)
+    .run();
+  return {
+    updated: Number(result.meta.changes ?? 0) > 0,
+    activatedNow: false,
+  };
+}
+
+async function bindSessionUserIfPresent(
+  kv: KVNamespace,
+  sessionId: string,
+  username: string | undefined,
+) {
+  if (!username) {
+    return;
+  }
+
+  try {
+    await kv.put(accountKvKeys.sessionUser(sessionId), username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
+  } catch (err: unknown) {
+    console.warn(
+      `[account/sync] failed to bind session for ${username}:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
+async function resolveLinkedLicenseSync(
+  deps: { db: D1Database; kv: KVNamespace; hash: string; limits: ReturnType<typeof getQuotaLimits> },
+) {
+  const linked = await getLinkedLicenseAccount(deps.db, deps.hash);
+  if (!linked) return null;
+  const quotaState = await getQuotaState(deps.kv, {
+    tier: "pro",
+    sessionId: "",
+    licenseKeyHash: linked.primaryLicenseHash,
+    limits: deps.limits,
+  });
+  return {
+    hash: linked.primaryLicenseHash,
+    profile: {
+      ...linked.profile,
+      quota_percent: quotaState.percent,
+      quota_remaining: quotaState.remaining,
+      quota_total: quotaState.total,
+    },
+  };
+}
+
+async function resolveExistingAccountCreditSync(
+  deps: {
+    db: D1Database;
+    kv: KVNamespace;
+    hash: string;
+    body: { username?: string };
+    sessionId: string | undefined;
+    validationId?: string;
+    limits: ReturnType<typeof getQuotaLimits>;
+  },
+) {
+  const username = deps.body.username?.trim();
+  if (!username || !deps.sessionId) return null;
+  const existing = await deps.db
+    .prepare("SELECT username, license_hash FROM user_scores WHERE LOWER(username) = LOWER(?)")
+    .bind(username)
+    .first<{ username: string; license_hash: string | null }>();
+  if (!existing?.username || !existing.license_hash || existing.license_hash === deps.hash) return null;
+
+  const boundUsername = await deps.kv.get(accountKvKeys.sessionUser(deps.sessionId));
+  if (boundUsername?.toLowerCase() !== existing.username.toLowerCase()) return null;
+
+  const creditResult = await creditExistingAccountWithLicense(
+    { db: deps.db, kv: deps.kv },
+    {
+      username: existing.username,
+      primaryLicenseHash: existing.license_hash,
+      topUpLicenseHash: deps.hash,
+      credits: deps.limits.proInitialQuota,
+      validationId: deps.validationId,
+    },
+  );
+  if (!creditResult.credited) return null;
+
+  const profile = await getProfile(deps.db, existing.username);
+  if (!profile) return null;
+  const quotaState = await getQuotaState(deps.kv, {
+    tier: "pro",
+    sessionId: "",
+    licenseKeyHash: existing.license_hash,
+    limits: deps.limits,
+  });
+  return {
+    hash: existing.license_hash,
+    profile: {
+      ...profile,
+      quota_percent: quotaState.percent,
+      quota_remaining: quotaState.remaining,
+      quota_total: quotaState.total,
+    },
+    creditsAdded: deps.limits.proInitialQuota,
+  };
 }
 
 const SUPPORTER_VANITY_TITLE_SET = new Set(SUPPORTER_VANITY_TITLES.map((title) => title.title));
 
+account.get("/checkout-reference", async (c) => {
+  const sessionId = c.get("sessionId");
+  if (!sessionId) return c.json({ error: "Session required" }, 401);
+  const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
+  if (!kv) return c.json({ error: "Checkout binding storage is not configured" }, 500);
+
+  const referenceId = crypto.randomUUID();
+  await kv.put(checkoutReferenceKey(referenceId), sessionId, { expirationTtl: CHECKOUT_REFERENCE_TTL_SECONDS });
+  return c.json({ referenceId });
+});
+
 account.post("/checkout-license", async (c) => {
   const validated = await validateCheckoutRequest(c);
   if ("error" in validated) return validated.error;
-  const { checkoutId, sessionId, kv } = validated;
+  const resolvedCheckout = await resolveCheckoutRequestId(c, validated);
+  if ("response" in resolvedCheckout) return resolvedCheckout.response;
+  const { checkoutId } = resolvedCheckout;
+  const { sessionId, kv } = validated;
   const claimSecret = c.env?.CHECKOUT_CLAIM_SECRET;
   if (!claimSecret) return c.json({ error: "Checkout claim secret is not configured" }, 500);
   const db = c.env?.DB;
@@ -442,6 +703,7 @@ account.post("/checkout-license", async (c) => {
     checkoutId,
     sessionId,
     claimSecret,
+    isExecutiveSupporterHint: resolvedCheckout.isExecutiveSupporterHint,
     allowMissingReferenceBinding: resolvedClaim.allowMissingReferenceBinding,
   });
 });
@@ -454,65 +716,78 @@ account.post("/sync", async (c) => {
   const sessionId = c.get("sessionId");
   const limits = getQuotaLimits(c.env);
 
+  const linkedLicenseSync = await resolveLinkedLicenseSync({ db, kv, hash, limits });
+  if (linkedLicenseSync) {
+    if (sessionId && linkedLicenseSync.profile.username) {
+      await bindSessionUserIfPresent(kv, sessionId, linkedLicenseSync.profile.username);
+    }
+    return c.json({
+      success: true,
+      hash: linkedLicenseSync.hash,
+      restored: true,
+      profile: linkedLicenseSync.profile,
+    });
+  }
+
+  const creditSync = await resolveExistingAccountCreditSync({
+    db,
+    kv,
+    hash,
+    body,
+    sessionId,
+    validationId: validation.id ? String(validation.id) : undefined,
+    limits,
+  });
+  if (creditSync) {
+    if (sessionId && creditSync.profile.username) {
+      await bindSessionUserIfPresent(kv, sessionId, creditSync.profile.username);
+    }
+    return c.json({
+      success: true,
+      hash: creditSync.hash,
+      restored: true,
+      credited: true,
+      creditsAdded: creditSync.creditsAdded,
+      profile: creditSync.profile,
+    });
+  }
+
   // Resolve the profile FIRST — if this fails (username taken, concurrent
   // claim, etc.) we must NOT leave behind an activated license row or KV
   // quota for a sync that never completed.
   const result = await resolveProfile(db, hash, body, sessionId && kv ? { sessionId, kv } : undefined);
   if (result.profile === null) {
-    const isConflict =
-      result.error.includes("already taken") ||
-      result.error.includes("just claimed") ||
-      result.error.includes("being activated");
-    return c.json({ error: result.error }, isConflict ? 409 : 403);
+    return respondWithSyncProfileError(c, result.error);
   }
+  const resolvedProfile = result;
 
   // Profile claim succeeded — now provision the licenses row and KV quota.
   // This ordering ensures that failed syncs never produce orphaned active
   // licenses or quota entries.
-  try {
-    const isExecutiveSupporter = await syncExecutiveSupporterEntitlement(db, hash);
-    await commitSyncSideEffects(
-      { db, kv, hash },
-      { validationId: validation.id, proInitialQuota: limits.proInitialQuota },
-    );
-    result.profile = {
-      ...result.profile,
-      is_executive_supporter: isExecutiveSupporter,
-      display_rank: isExecutiveSupporter ? result.profile.display_rank : null,
-    };
-  } catch (err: unknown) {
-    try {
-      await rollbackProfileMutation(db, hash, result.mutation);
-    } catch (rollbackErr: unknown) {
-      console.warn(
-        `[account/sync] failed to rollback profile mutation for ${hash.slice(0, 8)}:`,
-        rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
-      );
-    }
-    throw err;
-  }
+  await finalizeSyncProfile(
+    { db, kv, hash, validationId: validation.id ? String(validation.id) : undefined, proInitialQuota: limits.proInitialQuota },
+    resolvedProfile,
+  );
 
   // Bind the session to the resolved username so /me can look it up.
-  if (sessionId && result.profile?.username) {
-    try {
-      await kv.put(accountKvKeys.sessionUser(sessionId), result.profile.username, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
-    } catch (err: unknown) {
-      console.warn(
-        `[account/sync] failed to bind session for ${result.profile.username}:`,
-        err instanceof Error ? err.message : err,
-      );
-    }
+  if (sessionId && resolvedProfile.profile.username) {
+    await bindSessionUserIfPresent(kv, sessionId, resolvedProfile.profile.username);
   }
 
-  const quotaPercent = await getQuotaPercent(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
-  const profile = { ...result.profile, quota_percent: quotaPercent };
+  const quotaState = await getQuotaState(kv, { tier: "pro", sessionId: "", licenseKeyHash: hash, limits });
+  const profile = {
+    ...resolvedProfile.profile,
+    quota_percent: quotaState.percent,
+    quota_remaining: quotaState.remaining,
+    quota_total: quotaState.total,
+  };
 
-  return c.json({ success: true, hash, restored: result.restored, profile });
+  return c.json({ success: true, hash, restored: resolvedProfile.restored, profile });
 });
 
 account.get("/me", async (c) => {
   const kv = c.env?.QUOTA_KV ?? c.env?.USAGE_KV;
-  const sessionId = c.get("sessionId");
+  const sessionId = String(c.get("sessionId") ?? "");
   if (!kv || !sessionId) return c.json({ found: false });
 
   const db = c.env?.DB;
@@ -945,6 +1220,7 @@ account.post("/update-display-rank", async (c) => {
     return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
   }
   const { profile, licenseKeyHash } = ownership;
+  const needsFirstSupporterActivation = displayRank !== null && !profile.is_executive_supporter;
 
   if (!(await ensureDisplayRankSupporterAccess(db, {
     displayRank,
@@ -955,18 +1231,18 @@ account.post("/update-display-rank", async (c) => {
     return c.json({ error: PROMOTE_ACCESS_DENIED_MESSAGE }, 403);
   }
 
-  const supporterClause = displayRank === null ? "" : " AND is_executive_supporter = 1";
-  const result = await db
-    .prepare(
-      `UPDATE user_scores SET display_rank = ?, updated_at = datetime('now')
-       WHERE username = ? AND license_hash = ?${supporterClause}
-         AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
-    )
-    .bind(displayRank, profile.username, licenseKeyHash)
-    .run();
+  const result = await persistDisplayRankUpdate(db, {
+    displayRank,
+    licenseKeyHash,
+    username: profile.username,
+    needsFirstSupporterActivation,
+  });
 
-  if (!result.meta.changes) {
+  if (!result.updated) {
     return c.json({ error: "Update failed — profile not found, supporter entitlement missing, or license revoked" }, 409);
+  }
+  if (result.activatedNow) {
+    profile.is_executive_supporter = true;
   }
 
   const updated = await getProfile(db, profile.username);
