@@ -55,10 +55,9 @@ describe("ShareButton native share flow", () => {
     expect(isNativeShareCancellation(new Error("share request aborted by browser extension"))).toBe(false);
   });
 
-  it("uses navigator.share on mobile with the backend-generated public share URL", async () => {
+  it("opens the mobile preview modal first and shows only the generic native share action", async () => {
     testScope.setNativeShareDevice(true);
     testScope.setNavigatorShare(async () => undefined);
-    testScope.setTransientUserActivation(true);
     testScope.renderComponent();
     await triggerMobileTap();
 
@@ -67,15 +66,11 @@ describe("ShareButton native share flow", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ shareClaim: signedShareClaim }),
     }));
-    expect(testScope.navigatorShareMock).toHaveBeenCalledWith(expect.objectContaining({
-      title: "Claude Cope chat by @testuser",
-      text: "Hello",
-      url: shareCardResponse.shareUrl,
-    }));
-    expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
-    expect(testScope.fetchMock).not.toHaveBeenCalledWith(shareCardResponse.imageUrl);
-    expect(mockClipboard.write).not.toHaveBeenCalled();
-    expect(mockClipboard.writeText).not.toHaveBeenCalled();
+    expect(testScope.navigatorShareMock).not.toHaveBeenCalled();
+    expect(testScope.container.querySelector("[role='dialog']")).not.toBeNull();
+    expect(testScope.getButtonByLabel("OPEN SHARE MENU")).not.toBeNull();
+    expect(testScope.container.textContent).not.toContain("SHARE ON X");
+    expect(testScope.container.textContent).not.toContain("COPY IMAGE");
   });
 
   it("does not create a public share card before the user completes the share action", async () => {
@@ -98,50 +93,70 @@ describe("ShareButton native share flow", () => {
     expect(testScope.navigatorShareMock).not.toHaveBeenCalled();
   });
 
-  it("opens the existing modal instead of attempting native share after activation is lost", async () => {
+  it("shares the rendered backend image through the generic native share action", async () => {
     testScope.setNativeShareDevice(true);
     testScope.setNavigatorShare(async () => undefined);
-    testScope.setTransientUserActivation(true);
-    const shareCardResponseDeferred = createDeferred<Response>();
-
-    testScope.fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("/api/share-cards")) {
-        testScope.setTransientUserActivation(false);
-        return shareCardResponseDeferred.promise;
-      }
-      if (url.includes("/api/share-image/")) {
-        return Promise.resolve(new Response("unexpected", { status: 500 }));
-      }
-      return Promise.resolve(new Response("unexpected", { status: 500 }));
-    });
-
     testScope.renderComponent();
+    await triggerMobileTap();
+    await testScope.clickShareButton("OPEN SHARE MENU");
 
-    const shareBtn = testScope.container.querySelector("button");
-    expect(shareBtn).not.toBeNull();
-
-    expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(0);
-
-    const clickPromise = act(async () => {
-      shareBtn!.click();
-      await Promise.resolve();
-    });
-
-    shareCardResponseDeferred.resolve(new Response(JSON.stringify(shareCardResponse), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    }));
-
-    await clickPromise;
-
-    expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(1);
-    expect(testScope.navigatorShareMock).not.toHaveBeenCalled();
-    expect(testScope.container.querySelector("[role='dialog']")).not.toBeNull();
-    expect(testScope.container.textContent).toContain("SHARE ON X");
+    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
+    const [shareData] = testScope.navigatorShareMock.mock.calls[0] ?? [];
+    const file = shareData?.files?.[0];
+    expect(shareData).toMatchObject({ title: "Claude Cope chat by @testuser" });
+    expect(shareData).not.toHaveProperty("text");
+    expect(shareData).not.toHaveProperty("url");
+    expect(file).toBeInstanceOf(File);
+    expect(file?.name).toBe("claude-cope-chat-share-123.png");
+    expect(file?.type).toBe("image/png");
+    expect(file?.size).toBeGreaterThan(0);
+    expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
+    expect(mockClipboard.write).not.toHaveBeenCalled();
+    expect(mockClipboard.writeText).not.toHaveBeenCalled();
   });
 
-  it("does not use navigator.share for touch-enabled desktop devices", async () => {
+  it("treats native share cancellation on mobile as a non-error and keeps the preview open", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(async () => {
+      throw new DOMException("The share operation was aborted.", "AbortError");
+    });
+    testScope.renderComponent();
+    await triggerMobileTap();
+    await testScope.clickShareButton("OPEN SHARE MENU");
+
+    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
+    expect(testScope.container.querySelector("[role='dialog']")).not.toBeNull();
+    expect(testScope.container.textContent).not.toContain("Failed to open share menu");
+    expect(testScope.container.textContent).not.toContain("Something went wrong");
+  });
+
+  it("closes the preview and shows an inline error when native share rejects unexpectedly", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(async () => {
+      throw new Error("share request aborted by browser extension");
+    });
+    testScope.renderComponent();
+    await triggerMobileTap();
+    await testScope.clickShareButton("OPEN SHARE MENU");
+
+    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
+    expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
+    expect(testScope.container.textContent).toContain("Failed to open share menu. Please try again.");
+  });
+
+  it("falls back to the desktop modal actions on mobile when native share is unavailable", async () => {
+    testScope.setNativeShareDevice(true);
+    testScope.setNavigatorShare(undefined);
+
+    const dialog = await testScope.renderOpenPreview();
+
+    expect(dialog).not.toBeNull();
+    expect(testScope.navigatorShareMock).not.toHaveBeenCalled();
+    expect(testScope.container.textContent).toContain("SHARE ON X");
+    expect(testScope.getButtonByLabel("OPEN SHARE MENU")).toBeNull();
+  });
+
+  it("does not use the native-share preview for touch-enabled desktop devices", async () => {
     testScope.setNativeShareDevice(false);
     testScope.setTouchDesktopDevice();
     testScope.setNavigatorShare(async () => undefined);
@@ -151,83 +166,23 @@ describe("ShareButton native share flow", () => {
     expect(testScope.navigatorShareMock).not.toHaveBeenCalled();
     expect(dialog).not.toBeNull();
     expect(testScope.container.textContent).toContain("SHARE ON X");
+    expect(testScope.getButtonByLabel("OPEN SHARE MENU")).toBeNull();
   });
 
-  it("uses navigator.share for desktop-class iPad Safari user agents", async () => {
+  it("uses the generic native-share preview for desktop-class iPad Safari user agents", async () => {
     testScope.setDesktopClassIpadDevice();
     testScope.setNavigatorShare(async () => undefined);
-    testScope.setTransientUserActivation(true);
     testScope.renderComponent();
     await triggerMobileTap();
 
-    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
-    expect(testScope.navigatorShareMock).toHaveBeenCalledWith(expect.objectContaining({
-      url: shareCardResponse.shareUrl,
-    }));
-    expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
-  });
-
-  it("treats native share cancellation on mobile as a non-error", async () => {
-    testScope.setNativeShareDevice(true);
-    testScope.setNavigatorShare(async () => {
-      throw new DOMException("The share operation was aborted.", "AbortError");
-    });
-    testScope.setTransientUserActivation(true);
-    testScope.renderComponent();
-    await triggerMobileTap();
-
-    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
-    expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
-    expect(testScope.container.textContent).not.toContain("Something went wrong");
-    expect(testScope.container.textContent).not.toContain("Failed to create share preview");
-    expect(testScope.container.querySelector("button")?.textContent).toBe("[share]");
-  });
-
-  it("treats mobile share-sheet dismissal variants as a non-error", async () => {
-    testScope.setNativeShareDevice(true);
-    testScope.setNavigatorShare(async () => {
-      throw new DOMException("Share dismissed", "NotAllowedError");
-    });
-    testScope.setTransientUserActivation(true);
-    testScope.renderComponent();
-    await triggerMobileTap();
-
-    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
-    expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
-    expect(testScope.container.textContent).not.toContain("Something went wrong");
-    expect(testScope.container.textContent).not.toContain("Failed to create share preview");
-  });
-
-  it("falls back to the existing modal when native share rejects unexpectedly", async () => {
-    testScope.setNativeShareDevice(true);
-    testScope.setNavigatorShare(async () => {
-      throw new Error("share request aborted by browser extension");
-    });
-    testScope.setTransientUserActivation(true);
-    testScope.renderComponent();
-    await triggerMobileTap();
-
-    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
-    expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(1);
-    expect(testScope.container.querySelector("[role='dialog']")).not.toBeNull();
-    expect(testScope.container.textContent).toContain("SHARE ON X");
-  });
-
-  it("falls back to the existing modal on mobile when native share is unavailable", async () => {
-    testScope.setNativeShareDevice(true);
-    testScope.setNavigatorShare(undefined);
-
-    const dialog = await testScope.renderOpenPreview();
-
-    expect(dialog).not.toBeNull();
     expect(testScope.navigatorShareMock).not.toHaveBeenCalled();
-    expect(testScope.container.textContent).toContain("SHARE ON X");
+    expect(testScope.container.querySelector("[role='dialog']")).not.toBeNull();
+    expect(testScope.getButtonByLabel("OPEN SHARE MENU")).not.toBeNull();
   });
 
   it("does not reuse a cached native-share card after shareClaim changes before effects flush", async () => {
     testScope.setNativeShareDevice(true);
     testScope.setNavigatorShare(async () => undefined);
-    testScope.setTransientUserActivation(true);
     testScope.shareCardResponses = [
       {
         ...shareCardResponse,
@@ -245,100 +200,19 @@ describe("ShareButton native share flow", () => {
 
     testScope.renderComponent({ shareClaim: signedShareClaim });
     await triggerMobileTap();
-
-    expect(testScope.navigatorShareMock).toHaveBeenCalledWith(expect.objectContaining({
-      url: "https://claudecope.com/s/share-old",
-    }));
-
-    testScope.navigatorShareMock.mockClear();
-    testScope.renderComponent({ shareClaim: nextSignedShareClaim });
-
-    const shareBtn = testScope.container.querySelector("button");
-    expect(shareBtn).not.toBeNull();
-
     await act(async () => {
-      shareBtn!.click();
-    });
-
-    expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(2);
-    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
-    expect(testScope.navigatorShareMock).toHaveBeenCalledWith(expect.objectContaining({
-      url: "https://claudecope.com/s/share-new",
-    }));
-  });
-
-  it("still attempts native share when activation cannot be confirmed after creating the share card", async () => {
-    testScope.setNativeShareDevice(true);
-    testScope.setNavigatorShare(async () => undefined);
-    testScope.renderComponent();
-
-    await triggerMobileTap();
-
-    expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(1);
-    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
-    expect(testScope.navigatorShareMock).toHaveBeenCalledWith(expect.objectContaining({
-      url: shareCardResponse.shareUrl,
-    }));
-    expect(testScope.container.querySelector("[role='dialog']")).toBeNull();
-  });
-
-  it("does not reuse a stale native-share card after shareClaim changes mid-request", async () => {
-    testScope.setNativeShareDevice(true);
-    testScope.setNavigatorShare(async () => undefined);
-    testScope.setTransientUserActivation(true);
-    const firstCard = {
-      ...shareCardResponse,
-      shareId: "share-old",
-      imageUrl: "https://claudecope.com/api/share-image/share-old",
-      shareUrl: "https://claudecope.com/s/share-old",
-    };
-    const secondCard = {
-      ...shareCardResponse,
-      shareId: "share-new",
-      imageUrl: "https://claudecope.com/api/share-image/share-new",
-      shareUrl: "https://claudecope.com/s/share-new",
-    };
-    const firstResponse = createDeferred<Response>();
-    let shareCardRequestCount = 0;
-
-    testScope.fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("/api/share-cards")) {
-        shareCardRequestCount += 1;
-        if (shareCardRequestCount === 1) {
-          return firstResponse.promise;
-        }
-        return Promise.resolve(new Response(JSON.stringify(secondCard), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }));
-      }
-      if (url.includes("/api/share-image/")) {
-        return Promise.resolve(new Response("unexpected", { status: 500 }));
-      }
-      return Promise.resolve(new Response("unexpected", { status: 500 }));
-    });
-
-    testScope.renderComponent({ shareClaim: signedShareClaim });
-    await triggerMobileTap();
-    testScope.renderComponent({ shareClaim: nextSignedShareClaim });
-    firstResponse.resolve(new Response(JSON.stringify(firstCard), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    }));
-
-    await act(async () => {
-      await Promise.resolve();
+      testScope.container.querySelector<HTMLButtonElement>("button[aria-label='Close']")?.click();
       await Promise.resolve();
     });
 
+    testScope.renderComponent({ shareClaim: nextSignedShareClaim });
     await triggerMobileTap();
+    await testScope.clickShareButton("OPEN SHARE MENU");
 
-    expect(testScope.navigatorShareMock).toHaveBeenCalledTimes(1);
-    expect(testScope.navigatorShareMock).toHaveBeenCalledWith(expect.objectContaining({
-      url: secondCard.shareUrl,
-    }));
     expect(testScope.fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/share-cards"))).toHaveLength(2);
+    const [shareData] = testScope.navigatorShareMock.mock.calls[0] ?? [];
+    const file = shareData?.files?.[0];
+    expect(file?.name).toBe("claude-cope-chat-share-new.png");
   });
 
   it("aborts native-share card creation when the inline cancel action is used", async () => {

@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
 import { copyBlobToClipboard, copyTextToClipboard, openShareIntent } from "./shareChatUtils";
 import { isNativeShareCancellation } from "./shareButtonNativeShare";
-import { getTransientUserActivationState, shouldUseNativeShareFlow } from "./shareButtonBrowser";
+import { shouldUseNativeShareFlow } from "./shareButtonBrowser";
 import { ShareButtonInlineStatus, ShareButtonPreviewModal, type ShareButtonPreviewActions, type ShareButtonPreviewModel } from "./ShareButtonPreviewModal";
 import { useNativeShareCard } from "./useNativeShareCard";
 import { useSharePreviewImage } from "./useSharePreviewImage";
@@ -12,6 +12,11 @@ type SharePlatform = "twitter" | "linkedin";
 type PasteHintState = { platform: "twitter"; method: "image" | "link" } | { platform: "linkedin" };
 
 const SPINNER_FRAMES = ["|", "/", "-", "\\"];
+const NATIVE_SHARE_ERROR_MESSAGE = "Failed to open share menu. Please try again.";
+
+function buildNativeShareFile(blob: Blob, shareId: string) {
+  return new File([blob], `claude-cope-chat-${shareId}.png`, { type: blob.type || "image/png" });
+}
 
 export function ShareButton({ userMessage, systemMessage, username, shareClaim }: { userMessage: string; systemMessage: string; username: string; shareClaim: string }) {
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "error">("idle");
@@ -107,64 +112,16 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     resetPreviewState({ resetNativeShareCardCache: true });
   }, [shareClaim, resetPreviewState]);
 
-  const tryNativeShare = useCallback(async (card: CreateShareCardResult, token: MountToken, sessionId: number): Promise<"shared" | "cancelled" | "fallback"> => {
-    try {
-      await navigator.share({
-        title: `Claude Cope chat by @${username}`,
-        text: userMessage.trim().slice(0, 140) || undefined,
-        url: card.shareUrl,
-      });
-      if (token.cancelled || sessionId !== previewSessionRef.current) return "shared";
-      setStatus("idle");
-      setFeedback(null);
-      return "shared";
-    } catch (error) {
-      if (token.cancelled || sessionId !== previewSessionRef.current) return "shared";
-      if (isNativeShareCancellation(error)) {
-        setStatus("idle");
-        setFeedback(null);
-        return "cancelled";
-      }
-      return "fallback";
-    }
-  }, [username, userMessage]);
-
-  const canAttemptImmediateNativeShare = useCallback((shareClaimValue: string) => {
+  const getCachedPreviewCard = useCallback((shareClaimValue: string) => {
     invalidateStaleNativeShareCache(shareClaimValue);
     return getCachedNativeShareCard(shareClaimValue);
   }, [getCachedNativeShareCard, invalidateStaleNativeShareCache]);
-
-  const trySharingExistingNativeCard = useCallback(async (shareClaimValue: string, token: MountToken, sessionId: number) => {
-    const nativeShareCard = canAttemptImmediateNativeShare(shareClaimValue);
-    if (!nativeShareCard) {
-      return false;
-    }
-    const nativeShareResult = await tryNativeShare(nativeShareCard, token, sessionId);
-    if (nativeShareResult !== "fallback") {
-      return true;
-    }
-    openPreviewCard(nativeShareCard);
-    return true;
-  }, [canAttemptImmediateNativeShare, openPreviewCard, tryNativeShare]);
 
   const createPreviewCard = useCallback((useNativeShareFlow: boolean, abortController: AbortController) => (
     useNativeShareFlow
       ? requestNativeShareCard({ signal: abortController.signal })
       : createShareCard({ shareClaim, signal: abortController.signal })
   ), [requestNativeShareCard, shareClaim]);
-
-  const maybeHandleNativeShareForNewCard = useCallback(async (card: CreateShareCardResult, activationAtStart: boolean | null, token: MountToken, sessionId: number) => {
-    const activationBeforeShare = getTransientUserActivationState();
-    if (activationAtStart === false || activationBeforeShare === false) {
-      openPreviewCard(card);
-      return true;
-    }
-    const nativeShareResult = await tryNativeShare(card, token, sessionId);
-    if (nativeShareResult !== "fallback") {
-      return true;
-    }
-    return false;
-  }, [openPreviewCard, tryNativeShare]);
 
   const handleOpenPreview = useCallback(async () => {
     if (generatingRef.current) return;
@@ -179,19 +136,16 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
 
     try {
       const useNativeShareFlow = shouldUseNativeShareFlow();
-      const activationAtStart = useNativeShareFlow ? getTransientUserActivationState() : null;
-
       if (useNativeShareFlow) {
-        const handledCachedShare = await trySharingExistingNativeCard(shareClaim, token, sessionId);
-        if (handledCachedShare) {
+        const cachedPreviewCard = getCachedPreviewCard(shareClaim);
+        if (cachedPreviewCard) {
+          openPreviewCard(cachedPreviewCard);
           return;
         }
       }
 
       const card = await createPreviewCard(useNativeShareFlow, abortController);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
-
-      if (useNativeShareFlow && await maybeHandleNativeShareForNewCard(card, activationAtStart, token, sessionId)) return;
       openPreviewCard(card);
     } catch (error) {
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
@@ -207,7 +161,42 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
         generatingRef.current = false;
       }
     }
-  }, [createPreviewCard, maybeHandleNativeShareForNewCard, shareClaim, resetAfterDelay, openPreviewCard, trySharingExistingNativeCard]);
+  }, [createPreviewCard, shareClaim, resetAfterDelay, openPreviewCard, getCachedPreviewCard]);
+
+  const handleNativeShare = useCallback(async () => {
+    if (!previewCard || sharingRef.current) return;
+    sharingRef.current = true;
+    const token = mountTokenRef.current;
+    const sessionId = previewSessionRef.current;
+    clearTimeouts();
+    setStatus("generating");
+    setFeedback("Preparing image for sharing...");
+
+    try {
+      const previewBlob = await loadPreviewBlob(previewCard.imageUrl);
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      await navigator.share({
+        files: [buildNativeShareFile(previewBlob, previewCard.shareId)],
+        title: `Claude Cope chat by @${username}`,
+      });
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      closePreview();
+      triggerRef.current?.focus();
+    } catch (error) {
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      if (isNativeShareCancellation(error)) {
+        setStatus("idle");
+        setFeedback(null);
+        return;
+      }
+      closePreview({ resetStatus: false });
+      setStatus("error");
+      setFeedback(NATIVE_SHARE_ERROR_MESSAGE);
+      resetAfterDelay(4000);
+    } finally {
+      sharingRef.current = false;
+    }
+  }, [previewCard, clearTimeouts, loadPreviewBlob, username, closePreview, resetAfterDelay]);
 
   const handleShare = useCallback(async (platform: SharePlatform) => {
     if (!previewCard || sharingRef.current) return;
@@ -347,11 +336,13 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   }, [previewCard, closePreview]);
 
   const isGenerating = status === "generating";
+  const useNativeSharePreview = shouldUseNativeShareFlow();
   const spinnerChar = SPINNER_FRAMES[spinnerFrameIndex]!;
   const isPreviewImageLoading = previewImageStatus === "loading";
   const previewActions: ShareButtonPreviewActions = {
     closePreview: () => closePreview(),
     copyImage: handleCopyImage,
+    nativeShare: handleNativeShare,
     openShareTarget: handleOpenShareTarget,
     shareToPlatform: handleShare,
     triggerFocus: () => triggerRef.current?.focus(),
@@ -365,6 +356,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     spinnerChar,
     status,
     systemMessage,
+    useNativeSharePreview,
     userMessage,
     username,
   };
