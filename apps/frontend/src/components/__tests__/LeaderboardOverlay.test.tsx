@@ -28,12 +28,12 @@ describe("LeaderboardOverlay", () => {
   });
 
   async function renderOverlay(entries: unknown[] = []) {
-    global.fetch = vi.fn(async () => (
+    global.fetch = vi.fn(async () =>
       new Response(JSON.stringify(entries), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),
-    )) as typeof fetch;
+    ) as typeof fetch;
 
     container = document.createElement("div");
     document.body.appendChild(container);
