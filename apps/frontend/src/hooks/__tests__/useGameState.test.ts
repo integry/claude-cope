@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { calcBulkCost, canBuyTheme, applyOptimisticThemePurchase, rollbackOptimisticThemePurchase, applyThemePurchaseFailure, applyValidatedSessionProState } from "../useGameState";
-import { GROWTH_RATE, GENERATORS } from "../../game/constants";
+import { GROWTH_RATE, GENERATORS, THEMES } from "../../game/constants";
 import type { GameState } from "../gameStateUtils";
 
 describe("calcBulkCost", () => {
@@ -149,8 +149,8 @@ describe("canBuyTheme", () => {
         achievements: [],
         buddy_type: null,
         buddy_is_shiny: false,
-        unlocked_themes: ["default", "amber", "midnight"],
-        active_theme: "midnight",
+        unlocked_themes: ["default", "amber", "syntax-error"],
+        active_theme: "syntax-error",
         active_ticket: null,
         td_multiplier: 1,
         multiplier: 1,
@@ -160,8 +160,19 @@ describe("canBuyTheme", () => {
     expect(nextState.isPro).toBe(true);
     expect(nextState.hasSessionPro).toBe(true);
     expect(nextState.isExecutiveSupporter).toBe(true);
-    expect(nextState.activeTheme).toBe("midnight");
-    expect(nextState.unlockedThemes).toEqual(["default", "amber", "midnight"]);
+    expect(nextState.activeTheme).toBe("syntax-error");
+    expect(nextState.unlockedThemes).toEqual(["default", "amber", "syntax-error"]);
+  });
+
+  it("includes the new premium themes in the shared catalog", () => {
+    expect(THEMES.map((theme) => theme.id)).toEqual([
+      "default",
+      "amber",
+      "matrix",
+      "light",
+      "corporate-beige",
+      "syntax-error",
+    ]);
   });
 
   it("allows restored paid users without proKeyHash to buy themes", () => {

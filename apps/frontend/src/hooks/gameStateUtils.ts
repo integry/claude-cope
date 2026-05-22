@@ -116,6 +116,8 @@ export interface EconomyState {
   totalTDEarned: number;
   currentRank: string;
   quotaPercent: number;
+  quotaRemaining?: number;
+  quotaTotal?: number;
   quotaLockouts: number;
   tdMultiplier: number;
 }
@@ -292,6 +294,16 @@ function ensureDefaultValue<K extends keyof GameState>(
   }
 }
 
+function applyPresentationDefaults(state: GameState): void {
+  if (!state.activeTheme) {
+    state.activeTheme = "default";
+  }
+  ensureArrayField(state, "unlockedThemes", ["default"]);
+  ensureDefaultValue(state, "soundEnabled", true);
+  ensureDefaultValue(state, "isExecutiveSupporter", false);
+  ensureDefaultValue(state, "displayRank", null);
+}
+
 function applyDefensiveDefaults(state: GameState): void {
   ensureArrayField(state, "upgrades", []);
   ensureArrayField(state, "achievements", []);
@@ -309,18 +321,12 @@ function applyDefensiveDefaults(state: GameState): void {
   ensureObjectField(state, "modes", { fast: false, voice: false });
   ensureDefaultValue(state, "activeTicket", null);
   ensureDefaultValue(state, "hasSeenTicketPrompt", false);
-  if (!state.activeTheme) {
-    state.activeTheme = "default";
-  }
-  ensureArrayField(state, "unlockedThemes", ["default"]);
-  ensureDefaultValue(state, "soundEnabled", true);
+  applyPresentationDefaults(state);
   ensureArrayField(state, "pendingCompletedTaskIds", []);
   ensureObjectField(state, "pendingCompletedTaskRewards", {});
   if (!hasValidAuthoritativeProfileFloor(state)) {
     state.authoritativeProfileFloor = null;
   }
-  ensureDefaultValue(state, "isExecutiveSupporter", false);
-  ensureDefaultValue(state, "displayRank", null);
 }
 
 export function loadState(): GameState {

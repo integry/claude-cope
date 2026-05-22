@@ -169,6 +169,7 @@ function renderBuddyDock(buddy: GameState["buddy"]) {
   return <div className="terminal-buddy-dock hidden md:flex"><BuddyOverlay buddy={buddy} /></div>;
 }
 
+/* eslint-disable max-lines -- Large presentational component pending extraction */
 export function TerminalView({
   activeRegression,
   outageHp,
@@ -314,6 +315,8 @@ export function TerminalView({
           rank={rank}
           currentTD={state.economy.currentTD}
           quotaPercent={state.economy.quotaPercent}
+          quotaRemaining={state.economy.quotaRemaining}
+          quotaTotal={state.economy.quotaTotal}
           outageHp={outageHp}
           activeMultiplier={
             calculateActiveMultiplier(state.inventory, state.upgrades) *
@@ -323,6 +326,7 @@ export function TerminalView({
           isBYOK={BYOK_ENABLED && !!state.apiKey}
           isMax={Boolean(state.proKey || state.proKeyHash || state.isPro || state.hasSessionPro)}
           isExecutiveSupporter={Boolean(state.isExecutiveSupporter)}
+          hasVanityTitle={Boolean(state.displayRank)}
           byokTotalCost={state.byokTotalCost}
           onHomeClick={handleHomeClick}
           onProfileClick={handleProfileClick}
@@ -441,3 +445,4 @@ export function TerminalView({
     </div>
   );
 }
+/* eslint-enable max-lines */

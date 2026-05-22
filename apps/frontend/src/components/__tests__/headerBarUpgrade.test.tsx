@@ -282,6 +282,16 @@ function expectExecutiveBadgePlacement() {
   expect(mobileBadge?.textContent).toContain("EXECUTIVE MAX");
 }
 
+function expectVanityRankStyling() {
+  const rankLine = queryByTestId("desktop-rank-line");
+  const mobileRankLine = queryByTestId("mobile-rank-line");
+
+  expect(rankLine?.className).toContain("text-fuchsia-300");
+  expect(rankLine?.className).toContain("font-semibold");
+  expect(mobileRankLine?.className).toContain("text-fuchsia-300");
+  expect(mobileRankLine?.className).toContain("font-semibold");
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   if (container) {
@@ -321,6 +331,11 @@ describe("HeaderBar upgrade CTA visibility", () => {
     expectMobileIdentityLayout();
   });
 
+  it("renders vanity overrides in the premium title color", () => {
+    renderHeaderBar({ ...baseProps, rank: "Founder in Stealth", hasVanityTitle: true, isBYOK: false, isMax: true, isExecutiveSupporter: true });
+    expectVanityRankStyling();
+  });
+
   it("shows a dark red mobile quota track when quota is exhausted", () => {
     renderHeaderBar({ ...baseProps, isBYOK: false, isMax: false, quotaPercent: 0 });
 
@@ -331,6 +346,16 @@ describe("HeaderBar upgrade CTA visibility", () => {
     expect(quotaLine?.style.backgroundColor).toBe("rgb(138, 0, 0)");
     expect(quotaLine?.style.boxShadow).toContain("rgba(255, 0, 0, 0.45)");
     expect(quotaFill?.style.width).toBe("0%");
+  });
+
+  it("displays stacked Max credits without overflowing the quota bars", () => {
+    renderHeaderBar({ ...baseProps, isBYOK: false, isMax: true, quotaPercent: 200, quotaTotalOverride: 100 });
+
+    const desktopQuotaLine = container.querySelector("[data-testid='desktop-status-detail-line']");
+    const quotaFill = queryByTestId("mobile-quota-fill") as HTMLDivElement | null;
+
+    expect(desktopQuotaLine?.textContent).toContain("200/200");
+    expect(quotaFill?.style.width).toBe("100%");
   });
 
   it("closes the mobile menu and invokes the shared home handler when the logo is clicked", () => {

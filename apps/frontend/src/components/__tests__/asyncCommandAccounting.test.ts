@@ -4,6 +4,7 @@ import type { SetStateAction } from "react";
 import type { GameState } from "../../hooks/useGameState";
 import type { Message } from "../Terminal";
 import { ALL_SLASH_COMMANDS } from "../slashCommands";
+import { PRO_QUOTA_LIMIT } from "../../config";
 
 vi.mock("../../analytics", () => ({
   track: vi.fn(),
@@ -135,6 +136,98 @@ describe("async slash-command accounting", () => {
 
     expect(ctx.state.commandUsage).toEqual({ "/sync": 1 });
     expect(ctx.onValidSlashCommand).toHaveBeenCalledWith("/sync");
+  });
+
+  it("labels executive supporter sync activation distinctly", async () => {
+    const ctx = makeCtx(makeGameState());
+    vi.stubGlobal("fetch", vi.fn(async () => (
+      new Response(JSON.stringify({
+        success: true,
+        hash: "executive-hash",
+        restored: false,
+        profile: {
+          username: "TestUser0",
+          total_td: 0,
+          current_td: 0,
+          corporate_rank: "Junior Code Monkey",
+          display_rank: null,
+          is_executive_supporter: true,
+          inventory: {},
+          upgrades: [],
+          achievements: [],
+          buddy_type: null,
+          buddy_is_shiny: false,
+          unlocked_themes: ["default", "amber", "syntax-error"],
+          active_theme: "default",
+          active_ticket: null,
+          td_multiplier: 1,
+          multiplier: 1,
+          quota_percent: 100,
+        },
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    )));
+
+    executeSlashCommand("/sync COPE-EXEC", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    const activationMessage = ctx.getHistory().find((message) => message.content.includes("ACTIVATED"));
+    expect(activationMessage?.content).toContain("[✓ EXECUTIVE MAX ACTIVATED]");
+    expect(activationMessage?.content).not.toContain("[✓ MAX ACTIVATED]");
+  });
+
+  it("reports same-account license top-ups as added credits", async () => {
+    const ctx = makeCtx(makeGameState({ proKey: "COPE-PRIMARY", proKeyHash: "primary-hash", isPro: true }));
+    vi.stubGlobal("fetch", vi.fn(async () => (
+      new Response(JSON.stringify({
+        success: true,
+        hash: "primary-hash",
+        restored: true,
+        credited: true,
+        creditsAdded: 100,
+        profile: {
+          username: "TestUser0",
+          total_td: 0,
+          current_td: 0,
+          corporate_rank: "Junior Code Monkey",
+          display_rank: null,
+          is_executive_supporter: true,
+          inventory: {},
+          upgrades: [],
+          achievements: [],
+          buddy_type: null,
+          buddy_is_shiny: false,
+          unlocked_themes: ["default", "amber", "syntax-error"],
+          active_theme: "default",
+          active_ticket: null,
+          td_multiplier: 1,
+          multiplier: 1,
+          quota_percent: 100,
+          quota_remaining: PRO_QUOTA_LIMIT * 2,
+          quota_total: PRO_QUOTA_LIMIT * 2,
+        },
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    )));
+
+    executeSlashCommand("/sync COPE-TOP-UP", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    const topUpMessage = ctx.getHistory().find((message) => message.content.includes("CREDITS ADDED"));
+    expect(topUpMessage?.content).toContain("[✓ MAX CREDITS ADDED]");
+    expect(topUpMessage?.content).toContain("Added **100 Max credits**");
+    expect(topUpMessage?.content).toContain(`**${PRO_QUOTA_LIMIT * 2} Max credits** remaining`);
+    expect(ctx.state.proKey).toBe("COPE-PRIMARY");
+    expect(ctx.state.proKeyHash).toBe("primary-hash");
+    expect(ctx.state.economy.quotaPercent).toBe(100);
+    expect(ctx.state.economy.quotaRemaining).toBe(PRO_QUOTA_LIMIT * 2);
+    expect(ctx.state.economy.quotaTotal).toBe(PRO_QUOTA_LIMIT * 2);
   });
 
   it("counts /backlog even when fetching the backlog fails", async () => {

@@ -20,17 +20,20 @@ const originalLocation = window.location.pathname + window.location.search;
 function Harness({
   isBooting = false,
   proKeyHash,
+  username = "TestUser",
   setHistory,
   runSlashCommand,
 }: {
   isBooting?: boolean;
   proKeyHash?: string;
+  username?: string;
   setHistory: (value: SetStateAction<Message[]>) => void;
   runSlashCommand: (command: string) => void;
 }) {
   useCheckoutLicenseSync({
     isBooting,
     proKeyHash,
+    username,
     setHistory,
     runSlashCommand,
   });
@@ -40,6 +43,7 @@ function Harness({
 function renderHarness(props: {
   isBooting?: boolean;
   proKeyHash?: string;
+  username?: string;
   setHistory: (value: SetStateAction<Message[]>) => void;
   runSlashCommand: (command: string) => void;
 }) {
@@ -150,6 +154,66 @@ describe("useCheckoutLicenseSync", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(runSlashCommand).toHaveBeenCalledWith("/sync COPE-123");
+    expect(window.location.search).toBe("");
+  });
+
+  it("starts checkout sync from Polar customer session token return URLs", async () => {
+    window.history.replaceState({}, "", "/?customer_session_token=polar_cst_return_1234567890&keep=1");
+
+    const setHistory = vi.fn<(value: SetStateAction<Message[]>) => void>();
+    const runSlashCommand = vi.fn();
+    const fetchMock = vi.fn(async (): Promise<Response> => (
+      new Response(JSON.stringify({ licenseKey: "COPE-456" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    ));
+    global.fetch = fetchMock as typeof fetch;
+
+    await act(async () => {
+      renderHarness({ setHistory, runSlashCommand });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://example.com/api/account/checkout-license", expect.objectContaining({
+      body: JSON.stringify({ customerSessionToken: "polar_cst_return_1234567890" }),
+      credentials: "include",
+      method: "POST",
+    }));
+    expect(runSlashCommand).toHaveBeenCalledWith("/sync COPE-456");
+    expect(window.location.search).toBe("?keep=1");
+  });
+
+  it("marks the first team-pack key as consumed by the syncing user", async () => {
+    window.history.replaceState({}, "", "/?checkout_id=checkout_team");
+
+    let history: Message[] = [];
+    const setHistory = vi.fn((value: SetStateAction<Message[]>) => {
+      history = typeof value === "function" ? value(history) : value;
+    });
+    const runSlashCommand = vi.fn();
+    const fetchMock = vi.fn(async (): Promise<Response> => (
+      new Response(JSON.stringify({
+        licenseKey: "COPE-FIRST",
+        allKeys: ["COPE-FIRST", "COPE-SECOND"],
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    ));
+    global.fetch = fetchMock as typeof fetch;
+
+    await act(async () => {
+      renderHarness({ username: "LurkingRebase7627", setHistory, runSlashCommand });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const teamPackMessage = history[history.length - 1]?.content;
+    expect(teamPackMessage).toContain("1. ~~COPE-FIRST~~ [LurkingRebase7627]");
+    expect(teamPackMessage).toContain("2. `COPE-SECOND`");
+    expect(runSlashCommand).toHaveBeenCalledWith("/sync COPE-FIRST");
     expect(window.location.search).toBe("");
   });
 });

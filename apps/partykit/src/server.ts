@@ -421,10 +421,17 @@ export default class ClaudeCopeServer implements Party.Server {
   // Broadcast the current connection count and list of online usernames to all clients.
   private broadcastPresence() {
     const connections = Array.from(this.room.getConnections());
-    const users = connections.map(c => this.usernames.get(c.id) || `anon-${c.id.slice(0, 6)}`);
+    const seenUsers = new Set<string>();
+    const users: string[] = [];
+    for (const conn of connections) {
+      const username = this.usernames.get(conn.id) || `anon-${conn.id.slice(0, 6)}`;
+      if (seenUsers.has(username)) continue;
+      seenUsers.add(username);
+      users.push(username);
+    }
     this.broadcast({
       type: "presence",
-      count: connections.length,
+      count: users.length,
       users,
     });
   }

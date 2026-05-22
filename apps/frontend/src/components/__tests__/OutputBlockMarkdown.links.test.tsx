@@ -50,4 +50,24 @@ describe("OutputBlock markdown links", () => {
     expect(container.querySelector("button")?.textContent).toBe("share");
     expect(container.querySelector("a")).toBeNull();
   });
+
+  it("renders executive status tags in the executive color", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <OutputBlock
+          message={{ role: "system", content: "[✓ EXECUTIVE MAX ACTIVATED] License key validated." }}
+          promptString=">"
+          username=""
+        />,
+      );
+    });
+
+    const tag = Array.from(container.querySelectorAll("span"))
+      .find((element) => element.textContent === "✓ EXECUTIVE MAX ACTIVATED");
+    expect(tag?.className).toContain("text-amber-300");
+  });
 });
