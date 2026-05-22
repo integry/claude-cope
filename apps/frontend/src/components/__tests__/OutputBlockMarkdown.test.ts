@@ -11,4 +11,16 @@ describe("cleanLLMOutput", () => {
       "Future regret as a feature flag.\n\n\u20031️⃣ Create the flag.\n\n\u20032️⃣ Never read it.\n\n\u20033️⃣ Ship anyway.\n\n\u20034️⃣ Blame QA.",
     );
   });
+
+  it("promotes generic all-caps terminal tags onto separate rows", () => {
+    const input = "[SUCCESS] Ticket created. [EXIT] Boredom level: 9000.";
+
+    expect(cleanLLMOutput(input)).toBe("[SUCCESS] Ticket created.\n\n[EXIT] Boredom level: 9000.");
+  });
+
+  it("does not split ordinary markdown links", () => {
+    const input = "[share](https://example.com)";
+
+    expect(cleanLLMOutput(input)).toBe(input);
+  });
 });

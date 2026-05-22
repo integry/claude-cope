@@ -869,11 +869,38 @@ describe("POST /api/account/update-alias", () => {
     const res = await postJSON("/api/account/update-alias", { username: "alice" }, { DB: db });
     expect(res.status).toBe(400);
   });
-  it("returns 403 when licenseKeyHash is missing (free user)", async () => {
+  it("returns 403 when licenseKeyHash is missing and no session owns the account", async () => {
     const { db } = createMockDB();
     const res = await postJSON("/api/account/update-alias", { username: "alice", newAlias: "alice-new" }, { DB: db });
     expect(res.status).toBe(403);
-    expect(((await res.json()) as { error: string }).error).toContain("Max license");
+    expect(((await res.json()) as { error: string }).error).toContain("Session authentication");
+  });
+  it("succeeds for a session-authenticated Max user without licenseKeyHash", async () => {
+    const { db } = createMockDB({
+      firstBySQL: {
+        [ACCOUNT_TEST_SQL.getProfile]: {
+          ...BASE_PROFILE,
+          username: "alice-new",
+          license_hash: undefined,
+        },
+        [ACCOUNT_TEST_SQL.getProfileRow]: BASE_PROFILE,
+        [ACCOUNT_TEST_SQL.getLicenseStatus]: { status: "active", last_activated_at: new Date().toISOString() },
+        [ACCOUNT_TEST_SQL.aliasTakenLookup]: null,
+        [ACCOUNT_TEST_SQL.aliasHistoryLookup]: null,
+      },
+      runChanges: 1,
+    });
+    db.batch = vi.fn().mockResolvedValue([
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+      { meta: { changes: 1 } },
+    ]);
+    const kv = mockKV({ "session_user:test-session": "alice" });
+    const res = await postWithSession("/api/account/update-alias", { username: "alice", newAlias: "alice-new" }, { DB: db, QUOTA_KV: kv });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true });
   });
   it("returns 400 when alias is too short", async () => {
     const { db } = createMockDB();

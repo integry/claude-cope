@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { calcBulkCost, canBuyTheme, applyOptimisticThemePurchase, rollbackOptimisticThemePurchase, applyThemePurchaseFailure, applyValidatedSessionProState } from "../useGameState";
+import { isPaidUser } from "../gameStateUtils";
 import { GROWTH_RATE, GENERATORS, THEMES } from "../../game/constants";
 import type { GameState } from "../gameStateUtils";
 
@@ -114,6 +115,12 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
 }
 
 describe("canBuyTheme", () => {
+  it("treats session-restored Max state as paid everywhere", () => {
+    const state = makeGameState({ isPro: false, hasSessionPro: true, proKeyHash: undefined, proKey: undefined });
+
+    expect(isPaidUser(state)).toBe(true);
+  });
+
   it("marks persisted paid state as session-backed after successful validation", () => {
     const state = makeGameState({ isPro: true, hasSessionPro: undefined, proKeyHash: undefined, proKey: undefined });
     const nextState = applyValidatedSessionProState(state, {

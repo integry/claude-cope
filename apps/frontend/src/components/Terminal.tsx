@@ -32,7 +32,7 @@ import { usePromptSubmissionState } from "./usePromptSubmissionState";
 import { useUpgradeNagState } from "./useUpgradeNagState";
 import { STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, getSlashCommandClickSelection, syncMessageKeys } from "./terminalUtils";
 import { useIsMobileViewport } from "./useIsMobileViewport";
-import { useMobilePromptFollow } from "./useMobilePromptFollow";
+import { useTerminalScrollManager } from "./useTerminalScrollManager";
 export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
 type PromptSubmission = { command: string; replayId: number | null; submissionId: number };
 const createPromptLoadingMessage = (submissionId: number): Message => ({ id: submissionId, role: "loading", content: getRandomLoadingPhrase() });
@@ -85,7 +85,6 @@ function Terminal() {
   const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyRef = useRef(history);
   historyRef.current = history;
-  const hasScrolledTerminalToBottomOnLoadRef = useRef(false);
   const lastSuggestedReplyRef = useRef<string | null>(null);
   const nextPendingBacklogRollbackIdRef = useRef(0);
   const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
@@ -96,23 +95,7 @@ function Terminal() {
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
   const { abortControllerRef, createPromptProcessingSetter, isProcessing, resetPromptProcessing, setIsProcessing, startPromptProcessing, trackAbortController, untrackAbortController } = usePromptSubmissionState();
   const { recordConversationRound, recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
-  const resolveScrollViewport = useCallback((): HTMLDivElement | null => {
-    if (scrollViewportRef.current) return scrollViewportRef.current;
-    if (typeof document === "undefined") return null;
-    return document.querySelector<HTMLDivElement>('[data-terminal-scroll-viewport="true"]');
-  }, []);
-  const scrollTerminalToBottom = useCallback(() => {
-    const viewport = resolveScrollViewport();
-    if (viewport) {
-      requestAnimationFrame(() => {
-        viewport.scrollTop = viewport.scrollHeight;
-      });
-      return;
-    }
-    if (typeof bottomRef.current?.scrollIntoView === "function") {
-      bottomRef.current.scrollIntoView({ behavior: "auto", block: "end" });
-    }
-  }, [resolveScrollViewport]);
+  const { scrollTerminalToBottom } = useTerminalScrollManager({ history, messageKeys: messageKeys.current, isMobileViewport, isProcessing, scrollViewportRef, bottomRef });
   useEffect(() => () => {
     const ds = freeTierDelayRef.current;
     ds.cancelled = true;
@@ -158,19 +141,7 @@ function Terminal() {
     }
     scrollTerminalToBottom();
   }, [closeAllOverlays, dismissUpgradeNagOverlay, scrollTerminalToBottom]);
-  useEffect(() => {
-    lastSuggestedReplyRef.current = suggestedReply;
-  }, [suggestedReply]);
-  useEffect(() => {
-    if (hasScrolledTerminalToBottomOnLoadRef.current) return;
-    hasScrolledTerminalToBottomOnLoadRef.current = true;
-    scrollTerminalToBottom();
-  }, [scrollTerminalToBottom]);
-  useEffect(() => {
-    if (isMobileViewport) return;
-    scrollTerminalToBottom();
-  }, [history, isMobileViewport, scrollTerminalToBottom]);
-  useMobilePromptFollow({ history, isMobileViewport, isProcessing, messageKeys: messageKeys.current, resolveScrollViewport });
+  useEffect(() => { lastSuggestedReplyRef.current = suggestedReply; }, [suggestedReply]);
   useEffect(() => {
     const onPopState = () => {
       if (pendingNagCommandRef.current !== null) return void setShowUpgrade(true);

@@ -1,4 +1,3 @@
-import type { ChangeEvent, Dispatch, KeyboardEvent as ReactKeyboardEvent, RefObject, SetStateAction } from "react";
 import { useRef } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
@@ -12,83 +11,14 @@ import Ticker from "./Ticker";
 import { OutageBar } from "./OutageBar";
 import SprintProgressBar from "./SprintProgressBar";
 import MessageList from "./MessageList";
-import type { SlashCommandAction } from "./slashCommandDetect";
 import { TerminalOverlays } from "./TerminalOverlays";
-import type { GameState, Message } from "../hooks/useGameState";
-import type { PendingReviewPing } from "../hooks/useMultiplayer";
-import type { OverlayVisibility } from "./terminalViewUtils";
-import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
-import type { OutageScenario } from "@claude-cope/shared/multiplayer-types";
-import { buildTerminalOpeners, focusTerminalInputIfEligible, getUpgradeDismissProps, renderBuddyDock } from "./terminalViewHelpers";
-
-type TerminalViewProps = OverlayVisibility & {
-  activeRegression: string | null;
-  outageHp: number | null;
-  activeOutageScenario: OutageScenario | null;
-  pendingReviewPing: PendingReviewPing;
-  pingAcknowledged: boolean;
-  activeTheme: GameState["activeTheme"];
-  regressionGlitch: string | null | undefined;
-  anyOverlayOpen: boolean;
-  isMobileViewport: boolean;
-  inputRef: RefObject<HTMLInputElement | null>;
-  closeAllOverlaysPreservingNag: () => void;
-  onlineCount: number;
-  rank: GameState["economy"]["currentRank"];
-  state: GameState;
-  handleHomeClick: () => void;
-  handleProfileClick: () => void;
-  setShowHelp: Dispatch<SetStateAction<boolean>>;
-  setShowAbout: Dispatch<SetStateAction<boolean>>;
-  setInputValue: Dispatch<SetStateAction<string>>;
-  setSlashQuery: Dispatch<SetStateAction<string>>;
-  setSlashIndex: Dispatch<SetStateAction<number>>;
-  setShowUpgrade: Dispatch<SetStateAction<boolean>>;
-  compactEffect: boolean;
-  isBooting: boolean;
-  history: Message[];
-  messageKeys: number[];
-  initialHistoryLen: number;
-  promptString: string;
-  handleSlashCommandClick: (
-    command: string,
-    action: SlashCommandAction,
-  ) => void;
-  scrollViewportRef?: RefObject<HTMLDivElement | null>;
-  bottomRef: RefObject<HTMLDivElement | null>;
-  slashQuery: string;
-  slashIndex: number;
-  handleSlashMenuSelect: (command: string) => void;
-  runSlashCommand: (command: string) => void;
-  inputValue: string;
-  suggestedReply: string | null;
-  acceptSuggestedReply: (options?: { submit?: boolean }) => void;
-  isProcessing: boolean;
-  handleChange: (e: ChangeEvent<HTMLInputElement>) => void;
-  handleKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
-  handleSubmit: () => void;
-  buyGenerator: (generatorId: string, amount?: number) => boolean;
-  buyUpgrade: (upgradeId: string) => boolean;
-  buyTheme: (themeId: string) => boolean;
-  setActiveTheme: (id: string) => void;
-  setShowStore: Dispatch<SetStateAction<boolean>>;
-  setShowLeaderboard: Dispatch<SetStateAction<boolean>>;
-  setShowAchievements: Dispatch<SetStateAction<boolean>>;
-  setShowPrivacy: Dispatch<SetStateAction<boolean>>;
-  setShowTerms: Dispatch<SetStateAction<boolean>>;
-  setShowContact: Dispatch<SetStateAction<boolean>>;
-  setShowProfile: Dispatch<SetStateAction<boolean>>;
-  setShowParty: Dispatch<SetStateAction<boolean>>;
-  setShowSynergize: Dispatch<SetStateAction<boolean>>;
-  setIsProcessing: Dispatch<SetStateAction<boolean>>;
-  setHistory: Dispatch<SetStateAction<Message[]>>;
-  pendingNagCommand: string | null;
-  handleUpgradeNagClose: () => void;
-  handleManualUpgradeDismiss: () => void;
-  upgradeNagDismissPhase: "idle" | "closing";
-  upgradeNagDismissEffect: UpgradeNagCloseEffect;
-};
-
+import {
+  buildTerminalOpeners,
+  focusTerminalInputIfEligible,
+  getUpgradeDismissProps,
+  renderBuddyDock,
+  type TerminalViewProps,
+} from "./terminalViewHelpers";
 export function TerminalView({
   activeRegression,
   outageHp,
