@@ -380,10 +380,15 @@ describe("UpgradeOverlay", () => {
   it("applies mobile CTA nowrap hooks and narrower mobile panel spacing classes", () => {
     setViewportWidth(320);
     renderOverlay();
+    const mobilePanel = container.querySelector(".upgrade-mobile .upgrade-mobile-panel") as HTMLDivElement | null;
+    const mobileScroll = container.querySelector(".upgrade-mobile .upgrade-mobile-scroll") as HTMLDivElement | null;
+
     expect(container.querySelector(".upgrade-mobile .upgrade-mobile-cta")).not.toBeNull();
     expect(container.querySelector(".upgrade-mobile .upgrade-mobile-cta-label")).not.toBeNull();
-    expect(container.querySelector(".upgrade-mobile .upgrade-mobile-panel")).not.toBeNull();
-    expect(container.querySelector(".upgrade-mobile .upgrade-mobile-scroll")).not.toBeNull();
+    expect(mobilePanel).not.toBeNull();
+    expect(mobilePanel?.style.maxHeight).toBe("80vh");
+    expect(mobileScroll).not.toBeNull();
+    expect(mobileScroll?.style.overflowY).toBe("auto");
     expect(container.querySelectorAll(".upgrade-mobile .upgrade-mobile-section").length).toBeGreaterThan(0);
   });
 });

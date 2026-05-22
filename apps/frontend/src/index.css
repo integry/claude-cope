@@ -723,7 +723,7 @@ body {
 
   .upgrade-mobile-panel {
     width: calc(100vw - 1.25rem) !important;
-    max-height: calc(100vh - 1.25rem) !important;
+    max-height: 80vh !important;
   }
 
   .upgrade-mobile-section,

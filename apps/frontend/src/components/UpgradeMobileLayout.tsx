@@ -176,7 +176,7 @@ export default function UpgradeMobileLayout({
           boxShadow: "8px 8px 0px rgba(0, 0, 0, 0.9)",
           width: "calc(100vw - 2rem)",
           maxWidth: "480px",
-          maxHeight: "calc(100vh - 2rem)",
+          maxHeight: "80vh",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
