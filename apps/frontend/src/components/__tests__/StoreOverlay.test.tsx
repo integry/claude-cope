@@ -100,6 +100,14 @@ describe("StoreOverlay", () => {
 
     expect(text()).toContain("Owned: 0");
     expect(text()).not.toContain("x0");
+
+    const drawer = container.firstElementChild;
+    const ownedLabel = Array.from(container.querySelectorAll("span")).find(
+      (element) => element.textContent === "Owned: 0",
+    );
+
+    expect(drawer?.className).toContain("md:w-[27rem]");
+    expect(ownedLabel?.className).toContain("pl-3");
   });
 
   it("renders explicit ownership labels for non-zero generator counts", () => {
