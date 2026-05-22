@@ -10,7 +10,7 @@ vi.mock("../utils/polar", () => ({
 import app from "../app";
 import { validatePolarKey } from "../utils/polar";
 import { hashKey } from "../utils/quota";
-import { BASE_PROFILE, createMockDB, mockKV, postJSON, postWithSession } from "./account.test-utils";
+import { BASE_PROFILE, createMockDB, mockKV, postWithSession } from "./account.test-utils";
 
 const mockedValidatePolarKey = vi.mocked(validatePolarKey);
 

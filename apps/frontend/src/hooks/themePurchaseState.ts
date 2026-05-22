@@ -111,35 +111,33 @@ export function isFreshStateForSessionRestore(state: GameState): boolean {
     && !state.proKeyHash;
 }
 
-export function applyValidatedSessionProState(state: GameState, result: SessionProfileResult): GameState {
-  if (!result.found || result.isPro === false) {
-    if (!state.hasSessionPro) return state;
-    return clearStaleSessionEntitlement(state);
-  }
-
-  if (result.isPro !== true) {
-    if (result.profile) {
-      const nextState = applyServerProfile(state, result.profile, { includeActiveTicket: true });
-      return {
-        ...nextState,
-        isPro: state.isPro,
-        hasSessionPro: state.hasSessionPro,
-      };
-    }
-
-    if (!result.username && result.quotaPercent == null && result.quotaRemaining == null && result.quotaTotal == null) return state;
+function applyValidatedSessionIdentity(state: GameState, result: SessionProfileResult): GameState {
+  if (result.profile) {
+    const nextState = applyServerProfile(state, result.profile, { includeActiveTicket: true });
     return {
-      ...state,
-      ...(result.username && state.username !== result.username ? { username: result.username } : {}),
-      economy: {
-        ...state.economy,
-        ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}),
-        ...(result.quotaRemaining != null ? { quotaRemaining: result.quotaRemaining } : {}),
-        ...(result.quotaTotal != null ? { quotaTotal: result.quotaTotal } : {}),
-      },
+      ...nextState,
+      isPro: state.isPro,
+      hasSessionPro: state.hasSessionPro,
     };
   }
 
+  if (!result.username && result.quotaPercent == null && result.quotaRemaining == null && result.quotaTotal == null) {
+    return state;
+  }
+
+  return {
+    ...state,
+    ...(result.username && state.username !== result.username ? { username: result.username } : {}),
+    economy: {
+      ...state.economy,
+      ...(result.quotaPercent != null ? { quotaPercent: result.quotaPercent } : {}),
+      ...(result.quotaRemaining != null ? { quotaRemaining: result.quotaRemaining } : {}),
+      ...(result.quotaTotal != null ? { quotaTotal: result.quotaTotal } : {}),
+    },
+  };
+}
+
+function applyValidatedSessionProIdentity(state: GameState, result: SessionProfileResult): GameState {
   if (result.profile) {
     return {
       ...applyServerProfile(state, result.profile, { includeActiveTicket: true }),
@@ -152,7 +150,26 @@ export function applyValidatedSessionProState(state: GameState, result: SessionP
   if (state.hasSessionPro && state.isPro && (!restoredUsername || state.username === restoredUsername)) {
     return state;
   }
-  return { ...state, ...(restoredUsername && state.username !== restoredUsername ? { username: restoredUsername } : {}), isPro: true, hasSessionPro: true };
+
+  return {
+    ...state,
+    ...(restoredUsername && state.username !== restoredUsername ? { username: restoredUsername } : {}),
+    isPro: true,
+    hasSessionPro: true,
+  };
+}
+
+export function applyValidatedSessionProState(state: GameState, result: SessionProfileResult): GameState {
+  if (!result.found || result.isPro === false) {
+    if (!state.hasSessionPro) return state;
+    return clearStaleSessionEntitlement(state);
+  }
+
+  if (result.isPro !== true) {
+    return applyValidatedSessionIdentity(state, result);
+  }
+
+  return applyValidatedSessionProIdentity(state, result);
 }
 
 export function applyThemeEntitlementFailure(state: GameState, error?: string, errorCode?: ThemeEntitlementErrorCode): GameState {
