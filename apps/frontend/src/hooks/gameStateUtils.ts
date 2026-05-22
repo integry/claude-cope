@@ -282,7 +282,6 @@ function applyPresentationDefaults(state: GameState): void {
   }
 }
 
-// eslint-disable-next-line complexity
 function applyDefensiveDefaults(state: GameState): void {
   if (!Array.isArray(state.upgrades)) {
     state.upgrades = [];
