@@ -55,9 +55,10 @@ function validatePaidSession(
   setState: SetGameState,
   result: SessionProfileResult,
   confirmedActiveThemeRef: { current: string },
+  allowSessionPromotion = false,
 ): void {
   if (result.profile) confirmedActiveThemeRef.current = result.profile.active_theme;
-  setState((prev) => (isPaidUser(prev) || prev.hasSessionPro ? applyValidatedSessionProState(prev, result) : prev));
+  setState((prev) => (allowSessionPromotion || isPaidUser(prev) || prev.hasSessionPro ? applyValidatedSessionProState(prev, result) : prev));
 }
 
 function applyGeneratorPurchase(state: GameState, generatorId: string, amount: number, cost: number): GameState {
@@ -161,12 +162,19 @@ export function useGameState() {
 
   useEffect(() => {
     const initial = stateRef.current;
-    if (!isPaidUser(initial)) return;
+    const canValidateExistingPaidState = isPaidUser(initial) || initial.hasSessionPro;
+    const canProbeSessionForCurrentUsername = !canValidateExistingPaidState
+      && !isFreshStateForSessionRestore(initial)
+      && Boolean(initial.username)
+      && initial.username !== "anonymous";
+    if (!canValidateExistingPaidState && !canProbeSessionForCurrentUsername) return;
 
     let cancelled = false;
     fetchSessionProfile().then((result) => {
       if (cancelled) return;
-      validatePaidSession(setState, result, confirmedActiveThemeRef);
+      const restoredUsername = result.profile?.username ?? result.username;
+      if (!canValidateExistingPaidState && (!result.isPro || restoredUsername !== initial.username)) return;
+      validatePaidSession(setState, result, confirmedActiveThemeRef, !canValidateExistingPaidState);
     });
     return () => { cancelled = true; };
   }, []);
