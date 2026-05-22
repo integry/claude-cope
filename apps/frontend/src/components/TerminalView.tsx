@@ -137,7 +137,6 @@ function renderBuddyDock(buddy: GameState["buddy"]) {
   return <div className="terminal-buddy-dock hidden md:flex"><BuddyOverlay buddy={buddy} /></div>;
 }
 
-/* eslint-disable max-lines -- Large presentational component pending extraction */
 export function TerminalView({
   activeRegression,
   outageHp,

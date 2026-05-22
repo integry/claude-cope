@@ -72,7 +72,6 @@ function isDesktopBottomPinned(scrollTop: number, maxScrollTop: number): boolean
   return scrollTop >= maxScrollTop - DESKTOP_BOTTOM_EPSILON_PX;
 }
 
-/* eslint-disable max-lines -- Large orchestrator component pending extraction */
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory; const setHistory = setChatHistory; const rank = state.displayRank ?? state.economy.currentRank;
