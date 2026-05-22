@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, vi } from "vitest";
 
@@ -17,6 +17,7 @@ export const shareCardResponse: ShareCardResponse = {
   shareUrl: "https://claudecope.com/s/share-123",
 };
 export const signedShareClaim = "signed-share-claim";
+export const nextSignedShareClaim = "signed-share-claim-next";
 
 export const imageBytes = new TextEncoder().encode("server-image");
 
@@ -43,6 +44,8 @@ export const mockClipboard = {
 
 export const createObjectURLMock = vi.fn((blob: Blob) => `blob:mock-${blob.size}`);
 export const revokeObjectURLMock = vi.fn();
+export const navigatorShareMock = vi.fn();
+const defaultUserAgent = navigator.userAgent;
 
 export const MockClipboardItem = vi.fn().mockImplementation((items: Record<string, Blob>) => ({
   types: Object.keys(items),
@@ -56,6 +59,7 @@ export const setupShareButtonTest = () => {
   let shareCardResponses: Array<ShareCardResponse> = [];
   let imageBodies = new Map<string, ArrayBuffer>();
   let imageFetchOverrides = new Map<string, Promise<Response>>();
+  let currentProps!: ComponentProps<typeof ShareButton>;
 
   beforeEach(() => {
     container = document.createElement("div");
@@ -70,6 +74,36 @@ export const setupShareButtonTest = () => {
       writable: true,
       configurable: true,
     });
+    Object.defineProperty(navigator, "share", {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      value: 0,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgentData", {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userActivation", {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+    vi.stubGlobal("matchMedia", vi.fn().mockImplementation(() => ({
+      matches: false,
+      media: "",
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })));
     // @ts-expect-error - ClipboardItem may not exist in jsdom
     globalThis.ClipboardItem = MockClipboardItem;
     vi.stubGlobal("URL", class extends URL {
@@ -101,6 +135,12 @@ export const setupShareButtonTest = () => {
     vi.stubGlobal("fetch", fetchMock);
 
     vi.useFakeTimers();
+    currentProps = {
+      userMessage: "Hello",
+      systemMessage: "World",
+      username: "testuser",
+      shareClaim: signedShareClaim,
+    };
   });
 
   afterEach(() => {
@@ -111,16 +151,10 @@ export const setupShareButtonTest = () => {
     vi.clearAllMocks();
   });
 
-  const renderComponent = () => {
+  const renderComponent = (props?: Partial<ComponentProps<typeof ShareButton>>) => {
+    currentProps = { ...currentProps, ...props };
     act(() => {
-      root.render(
-        <ShareButton
-          userMessage="Hello"
-          systemMessage="World"
-          username="testuser"
-          shareClaim={signedShareClaim}
-        />,
-      );
+      root.render(<ShareButton {...currentProps} />);
     });
   };
 
@@ -160,6 +194,98 @@ export const setupShareButtonTest = () => {
     return Array.from(buttons).find((button) => button.textContent?.includes(label)) ?? null;
   };
 
+  const setDeviceMatchMedia = (coarsePointer: boolean) => {
+    vi.stubGlobal("matchMedia", vi.fn().mockImplementation((query: string) => ({
+      matches: coarsePointer && (query === "(pointer: coarse)" || query === "(any-pointer: coarse)"),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })));
+  };
+
+  const setNativeShareDevice = (value: boolean) => {
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      value: value ? 5 : 0,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgentData", {
+      value: value ? { mobile: true } : undefined,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgent", {
+      value: value
+        ? "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1"
+        : defaultUserAgent,
+      writable: true,
+      configurable: true,
+    });
+    setDeviceMatchMedia(value);
+  };
+
+  const setTouchDesktopDevice = () => {
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      value: 5,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgentData", {
+      value: { mobile: false },
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgent", {
+      value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/136.0.0.0 Safari/537.36",
+      writable: true,
+      configurable: true,
+    });
+    setDeviceMatchMedia(true);
+  };
+
+  const setDesktopClassIpadDevice = () => {
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      value: 5,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgentData", {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgent", {
+      value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15",
+      writable: true,
+      configurable: true,
+    });
+    setDeviceMatchMedia(true);
+  };
+
+  const setNavigatorShare = (implementation?: typeof navigator.share) => {
+    navigatorShareMock.mockReset();
+    if (implementation) {
+      navigatorShareMock.mockImplementation(implementation);
+    }
+    Object.defineProperty(navigator, "share", {
+      value: implementation ? navigatorShareMock : undefined,
+      writable: true,
+      configurable: true,
+    });
+  };
+
+  const setTransientUserActivation = (isActive?: boolean) => {
+    Object.defineProperty(navigator, "userActivation", {
+      value: typeof isActive === "boolean" ? { isActive } : undefined,
+      writable: true,
+      configurable: true,
+    });
+  };
+
   return {
     get container() {
       return container;
@@ -184,8 +310,16 @@ export const setupShareButtonTest = () => {
     },
     clickShareButton,
     getButtonByLabel,
+    get navigatorShareMock() {
+      return navigatorShareMock;
+    },
     openPreview,
     renderOpenPreview,
     renderComponent,
+    setDesktopClassIpadDevice,
+    setNativeShareDevice,
+    setTransientUserActivation,
+    setTouchDesktopDevice,
+    setNavigatorShare,
   };
 };

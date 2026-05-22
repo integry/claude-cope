@@ -36,8 +36,7 @@ import { useTerminalScrollManager } from "./useTerminalScrollManager";
 export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
 type PromptSubmission = { command: string; replayId: number | null; submissionId: number };
 const createPromptLoadingMessage = (submissionId: number): Message => ({ id: submissionId, role: "loading", content: getRandomLoadingPhrase() });
-const removePromptMessages = (submissionId: number) => (prev: Message[]) =>
-  prev.filter((message) => !(message.id === submissionId && (message.role === "user" || message.role === "loading")));
+const removePromptMessages = (submissionId: number) => (prev: Message[]) => prev.filter((message) => !(message.id === submissionId && (message.role === "user" || message.role === "loading")));
 
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
@@ -94,16 +93,7 @@ function Terminal() {
   const promptString = getPromptString(activeRegression);
   const isFreeTier = isFreeUser(state);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
-  const {
-    abortControllerRef,
-    createPromptProcessingSetter,
-    isProcessing,
-    resetPromptProcessing,
-    setIsProcessing,
-    startPromptProcessing,
-    trackAbortController,
-    untrackAbortController,
-  } = usePromptSubmissionState();
+  const { abortControllerRef, createPromptProcessingSetter, isProcessing, resetPromptProcessing, setIsProcessing, startPromptProcessing, trackAbortController, untrackAbortController } = usePromptSubmissionState();
   const { recordConversationRound, recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
   const { scrollTerminalToBottom } = useTerminalScrollManager({ history, messageKeys: messageKeys.current, isMobileViewport, isProcessing, scrollViewportRef, bottomRef });
   useEffect(() => () => {
@@ -137,23 +127,7 @@ function Terminal() {
     setCommandHistoryEntries((prev) => [...prev, { submissionId, command }]);
     processCommandRef.current({ command, replayId, submissionId });
   }, [setCommandHistoryEntries]);
-  const {
-    closeAllOverlaysAndRestoreNag,
-    closeAllOverlaysPreservingNag,
-    dismissUpgradeOverlay: dismissUpgradeNagOverlay,
-    handleUpgradeNagClose,
-    nagArmedFromQuotaRef,
-    openUpgradeNag,
-    pendingNagCommand,
-    pendingNagCommandRef,
-    settleAcceptedNagReplay,
-    upgradeNagDismissEffect,
-    upgradeNagDismissPhase,
-  } = useUpgradeNagState({
-    closeAllOverlays,
-    setInputValue,
-    setShowUpgrade,
-  });
+  const { closeAllOverlaysAndRestoreNag, closeAllOverlaysPreservingNag, dismissUpgradeOverlay: dismissUpgradeNagOverlay, handleUpgradeNagClose, nagArmedFromQuotaRef, openUpgradeNag, pendingNagCommand, pendingNagCommandRef, settleAcceptedNagReplay, upgradeNagDismissEffect, upgradeNagDismissPhase } = useUpgradeNagState({ closeAllOverlays, setInputValue, setShowUpgrade });
   const handleProfileClick = useCallback(() => {
     closeAllOverlaysPreservingNag();
     setShowProfile(true);
@@ -189,10 +163,7 @@ function Terminal() {
       void fetchRandomTicketPrompt(setHistory, currentState.proKeyHash);
     }, STARTUP_TICKET_PROMPT_DELAY_MS);
     return () => {
-      if (startupTicketPromptTimeoutRef.current) {
-        clearTimeout(startupTicketPromptTimeoutRef.current);
-        startupTicketPromptTimeoutRef.current = null;
-      }
+      if (startupTicketPromptTimeoutRef.current) { clearTimeout(startupTicketPromptTimeoutRef.current); startupTicketPromptTimeoutRef.current = null; }
     };
   }, [getCurrentState, isBooting, state.hasSeenTicketPrompt, state.activeTicket, state.proKeyHash, setState, setHistory]);
   const handleQuotaLockout = useCallback((command?: string) => {
@@ -336,9 +307,7 @@ function Terminal() {
   };
   processCommandRef.current = processCommand;
   const submitPromptCommandWithAccounting = useCallback((command: string, replayId: number | null = null) => {
-    setInputValue("");
-    setHistoryIndex(-1);
-    submitPromptCommand(command, replayId);
+    setInputValue(""); setHistoryIndex(-1); submitPromptCommand(command, replayId);
   }, [submitPromptCommand]);
   const submitCommandValue = useCallback(async (commandValue: string) => {
     if (tryOutageDamage({ inputValue: commandValue, outageHp, activeOutageScenario, sendDamage, setHistory, setInputValue })) return;
@@ -381,16 +350,16 @@ function Terminal() {
     <TerminalView
       activeRegression={activeRegression} outageHp={outageHp} activeOutageScenario={activeOutageScenario} pendingReviewPing={pendingReviewPing} pingAcknowledged={pingAcknowledged}
       activeTheme={state.activeTheme} regressionGlitch={regressionGlitch} anyOverlayOpen={anyOverlayOpen} isMobileViewport={isMobileViewport} inputRef={inputRef} closeAllOverlaysPreservingNag={closeAllOverlaysPreservingNag}
-      onlineCount={onlineCount} rank={rank} state={state} handleHomeClick={handleHomeClick} handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue}
-      setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex} setShowUpgrade={setShowUpgrade} compactEffect={compactEffect} isBooting={isBooting} history={history}
-      messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString} handleSlashCommandClick={handleSlashCommandClick} scrollViewportRef={scrollViewportRef} bottomRef={bottomRef}
-      slashQuery={slashQuery} slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect} runSlashCommand={runSlashCommand} inputValue={inputValue} suggestedReply={suggestedReply} acceptSuggestedReply={acceptSuggestedReply}
-      isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown} handleSubmit={handleEnterSubmit} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme}
-      showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy}
-      showTerms={showTerms} showContact={showContact} showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade} setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard}
-      setShowAchievements={setShowAchievements} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms} setShowContact={setShowContact} setShowProfile={setShowProfile} setShowParty={setShowParty}
-      setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory} pendingNagCommand={pendingNagCommand} handleUpgradeNagClose={handleUpgradeNagDismiss}
-      handleManualUpgradeDismiss={handleManualUpgradeDismiss} upgradeNagDismissPhase={upgradeNagDismissPhase} upgradeNagDismissEffect={upgradeNagDismissEffect} />
+      onlineCount={onlineCount} rank={rank} state={state} handleHomeClick={handleHomeClick} handleProfileClick={handleProfileClick} setShowHelp={setShowHelp} setShowAbout={setShowAbout} setInputValue={setInputValue} setSlashQuery={setSlashQuery} setSlashIndex={setSlashIndex}
+      setShowUpgrade={setShowUpgrade} compactEffect={compactEffect} isBooting={isBooting} history={history} messageKeys={messageKeys.current} initialHistoryLen={initialHistoryLen.current} promptString={promptString}
+      handleSlashCommandClick={handleSlashCommandClick} scrollViewportRef={scrollViewportRef} bottomRef={bottomRef} slashQuery={slashQuery} slashIndex={slashIndex} handleSlashMenuSelect={handleSlashMenuSelect}
+      runSlashCommand={runSlashCommand} inputValue={inputValue} suggestedReply={suggestedReply} acceptSuggestedReply={acceptSuggestedReply} isProcessing={isProcessing} handleChange={handleChange} handleKeyDown={handleKeyDown}
+      handleSubmit={handleEnterSubmit} buyGenerator={buyGenerator} buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements}
+      showSynergize={showSynergize} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy} showTerms={showTerms} showContact={showContact} showProfile={showProfile} showParty={showParty} showUpgrade={showUpgrade}
+      setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard} setShowAchievements={setShowAchievements} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms} setShowContact={setShowContact}
+      setShowProfile={setShowProfile} setShowParty={setShowParty} setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory} pendingNagCommand={pendingNagCommand}
+      handleUpgradeNagClose={handleUpgradeNagDismiss} handleManualUpgradeDismiss={handleManualUpgradeDismiss} upgradeNagDismissPhase={upgradeNagDismissPhase} upgradeNagDismissEffect={upgradeNagDismissEffect}
+    />
   );
 }
 export default Terminal;

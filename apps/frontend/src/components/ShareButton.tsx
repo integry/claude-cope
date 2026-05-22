@@ -1,47 +1,27 @@
-/* eslint-disable max-lines */
-import { useState, useCallback, useEffect, useRef, type CSSProperties } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
 import { copyBlobToClipboard, copyTextToClipboard, openShareIntent } from "./shareChatUtils";
-import ShareCardRenderSurface from "./ShareCardRenderSurface";
+import { isNativeShareCancellation } from "./shareButtonNativeShare";
+import { shouldTreatDeviceAsMobileForSharePreview, shouldUseNativeShareFlow } from "./shareButtonBrowser";
+import { ShareButtonInlineStatus, ShareButtonPreviewModal, type ShareButtonPreviewActions, type ShareButtonPreviewModel } from "./ShareButtonPreviewModal";
+import { useNativeShareCard } from "./useNativeShareCard";
+import { useSharePreviewImage } from "./useSharePreviewImage";
 
 type MountToken = { cancelled: boolean };
 type SharePlatform = "twitter" | "linkedin";
-type PasteHintState =
-  | { platform: "twitter"; method: "image" | "link" }
-  | { platform: "linkedin" };
+type PasteHintState = { platform: "twitter"; method: "image" | "link" } | { platform: "linkedin" };
 
 const SPINNER_FRAMES = ["|", "/", "-", "\\"];
-const modalStyle: CSSProperties = { fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace", fontSize: "13px", lineHeight: "1.4", backgroundColor: "#1e232b", border: "2px solid #ff5555", boxShadow: "8px 8px 0px rgba(0, 0, 0, 0.9)", maxWidth: "calc(100vw - 2rem)", maxHeight: "calc(100vh - 2rem)", overflow: "hidden", color: "#c9d1d9", display: "flex", flexDirection: "column" };
-const modalHeaderStyle: CSSProperties = { padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #ff5555" };
-const modalTitleStyle: CSSProperties = { color: "#ff5555", fontWeight: "bold", fontSize: "11px" };
-const closeButtonStyle: CSSProperties = { color: "#aaaaaa", cursor: "pointer", fontSize: "14px", background: "none", border: "none", padding: 0 };
-const modalBodyStyle: CSSProperties = { padding: "12px", overflowY: "auto", overflowX: "hidden", maxHeight: "calc(100vh - 9rem)" };
-const modalFooterStyle: CSSProperties = { borderTop: "1px solid #ff5555", padding: "10px 12px" };
-const pasteHintStyle: CSSProperties = { fontSize: "12px", lineHeight: "1.6", textAlign: "left" };
-const emphasisStyle: CSSProperties = { color: "#ff5555", fontWeight: "bold" };
-const highlightStyle: CSSProperties = { color: "#ffff55" };
-const actionRowStyle: CSSProperties = { display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" };
-const linkStyle: CSSProperties = { background: "none", border: "none", padding: "8px 0 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", display: "block" };
-const previewFrameStyle: CSSProperties = { display: "flex", justifyContent: "center", alignItems: "flex-start", overflow: "hidden", maxWidth: "100%" };
-const previewScaleWrapStyle: CSSProperties = { width: "min(100%, 760px)" };
-const previewSurfaceStyle: CSSProperties = { width: "100%" };
-const modalStatusStyle: CSSProperties = { fontSize: "12px", textAlign: "left" };
-const modalStatusGeneratingStyle: CSSProperties = { ...modalStatusStyle, color: "#ffff55" };
-const modalStatusErrorStyle: CSSProperties = { ...modalStatusStyle, color: "#ff5555" };
+const NATIVE_SHARE_ERROR_MESSAGE = "Failed to open share menu. Please try again.";
 
-function isMacPlatform(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const uaData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
-  if (uaData?.platform) return uaData.platform.toLowerCase().includes("mac");
-  return /mac/i.test(navigator.platform || "");
+function buildNativeShareFile(blob: Blob, shareId: string) {
+  return new File([blob], `claude-cope-chat-${shareId}.png`, { type: blob.type || "image/png" });
 }
 
 export function ShareButton({ userMessage, systemMessage, username, shareClaim }: { userMessage: string; systemMessage: string; username: string; shareClaim: string }) {
   const [status, setStatus] = useState<"idle" | "generating" | "copied" | "error">("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [previewCard, setPreviewCard] = useState<CreateShareCardResult | null>(null);
-  const [previewImageStatus, setPreviewImageStatus] = useState<"idle" | "loading" | "ready" | "failed">("idle");
-  const [previewImageObjectUrl, setPreviewImageObjectUrl] = useState<string | null>(null);
   const [spinnerFrameIndex, setSpinnerFrameIndex] = useState(0);
   const [pasteHint, setPasteHint] = useState<PasteHintState | null>(null);
   const timeoutIds = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
@@ -49,9 +29,8 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   const triggerRef = useRef<HTMLButtonElement>(null);
   const previewSessionRef = useRef(0);
   const previewCreationAbortRef = useRef<AbortController | null>(null);
-  const previewBlobRef = useRef<{ imageUrl: string; blob: Blob } | null>(null);
-  const previewBlobRequestRef = useRef<{ imageUrl: string; request: Promise<Blob> } | null>(null);
-  const previewImageObjectUrlRef = useRef<string | null>(null);
+  const { getCachedNativeShareCard, invalidateStaleNativeShareCache, requestNativeShareCard, resetNativeShareCardCache } = useNativeShareCard(shareClaim);
+  const { loadPreviewBlob, previewImageObjectUrl, previewImageStatus, prewarmPreviewImage, resetPreviewImage } = useSharePreviewImage(previewCard);
 
   const clearTimeouts = useCallback(() => {
     timeoutIds.current.forEach(clearTimeout);
@@ -74,10 +53,6 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     mountTokenRef.current = token;
     return () => {
       token.cancelled = true;
-      if (previewImageObjectUrlRef.current) {
-        URL.revokeObjectURL(previewImageObjectUrlRef.current);
-        previewImageObjectUrlRef.current = null;
-      }
     };
   }, []);
 
@@ -99,99 +74,54 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
 
   const resetAfterDelay = useCallback((ms: number) => {
     clearTimeouts();
-    addTimeout(() => {
-      setStatus("idle");
-      setFeedback(null);
-      triggerRef.current?.focus();
-    }, ms);
+    addTimeout(() => { setStatus("idle"); setFeedback(null); triggerRef.current?.focus(); }, ms);
   }, [clearTimeouts, addTimeout]);
 
   const generatingRef = useRef(false);
   const sharingRef = useRef(false);
 
-  const closePreview = useCallback((options?: { resetStatus?: boolean }) => {
+  const resetPreviewState = useCallback((options?: { resetStatus?: boolean; resetNativeShareCardCache?: boolean }) => {
     previewSessionRef.current += 1;
     previewCreationAbortRef.current?.abort();
     previewCreationAbortRef.current = null;
     generatingRef.current = false;
     sharingRef.current = false;
+    if (options?.resetNativeShareCardCache) {
+      resetNativeShareCardCache();
+    }
     clearTimeouts();
     setPreviewCard(null);
-    setPreviewImageStatus("idle");
-    if (previewImageObjectUrlRef.current) {
-      URL.revokeObjectURL(previewImageObjectUrlRef.current);
-      previewImageObjectUrlRef.current = null;
-    }
-    setPreviewImageObjectUrl(null);
+    resetPreviewImage();
     setPasteHint(null);
     if (options?.resetStatus !== false) {
       setStatus("idle");
       setFeedback(null);
     }
-  }, [clearTimeouts]);
+  }, [clearTimeouts, resetNativeShareCardCache, resetPreviewImage]);
 
-  const loadPreviewBlob = useCallback(async (imageUrl: string): Promise<Blob> => {
-    const cached = previewBlobRef.current;
-    if (cached && cached.imageUrl === imageUrl) return cached.blob;
-    const inFlight = previewBlobRequestRef.current;
-    if (inFlight && inFlight.imageUrl === imageUrl) return inFlight.request;
-    const request = (async () => {
-      const res = await fetch(imageUrl);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      previewBlobRef.current = { imageUrl, blob };
-      return blob;
-    })();
-    previewBlobRequestRef.current = { imageUrl, request };
-    try {
-      return await request;
-    } finally {
-      if (previewBlobRequestRef.current?.request === request) {
-        previewBlobRequestRef.current = null;
-      }
-    }
-  }, []);
+  const closePreview = useCallback((options?: { resetStatus?: boolean }) => { resetPreviewState(options); }, [resetPreviewState]);
 
-  const prewarmPreviewImage = useCallback((imageUrl: string) => {
-    if (previewBlobRef.current?.imageUrl === imageUrl || previewBlobRequestRef.current?.imageUrl === imageUrl) {
-      return;
-    }
-    void loadPreviewBlob(imageUrl).catch(() => {
-      // Best-effort warmup only; preview rendering should not fail if prewarm fails.
-    });
-  }, [loadPreviewBlob]);
+  const openPreviewCard = useCallback((card: CreateShareCardResult) => {
+    setPreviewCard(card);
+    prewarmPreviewImage(card.imageUrl);
+    setStatus("idle");
+    setFeedback(null);
+  }, [prewarmPreviewImage]);
 
   useEffect(() => {
-    if (!previewCard) return;
-    setPreviewImageStatus("loading");
-    if (previewImageObjectUrlRef.current) {
-      URL.revokeObjectURL(previewImageObjectUrlRef.current);
-      previewImageObjectUrlRef.current = null;
-    }
-    setPreviewImageObjectUrl(null);
+    resetPreviewState({ resetNativeShareCardCache: true });
+  }, [shareClaim, resetPreviewState]);
 
-    let cancelled = false;
-    const expectedImageUrl = previewCard.imageUrl;
-    void loadPreviewBlob(expectedImageUrl)
-      .then((blob) => {
-        if (cancelled || previewCard.imageUrl !== expectedImageUrl) return;
-        const objectUrl = URL.createObjectURL(blob);
-        if (previewImageObjectUrlRef.current) {
-          URL.revokeObjectURL(previewImageObjectUrlRef.current);
-        }
-        previewImageObjectUrlRef.current = objectUrl;
-        setPreviewImageStatus("ready");
-        setPreviewImageObjectUrl(objectUrl);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setPreviewImageStatus("failed");
-      });
+  const getCachedPreviewCard = useCallback((shareClaimValue: string) => {
+    invalidateStaleNativeShareCache(shareClaimValue);
+    return getCachedNativeShareCard(shareClaimValue);
+  }, [getCachedNativeShareCard, invalidateStaleNativeShareCache]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [previewCard, loadPreviewBlob]);
+  const createPreviewCard = useCallback((useNativeShareFlow: boolean, abortController: AbortController) => (
+    useNativeShareFlow
+      ? requestNativeShareCard({ signal: abortController.signal })
+      : createShareCard({ shareClaim, signal: abortController.signal })
+  ), [requestNativeShareCard, shareClaim]);
 
   const handleOpenPreview = useCallback(async () => {
     if (generatingRef.current) return;
@@ -205,18 +135,21 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
     setPasteHint(null);
 
     try {
-      const card = await createShareCard({
-        shareClaim,
-        signal: abortController.signal,
-      });
+      const useNativeShareFlow = shouldUseNativeShareFlow();
+      if (useNativeShareFlow) {
+        const cachedPreviewCard = getCachedPreviewCard(shareClaim);
+        if (cachedPreviewCard) {
+          openPreviewCard(cachedPreviewCard);
+          return;
+        }
+      }
+
+      const card = await createPreviewCard(useNativeShareFlow, abortController);
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
-      if (previewBlobRef.current?.imageUrl !== card.imageUrl) previewBlobRef.current = null;
-      setPreviewCard(card);
-      prewarmPreviewImage(card.imageUrl);
-      setStatus("idle");
-      setFeedback(null);
+      openPreviewCard(card);
     } catch (error) {
       if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      if (error instanceof DOMException && error.name === "AbortError") return;
       setStatus("error");
       setFeedback(error instanceof Error ? error.message : "Failed to create share preview.");
       resetAfterDelay(3000);
@@ -228,7 +161,42 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
         generatingRef.current = false;
       }
     }
-  }, [shareClaim, resetAfterDelay, prewarmPreviewImage]);
+  }, [createPreviewCard, shareClaim, resetAfterDelay, openPreviewCard, getCachedPreviewCard]);
+
+  const handleNativeShare = useCallback(async () => {
+    if (!previewCard || sharingRef.current) return;
+    sharingRef.current = true;
+    const token = mountTokenRef.current;
+    const sessionId = previewSessionRef.current;
+    clearTimeouts();
+    setStatus("generating");
+    setFeedback("Preparing image for sharing...");
+
+    try {
+      const previewBlob = await loadPreviewBlob(previewCard.imageUrl);
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      await navigator.share({
+        files: [buildNativeShareFile(previewBlob, previewCard.shareId)],
+        title: `Claude Cope chat by @${username}`,
+      });
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      closePreview();
+      triggerRef.current?.focus();
+    } catch (error) {
+      if (token.cancelled || sessionId !== previewSessionRef.current) return;
+      if (isNativeShareCancellation(error)) {
+        setStatus("idle");
+        setFeedback(null);
+        return;
+      }
+      closePreview({ resetStatus: false });
+      setStatus("error");
+      setFeedback(NATIVE_SHARE_ERROR_MESSAGE);
+      resetAfterDelay(4000);
+    } finally {
+      sharingRef.current = false;
+    }
+  }, [previewCard, clearTimeouts, loadPreviewBlob, username, closePreview, resetAfterDelay]);
 
   const handleShare = useCallback(async (platform: SharePlatform) => {
     if (!previewCard || sharingRef.current) return;
@@ -319,7 +287,6 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
         resetAfterDelay(3000);
         return;
       }
-
       closePreview();
       setStatus("error");
       setFeedback("Failed to copy to clipboard. Please try again or check browser permissions.");
@@ -348,9 +315,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       }
 
       if (e.key === "Tab" && modal) {
-        const focusable = modal.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        );
+        const focusable = modal.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
         if (focusable.length === 0) return;
         const first = focusable[0]!;
         const last = focusable[focusable.length - 1]!;
@@ -371,16 +336,36 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   }, [previewCard, closePreview]);
 
   const isGenerating = status === "generating";
+  const isMobileSharePreview = shouldTreatDeviceAsMobileForSharePreview();
+  const useNativeSharePreview = shouldUseNativeShareFlow();
   const spinnerChar = SPINNER_FRAMES[spinnerFrameIndex]!;
   const isPreviewImageLoading = previewImageStatus === "loading";
+  const previewActions: ShareButtonPreviewActions = {
+    closePreview: () => closePreview(),
+    copyImage: handleCopyImage,
+    nativeShare: handleNativeShare,
+    openShareTarget: handleOpenShareTarget,
+    shareToPlatform: handleShare,
+    triggerFocus: () => triggerRef.current?.focus(),
+  };
+  const previewModel: ShareButtonPreviewModel = {
+    feedback,
+    isGenerating,
+    isMobileSharePreview,
+    isPreviewImageLoading,
+    pasteHint,
+    previewImageObjectUrl,
+    spinnerChar,
+    status,
+    systemMessage,
+    useNativeSharePreview,
+    userMessage,
+    username,
+  };
 
-  if (status !== "idle" && !previewCard) return (
-    <span className="inline-flex items-center gap-2 ml-2 text-[11px] font-mono align-baseline">
-      {isGenerating ? <><span className="text-yellow-400 animate-pulse">{spinnerChar} {feedback}</span><button onClick={() => closePreview()} className="font-mono text-[11px] text-gray-400 transition-colors hover:text-[#ff5555]">[cancel]</button></> : null}
-      {status === "copied" && <span className="text-green-400">{feedback}</span>}
-      {status === "error" && <span className="text-red-400">{feedback}</span>}
-    </span>
-  );
+  if (status !== "idle" && !previewCard) {
+    return <ShareButtonInlineStatus closePreview={() => closePreview()} feedback={feedback} spinnerChar={spinnerChar} status={status} />;
+  }
 
   return (
     <span className="relative ml-2 inline-flex align-baseline">
@@ -391,106 +376,13 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
       >
         [share]
       </button>
-      {previewCard && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          onClick={() => { closePreview(); triggerRef.current?.focus(); }}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Share preview"
-        >
-          <div className="absolute inset-0 bg-black opacity-70" />
-          <div
-            ref={modalRef}
-            className="relative z-10"
-            style={modalStyle}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={modalHeaderStyle}>
-              <span style={modalTitleStyle}>SHARE PREVIEW</span>
-              <button onClick={() => { closePreview(); triggerRef.current?.focus(); }} style={closeButtonStyle} aria-label="Close">[x]</button>
-            </div>
-            <div style={modalBodyStyle}>
-              <div style={previewFrameStyle}>
-                <div style={previewScaleWrapStyle}>
-                  <div style={previewSurfaceStyle}>
-                    {previewImageObjectUrl ? (
-                      <img
-                        src={previewImageObjectUrl}
-                        alt={`Share preview for @${username}`}
-                        className="block h-auto w-full"
-                      />
-                    ) : (
-                      <ShareCardRenderSurface
-                        prompt={userMessage}
-                        response={systemMessage}
-                        username={username}
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div style={modalFooterStyle}>
-              {pasteHint ? (
-                <div style={pasteHintStyle}>
-                  <div style={emphasisStyle}>
-                    {pasteHint.platform === "twitter" ? (
-                      <>
-                        {pasteHint.method === "image" ? (
-                          <>
-                            <div>{"> [SYSTEM] IMAGE COPIED TO CLIPBOARD."}</div>
-                            <div>
-                              {"> MANDATORY ACTION: GO TO THE NEW TAB AND PRESS "}
-                              <span style={highlightStyle}>{`[ ${isMacPlatform() ? "CMD" : "CTRL"} + V ]`}</span>
-                              {" TO PASTE."}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div>{"> [SYSTEM] SHARE LINK COPIED TO CLIPBOARD."}</div>
-                            <div>{"> IMAGE COPY IS NOT SUPPORTED IN THIS BROWSER. OPEN X TO POST THE LINK."}</div>
-                          </>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <div>{"> [SYSTEM] LINKEDIN WILL SHARE THE PUBLIC LINK DIRECTLY."}</div>
-                        <div>{"> ACTION: OPEN THE NEW TAB TO POST THE SHARE URL."}</div>
-                      </>
-                    )}
-                  </div>
-                  <button onClick={() => handleOpenShareTarget(pasteHint.platform)} className="share-popup-action" style={linkStyle}>
-                    <span data-cursor="">{">"}</span>
-                    <span data-btn="">{` [ OPEN ${pasteHint.platform === "twitter" ? "X" : "LINKEDIN"} TAB ]`}</span>
-                  </button>
-                </div>
-              ) : isGenerating ? (
-                <div style={modalStatusGeneratingStyle}>{spinnerChar} {feedback}</div>
-              ) : isPreviewImageLoading ? (
-                <div style={modalStatusGeneratingStyle}>{spinnerChar} Rendering final image...</div>
-              ) : status === "error" && feedback ? (
-                <div style={modalStatusErrorStyle}>{feedback}</div>
-              ) : (
-                <div style={actionRowStyle}>
-                  {[{ label: "COPY IMAGE", onClick: handleCopyImage }, { label: "SHARE ON X", onClick: () => handleShare("twitter") }, { label: "SHARE ON LINKEDIN", onClick: () => handleShare("linkedin") }].map(({ label, onClick }) => (
-                    <button
-                      key={label}
-                      onClick={onClick}
-                      disabled={isGenerating}
-                      className="share-popup-action"
-                      style={{ ...closeButtonStyle, padding: 0, cursor: isGenerating ? "not-allowed" : "pointer", fontSize: "12px", opacity: isGenerating ? 0.5 : 1 }}
-                    >
-                      <span data-cursor="">{">"}</span>
-                      <span data-btn="">{` [ ${label} ]`}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {previewCard ? (
+        <ShareButtonPreviewModal
+          actions={previewActions}
+          modalRef={modalRef}
+          preview={previewModel}
+        />
+      ) : null}
     </span>
   );
 }
