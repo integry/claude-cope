@@ -171,7 +171,8 @@ export function rewriteTutorialLeakIfNeeded(
 Congratulations: you asked for a simple lesson and summoned a workplace incident instead.`;
 
   void previousUserNextMessage;
-  return rewritten;
+  const userNext = extractUserNextMessage(reply);
+  return userNext ? `${rewritten}\n[USER_NEXT_MESSAGE: ${userNext}]` : rewritten;
 }
 
 const BROKEN_REPLY_FALLBACKS = [
@@ -1241,6 +1242,7 @@ type PreChatResult = {
   profileLicenseHash: string | null;
   revokedProfileLicenseHash: string | null;
   freeAccountId: string | null;
+  sessionProKeyHash?: string | undefined;
   quotaPercent: number;
   isProUserForRouting: boolean;
   ownsUsername: boolean;
@@ -1297,7 +1299,7 @@ async function validateFreeUserAccess(
     rowAccountId: string | null;
     trustedFreeAccountId: string | undefined;
   },
-): Promise<PreChatResult | { profileLicenseHash: string | null; revokedProfileLicenseHash: string | null; freeAccountId: string | null }> {
+): Promise<PreChatResult | { profileLicenseHash: string | null; revokedProfileLicenseHash: string | null; freeAccountId: string | null; sessionProKeyHash: string | undefined }> {
   let { profileLicenseHash } = opts;
   let freeAccountId = opts.rowAccountId ?? null;
   const ownershipCheck = await checkFreeOwnership(env, opts.sessionId, opts.username, opts.hasRow);
@@ -1319,10 +1321,12 @@ async function validateFreeUserAccess(
     profileLicenseHash = licenseState.activeProfileLicenseHash;
     revokedProfileLicenseHash = licenseState.revokedProfileLicenseHash;
   }
-  if (profileLicenseHash) {
-    return rejectPreChat("This account is linked to a Pro license — authenticate with proKeyHash", 403, { profileLicenseHash });
-  }
-  return { profileLicenseHash, revokedProfileLicenseHash, freeAccountId: freeAccountId ?? crypto.randomUUID() };
+  return {
+    profileLicenseHash,
+    revokedProfileLicenseHash,
+    freeAccountId: freeAccountId ?? crypto.randomUUID(),
+    sessionProKeyHash: profileLicenseHash ?? undefined,
+  };
 }
 
 export async function resolveRoutingQuotaState(
@@ -1375,7 +1379,8 @@ async function preChatChecks(
   ctx: { waitUntil: (p: Promise<unknown>) => void },
   opts: { db: D1Database | undefined; sessionId: string; username: string; effectiveProKeyHash: string | undefined; trustedFreeAccountId: string | undefined },
 ): Promise<PreChatResult> {
-  const { db, sessionId, username, effectiveProKeyHash, trustedFreeAccountId } = opts;
+  const { db, sessionId, username, trustedFreeAccountId } = opts;
+  let effectiveProKeyHash = opts.effectiveProKeyHash;
 
   if (!username || username === "anonymous") {
     return rejectPreChat("A proven username is required to use chat", 403, { effectiveProKeyHash });
@@ -1416,6 +1421,7 @@ async function preChatChecks(
     profileLicenseHash = freeAccess.profileLicenseHash;
     revokedProfileLicenseHash = freeAccess.revokedProfileLicenseHash;
     freeAccountId = freeAccess.freeAccountId;
+    effectiveProKeyHash = freeAccess.sessionProKeyHash ?? effectiveProKeyHash;
   }
 
   const { quotaPercent, isProUserForRouting } = await resolveRoutingQuotaState(env, sessionId, effectiveProKeyHash);
