@@ -350,4 +350,3 @@ export function TerminalView({
     </div>
   );
 }
-/* eslint-enable max-lines */

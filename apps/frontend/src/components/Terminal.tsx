@@ -38,7 +38,6 @@ type PromptSubmission = { command: string; replayId: number | null; submissionId
 const createPromptLoadingMessage = (submissionId: number): Message => ({ id: submissionId, role: "loading", content: getRandomLoadingPhrase() });
 const removePromptMessages = (submissionId: number) => (prev: Message[]) => prev.filter((message) => !(message.id === submissionId && (message.role === "user" || message.role === "loading")));
 
-/* eslint-disable max-lines -- Large orchestrator component pending extraction */
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
@@ -392,5 +391,4 @@ function Terminal() {
     />
   );
 }
-/* eslint-enable max-lines */
 export default Terminal;
