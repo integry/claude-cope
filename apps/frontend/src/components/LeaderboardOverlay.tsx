@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { API_BASE } from "../config";
 import LeaderboardPanel, { type LeaderboardEntry } from "./LeaderboardPanel";
 
@@ -39,6 +39,15 @@ const ALL_COUNTRIES: { code: string; name: string }[] = [
   { code: "AE", name: "UAE" }, { code: "GB", name: "United Kingdom" }, { code: "US", name: "United States" },
   { code: "VN", name: "Vietnam" },
 ];
+
+const LEGACY_LEADERBOARD_OVERLAY_WIDTH_REM = 20;
+const LEADERBOARD_OVERLAY_WIDTH_REM = LEGACY_LEADERBOARD_OVERLAY_WIDTH_REM * 1.5;
+const LEADERBOARD_OVERLAY_MAX_WIDTH = "calc(100vw - 1rem)";
+const LEADERBOARD_OVERLAY_STYLE = {
+  backgroundColor: "var(--color-bg)",
+  width: `${LEADERBOARD_OVERLAY_WIDTH_REM}rem`,
+  maxWidth: LEADERBOARD_OVERLAY_MAX_WIDTH,
+} satisfies CSSProperties;
 
 function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -96,6 +105,7 @@ function LeaderboardOverlay({ onClose }: LeaderboardOverlayProps) {
       loading={loading}
       error={error}
       onClose={onClose}
+      style={LEADERBOARD_OVERLAY_STYLE}
       controls={
         <>
           <select
