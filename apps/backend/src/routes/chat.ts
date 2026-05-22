@@ -171,7 +171,8 @@ export function rewriteTutorialLeakIfNeeded(
 Congratulations: you asked for a simple lesson and summoned a workplace incident instead.`;
 
   void previousUserNextMessage;
-  return rewritten;
+  const userNext = extractUserNextMessage(reply);
+  return userNext ? `${rewritten}\n[USER_NEXT_MESSAGE: ${userNext}]` : rewritten;
 }
 
 const BROKEN_REPLY_FALLBACKS = [
@@ -289,6 +290,15 @@ function isGenericUserNextMessage(text: string): boolean {
   );
 }
 
+function containsForbiddenUserNextWord(text: string | null | undefined): boolean {
+  const normalized = normalizeComparableUserNextMessage(text);
+  if (!normalized) return false;
+  return (
+    /\bnext\b/.test(normalized) ||
+    /\bnext(?:step|steps|move|moves|thing|things|part|one|task|up)\b/.test(normalized)
+  );
+}
+
 function isBannedUserNextMessagePattern(text: string): boolean {
   const normalized = normalizeComparableUserNextMessage(text);
   return (
@@ -345,6 +355,7 @@ function shouldReplaceUserNextMessage(
   latestUserMessage?: string | null,
 ): boolean {
   if (!text?.trim()) return true;
+  if (containsForbiddenUserNextWord(text)) return true;
   if (isGenericUserNextMessage(text)) return true;
   if (isOverlyTechnicalUserNextMessage(text)) return true;
   if (isOverlyDramaticUserNextMessage(text)) return true;
@@ -361,6 +372,7 @@ function explainUserNextReplacement(
   latestUserMessage?: string | null,
 ): string {
   if (!text?.trim()) return "empty";
+  if (containsForbiddenUserNextWord(text)) return "forbidden_next_word";
   if (isGenericUserNextMessage(text)) return "generic_or_banned";
   if (isOverlyTechnicalUserNextMessage(text)) return "overly_technical";
   if (isOverlyDramaticUserNextMessage(text)) return "overly_dramatic";
@@ -380,6 +392,7 @@ function explainHelperUserNextAcceptance(
   latestUserMessage?: string | null,
 ): string {
   if (!text?.trim()) return "empty";
+  if (containsForbiddenUserNextWord(text)) return "forbidden_next_word";
   if (hasNearExactHelperOverlap(text, latestUserMessage)) return "overlaps_latest_user";
   if (
     normalizeComparableUserNextMessage(text) ===
@@ -1114,6 +1127,7 @@ function buildUserNextSuggestionMessages({
         "Avoid object-chasing prompts that fixate on one artifact from the reply.",
         "Do not mirror previous user-next-message phrasing from the conversation.",
         "Do not repeat or lightly paraphrase the user's latest message.",
+        "The suggested message must not contain the word 'next' or lazy variants like next step, next move, next one, next up, or next thing.",
         "Do not jump straight to production, intentional crashes, wipes, purges, or other maximum-chaos escalation unless the conversation is already clearly there.",
         "Prefer a single blunt command, impulsive question, or small panic confession.",
         "Keep it broad, hilariously misguided, and slightly destructive.",
@@ -1241,6 +1255,7 @@ type PreChatResult = {
   profileLicenseHash: string | null;
   revokedProfileLicenseHash: string | null;
   freeAccountId: string | null;
+  sessionProKeyHash?: string | undefined;
   quotaPercent: number;
   isProUserForRouting: boolean;
   ownsUsername: boolean;
@@ -1297,7 +1312,7 @@ async function validateFreeUserAccess(
     rowAccountId: string | null;
     trustedFreeAccountId: string | undefined;
   },
-): Promise<PreChatResult | { profileLicenseHash: string | null; revokedProfileLicenseHash: string | null; freeAccountId: string | null }> {
+): Promise<PreChatResult | { profileLicenseHash: string | null; revokedProfileLicenseHash: string | null; freeAccountId: string | null; sessionProKeyHash: string | undefined }> {
   let { profileLicenseHash } = opts;
   let freeAccountId = opts.rowAccountId ?? null;
   const ownershipCheck = await checkFreeOwnership(env, opts.sessionId, opts.username, opts.hasRow);
@@ -1319,10 +1334,12 @@ async function validateFreeUserAccess(
     profileLicenseHash = licenseState.activeProfileLicenseHash;
     revokedProfileLicenseHash = licenseState.revokedProfileLicenseHash;
   }
-  if (profileLicenseHash) {
-    return rejectPreChat("This account is linked to a Pro license — authenticate with proKeyHash", 403, { profileLicenseHash });
-  }
-  return { profileLicenseHash, revokedProfileLicenseHash, freeAccountId: freeAccountId ?? crypto.randomUUID() };
+  return {
+    profileLicenseHash,
+    revokedProfileLicenseHash,
+    freeAccountId: freeAccountId ?? crypto.randomUUID(),
+    sessionProKeyHash: profileLicenseHash ?? undefined,
+  };
 }
 
 export async function resolveRoutingQuotaState(
@@ -1375,7 +1392,8 @@ async function preChatChecks(
   ctx: { waitUntil: (p: Promise<unknown>) => void },
   opts: { db: D1Database | undefined; sessionId: string; username: string; effectiveProKeyHash: string | undefined; trustedFreeAccountId: string | undefined },
 ): Promise<PreChatResult> {
-  const { db, sessionId, username, effectiveProKeyHash, trustedFreeAccountId } = opts;
+  const { db, sessionId, username, trustedFreeAccountId } = opts;
+  let effectiveProKeyHash = opts.effectiveProKeyHash;
 
   if (!username || username === "anonymous") {
     return rejectPreChat("A proven username is required to use chat", 403, { effectiveProKeyHash });
@@ -1416,6 +1434,7 @@ async function preChatChecks(
     profileLicenseHash = freeAccess.profileLicenseHash;
     revokedProfileLicenseHash = freeAccess.revokedProfileLicenseHash;
     freeAccountId = freeAccess.freeAccountId;
+    effectiveProKeyHash = freeAccess.sessionProKeyHash ?? effectiveProKeyHash;
   }
 
   const { quotaPercent, isProUserForRouting } = await resolveRoutingQuotaState(env, sessionId, effectiveProKeyHash);

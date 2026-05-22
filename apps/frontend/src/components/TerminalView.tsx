@@ -1,4 +1,3 @@
-import type { ChangeEvent, Dispatch, KeyboardEvent as ReactKeyboardEvent, RefObject, SetStateAction } from "react";
 import { useRef } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
@@ -12,163 +11,18 @@ import Ticker from "./Ticker";
 import { OutageBar } from "./OutageBar";
 import SprintProgressBar from "./SprintProgressBar";
 import MessageList from "./MessageList";
-import type { SlashCommandAction } from "./slashCommandDetect";
 import { TerminalOverlays } from "./TerminalOverlays";
-import { BuddyOverlay } from "./BuddyOverlay";
-import type { GameState, Message } from "../hooks/useGameState";
-import type { PendingReviewPing } from "../hooks/useMultiplayer";
-import type { OverlayVisibility } from "./terminalViewUtils";
-import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
-import type { OutageScenario } from "@claude-cope/shared/multiplayer-types";
+import {
+  createOverlayOpener,
+  createSlashMenuOpener,
+  createTickerCommandRunner,
+  createUpgradeOpener,
+  focusTerminalInputIfEligible,
+  getUpgradeDismissProps,
+  renderBuddyDock,
+  type TerminalViewProps,
+} from "./terminalViewHelpers";
 
-type TerminalViewProps = OverlayVisibility & {
-  activeRegression: string | null;
-  outageHp: number | null;
-  activeOutageScenario: OutageScenario | null;
-  pendingReviewPing: PendingReviewPing;
-  pingAcknowledged: boolean;
-  activeTheme: GameState["activeTheme"];
-  regressionGlitch: string | null | undefined;
-  anyOverlayOpen: boolean;
-  isMobileViewport: boolean;
-  inputRef: RefObject<HTMLInputElement | null>;
-  closeAllOverlaysPreservingNag: () => void;
-  onlineCount: number;
-  rank: GameState["economy"]["currentRank"];
-  state: GameState;
-  handleHomeClick: () => void;
-  handleProfileClick: () => void;
-  setShowHelp: Dispatch<SetStateAction<boolean>>;
-  setShowAbout: Dispatch<SetStateAction<boolean>>;
-  setInputValue: Dispatch<SetStateAction<string>>;
-  setSlashQuery: Dispatch<SetStateAction<string>>;
-  setSlashIndex: Dispatch<SetStateAction<number>>;
-  setShowUpgrade: Dispatch<SetStateAction<boolean>>;
-  compactEffect: boolean;
-  isBooting: boolean;
-  history: Message[];
-  messageKeys: number[];
-  initialHistoryLen: number;
-  promptString: string;
-  handleSlashCommandClick: (
-    command: string,
-    action: SlashCommandAction,
-  ) => void;
-  scrollViewportRef?: RefObject<HTMLDivElement | null>;
-  bottomRef: RefObject<HTMLDivElement | null>;
-  slashQuery: string;
-  slashIndex: number;
-  handleSlashMenuSelect: (command: string) => void;
-  runSlashCommand: (command: string) => void;
-  inputValue: string;
-  suggestedReply: string | null;
-  acceptSuggestedReply: (options?: { submit?: boolean }) => void;
-  isProcessing: boolean;
-  handleChange: (e: ChangeEvent<HTMLInputElement>) => void;
-  handleKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
-  handleSubmit: () => void;
-  buyGenerator: (generatorId: string, amount?: number) => boolean;
-  buyUpgrade: (upgradeId: string) => boolean;
-  buyTheme: (themeId: string) => boolean;
-  setActiveTheme: (id: string) => void;
-  setShowStore: Dispatch<SetStateAction<boolean>>;
-  setShowLeaderboard: Dispatch<SetStateAction<boolean>>;
-  setShowAchievements: Dispatch<SetStateAction<boolean>>;
-  setShowPrivacy: Dispatch<SetStateAction<boolean>>;
-  setShowTerms: Dispatch<SetStateAction<boolean>>;
-  setShowContact: Dispatch<SetStateAction<boolean>>;
-  setShowProfile: Dispatch<SetStateAction<boolean>>;
-  setShowParty: Dispatch<SetStateAction<boolean>>;
-  setShowSynergize: Dispatch<SetStateAction<boolean>>;
-  setIsProcessing: Dispatch<SetStateAction<boolean>>;
-  setHistory: Dispatch<SetStateAction<Message[]>>;
-  pendingNagCommand: string | null;
-  handleUpgradeNagClose: () => void;
-  handleManualUpgradeDismiss: () => void;
-  upgradeNagDismissPhase: "idle" | "closing";
-  upgradeNagDismissEffect: UpgradeNagCloseEffect;
-};
-
-function getUpgradeDismissProps(
-  pendingNagCommand: string | null,
-  handleUpgradeNagClose: () => void,
-  handleManualUpgradeDismiss: () => void,
-) {
-  const nagDismiss = pendingNagCommand !== null;
-  return {
-    onUpgradeDismiss: nagDismiss
-      ? handleUpgradeNagClose
-      : handleManualUpgradeDismiss,
-    upgradeDismissMode: nagDismiss ? "nag" : "manual",
-  } as const;
-}
-
-function focusTerminalInputIfEligible(
-  isMobileViewport: boolean,
-  anyOverlayOpen: boolean,
-  inputRef: RefObject<HTMLInputElement | null>,
-) {
-  if (
-    !isMobileViewport &&
-    !anyOverlayOpen &&
-    !window.getSelection()?.toString()
-  ) {
-    inputRef.current?.focus();
-  }
-}
-
-function createOverlayOpener(
-  closeAllOverlaysPreservingNag: () => void,
-  setVisible: Dispatch<SetStateAction<boolean>>,
-) {
-  return () => {
-    closeAllOverlaysPreservingNag();
-    setVisible(true);
-  };
-}
-
-function createSlashMenuOpener(
-  setInputValue: Dispatch<SetStateAction<string>>,
-  setSlashQuery: Dispatch<SetStateAction<string>>,
-  setSlashIndex: Dispatch<SetStateAction<number>>,
-  isMobileViewport: boolean,
-  inputRef: RefObject<HTMLInputElement | null>,
-) {
-  return () => {
-    setInputValue("/");
-    setSlashQuery("/");
-    setSlashIndex(0);
-    if (!isMobileViewport) inputRef.current?.focus();
-  };
-}
-
-function createUpgradeOpener(
-  closeAllOverlaysPreservingNag: () => void,
-  setShowUpgrade: Dispatch<SetStateAction<boolean>>,
-) {
-  return () => {
-    closeAllOverlaysPreservingNag();
-    setShowUpgrade(true);
-    window.history.pushState(null, "", "/upgrade");
-  };
-}
-
-function createTickerCommandRunner(
-  closeAllOverlaysPreservingNag: () => void,
-  runSlashCommand: (command: string) => void,
-) {
-  return (command: string) => {
-    closeAllOverlaysPreservingNag();
-    runSlashCommand(command);
-  };
-}
-
-function renderBuddyDock(buddy: GameState["buddy"]) {
-  if (!buddy.type) return null;
-  return <div className="terminal-buddy-dock hidden md:flex"><BuddyOverlay buddy={buddy} /></div>;
-}
-
-/* eslint-disable max-lines -- Large presentational component pending extraction */
 export function TerminalView({
   activeRegression,
   outageHp,
@@ -444,4 +298,3 @@ export function TerminalView({
     </div>
   );
 }
-/* eslint-enable max-lines */

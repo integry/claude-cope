@@ -91,6 +91,7 @@ export function buildTicketMessage(
   return {
     role: "system",
     content: buildTicketFallbackText(ticketDisplay),
+    contextBoundary: status === "claimed" ? "ticket-claim" : undefined,
     ticketDisplay,
   };
 }

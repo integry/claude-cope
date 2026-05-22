@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
+import { Hono } from "hono";
 import { getDefaultCopeModel, resolveCopeModel } from "@claude-cope/shared/models";
 import {
   sanitizeChatMessages,
@@ -768,6 +769,16 @@ describe("reply formatting normalizer", () => {
     expect(output).not.toContain("[USER_NEXT_MESSAGE:");
   });
 
+  it("removes USER_NEXT_MESSAGE text containing forbidden next variants", () => {
+    const input = "The retry queue is now mostly vibes and unpaid invoices.\n[USER_NEXT_MESSAGE: what's our next move?]";
+    const output = normalizeReplyContent(input);
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
+
+    const compactInput = "The rollout checklist is sweating.\n[USER_NEXT_MESSAGE: nextstep is panic?]";
+    const compactOutput = normalizeReplyContent(compactInput);
+    expect(compactOutput).not.toContain("[USER_NEXT_MESSAGE:");
+  });
+
   it("removes overly technical follow-up tags", () => {
     const input = "The cluster is now a haunted landfill.\n[USER_NEXT_MESSAGE: what's the fresh-start-manifest.yaml look like?]";
     const output = normalizeReplyContent(input);
@@ -999,6 +1010,89 @@ describe("Provider configuration in OpenRouter requests", () => {
 });
 
 describe("chat route model persona wiring", () => {
+  it("allows session-owned pro accounts to chat without sending proKeyHash", async () => {
+    const { default: chat } = await import("./chat");
+    const profileRow = {
+      username: "RinaldsTheDevv",
+      account_id: null,
+      total_td: 0,
+      current_td: 0,
+      corporate_rank: "Junior Code Monkey",
+      display_rank: null,
+      inventory: "{}",
+      upgrades: "[]",
+      achievements: "[]",
+      is_executive_supporter: 0,
+      buddy_type: null,
+      buddy_is_shiny: 0,
+      unlocked_themes: "[\"default\"]",
+      active_theme: "default",
+      active_ticket: null,
+      td_multiplier: 1,
+      license_hash: "pro-hash",
+    };
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn(() => ({
+          first: vi.fn(async () => {
+            if (sql.includes("SELECT status, last_activated_at FROM licenses")) {
+              return { status: "active", last_activated_at: new Date().toISOString() };
+            }
+            if (sql.includes("FROM user_scores WHERE username = ?")) return profileRow;
+            if (sql.includes("FROM user_scores WHERE license_hash = ?")) return profileRow;
+            if (sql.includes("UPDATE user_scores SET total_td")) return { total_td: 23 };
+            return null;
+          }),
+          run: vi.fn(async () => ({ meta: { changes: 1 } })),
+          all: vi.fn(async () => ({ results: [] })),
+        })),
+      })),
+    } as unknown as D1Database;
+    const kvStore = new Map<string, string>([
+      ["session_user:test-session", "RinaldsTheDevv"],
+      ["polar:pro-hash", "10"],
+      ["polar_total:pro-hash", "10"],
+    ]);
+    const kv = {
+      get: vi.fn(async (key: string) => kvStore.get(key) ?? null),
+      put: vi.fn(async (key: string, value: string) => { kvStore.set(key, value); }),
+    } as unknown as KVNamespace;
+    const app = new Hono<{ Bindings: { OPENROUTER_API_KEY: string; DB: D1Database; QUOTA_KV: KVNamespace; PRO_INITIAL_QUOTA: string }; Variables: { sessionId: string } }>();
+    app.use("*", async (c, next) => {
+      c.set("sessionId", "test-session");
+      await next();
+    });
+    app.route("/api/chat", chat);
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: "test response\n[USER_NEXT_MESSAGE: ship it]" } }],
+      usage: {},
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+
+    const res = await app.request("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: "RinaldsTheDevv",
+        rank: "Junior Code Monkey",
+        chatMessages: [{ role: "user", content: "go" }],
+      }),
+    }, {
+      OPENROUTER_API_KEY: "test-key",
+      DB: db,
+      QUOTA_KV: kv,
+      PRO_INITIAL_QUOTA: "10",
+    }, createExecutionContext());
+
+    fetchSpy.mockRestore();
+
+    expect(res.status).toBe(200);
+    expect(kvStore.get("polar:pro-hash")).toBe("9");
+  });
+
   it("passes modelId into prompt construction before calling OpenRouter", async () => {
     const { default: chat } = await import("./chat");
     let capturedRequestBody: Record<string, unknown> | undefined;
@@ -1009,7 +1103,7 @@ describe("chat route model persona wiring", () => {
       }
 
       return new Response(JSON.stringify({
-        choices: [{ message: { content: "test response\n[USER_NEXT_MESSAGE: what breaks next?]" } }],
+        choices: [{ message: { content: "test response\n[USER_NEXT_MESSAGE: what breaks first?]" } }],
         usage: {},
       }), {
         status: 200,
@@ -1050,7 +1144,7 @@ describe("chat route model persona wiring", () => {
       }
 
       return new Response(JSON.stringify({
-        choices: [{ message: { content: "test response\n[USER_NEXT_MESSAGE: what breaks next?]" } }],
+        choices: [{ message: { content: "test response\n[USER_NEXT_MESSAGE: what breaks first?]" } }],
         usage: {},
       }), {
         status: 200,
@@ -1086,7 +1180,7 @@ describe("chat route model persona wiring", () => {
         openRouterCalls += 1;
         const content = openRouterCalls === 1
           ? ""
-          : "retry response\n[USER_NEXT_MESSAGE: what breaks next?]";
+          : "retry response\n[USER_NEXT_MESSAGE: what breaks first?]";
         return new Response(JSON.stringify({
           choices: [{ message: { content } }],
           usage: {},

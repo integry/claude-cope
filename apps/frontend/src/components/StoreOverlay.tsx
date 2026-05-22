@@ -18,6 +18,23 @@ type StoreOverlayProps = {
   style?: CSSProperties;
 };
 
+function formatOwnedLabel(owned: number): string {
+  return `Owned: ${owned}`;
+}
+
+function formatUpgradeEffectLabel(
+  upgrade: (typeof UPGRADES)[number],
+  inventory: GameState["inventory"],
+  targetName?: string,
+): string {
+  const effectTarget = targetName ?? "Target";
+  if (upgrade.synergyPercent != null) {
+    const currentBoost = 1 + ((inventory[upgrade.requiredGeneratorId] ?? 0) * upgrade.synergyPercent) / 100;
+    return `Current boost: ${effectTarget} x${currentBoost.toFixed(2)} (+${upgrade.synergyPercent}%/ea)`;
+  }
+  return `Boost: ${effectTarget} x${upgrade.multiplier}`;
+}
+
 function StoreOverlay({
   state,
   buyGenerator,
@@ -32,7 +49,7 @@ function StoreOverlay({
 
   return (
     <div
-      className={`fixed right-0 top-0 h-full w-72 border-l border-gray-700 flex flex-col z-20 ${className}`.trim()}
+      className={`fixed right-0 top-0 h-full w-72 md:w-[27rem] border-l border-gray-700 flex flex-col z-20 ${className}`.trim()}
       style={{ backgroundColor: "var(--color-bg)", ...style }}
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
@@ -81,7 +98,7 @@ function StoreOverlay({
             >
               <div className="flex justify-between items-center text-sm font-semibold">
                 <span>{gen.name}</span>
-                <span className="text-xs text-gray-400">x{owned}</span>
+                <span className="pl-3 text-xs text-gray-400">{formatOwnedLabel(owned)}</span>
               </div>
               <p className="text-xs text-gray-400 italic mt-1">
                 {gen.description}
@@ -151,10 +168,7 @@ function StoreOverlay({
                   Cost: {upgrade.cost.toLocaleString()} TD
                 </span>
                 <span className="text-gray-500 ml-2">
-                  ({targetGen?.name}{" "}
-                  {upgrade.synergyPercent != null
-                    ? `x${(1 + ((state.inventory[upgrade.requiredGeneratorId] ?? 0) * upgrade.synergyPercent) / 100).toFixed(2)} — +${upgrade.synergyPercent}%/ea`
-                    : `x${upgrade.multiplier}`})
+                  {formatUpgradeEffectLabel(upgrade, state.inventory, targetGen?.name)}
                 </span>
               </div>
               {!owned && (

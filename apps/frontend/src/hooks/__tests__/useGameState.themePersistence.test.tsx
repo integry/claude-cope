@@ -180,6 +180,32 @@ describe("useGameState theme persistence", () => {
     await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("syntax-error"));
   });
 
+  it("restores session Max status for a non-fresh local state without proKeyHash", async () => {
+    await vi.waitFor(() => expect(fetchSessionProfile).toHaveBeenCalled());
+    vi.mocked(fetchSessionProfile).mockClear();
+    vi.mocked(fetchSessionProfile).mockResolvedValueOnce({
+      found: true,
+      isPro: true,
+      username: "alice",
+      profile: createServerProfile({
+        username: "alice",
+        quota_remaining: 431,
+        quota_total: 1337,
+      }),
+    });
+    remountWithState(makeState({
+      isPro: undefined,
+      hasSessionPro: undefined,
+      proKey: undefined,
+      proKeyHash: undefined,
+      chatHistory: [{ id: 1, role: "user", content: "hello" }],
+    }));
+
+    await vi.waitFor(() => expect(hookState.state.isPro).toBe(true));
+    await vi.waitFor(() => expect(hookState.state.hasSessionPro).toBe(true));
+    await vi.waitFor(() => expect(hookState.state.economy.quotaRemaining).toBe(431));
+  });
+
   it("rolls back to the validated server theme when update-theme fails after non-fresh /me restoration", async () => {
     vi.mocked(fetchSessionProfile).mockResolvedValueOnce({
       found: true,
