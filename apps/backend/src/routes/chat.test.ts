@@ -769,6 +769,16 @@ describe("reply formatting normalizer", () => {
     expect(output).not.toContain("[USER_NEXT_MESSAGE:");
   });
 
+  it("removes USER_NEXT_MESSAGE text containing forbidden next variants", () => {
+    const input = "The retry queue is now mostly vibes and unpaid invoices.\n[USER_NEXT_MESSAGE: what's our next move?]";
+    const output = normalizeReplyContent(input);
+    expect(output).not.toContain("[USER_NEXT_MESSAGE:");
+
+    const compactInput = "The rollout checklist is sweating.\n[USER_NEXT_MESSAGE: nextstep is panic?]";
+    const compactOutput = normalizeReplyContent(compactInput);
+    expect(compactOutput).not.toContain("[USER_NEXT_MESSAGE:");
+  });
+
   it("removes overly technical follow-up tags", () => {
     const input = "The cluster is now a haunted landfill.\n[USER_NEXT_MESSAGE: what's the fresh-start-manifest.yaml look like?]";
     const output = normalizeReplyContent(input);
@@ -1093,7 +1103,7 @@ describe("chat route model persona wiring", () => {
       }
 
       return new Response(JSON.stringify({
-        choices: [{ message: { content: "test response\n[USER_NEXT_MESSAGE: what breaks next?]" } }],
+        choices: [{ message: { content: "test response\n[USER_NEXT_MESSAGE: what breaks first?]" } }],
         usage: {},
       }), {
         status: 200,
@@ -1134,7 +1144,7 @@ describe("chat route model persona wiring", () => {
       }
 
       return new Response(JSON.stringify({
-        choices: [{ message: { content: "test response\n[USER_NEXT_MESSAGE: what breaks next?]" } }],
+        choices: [{ message: { content: "test response\n[USER_NEXT_MESSAGE: what breaks first?]" } }],
         usage: {},
       }), {
         status: 200,
@@ -1170,7 +1180,7 @@ describe("chat route model persona wiring", () => {
         openRouterCalls += 1;
         const content = openRouterCalls === 1
           ? ""
-          : "retry response\n[USER_NEXT_MESSAGE: what breaks next?]";
+          : "retry response\n[USER_NEXT_MESSAGE: what breaks first?]";
         return new Response(JSON.stringify({
           choices: [{ message: { content } }],
           usage: {},
