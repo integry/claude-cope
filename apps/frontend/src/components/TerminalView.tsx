@@ -13,16 +13,12 @@ import SprintProgressBar from "./SprintProgressBar";
 import MessageList from "./MessageList";
 import { TerminalOverlays } from "./TerminalOverlays";
 import {
-  createOverlayOpener,
-  createSlashMenuOpener,
-  createTickerCommandRunner,
-  createUpgradeOpener,
+  buildTerminalOpeners,
   focusTerminalInputIfEligible,
   getUpgradeDismissProps,
   renderBuddyDock,
   type TerminalViewProps,
 } from "./terminalViewHelpers";
-
 export function TerminalView({
   activeRegression,
   outageHp,
@@ -106,37 +102,23 @@ export function TerminalView({
     handleUpgradeNagClose,
     handleManualUpgradeDismiss,
   );
-  const openHelp = createOverlayOpener(closeAllOverlaysPreservingNag, setShowHelp);
-  const openAbout = createOverlayOpener(closeAllOverlaysPreservingNag, setShowAbout);
-  const openStore = createOverlayOpener(closeAllOverlaysPreservingNag, setShowStore);
-  const openLeaderboard = createOverlayOpener(
+  const { openHelp, openAbout, openStore, openLeaderboard, openAchievements, openContact, openParty, openUpgrade, openSlashMenu, handleTickerCommand } = buildTerminalOpeners({
     closeAllOverlaysPreservingNag,
+    setShowHelp,
+    setShowAbout,
+    setShowStore,
     setShowLeaderboard,
-  );
-  const openAchievements = createOverlayOpener(
-    closeAllOverlaysPreservingNag,
     setShowAchievements,
-  );
-  const openContact = createOverlayOpener(
-    closeAllOverlaysPreservingNag,
     setShowContact,
-  );
-  const openParty = createOverlayOpener(closeAllOverlaysPreservingNag, setShowParty);
-  const openUpgrade = createUpgradeOpener(
-    closeAllOverlaysPreservingNag,
+    setShowParty,
     setShowUpgrade,
-  );
-  const openSlashMenu = createSlashMenuOpener(
     setInputValue,
     setSlashQuery,
     setSlashIndex,
     isMobileViewport,
     inputRef,
-  );
-  const handleTickerCommand = createTickerCommandRunner(
-    closeAllOverlaysPreservingNag,
     runSlashCommand,
-  );
+  });
 
   return (
     <div

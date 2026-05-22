@@ -181,6 +181,34 @@ describe("TurnstileWidget", () => {
     expect(onError).toHaveBeenCalledWith("Turnstile reported repeated errors.");
     expect(onVerified).not.toHaveBeenCalled();
   });
+
+  it("keeps the challenge surface visible and interactive while verification is active", async () => {
+    const onVerified = vi.fn();
+    const onError = vi.fn();
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: "enabled", enabled: true, bypassed: false, misconfigured: false }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    window.turnstile = {
+      render: () => "widget-1",
+      execute: vi.fn(),
+      reset: vi.fn(),
+    };
+
+    await renderWidget({ onVerified, onError });
+    await flushEffects();
+
+    const challenge = container.querySelector<HTMLDivElement>("[data-testid='turnstile-challenge-surface']");
+    expect(challenge?.style.pointerEvents).toBe("auto");
+    expect(challenge?.style.opacity).toBe("1");
+    expect(challenge?.style.width).toBe("320px");
+    expect(challenge?.style.maxWidth).toBe("calc(100vw - 32px)");
+    expect(challenge?.getAttribute("aria-hidden")).toBe("false");
+  });
 });
 
 describe("TurnstileWidget bootstrap gating", () => {
