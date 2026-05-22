@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Hono } from "hono";
 import {
   FREE_BACKLOG_CATEGORY_PREFIXES,
@@ -37,7 +37,7 @@ function makeBacklogRow(id: string): MockBacklogRow {
   };
 }
 
-function createCommunityMockDB(rows: MockBacklogRow[], activeHashes: string[] = []) {
+function createCommunityMockDB(rows: MockBacklogRow[], activeHashes: string[] = [], sessionProfiles: Record<string, string> = {}) {
   return {
     prepare(sql: string) {
       let bindings: unknown[] = [];
@@ -68,6 +68,16 @@ function createCommunityMockDB(rows: MockBacklogRow[], activeHashes: string[] = 
           return { results: filteredRows.slice(0, limit) as T[] };
         },
         async first<T>() {
+          if (sql.includes("FROM user_scores WHERE username = ?")) {
+            const username = String(bindings[0] ?? "");
+            const licenseHash = sessionProfiles[username];
+            if (!licenseHash) return null as T | null;
+            return {
+              username,
+              license_hash: licenseHash,
+              account_id: "account-id",
+            } as T;
+          }
           if (!sql.includes("FROM licenses WHERE key_hash = ?")) {
             throw new Error(`Unexpected first() query: ${sql}`);
           }
@@ -187,6 +197,13 @@ describe("GET /api/tickets/community backlog tiering", () => {
   const app = new Hono();
   app.route("/api/tickets", tickets);
 
+  const sessionApp = new Hono<{ Variables: { sessionId: string } }>();
+  sessionApp.use("*", async (c, next) => {
+    c.set("sessionId", "sess-pro");
+    await next();
+  });
+  sessionApp.route("/api/tickets", tickets);
+
   const rows = [
     makeBacklogRow("YELL-001"),
     makeBacklogRow("OOPS-001"),
@@ -203,7 +220,7 @@ describe("GET /api/tickets/community backlog tiering", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("private, max-age=10");
-    expect(res.headers.get("Vary")).toBe("x-pro-key-hash");
+    expect(res.headers.get("Vary")).toBe("x-pro-key-hash, Cookie");
 
     const data = await res.json() as CommunityBacklogTicket[];
 
@@ -230,6 +247,26 @@ describe("GET /api/tickets/community backlog tiering", () => {
       "/api/tickets/community",
       { headers: { "x-pro-key-hash": "pro-hash" } },
       { DB: createCommunityMockDB(rows, ["pro-hash"]) },
+    );
+
+    expect(res.status).toBe(200);
+
+    const data = await res.json() as CommunityBacklogTicket[];
+
+    expect(data).toHaveLength(5);
+    expect(data.some((row) => row.tier === "premium" && row.is_locked === false)).toBe(true);
+    expect(data.every((row) => row.is_locked === false)).toBe(true);
+  });
+
+  it("returns premium categories unlocked for session-restored paid users without a pro hash header", async () => {
+    const kv = {
+      get: vi.fn(async (key: string) => key === "session_user:sess-pro" ? "SessionMax" : null),
+      put: vi.fn(),
+    } as unknown as KVNamespace;
+    const res = await sessionApp.request(
+      "/api/tickets/community",
+      {},
+      { DB: createCommunityMockDB(rows, ["session-hash"], { SessionMax: "session-hash" }), QUOTA_KV: kv },
     );
 
     expect(res.status).toBe(200);

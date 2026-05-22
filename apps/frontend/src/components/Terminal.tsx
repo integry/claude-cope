@@ -32,7 +32,7 @@ import { usePromptSubmissionState } from "./usePromptSubmissionState";
 import { useUpgradeNagState } from "./useUpgradeNagState";
 import { STARTUP_TICKET_PROMPT_DELAY_MS, getNextTerminalInputValue, getSlashCommandClickSelection, syncMessageKeys } from "./terminalUtils";
 import { useIsMobileViewport } from "./useIsMobileViewport";
-
+import { useTerminalScrollManager } from "./useTerminalScrollManager";
 export type { Message }; export { STARTUP_TICKET_PROMPT_DELAY_MS };
 type PromptSubmission = { command: string; replayId: number | null; submissionId: number };
 type DesktopScrollMetrics = { contentHeight: number; viewportHeight: number; maxScrollTop: number };
@@ -93,27 +93,29 @@ function Terminal() {
   const brrrrrrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null); const initialHistoryLen = useRef(history.length); const messageKeys = useRef<number[]>([]); const messageKeyMap = useRef(new WeakMap<Message, number>());
   const nextKeyId = useRef(0); syncMessageKeys(messageKeys.current, nextKeyId, history, messageKeyMap.current);
   const freeTierDelayRef = useRef<{ cancelled: boolean; timeoutId: ReturnType<typeof setTimeout> | null; batchId?: string }>({ cancelled: false, timeoutId: null });
-  const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); const historyRef = useRef(history); historyRef.current = history;
-  const hasScrolledTerminalToBottomOnLoadRef = useRef(false); const lastDesktopScrollMetricsRef = useRef<DesktopScrollMetrics | null>(null);
-  const wasMobileRequestProcessingRef = useRef(false); const activeMobilePromptKeyRef = useRef<number | null>(null); const mobilePromptFollowFrameRef = useRef<number | null>(null);
-  const mobilePromptFollowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); const lastMobilePromptScrollHeightRef = useRef(0); const lastMobilePromptGrowthAtRef = useRef(0);
-  const lastSuggestedReplyRef = useRef<string | null>(null); const nextPendingBacklogRollbackIdRef = useRef(0); const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
-  const nextPromptSubmissionIdRef = useRef(0); const commandHistoryEntriesRef = useRef<Array<{ submissionId: number; command: string }>>([]); const promptString = getPromptString(activeRegression);
+  const startupTicketPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyRef = useRef(history);
+  historyRef.current = history;
+  const lastDesktopScrollMetricsRef = useRef<DesktopScrollMetrics | null>(null);
+  const lastSuggestedReplyRef = useRef<string | null>(null);
+  const nextPendingBacklogRollbackIdRef = useRef(0);
+  const pendingBacklogRollbacksRef = useRef(new Map<number, () => void>());
+  const nextPromptSubmissionIdRef = useRef(0);
+  const commandHistoryEntriesRef = useRef<Array<{ submissionId: number; command: string }>>([]);
+  const promptString = getPromptString(activeRegression);
   const anyOverlayOpen = isAnyOverlayOpen(overlays);
   const { abortControllerRef, createPromptProcessingSetter, isProcessing, resetPromptProcessing, setIsProcessing, startPromptProcessing, trackAbortController, untrackAbortController } = usePromptSubmissionState();
   const { recordConversationRound, recordEnter, recordValidCommand, recordMessageWithoutTicket } = useTipManager({ isBooting, isInteractionBlocked: anyOverlayOpen || isProcessing, gameState: state, onlineCount, setHistory });
+  const { scrollTerminalToBottom } = useTerminalScrollManager({ history, messageKeys: messageKeys.current, isMobileViewport, isProcessing, scrollViewportRef, bottomRef });
   const resolveScrollViewport = useCallback((): HTMLDivElement | null => scrollViewportRef.current || (typeof document === "undefined" ? null : document.querySelector<HTMLDivElement>('[data-terminal-scroll-viewport="true"]')), []);
-  const stopMobilePromptFollowLoop = useCallback(() => {
-    if (mobilePromptFollowFrameRef.current !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(mobilePromptFollowFrameRef.current);
-    mobilePromptFollowFrameRef.current = null;
-    if (mobilePromptFollowTimeoutRef.current) clearTimeout(mobilePromptFollowTimeoutRef.current);
-    mobilePromptFollowTimeoutRef.current = null;
+  useEffect(() => () => {
+    const ds = freeTierDelayRef.current;
+    ds.cancelled = true;
+    if (ds.timeoutId) clearTimeout(ds.timeoutId);
   }, []);
-  const scrollTerminalToBottom = useCallback(() => {
-    const viewport = resolveScrollViewport();
-    if (viewport) return void requestAnimationFrame(() => { viewport.scrollTop = viewport.scrollHeight; });
-    if (typeof bottomRef.current?.scrollIntoView === "function") bottomRef.current.scrollIntoView({ behavior: "auto", block: "end" });
-  }, [resolveScrollViewport]);
+  useEffect(() => () => {
+    if (startupTicketPromptTimeoutRef.current) clearTimeout(startupTicketPromptTimeoutRef.current);
+  }, []);
   const scheduleHistoryCommitCallback = useHistoryCommitQueue(history.length);
   const setPersistedSuggestedReply = useCallback((nextSuggestedReply: string | null) => { setState((prev) => prev.suggestedReply === nextSuggestedReply ? prev : { ...prev, suggestedReply: nextSuggestedReply }); }, [setState]);
   const setCommandHistoryEntries = useCallback((updater: (prev: Array<{ submissionId: number; command: string }>) => Array<{ submissionId: number; command: string }>) => {
@@ -122,49 +124,42 @@ function Terminal() {
   const unlockAchievementWithSound = useCallback((id: string): boolean => { const isNew = unlockAchievement(id); if (isNew) playChime(); return isNew; }, [unlockAchievement, playChime]);
   const handleSuggestedReply = useCallback((suggestion: string) => { const merged = mergeSuggestedReply(lastSuggestedReplyRef.current, suggestion); lastSuggestedReplyRef.current = merged; setPersistedSuggestedReply(merged); }, [setPersistedSuggestedReply]);
   const processCommandRef = useRef<(submission: PromptSubmission) => void>(() => {});
-  const submitPromptCommand = useCallback((command: string, replayId: number | null = null) => { const submissionId = nextPromptSubmissionIdRef.current++; setCommandHistoryEntries((prev) => [...prev, { submissionId, command }]); processCommandRef.current({ command, replayId, submissionId }); }, [setCommandHistoryEntries]);
-  const { closeAllOverlaysAndRestoreNag, closeAllOverlaysPreservingNag, dismissUpgradeOverlay: dismissUpgradeNagOverlay, handleUpgradeNagClose, nagArmedFromQuotaRef, openUpgradeNag, pendingNagCommand, pendingNagCommandRef, settleAcceptedNagReplay, upgradeNagDismissEffect, upgradeNagDismissPhase } = useUpgradeNagState({ closeAllOverlays, setInputValue, setShowUpgrade });
-  const handleProfileClick = useCallback(() => { closeAllOverlaysPreservingNag(); setShowProfile(true); window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`); }, [closeAllOverlaysPreservingNag, setShowProfile, state.username]);
-  const handleHomeClick = useCallback(() => { dismissUpgradeNagOverlay(); closeAllOverlays(); if (window.location.pathname !== "/") window.history.pushState(null, "", "/"); scrollTerminalToBottom(); }, [closeAllOverlays, dismissUpgradeNagOverlay, scrollTerminalToBottom]);
-
-  useEffect(() => () => { stopMobilePromptFollowLoop(); }, [stopMobilePromptFollowLoop]);
-  useEffect(() => () => { const ds = freeTierDelayRef.current; ds.cancelled = true; if (ds.timeoutId) clearTimeout(ds.timeoutId); }, []);
-  useEffect(() => () => { if (startupTicketPromptTimeoutRef.current) clearTimeout(startupTicketPromptTimeoutRef.current); }, []);
-  useEffect(() => { lastSuggestedReplyRef.current = suggestedReply; }, [suggestedReply]);
-  useEffect(() => { if (hasScrolledTerminalToBottomOnLoadRef.current) return; hasScrolledTerminalToBottomOnLoadRef.current = true; scrollTerminalToBottom(); }, [scrollTerminalToBottom]);
-  useEffect(() => { if (!isMobileViewport) scrollTerminalToBottom(); }, [history, isMobileViewport, scrollTerminalToBottom]);
-  useEffect(() => {
-    if (!isMobileViewport) {
-      wasMobileRequestProcessingRef.current = isProcessing; activeMobilePromptKeyRef.current = null; lastMobilePromptScrollHeightRef.current = 0; lastMobilePromptGrowthAtRef.current = 0; stopMobilePromptFollowLoop(); return;
+  const submitPromptCommand = useCallback((command: string, replayId: number | null = null) => {
+    const submissionId = nextPromptSubmissionIdRef.current++;
+    setCommandHistoryEntries((prev) => [...prev, { submissionId, command }]);
+    processCommandRef.current({ command, replayId, submissionId });
+  }, [setCommandHistoryEntries]);
+  const {
+    closeAllOverlaysAndRestoreNag,
+    closeAllOverlaysPreservingNag,
+    dismissUpgradeOverlay: dismissUpgradeNagOverlay,
+    handleUpgradeNagClose,
+    nagArmedFromQuotaRef,
+    openUpgradeNag,
+    pendingNagCommand,
+    pendingNagCommandRef,
+    settleAcceptedNagReplay,
+    upgradeNagDismissEffect,
+    upgradeNagDismissPhase,
+  } = useUpgradeNagState({
+    closeAllOverlays,
+    setInputValue,
+    setShowUpgrade,
+  });
+  const handleProfileClick = useCallback(() => {
+    closeAllOverlaysPreservingNag();
+    setShowProfile(true);
+    window.history.pushState(null, "", `/user/${encodeURIComponent(state.username)}`);
+  }, [closeAllOverlaysPreservingNag, setShowProfile, state.username]);
+  const handleHomeClick = useCallback(() => {
+    dismissUpgradeNagOverlay();
+    closeAllOverlays();
+    if (window.location.pathname !== "/") {
+      window.history.pushState(null, "", "/");
     }
-    let latestPromptIndex = -1; for (let i = history.length - 1; i >= 0; i -= 1) if (history[i]?.role === "user") { latestPromptIndex = i; break; }
-    if (latestPromptIndex < 0) return;
-    const latestPromptKey = messageKeys.current[latestPromptIndex]; if (latestPromptKey == null) return;
-    const viewport = resolveScrollViewport(); const justFinishedProcessing = wasMobileRequestProcessingRef.current && !isProcessing;
-    if (isProcessing && activeMobilePromptKeyRef.current !== latestPromptKey) activeMobilePromptKeyRef.current = latestPromptKey;
-    if (viewport && (isProcessing || justFinishedProcessing)) { lastMobilePromptScrollHeightRef.current = viewport.scrollHeight; lastMobilePromptGrowthAtRef.current = Date.now(); }
-    const trackedPromptKey = activeMobilePromptKeyRef.current; const shouldTrack = trackedPromptKey === latestPromptKey && (isProcessing || justFinishedProcessing); wasMobileRequestProcessingRef.current = isProcessing;
-    if (!shouldTrack || !viewport || typeof document === "undefined") return;
-    stopMobilePromptFollowLoop();
-    const runFollowFrame = () => {
-      if (activeMobilePromptKeyRef.current !== latestPromptKey) return void (mobilePromptFollowFrameRef.current = null);
-      const currentViewport = resolveScrollViewport(); const target = document.querySelector<HTMLElement>(`[data-message-key="${latestPromptKey}"]`);
-      if (!currentViewport || !target) return void (mobilePromptFollowFrameRef.current = null);
-      const viewportRect = currentViewport.getBoundingClientRect(); const targetRect = target.getBoundingClientRect(); const promptReachedTop = targetRect.top <= viewportRect.top + 1;
-      const maxScrollTop = currentViewport.scrollHeight - currentViewport.clientHeight; const now = Date.now();
-      if (currentViewport.scrollHeight !== lastMobilePromptScrollHeightRef.current) { lastMobilePromptScrollHeightRef.current = currentViewport.scrollHeight; lastMobilePromptGrowthAtRef.current = now; }
-      if (!promptReachedTop) {
-        const remainingDistance = Math.max(0, maxScrollTop - currentViewport.scrollTop); const nextStep = remainingDistance > 0 ? Math.max(12, Math.min(remainingDistance, remainingDistance * 0.18)) : 0;
-        currentViewport.scrollTop = Math.min(maxScrollTop, currentViewport.scrollTop + nextStep);
-      }
-      const quietMs = now - lastMobilePromptGrowthAtRef.current; const isStuckAtBottom = currentViewport.scrollTop >= maxScrollTop && !promptReachedTop;
-      const shouldContinue = activeMobilePromptKeyRef.current === latestPromptKey && !promptReachedTop && (isProcessing || quietMs < 1000);
-      if (!shouldContinue) { if (promptReachedTop) activeMobilePromptKeyRef.current = null; mobilePromptFollowFrameRef.current = null; return; }
-      if (isStuckAtBottom && !isProcessing) mobilePromptFollowTimeoutRef.current = setTimeout(() => { mobilePromptFollowTimeoutRef.current = null; mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame); }, 80);
-      else mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
-    };
-    mobilePromptFollowFrameRef.current = requestAnimationFrame(runFollowFrame);
-  }, [history, isMobileViewport, isProcessing, resolveScrollViewport, stopMobilePromptFollowLoop]);
+    scrollTerminalToBottom();
+  }, [closeAllOverlays, dismissUpgradeNagOverlay, scrollTerminalToBottom]);
+  useEffect(() => { lastSuggestedReplyRef.current = suggestedReply; }, [suggestedReply]);
   useEffect(() => {
     const scrollContent = scrollContentRef.current; const viewport = resolveScrollViewport();
     if (isMobileViewport || !scrollContent || !viewport || typeof ResizeObserver === "undefined") {

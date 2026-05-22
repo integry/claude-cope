@@ -655,6 +655,7 @@ Write what they'd actually send next:
 - specific to what you just discussed
 - usually a follow-up request, eager question, concrete ask, or impulsive reaction
 - do not repeat or lightly paraphrase the user's most recent message
+- never use the word "next" in the USER_NEXT_MESSAGE text, including lazy variants like "next step", "next move", "next one", "next up", or "next thing"
 - anchor it to at least one concrete thing from the immediately preceding reply: a named error, weird component, byte, pod, config field, artifact, command, metric, or absurd mechanism
 - prefer reacting to the strangest specific detail you just mentioned, not to the topic in general
 - move the scene forward instead of staring at the same prop forever
@@ -670,22 +671,22 @@ Use a mix of:
 - asking which option, part, or idea is the least bad
 - asking to try, rerun, deploy, or roll back the risky thing
 - challenging the roast or asking what exactly you meant
-- pushing the scene forward toward the next mistake
-Do not overuse generic variants of "what's next", "next step", or "what now".
+- pushing the scene forward toward another mistake
+Never use generic variants of "what's next", "next step", or "what now".
 Never use generic filler like "what should I do next?", "what now?", "show me the logs", "what happens if I run this?", "show me the error logs", or "run it now" unless that exact object is the only salient thing in the previous reply.
 Do not default to "why is X involved?", "what is X doing there?", or "why X of all things?" when you mention a specific technology or artifact.
 Do not recycle the user's last sentence with a few word swaps. A near-paraphrase of the latest user message is a failure.
-If you mention a concrete thing like Postgres, npm, Helm, a YAML field, or a weird script, prefer asking what it breaks, who added it, whether we can remove it, or what to try next with it.
+If you mention a concrete thing like Postgres, npm, Helm, a YAML field, or a weird script, prefer asking what it breaks, who added it, whether we can remove it, or what to try with it.
 If the previous reply mentioned a concrete object like \`0xFF\`, \`offset 42\`, \`yaml-apology-proxy\`, \`restartPolicy\`, or \`orphaned pods\`, mention that specific thing instead of falling back to a generic follow-up.
-If the previous reply was mostly attitude or mockery, react to one concrete phrase or image from it instead of asking a generic next-step question.
+If the previous reply was mostly attitude or mockery, react to one concrete phrase or image from it instead of asking a generic follow-up question.
 When there is no obvious object, prefer a pointed follow-up that asks what you meant, which thing matters, or why one specific detail was mentioned.
 Prefer simple, scene-advancing follow-ups over expert-y asks for stack traces, logs, line numbers, payloads, or metrics.
 Do not ask to see the exact same artifact twice in a row unless the previous reply materially transformed it, revealed a different part of it, or introduced a new failure mode.
-If the previous USER_NEXT_MESSAGE already focused on one object, the next one should usually escalate, reinterpret, or pivot to a new concrete detail instead of repeating that same ask.
+If the previous USER_NEXT_MESSAGE already focused on one object, the new one should usually escalate, reinterpret, or pivot to a different concrete detail instead of repeating that same ask.
 An adjacent-turn repeat is a failure. Do not output the same suggested message twice in a row, even with tiny punctuation changes.
 If you stay on the same object, change the angle: ask why it exists, what it breaks, who introduced it, or which part of it matters.
 Do not copy example phrases verbatim across turns.
-If the user already asked a generic "what next" style question recently, pivot to a more concrete follow-up instead of repeating that shape.
+If the user already asked a generic "what now" style question recently, pivot to a more concrete follow-up instead of repeating that shape.
 Prefer concrete action verbs over mushy filler like "continue" or "proceed".
 Never write it as a polite assistant question — the user is impatient and casual, not formal.
 Do not wrap the USER_NEXT_MESSAGE text in quotes.

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
   BACKLOG_CATEGORY_ALL,
@@ -16,13 +17,19 @@ import type {
 import { TICKET_PM_PROMPT } from "../prompts/ticketPrompt";
 import { parseProviderList } from "@claude-cope/shared/openrouter";
 import { isLicenseActive } from "../utils/profile";
+import { resolveActiveSessionLicenseHash } from "./accountHelpers";
 
 type Env = {
   Bindings: {
     DB: D1Database;
+    QUOTA_KV?: KVNamespace;
+    USAGE_KV?: KVNamespace;
     OPENROUTER_API_KEY?: string;
     OPENROUTER_PROVIDERS?: string;
     ENABLE_TICKET_REFINE?: string;
+  };
+  Variables: {
+    sessionId?: string;
   };
 };
 
@@ -146,6 +153,19 @@ async function queryRandomCommunityRows(db: D1Database, limit: number): Promise<
   return results ?? [];
 }
 
+async function isPaidBacklogRequester(c: Context<Env>, db: D1Database): Promise<boolean> {
+  const proKeyHash = c.req.header("x-pro-key-hash")?.trim();
+  if (proKeyHash && await isLicenseActive(db, proKeyHash)) return true;
+
+  const sessionLicenseHash = await resolveActiveSessionLicenseHash({
+    db,
+    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
+    sessionId: c.get("sessionId"),
+    logPrefix: "[tickets/session-license]",
+  });
+  return Boolean(sessionLicenseHash);
+}
+
 function parseBacklogCategoryFilter(rawCategory: string | undefined): { category: string | null; error?: string } {
   if (!rawCategory) return { category: null };
 
@@ -168,11 +188,10 @@ tickets.get("/community", async (c) => {
     return c.json({ error: "Database is not configured" }, 500);
   }
 
-  const proKeyHash = c.req.header("x-pro-key-hash")?.trim();
-  const isPaidUser = proKeyHash ? await isLicenseActive(db, proKeyHash) : false;
+  const isPaidUser = await isPaidBacklogRequester(c, db);
   const categoryFilter = parseBacklogCategoryFilter(c.req.query("category"));
   c.header("Cache-Control", "private, max-age=10");
-  c.header("Vary", "x-pro-key-hash");
+  c.header("Vary", "x-pro-key-hash, Cookie");
 
   if (categoryFilter.error) {
     return c.json({ error: categoryFilter.error }, 400);

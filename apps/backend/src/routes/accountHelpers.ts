@@ -599,6 +599,30 @@ export async function resolveSessionProfileRow(opts: {
   return { username: current, row, redirected };
 }
 
+export async function resolveActiveSessionLicenseHash(opts: {
+  db: D1Database | undefined;
+  kv: KVNamespace | undefined;
+  sessionId: string | undefined;
+  logPrefix?: string;
+}): Promise<string | null> {
+  const { db, kv, sessionId } = opts;
+  if (!db || !kv || !sessionId) return null;
+
+  const username = await kv.get(accountKvKeys.sessionUser(sessionId));
+  if (!username) return null;
+
+  const resolved = await resolveSessionProfileRow({
+    db,
+    kv,
+    sessionId,
+    username,
+    logPrefix: opts.logPrefix ?? "[account/session-license]",
+  });
+  const licenseHash = (resolved.row as { license_hash?: string | null } | null)?.license_hash;
+  if (!licenseHash) return null;
+  return (await isLicenseActive(db, licenseHash)) ? licenseHash : null;
+}
+
 export async function verifyOwnership(db: D1Database, username: string, licenseKeyHash: string): Promise<OwnershipResult> {
   const row = await getProfileRow(db, username);
   if (!row) return { profile: null, status: "not_found", error: "Profile not found" };

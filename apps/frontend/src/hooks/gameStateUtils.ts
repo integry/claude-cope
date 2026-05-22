@@ -74,6 +74,7 @@ export type Message = {
   id?: number;
   role: "user" | "system" | "loading" | "warning" | "error";
   content: string;
+  contextBoundary?: "ticket-claim";
   displayType?: "tip";
   shareClaim?: string;
   buddyType?: string;
@@ -84,13 +85,26 @@ export type Message = {
   ticketDisplay?: TicketDisplayData;
 };
 
+export function isStructuredClaimedTicketMessage(
+  message: Pick<Message, "role" | "ticketDisplay">,
+): boolean {
+  return message.role === "system" && message.ticketDisplay?.status === "claimed";
+}
+
 // Backlog messages persist their structured payload so the responsive renderer
 // survives reloads; this hook exists as the single normalization point if that changes.
 export function normalizePersistedMessage(message: Message): Message {
-  if (message.displayType === "tip" && !getTipRenderData(message).isTip) {
-    return { ...message, displayType: undefined };
+  let normalized = message;
+
+  if (normalized.displayType === "tip" && !getTipRenderData(normalized).isTip) {
+    normalized = { ...normalized, displayType: undefined };
   }
-  return message;
+
+  if (isStructuredClaimedTicketMessage(normalized) && normalized.contextBoundary !== "ticket-claim") {
+    normalized = { ...normalized, contextBoundary: "ticket-claim" };
+  }
+
+  return normalized;
 }
 
 function normalizePersistedChatHistory(chatHistory: Message[]): Message[] {
@@ -206,11 +220,11 @@ export function resolveRank(totalTDEarned: number, currentRankTitle: string): st
 // first-class feature yet and only applies to standalone installations.
 // Once BYOK is promoted, consider whether BYOK users should be treated as
 // "paid" for gating purposes or need a separate check.
-export function isPaidUser(state: Pick<GameState, "proKey" | "proKeyHash" | "isPro">): boolean {
-  return Boolean(state.proKey) || Boolean(state.proKeyHash) || Boolean(state.isPro);
+export function isPaidUser(state: Pick<GameState, "proKey" | "proKeyHash" | "isPro" | "hasSessionPro">): boolean {
+  return Boolean(state.proKey) || Boolean(state.proKeyHash) || Boolean(state.isPro) || Boolean(state.hasSessionPro);
 }
 
-export function isFreeUser(state: Pick<GameState, "proKey" | "proKeyHash" | "isPro" | "apiKey">): boolean {
+export function isFreeUser(state: Pick<GameState, "proKey" | "proKeyHash" | "isPro" | "hasSessionPro" | "apiKey">): boolean {
   return !isPaidUser(state) && !(BYOK_ENABLED && state.apiKey);
 }
 
@@ -266,6 +280,22 @@ function hasValidAuthoritativeProfileFloor(state: GameState): boolean {
 
 function createDefaultBuddyState(): BuddyState { return { type: null, isShiny: false, promptsSinceLastInterjection: 0 }; }
 function createDefaultModesState(): ModesState { return { fast: false, voice: false }; }
+
+function applyPresentationDefaults(state: GameState): void {
+  if (!state.activeTheme) {
+    state.activeTheme = "default";
+  }
+  if (state.soundEnabled === undefined) {
+    state.soundEnabled = true;
+  }
+  if (state.isExecutiveSupporter === undefined) {
+    state.isExecutiveSupporter = false;
+  }
+  if (state.displayRank === undefined) {
+    state.displayRank = null;
+  }
+}
+
 function applyCollectionDefaults(state: GameState): void {
   if (!Array.isArray(state.upgrades)) {
     state.upgrades = [];
@@ -277,26 +307,11 @@ function applyCollectionDefaults(state: GameState): void {
     state.chatHistory = [];
   }
   state.chatHistory = normalizePersistedChatHistory(state.chatHistory);
-  if (!Array.isArray(state.pendingCompletedTaskIds)) {
-    state.pendingCompletedTaskIds = [];
-  }
-}
-
-function applyPresentationDefaults(state: GameState): void {
-  if (!state.activeTheme) {
-    state.activeTheme = "default";
-  }
   if (!Array.isArray(state.unlockedThemes)) {
     state.unlockedThemes = ["default"];
   }
-  if (state.soundEnabled === undefined) {
-    state.soundEnabled = true;
-  }
-  if (state.isExecutiveSupporter === undefined) {
-    state.isExecutiveSupporter = false;
-  }
-  if (state.displayRank === undefined) {
-    state.displayRank = null;
+  if (!Array.isArray(state.pendingCompletedTaskIds)) {
+    state.pendingCompletedTaskIds = [];
   }
 }
 
@@ -313,16 +328,12 @@ function applyObjectDefaults(state: GameState): void {
   if (!state.pendingCompletedTaskRewards || typeof state.pendingCompletedTaskRewards !== "object") {
     state.pendingCompletedTaskRewards = {};
   }
-  if (!hasValidAuthoritativeProfileFloor(state)) {
-    state.authoritativeProfileFloor = null;
-  }
 }
-function applyDefensiveDefaults(state: GameState): void {
-  applyCollectionDefaults(state);
+
+function applyScalarDefaults(state: GameState): void {
   if (typeof state.suggestedReply !== "string") {
     state.suggestedReply = null;
   }
-  applyObjectDefaults(state);
   if (state.activeTicket === undefined) {
     state.activeTicket = null;
   }
@@ -330,6 +341,15 @@ function applyDefensiveDefaults(state: GameState): void {
     state.hasSeenTicketPrompt = false;
   }
   applyPresentationDefaults(state);
+}
+
+function applyDefensiveDefaults(state: GameState): void {
+  applyCollectionDefaults(state);
+  applyObjectDefaults(state);
+  applyScalarDefaults(state);
+  if (!hasValidAuthoritativeProfileFloor(state)) {
+    state.authoritativeProfileFloor = null;
+  }
 }
 
 export function loadState(): GameState {
