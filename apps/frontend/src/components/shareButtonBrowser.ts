@@ -11,6 +11,17 @@ export function supportsNativeShare(): boolean {
   return typeof navigator !== "undefined" && typeof navigator.share === "function";
 }
 
+export function shouldTreatDeviceAsMobileForSharePreview(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const uaData = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
+  return shouldUseNativeShareFlowForDevice({
+    supportsNativeShare: true,
+    userAgentDataMobile: uaData.userAgentData?.mobile,
+    userAgent: navigator.userAgent || "",
+    maxTouchPoints: navigator.maxTouchPoints,
+  });
+}
+
 export function getTransientUserActivationState(): boolean | null {
   if (typeof navigator === "undefined") return null;
   const activation = (navigator as Navigator & { userActivation?: { isActive?: boolean } }).userActivation;

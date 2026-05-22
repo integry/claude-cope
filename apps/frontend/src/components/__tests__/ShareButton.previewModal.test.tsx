@@ -41,6 +41,28 @@ describe("ShareButton preview modal flow", () => {
     expect(testScope.createObjectURLMock).toHaveBeenCalledTimes(1);
   });
 
+  it("shows a loading spinner instead of the DOM preview while the PNG is rendering on mobile", async () => {
+    const deferredImage = createDeferred<Response>();
+    testScope.setNativeShareDevice(true);
+    testScope.imageFetchOverrides.set(shareCardResponse.imageUrl, deferredImage.promise);
+    testScope.renderComponent();
+
+    const dialog = await testScope.openPreview();
+    expect(dialog.querySelector("#share-card-root")).toBeNull();
+    expect(dialog.querySelector('img[alt="Share preview for @testuser"]')).toBeNull();
+    expect(testScope.container.textContent).toContain("Rendering final image...");
+
+    deferredImage.resolve(new Response(toArrayBuffer(imageBytes), { status: 200, headers: { "Content-Type": "image/png" } }));
+
+    await act(async () => {
+      await deferredImage.promise;
+      await Promise.resolve();
+    });
+
+    expect(dialog.querySelector('img[alt="Share preview for @testuser"]')).not.toBeNull();
+    expect(dialog.querySelector("#share-card-root")).toBeNull();
+  });
+
   it("Share on X flow: footer swaps to paste hint, [OPEN X TAB] uses the stable share URL", async () => {
     await testScope.renderOpenPreview();
     await testScope.clickShareButton("SHARE ON X");

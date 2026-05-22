@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { createShareCard, type CreateShareCardResult } from "../api/shareCards";
 import { copyBlobToClipboard, copyTextToClipboard, openShareIntent } from "./shareChatUtils";
 import { isNativeShareCancellation } from "./shareButtonNativeShare";
-import { shouldUseNativeShareFlow } from "./shareButtonBrowser";
+import { shouldTreatDeviceAsMobileForSharePreview, shouldUseNativeShareFlow } from "./shareButtonBrowser";
 import { ShareButtonInlineStatus, ShareButtonPreviewModal, type ShareButtonPreviewActions, type ShareButtonPreviewModel } from "./ShareButtonPreviewModal";
 import { useNativeShareCard } from "./useNativeShareCard";
 import { useSharePreviewImage } from "./useSharePreviewImage";
@@ -336,6 +336,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   }, [previewCard, closePreview]);
 
   const isGenerating = status === "generating";
+  const isMobileSharePreview = shouldTreatDeviceAsMobileForSharePreview();
   const useNativeSharePreview = shouldUseNativeShareFlow();
   const spinnerChar = SPINNER_FRAMES[spinnerFrameIndex]!;
   const isPreviewImageLoading = previewImageStatus === "loading";
@@ -350,6 +351,7 @@ export function ShareButton({ userMessage, systemMessage, username, shareClaim }
   const previewModel: ShareButtonPreviewModel = {
     feedback,
     isGenerating,
+    isMobileSharePreview,
     isPreviewImageLoading,
     pasteHint,
     previewImageObjectUrl,

@@ -22,6 +22,9 @@ const linkStyle: CSSProperties = { background: "none", border: "none", padding: 
 const previewFrameStyle: CSSProperties = { display: "flex", justifyContent: "center", alignItems: "flex-start", overflow: "hidden", maxWidth: "100%" };
 const previewScaleWrapStyle: CSSProperties = { width: "min(100%, 760px)" };
 const previewSurfaceStyle: CSSProperties = { width: "100%" };
+const previewLoadingSurfaceStyle: CSSProperties = { minHeight: "240px", width: "100%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: "12px", color: "#ffff55", textAlign: "center" };
+const previewLoadingSpinnerStyle: CSSProperties = { fontSize: "32px", lineHeight: 1, fontWeight: "bold" };
+const previewLoadingTextStyle: CSSProperties = { fontSize: "12px", lineHeight: "1.6" };
 const modalStatusStyle: CSSProperties = { fontSize: "12px", textAlign: "left" };
 const modalStatusGeneratingStyle: CSSProperties = { ...modalStatusStyle, color: "#ffff55" };
 const modalStatusErrorStyle: CSSProperties = { ...modalStatusStyle, color: "#ff5555" };
@@ -58,6 +61,7 @@ export function ShareButtonInlineStatus({
 export type ShareButtonPreviewModel = {
   feedback: string | null;
   isGenerating: boolean;
+  isMobileSharePreview: boolean;
   isPreviewImageLoading: boolean;
   pasteHint: PasteHintState | null;
   previewImageObjectUrl: string | null;
@@ -88,7 +92,8 @@ export function ShareButtonPreviewModal({
   preview: ShareButtonPreviewModel;
 }) {
   const { closePreview, copyImage, nativeShare, openShareTarget, shareToPlatform, triggerFocus } = actions;
-  const { feedback, isGenerating, isPreviewImageLoading, pasteHint, previewImageObjectUrl, spinnerChar, status, systemMessage, useNativeSharePreview, userMessage, username } = preview;
+  const { feedback, isGenerating, isMobileSharePreview, isPreviewImageLoading, pasteHint, previewImageObjectUrl, spinnerChar, status, systemMessage, useNativeSharePreview, userMessage, username } = preview;
+  const showMobileLoadingPreview = isMobileSharePreview && isPreviewImageLoading && !previewImageObjectUrl;
 
   return (
     <div
@@ -119,6 +124,11 @@ export function ShareButtonPreviewModal({
                     alt={`Share preview for @${username}`}
                     className="block h-auto w-full"
                   />
+                ) : showMobileLoadingPreview ? (
+                  <div style={previewLoadingSurfaceStyle} aria-live="polite">
+                    <div style={previewLoadingSpinnerStyle} className="animate-pulse">{spinnerChar}</div>
+                    <div style={previewLoadingTextStyle}>Rendering final image...</div>
+                  </div>
                 ) : (
                   <ShareCardRenderSurface
                     prompt={userMessage}
