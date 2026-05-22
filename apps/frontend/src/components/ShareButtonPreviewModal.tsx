@@ -8,7 +8,7 @@ type PasteHintState =
   | { platform: "linkedin" };
 type ShareStatus = "idle" | "generating" | "copied" | "error";
 
-const modalStyle: CSSProperties = { fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace", fontSize: "13px", lineHeight: "1.4", backgroundColor: "#1e232b", border: "2px solid #ff5555", boxShadow: "8px 8px 0px rgba(0, 0, 0, 0.9)", maxWidth: "calc(100vw - 2rem)", maxHeight: "calc(100vh - 2rem)", overflow: "hidden", color: "#c9d1d9", display: "flex", flexDirection: "column" };
+const modalStyle: CSSProperties = { fontFamily: "'Courier New', 'Courier Prime', Courier, monospace", fontSize: "13px", lineHeight: "1.4", backgroundColor: "#1e232b", border: "2px solid #ff5555", boxShadow: "8px 8px 0px rgba(0, 0, 0, 0.9)", maxWidth: "calc(100vw - 2rem)", maxHeight: "calc(100vh - 2rem)", overflow: "hidden", color: "#c9d1d9", display: "flex", flexDirection: "column" };
 const modalHeaderStyle: CSSProperties = { padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #ff5555" };
 const modalTitleStyle: CSSProperties = { color: "#ff5555", fontWeight: "bold", fontSize: "11px" };
 const closeButtonStyle: CSSProperties = { color: "#aaaaaa", cursor: "pointer", fontSize: "14px", background: "none", border: "none", padding: 0 };

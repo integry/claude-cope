@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type RefObject } from "react";
 import CommandLine from "./CommandLine";
 import SlashMenu from "./SlashMenu";
 import HeaderBar from "./HeaderBar";
@@ -17,8 +17,12 @@ import {
   focusTerminalInputIfEligible,
   getUpgradeDismissProps,
   renderBuddyDock,
-  type TerminalViewProps,
+  type TerminalViewProps as SharedTerminalViewProps,
 } from "./terminalViewHelpers";
+
+type TerminalViewProps = SharedTerminalViewProps & {
+  scrollContentRef?: RefObject<HTMLDivElement | null>;
+};
 export function TerminalView({
   activeRegression,
   outageHp,
@@ -50,6 +54,7 @@ export function TerminalView({
   promptString,
   handleSlashCommandClick,
   scrollViewportRef,
+  scrollContentRef,
   bottomRef,
   slashQuery,
   slashIndex,
@@ -121,31 +126,10 @@ export function TerminalView({
   });
 
   return (
-    <div
-      ref={terminalRef}
-      className={`relative ${terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}`}
-      style={{
-        ...parseGlitchStyle(regressionGlitch),
-        backgroundColor: outageHp !== null ? undefined : "var(--color-bg)",
-        color: "var(--color-text)",
-      }}
-      onClick={() =>
-        focusTerminalInputIfEligible(
-          isMobileViewport,
-          anyOverlayOpen,
-          inputRef,
-        )
-      }
-    >
+    <div ref={terminalRef} className={`relative ${terminalContainerClassName({ activeRegression, outageHp, pendingReviewPing, pingAcknowledged, activeTheme })}`} style={{ ...parseGlitchStyle(regressionGlitch), backgroundColor: outageHp !== null ? undefined : "var(--color-bg)", color: "var(--color-text)" }} onClick={() => focusTerminalInputIfEligible(isMobileViewport, anyOverlayOpen, inputRef)}>
       <div className="shrink-0">
-        <Ticker
-          onExpand={openParty}
-          onSlashCommand={handleTickerCommand}
-          onlineCount={onlineCount}
-        />
-        {outageHp !== null && activeOutageScenario && (
-          <OutageBar outageHp={outageHp} scenario={activeOutageScenario} />
-        )}
+        <Ticker onExpand={openParty} onSlashCommand={handleTickerCommand} onlineCount={onlineCount} />
+        {outageHp !== null && activeOutageScenario && <OutageBar outageHp={outageHp} scenario={activeOutageScenario} />}
         <HeaderBar
           rank={rank}
           currentTD={state.economy.currentTD}
@@ -175,108 +159,32 @@ export function TerminalView({
           onUpgradeClick={openUpgrade}
         />
       </div>
-      <div
-        ref={scrollViewportRef}
-        data-terminal-scroll-viewport="true"
-        className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}
-      >
-        {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
-        <MessageList
-          history={history}
-          messageKeys={messageKeys}
-          initialHistoryLen={initialHistoryLen}
-          promptString={promptString}
-          activeTicketId={state.activeTicket?.id}
-          username={state.username}
-          onSlashCommand={handleSlashCommandClick}
-        />
-        <div ref={bottomRef} />
+      <div ref={scrollViewportRef} data-terminal-scroll-viewport="true" className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
+        <div ref={scrollContentRef} data-terminal-scroll-content="true">
+          {!isBooting && <p>Welcome to Claude Cope. Type a command to begin.</p>}
+          <MessageList history={history} messageKeys={messageKeys} initialHistoryLen={initialHistoryLen} promptString={promptString} activeTicketId={state.activeTicket?.id} username={state.username} onSlashCommand={handleSlashCommandClick} />
+          <div ref={bottomRef} />
+        </div>
       </div>
-      <div
-        ref={bottomChromeRef}
-        className="terminal-bottom-chrome shrink-0 gap-4 md:flex md:items-end md:justify-between"
-        data-terminal-bottom-chrome="true"
-      >
+      <div ref={bottomChromeRef} className="terminal-bottom-chrome shrink-0 gap-4 md:flex md:items-end md:justify-between" data-terminal-bottom-chrome="true">
         <div className="min-w-0 flex-1">
-          <SprintProgressBar
-            id={state.activeTicket?.id}
-            title={state.activeTicket?.title}
-            sprintProgress={state.activeTicket?.sprintProgress}
-            sprintGoal={state.activeTicket?.sprintGoal}
-            onSlashCommand={handleSlashCommandClick}
-          />
+          <SprintProgressBar id={state.activeTicket?.id} title={state.activeTicket?.title} sprintProgress={state.activeTicket?.sprintProgress} sprintGoal={state.activeTicket?.sprintGoal} onSlashCommand={handleSlashCommandClick} />
           <div className="terminal-command-shell relative border-b border-white/20">
-            {slashQuery && (
-              <SlashMenu
-                query={slashQuery}
-                activeIndex={slashIndex}
-                totalTechnicalDebt={state.economy.totalTDEarned}
-                paidUser={isPaidUser(state)}
-                isExecutiveSupporter={Boolean(state.isExecutiveSupporter)}
-                onSelect={handleSlashMenuSelect}
-              />
-            )}
-            <CommandLine
-              ref={inputRef}
-              value={inputValue}
-              disabled={isProcessing || isBooting || anyOverlayOpen}
-              onChange={handleChange}
-              onKeyDown={handleKeyDown}
-              onSubmit={handleSubmit}
-              promptString={promptString}
-              placeholder={suggestedReply ?? undefined}
-              onPlaceholderAccept={acceptSuggestedReply}
-            />
+            {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} paidUser={isPaidUser(state)} isExecutiveSupporter={Boolean(state.isExecutiveSupporter)} onSelect={handleSlashMenuSelect} />}
+            <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} onSubmit={handleSubmit} promptString={promptString} placeholder={suggestedReply ?? undefined} onPlaceholderAccept={acceptSuggestedReply} />
           </div>
         </div>
         {renderBuddyDock(state.buddy)}
       </div>
       <TerminalOverlays
-        showStore={showStore}
-        showLeaderboard={showLeaderboard}
-        showAchievements={showAchievements}
-        showHelp={showHelp}
-        showAbout={showAbout}
-        showPrivacy={showPrivacy}
-        showTerms={showTerms}
-        showContact={showContact}
-        showProfile={showProfile}
-        showParty={showParty}
-        showSynergize={showSynergize}
-        showUpgrade={showUpgrade}
-        state={state}
-        buyGenerator={buyGenerator}
-        buyUpgrade={buyUpgrade}
-        buyTheme={buyTheme}
-        setActiveTheme={setActiveTheme}
-        setShowStore={setShowStore}
-        setShowLeaderboard={setShowLeaderboard}
-        setShowAchievements={setShowAchievements}
-        setShowHelp={setShowHelp}
-        setShowAbout={setShowAbout}
-        setShowPrivacy={setShowPrivacy}
-        setShowTerms={setShowTerms}
-        setShowContact={setShowContact}
-        setShowProfile={setShowProfile}
-        setShowParty={setShowParty}
-        setShowSynergize={setShowSynergize}
-        setIsProcessing={setIsProcessing}
-        setHistory={setHistory}
-        onUpgradeDismiss={upgradeDismissProps.onUpgradeDismiss}
-        upgradeDismissMode={upgradeDismissProps.upgradeDismissMode}
-        upgradeDismissPhase={upgradeNagDismissPhase}
-        upgradeDismissEffect={upgradeNagDismissEffect}
+        showStore={showStore} showLeaderboard={showLeaderboard} showAchievements={showAchievements} showHelp={showHelp} showAbout={showAbout} showPrivacy={showPrivacy} showTerms={showTerms}
+        showContact={showContact} showProfile={showProfile} showParty={showParty} showSynergize={showSynergize} showUpgrade={showUpgrade} state={state} buyGenerator={buyGenerator}
+        buyUpgrade={buyUpgrade} buyTheme={buyTheme} setActiveTheme={setActiveTheme} setShowStore={setShowStore} setShowLeaderboard={setShowLeaderboard} setShowAchievements={setShowAchievements}
+        setShowHelp={setShowHelp} setShowAbout={setShowAbout} setShowPrivacy={setShowPrivacy} setShowTerms={setShowTerms} setShowContact={setShowContact} setShowProfile={setShowProfile}
+        setShowParty={setShowParty} setShowSynergize={setShowSynergize} setIsProcessing={setIsProcessing} setHistory={setHistory} onUpgradeDismiss={upgradeDismissProps.onUpgradeDismiss}
+        upgradeDismissMode={upgradeDismissProps.upgradeDismissMode} upgradeDismissPhase={upgradeNagDismissPhase} upgradeDismissEffect={upgradeNagDismissEffect}
       />
-      <TerminalFooter
-        closeAllOverlays={closeAllOverlaysPreservingNag}
-        buddyType={state.buddy.type}
-        buddyIsShiny={state.buddy.isShiny}
-        setShowTerms={setShowTerms}
-        setShowPrivacy={setShowPrivacy}
-        setShowAbout={setShowAbout}
-        setShowHelp={setShowHelp}
-        setShowContact={setShowContact}
-      />
+      <TerminalFooter closeAllOverlays={closeAllOverlaysPreservingNag} buddyType={state.buddy.type} buddyIsShiny={state.buddy.isShiny} setShowTerms={setShowTerms} setShowPrivacy={setShowPrivacy} setShowAbout={setShowAbout} setShowHelp={setShowHelp} setShowContact={setShowContact} />
     </div>
   );
 }

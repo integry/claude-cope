@@ -1,9 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import "@fontsource/fira-code/latin-400.css";
-import "@fontsource/fira-code/latin-500.css";
-import "@fontsource/fira-code/latin-600.css";
-import "@fontsource/fira-code/latin-700.css";
+import "@fontsource/courier-prime/latin-400.css";
+import "@fontsource/courier-prime/latin-700.css";
 import "./index.css";
 import App from "./App";
 import { initPostHog } from "./analytics";
