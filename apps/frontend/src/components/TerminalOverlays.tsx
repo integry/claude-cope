@@ -13,6 +13,7 @@ import PartyOverlay from "./PartyOverlay";
 import UpgradeOverlay from "./UpgradeOverlay";
 import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
 import type { GameState, Message } from "../hooks/useGameState";
+import { isPaidUser } from "../hooks/gameStateUtils";
 import { FREE_QUOTA_LIMIT, PRO_QUOTA_LIMIT } from "../config";
 import { DEFAULT_CLOSE_EFFECT } from "./upgradeOverlayEffects";
 
@@ -87,6 +88,8 @@ export function TerminalOverlays({
   upgradeDismissPhase?: "idle" | "closing";
   upgradeDismissEffect?: UpgradeNagCloseEffect;
 }) {
+  const hasPaidAccess = isPaidUser(state);
+
   return (
     <>
       {showStore && (
@@ -168,8 +171,8 @@ export function TerminalOverlays({
       {showUpgrade && (
         <UpgradeOverlay
           quotaPercent={state.economy.quotaPercent}
-          totalQuota={state.proKey || state.proKeyHash ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT}
-          isBYOK={Boolean(state.apiKey) && !state.proKey && !state.proKeyHash}
+          totalQuota={hasPaidAccess ? PRO_QUOTA_LIMIT : FREE_QUOTA_LIMIT}
+          isBYOK={Boolean(state.apiKey) && !hasPaidAccess}
           onDismiss={onUpgradeDismiss}
           dismissMode={upgradeDismissMode}
           dismissPhase={upgradeDismissPhase}

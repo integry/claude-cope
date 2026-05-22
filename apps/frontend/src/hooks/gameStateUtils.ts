@@ -220,11 +220,11 @@ export function resolveRank(totalTDEarned: number, currentRankTitle: string): st
 // first-class feature yet and only applies to standalone installations.
 // Once BYOK is promoted, consider whether BYOK users should be treated as
 // "paid" for gating purposes or need a separate check.
-export function isPaidUser(state: Pick<GameState, "proKey" | "proKeyHash" | "isPro">): boolean {
-  return Boolean(state.proKey) || Boolean(state.proKeyHash) || Boolean(state.isPro);
+export function isPaidUser(state: Pick<GameState, "proKey" | "proKeyHash" | "isPro" | "hasSessionPro">): boolean {
+  return Boolean(state.proKey) || Boolean(state.proKeyHash) || Boolean(state.isPro) || Boolean(state.hasSessionPro);
 }
 
-export function isFreeUser(state: Pick<GameState, "proKey" | "proKeyHash" | "isPro" | "apiKey">): boolean {
+export function isFreeUser(state: Pick<GameState, "proKey" | "proKeyHash" | "isPro" | "hasSessionPro" | "apiKey">): boolean {
   return !isPaidUser(state) && !(BYOK_ENABLED && state.apiKey);
 }
 

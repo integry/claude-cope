@@ -1254,12 +1254,9 @@ account.post("/update-alias", async (c) => {
   const db = c.env?.DB;
   if (!db) return c.json({ error: "Database not configured" }, 500);
 
-  const body = await c.req.json<{ username: string; newAlias: string; licenseKeyHash: string }>();
+  const body = await c.req.json<{ username: string; newAlias: string; licenseKeyHash?: string }>();
   if (!body.username || !body.newAlias) {
     return c.json({ error: "username and newAlias are required" }, 400);
-  }
-  if (!body.licenseKeyHash) {
-    return c.json({ error: "Alias changes require an active Max license" }, 403);
   }
 
   const v = validateAlias(body.newAlias);
@@ -1270,15 +1267,23 @@ account.post("/update-alias", async (c) => {
     return c.json({ error: "New alias is the same as the current username" }, 400);
   }
 
-  const ownership = await verifyOwnership(db, body.username, body.licenseKeyHash);
+  const ownership = await resolveThemePurchaseOwnership(db, {
+    username: body.username,
+    licenseKeyHash: body.licenseKeyHash,
+    kv: c.env?.QUOTA_KV ?? c.env?.USAGE_KV,
+    sessionId: c.get("sessionId"),
+    actionLabel: "alias changes",
+    logPrefix: "[account/update-alias]",
+  });
   if (ownership.status !== "ok") {
-    return c.json({ error: ownership.error }, ownership.status === "not_found" ? 404 : 403);
+    return c.json({ error: ownership.error, ...(ownership.errorCode ? { errorCode: ownership.errorCode } : {}) }, ownership.status === "not_found" ? 404 : 403);
   }
+  const { profile, licenseKeyHash } = ownership;
 
   const dbResult = await performAliasDbUpdate(db, {
-    oldUsername: body.username,
+    oldUsername: profile.username,
     newAlias: alias,
-    licenseKeyHash: body.licenseKeyHash,
+    licenseKeyHash,
     dailyLimit: ALIAS_CHANGES_PER_DAY,
   });
   if (!dbResult.success) {
@@ -1295,17 +1300,17 @@ account.post("/update-alias", async (c) => {
     try {
       await kv.put(accountKvKeys.sessionUser(sessionId), alias, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
       await kv.put(accountKvKeys.usernameSession(alias), sessionId, { expirationTtl: SESSION_USERNAME_TTL_SECONDS });
-      await kv.delete(accountKvKeys.usernameSession(body.username));
+      await kv.delete(accountKvKeys.usernameSession(profile.username));
       // Store a redirect so other active sessions following the old username
       // can discover the rename via /me and repair their own session mapping.
       // This still relies on username redirects rather than immutable account IDs,
       // so keep the TTL long enough to cover dormant-but-still-valid sessions.
-      await kv.put(accountKvKeys.renamed(body.username), alias, { expirationTtl: RENAME_REDIRECT_TTL_SECONDS });
+      await kv.put(accountKvKeys.renamed(profile.username), alias, { expirationTtl: RENAME_REDIRECT_TTL_SECONDS });
     } catch (err: unknown) {
       // TODO: Once accounts have immutable IDs, make this repair path durable
       // instead of relying on best-effort username redirects.
       console.warn(
-        `[account/update-alias] KV session repair failed for ${body.username} -> ${alias}:`,
+        `[account/update-alias] KV session repair failed for ${profile.username} -> ${alias}:`,
         err instanceof Error ? err.message : err,
       );
     }
@@ -1315,7 +1320,7 @@ account.post("/update-alias", async (c) => {
     updated = await getProfile(db, alias);
   } catch (err: unknown) {
     console.warn(
-      `[account/update-alias] profile fetch failed after renaming ${body.username} -> ${alias}:`,
+      `[account/update-alias] profile fetch failed after renaming ${profile.username} -> ${alias}:`,
       err instanceof Error ? err.message : err,
     );
   }
