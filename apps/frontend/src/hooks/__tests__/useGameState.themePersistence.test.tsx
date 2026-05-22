@@ -65,7 +65,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     activeTicket: null,
     hasSeenTicketPrompt: false,
     activeTheme: "default",
-    unlockedThemes: ["default", "amber", "midnight"],
+    unlockedThemes: ["default", "amber", "syntax-error"],
     soundEnabled: true,
     pendingCompletedTaskIds: [],
     isPro: true,
@@ -127,27 +127,27 @@ describe("useGameState theme persistence", () => {
     const secondRequest = deferred<{ success: boolean; profile: ReturnType<typeof createServerProfile> }>();
     vi.mocked(updateThemeServer).mockReturnValueOnce(firstRequest.promise).mockReturnValueOnce(secondRequest.promise);
     act(() => { hookState.setActiveTheme("amber"); });
-    act(() => { hookState.setActiveTheme("midnight"); });
-    expect(hookState.state.activeTheme).toBe("midnight");
+    act(() => { hookState.setActiveTheme("syntax-error"); });
+    expect(hookState.state.activeTheme).toBe("syntax-error");
     await act(async () => {
-      secondRequest.resolve({ success: true, profile: createServerProfile({ active_theme: "midnight", unlocked_themes: ["default", "amber", "midnight"] }) });
+      secondRequest.resolve({ success: true, profile: createServerProfile({ active_theme: "syntax-error", unlocked_themes: ["default", "amber", "syntax-error"] }) });
       await secondRequest.promise;
     });
-    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("syntax-error"));
     await act(async () => {
-      firstRequest.resolve({ success: true, profile: createServerProfile({ active_theme: "amber", unlocked_themes: ["default", "amber", "midnight"] }) });
+      firstRequest.resolve({ success: true, profile: createServerProfile({ active_theme: "amber", unlocked_themes: ["default", "amber", "syntax-error"] }) });
       await firstRequest.promise;
     });
-    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("syntax-error"));
   });
 
   it("rolls back to the last confirmed theme and surfaces update-theme failures", async () => {
     const confirmedRequest = deferred<{ success: true; profile: ReturnType<typeof createServerProfile> }>();
     const request = deferred<{ success: false; error: string; errorCode: "session_auth_required" }>();
     vi.mocked(updateThemeServer).mockReturnValueOnce(confirmedRequest.promise).mockReturnValueOnce(request.promise);
-    act(() => { hookState.setActiveTheme("midnight"); });
+    act(() => { hookState.setActiveTheme("syntax-error"); });
     await act(async () => {
-      confirmedRequest.resolve({ success: true, profile: createServerProfile({ active_theme: "midnight", unlocked_themes: ["default", "amber", "midnight"] }) });
+      confirmedRequest.resolve({ success: true, profile: createServerProfile({ active_theme: "syntax-error", unlocked_themes: ["default", "amber", "syntax-error"] }) });
       await confirmedRequest.promise;
     });
     act(() => { hookState.setActiveTheme("amber"); });
@@ -156,7 +156,7 @@ describe("useGameState theme persistence", () => {
       request.resolve({ success: false, error: "Session authentication is required for theme updates", errorCode: "session_auth_required" });
       await request.promise;
     });
-    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("syntax-error"));
     await vi.waitFor(() => expect(hookState.state.hasSessionPro).toBeUndefined());
     await vi.waitFor(() =>
       expect(hookState.state.chatHistory[hookState.state.chatHistory.length - 1]).toMatchObject({
@@ -172,12 +172,12 @@ describe("useGameState theme persistence", () => {
       isPro: true,
       username: "alice",
       profile: createServerProfile({
-        active_theme: "midnight",
-        unlocked_themes: ["default", "amber", "midnight"],
+        active_theme: "syntax-error",
+        unlocked_themes: ["default", "amber", "syntax-error"],
       }),
     });
-    remountWithState(makeState({ activeTheme: "default", unlockedThemes: ["default", "amber", "midnight"], chatHistory: [{ id: 1, role: "user", content: "hello" }] }));
-    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
+    remountWithState(makeState({ activeTheme: "default", unlockedThemes: ["default", "amber", "syntax-error"], chatHistory: [{ id: 1, role: "user", content: "hello" }] }));
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("syntax-error"));
   });
 
   it("rolls back to the validated server theme when update-theme fails after non-fresh /me restoration", async () => {
@@ -186,12 +186,12 @@ describe("useGameState theme persistence", () => {
       isPro: true,
       username: "alice",
       profile: createServerProfile({
-        active_theme: "midnight",
-        unlocked_themes: ["default", "amber", "midnight"],
+        active_theme: "syntax-error",
+        unlocked_themes: ["default", "amber", "syntax-error"],
       }),
     });
-    remountWithState(makeState({ activeTheme: "default", unlockedThemes: ["default", "amber", "midnight"], chatHistory: [{ id: 1, role: "user", content: "hello" }] }));
-    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
+    remountWithState(makeState({ activeTheme: "default", unlockedThemes: ["default", "amber", "syntax-error"], chatHistory: [{ id: 1, role: "user", content: "hello" }] }));
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("syntax-error"));
     const request = deferred<{ success: false; error: string; errorCode: "session_auth_required" }>();
     vi.mocked(updateThemeServer).mockReturnValueOnce(request.promise);
     act(() => { hookState.setActiveTheme("amber"); });
@@ -200,7 +200,7 @@ describe("useGameState theme persistence", () => {
       request.resolve({ success: false, error: "Session authentication is required for theme updates", errorCode: "session_auth_required" });
       await request.promise;
     });
-    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("syntax-error"));
   });
 
   it("clears stale session-backed paid state when /me no longer finds the session profile", async () => {
@@ -233,8 +233,8 @@ describe("useGameState theme persistence", () => {
         buddy_type: "cat",
         buddy_is_shiny: true,
         active_ticket: { id: "T-1", title: "Ship it", sprintProgress: 1, sprintGoal: 3 },
-        active_theme: "midnight",
-        unlocked_themes: ["default", "amber", "midnight"],
+        active_theme: "corporate-beige",
+        unlocked_themes: ["default", "amber", "corporate-beige"],
       }),
     });
     remountWithState(makeState({
@@ -246,7 +246,7 @@ describe("useGameState theme persistence", () => {
       activeTicket: null,
       chatHistory: [{ id: 1, role: "user", content: "hello" }],
     }));
-    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("midnight"));
+    await vi.waitFor(() => expect(hookState.state.activeTheme).toBe("corporate-beige"));
     await vi.waitFor(() => expect(hookState.state.inventory).toEqual({ coffee: 3 }));
     await vi.waitFor(() => expect(hookState.state.upgrades).toEqual(["ci_cd"]));
     await vi.waitFor(() => expect(hookState.state.achievements).toEqual(["ship_it"]));

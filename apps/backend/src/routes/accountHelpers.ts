@@ -4,7 +4,8 @@ import type { ThemeEntitlementErrorCode } from "@claude-cope/shared/themeEntitle
 import type { ProfileRow } from "../utils/profile";
 import { getProfile, getProfileByLicenseHash, getProfileRow, isLicenseActive, resolveRank } from "../utils/profile";
 import { validatePolarKey } from "../utils/polar";
-import { hashKey } from "../utils/quota";
+import { hashKey, proQuotaKey, proQuotaTotalKey } from "../utils/quota";
+import { EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS } from "../gameConstants";
 
 const LICENSE_STALE_SQL_CUTOFF = "-90 days";
 const MAX_SESSION_RENAME_HOPS = 32;
@@ -32,8 +33,16 @@ export type PolarCheckout = {
   customer?: { id?: string };
   created_at?: string;
   metadata?: Record<string, unknown>;
+  product?: { name?: string; slug?: string; metadata?: Record<string, unknown> };
 };
 export type PolarLicenseKeyItem = { key: string; created_at: string; status: string };
+type PolarCustomerOrder = {
+  paid?: boolean;
+  status?: string;
+  checkout_id?: string | null;
+  created_at?: string;
+  product?: { name?: string; slug?: string; metadata?: Record<string, unknown> };
+};
 export type CheckoutCache = { keys: string[]; sessionId: string };
 
 const MAX_KEY_MINT_WINDOW_MS = 15 * 60 * 1000;
@@ -62,7 +71,137 @@ export type SyncBody = {
   };
 };
 
-export async function syncExecutiveSupporterEntitlement(db: D1Database, hash: string): Promise<boolean> {
+export type ExecutiveSupporterEntitlementSyncResult = {
+  isExecutiveSupporter: boolean;
+  activatedNow: boolean;
+};
+
+export type SyncProfileErrorCode =
+  | "username_required"
+  | "session_required"
+  | "free_username_claim_forbidden"
+  | "sync_conflict"
+  | "profile_lookup_failed";
+
+type SyncProfileError = {
+  code: SyncProfileErrorCode;
+  message: string;
+};
+
+type ExecutiveSupporterActivationOptions = {
+  username: string;
+  licenseKeyHash: string;
+  displayRank?: string | null;
+};
+
+function buildExecutiveSupporterActivationMessage(username: string): string {
+  return `[LIVE] 👑 ${username} just expensed the Executive Supporter Pack. Respect the grift.`;
+}
+
+function parseUnlockedThemes(raw: string | null | undefined): string[] {
+  if (!raw) return ["default"];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) && parsed.every((item) => typeof item === "string")
+      ? parsed
+      : ["default"];
+  } catch {
+    return ["default"];
+  }
+}
+
+async function grantExecutiveSupporterIncludedThemes(db: D1Database, licenseKeyHash: string) {
+  const row = await db
+    .prepare("SELECT unlocked_themes FROM user_scores WHERE license_hash = ?")
+    .bind(licenseKeyHash)
+    .first<{ unlocked_themes: string | null }>();
+  if (!row) return;
+
+  const mergedThemes = new Set(parseUnlockedThemes(row.unlocked_themes));
+  mergedThemes.add("default");
+  for (const themeId of EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS) {
+    mergedThemes.add(themeId);
+  }
+
+  const nextUnlockedThemes = JSON.stringify([...mergedThemes]);
+  if (nextUnlockedThemes === row.unlocked_themes) return;
+  await db
+    .prepare("UPDATE user_scores SET unlocked_themes = ?, updated_at = datetime('now') WHERE license_hash = ?")
+    .bind(nextUnlockedThemes, licenseKeyHash)
+    .run();
+}
+
+export async function activateExecutiveSupporterIfNeeded(
+  db: D1Database,
+  opts: ExecutiveSupporterActivationOptions,
+): Promise<boolean> {
+  const updateResult = opts.displayRank === undefined
+    ? await db
+      .prepare(
+        `UPDATE user_scores
+         SET is_executive_supporter = 1,
+             updated_at = datetime('now')
+         WHERE license_hash = ?
+           AND is_executive_supporter = 0`,
+      )
+      .bind(opts.licenseKeyHash)
+      .run()
+    : await db
+      .prepare(
+        `UPDATE user_scores
+         SET is_executive_supporter = 1,
+             display_rank = ?,
+             updated_at = datetime('now')
+         WHERE username = ? AND license_hash = ?
+           AND is_executive_supporter = 0
+           AND ${ACTIVE_LICENSE_EXISTS_SQL}`,
+      )
+      .bind(opts.displayRank, opts.username, opts.licenseKeyHash)
+      .run();
+
+  if (Number(updateResult.meta.changes ?? 0) === 0) {
+    return false;
+  }
+
+  try {
+    await grantExecutiveSupporterIncludedThemes(db, opts.licenseKeyHash);
+  } catch (err: unknown) {
+    await db
+      .prepare(
+        `UPDATE user_scores
+         SET is_executive_supporter = 0,
+             display_rank = CASE WHEN license_hash = ? THEN NULL ELSE display_rank END,
+             updated_at = datetime('now')
+         WHERE license_hash = ?`,
+      )
+      .bind(opts.licenseKeyHash, opts.licenseKeyHash)
+      .run()
+      .catch(() => undefined);
+    throw err;
+  }
+
+  try {
+    await db
+      .prepare("INSERT INTO recent_events (message) VALUES (?)")
+      .bind(buildExecutiveSupporterActivationMessage(opts.username))
+      .run();
+    await db
+      .prepare("DELETE FROM recent_events WHERE id NOT IN (SELECT id FROM recent_events ORDER BY created_at DESC LIMIT 50)")
+      .run();
+  } catch (err: unknown) {
+    console.warn(
+      `[account/sync] failed to broadcast executive supporter activation for ${opts.licenseKeyHash.slice(0, 8)}:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  return true;
+}
+
+export async function syncExecutiveSupporterEntitlement(
+  db: D1Database,
+  hash: string,
+): Promise<ExecutiveSupporterEntitlementSyncResult> {
   const supporterRow = await db
     .prepare("SELECT is_executive_supporter FROM checkout_key_claims WHERE license_key_hash = ?")
     .bind(hash)
@@ -72,20 +211,46 @@ export async function syncExecutiveSupporterEntitlement(db: D1Database, hash: st
       .prepare("SELECT is_executive_supporter FROM user_scores WHERE license_hash = ?")
       .bind(hash)
       .first<{ is_executive_supporter: number }>();
-    return existingUserRow?.is_executive_supporter === 1;
+    const isExecutiveSupporter = existingUserRow?.is_executive_supporter === 1;
+    if (isExecutiveSupporter) {
+      await grantExecutiveSupporterIncludedThemes(db, hash);
+    }
+    return { isExecutiveSupporter, activatedNow: false };
   }
+
   const isExecutiveSupporter = supporterRow.is_executive_supporter === 1;
-  await db
-    .prepare(
-      `UPDATE user_scores
-       SET is_executive_supporter = ?,
-           display_rank = CASE WHEN ? = 1 THEN display_rank ELSE NULL END,
-           updated_at = datetime('now')
-       WHERE license_hash = ?`,
-    )
-    .bind(isExecutiveSupporter ? 1 : 0, isExecutiveSupporter ? 1 : 0, hash)
-    .run();
-  return isExecutiveSupporter;
+  const existingUserRow = await db
+    .prepare("SELECT username, is_executive_supporter FROM user_scores WHERE license_hash = ?")
+    .bind(hash)
+    .first<{ username: string; is_executive_supporter: number }>();
+  if (!existingUserRow) {
+    return { isExecutiveSupporter, activatedNow: false };
+  }
+
+  if (isExecutiveSupporter) {
+    const activatedNow = await activateExecutiveSupporterIfNeeded(db, {
+      username: existingUserRow.username,
+      licenseKeyHash: hash,
+    });
+    if (!activatedNow) {
+      await grantExecutiveSupporterIncludedThemes(db, hash);
+    }
+    return { isExecutiveSupporter, activatedNow };
+  } else {
+    await db
+      .prepare(
+        `UPDATE user_scores
+         SET is_executive_supporter = 0,
+             display_rank = NULL,
+             updated_at = datetime('now')
+         WHERE license_hash = ?
+           AND (is_executive_supporter != 0 OR display_rank IS NOT NULL)`,
+      )
+      .bind(hash)
+      .run();
+  }
+
+  return { isExecutiveSupporter, activatedNow: false };
 }
 
 function metadataFlagIsTrue(value: unknown): boolean {
@@ -145,6 +310,13 @@ function isExecutiveSupporterCheckout(metadata: Record<string, unknown> | undefi
   return false;
 }
 
+function isExecutiveSupporterProduct(product: { name?: string; slug?: string; metadata?: Record<string, unknown> } | undefined): boolean {
+  if (!product) return false;
+  return isExecutiveSupporterCheckout(product.metadata)
+    || normalizeMetadataIdentifier(product.slug) === "executive-supporter"
+    || metadataMatchesExecutiveSupporter(product.name);
+}
+
 function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
   // Only truly cosmetic preferences are accepted from the client.
   // unlocked_themes, active_theme, and active_ticket are server-authoritative:
@@ -161,9 +333,9 @@ function buildProfileCosmetics(cp: SyncBody["currentProfile"]) {
 
 type CreateProfileResult =
   | { profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; mutation: SyncProfileMutation; error?: undefined }
-  | { profile: null; error: string; mutation?: undefined };
+  | { profile: null; error: SyncProfileError; mutation?: undefined };
 
-type SyncProfileMutation =
+export type SyncProfileMutation =
   | { kind: "none" }
   | { kind: "created"; username: string }
   | { kind: "attached_license"; username: string; previousUsername: string };
@@ -171,7 +343,13 @@ type SyncProfileMutation =
 async function createProfileFromClient(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<CreateProfileResult> {
   const newUsername = body.username?.trim();
   if (!newUsername) {
-    return { profile: null, error: "Username is required — please set a username before activating." };
+    return {
+      profile: null,
+      error: {
+        code: "username_required",
+        message: "Username is required — please set a username before activating.",
+      },
+    };
   }
 
   // Check if username already exists.
@@ -184,7 +362,15 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
     if (existing.license_hash === hash) {
       // Already belongs to this license — just return the existing profile
       const profile = await getProfile(db, existingUsername);
-      if (!profile) return { profile: null, error: "Profile not found after lookup" };
+      if (!profile) {
+        return {
+          profile: null,
+          error: {
+            code: "profile_lookup_failed",
+            message: "Profile not found after lookup",
+          },
+        };
+      }
       return { profile, mutation: { kind: "none" } };
     }
     if (existing.license_hash === null) {
@@ -195,11 +381,23 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
       // have no way to verify ownership of an existing free row, so refuse
       // the upgrade rather than allowing it unconditionally.
       if (!sessionContext) {
-        return { profile: null, error: "Session required to upgrade an existing username." };
+        return {
+          profile: null,
+          error: {
+            code: "session_required",
+            message: "Session required to upgrade an existing username.",
+          },
+        };
       }
       const boundUsername = await sessionContext.kv.get(accountKvKeys.sessionUser(sessionContext.sessionId));
       if (boundUsername?.toLowerCase() !== existingUsername.toLowerCase()) {
-        return { profile: null, error: "Cannot claim an existing free username — log in to that account first or pick a different username." };
+        return {
+          profile: null,
+          error: {
+            code: "free_username_claim_forbidden",
+            message: "Cannot claim an existing free username — log in to that account first or pick a different username.",
+          },
+        };
       }
       // Preserve the server-authoritative profile data (TD, inventory, etc.).
       // The WHERE clause includes `license_hash IS NULL` so that under a
@@ -211,14 +409,34 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
         .run();
       if (!upgradeResult.meta.changes) {
         // Another concurrent request already attached a license to this row.
-        return { profile: null, error: "This username was just claimed by another request. Please try again." };
+        return {
+          profile: null,
+          error: {
+            code: "sync_conflict",
+            message: "This username was just claimed by another request. Please try again.",
+          },
+        };
       }
       const profile = await getProfile(db, newUsername);
-      if (!profile) return { profile: null, error: "Profile not found after upgrade" };
+      if (!profile) {
+        return {
+          profile: null,
+          error: {
+            code: "profile_lookup_failed",
+            message: "Profile not found after upgrade",
+          },
+        };
+      }
       return { profile, mutation: { kind: "attached_license", username: newUsername, previousUsername: existingUsername } };
     }
     // Username is owned by a different license — refuse
-    return { profile: null, error: "This username is already taken. Please change your username and try again." };
+    return {
+      profile: null,
+      error: {
+        code: "sync_conflict",
+        message: "This username is already taken. Please change your username and try again.",
+      },
+    };
   }
 
   // New profile for a freshly activated license — use server-authoritative defaults.
@@ -247,19 +465,33 @@ async function createProfileFromClient(db: D1Database, hash: string, body: SyncB
     // Catch UNIQUE constraint violations from concurrent /sync requests racing
     // on the same username or license_hash.
     if (msg.includes("UNIQUE") || msg.includes("unique") || msg.includes("constraint")) {
-      return { profile: null, error: "This username or license is being activated by another request. Please try again." };
+      return {
+        profile: null,
+        error: {
+          code: "sync_conflict",
+          message: "This username or license is being activated by another request. Please try again.",
+        },
+      };
     }
     throw err;
   }
 
   const profile = await getProfile(db, newUsername);
-  if (!profile) return { profile: null, error: "Failed to create profile" };
+  if (!profile) {
+    return {
+      profile: null,
+      error: {
+        code: "profile_lookup_failed",
+        message: "Failed to create profile",
+      },
+    };
+  }
   return { profile, mutation: { kind: "created", username: newUsername } };
 }
 
-type ResolveProfileResult =
+export type ResolveProfileResult =
   | { restored: boolean; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>; mutation: SyncProfileMutation; error?: undefined }
-  | { restored: false; profile: null; error: string; mutation?: undefined };
+  | { restored: false; profile: null; error: SyncProfileError; mutation?: undefined };
 
 export async function resolveProfile(db: D1Database, hash: string, body: SyncBody, sessionContext?: { sessionId: string; kv: KVNamespace }): Promise<ResolveProfileResult> {
   // Case 1: Existing profile with this license_hash → restore (cross-device sync)
@@ -574,18 +806,125 @@ export function broadcastPurchase(message: string, db: D1Database | undefined, c
 }
 
 async function ensureQuota(kv: KVNamespace, hash: string, proInitialQuota: number): Promise<void> {
-  const kvKey = `polar:${hash}`;
+  const kvKey = proQuotaKey(hash);
   const existingQuota = await kv.get(kvKey);
-  if (existingQuota !== null) return;
-
-  const revokedKey = `polar_revoked:${hash}`;
-  const savedQuota = await kv.get(revokedKey);
-  if (savedQuota !== null) {
-    await kv.put(kvKey, savedQuota);
-    await kv.delete(revokedKey);
-  } else {
-    await kv.put(kvKey, String(proInitialQuota));
+  if (existingQuota === null) {
+    const revokedKey = `polar_revoked:${hash}`;
+    const savedQuota = await kv.get(revokedKey);
+    if (savedQuota !== null) {
+      await kv.put(kvKey, savedQuota);
+      await kv.delete(revokedKey);
+    } else {
+      await kv.put(kvKey, String(proInitialQuota));
+    }
   }
+
+  const totalKey = proQuotaTotalKey(hash);
+  if (await kv.get(totalKey) === null) {
+    await kv.put(totalKey, String(proInitialQuota));
+  }
+}
+
+async function addQuotaCredits(kv: KVNamespace, hash: string, credits: number): Promise<{ previousRemaining: string | null; previousTotal: string | null }> {
+  const kvKey = proQuotaKey(hash);
+  const totalKey = proQuotaTotalKey(hash);
+  const [previousRemaining, previousTotal] = await Promise.all([kv.get(kvKey), kv.get(totalKey)]);
+  const currentRemaining = previousRemaining === null ? 0 : parseInt(previousRemaining, 10);
+  const currentTotal = previousTotal === null ? Math.max(credits, Number.isFinite(currentRemaining) ? currentRemaining : 0) : parseInt(previousTotal, 10);
+  const nextRemaining = (Number.isFinite(currentRemaining) ? currentRemaining : 0) + credits;
+  const nextTotal = (Number.isFinite(currentTotal) ? currentTotal : credits) + credits;
+  await kv.put(kvKey, String(nextRemaining));
+  await kv.put(totalKey, String(nextTotal));
+  return { previousRemaining, previousTotal };
+}
+
+export async function getLinkedLicenseAccount(
+  db: D1Database,
+  licenseKeyHash: string,
+): Promise<{ username: string; primaryLicenseHash: string; profile: NonNullable<Awaited<ReturnType<typeof getProfile>>> } | null> {
+  const link = await db
+    .prepare("SELECT username, credited_to_hash FROM license_account_links WHERE key_hash = ?")
+    .bind(licenseKeyHash)
+    .first<{ username: string; credited_to_hash: string }>();
+  if (!link) return null;
+  const profile = await getProfile(db, link.username);
+  if (!profile) return null;
+  return { username: link.username, primaryLicenseHash: link.credited_to_hash, profile };
+}
+
+export async function creditExistingAccountWithLicense(
+  deps: { db: D1Database; kv: KVNamespace },
+  opts: {
+    username: string;
+    primaryLicenseHash: string;
+    topUpLicenseHash: string;
+    credits: number;
+    validationId?: string;
+  },
+): Promise<{ credited: true } | { credited: false; reason: "already_used" | "profile_missing" }> {
+  const { db, kv } = deps;
+  const existingByHash = await getProfileByLicenseHash(db, opts.topUpLicenseHash);
+  if (existingByHash) return { credited: false, reason: "already_used" };
+  const existingLink = await getLinkedLicenseAccount(db, opts.topUpLicenseHash);
+  if (existingLink) return { credited: false, reason: "already_used" };
+
+  const polarIdKey = `polar_id:${opts.topUpLicenseHash}`;
+  const [previousLicense, previousTopUpPolarId] = await Promise.all([
+    db
+      .prepare("SELECT status, last_activated_at FROM licenses WHERE key_hash = ?")
+      .bind(opts.topUpLicenseHash)
+      .first<{ status: string; last_activated_at: string | null }>(),
+    kv.get(polarIdKey),
+  ]);
+  let previousPrimaryQuota: { previousRemaining: string | null; previousTotal: string | null } | null = null;
+  let linkInserted = false;
+
+  try {
+    await db
+      .prepare(
+        "INSERT INTO licenses (key_hash, status) VALUES (?, 'active') ON CONFLICT(key_hash) DO UPDATE SET status = 'active', last_activated_at = datetime('now')",
+      )
+      .bind(opts.topUpLicenseHash)
+      .run();
+
+    await db
+      .prepare("INSERT INTO license_account_links (key_hash, username, credited_to_hash) VALUES (?, ?, ?)")
+      .bind(opts.topUpLicenseHash, opts.username, opts.primaryLicenseHash)
+      .run();
+    linkInserted = true;
+
+    previousPrimaryQuota = await addQuotaCredits(kv, opts.primaryLicenseHash, opts.credits);
+    if (opts.validationId) {
+      await kv.put(polarIdKey, opts.validationId);
+    }
+  } catch (err: unknown) {
+    if (linkInserted) {
+      await db.prepare("DELETE FROM license_account_links WHERE key_hash = ?").bind(opts.topUpLicenseHash).run().catch(() => undefined);
+    }
+    await rollbackLicenseActivation(db, opts.topUpLicenseHash, previousLicense).catch(() => undefined);
+    if (previousPrimaryQuota) {
+      const primaryQuotaKey = proQuotaKey(opts.primaryLicenseHash);
+      const primaryTotalKey = proQuotaTotalKey(opts.primaryLicenseHash);
+      if (previousPrimaryQuota.previousRemaining === null) {
+        await kv.delete(primaryQuotaKey).catch(() => undefined);
+      } else {
+        await kv.put(primaryQuotaKey, previousPrimaryQuota.previousRemaining).catch(() => undefined);
+      }
+      if (previousPrimaryQuota.previousTotal === null) {
+        await kv.delete(primaryTotalKey).catch(() => undefined);
+      } else {
+        await kv.put(primaryTotalKey, previousPrimaryQuota.previousTotal).catch(() => undefined);
+      }
+    }
+    if (previousTopUpPolarId === null) {
+      await kv.delete(polarIdKey).catch(() => undefined);
+    } else {
+      await kv.put(polarIdKey, previousTopUpPolarId).catch(() => undefined);
+    }
+    throw err;
+  }
+
+  return { credited: true };
 }
 
 async function rollbackLicenseActivation(
@@ -640,18 +979,8 @@ export async function commitSyncSideEffects(
   opts: { validationId?: string; proInitialQuota: number },
 ) {
   const { db, kv, hash } = deps;
-  const polarKey = `polar:${hash}`;
-  const revokedKey = `polar_revoked:${hash}`;
   const polarIdKey = `polar_id:${hash}`;
-  const [previousLicense, previousQuota, previousRevokedQuota, previousPolarId] = await Promise.all([
-    db
-      .prepare("SELECT status, last_activated_at FROM licenses WHERE key_hash = ?")
-      .bind(hash)
-      .first<{ status: string; last_activated_at: string | null }>(),
-    kv.get(polarKey),
-    kv.get(revokedKey),
-    kv.get(polarIdKey),
-  ]);
+  const snapshot = await captureSyncSideEffectSnapshot(deps);
 
   try {
     await db
@@ -667,33 +996,73 @@ export async function commitSyncSideEffects(
       await kv.put(polarIdKey, opts.validationId);
     }
   } catch (err: unknown) {
-    try {
-      await rollbackLicenseActivation(db, hash, previousLicense);
-
-      if (previousQuota === null) {
-        await kv.delete(polarKey);
-      } else {
-        await kv.put(polarKey, previousQuota);
-      }
-
-      if (previousRevokedQuota === null) {
-        await kv.delete(revokedKey);
-      } else {
-        await kv.put(revokedKey, previousRevokedQuota);
-      }
-
-      if (previousPolarId === null) {
-        await kv.delete(polarIdKey);
-      } else {
-        await kv.put(polarIdKey, previousPolarId);
-      }
-    } catch (rollbackErr: unknown) {
-      console.warn(
-        `[account/sync] failed to rollback side effects for ${hash.slice(0, 8)}:`,
-        rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
-      );
-    }
+    await rollbackSyncSideEffects(deps, snapshot);
     throw err;
+  }
+
+  return snapshot;
+}
+
+type SyncSideEffectsSnapshot = {
+  previousLicense: { status: string; last_activated_at: string | null } | null;
+  previousQuota: string | null;
+  previousRevokedQuota: string | null;
+  previousPolarId: string | null;
+};
+
+async function captureSyncSideEffectSnapshot(
+  deps: { db: D1Database; kv: KVNamespace; hash: string },
+): Promise<SyncSideEffectsSnapshot> {
+  const { db, kv, hash } = deps;
+  const polarKey = `polar:${hash}`;
+  const revokedKey = `polar_revoked:${hash}`;
+  const polarIdKey = `polar_id:${hash}`;
+  const [previousLicense, previousQuota, previousRevokedQuota, previousPolarId] = await Promise.all([
+    db
+      .prepare("SELECT status, last_activated_at FROM licenses WHERE key_hash = ?")
+      .bind(hash)
+      .first<{ status: string; last_activated_at: string | null }>(),
+    kv.get(polarKey),
+    kv.get(revokedKey),
+    kv.get(polarIdKey),
+  ]);
+  return { previousLicense, previousQuota, previousRevokedQuota, previousPolarId };
+}
+
+export async function rollbackSyncSideEffects(
+  deps: { db: D1Database; kv: KVNamespace; hash: string },
+  snapshot: SyncSideEffectsSnapshot,
+) {
+  const { db, kv, hash } = deps;
+  const polarKey = `polar:${hash}`;
+  const revokedKey = `polar_revoked:${hash}`;
+  const polarIdKey = `polar_id:${hash}`;
+
+  try {
+    await rollbackLicenseActivation(db, hash, snapshot.previousLicense);
+
+    if (snapshot.previousQuota === null) {
+      await kv.delete(polarKey);
+    } else {
+      await kv.put(polarKey, snapshot.previousQuota);
+    }
+
+    if (snapshot.previousRevokedQuota === null) {
+      await kv.delete(revokedKey);
+    } else {
+      await kv.put(revokedKey, snapshot.previousRevokedQuota);
+    }
+
+    if (snapshot.previousPolarId === null) {
+      await kv.delete(polarIdKey);
+    } else {
+      await kv.put(polarIdKey, snapshot.previousPolarId);
+    }
+  } catch (rollbackErr: unknown) {
+    console.warn(
+      `[account/sync] failed to rollback side effects for ${hash.slice(0, 8)}:`,
+      rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+    );
   }
 }
 
@@ -798,8 +1167,42 @@ export async function fetchCheckoutCustomerId(
     customerId,
     createdAt: checkout.created_at,
     referenceId,
-    isExecutiveSupporter: isExecutiveSupporterCheckout(checkout.metadata),
+    isExecutiveSupporter: isExecutiveSupporterCheckout(checkout.metadata) || isExecutiveSupporterProduct(checkout.product),
   };
+}
+
+export async function fetchCheckoutIdFromCustomerSession(
+  customerSessionToken: string,
+  organizationId: string,
+): Promise<{ checkoutId: string; isExecutiveSupporter: boolean } | { error: string; status: ContentfulStatusCode }> {
+  let resp: Response;
+  try {
+    const params = new URLSearchParams({
+      organization_id: organizationId,
+      product_billing_type: "one_time",
+      limit: "10",
+      sorting: "-created_at",
+    });
+    resp = await fetch(`https://api.polar.sh/v1/customer-portal/orders/?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${customerSessionToken}` },
+    });
+  } catch {
+    return { error: "Unable to reach Polar — please try again", status: 502 };
+  }
+  if (!resp.ok) {
+    if (resp.status === 401 || resp.status === 403) {
+      return { error: "Invalid customer session token", status: 403 };
+    }
+    if (resp.status >= 500) return { error: "Polar is temporarily unavailable — please try again", status: 502 };
+    return { error: `Polar returned an unexpected customer session error (${resp.status})`, status: 502 };
+  }
+
+  const items = ((await resp.json()) as { items?: PolarCustomerOrder[] }).items ?? [];
+  const order = items.find((item) => item?.checkout_id && (item.paid === true || item.status === "paid"));
+  if (!order?.checkout_id) {
+    return { error: "No paid checkout found for this customer session yet — try again in a few seconds", status: 409 };
+  }
+  return { checkoutId: order.checkout_id, isExecutiveSupporter: isExecutiveSupporterProduct(order.product) };
 }
 
 export async function fetchNextCheckoutCreatedAt(customerId: string, organizationId: string, accessToken: string, opts: { checkoutId: string; checkoutCreatedAt: string }): Promise<{ createdAt: string | null } | { error: string; status: ContentfulStatusCode }> {

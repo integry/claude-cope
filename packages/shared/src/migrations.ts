@@ -336,6 +336,15 @@ export const migrations: Migration[] = [
     sql: "ALTER TABLE checkout_claims ADD COLUMN is_executive_supporter INTEGER NOT NULL DEFAULT 0",
     ignoreErrorMatching: /duplicate column name.*is_executive_supporter/i,
   },
+  {
+    name: "048_create_license_account_links",
+    sql: `CREATE TABLE IF NOT EXISTS license_account_links (
+      key_hash TEXT PRIMARY KEY,
+      username TEXT NOT NULL,
+      credited_to_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+  },
 ];
 
 /**

@@ -300,15 +300,17 @@ describe("/promote command", () => {
     await vi.runAllTimersAsync();
 
     const reply = getLastReply(ctx);
-    expect(reply).toContain("Vanity title catalog");
-    expect(reply).toContain("`junior-code-monkey`");
-    expect(reply).toContain("Usage: `/promote <title-id>`");
+    expect(reply).toContain("[ EXECUTIVE VANITY OVERRIDE ]");
+    expect(reply).toContain("Executive Supporter perk unlocked.");
+    expect(reply).toContain("10x Rockstar Ninja");
+    expect(reply).toContain("Founder in Stealth");
+    expect(reply).toContain("Only Executive Supporters can use /promote.");
   });
 
   it("persists supporter vanity title selections", async () => {
     const ctx = makeCtx(makeGameState({ isExecutiveSupporter: true, proKey: "pro-test-key", proKeyHash: "hash" }));
 
-    executeSlashCommand("/promote mid-level-googler", ctx);
+    executeSlashCommand("/promote stealth", ctx);
     vi.advanceTimersByTime(1500);
     await vi.runAllTimersAsync();
     await Promise.resolve();
@@ -316,9 +318,34 @@ describe("/promote command", () => {
     expect(fetch).toHaveBeenCalledWith("/api/account/update-display-rank", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: "TestUser0", displayRank: "Mid-Level Googler", licenseKeyHash: "hash" }),
+      body: JSON.stringify({ username: "TestUser0", displayRank: "Founder in Stealth", licenseKeyHash: "hash" }),
     });
-    expect(ctx.state.displayRank).toBe("Mid-Level Googler");
+    expect(ctx.state.displayRank).toBe("Founder in Stealth");
     expect(getLastReply(ctx)).toContain("Vanity title updated");
+  });
+});
+
+describe("/theme command", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("lists newly added premium themes automatically from the shared catalog", async () => {
+    const ctx = makeCtx(makeGameState());
+
+    executeSlashCommand("/theme", ctx);
+    vi.advanceTimersByTime(1500);
+    await vi.runAllTimersAsync();
+
+    const reply = getLastReply(ctx);
+    expect(reply).toContain("corporate-beige");
+    expect(reply).toContain("syntax-error");
+    expect(reply).toContain("40,000 TD");
+    expect(reply).toContain("50,000 TD");
   });
 });

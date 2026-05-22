@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { UPGRADE_CHECKOUT_SINGLE, UPGRADE_CHECKOUT_MULTI, PRO_QUOTA_LIMIT } from "../config";
+import { openBoundCheckoutUrl } from "./checkoutLinks";
 import { DEFAULT_CLOSE_EFFECT, type UpgradeNagCloseEffect } from "./upgradeOverlayEffects";
 
 const B = "#ff5555"; // border (red)
@@ -121,7 +122,13 @@ export default function DesktopLayout({
         style={{ display: "inline", textDecoration: "none", cursor: "pointer", backgroundColor: "transparent" }}
         tabIndex={isForcedClosing ? -1 : undefined}
         aria-hidden={isForcedClosing ? true : undefined}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void openBoundCheckoutUrl(url).catch(() => {
+            window.alert("Checkout could not be bound to this session. Please retry.");
+          });
+        }}
         onMouseDown={() => { focusSourceRef.current = "pointer"; setIsKeyboardNavigationMode(false); setShowManualFocus(false); }}
         onKeyDown={(event) => {
           if (shouldBlockManualLinkEnter(event, isKeyboardNavigationMode, showManualFocus)) {

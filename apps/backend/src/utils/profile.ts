@@ -1,5 +1,5 @@
 import type { ServerProfile } from "@claude-cope/shared/profile";
-import { computeMultiplier, CORPORATE_RANKS } from "../gameConstants";
+import { computeMultiplier, CORPORATE_RANKS, EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS } from "../gameConstants";
 
 interface UserScoreRow {
   username: string;
@@ -32,6 +32,16 @@ function parseJSON<T>(raw: string, fallback: T): T {
   }
 }
 
+function withExecutiveSupporterThemes(themes: string[], isExecutiveSupporter: boolean): string[] {
+  if (!isExecutiveSupporter) return themes;
+  const merged = new Set(themes.length ? themes : ["default"]);
+  merged.add("default");
+  for (const themeId of EXECUTIVE_SUPPORTER_INCLUDED_THEME_IDS) {
+    merged.add(themeId);
+  }
+  return [...merged];
+}
+
 export type ProfileRow = UserScoreWithLicenseHashRow;
 
 export function resolveRank(totalTD: number): string {
@@ -46,7 +56,10 @@ export function rowToProfile(row: UserScoreRow, quotaPercent?: number): ServerPr
   const inventory = parseJSON<Record<string, number>>(row.inventory, {});
   const upgrades = parseJSON<string[]>(row.upgrades, []);
   const achievements = parseJSON<string[]>(row.achievements, []);
-  const unlockedThemes = parseJSON<string[]>(row.unlocked_themes, ["default"]);
+  const unlockedThemes = withExecutiveSupporterThemes(
+    parseJSON<string[]>(row.unlocked_themes, ["default"]),
+    row.is_executive_supporter === 1,
+  );
   const activeTicket = row.active_ticket
     ? parseJSON<{ id: string; title: string; sprintProgress: number; sprintGoal: number } | null>(row.active_ticket, null)
     : null;

@@ -186,6 +186,8 @@ export function applyServerProfile(
       currentRank,
       tdMultiplier: profile.td_multiplier,
       ...(profile.quota_percent != null ? { quotaPercent: profile.quota_percent } : {}),
+      ...(profile.quota_remaining != null ? { quotaRemaining: profile.quota_remaining } : {}),
+      ...(profile.quota_total != null ? { quotaTotal: profile.quota_total } : {}),
     },
     inventory: profile.inventory,
     upgrades: profile.upgrades,

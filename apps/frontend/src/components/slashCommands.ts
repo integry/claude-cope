@@ -84,7 +84,7 @@ export const SLASH_COMMAND_DESCRIPTIONS: Record<string, string> = {
   "/abandon": "Give up. We knew you would.",
   "/alias": "Change your identity. Witness protection for devs.",
   "/model": "Swap out the hallucination engine",
-  "/promote": "Buy a vanity title and wear it in public",
+  "/promote": "Executive Supporter-only vanity titles",
   "/user": "Confirm you exist (debatable)",
   "/sync": "Link your Polar license key to unlock Max",
   "/shill": "Tweet about us for 5 free tokens. Dignity sold separately.",
@@ -221,7 +221,7 @@ export function getSlashMenuItems(
         value: `/promote ${title.id}`,
         titleId: title.id,
         label: title.title,
-        description: "Executive Supporter vanity title",
+        description: title.profile,
         locked: !isExecutiveSupporter,
       }));
   }
