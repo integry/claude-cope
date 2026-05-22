@@ -18,7 +18,7 @@ function renderShareCard(lines: string[]): HTMLCanvasElement {
   const padding = 40;
   const lineHeight = 28;
   const fontSize = 18;
-  const font = `${fontSize}px "Courier New", Courier, monospace`;
+  const font = `${fontSize}px "Courier New", "Courier Prime", Courier, monospace`;
 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;

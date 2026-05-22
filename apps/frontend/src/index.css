@@ -5,7 +5,7 @@
 :root {
   --color-bg: #0d1117;
   --color-text: #e6edf3;
-  --font-terminal-mono: 'Fira Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  --font-terminal-mono: 'Courier New', 'Courier Prime', Courier, monospace;
 }
 
 body {

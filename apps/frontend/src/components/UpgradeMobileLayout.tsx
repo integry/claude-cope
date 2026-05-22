@@ -13,7 +13,7 @@ const W = "#c9d1d9"; // soft off-white body text
 const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
-const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
+const MONO_FONT = "'Courier New', 'Courier Prime', Courier, monospace";
 
 type BenchmarkCard = {
   label: string;

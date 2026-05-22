@@ -11,7 +11,7 @@ const G = "#4ade80"; // green buttons
 const DIM = "#aaaaaa"; // dim footer
 
 const INNER_W = 64; // inner content width (between ║ chars)
-const MONO_FONT = "'Fira Code', 'Cascadia Code', 'Consolas', monospace";
+const MONO_FONT = "'Courier New', 'Courier Prime', Courier, monospace";
 export const UPGRADE_OVERLAY_MOBILE_MAX_WIDTH = 640;
 const BORDER_TOP = `╔${"═".repeat(INNER_W)}╗`;
 const BORDER_MID = `╠${"═".repeat(INNER_W)}╣`;

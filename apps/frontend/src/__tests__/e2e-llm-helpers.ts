@@ -145,7 +145,7 @@ export function generateHtmlReport(): string {
 <title>Claude Cope E2E LLM Report</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; background: #0d1117; color: #c9d1d9; padding: 20px; line-height: 1.5; }
+  body { font-family: 'Courier New', 'Courier Prime', Courier, monospace; background: #0d1117; color: #c9d1d9; padding: 20px; line-height: 1.5; }
   h1 { color: #58a6ff; margin-bottom: 8px; }
   .meta { color: #8b949e; margin-bottom: 24px; font-size: 13px; }
   .suite { margin-bottom: 32px; }
