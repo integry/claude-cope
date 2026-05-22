@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TURNSTILE_SITE_KEY } from "../config";
 import { pollBootstrapStatus, verifyToken } from "./turnstileBootstrap";
 
@@ -118,6 +118,7 @@ export default function TurnstileWidget({
   verificationNonce: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isChallengeVisible, setIsChallengeVisible] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,7 +135,11 @@ export default function TurnstileWidget({
         verificationTimeoutId = null;
       }
     };
-    const settle = () => { settled = true; clearVerificationTimeout(); };
+    const settle = () => {
+      settled = true;
+      clearVerificationTimeout();
+      setIsChallengeVisible(false);
+    };
     const startVerificationTimeout = () => {
       clearVerificationTimeout();
       verificationTimeoutId = window.setTimeout(() => {
@@ -179,6 +184,7 @@ export default function TurnstileWidget({
         return;
       }
 
+      setIsChallengeVisible(true);
       await Promise.race([
         ensureTurnstileScript(),
         new Promise((_, reject) => window.setTimeout(() => reject(new Error("Turnstile script load timed out")), scriptLoadTimeoutMs)),
@@ -235,7 +241,10 @@ export default function TurnstileWidget({
     };
 
     void run().catch(() => {
-      if (!cancelled && !settled) onError("Unable to start human verification.");
+      if (!cancelled && !settled) {
+        settle();
+        onError("Unable to start human verification.");
+      }
     });
 
     return () => {
@@ -252,15 +261,19 @@ export default function TurnstileWidget({
       ref={containerRef}
       style={{
         position: "fixed",
-        left: 0,
-        bottom: 0,
-        width: 1,
-        height: 1,
-        overflow: "hidden",
-        opacity: 0,
-        pointerEvents: "none",
+        left: "50%",
+        bottom: 16,
+        width: 320,
+        maxWidth: "calc(100vw - 32px)",
+        minHeight: 80,
+        overflow: "visible",
+        opacity: isChallengeVisible ? 1 : 0,
+        pointerEvents: isChallengeVisible ? "auto" : "none",
+        transform: "translateX(-50%)",
+        zIndex: 10000,
       }}
-      aria-hidden="true"
+      aria-hidden={!isChallengeVisible}
+      data-testid="turnstile-challenge-surface"
     />
   );
 }
