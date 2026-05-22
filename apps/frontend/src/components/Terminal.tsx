@@ -39,7 +39,6 @@ const createPromptLoadingMessage = (submissionId: number): Message => ({ id: sub
 const removePromptMessages = (submissionId: number) => (prev: Message[]) =>
   prev.filter((message) => !(message.id === submissionId && (message.role === "user" || message.role === "loading")));
 
-/* eslint-disable max-lines -- Large orchestrator component pending extraction */
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory;
@@ -394,5 +393,4 @@ function Terminal() {
       handleManualUpgradeDismiss={handleManualUpgradeDismiss} upgradeNagDismissPhase={upgradeNagDismissPhase} upgradeNagDismissEffect={upgradeNagDismissEffect} />
   );
 }
-/* eslint-enable max-lines */
 export default Terminal;

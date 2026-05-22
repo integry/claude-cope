@@ -23,7 +23,6 @@ import {
   type TerminalViewProps,
 } from "./terminalViewHelpers";
 
-/* eslint-disable max-lines -- Large presentational component pending extraction */
 export function TerminalView({
   activeRegression,
   outageHp,
@@ -299,4 +298,3 @@ export function TerminalView({
     </div>
   );
 }
-/* eslint-enable max-lines */
