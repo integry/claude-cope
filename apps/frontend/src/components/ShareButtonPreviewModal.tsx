@@ -31,6 +31,7 @@ const ACTIONS: Array<{ label: string; platform?: SharePlatform }> = [
   { label: "SHARE ON X", platform: "twitter" },
   { label: "SHARE ON LINKEDIN", platform: "linkedin" },
 ];
+const NATIVE_SHARE_LABEL = "OPEN SHARE MENU";
 
 export function ShareButtonInlineStatus({
   closePreview,
@@ -63,6 +64,7 @@ export type ShareButtonPreviewModel = {
   spinnerChar: string;
   status: ShareStatus;
   systemMessage: string;
+  useNativeSharePreview: boolean;
   userMessage: string;
   username: string;
 };
@@ -70,6 +72,7 @@ export type ShareButtonPreviewModel = {
 export type ShareButtonPreviewActions = {
   closePreview: () => void;
   copyImage: () => void;
+  nativeShare: () => void;
   openShareTarget: (platform: SharePlatform) => void;
   shareToPlatform: (platform: SharePlatform) => void;
   triggerFocus: () => void;
@@ -84,8 +87,8 @@ export function ShareButtonPreviewModal({
   modalRef: RefObject<HTMLDivElement | null>;
   preview: ShareButtonPreviewModel;
 }) {
-  const { closePreview, copyImage, openShareTarget, shareToPlatform, triggerFocus } = actions;
-  const { feedback, isGenerating, isPreviewImageLoading, pasteHint, previewImageObjectUrl, spinnerChar, status, systemMessage, userMessage, username } = preview;
+  const { closePreview, copyImage, nativeShare, openShareTarget, shareToPlatform, triggerFocus } = actions;
+  const { feedback, isGenerating, isPreviewImageLoading, pasteHint, previewImageObjectUrl, spinnerChar, status, systemMessage, useNativeSharePreview, userMessage, username } = preview;
 
   return (
     <div
@@ -167,6 +170,18 @@ export function ShareButtonPreviewModal({
             <div style={modalStatusGeneratingStyle}>{spinnerChar} Rendering final image...</div>
           ) : status === "error" && feedback ? (
             <div style={modalStatusErrorStyle}>{feedback}</div>
+          ) : useNativeSharePreview ? (
+            <div style={actionRowStyle}>
+              <button
+                onClick={nativeShare}
+                disabled={isGenerating}
+                className="share-popup-action"
+                style={{ ...closeButtonStyle, padding: 0, cursor: isGenerating ? "not-allowed" : "pointer", fontSize: "12px", opacity: isGenerating ? 0.5 : 1 }}
+              >
+                <span data-cursor="">{">"}</span>
+                <span data-btn="">{` [ ${NATIVE_SHARE_LABEL} ]`}</span>
+              </button>
+            </div>
           ) : (
             <div style={actionRowStyle}>
               {ACTIONS.map(({ label, platform }) => (
