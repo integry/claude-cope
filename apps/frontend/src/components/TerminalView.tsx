@@ -137,6 +137,7 @@ function renderBuddyDock(buddy: GameState["buddy"]) {
   return <div className="terminal-buddy-dock hidden md:flex"><BuddyOverlay buddy={buddy} /></div>;
 }
 
+/* eslint-disable max-lines -- Large presentational component pending extraction */
 export function TerminalView({
   activeRegression,
   outageHp,
@@ -234,12 +235,32 @@ export function TerminalView({
         <Ticker onExpand={openParty} onSlashCommand={handleTickerCommand} onlineCount={onlineCount} />
         {outageHp !== null && activeOutageScenario && <OutageBar outageHp={outageHp} scenario={activeOutageScenario} />}
         <HeaderBar
-          rank={rank} currentTD={state.economy.currentTD} quotaPercent={state.economy.quotaPercent} outageHp={outageHp}
-          activeMultiplier={calculateActiveMultiplier(state.inventory, state.upgrades) * state.economy.tdMultiplier}
-          username={state.username} isBYOK={BYOK_ENABLED && !!state.apiKey} isMax={Boolean(state.proKey || state.proKeyHash || state.isPro || state.hasSessionPro)}
-          isExecutiveSupporter={Boolean(state.isExecutiveSupporter)} byokTotalCost={state.byokTotalCost} onHomeClick={handleHomeClick} onProfileClick={handleProfileClick}
-          onHelpClick={openHelp} onAboutClick={openAbout} onStoreClick={openStore} onLeaderboardClick={openLeaderboard} onAchievementsClick={openAchievements} onContactClick={openContact}
-          onSlashMenuClick={openSlashMenu} onUpgradeClick={openUpgrade}
+          rank={rank}
+          currentTD={state.economy.currentTD}
+          quotaPercent={state.economy.quotaPercent}
+          quotaRemaining={state.economy.quotaRemaining}
+          quotaTotal={state.economy.quotaTotal}
+          outageHp={outageHp}
+          activeMultiplier={
+            calculateActiveMultiplier(state.inventory, state.upgrades) *
+            state.economy.tdMultiplier
+          }
+          username={state.username}
+          isBYOK={BYOK_ENABLED && !!state.apiKey}
+          isMax={Boolean(state.proKey || state.proKeyHash || state.isPro || state.hasSessionPro)}
+          isExecutiveSupporter={Boolean(state.isExecutiveSupporter)}
+          hasVanityTitle={Boolean(state.displayRank)}
+          byokTotalCost={state.byokTotalCost}
+          onHomeClick={handleHomeClick}
+          onProfileClick={handleProfileClick}
+          onHelpClick={openHelp}
+          onAboutClick={openAbout}
+          onStoreClick={openStore}
+          onLeaderboardClick={openLeaderboard}
+          onAchievementsClick={openAchievements}
+          onContactClick={openContact}
+          onSlashMenuClick={openSlashMenu}
+          onUpgradeClick={openUpgrade}
         />
       </div>
       <div ref={scrollViewportRef} data-terminal-scroll-viewport="true" className={`flex-1 min-h-0 ${activeRegression === "broken_scrollback" ? "overflow-y-hidden" : "overflow-y-auto"} ${compactEffect ? "compact-squeeze" : ""}`}>
@@ -271,3 +292,4 @@ export function TerminalView({
     </div>
   );
 }
+/* eslint-enable max-lines */

@@ -247,5 +247,20 @@ export default function TurnstileWidget({
     };
   }, [onError, onVerified, verificationNonce]);
 
-  return <div ref={containerRef} style={{ display: "none" }} aria-hidden="true" />;
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        position: "fixed",
+        left: 0,
+        bottom: 0,
+        width: 1,
+        height: 1,
+        overflow: "hidden",
+        opacity: 0,
+        pointerEvents: "none",
+      }}
+      aria-hidden="true"
+    />
+  );
 }

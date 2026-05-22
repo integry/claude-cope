@@ -6,10 +6,12 @@ type SlashMenuProps = {
   totalTechnicalDebt: number;
   paidUser: boolean;
   isExecutiveSupporter?: boolean;
+  hideLockedBadges?: boolean;
+  previewScrollY?: number;
   onSelect: (cmd: string) => void;
 };
 
-function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecutiveSupporter = false, onSelect }: SlashMenuProps) {
+function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecutiveSupporter = false, hideLockedBadges = false, previewScrollY = 0, onSelect }: SlashMenuProps) {
   const items = getSlashMenuItems(query, totalTechnicalDebt, paidUser, isExecutiveSupporter);
   if (items.length === 0) return null;
 
@@ -27,7 +29,12 @@ function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecuti
           <div className="px-3 pb-1 pt-2 text-[10px] font-bold tracking-[0.24em] text-cyan-500/80 first:pt-1 select-none">
             BACKLOG CATEGORIES
           </div>
-          <ul>
+          <ul
+            style={previewScrollY ? {
+              transform: `translate3d(0, ${previewScrollY}px, 0)`,
+              willChange: "transform",
+            } : undefined}
+          >
             {items.map((item, index) => {
               if (item.type !== "backlog-category") return null;
 
@@ -45,7 +52,7 @@ function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecuti
                     <div className="flex items-center gap-2">
                       <span className={`whitespace-nowrap font-bold ${item.prefix === "ALL" ? "text-yellow-400" : "text-cyan-300"}`}>{item.prefix}</span>
                       <span className="truncate text-sm">{item.label}</span>
-                      {item.locked && <span className="shrink-0 text-[10px] font-bold tracking-[0.2em] text-amber-400">LOCKED</span>}
+                      {item.locked && !hideLockedBadges && <span className="shrink-0 text-[10px] font-bold tracking-[0.2em] text-amber-400">LOCKED</span>}
                     </div>
                     <div className="text-xs text-gray-500">{item.description}</div>
                   </div>
@@ -107,8 +114,8 @@ function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecuti
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="whitespace-nowrap font-bold text-cyan-300">{item.titleId}</span>
-                      <span className="truncate text-sm">{item.label}</span>
+                      <span className="whitespace-nowrap font-bold text-fuchsia-300">{item.titleId}</span>
+                      <span className="truncate text-sm text-fuchsia-100">{item.label}</span>
                       {item.locked && <span className="shrink-0 text-[10px] font-bold tracking-[0.2em] text-amber-400">LOCKED</span>}
                     </div>
                     <div className="text-xs text-gray-500">{item.description}</div>
@@ -138,7 +145,15 @@ function SlashMenu({ query, activeIndex, totalTechnicalDebt, paidUser, isExecuti
                     }`}
                     onClick={() => onSelect(item.value)}
                   >
-                    <span className={`whitespace-nowrap ${item.value === "/backlog" || item.value === "/model" || item.value === "/promote" ? "font-bold text-yellow-400" : ""}`}>
+                    <span
+                      className={`whitespace-nowrap ${
+                        item.value === "/backlog" || item.value === "/model"
+                          ? "font-bold text-yellow-400"
+                          : item.value === "/promote"
+                            ? "font-bold text-fuchsia-300"
+                            : ""
+                      }`}
+                    >
                       {item.value}
                       {item.argumentHint && <span className="ml-1 text-xs font-normal text-gray-500"> {item.argumentHint}</span>}
                     </span>

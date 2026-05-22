@@ -28,12 +28,25 @@ leaderboard.get("/", async (c) => {
   }
 
   let sql =
-    `SELECT us.username,
+    // The frontend treats leaderboard identity as username-backed, so `id`
+    // remains an alias for `username` instead of a separate opaque key.
+    `SELECT us.username AS id,
+            us.username,
+            CASE
+              WHEN us.is_executive_supporter = 1 AND active_licenses.key_hash IS NOT NULL
+                THEN 1
+              ELSE 0
+            END AS is_executive_supporter,
             CASE
               WHEN us.is_executive_supporter = 1 AND active_licenses.key_hash IS NOT NULL
                 THEN COALESCE(us.display_rank, us.corporate_rank)
               ELSE us.corporate_rank
             END AS corporate_rank,
+            CASE
+              WHEN us.is_executive_supporter = 1 AND active_licenses.key_hash IS NOT NULL
+                THEN us.display_rank
+              ELSE NULL
+            END AS display_rank,
             us.country,
             us.total_td as technical_debt,
             us.updated_at as created_at

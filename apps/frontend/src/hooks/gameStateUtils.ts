@@ -116,6 +116,8 @@ export interface EconomyState {
   totalTDEarned: number;
   currentRank: string;
   quotaPercent: number;
+  quotaRemaining?: number;
+  quotaTotal?: number;
   quotaLockouts: number;
   tdMultiplier: number;
 }
@@ -275,13 +277,29 @@ function applyCollectionDefaults(state: GameState): void {
     state.chatHistory = [];
   }
   state.chatHistory = normalizePersistedChatHistory(state.chatHistory);
-  if (!Array.isArray(state.unlockedThemes)) {
-    state.unlockedThemes = ["default"];
-  }
   if (!Array.isArray(state.pendingCompletedTaskIds)) {
     state.pendingCompletedTaskIds = [];
   }
 }
+
+function applyPresentationDefaults(state: GameState): void {
+  if (!state.activeTheme) {
+    state.activeTheme = "default";
+  }
+  if (!Array.isArray(state.unlockedThemes)) {
+    state.unlockedThemes = ["default"];
+  }
+  if (state.soundEnabled === undefined) {
+    state.soundEnabled = true;
+  }
+  if (state.isExecutiveSupporter === undefined) {
+    state.isExecutiveSupporter = false;
+  }
+  if (state.displayRank === undefined) {
+    state.displayRank = null;
+  }
+}
+
 function applyObjectDefaults(state: GameState): void {
   if (!state.buddy) {
     state.buddy = createDefaultBuddyState();
@@ -311,18 +329,7 @@ function applyDefensiveDefaults(state: GameState): void {
   if (state.hasSeenTicketPrompt === undefined) {
     state.hasSeenTicketPrompt = false;
   }
-  if (!state.activeTheme) {
-    state.activeTheme = "default";
-  }
-  if (state.soundEnabled === undefined) {
-    state.soundEnabled = true;
-  }
-  if (state.isExecutiveSupporter === undefined) {
-    state.isExecutiveSupporter = false;
-  }
-  if (state.displayRank === undefined) {
-    state.displayRank = null;
-  }
+  applyPresentationDefaults(state);
 }
 
 export function loadState(): GameState {

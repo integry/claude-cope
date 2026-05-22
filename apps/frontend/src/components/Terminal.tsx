@@ -72,6 +72,7 @@ function isDesktopBottomPinned(scrollTop: number, maxScrollTop: number): boolean
   return scrollTop >= maxScrollTop - DESKTOP_BOTTOM_EPSILON_PX;
 }
 
+/* eslint-disable max-lines -- Large orchestrator component pending extraction */
 function Terminal() {
   const { state, setState, getCurrentState, addActiveTD, buyGenerator, buyUpgrade, resetQuota, unlockAchievement, applyOutageReward, applyOutagePenalty, setChatHistory, setActiveTheme, buyTheme, offlineTDEarned, clearOfflineTDEarned, updateTicketProgress } = useGameState();
   const history = state.chatHistory; const setHistory = setChatHistory; const rank = state.displayRank ?? state.economy.currentRank;
@@ -226,8 +227,9 @@ function Terminal() {
       playChime, playError, setActiveTheme, onValidSlashCommand: recordValidatedSlashCommand,
     });
   }, [state, setState, setHistory, setIsProcessing, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply, recordValidatedSlashCommand]);
-  const runSlashCommandRef = useRef(runSlashCommand); runSlashCommandRef.current = runSlashCommand;
-  useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, setHistory, runSlashCommand });
+  const runSlashCommandRef = useRef(runSlashCommand);
+  runSlashCommandRef.current = runSlashCommand;
+  useCheckoutLicenseSync({ isBooting, proKeyHash: state.proKeyHash, username: state.username, setHistory, runSlashCommand });
   const handlePromptAccepted = useCallback((rollbackId: number, replayId: number | null) => { settlePendingBacklogRollback(rollbackId, false); settleAcceptedNagReplay(replayId); }, [settleAcceptedNagReplay, settlePendingBacklogRollback]);
   const handlePromptError = useCallback((rollbackId: number) => { settlePendingBacklogRollback(rollbackId, true); playError(); }, [playError, settlePendingBacklogRollback]);
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
@@ -264,7 +266,7 @@ function Terminal() {
       proKey: state.proKey, proKeyHash: state.proKeyHash, modes: state.modes, activeTicket: state.activeTicket, onSprintProgress, getSprintCompleteMessage, addActiveTD, onSuggestedReply: handleSuggestedReply,
       buddyType: state.buddy.type, username: state.username, inventory: state.inventory, upgrades: state.upgrades,
       onByokUsage: (usage) => setState((prev) => { const existing = prev.byokUsage?.[usage.model] ?? { prompt_tokens: 0, completion_tokens: 0, cost: 0 }; return { ...prev, byokTotalCost: (prev.byokTotalCost ?? 0) + (usage.cost ?? 0), byokUsage: { ...prev.byokUsage, [usage.model]: { prompt_tokens: existing.prompt_tokens + (usage.prompt_tokens ?? 0), completion_tokens: existing.completion_tokens + (usage.completion_tokens ?? 0), cost: existing.cost + (usage.cost ?? 0) } } }; }),
-      onQuotaUpdate: (quotaPercent) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent } })); if (quotaPercent <= 0 && isFreeTier && !effectiveApiKey) nagArmedFromQuotaRef.current = true; },
+      onQuotaUpdate: (quotaPercent) => { setState((prev) => ({ ...prev, economy: { ...prev.economy, quotaPercent, ...(prev.economy.quotaTotal != null ? { quotaRemaining: Math.round((quotaPercent / 100) * prev.economy.quotaTotal) } : {}) } })); if (quotaPercent <= 0 && isFreeTier && !effectiveApiKey) nagArmedFromQuotaRef.current = true; },
       loadingMessageId: isFreeTier ? undefined : submissionId,
       onQuotaExhausted: effectiveApiKey ? undefined : () => { untrackAbortController(controller); settlePendingBacklogRollback(rollbackId, true); setCommandHistoryEntries((prev) => prev.filter((entry) => entry.submissionId !== submissionId)); setHistory(removePromptMessages(submissionId)); handleQuotaLockout(command); },
       onProfileUpdate: applyProfileUpdate,
@@ -377,5 +379,5 @@ function Terminal() {
     />
   );
 }
-
+/* eslint-enable max-lines */
 export default Terminal;
