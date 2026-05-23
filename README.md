@@ -14,9 +14,7 @@
 > Go look at the **[Closed Pull Requests](https://github.com/integry/claude-cope/pulls?q=is%3Apr+is%3Aclosed)**. You will see an AI orchestrator catch and fix React `stale-closure` race conditions, extract components to satisfy strict CI/CD line-count linters, and generate hundreds of lines of satirical lore based on 4-word prompts.
 > 
 > ### The Engine Behind the Curtain
-> This game is a live tech demo for **[Propr.dev](https://propr.dev)**, an autonomous AI coding orchestrator that integrates directly into GitHub PRs. 
-> 
-> 👉 **[Propr launches next week. Click here to join the waitlist for day-one access.](https://propr.dev)**
+> Claude Cope also doubles as a stress test for **[ProPR](https://propr.dev)**, an AI coding orchestration tool I am building. It runs agents like Claude, Codex, and Gemini in isolated Docker environments, then turns their work into GitHub pull requests that can be reviewed and refined there.
 
 ---
 
@@ -26,8 +24,9 @@
 
 Most AI coding agents try to make you faster, smarter, and more efficient. **This is a fundamental misunderstanding of the modern enterprise.** Claude Cope is a browser-based, multiplayer terminal game that faithfully simulates the true software engineering experience: arguing with confidently wrong stakeholders, accumulating massive amounts of Technical Debt (TD), and deploying catastrophic infrastructure to production on a Friday.
 
-🌐 **Play it live at: [claudecope.com](https://claudecope.com)**  
-Short alias: [cope.bot](https://cope.bot)
+* 🌐 **Play it live at:** [claudecope.com](https://claudecope.com)
+* Short alias: [cope.bot](https://cope.bot)
+* 🎬 **Watch the demo:** [cope.bot/intro.mp4](https://cope.bot/intro.mp4)
 
 ## 🌪️ The Core Loop
 
@@ -117,7 +116,7 @@ The frontend renders the fake terminal and slash-command UX in React. The backen
 
 ## 🛠️ Tech Stack
 
-While the game simulates garbage code, the underlying stack does not. (Orchestrated entirely by Propr.dev):
+While the game simulates garbage code, the underlying stack does not:
 * **Frontend:** React, TypeScript, Vite. (Strict, responsive Flexbox/Grid terminal UI).
 * **Backend:** Hono, Cloudflare Workers.
 * **Database:** Cloudflare D1 (SQLite at the Edge).
@@ -131,7 +130,7 @@ We welcome pull requests, provided they introduce at least one new dependency an
 **License:** This project uses the **Business Source License 1.1**. 
 You are free to view, fork, and learn from this codebase, or use the terminal chassis to build non-competitive tools. You are *not* permitted to host a competing commercial version of this game or bypass the monetization systems. See `LICENSE.md` for the full Additional Use Grant.
 
-If you have a horrific workplace experience that needs to be immortalized, please open a GitHub Issue using the `[GRIEVANCE]` template. If it is painful enough, Propr will autonomously add it to the official database seed.
+If you have a horrific workplace experience that needs to be immortalized, please open a GitHub Issue using the `[GRIEVANCE]` template. If it is painful enough, it may end up in the official database seed.
 
 ## 📜 Legal
 
