@@ -5,14 +5,6 @@
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL_1.1-blue.svg)](LICENSE.md)
 [![Technical Debt](https://img.shields.io/badge/Technical_Debt-Compounding-critical.svg)](https://claudecope.com)
 
-> **⚠️ DISCLAIMER: I did not write this codebase.**
-> 
-> If you are looking at this repository, you probably just played the game and wanted to see how the terminal state, real-time typing effects, and serverless Cloudflare architecture were implemented. 
->
-> I didn't code any of it. **This entire project was autonomously generated, architected, and debugged by an AI.**
->
-> Go look at the **[Closed Pull Requests](https://github.com/integry/claude-cope/pulls?q=is%3Apr+is%3Aclosed)**. You will see an AI orchestrator catch and fix React `stale-closure` race conditions, extract components to satisfy strict CI/CD line-count linters, and generate hundreds of lines of satirical lore based on 4-word prompts.
-> 
 > ### The Engine Behind the Curtain
 > Claude Cope also doubles as a stress test for **[ProPR](https://propr.dev)**, an AI coding orchestration tool I am building. It runs agents like Claude, Codex, and Gemini in isolated Docker environments, then turns their work into GitHub pull requests that can be reviewed and refined there.
 
