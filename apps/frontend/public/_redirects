@@ -1,0 +1,3 @@
+# Launch video aliases. Keep the MP4s on the separate media Pages project so
+# normal app deploys do not need to carry raw video files.
+/intro.mp4 https://claude-cope-media.pages.dev/media/launch-video-reddit.mp4 302
