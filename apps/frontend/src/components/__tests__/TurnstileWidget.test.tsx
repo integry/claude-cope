@@ -48,6 +48,37 @@ afterEach(async () => {
 });
 
 describe("TurnstileWidget", () => {
+  it("renders with supported sizing and explicit execute mode before executing the widget", async () => {
+    const onVerified = vi.fn();
+    const onError = vi.fn();
+    const execute = vi.fn();
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: "enabled", enabled: true, bypassed: false, misconfigured: false }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    window.turnstile = {
+      render: (_target, options) => {
+        expect(options.size).toBe("flexible");
+        expect(options.size).not.toBe("invisible");
+        expect(options.execution).toBe("execute");
+        return "widget-1";
+      },
+      execute,
+      reset: vi.fn(),
+    };
+
+    await renderWidget({ onVerified, onError });
+    await flushEffects();
+
+    expect(execute).toHaveBeenCalledWith("widget-1");
+    expect(onVerified).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it("re-injects the script when an existing loaded tag does not expose the API", async () => {
     const onVerified = vi.fn();
     const onError = vi.fn();

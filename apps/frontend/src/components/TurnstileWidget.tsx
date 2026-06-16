@@ -4,7 +4,8 @@ import { pollBootstrapStatus, verifyToken } from "./turnstileBootstrap";
 
 type TurnstileRenderOptions = {
   sitekey: string;
-  size?: "invisible";
+  size?: "compact" | "flexible" | "normal";
+  execution?: "render" | "execute";
   callback?: (token: string) => void;
   "error-callback"?: () => void;
   "expired-callback"?: () => void;
@@ -202,7 +203,8 @@ export default function TurnstileWidget({
 
       const renderedWidgetId = turnstileApi.render(container, {
         sitekey: TURNSTILE_SITE_KEY,
-        size: "invisible",
+        size: "flexible",
+        execution: "execute",
         callback: async (token: string) => {
           if (cancelled || settled) return;
           const result = await verifyToken(token).catch(() => ({
