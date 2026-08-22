@@ -58,7 +58,7 @@ export function TicketMessage({
       <div className="border-b border-dashed border-cyan-400/40 py-3">
         <DossierField
           label="DESCRIPTION:"
-          value={<div className="whitespace-pre-wrap break-words text-cyan-100 [overflow-wrap:anywhere]">{ticket.body}</div>}
+          value={<div className="whitespace-pre-wrap break-words text-cyan-100 [overflow-wrap:anywhere] md:max-w-[72ch]">{ticket.body}</div>}
           stackOnMobile
         />
       </div>

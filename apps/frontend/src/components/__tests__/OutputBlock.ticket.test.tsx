@@ -100,6 +100,20 @@ describe("OutputBlock ticket dossier rendering", () => {
     expect(titleLabel?.parentElement?.className).toContain("md:grid");
   });
 
+  it("limits description line length on desktop while preserving wrapping behavior", () => {
+    renderMessage(buildTicketMessage(makeTicket(), "claimed"));
+
+    const descriptionValue = Array.from(container.querySelectorAll("div")).find((node) =>
+      node.className.includes("[overflow-wrap:anywhere]"),
+    );
+
+    expect(descriptionValue?.textContent).toContain("we need the login flow refactored by EOD.");
+    expect(descriptionValue?.className).toContain("md:max-w-[72ch]");
+    expect(descriptionValue?.className).toContain("whitespace-pre-wrap");
+    expect(descriptionValue?.className).toContain("break-words");
+    expect(descriptionValue?.className).toContain("[overflow-wrap:anywhere]");
+  });
+
   it("keeps slash-link behavior in incoming ticket footers", () => {
     const onSlashCommand = renderMessage(buildTicketMessage(makeTicket(), "offered"));
 
