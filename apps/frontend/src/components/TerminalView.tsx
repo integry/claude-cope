@@ -173,9 +173,6 @@ export function TerminalView({
             {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} paidUser={isPaidUser(state)} isExecutiveSupporter={Boolean(state.isExecutiveSupporter)} onSelect={handleSlashMenuSelect} />}
             <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} onSubmit={handleSubmit} promptString={promptString} placeholder={suggestedReply ?? undefined} onPlaceholderAccept={acceptSuggestedReply} />
           </div>
-          <div className="terminal-agent-status-bar" data-testid="terminal-agent-status-bar">
-            model: junior-dev-despair-v4 | /mnt/legacy/spaghetti | tokens: maxed | mode: plausible deniability
-          </div>
         </div>
         {renderBuddyDock(state.buddy)}
       </div>

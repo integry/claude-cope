@@ -161,21 +161,6 @@ body {
     inset 0 0 0 1px rgba(34, 211, 238, 0.04);
 }
 
-.terminal-agent-status-bar {
-  display: block;
-  min-width: 0;
-  padding: 0.35rem 0.9rem 0.3rem;
-  overflow: hidden;
-  background-color: rgba(3, 7, 12, 0.42);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(148, 163, 184, 0.86);
-  font-size: 0.75rem;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  text-shadow: 0 0 10px rgba(34, 211, 238, 0.1);
-  white-space: nowrap;
-}
-
 .terminal-buddy-overlay {
   display: flex;
   justify-content: flex-end;

@@ -172,19 +172,4 @@ describe("TerminalView ticker shortcuts", () => {
     expect(runSlashCommand).toHaveBeenNthCalledWith(3, "/leaderboard");
   });
 
-  it("renders an agent status bar between the command line and footer", () => {
-    renderTerminalView(createProps());
-
-    const commandLine = container.querySelector("[data-testid='command-line']");
-    const statusBar = container.querySelector("[data-testid='terminal-agent-status-bar']");
-    const footer = container.querySelector("[data-testid='terminal-footer']");
-
-    expect(commandLine).not.toBeNull();
-    expect(statusBar).not.toBeNull();
-    expect(footer).not.toBeNull();
-    expect(statusBar?.textContent).toContain("model: junior-dev-despair-v4");
-    expect(statusBar?.textContent).toContain("/mnt/legacy/spaghetti");
-    expect(statusBar!.compareDocumentPosition(commandLine!) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
-    expect(statusBar!.compareDocumentPosition(footer!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
 });
