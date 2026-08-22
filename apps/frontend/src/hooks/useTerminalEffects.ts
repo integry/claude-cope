@@ -42,7 +42,7 @@ const WEEKDAY_DEPLOY_MESSAGES: Record<number, ((v: number, name: string) => stri
   0: [
     (v: number, name: string) => `[🛐 SUNDAY DEPLOY] v0.1.4-rc.${v} pushed on the Lord's day — ${name} is a sin`,
     (v: number, name: string) => `[😴 SUNDAY] v0.1.4-rc.${v} deployed while everyone's at brunch — ${name} goes unreviewed`,
-    (v: number, name: string) => `[⛪ SABBATH SHIP] v0.1.4-rc.${v} — deploying ${name} on a Sunday. God can't help you now.`,
+    (v: number, name: string) => `[!! SABBATH SHIP] v0.1.4-rc.${v} — deploying ${name} on a Sunday. God can't help you now.`,
   ],
   // Monday (1)
   1: [
@@ -157,7 +157,7 @@ const ROLLBACK_MESSAGES = [
   (name: string) => `[🏚️ ABANDONED] ${name} was shipped by someone who quit last week. No docs. Rolling back.`,
   (name: string) => `[🧨 EXPLOSIVE] ${name} caused cascading failures across 12 microservices. ROLLING BACK NOW.`,
   (name: string) => `[💸 COST SPIKE] ${name} generated a $47,000 AWS bill in 6 minutes. Emergency rollback.`,
-  (name: string) => `[🌀 LOOP] ${name} created an infinite redirect. Users trapped. Rolling back to free them.`,
+  (name: string) => `[>> LOOP] ${name} created an infinite redirect. Users trapped. Rolling back to free them.`,
   (name: string) => `[🎭 IMPOSTOR] ${name} worked in staging but was a completely different build in prod. Reverting.`,
   (name: string) => `[📢 PR DISASTER] ${name} went viral on Twitter for the wrong reasons. Rolling back for legal review.`,
   (name: string) => `[🧟 ZOMBIE] ${name} was supposedly killed last sprint. It's back. Rolling back... again.`,

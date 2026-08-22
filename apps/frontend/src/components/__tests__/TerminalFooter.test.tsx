@@ -56,6 +56,7 @@ describe("TerminalFooter", () => {
     const mobileFooter = container.querySelector("footer.sm\\:hidden");
     const mobileRow = mobileFooter?.firstElementChild as HTMLElement | null;
 
+    expect(mobileFooter?.className).toContain("text-gray-400/80");
     expect(mobileRow?.className).not.toContain("terminal-footer-mobile-with-buddy");
     expect(mobileRow?.textContent).toContain("Parody project, no Anthropic affiliation... yet.");
   });

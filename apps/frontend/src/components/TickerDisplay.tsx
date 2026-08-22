@@ -24,7 +24,7 @@ export default function TickerDisplay({ latestEvent, onExpand, onSlashCommand, o
           {latestEvent.message}
         </button>
         {showHeaderLinks ? (
-          <div className="ml-4 flex flex-shrink-0 items-center gap-0 text-gray-400">
+          <div className="ml-4 flex flex-shrink-0 items-center gap-1 text-gray-400">
             <button
               type="button"
               className="ticker-header-link"
@@ -39,7 +39,7 @@ export default function TickerDisplay({ latestEvent, onExpand, onSlashCommand, o
             </button>
             {showPartyLink ? (
               <>
-                <span className="mx-3 text-gray-500" aria-hidden="true">|</span>
+                <span className="mx-3 text-gray-500" aria-hidden="true"> | </span>
                 <button
                   type="button"
                   className="ticker-header-link"
@@ -53,7 +53,7 @@ export default function TickerDisplay({ latestEvent, onExpand, onSlashCommand, o
                 </button>
               </>
             ) : null}
-            <span className="mx-3 text-gray-500" aria-hidden="true">|</span>
+            <span className="mx-3 text-gray-500" aria-hidden="true"> | </span>
             <button
               type="button"
               className="ticker-header-link"

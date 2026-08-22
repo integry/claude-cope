@@ -87,6 +87,8 @@ describe("OutputBlock ticket dossier rendering", () => {
     expect(titleValue?.className).toContain("text-white");
     expect(reporterValue?.className).toContain("text-cyan-300");
     expect(reporterLabel?.className).toContain("text-slate-400");
+    expect(reporterLabel?.className).toContain("pr-4");
+    expect(reporterLabel?.parentElement?.className).toContain("md:grid-cols-[8.25rem_minmax(0,1fr)]");
     expect(profileValue?.className).toContain("text-slate-400");
     expect(profileValue?.className).toContain("italic");
   });
@@ -111,7 +113,19 @@ describe("OutputBlock ticket dossier rendering", () => {
     expect(descriptionValue?.className).toContain("md:max-w-[72ch]");
     expect(descriptionValue?.className).toContain("whitespace-pre-wrap");
     expect(descriptionValue?.className).toContain("break-words");
+    expect(descriptionValue?.className).toContain("leading-[1.45]");
     expect(descriptionValue?.className).toContain("[overflow-wrap:anywhere]");
+  });
+
+  it("tracks and glows the imported payload heading", () => {
+    renderMessage(buildTicketMessage(makeTicket(), "claimed"));
+
+    const heading = Array.from(container.querySelectorAll("div")).find((node) =>
+      node.textContent === "[ JIRA PAYLOAD IMPORTED ]" && node.className.includes("tracking-[0.05em]"),
+    );
+
+    expect(heading?.className).toContain("tracking-[0.05em]");
+    expect(heading?.className).toContain("[text-shadow:0_0_2px_rgba(34,211,238,0.45)]");
   });
 
   it("keeps slash-link behavior in incoming ticket footers", () => {
