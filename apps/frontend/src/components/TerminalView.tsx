@@ -169,9 +169,12 @@ export function TerminalView({
       <div ref={bottomChromeRef} className="terminal-bottom-chrome shrink-0 gap-4 md:flex md:items-end md:justify-between" data-terminal-bottom-chrome="true">
         <div className="min-w-0 flex-1">
           <SprintProgressBar id={state.activeTicket?.id} title={state.activeTicket?.title} sprintProgress={state.activeTicket?.sprintProgress} sprintGoal={state.activeTicket?.sprintGoal} onSlashCommand={handleSlashCommandClick} />
-          <div className="terminal-command-shell relative border-b border-white/20">
+          <div className="terminal-command-shell relative">
             {slashQuery && <SlashMenu query={slashQuery} activeIndex={slashIndex} totalTechnicalDebt={state.economy.totalTDEarned} paidUser={isPaidUser(state)} isExecutiveSupporter={Boolean(state.isExecutiveSupporter)} onSelect={handleSlashMenuSelect} />}
             <CommandLine ref={inputRef} value={inputValue} disabled={isProcessing || isBooting || anyOverlayOpen} onChange={handleChange} onKeyDown={handleKeyDown} onSubmit={handleSubmit} promptString={promptString} placeholder={suggestedReply ?? undefined} onPlaceholderAccept={acceptSuggestedReply} />
+          </div>
+          <div className="terminal-agent-status-bar" data-testid="terminal-agent-status-bar">
+            model: junior-dev-despair-v4 | /mnt/legacy/spaghetti | tokens: maxed | mode: plausible deniability
           </div>
         </div>
         {renderBuddyDock(state.buddy)}

@@ -314,7 +314,7 @@ const CommandLine = forwardRef<HTMLInputElement, CommandLineProps>(
     };
 
     return (
-      <div className="terminal-command-line border-t border-white/20">
+      <div className="terminal-command-line">
         <div className={commandRowClassName}>
           <span
             className="terminal-command-prompt font-bold whitespace-pre leading-none"
