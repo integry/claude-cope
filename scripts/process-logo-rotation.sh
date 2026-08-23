@@ -6,6 +6,7 @@ SOURCE_DIR="${1:?Usage: scripts/process-logo-rotation.sh /path/to/cope-logos}"
 OUTPUT_DIR="$ROOT/apps/frontend/public/media/logo-rotation"
 SPLASH_DIR="$OUTPUT_DIR/splash"
 WORDMARK_DIR="$OUTPUT_DIR/wordmark"
+EDITED_SPLASH_DIR="$ROOT/assets/logo-rotation/splash-edits"
 PROCESSING_DIR="$(mktemp -d)"
 trap 'rm -rf -- "$PROCESSING_DIR"' EXIT
 
@@ -108,6 +109,10 @@ WORDMARK_SPECS=(
 for source in "${SPLASH_SOURCES[@]}"; do
   IFS='|' read -r filename id <<< "$source"
   source_path="$SOURCE_DIR/$filename"
+  edited_source_path="$EDITED_SPLASH_DIR/$id.webp"
+  if [[ -f "$edited_source_path" ]]; then
+    source_path="$edited_source_path"
+  fi
   if [[ ! -f "$source_path" ]]; then
     echo "Missing source logo: $source_path" >&2
     exit 1
