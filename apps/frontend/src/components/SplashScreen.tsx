@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { ACTIVE_SPLASH_VARIANT } from "../logoRotation";
 
 export default function SplashScreen({ onComplete }: { onComplete: () => void }) {
   const [fadeOut, setFadeOut] = useState(false);
@@ -19,12 +20,14 @@ export default function SplashScreen({ onComplete }: { onComplete: () => void })
       }`}
       style={{ backgroundColor: 'var(--color-bg)' }}
     >
-      <picture>
-        <source media="(min-width: 640px)" srcSet="/media/logo-800-transparent.png" />
+      <picture className="flex h-full w-full items-center justify-center p-4 sm:p-8">
+        <source media="(min-width: 640px)" srcSet={ACTIVE_SPLASH_VARIANT.splashDesktop} />
         <img
-          src="/media/logo-400-transparent.png"
+          src={ACTIVE_SPLASH_VARIANT.splashMobile}
           alt="Claude Cope"
-          className="max-w-[280px] px-6 sm:max-w-lg sm:px-0 md:max-w-xl lg:max-w-2xl"
+          className="max-h-full max-w-full object-contain"
+          decoding="async"
+          fetchPriority="high"
         />
       </picture>
     </div>

@@ -206,9 +206,8 @@ export default function HeaderBarMobileMenu({
           <button type="button" onClick={closeAnd(onContactClick)} className="hover:text-gray-300">/contact</button>
         </div>
         <div className="mb-3 font-mono leading-[1.15]">
-          <p>© 2026 Unchained Development OÜ</p>
-          <p>git blame --author="Rinalds Uzkalns"</p>
-          <p>{"made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">propr.dev</a></p>
+          <p>© 2006 Rinalds Uzkalns</p>
+          <p>{"made with "}<a href="https://propr.dev" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">ProPR</a></p>
         </div>
         <div className="flex justify-center">
           <button type="button" onClick={closeAnd(onSlashMenuClick)} className="font-mono text-center hover:text-gray-300">
