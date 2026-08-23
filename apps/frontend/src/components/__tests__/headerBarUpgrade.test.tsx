@@ -11,6 +11,7 @@ vi.mock("../../hooks/useAnimatedCounter", () => ({
 }));
 
 import HeaderBar from "../HeaderBar";
+import { ACTIVE_WORDMARK_VARIANT } from "../../logoRotation";
 
 const baseProps = {
   rank: "Junior Code Monkey",
@@ -48,7 +49,7 @@ const mobileMenuTexts = [
   "/privacy",
   "/about",
   "/contact",
-  "made with propr.dev",
+  "made with ProPR",
 ];
 const mobileMenuStatTexts = ["Technical Debt:", "3,880 TD", "API Quota:"];
 
@@ -94,8 +95,9 @@ function expectMobileMenuHasText(menuPanel: Element | null, texts: readonly stri
 
 function expectMobileMenuFooter(menuPanel: Element | null) {
   const footerParagraphs = Array.from(menuPanel?.querySelectorAll("p") ?? []);
-  expect(footerParagraphs.some((paragraph) => paragraph.textContent === "© 2026 Unchained Development OÜ")).toBe(true);
-  expect(footerParagraphs.some((paragraph) => paragraph.textContent === "git blame --author=\"Rinalds Uzkalns\"")).toBe(true);
+  expect(footerParagraphs.some((paragraph) => paragraph.textContent === "© 2006 Rinalds Uzkalns")).toBe(true);
+  expect(menuPanel?.textContent).not.toContain("Unchained Development");
+  expect(menuPanel?.textContent).not.toContain("git blame");
   expect(menuPanel?.textContent).not.toContain("[BLAME]");
   expect(menuPanel?.textContent).not.toContain("&&");
 }
@@ -110,7 +112,7 @@ function expectMobileMenuStatBox(statBox: Element | null) {
 function expectMobileMenuLinkStyles(menuPanel: Element | null) {
   const proprLink = menuPanel?.querySelector("a[href='https://propr.dev']") as HTMLAnchorElement | null;
   expect(proprLink).not.toBeNull();
-  expect(proprLink?.textContent).toBe("propr.dev");
+  expect(proprLink?.textContent).toBe("ProPR");
   expect(proprLink?.className).toContain("text-gray-400");
 
   const githubLink = menuPanel?.querySelector("a[href='https://github.com/integry/claude-cope']") as HTMLAnchorElement | null;
@@ -198,7 +200,7 @@ function expectMobileIdentityLayout() {
   const mobileStatusBlock = queryByTestId("mobile-status-block");
 
   expect(mobileLogo?.tagName).toBe("BUTTON");
-  expect(mobileLogoImage?.getAttribute("src")).toBe("/media/logo-400-transparent.png");
+  expect(mobileLogoImage?.getAttribute("src")).toBe(ACTIVE_WORDMARK_VARIANT.wordmark);
   expect(mobileIdentityBlock?.textContent).toContain("TestUser");
   expect(mobileIdentityBlock?.className).not.toContain("pr-14");
   expect(mobileIdentityBlock?.className).not.toContain("col-end-4");
@@ -397,7 +399,7 @@ describe("HeaderBar upgrade CTA visibility", () => {
     const expandedLogo = queryByTestId("mobile-header-logo-expanded");
     const headerRoot = queryByTestId("header-bar-root");
     expect(expandedLogo?.tagName).toBe("BUTTON");
-    expect(expandedLogo?.querySelector("img")?.getAttribute("src")).toBe("/media/logo-400-transparent.png");
+    expect(expandedLogo?.querySelector("img")?.getAttribute("src")).toBe(ACTIVE_WORDMARK_VARIANT.wordmark);
     expect(expandedLogo?.className).not.toContain("absolute");
     expect(expandedLogo?.className).toContain("col-end-3");
     expect(expandedLogo?.className).toContain("row-span-2");

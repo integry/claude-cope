@@ -60,4 +60,29 @@ describe("TerminalFooter", () => {
     expect(mobileRow?.className).not.toContain("terminal-footer-mobile-with-buddy");
     expect(mobileRow?.textContent).toContain("Parody project, no Anthropic affiliation... yet.");
   });
+
+  it("shows the simplified blame attribution", () => {
+    renderFooter(null);
+
+    const desktopFooter = container.querySelector("footer.sm\\:flex");
+    expect(desktopFooter?.textContent).toContain("[BLAME] © 2006 Rinalds Uzkalns");
+    expect(desktopFooter?.textContent).not.toContain("Unchained Development");
+    expect(desktopFooter?.textContent).not.toContain("git blame");
+    expect(desktopFooter?.textContent).not.toContain("&&");
+  });
+
+  it("keeps GitHub in the footer without the Reddit link", () => {
+    renderFooter(null);
+
+    const desktopFooter = container.querySelector("footer.sm\\:flex");
+    expect(desktopFooter?.textContent).toContain("/github");
+    expect(desktopFooter?.textContent).not.toContain("/reddit");
+  });
+
+  it("uses the ProPR name for the linked build credit", () => {
+    renderFooter(null);
+
+    const creditLink = container.querySelector<HTMLAnchorElement>('a[href="https://propr.dev"]');
+    expect(creditLink?.textContent).toBe("ProPR");
+  });
 });
